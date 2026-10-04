@@ -18,14 +18,19 @@
       "status": "available",
       "billTotal": 0,
       "orders": [],
-      "isPaid": false
+      "isPaid": false,
+      "x": 40,
+      "y": 320
     },
     {
       "id": "3",
       "zone": "Main Hall",
       "name": "T-03",
       "seats": 4,
-      "status": "available"
+      "status": "available",
+      "x": 30,
+      "y": 210,
+      "shape": "rectangle"
     },
     {
       "id": "4",
@@ -52,7 +57,15 @@
       "zone": "VIP",
       "name": "V-01",
       "seats": 8,
-      "status": "reserved"
+      "status": "occupied",
+      "occupiedSince": 1791104217880
+    },
+    {
+      "name": "MC-01",
+      "zone": "Majlis Floor 1",
+      "seats": 6,
+      "status": "available",
+      "id": "t1791104164902"
     }
   ],
   "tickets": [
@@ -338,7 +351,8 @@
   "zones": [
     "Main Hall",
     "Rooftop",
-    "VIP"
+    "VIP",
+    "Majlis Floor 1"
   ],
   "staff": [
     {

@@ -16,10 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, Table, OrderItem, Reservation } from '../../store/restaurantStore';
 import InvoiceComponent from '../../components/Invoice';
 
-type Zone = 'Main Hall' | 'Rooftop' | 'VIP';
-
-// Define static positioning and shapes for the tables, combining with dynamic store data
-const TABLE_LAYOUTS: Record<string, { x: number; y: number; shape: string }> = {
+const TABLE_LAYOUTS: Record<string, { x: number; y: number; shape: 'square' | 'round' | 'rectangle' }> = {
   '1': { x: 30, y: 80, shape: 'square' },
   '2': { x: 160, y: 80, shape: 'round' },
   '3': { x: 290, y: 80, shape: 'square' },
@@ -48,12 +45,27 @@ export default function FloorPlanScreen() {
   const addReservation = useRestaurantStore((state) => state.addReservation);
   const seatReservation = useRestaurantStore((state) => state.seatReservation);
   const cancelReservation = useRestaurantStore((state) => state.cancelReservation);
+  const addTable = useRestaurantStore((state) => state.addTable);
+  const updateTable = useRestaurantStore((state) => state.updateTable);
+  const deleteTable = useRestaurantStore((state) => state.deleteTable);
 
   const storeZones = useRestaurantStore((state) => state.zones);
   const zones: string[] = storeZones && storeZones.length > 0 ? storeZones : ['Main Hall', 'Rooftop', 'VIP'];
 
   const [activeZone, setActiveZone] = useState<string>('Main Hall');
   const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+
+  // Layout Move Mode Settings
+  const [isMoveMode, setIsMoveMode] = useState(false);
+  const [moveStep, setMoveStep] = useState<number>(20);
+
+  // Add / Edit Table Modal State
+  const [tableModalVisible, setTableModalVisible] = useState(false);
+  const [editingTable, setEditingTable] = useState<Table | null>(null);
+  const [formName, setFormName] = useState('');
+  const [formZone, setFormZone] = useState('');
+  const [formSeats, setFormSeats] = useState('4');
+  const [formShape, setFormShape] = useState<'square' | 'round' | 'rectangle'>('square');
 
   // Bill Modal
   const [viewBillModalVisible, setViewBillModalVisible] = useState(false);
@@ -75,6 +87,7 @@ export default function FloorPlanScreen() {
   const [resTimeSlot, setResTimeSlot] = useState('08:00 PM');
   const [resGuestsCount, setResGuestsCount] = useState('4');
   const [resNotes, setResNotes] = useState('');
+  const [resLinkedIds, setResLinkedIds] = useState<string[]>([]);
 
   const liveSelectedTable = selectedTableId ? tables.find(t => t.id === selectedTableId) || null : null;
   const effectiveActiveZone = zones.includes(activeZone) ? activeZone : (zones[0] || 'Main Hall');
@@ -118,6 +131,108 @@ export default function FloorPlanScreen() {
     }
   };
 
+  // --- Move & Position Functions ---
+  const handleNudgeTable = (dx: number, dy: number) => {
+    if (!liveSelectedTable) {
+      showNotification('Select Table', 'Please tap a table on the floor plan to move it.');
+      return;
+    }
+    const currentX = liveSelectedTable.x ?? (TABLE_LAYOUTS[liveSelectedTable.id]?.x ?? 30);
+    const currentY = liveSelectedTable.y ?? (TABLE_LAYOUTS[liveSelectedTable.id]?.y ?? 80);
+    const newX = Math.max(10, Math.min(650, currentX + dx));
+    const newY = Math.max(10, Math.min(550, currentY + dy));
+    updateTable(liveSelectedTable.id, { x: newX, y: newY });
+  };
+
+  const handleChangeTableShape = (shape: 'square' | 'round' | 'rectangle') => {
+    if (!liveSelectedTable) return;
+    updateTable(liveSelectedTable.id, { shape });
+  };
+
+  // --- Add / Edit / Delete Table Functions ---
+  const openAddTableDialog = () => {
+    setEditingTable(null);
+    setFormName('');
+    setFormZone(effectiveActiveZone);
+    setFormSeats('4');
+    setFormShape('square');
+    setTableModalVisible(true);
+  };
+
+  const openEditTableDialog = (table: Table) => {
+    setEditingTable(table);
+    setFormName(table.name);
+    setFormZone(table.zone);
+    setFormSeats(table.seats ? table.seats.toString() : '4');
+    setFormShape(table.shape || 'square');
+    setTableModalVisible(true);
+  };
+
+  const handleSaveTableForm = () => {
+    if (!formName.trim() || !formZone.trim()) {
+      showNotification('Missing Information', 'Please provide table name and select zone.');
+      return;
+    }
+    const seatsNum = parseInt(formSeats, 10);
+    if (isNaN(seatsNum) || seatsNum <= 0) {
+      showNotification('Invalid Seats', 'Seat count must be a positive number.');
+      return;
+    }
+
+    if (editingTable) {
+      updateTable(editingTable.id, {
+        name: formName.trim(),
+        zone: formZone.trim(),
+        seats: seatsNum,
+        shape: formShape,
+      });
+      showNotification('Table Updated', `Table ${formName.trim()} settings updated.`);
+    } else {
+      const zoneCount = currentZoneTables.length;
+      const newX = 30 + ((zoneCount % 3) * 140);
+      const newY = 60 + (Math.floor(zoneCount / 3) * 125);
+
+      addTable({
+        name: formName.trim(),
+        zone: formZone.trim(),
+        seats: seatsNum,
+        status: 'available',
+        x: newX,
+        y: newY,
+        shape: formShape,
+      });
+      showNotification('Table Added', `Table ${formName.trim()} added to ${formZone}.`);
+    }
+    setTableModalVisible(false);
+  };
+
+  const handleDeleteTable = (table: Table) => {
+    if (table.status !== 'available') {
+      showNotification('Cannot Delete', `Table ${table.name} is currently ${table.status}. Clear it first.`);
+      return;
+    }
+    const msg = `Are you sure you want to remove ${table.name} from the floor?`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) {
+        deleteTable(table.id);
+        setSelectedTableId(null);
+      }
+    } else {
+      Alert.alert('Delete Table', msg, [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Delete', 
+          style: 'destructive', 
+          onPress: () => {
+            deleteTable(table.id);
+            setSelectedTableId(null);
+          } 
+        }
+      ]);
+    }
+  };
+
+  // --- Bill Receipt Handler ---
   const handleViewBill = (table: Table) => {
     const tickets = useRestaurantStore
       .getState()
@@ -202,7 +317,7 @@ export default function FloorPlanScreen() {
     setMergeModalVisible(false);
   };
 
-  // --- Reservation Handlers ---
+  // --- Reservation Handlers with Multi-Table Merge ---
   const openReserveDialog = (table: Table) => {
     setResCustomerName('');
     setResPhone('');
@@ -210,7 +325,47 @@ export default function FloorPlanScreen() {
     setResTimeSlot('08:00 PM');
     setResGuestsCount(table.seats ? table.seats.toString() : '4');
     setResNotes('');
+    setResLinkedIds([]);
     setReserveModalVisible(true);
+  };
+
+  const toggleLinkedTable = (tableId: string) => {
+    setResLinkedIds(prev => 
+      prev.includes(tableId) ? prev.filter(id => id !== tableId) : [...prev, tableId]
+    );
+  };
+
+  const autoFitTables = () => {
+    if (!liveSelectedTable) return;
+    const targetGuests = parseInt(resGuestsCount, 10) || 4;
+    let currentCapacity = liveSelectedTable.seats;
+    if (currentCapacity >= targetGuests) {
+      setResLinkedIds([]);
+      showNotification('Capacity OK', `${liveSelectedTable.name} already seats ${liveSelectedTable.seats} guests.`);
+      return;
+    }
+
+    const availableOtherTables = tables
+      .filter(t => t.id !== liveSelectedTable.id && t.status === 'available')
+      .sort((a, b) => {
+        const aSameZone = a.zone === liveSelectedTable.zone ? 0 : 1;
+        const bSameZone = b.zone === liveSelectedTable.zone ? 0 : 1;
+        return aSameZone - bSameZone || b.seats - a.seats;
+      });
+
+    const selected: string[] = [];
+    for (const t of availableOtherTables) {
+      if (currentCapacity >= targetGuests) break;
+      selected.push(t.id);
+      currentCapacity += t.seats;
+    }
+
+    setResLinkedIds(selected);
+    if (currentCapacity < targetGuests) {
+      showNotification('Notice', `Selected all available tables, capacity is ${currentCapacity} seats (needs ${targetGuests}).`);
+    } else {
+      showNotification('Tables Matched', `Combined ${selected.length + 1} tables for ${currentCapacity} seats.`);
+    }
   };
 
   const handleSaveReservation = () => {
@@ -224,9 +379,15 @@ export default function FloorPlanScreen() {
       return;
     }
 
+    const linkedNames = resLinkedIds.map(id => tables.find(t => t.id === id)?.name).filter(Boolean);
+    const combinedTableName = linkedNames.length > 0
+      ? `${liveSelectedTable.name} + ${linkedNames.join(' + ')}`
+      : liveSelectedTable.name;
+
     addReservation({
       tableId: liveSelectedTable.id,
-      tableName: liveSelectedTable.name,
+      tableName: combinedTableName,
+      linkedTableIds: resLinkedIds,
       customerName: resCustomerName.trim(),
       phone: resPhone.trim(),
       guestsCount: guests,
@@ -236,7 +397,7 @@ export default function FloorPlanScreen() {
       status: 'confirmed',
     });
 
-    showNotification('Confirmed', `${liveSelectedTable.name} reserved for ${resCustomerName} at ${resTimeSlot}.`);
+    showNotification('Confirmed', `${combinedTableName} reserved for ${resCustomerName} at ${resTimeSlot}.`);
     setReserveModalVisible(false);
   };
 
@@ -258,9 +419,13 @@ export default function FloorPlanScreen() {
   };
 
   const renderTableDetailsContent = (table: Table) => {
-    const matchingReservation = reservations.find(r => r.tableId === table.id && r.status === 'confirmed');
+    const matchingReservation = reservations.find(
+      r => r.status === 'confirmed' && (r.id === table.reservationId || r.tableId === table.id)
+    );
     const isBusy = table.status === 'occupied' || table.status === 'billed';
     const isReserved = table.status === 'reserved';
+    const isMergedChild = !!table.mergedInto;
+    const parentTable = isMergedChild ? tables.find(t => t.id === table.mergedInto) : null;
 
     return (
       <ScrollView style={styles.detailsContent} showsVerticalScrollIndicator={false}>
@@ -268,7 +433,7 @@ export default function FloorPlanScreen() {
           <View>
             <Text style={styles.detailsTitle}>{table.name}</Text>
             <Text style={styles.detailsZone}>
-              {table.zone} • {table.seats} Seats
+              {table.zone} • {table.seats} Seats • Shape: {table.shape || 'square'}
             </Text>
           </View>
           <View
@@ -278,8 +443,18 @@ export default function FloorPlanScreen() {
           </View>
         </View>
 
+        {/* Merged indicator */}
+        {isMergedChild && parentTable && (
+          <View style={styles.mergedBanner}>
+            <Ionicons name="link" size={16} color="#4F46E5" />
+            <Text style={styles.mergedBannerText}>
+              Joined with {parentTable.name} (Big Party / Merged Order)
+            </Text>
+          </View>
+        )}
+
         {/* Occupied or Billed Card */}
-        {isBusy && (
+        {isBusy && !isMergedChild && (
           <View style={styles.premiumCard}>
             <View style={styles.cardHeaderRow}>
               <Ionicons name="receipt-outline" size={24} color="#D5A943" />
@@ -332,9 +507,14 @@ export default function FloorPlanScreen() {
                 <Text style={{ fontSize: 13, color: '#666' }}>
                   👥 Party Size: <Text style={{ fontWeight: '700' }}>{matchingReservation.guestsCount} Guests</Text>
                 </Text>
+                {matchingReservation.linkedTableIds && matchingReservation.linkedTableIds.length > 0 && (
+                  <Text style={{ fontSize: 12, color: '#4F46E5', fontWeight: '700' }}>
+                    🔗 Merged Tables: {matchingReservation.tableName}
+                  </Text>
+                )}
                 {matchingReservation.notes ? (
                   <Text style={{ fontSize: 12, color: '#888', fontStyle: 'italic', marginTop: 4 }}>
-                    Note: "{matchingReservation.notes}"
+                    Note: &ldquo;{matchingReservation.notes}&rdquo;
                   </Text>
                 ) : null}
               </View>
@@ -401,13 +581,13 @@ export default function FloorPlanScreen() {
                 onPress={() => openReserveDialog(table)}
               >
                 <Ionicons name="calendar-outline" size={20} color="#fff" />
-                <Text style={styles.actionBtnTextSolid}>Reserve Table</Text>
+                <Text style={styles.actionBtnTextSolid}>Reserve (Merge Tables)</Text>
               </TouchableOpacity>
             </>
           )}
 
           {/* Busy Table Actions (Occupied or Billed) */}
-          {isBusy && (
+          {isBusy && !isMergedChild && (
             <>
               <TouchableOpacity
                 style={styles.actionBtnSuccess}
@@ -431,7 +611,6 @@ export default function FloorPlanScreen() {
                 <Text style={styles.actionBtnTextOutline}>Add Items in POS</Text>
               </TouchableOpacity>
 
-              {/* Table Transfer Action */}
               <TouchableOpacity
                 style={[styles.actionBtnOutline, { borderColor: '#2980b9' }]}
                 onPress={() => openTransferDialog(table)}
@@ -440,7 +619,6 @@ export default function FloorPlanScreen() {
                 <Text style={[styles.actionBtnTextOutline, { color: '#2980b9' }]}>Transfer Table</Text>
               </TouchableOpacity>
 
-              {/* Table Merge Action */}
               <TouchableOpacity
                 style={[styles.actionBtnOutline, { borderColor: '#8e44ad' }]}
                 onPress={() => openMergeDialog(table)}
@@ -486,21 +664,103 @@ export default function FloorPlanScreen() {
               </TouchableOpacity>
             </>
           )}
+
+          {/* Table Management Settings Actions */}
+          <View style={styles.divider} />
+          <Text style={styles.settingsSubHeader}>Table Layout & Settings</Text>
+
+          <TouchableOpacity
+            style={[styles.actionBtnOutline, { borderColor: '#D5A943' }]}
+            onPress={() => openEditTableDialog(table)}
+          >
+            <Ionicons name="pencil-outline" size={18} color="#D5A943" />
+            <Text style={[styles.actionBtnTextOutline, { color: '#D5A943' }]}>Edit Table Details</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionBtnOutline, { borderColor: '#5856D6' }]}
+            onPress={() => setIsMoveMode(true)}
+          >
+            <Ionicons name="move-outline" size={18} color="#5856D6" />
+            <Text style={[styles.actionBtnTextOutline, { color: '#5856D6' }]}>Move & Reposition</Text>
+          </TouchableOpacity>
+
+          {table.status === 'available' && (
+            <TouchableOpacity
+              style={[styles.actionBtnOutline, { borderColor: '#e74c3c' }]}
+              onPress={() => handleDeleteTable(table)}
+            >
+              <Ionicons name="trash-outline" size={18} color="#e74c3c" />
+              <Text style={[styles.actionBtnTextOutline, { color: '#e74c3c' }]}>Delete Table</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     );
   };
 
+  // Reservation capacity summary
+  const targetGuestsNum = parseInt(resGuestsCount, 10) || 4;
+  const primarySeats = liveSelectedTable?.seats || 0;
+  const linkedSeats = resLinkedIds.reduce((sum, id) => {
+    const t = tables.find(item => item.id === id);
+    return sum + (t?.seats || 0);
+  }, 0);
+  const totalCombinedSeats = primarySeats + linkedSeats;
+  const capacityMet = totalCombinedSeats >= targetGuestsNum;
+
   return (
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.header}>
-        <View>
+        <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={styles.title}>Visual Floor Plan</Text>
           <Text style={styles.subtitle}>
             Tap table to Transfer, Merge, Reserve, or launch POS Live Orders
           </Text>
         </View>
+
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.headerBtn, isMoveMode && styles.headerBtnMoveActive]}
+            onPress={() => setIsMoveMode(!isMoveMode)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name={isMoveMode ? 'checkmark-circle' : 'move'} size={17} color="#fff" />
+            <Text style={styles.headerBtnText}>
+              {isMoveMode ? 'Done Moving' : 'Move Tables'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+            onPress={openAddTableDialog}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="add" size={18} color="#fff" />
+            <Text style={styles.headerBtnText}>+ Add Table</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Move Mode Active Warning Bar */}
+      {isMoveMode && (
+        <View style={styles.moveModeBar}>
+          <Ionicons name="hand-left" size={18} color="#D5A943" />
+          <Text style={styles.moveModeBarText}>
+            Move Mode Active • Select any table on the blueprint and use the keypad below to position it.
+          </Text>
+          <TouchableOpacity 
+            style={styles.moveModeCloseBtn}
+            onPress={() => setIsMoveMode(false)}
+          >
+            <Text style={styles.moveModeCloseText}>Exit</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Legend */}
+      <View style={styles.legendBar}>
         <View style={styles.legend}>
           <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: getStatusColor('available') }]} />
@@ -562,10 +822,10 @@ export default function FloorPlanScreen() {
             <View style={[styles.canvasContainer, isMobile && { width: 460, minHeight: 450 }]}>
               <View style={styles.gridBackground} />
               {currentZoneTables.map((table, index) => {
-                const layout = TABLE_LAYOUTS[table.id] || {
-                  x: 30 + ((index % 3) * 140),
-                  y: 60 + (Math.floor(index / 3) * 125),
-                  shape: 'square',
+                const layout = {
+                  x: table.x ?? (TABLE_LAYOUTS[table.id]?.x ?? (30 + ((index % 3) * 140))),
+                  y: table.y ?? (TABLE_LAYOUTS[table.id]?.y ?? (60 + (Math.floor(index / 3) * 125))),
+                  shape: table.shape ?? (TABLE_LAYOUTS[table.id]?.shape ?? 'square'),
                 };
                 const color = getStatusColor(table.status);
                 const bgColor = getStatusBg(table.status);
@@ -576,7 +836,7 @@ export default function FloorPlanScreen() {
                 let borderRadius = 16;
 
                 if (layout.shape === 'round') borderRadius = 45;
-                if (layout.shape === 'rectangle') tableWidth = 150;
+                if (layout.shape === 'rectangle') tableWidth = 145;
 
                 return (
                   <TouchableOpacity
@@ -593,10 +853,16 @@ export default function FloorPlanScreen() {
                         borderColor: color,
                       },
                       isSelected && [styles.tableSelected, { shadowColor: color }],
+                      isMoveMode && styles.tableMoveModeBorder,
                     ]}
                     onPress={() => setSelectedTableId(table.id)}
                     activeOpacity={0.8}
                   >
+                    {isMoveMode && (
+                      <View style={styles.moveHandleBadge}>
+                        <Ionicons name="move" size={10} color="#fff" />
+                      </View>
+                    )}
                     <Text style={[styles.tableName, { color }]}>{table.name}</Text>
                     <View style={styles.seatsBadge}>
                       <Ionicons name="people" size={11} color="#666" />
@@ -607,6 +873,89 @@ export default function FloorPlanScreen() {
               })}
             </View>
           </ScrollView>
+
+          {/* D-Pad Floating Move Controller (When Move Mode is ON) */}
+          {isMoveMode && (
+            <View style={styles.dpadContainer}>
+              <View style={styles.dpadHeader}>
+                <Text style={styles.dpadTitle}>
+                  {liveSelectedTable ? `Moving ${liveSelectedTable.name}` : 'Tap table to move'}
+                </Text>
+                <View style={styles.stepToggle}>
+                  <TouchableOpacity 
+                    style={[styles.stepPill, moveStep === 10 && styles.stepPillActive]}
+                    onPress={() => setMoveStep(10)}
+                  >
+                    <Text style={[styles.stepPillText, moveStep === 10 && styles.stepPillTextActive]}>10px</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.stepPill, moveStep === 30 && styles.stepPillActive]}
+                    onPress={() => setMoveStep(30)}
+                  >
+                    <Text style={[styles.stepPillText, moveStep === 30 && styles.stepPillTextActive]}>30px</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.dpadControlsRow}>
+                {/* D-Pad Buttons */}
+                <View style={styles.dpadCross}>
+                  <TouchableOpacity 
+                    style={[styles.dpadBtn, styles.dpadUp]} 
+                    onPress={() => handleNudgeTable(0, -moveStep)}
+                  >
+                    <Ionicons name="chevron-up" size={20} color="#1C1C1E" />
+                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 26 }}>
+                    <TouchableOpacity 
+                      style={[styles.dpadBtn, styles.dpadLeft]} 
+                      onPress={() => handleNudgeTable(-moveStep, 0)}
+                    >
+                      <Ionicons name="chevron-back" size={20} color="#1C1C1E" />
+                    </TouchableOpacity>
+                    <TouchableOpacity 
+                      style={[styles.dpadBtn, styles.dpadRight]} 
+                      onPress={() => handleNudgeTable(moveStep, 0)}
+                    >
+                      <Ionicons name="chevron-forward" size={20} color="#1C1C1E" />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity 
+                    style={[styles.dpadBtn, styles.dpadDown]} 
+                    onPress={() => handleNudgeTable(0, moveStep)}
+                  >
+                    <Ionicons name="chevron-down" size={20} color="#1C1C1E" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Shape Selector for Selected Table */}
+                {liveSelectedTable && (
+                  <View style={styles.dpadShapeBox}>
+                    <Text style={styles.dpadShapeLabel}>Table Shape:</Text>
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      {(['square', 'round', 'rectangle'] as const).map(sh => (
+                        <TouchableOpacity
+                          key={sh}
+                          style={[
+                            styles.shapePill,
+                            (liveSelectedTable.shape || 'square') === sh && styles.shapePillActive
+                          ]}
+                          onPress={() => handleChangeTableShape(sh)}
+                        >
+                          <Text style={[
+                            styles.shapePillText,
+                            (liveSelectedTable.shape || 'square') === sh && styles.shapePillTextActive
+                          ]}>
+                            {sh.charAt(0).toUpperCase() + sh.slice(1)}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Desktop Side Panel */}
@@ -632,7 +981,7 @@ export default function FloorPlanScreen() {
       {/* Mobile Bottom Sheet Modal for Table Details */}
       {isMobile && (
         <Modal
-          visible={!!liveSelectedTable}
+          visible={!!liveSelectedTable && !isMoveMode}
           transparent
           animationType="slide"
           onRequestClose={() => setSelectedTableId(null)}
@@ -679,6 +1028,96 @@ export default function FloorPlanScreen() {
                 </TouchableOpacity>
               </View>
             )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add / Edit Table Modal */}
+      <Modal visible={tableModalVisible} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContentForm}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <Ionicons name="restaurant" size={22} color="#4a121a" />
+              <Text style={styles.formModalTitle}>
+                {editingTable ? `Edit ${editingTable.name}` : 'Add New Table'}
+              </Text>
+            </View>
+
+            <Text style={styles.formLabel}>Table Name / Code:</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="e.g. T-07, VIP-02"
+              value={formName}
+              onChangeText={setFormName}
+            />
+
+            <Text style={styles.formLabel}>Floor Zone:</Text>
+            <View style={styles.timeSlotRow}>
+              {zones.map(z => (
+                <TouchableOpacity
+                  key={z}
+                  style={[
+                    styles.timeSlotPill,
+                    formZone === z && { backgroundColor: '#4a121a' }
+                  ]}
+                  onPress={() => setFormZone(z)}
+                >
+                  <Text style={[
+                    styles.timeSlotPillText,
+                    formZone === z && { color: '#fff', fontWeight: 'bold' }
+                  ]}>
+                    {z}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <Text style={styles.formLabel}>Seats Capacity:</Text>
+            <TextInput
+              style={styles.formInput}
+              placeholder="e.g. 4"
+              value={formSeats}
+              onChangeText={setFormSeats}
+              keyboardType="numeric"
+            />
+
+            <Text style={styles.formLabel}>Table Shape:</Text>
+            <View style={styles.timeSlotRow}>
+              {(['square', 'round', 'rectangle'] as const).map(sh => (
+                <TouchableOpacity
+                  key={sh}
+                  style={[
+                    styles.timeSlotPill,
+                    formShape === sh && { backgroundColor: '#5856D6' }
+                  ]}
+                  onPress={() => setFormShape(sh)}
+                >
+                  <Text style={[
+                    styles.timeSlotPillText,
+                    formShape === sh && { color: '#fff', fontWeight: 'bold' }
+                  ]}>
+                    {sh.charAt(0).toUpperCase() + sh.slice(1)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <View style={styles.formActions}>
+              <TouchableOpacity 
+                style={styles.formCancelBtn} 
+                onPress={() => setTableModalVisible(false)}
+              >
+                <Text style={styles.formCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.formSaveBtn, { backgroundColor: '#4a121a' }]} 
+                onPress={handleSaveTableForm}
+              >
+                <Text style={styles.formSaveText}>
+                  {editingTable ? 'Update Table' : 'Save Table'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -835,16 +1274,16 @@ export default function FloorPlanScreen() {
         </View>
       </Modal>
 
-      {/* Floor Plan Reserve Table Modal */}
+      {/* Floor Plan Reserve Table Modal (with Multi-Table Merge!) */}
       <Modal visible={reserveModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContentForm}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+          <View style={[styles.modalContentForm, { maxWidth: 520 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <Ionicons name="calendar" size={24} color="#5856D6" />
               <Text style={styles.formModalTitle}>Reserve {liveSelectedTable?.name}</Text>
             </View>
 
-            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
               <Text style={styles.formLabel}>Guest Name:</Text>
               <TextInput
                 style={styles.formInput}
@@ -873,10 +1312,10 @@ export default function FloorPlanScreen() {
                   />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.formLabel}>Guests:</Text>
+                  <Text style={styles.formLabel}>Guests (Party Size):</Text>
                   <TextInput
                     style={styles.formInput}
-                    placeholder="Party Size"
+                    placeholder="e.g. 6"
                     value={resGuestsCount}
                     onChangeText={setResGuestsCount}
                     keyboardType="numeric"
@@ -905,7 +1344,75 @@ export default function FloorPlanScreen() {
                 ))}
               </View>
 
-              <Text style={styles.formLabel}>Special Notes (Optional):</Text>
+              {/* Multi-Table Merge Section */}
+              <View style={styles.mergeSectionHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.formLabel}>Merge More Tables (Big Party):</Text>
+                  <Text style={styles.subtext}>Join other free tables to seat larger groups.</Text>
+                </View>
+                <TouchableOpacity style={styles.autoFitBtn} onPress={autoFitTables}>
+                  <Ionicons name="sparkles" size={13} color="#4F46E5" />
+                  <Text style={styles.autoFitBtnText}>Auto-Fit</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.targetGrid}>
+                {tables
+                  .filter(t => t.id !== liveSelectedTable?.id && t.status === 'available')
+                  .map(t => {
+                    const isLinked = resLinkedIds.includes(t.id);
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[
+                          styles.targetCard,
+                          isLinked && { backgroundColor: '#4F46E5', borderColor: '#3730A3' }
+                        ]}
+                        onPress={() => toggleLinkedTable(t.id)}
+                      >
+                        {isLinked && (
+                          <View style={styles.linkedCheckBadge}>
+                            <Ionicons name="checkmark" size={10} color="#4F46E5" />
+                          </View>
+                        )}
+                        <Text style={[
+                          styles.targetCardName,
+                          isLinked && { color: '#fff' }
+                        ]}>
+                          {t.name}
+                        </Text>
+                        <Text style={[
+                          styles.targetCardSub,
+                          isLinked && { color: '#E0E7FF' }
+                        ]}>
+                          {t.zone} ({t.seats}s)
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
+
+              {/* Capacity Banner */}
+              <View style={[
+                styles.capacityNotice,
+                { backgroundColor: capacityMet ? '#E8F8F5' : '#FDEDEC', borderColor: capacityMet ? '#27ae60' : '#e74c3c' }
+              ]}>
+                <Ionicons 
+                  name={capacityMet ? 'checkmark-circle' : 'alert-circle'} 
+                  size={18} 
+                  color={capacityMet ? '#27ae60' : '#e74c3c'} 
+                />
+                <Text style={{ 
+                  color: capacityMet ? '#27ae60' : '#e74c3c', 
+                  fontWeight: '700', 
+                  fontSize: 13,
+                  flex: 1 
+                }}>
+                  {totalCombinedSeats} seats selected for {targetGuestsNum} guests {capacityMet ? '(Capacity satisfied)' : `(Short by ${targetGuestsNum - totalCombinedSeats})`}
+                </Text>
+              </View>
+
+              <Text style={[styles.formLabel, { marginTop: 10 }]}>Special Notes (Optional):</Text>
               <TextInput
                 style={[styles.formInput, { height: 55 }]}
                 placeholder="Window seat, anniversary, etc."
@@ -944,8 +1451,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#fff',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -955,15 +1462,71 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   title: {
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     color: '#1C1C1E',
   },
   subtitle: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#8E8E93',
     marginTop: 2,
     fontWeight: '500',
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#5856D6',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  headerBtnMoveActive: {
+    backgroundColor: '#E67E22',
+  },
+  headerBtnText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  moveModeBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FEF9E7',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FAD7A0',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+  },
+  moveModeBarText: {
+    fontSize: 12,
+    color: '#7D6608',
+    fontWeight: '700',
+    flex: 1,
+  },
+  moveModeCloseBtn: {
+    backgroundColor: '#E67E22',
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  moveModeCloseText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  legendBar: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EFEFEF',
   },
   legend: {
     flexDirection: 'row',
@@ -977,12 +1540,12 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   legendDot: {
-    width: 10,
-    height: 10,
+    width: 9,
+    height: 9,
     borderRadius: 5,
   },
   legendText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#3A3A3C',
     fontWeight: '600',
   },
@@ -994,20 +1557,21 @@ const styles = StyleSheet.create({
     flex: 1,
     display: 'flex',
     flexDirection: 'column',
+    position: 'relative',
   },
   zoneTabs: {
     flexDirection: 'row',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 10,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5EA',
   },
   zoneTab: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
     borderRadius: 20,
-    marginRight: 10,
+    marginRight: 8,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#E5E5EA',
@@ -1019,7 +1583,7 @@ const styles = StyleSheet.create({
   zoneTabText: {
     fontWeight: '700',
     color: '#8E8E93',
-    fontSize: 14,
+    fontSize: 13,
   },
   zoneTabTextActive: {
     color: '#fff',
@@ -1062,8 +1626,22 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     transform: [{ scale: 1.05 }],
   },
+  tableMoveModeBorder: {
+    borderStyle: 'dashed',
+  },
+  moveHandleBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#E67E22',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   tableName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
     marginBottom: 2,
   },
@@ -1081,6 +1659,105 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginLeft: 3,
   },
+  // Floating D-Pad Move Controller
+  dpadContainer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 20,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    elevation: 8,
+    zIndex: 100,
+  },
+  dpadHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    gap: 12,
+  },
+  dpadTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1C1C1E',
+  },
+  stepToggle: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  stepPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#F2F2F7',
+  },
+  stepPillActive: {
+    backgroundColor: '#5856D6',
+  },
+  stepPillText: {
+    fontSize: 11,
+    color: '#666',
+    fontWeight: '700',
+  },
+  stepPillTextActive: {
+    color: '#fff',
+  },
+  dpadControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  dpadCross: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  dpadBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dpadUp: {},
+  dpadDown: {},
+  dpadLeft: {},
+  dpadRight: {},
+  dpadShapeBox: {
+    gap: 6,
+  },
+  dpadShapeLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#666',
+  },
+  shapePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: '#F2F2F7',
+  },
+  shapePillActive: {
+    backgroundColor: '#1C1C1E',
+  },
+  shapePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#666',
+  },
+  shapePillTextActive: {
+    color: '#fff',
+  },
+  // Details Panel
   detailsPanel: {
     width: 380,
     backgroundColor: '#fff',
@@ -1094,16 +1771,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   detailsTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '900',
     color: '#1C1C1E',
     marginBottom: 2,
   },
   detailsZone: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#8E8E93',
     fontWeight: '600',
   },
@@ -1118,11 +1795,28 @@ const styles = StyleSheet.create({
     fontSize: 11,
     letterSpacing: 0.5,
   },
+  mergedBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EEF2FF',
+    padding: 10,
+    borderRadius: 10,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  mergedBannerText: {
+    color: '#4F46E5',
+    fontWeight: '700',
+    fontSize: 12,
+    flex: 1,
+  },
   premiumCard: {
     backgroundColor: '#F9F9FB',
     borderRadius: 14,
     padding: 16,
-    marginBottom: 20,
+    marginBottom: 16,
     borderWidth: 1,
     borderColor: '#F2F2F7',
   },
@@ -1164,10 +1858,23 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   actionsTitle: {
-    fontSize: 15,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#1C1C1E',
-    marginBottom: 12,
+    marginBottom: 10,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F2F2F7',
+    marginVertical: 8,
+  },
+  settingsSubHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#8E8E93',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
   },
   actionsGrid: {
     gap: 10,
@@ -1348,6 +2055,11 @@ const styles = StyleSheet.create({
     color: '#333',
     marginBottom: 6,
   },
+  subtext: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginBottom: 6,
+  },
   formInput: {
     borderWidth: 1,
     borderColor: '#E5E5EA',
@@ -1371,6 +2083,7 @@ const styles = StyleSheet.create({
     minWidth: 88,
     alignItems: 'center',
     gap: 3,
+    position: 'relative',
   },
   targetCardActive: {
     backgroundColor: '#2980b9',
@@ -1390,6 +2103,17 @@ const styles = StyleSheet.create({
   },
   targetCardSubActive: {
     color: '#EBF5FB',
+  },
+  linkedCheckBadge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   timeSlotRow: {
     flexDirection: 'row',
@@ -1413,6 +2137,37 @@ const styles = StyleSheet.create({
   timeSlotPillTextActive: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  mergeSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginTop: 8,
+  },
+  autoFitBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EEF2FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#C7D2FE',
+  },
+  autoFitBtnText: {
+    color: '#4F46E5',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  capacityNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginVertical: 8,
   },
   formActions: {
     flexDirection: 'row',

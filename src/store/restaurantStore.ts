@@ -15,6 +15,11 @@ export type Table = {
   lastInvoiceId?: string;
   occupiedSince?: number;
   reservationId?: string;
+  /** If set, this table is physically joined to the given primary table (merged reservation / big party). */
+  mergedInto?: string;
+  x?: number;
+  y?: number;
+  shape?: 'square' | 'round' | 'rectangle';
 };
 
 export type OrderItem = {
@@ -95,6 +100,8 @@ export type Reservation = {
   id: string;
   tableId: string;
   tableName: string;
+  /** Extra available tables merged with the primary table for large parties. */
+  linkedTableIds?: string[];
   customerName: string;
   phone: string;
   guestsCount: number;
@@ -338,7 +345,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       settleBill: (tableId) => set((state) => ({
         tables: state.tables.map(t => 
-          t.id === tableId ? { 
+          (t.id === tableId || t.mergedInto === tableId) ? { 
             ...t, 
             status: 'available', 
             billTotal: 0, 
@@ -346,7 +353,9 @@ export const useRestaurantStore = create<RestaurantState>()(
             orders: [], 
             isPaid: false, 
             lastInvoiceId: undefined,
-            occupiedSince: undefined
+            occupiedSince: undefined,
+            mergedInto: undefined,
+            reservationId: undefined,
           } : t
         ),
         tickets: state.tickets.filter(t => t.tableId !== tableId),
@@ -480,8 +489,10 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       addReservation: (res) => set((state) => {
         const newId = `res-${Date.now()}`;
+        const linked = (res.linkedTableIds || []).filter(id => id !== res.tableId);
         const newReservation: Reservation = {
           ...res,
+          linkedTableIds: linked,
           id: newId,
           status: res.status || 'confirmed',
           createdAt: Date.now()
@@ -489,11 +500,10 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         const updatedTables = state.tables.map(t => {
           if (t.id === res.tableId) {
-            return {
-              ...t,
-              status: 'reserved' as const,
-              reservationId: newId,
-            };
+            return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: undefined };
+          }
+          if (linked.includes(t.id)) {
+            return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: res.tableId };
           }
           return t;
         });
@@ -508,16 +518,24 @@ export const useRestaurantStore = create<RestaurantState>()(
         const targetRes = state.reservations.find(r => r.id === id);
         if (!targetRes) return state;
 
-        const updatedRes = { ...targetRes, ...updates };
+        const updatedRes: Reservation = { ...targetRes, ...updates };
+        updatedRes.linkedTableIds = (updatedRes.linkedTableIds || []).filter(tid => tid !== updatedRes.tableId);
 
+        const tablesChanged = updates.tableId !== undefined || updates.linkedTableIds !== undefined;
         let updatedTables = state.tables;
-        if (updates.tableId && updates.tableId !== targetRes.tableId) {
+        if (tablesChanged && targetRes.status === 'confirmed') {
+          // Release all previously held tables for this reservation, then reserve the new set
           updatedTables = updatedTables.map(t => {
-            if (t.id === targetRes.tableId && t.status === 'reserved') {
-              return { ...t, status: 'available' as const, reservationId: undefined };
+            if (t.reservationId === id && t.status === 'reserved') {
+              return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
             }
-            if (t.id === updates.tableId) {
-              return { ...t, status: 'reserved' as const, reservationId: id };
+            return t;
+          }).map(t => {
+            if (t.id === updatedRes.tableId) {
+              return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: undefined };
+            }
+            if (updatedRes.linkedTableIds!.includes(t.id)) {
+              return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: updatedRes.tableId };
             }
             return t;
           });
@@ -532,10 +550,11 @@ export const useRestaurantStore = create<RestaurantState>()(
       cancelReservation: (id) => set((state) => {
         const targetRes = state.reservations.find(r => r.id === id);
         if (!targetRes) return state;
+        const allIds = [targetRes.tableId, ...(targetRes.linkedTableIds || [])];
 
         const updatedTables = state.tables.map(t => {
-          if (t.id === targetRes.tableId && t.status === 'reserved') {
-            return { ...t, status: 'available' as const, reservationId: undefined };
+          if (allIds.includes(t.id) && t.status === 'reserved') {
+            return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
           }
           return t;
         });
@@ -549,15 +568,16 @@ export const useRestaurantStore = create<RestaurantState>()(
       seatReservation: (reservationId) => set((state) => {
         const targetRes = state.reservations.find(r => r.id === reservationId);
         if (!targetRes) return state;
+        const linked = targetRes.linkedTableIds || [];
+        const now = Date.now();
 
         const updatedTables = state.tables.map(t => {
           if (t.id === targetRes.tableId) {
-            return {
-              ...t,
-              status: 'occupied' as const,
-              occupiedSince: Date.now(),
-              reservationId: undefined
-            };
+            return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: undefined, mergedInto: undefined };
+          }
+          if (linked.includes(t.id)) {
+            // Linked tables stay blocked as part of the primary table's party
+            return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: undefined, mergedInto: targetRes.tableId };
           }
           return t;
         });

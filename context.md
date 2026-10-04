@@ -158,6 +158,7 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
 * [x] **Table Transfer & Merge Engine:** Live order transfer from one table to any available table with automatic KOT re-routing; Table merging combines running tabs and orders cleanly.
 * [x] **Advance Table Reservation System:** Booking management with Guest Name, Phone, Date, Time Slot, Party Size, Notes, and one-tap Seating Check-in integrated into Admin and Manager Floor Plan.
 * [x] **Branding & Logo Transparency:** Fixed background color mismatch between screen container and logo by generating a clean transparent PNG (`assets/images/sultan-logo.png`) and unifying background to Sultan Royal Burgundy (`#52171B`).
+* [x] **Manager Floor Plan Settings & Move Mode:** Managers can Add Table, Edit Table, Delete Table, and toggle live "Move Tables" mode with floating D-Pad controller and shape switchers (`square`, `round`, `rectangle`). Multi-table reservation merging with live capacity checks and Auto-fit integrated.
 
 ### 🟡 Active Tasks (In Progress):
 * **Developer A:** Table & Floor Management Enhancements & Real-time Server Sync.
@@ -166,7 +167,6 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
 
 ### 🔴 Next Up / Backlog:
 * [ ] Hardware thermal printer ESC/POS network & Bluetooth protocol.
-* [ ] Visual drag-and-drop table layout editor for custom dining halls.
 * [ ] Customer loyalty points and discount coupon redemption engine.
 * [ ] Kitchen bump bar physical USB/Bluetooth keycode bindings.
 
@@ -175,4 +175,5 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
 * **WebSocket IP Binding:** When running on local Wi-Fi, ensure `server.js` IP in `syncService.ts` matches the host computer's IPv4 address (`192.168.x.x`).
 * **Table Transfer Synchronization:** When a table is transferred, KDS tickets are automatically remapped to the target table name and ID so the kitchen serves the right station.
 * **Cross-Tab Broadcast Echo:** Do not trigger store sync broadcasts when applying updates received from `BroadcastChannel` or the WebSocket server (guarded by `isApplyingRemoteUpdate`).
+* **Table Positioning:** Floor coordinates (`x`, `y`) and `shape` are stored on the `Table` model so any repositioning done in Move Mode is persisted and synced across devices.
 * **Merge Hygiene:** After resolving any git conflict, run `git grep -n "<<<<<<<\|>>>>>>>"` BEFORE `git add`/commit to make sure no conflict markers remain.
