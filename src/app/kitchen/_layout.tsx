@@ -13,7 +13,7 @@ import { useRoleGuard } from '../../hooks/useRoleGuard';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 
 export default function KitchenLayout() {
-  const { ready, user, logout } = useRoleGuard(['kitchen']);
+  const { ready, user, logout } = useRoleGuard(['kitchen', 'manager', 'admin']);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 

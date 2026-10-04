@@ -354,19 +354,35 @@ export default function TableOrderScreen() {
                       <View style={styles.existingStatusWrap}>
                         <View style={[
                           styles.foodStatusPill, 
-                          item.status === 'ready' ? styles.statusReady : styles.statusCooking
+                          item.status === 'served' 
+                            ? styles.statusServed 
+                            : item.status === 'ready' 
+                              ? styles.statusReady 
+                              : styles.statusCooking
                         ]}>
                           <Ionicons 
-                            name={item.status === 'ready' ? "checkmark-circle" : "time-outline"} 
+                            name={
+                              item.status === 'served' 
+                                ? 'checkmark-done-circle' 
+                                : item.status === 'ready' 
+                                  ? 'checkmark-circle' 
+                                  : 'time-outline'
+                            } 
                             size={12} 
-                            color={item.status === 'ready' ? "#007AFF" : "#FF9500"} 
+                            color={
+                              item.status === 'served' 
+                                ? '#34C759' 
+                                : item.status === 'ready' 
+                                  ? '#007AFF' 
+                                  : '#FF9500'
+                            } 
                             style={{ marginRight: 3 }} 
                           />
                           <Text style={[
                             styles.foodStatusText,
-                            { color: item.status === 'ready' ? "#007AFF" : "#FF9500" }
+                            { color: item.status === 'served' ? '#34C759' : item.status === 'ready' ? '#007AFF' : '#FF9500' }
                           ]}>
-                            {item.status === 'ready' ? 'READY' : 'COOKING'}
+                            {item.status === 'served' ? 'SERVED' : item.status === 'ready' ? 'READY' : 'COOKING'}
                           </Text>
                         </View>
                         <Text style={styles.existingItemPrice}>Rs. {(item.price * item.qty).toLocaleString()}</Text>
@@ -883,6 +899,9 @@ const styles = StyleSheet.create({
   },
   statusReady: {
     backgroundColor: '#E3F2FD',
+  },
+  statusServed: {
+    backgroundColor: '#E8F5E9',
   },
   foodStatusText: {
     fontSize: 10,

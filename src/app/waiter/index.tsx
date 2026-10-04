@@ -29,6 +29,11 @@ export default function TablesScreen() {
     const isCooking = tableTickets.some((t) => t.status === 'cooking');
     const roundCount = tableTickets.length;
 
+    // Server (waiter) assigned to this table
+    // Prefer item.server, fallback to the latest ticket's server
+    const assignedServer = item.server 
+      || (tableTickets.length > 0 ? tableTickets[tableTickets.length - 1].server : null);
+
     let statusColor = '#34C759'; // Available: Green
     if (isFoodReady) statusColor = '#007AFF'; // Food Ready: Blue
     else if (isBilled) statusColor = '#E67E22'; // Billed/Paid: Orange/Amber
@@ -56,6 +61,14 @@ export default function TablesScreen() {
             <Ionicons name="people-outline" size={16} color="#8E8E93" />
             <Text style={styles.seatsText}>{item.seats} Seats</Text>
           </View>
+
+          {/* Waiter Assigned Badge */}
+          {assignedServer && (isOccupied || isBilled) && (
+            <View style={styles.waiterBadge}>
+              <Ionicons name="person" size={12} color="#4a121a" style={{ marginRight: 4 }} />
+              <Text style={styles.waiterBadgeText}>{assignedServer}</Text>
+            </View>
+          )}
 
           {item.billTotal !== undefined && item.billTotal > 0 && (
             <Text style={styles.billText}>Rs. {item.billTotal.toFixed(0)}</Text>
@@ -89,9 +102,16 @@ export default function TablesScreen() {
         </View>
 
         <View style={[styles.cardFooter, { backgroundColor: statusColor + '15' }]}>
-          <Text style={[styles.statusText, { color: statusColor, flex: 1 }]}>
-            {isFoodReady ? 'SERVE NOW' : (isBilled ? 'PAID (GUESTS SEATED)' : item.status.toUpperCase())}
-          </Text>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.statusText, { color: statusColor }]}>
+              {isFoodReady ? 'SERVE NOW' : (isBilled ? 'PAID (GUESTS SEATED)' : item.status.toUpperCase())}
+            </Text>
+            {assignedServer && (isOccupied || isBilled) && (
+              <Text style={styles.serverFooterText} numberOfLines={1}>
+                👤 {assignedServer}
+              </Text>
+            )}
+          </View>
           {isBilled && (
             <TouchableOpacity
               style={styles.releaseTableBtn}
@@ -387,11 +407,35 @@ const styles = StyleSheet.create({
   cardFooter: {
     paddingVertical: 10,
     paddingHorizontal: 12,
+    flexDirection: 'row',
     alignItems: 'center',
   },
   statusText: {
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  waiterBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F6F0E8',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+    marginTop: 6,
+  },
+  waiterBadgeText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#4a121a',
+  },
+  serverFooterText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: '#636366',
+    marginTop: 2,
   },
 });

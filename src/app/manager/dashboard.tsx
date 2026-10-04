@@ -20,7 +20,13 @@ export default function ManagerDashboard() {
   const activeWaiters = staff.filter((s) => s.role === 'Waiter' && s.status === 'Active').length;
   const activeKitchen = staff.filter((s) => s.role === 'Kitchen' && s.status === 'Active').length;
   const tables = useRestaurantStore((state) => state.tables) || [];
+  const tickets = useRestaurantStore((state) => state.tickets) || [];
   const occupiedCount = tables.filter(t => t.status === 'occupied').length;
+
+  // Live kitchen stats
+  const cookingCount = tickets.filter(t => t.status === 'cooking').length;
+  const readyCount = tickets.filter(t => t.status === 'ready').length;
+  const hasUrgent = readyCount > 0;
 
   return (
     <ScrollView style={[styles.container, isMobile && styles.containerMobile]} showsVerticalScrollIndicator={false}>
@@ -44,8 +50,38 @@ export default function ManagerDashboard() {
             <Ionicons name="people" size={16} color="#7B1FA2" style={{ marginRight: 6 }} />
             <Text style={styles.kpiText}>{activeWaiters} Waiters • {activeKitchen} Kitchen</Text>
           </View>
+          {cookingCount > 0 && (
+            <View style={[styles.kpiPill, { backgroundColor: '#FFF3E0', borderColor: '#FF9500' }]}>
+              <Ionicons name="flame" size={16} color="#FF9500" style={{ marginRight: 6 }} />
+              <Text style={[styles.kpiText, { color: '#E65100' }]}>{cookingCount} Cooking</Text>
+            </View>
+          )}
+          {readyCount > 0 && (
+            <View style={[styles.kpiPill, { backgroundColor: '#E3F2FD', borderColor: '#007AFF' }]}>
+              <Ionicons name="checkmark-circle" size={16} color="#007AFF" style={{ marginRight: 6 }} />
+              <Text style={[styles.kpiText, { color: '#0058CC' }]}>{readyCount} Ready to Serve!</Text>
+            </View>
+          )}
         </View>
         
+        {/* Urgent food-ready alert */}
+        {hasUrgent && (
+          <View style={styles.urgentBanner}>
+            <Ionicons name="notifications" size={20} color="#FF9500" />
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.urgentBannerTitle}>
+                🔔 {readyCount} Order{readyCount > 1 ? 's' : ''} Ready for Pickup!
+              </Text>
+              <Text style={styles.urgentBannerDesc}>
+                Food is at the pass — direct waiters to serve tables immediately.
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => router.push('/waiter')} style={styles.urgentBannerBtn}>
+              <Text style={styles.urgentBannerBtnText}>View Tables</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Urgent Alerts Section */}
         <View style={[styles.alertCard, isMobile && styles.alertCardMobile]}>
           <View style={styles.alertHeader}>
@@ -136,34 +172,79 @@ export default function ManagerDashboard() {
             )}
           </TouchableOpacity>
 
+          {/* KDS Card — with live cooking/ready badge */}
           <TouchableOpacity 
-            style={[styles.card, isMobile && styles.cardMobile]}
+            style={[
+              styles.card, 
+              isMobile && styles.cardMobile,
+              (cookingCount > 0 || readyCount > 0) && styles.cardActive,
+            ]}
             onPress={() => router.push('/kitchen/kds')}
             activeOpacity={0.7}
           >
-            <View style={[styles.iconBox, { backgroundColor: '#FBE9E7' }]}>
-              <Ionicons name="flame" size={24} color="#D84315" />
+            <View style={[styles.iconBox, { backgroundColor: readyCount > 0 ? '#E3F2FD' : '#FBE9E7' }]}>
+              <Ionicons 
+                name={readyCount > 0 ? 'checkmark-done-circle' : 'flame'} 
+                size={24} 
+                color={readyCount > 0 ? '#007AFF' : '#D84315'} 
+              />
             </View>
             <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>Kitchen Display (KDS)</Text>
-              <Text style={styles.cardDesc}>Monitor live cooking tickets and kitchen bumps.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                <Text style={styles.cardTitle}>Kitchen Display (KDS)</Text>
+                {cookingCount > 0 && (
+                  <View style={styles.liveBadge}>
+                    <Text style={styles.liveBadgeText}>{cookingCount} cooking</Text>
+                  </View>
+                )}
+                {readyCount > 0 && (
+                  <View style={[styles.liveBadge, styles.liveBadgeReady]}>
+                    <Text style={[styles.liveBadgeText, { color: '#0058CC' }]}>{readyCount} ready!</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.cardDesc}>
+                {cookingCount === 0 && readyCount === 0
+                  ? 'No active tickets in kitchen right now.'
+                  : `${cookingCount} being prepared • ${readyCount} waiting to be served.`}
+              </Text>
             </View>
             {isMobile && (
               <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
             )}
           </TouchableOpacity>
 
+          {/* Waiter Table Handheld Card — with live table count */}
           <TouchableOpacity 
-            style={[styles.card, isMobile && styles.cardMobile]}
+            style={[
+              styles.card, 
+              isMobile && styles.cardMobile,
+              hasUrgent && styles.cardUrgent,
+            ]}
             onPress={() => router.push('/waiter')}
             activeOpacity={0.7}
           >
-            <View style={[styles.iconBox, { backgroundColor: '#F6F3EC' }]}>
-              <Ionicons name="fast-food" size={24} color="#4a121a" />
+            <View style={[styles.iconBox, { backgroundColor: hasUrgent ? '#FFF3E0' : '#F6F3EC' }]}>
+              <Ionicons 
+                name={hasUrgent ? 'notifications' : 'fast-food'} 
+                size={24} 
+                color={hasUrgent ? '#FF9500' : '#4a121a'} 
+              />
             </View>
             <View style={styles.cardInfo}>
-              <Text style={styles.cardTitle}>Waiter Table Handheld</Text>
-              <Text style={styles.cardDesc}>Mobile table ordering for serving staff.</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
+                <Text style={styles.cardTitle}>Waiter Table Handheld</Text>
+                {occupiedCount > 0 && (
+                  <View style={[styles.liveBadge, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]}>
+                    <Text style={[styles.liveBadgeText, { color: '#C62828' }]}>{occupiedCount} occupied</Text>
+                  </View>
+                )}
+              </View>
+              <Text style={styles.cardDesc}>
+                {hasUrgent 
+                  ? `\u26a0\ufe0f ${readyCount} orders ready \u2014 check tables now!`
+                  : `Manage table orders, send to kitchen & print bills.`}
+              </Text>
             </View>
             {isMobile && (
               <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
@@ -213,7 +294,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   kpiPill: {
     flexDirection: 'row',
@@ -229,6 +310,38 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#1C1C1E',
+  },
+  urgentBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1.5,
+    borderColor: '#FFB300',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+    gap: 6,
+  },
+  urgentBannerTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#E65100',
+    marginBottom: 2,
+  },
+  urgentBannerDesc: {
+    fontSize: 13,
+    color: '#795548',
+  },
+  urgentBannerBtn: {
+    backgroundColor: '#FF9500',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  urgentBannerBtnText: {
+    color: '#fff',
+    fontWeight: '800',
+    fontSize: 12,
   },
   alertCard: {
     backgroundColor: '#FDF2F0',
@@ -300,6 +413,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 14,
   },
+  cardActive: {
+    borderColor: '#FF9500',
+    borderWidth: 1.5,
+  },
+  cardUrgent: {
+    borderColor: '#007AFF',
+    borderWidth: 1.5,
+    backgroundColor: '#F0F8FF',
+  },
   iconBox: {
     width: 48,
     height: 48,
@@ -310,10 +432,10 @@ const styles = StyleSheet.create({
   },
   cardInfo: {
     flex: 1,
-    marginHorizontal: 12,
+    marginHorizontal: 0,
   },
   cardTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#1C1C1E',
     marginBottom: 3,
@@ -322,5 +444,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#8E8E93',
     lineHeight: 18,
+  },
+  liveBadge: {
+    backgroundColor: '#FFF3E0',
+    borderWidth: 1,
+    borderColor: '#FFB74D',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  liveBadgeReady: {
+    backgroundColor: '#E3F2FD',
+    borderColor: '#90CAF9',
+  },
+  liveBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#E65100',
   },
 });

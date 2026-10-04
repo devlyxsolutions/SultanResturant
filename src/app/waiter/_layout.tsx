@@ -13,7 +13,7 @@ import { useRoleGuard } from '../../hooks/useRoleGuard';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 
 export default function WaiterLayout() {
-  const { ready, user, logout } = useRoleGuard(['waiter']);
+  const { ready, user, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
