@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform } from 'react-native';
 import { useRestaurantStore, Table } from '../../store/restaurantStore';
-
 import { useRouter } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function AdminTables() {
   const router = useRouter();
@@ -16,7 +16,11 @@ export default function AdminTables() {
   const addZone = useRestaurantStore((state) => state.addZone);
   const deleteZone = useRestaurantStore((state) => state.deleteZone);
 
+  const tickets = useRestaurantStore((state) => state.tickets);
+  const settleBill = useRestaurantStore((state) => state.settleBill);
+
   const [activeTab, setActiveTab] = useState<'tables' | 'zones'>('tables');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied' | 'billed'>('all');
 
   // Table Modal State
   const [tableModalVisible, setTableModalVisible] = useState(false);
@@ -95,6 +99,20 @@ export default function AdminTables() {
     }
   };
 
+  const handleClearTable = (table: Table) => {
+    const confirmMsg = `Are you sure you want to clear & release ${table.name}? Active tickets and running bill will be reset.`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        settleBill(table.id);
+      }
+    } else {
+      Alert.alert('Clear Table', confirmMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear & Release', style: 'destructive', onPress: () => settleBill(table.id) }
+      ]);
+    }
+  };
+
   // --- Zone Functions ---
   const handleSaveZone = () => {
     if (!formNewZone.trim()) {
@@ -134,11 +152,37 @@ export default function AdminTables() {
     }
   };
 
+  const occupiedCount = tables.filter(t => t.status === 'occupied').length;
+  const availableCount = tables.filter(t => t.status === 'available').length;
+  const billedCount = tables.filter(t => t.status === 'billed').length;
+  const totalActiveRevenue = tables
+    .filter(t => t.status === 'occupied' || t.status === 'billed')
+    .reduce((sum, t) => sum + (t.billTotal || 0), 0);
+
+  const filteredTables = tables.filter(t => {
+    if (statusFilter === 'available') return t.status === 'available';
+    if (statusFilter === 'occupied') return t.status === 'occupied';
+    if (statusFilter === 'billed') return t.status === 'billed';
+    return true;
+  });
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'available': return '#27ae60';
+      case 'occupied': return '#e74c3c';
+      case 'billed': return '#f39c12';
+      case 'reserved': return '#8e44ad';
+      default: return '#7f8c8d';
+    }
+  };
 
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Floor & Table Management</Text>
+        <View>
+          <Text style={styles.title}>Floor & Table Management</Text>
+          <Text style={styles.subtitle}>Directly linked with POS & Kitchen Live Orders</Text>
+        </View>
         <View style={styles.headerActions}>
           <TouchableOpacity 
             style={[styles.addButton, activeTab === 'zones' && styles.addButtonSecondary]} 
@@ -151,48 +195,147 @@ export default function AdminTables() {
         </View>
       </View>
 
+      {/* Live Table Metrics Bar */}
+      <View style={styles.metricsBar}>
+        <View style={styles.metricCard}>
+          <Text style={styles.metricLabel}>Total Tables</Text>
+          <Text style={styles.metricValue}>{tables.length}</Text>
+        </View>
+        <View style={[styles.metricCard, { borderLeftColor: '#27ae60' }]}>
+          <Text style={styles.metricLabel}>Available</Text>
+          <Text style={[styles.metricValue, { color: '#27ae60' }]}>{availableCount}</Text>
+        </View>
+        <View style={[styles.metricCard, { borderLeftColor: '#e74c3c' }]}>
+          <Text style={styles.metricLabel}>Occupied</Text>
+          <Text style={[styles.metricValue, { color: '#e74c3c' }]}>{occupiedCount}</Text>
+        </View>
+        <View style={[styles.metricCard, { borderLeftColor: '#f39c12' }]}>
+          <Text style={styles.metricLabel}>Active Dine-In Bill</Text>
+          <Text style={[styles.metricValue, { color: '#4a121a' }]}>Rs. {totalActiveRevenue.toLocaleString()}</Text>
+        </View>
+      </View>
+
       <View style={styles.tabs}>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'tables' && styles.activeTab]} 
           onPress={() => setActiveTab('tables')}
         >
-          <Text style={[styles.tabText, activeTab === 'tables' && styles.activeTabText]}>Tables</Text>
+          <Text style={[styles.tabText, activeTab === 'tables' && styles.activeTabText]}>Tables ({tables.length})</Text>
         </TouchableOpacity>
         <TouchableOpacity 
           style={[styles.tab, activeTab === 'zones' && styles.activeTab]} 
           onPress={() => setActiveTab('zones')}
         >
-          <Text style={[styles.tabText, activeTab === 'zones' && styles.activeTabText]}>Zones</Text>
+          <Text style={[styles.tabText, activeTab === 'zones' && styles.activeTabText]}>Zones ({zones.length})</Text>
         </TouchableOpacity>
       </View>
 
       {activeTab === 'tables' ? (
-        <ScrollView style={styles.listContainer}>
-          {tables.map((table) => (
-            <View key={table.id} style={styles.tableRow}>
-              <View style={styles.tableInfo}>
-                <Text style={styles.tableName}>{table.name} ({table.zone})</Text>
-                <Text style={styles.tableMeta}>Seats: {table.seats} • Status: {table.status}</Text>
+        <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
+          {/* Status Filter Bar */}
+          <View style={styles.filterPillsRow}>
+            {(['all', 'available', 'occupied', 'billed'] as const).map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[styles.statusFilterPill, statusFilter === f && styles.statusFilterPillActive]}
+                onPress={() => setStatusFilter(f)}
+              >
+                <Text style={[styles.statusFilterPillText, statusFilter === f && styles.statusFilterPillTextActive]}>
+                  {f === 'all' ? `All (${tables.length})` : f === 'available' ? `Available (${availableCount})` : f === 'occupied' ? `Occupied (${occupiedCount})` : `Billed (${billedCount})`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {filteredTables.map((table) => {
+            const tableTickets = tickets.filter(t => t.tableId === table.id);
+            const isBusy = table.status === 'occupied' || table.status === 'billed';
+            const statusColor = getStatusColor(table.status);
+
+            return (
+              <View key={table.id} style={styles.tableCard}>
+                <View style={styles.tableMainRow}>
+                  <View style={styles.tableInfo}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={styles.tableName}>{table.name}</Text>
+                      <View style={[styles.badge, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
+                        <View style={[styles.badgeDot, { backgroundColor: statusColor }]} />
+                        <Text style={[styles.badgeText, { color: statusColor }]}>
+                          {table.status.toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.tableMeta}>
+                      Zone: <Text style={{ fontWeight: '700', color: '#1C1C1E' }}>{table.zone}</Text> • Seats: {table.seats}
+                      {table.server ? ` • Server: ${table.server}` : ''}
+                    </Text>
+
+                    {isBusy && (
+                      <View style={styles.runningOrderRow}>
+                        <Text style={styles.runningBillText}>
+                          Live Bill: <Text style={{ color: '#4a121a', fontWeight: '900' }}>Rs. {(table.billTotal || 0).toLocaleString()}</Text>
+                        </Text>
+                        <Text style={styles.ticketsCountText}>
+                          • {tableTickets.length} active KOT(s) in kitchen
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* POS Integration Actions */}
+                  <View style={styles.posActionsGroup}>
+                    {isBusy ? (
+                      <>
+                        <TouchableOpacity 
+                          style={styles.checkoutPosBtn} 
+                          onPress={() => router.push(`/admin/pos?prefillTableId=${table.id}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="card" size={15} color="#fff" style={{ marginRight: 4 }} />
+                          <Text style={styles.posBtnTextWhite}>POS Checkout</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.addOrderPosBtn} 
+                          onPress={() => router.push(`/admin/pos?prefillTableId=${table.id}`)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="add-circle" size={15} color="#000" style={{ marginRight: 4 }} />
+                          <Text style={styles.posBtnTextDark}>Add Items</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity 
+                          style={styles.clearTableBtn} 
+                          onPress={() => handleClearTable(table)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="refresh" size={14} color="#e74c3c" />
+                          <Text style={styles.clearTableText}>Clear</Text>
+                        </TouchableOpacity>
+                      </>
+                    ) : (
+                      <TouchableOpacity 
+                        style={styles.startOrderPosBtn} 
+                        onPress={() => router.push(`/admin/pos?prefillTableId=${table.id}`)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="calculator" size={15} color="#fff" style={{ marginRight: 6 }} />
+                        <Text style={styles.posBtnTextWhite}>Open in POS</Text>
+                      </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity style={styles.editBtn} onPress={() => openEditTableModal(table)}>
+                      <Ionicons name="pencil" size={14} color="#fff" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteTable(table.id)}>
+                      <Ionicons name="trash" size={14} color="#fff" />
+                    </TouchableOpacity>
+                  </View>
+                </View>
               </View>
-              <View style={styles.actions}>
-                {(table.status === 'occupied' || table.status === 'billed') && (
-                  <TouchableOpacity 
-                    style={[styles.editBtn, {backgroundColor: '#2ecc71', borderColor: '#27ae60'}]} 
-                    onPress={() => router.push(`/admin/pos?prefillTableId=${table.id}`)}
-                  >
-                    <Text style={[styles.editBtnText, {color: '#fff'}]}>Checkout</Text>
-                  </TouchableOpacity>
-                )}
-                <TouchableOpacity style={styles.editBtn} onPress={() => openEditTableModal(table)}>
-                  <Text style={styles.editBtnText}>Edit</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.deleteBtn} onPress={() => handleDeleteTable(table.id)}>
-                  <Text style={styles.deleteBtnText}>Delete</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-          {tables.length === 0 && <Text style={styles.emptyText}>No tables found. Add a table to get started.</Text>}
+            );
+          })}
+          {filteredTables.length === 0 && <Text style={styles.emptyText}>No tables found matching criteria.</Text>}
         </ScrollView>
       ) : (
         <ScrollView style={styles.listContainer}>
@@ -490,5 +633,179 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  subtitle: {
+    fontSize: 13,
+    color: '#666',
+    marginTop: 2,
+  },
+  metricsBar: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+    flexWrap: 'wrap',
+  },
+  metricCard: {
+    flex: 1,
+    minWidth: 140,
+    backgroundColor: '#fff',
+    padding: 14,
+    borderRadius: 10,
+    borderLeftWidth: 4,
+    borderLeftColor: '#4a121a',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  metricLabel: {
+    fontSize: 12,
+    color: '#888',
+    fontWeight: '600',
+    textTransform: 'uppercase',
+  },
+  metricValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#1C1C1E',
+    marginTop: 4,
+  },
+  filterPillsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 16,
+    flexWrap: 'wrap',
+  },
+  statusFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    backgroundColor: '#F2F2F7',
+  },
+  statusFilterPillActive: {
+    backgroundColor: '#4a121a',
+  },
+  statusFilterPillText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#636366',
+  },
+  statusFilterPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  tableCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  tableMainRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  badge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+  },
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 5,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
+  runningOrderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 6,
+    gap: 6,
+  },
+  runningBillText: {
+    fontSize: 13,
+    color: '#1C1C1E',
+    fontWeight: '600',
+  },
+  ticketsCountText: {
+    fontSize: 12,
+    color: '#D5A943',
+    fontWeight: '700',
+  },
+  posActionsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  checkoutPosBtn: {
+    backgroundColor: '#27ae60',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  addOrderPosBtn: {
+    backgroundColor: '#F6F3EC',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  startOrderPosBtn: {
+    backgroundColor: '#4a121a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  clearTableBtn: {
+    borderWidth: 1,
+    borderColor: '#e74c3c',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  posBtnTextWhite: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  posBtnTextDark: {
+    color: '#4a121a',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  clearTableText: {
+    color: '#e74c3c',
+    fontSize: 11,
+    fontWeight: '700',
   },
 });

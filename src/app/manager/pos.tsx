@@ -16,6 +16,7 @@ export default function ManagerPOS() {
   const categories = useRestaurantStore(state => state.categories);
   const customers = useRestaurantStore(state => state.customers);
   const tables = useRestaurantStore(state => state.tables);
+  const zones = useRestaurantStore(state => state.zones);
   const addCustomer = useRestaurantStore(state => state.addCustomer);
   const updateCustomer = useRestaurantStore(state => state.updateCustomer);
   const saveInvoice = useRestaurantStore(state => state.saveInvoice);
@@ -53,9 +54,70 @@ export default function ManagerPOS() {
   const [discountAmount, setDiscountAmount] = useState('0');
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
 
+  // Table Modal Filter
+  const [tableModalZone, setTableModalZone] = useState('All');
+
   // Print Preview
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const prefilledRef = useRef<string | null>(null);
+
+  const handleTableSelect = (tId: string) => {
+    setSelectedTableId(tId);
+    setOrderType('dine-in');
+    setTableModalVisible(false);
+    
+    // Find all active tickets for this table to load running order
+    const tableTickets = tickets.filter(t => t.tableId === tId);
+    if (tableTickets.length > 0) {
+      const combinedItems: OrderItem[] = [];
+      tableTickets.forEach(ticket => {
+        ticket.items.forEach(ti => {
+          const existing = combinedItems.find(i => i.id === ti.id);
+          if (existing) {
+            existing.qty += ti.qty;
+          } else {
+            combinedItems.push({ ...ti });
+          }
+        });
+      });
+      setCart(combinedItems);
+      setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
+      if (isMobile) {
+        setMobileTab('cart');
+      }
+    } else {
+      setCart([]);
+      setLoadedCart([]);
+    }
+  };
+
+  const handleClearSelectedTable = () => {
+    if (!selectedTableId) return;
+    const targetTable = tables.find(t => t.id === selectedTableId);
+    const confirmMsg = `Are you sure you want to release ${targetTable ? targetTable.name : 'this table'}? Active tickets and running bill will be cleared.`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        settleBill(selectedTableId);
+        setCart([]);
+        setLoadedCart([]);
+        setSelectedTableId('');
+      }
+    } else {
+      Alert.alert('Release Table', confirmMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Release', 
+          style: 'destructive', 
+          onPress: () => {
+            settleBill(selectedTableId);
+            setCart([]);
+            setLoadedCart([]);
+            setSelectedTableId('');
+          } 
+        }
+      ]);
+    }
+  };
 
   useEffect(() => {
     if (prefillTableId && typeof prefillTableId === 'string' && prefilledRef.current !== prefillTableId) {
@@ -165,13 +227,17 @@ export default function ManagerPOS() {
       return;
     }
     
-    placeOrder(tId, 'Manager POS', kotItems);
+    const isAddOn = loadedCart.length > 0;
+    placeOrder(tId, 'Manager POS', kotItems, isAddOn);
     
     // Update loaded cart so subsequent clicks don't resend
     setLoadedCart(JSON.parse(JSON.stringify(cart)));
     
-    if (Platform.OS === 'web') window.alert("Order Held & Sent to Kitchen!");
-    else Alert.alert("Success", "Order Held & Sent to Kitchen!");
+    const alertMsg = isAddOn 
+      ? `Add-on items sent to Kitchen! (KOT Generated & Table Updated)` 
+      : `Order sent to Kitchen! Table is now OCCUPIED.`;
+    if (Platform.OS === 'web') window.alert(alertMsg);
+    else Alert.alert("Kitchen Notified", alertMsg);
   };
 
   const openCheckout = () => {
@@ -188,30 +254,6 @@ export default function ManagerPOS() {
     setCheckoutModalVisible(true);
   };
 
-  const handleTableSelect = (tId: string) => {
-    setSelectedTableId(tId);
-    setTableModalVisible(false);
-    
-    const tableTickets = tickets.filter(t => t.tableId === tId);
-    if (tableTickets.length > 0) {
-      let combinedItems: OrderItem[] = [];
-      tableTickets.forEach(ticket => {
-        ticket.items.forEach(ti => {
-          const existing = combinedItems.find(i => i.id === ti.id);
-          if (existing) {
-            existing.qty += ti.qty;
-          } else {
-            combinedItems.push({ ...ti });
-          }
-        });
-      });
-      setCart(combinedItems);
-      setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
-    } else {
-      setCart([]);
-      setLoadedCart([]);
-    }
-  };
 
   const finalizeOrder = () => {
     if (remaining > 0.01) { // Floating point safety
@@ -409,15 +451,51 @@ export default function ManagerPOS() {
             {orderType === 'dine-in' && (
               <View style={styles.metaSection}>
                 {selectedTableObj ? (
-                  <View style={styles.selectedMeta}>
-                    <Text style={styles.metaName}>Table: {selectedTableObj.name} ({selectedTableObj.zone})</Text>
-                    <TouchableOpacity onPress={() => setTableModalVisible(true)}>
-                      <Ionicons name="pencil" size={20} color="#4a121a" />
-                    </TouchableOpacity>
+                  <View style={styles.selectedMetaTableCard}>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={styles.metaName}>Table: {selectedTableObj.name}</Text>
+                        <View style={[
+                          styles.tableStatusPill, 
+                          selectedTableObj.status === 'available' ? styles.statusAvail : styles.statusOcc
+                        ]}>
+                          <Text style={styles.tableStatusPillText}>
+                            {selectedTableObj.status.toUpperCase()}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.metaSub}>
+                        {selectedTableObj.zone} • {selectedTableObj.seats} Seats 
+                        {selectedTableObj.server ? ` • Server: ${selectedTableObj.server}` : ''}
+                      </Text>
+                      {(selectedTableObj.status === 'occupied' || selectedTableObj.status === 'billed') && (
+                        <Text style={styles.metaRunningBill}>
+                          Live Running Bill: Rs. {(selectedTableObj.billTotal || subTotal).toLocaleString()}
+                        </Text>
+                      )}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity 
+                        style={styles.changeTableBtn}
+                        onPress={() => setTableModalVisible(true)}
+                      >
+                        <Ionicons name="swap-horizontal" size={16} color="#4a121a" style={{ marginRight: 4 }} />
+                        <Text style={styles.changeTableBtnText}>Change</Text>
+                      </TouchableOpacity>
+                      {(selectedTableObj.status === 'occupied' || selectedTableObj.status === 'billed') && (
+                        <TouchableOpacity 
+                          style={styles.resetTableBtn}
+                          onPress={handleClearSelectedTable}
+                        >
+                          <Ionicons name="refresh" size={14} color="#e74c3c" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
                   </View>
                 ) : (
                   <TouchableOpacity style={styles.selectMetaBtn} onPress={() => setTableModalVisible(true)}>
-                    <Text style={styles.selectMetaBtnText}>Select Table</Text>
+                    <Ionicons name="grid-outline" size={16} color="#4a121a" style={{ marginRight: 6 }} />
+                    <Text style={styles.selectMetaBtnText}>Select Dining Table</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -574,25 +652,95 @@ export default function ManagerPOS() {
       {/* Table Modal */}
       <Modal visible={tableModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <View style={[styles.modalContent, { maxWidth: 540, maxHeight: '85%' }]}>
             <View style={styles.modalHeader}>
-               <Text style={styles.modalTitle}>Select Table</Text>
-               <TouchableOpacity onPress={() => setTableModalVisible(false)}><Ionicons name="close" size={24}/></TouchableOpacity>
+              <View>
+                <Text style={styles.modalTitle}>Select Dining Table</Text>
+                <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                  Live integration with Table Service & Kitchen Orders
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setTableModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#1C1C1E" />
+              </TouchableOpacity>
             </View>
-            <ScrollView style={{maxHeight: 400}}>
-              {tables.map(t => (
-                <TouchableOpacity 
-                  key={t.id} 
-                  style={[styles.selectRow, t.status === 'billed' ? {opacity: 0.5} : {}]}
-                  onPress={() => handleTableSelect(t.id)}
-                >
-                  <View>
-                    <Text style={{fontWeight:'bold'}}>{t.name} ({t.zone})</Text>
-                    <Text style={{color:'#666'}}>Seats: {t.seats} • {t.status}</Text>
-                  </View>
-                  <Ionicons name={selectedTableId === t.id ? "checkmark-circle" : "ellipse-outline"} size={24} color={selectedTableId === t.id ? "#2ecc71" : "#ccc"} />
-                </TouchableOpacity>
-              ))}
+
+            {/* Zone Filter in Modal */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginVertical: 10, flexGrow: 0 }}>
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                {['All', ...zones].map(z => (
+                  <TouchableOpacity
+                    key={z}
+                    style={[styles.modalFilterPill, tableModalZone === z && styles.modalFilterPillActive]}
+                    onPress={() => setTableModalZone(z)}
+                  >
+                    <Text style={[styles.modalFilterText, tableModalZone === z && styles.modalFilterTextActive]}>
+                      {z}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10 }}>
+                {tables
+                  .filter(t => tableModalZone === 'All' || t.zone === tableModalZone)
+                  .map(t => {
+                    const isBusy = t.status === 'occupied' || t.status === 'billed';
+                    const isSelected = selectedTableId === t.id;
+                    const tableTickets = tickets.filter(tk => tk.tableId === t.id);
+                    const statusColor = t.status === 'available' ? '#27ae60' : (t.status === 'occupied' ? '#e74c3c' : '#f39c12');
+
+                    return (
+                      <TouchableOpacity 
+                        key={t.id} 
+                        style={[
+                          styles.tableSelectCard,
+                          isSelected && styles.tableSelectCardActive,
+                          isBusy && styles.tableSelectCardBusy,
+                        ]}
+                        onPress={() => handleTableSelect(t.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.tableCardTitle}>{t.name}</Text>
+                            <View style={[styles.tableCardStatusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
+                              <View style={[styles.tableCardStatusDot, { backgroundColor: statusColor }]} />
+                              <Text style={[styles.tableCardStatusText, { color: statusColor }]}>
+                                {t.status.toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.tableCardSubtitle}>
+                            Zone: {t.zone} • {t.seats} Seats {t.server ? `• Served by ${t.server}` : ''}
+                          </Text>
+
+                          {isBusy ? (
+                            <View style={styles.tableCardBillRow}>
+                              <Text style={styles.tableCardBillAmount}>
+                                Active Bill: Rs. {(t.billTotal || 0).toLocaleString()}
+                              </Text>
+                              <Text style={styles.tableCardTicketsHint}>
+                                • {tableTickets.length} active KOT(s) (Tap to Load & Checkout)
+                              </Text>
+                            </View>
+                          ) : (
+                            <Text style={styles.tableCardAvailableHint}>
+                              ✓ Ready for seating • Tap to start order
+                            </Text>
+                          )}
+                        </View>
+                        <Ionicons 
+                          name={isSelected ? "checkmark-circle" : "chevron-forward-circle-outline"} 
+                          size={24} 
+                          color={isSelected ? "#27ae60" : (isBusy ? "#e74c3c" : "#8E8E93")} 
+                        />
+                      </TouchableOpacity>
+                    );
+                  })}
+              </View>
             </ScrollView>
           </View>
         </View>
@@ -1275,5 +1423,143 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: 'bold',
     fontSize: 16,
+  },
+  selectedMetaTableCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8F9FA',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  tableStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  statusAvail: {
+    backgroundColor: 'rgba(39, 174, 96, 0.15)',
+  },
+  statusOcc: {
+    backgroundColor: 'rgba(231, 76, 60, 0.15)',
+  },
+  tableStatusPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1C1C1E',
+  },
+  metaRunningBill: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#4a121a',
+    marginTop: 3,
+  },
+  changeTableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  changeTableBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#4a121a',
+  },
+  resetTableBtn: {
+    backgroundColor: 'rgba(231, 76, 60, 0.1)',
+    padding: 7,
+    borderRadius: 6,
+  },
+  modalFilterPill: {
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#F2F2F7',
+  },
+  modalFilterPillActive: {
+    backgroundColor: '#4a121a',
+  },
+  modalFilterText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#636366',
+  },
+  modalFilterTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  tableSelectCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFC',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  tableSelectCardActive: {
+    borderColor: '#27ae60',
+    borderWidth: 2,
+    backgroundColor: '#F0FFF4',
+  },
+  tableSelectCardBusy: {
+    borderColor: '#FFD7D3',
+    backgroundColor: '#FFF8F7',
+  },
+  tableCardTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1C1C1E',
+  },
+  tableCardStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  tableCardStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
+  tableCardStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  tableCardSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  tableCardBillRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  tableCardBillAmount: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#4a121a',
+  },
+  tableCardTicketsHint: {
+    fontSize: 11,
+    color: '#D84315',
+    fontWeight: '600',
+    marginLeft: 4,
+  },
+  tableCardAvailableHint: {
+    fontSize: 11,
+    color: '#27ae60',
+    fontWeight: '600',
+    marginTop: 4,
   },
 });

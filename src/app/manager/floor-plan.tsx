@@ -36,13 +36,16 @@ export default function FloorPlanScreen() {
   const tables = useRestaurantStore((state) => state.tables);
   const settleBill = useRestaurantStore((state) => state.settleBill);
 
-  const [activeZone, setActiveZone] = useState<Zone>('Main Hall');
+  const storeZones = useRestaurantStore((state) => state.zones);
+  const zones: string[] = storeZones && storeZones.length > 0 ? storeZones : ['Main Hall', 'Rooftop', 'VIP'];
+
+  const [activeZone, setActiveZone] = useState<string>('Main Hall');
   const [selectedTable, setSelectedTable] = useState<Table | null>(null);
   const [viewBillModalVisible, setViewBillModalVisible] = useState(false);
   const [billInvoice, setBillInvoice] = useState<any>(null);
 
-  const zones: Zone[] = ['Main Hall', 'Rooftop', 'VIP'];
-  const currentZoneTables = tables.filter((t) => t.zone === activeZone);
+  const effectiveActiveZone = zones.includes(activeZone) ? activeZone : (zones[0] || 'Main Hall');
+  const currentZoneTables = tables.filter((t) => t.zone === effectiveActiveZone);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -152,8 +155,56 @@ export default function FloorPlanScreen() {
 
       <Text style={styles.actionsTitle}>Quick Actions</Text>
       <View style={styles.actionsGrid}>
-        {table.status === 'occupied' && (
+        {table.status === 'available' && (
           <>
+            <TouchableOpacity
+              style={styles.actionBtnSuccess}
+              onPress={() => {
+                setSelectedTable(null);
+                router.push(`/manager/pos?prefillTableId=${table.id}`);
+              }}
+            >
+              <Ionicons name="calculator-outline" size={20} color="#fff" />
+              <Text style={styles.actionBtnTextSolid}>Start Order in POS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionBtnSolid}
+              onPress={() => {
+                if (Platform.OS === 'web') window.alert(`${table.name} has been marked as reserved.`);
+                else Alert.alert('Reserved', `${table.name} has been marked as reserved.`);
+              }}
+            >
+              <Ionicons name="calendar-outline" size={20} color="#fff" />
+              <Text style={styles.actionBtnTextSolid}>Reserve Table</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {(table.status === 'billed' || table.status === 'occupied') && (
+          <>
+            <TouchableOpacity
+              style={styles.actionBtnSuccess}
+              onPress={() => {
+                setSelectedTable(null);
+                router.push(`/manager/pos?prefillTableId=${table.id}`);
+              }}
+            >
+              <Ionicons name="card-outline" size={20} color="#fff" />
+              <Text style={styles.actionBtnTextSolid}>Checkout in POS</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.actionBtnOutline}
+              onPress={() => {
+                setSelectedTable(null);
+                router.push(`/manager/pos?prefillTableId=${table.id}`);
+              }}
+            >
+              <Ionicons name="add-circle-outline" size={20} color="#1C1C1E" />
+              <Text style={styles.actionBtnTextOutline}>Add Items in POS</Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               style={styles.actionBtnOutline}
               onPress={() => handleViewBill(table)}
@@ -161,31 +212,35 @@ export default function FloorPlanScreen() {
               <Ionicons name="eye-outline" size={20} color="#1C1C1E" />
               <Text style={styles.actionBtnTextOutline}>View Bill</Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionBtnOutline, { borderColor: '#e74c3c' }]}
+              onPress={() => {
+                const confirmMsg = `Release ${table.name}? Active tickets and running bill will be cleared.`;
+                if (Platform.OS === 'web') {
+                  if (window.confirm(confirmMsg)) {
+                    settleBill(table.id);
+                    setSelectedTable(null);
+                  }
+                } else {
+                  Alert.alert('Release Table', confirmMsg, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { 
+                      text: 'Release', 
+                      style: 'destructive', 
+                      onPress: () => {
+                        settleBill(table.id);
+                        setSelectedTable(null);
+                      } 
+                    }
+                  ]);
+                }
+              }}
+            >
+              <Ionicons name="refresh-outline" size={20} color="#e74c3c" />
+              <Text style={[styles.actionBtnTextOutline, { color: '#e74c3c' }]}>Release Table</Text>
+            </TouchableOpacity>
           </>
-        )}
-        {table.status === 'available' && (
-          <TouchableOpacity
-            style={styles.actionBtnSolid}
-            onPress={() => {
-              if (Platform.OS === 'web') window.alert(`${table.name} has been marked as reserved.`);
-              else Alert.alert('Reserved', `${table.name} has been marked as reserved.`);
-            }}
-          >
-            <Ionicons name="calendar-outline" size={20} color="#fff" />
-            <Text style={styles.actionBtnTextSolid}>Reserve Table</Text>
-          </TouchableOpacity>
-        )}
-        {(table.status === 'billed' || table.status === 'occupied') && (
-          <TouchableOpacity
-            style={styles.actionBtnSuccess}
-            onPress={() => {
-              setSelectedTable(null);
-              router.push(`/manager/pos?prefillTableId=${table.id}`);
-            }}
-          >
-            <Ionicons name="card-outline" size={20} color="#fff" />
-            <Text style={styles.actionBtnTextSolid}>Checkout in POS</Text>
-          </TouchableOpacity>
         )}
       </View>
     </ScrollView>
@@ -235,7 +290,7 @@ export default function FloorPlanScreen() {
                 key={z}
                 style={[
                   styles.zoneTab,
-                  activeZone === z && styles.zoneTabActive,
+                  effectiveActiveZone === z && styles.zoneTabActive,
                   isMobile && { paddingHorizontal: 16, paddingVertical: 8 },
                 ]}
                 onPress={() => {
@@ -246,7 +301,7 @@ export default function FloorPlanScreen() {
                 <Text
                   style={[
                     styles.zoneTabText,
-                    activeZone === z && styles.zoneTabTextActive,
+                    effectiveActiveZone === z && styles.zoneTabTextActive,
                     isMobile && { fontSize: 13 },
                   ]}
                 >
@@ -264,8 +319,12 @@ export default function FloorPlanScreen() {
           >
             <View style={[styles.canvasContainer, isMobile && { width: 460, minHeight: 450 }]}>
               <View style={styles.gridBackground} />
-              {currentZoneTables.map((table) => {
-                const layout = TABLE_LAYOUTS[table.id] || { x: 30, y: 80, shape: 'square' };
+              {currentZoneTables.map((table, index) => {
+                const layout = TABLE_LAYOUTS[table.id] || {
+                  x: 30 + ((index % 3) * 140),
+                  y: 60 + (Math.floor(index / 3) * 125),
+                  shape: 'square',
+                };
                 const color = getStatusColor(table.status);
                 const bgColor = getStatusBg(table.status);
                 const isSelected = selectedTable?.id === table.id;
