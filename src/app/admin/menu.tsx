@@ -38,6 +38,7 @@ export default function MenuManagement() {
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
   const [itemCategory, setItemCategory] = useState(categories[0] || 'Mains');
+  const [itemVariants, setItemVariants] = useState<{name: string, price: string}[]>([]);
   const [isDropdownOpen, setDropdownOpen] = useState(false);
 
   // Category Modal state
@@ -69,6 +70,7 @@ export default function MenuManagement() {
     setItemName('');
     setItemPrice('');
     setItemCategory(categories[0] || 'Mains');
+    setItemVariants([]);
     setDropdownOpen(false);
     setItemModalVisible(true);
   };
@@ -78,6 +80,7 @@ export default function MenuManagement() {
     setItemName(item.name);
     setItemPrice(item.price.toString());
     setItemCategory(item.category);
+    setItemVariants(item.variants ? item.variants.map(v => ({ name: v.name, price: v.price.toString() })) : []);
     setDropdownOpen(false);
     setItemModalVisible(true);
   };
@@ -98,17 +101,23 @@ export default function MenuManagement() {
       return;
     }
 
+    const parsedVariants = itemVariants
+      .filter(v => v.name.trim() !== '' && !isNaN(parseFloat(v.price)))
+      .map(v => ({ name: v.name.trim(), price: parseFloat(v.price) }));
+
     if (editingItem) {
       updateMenuItem(editingItem.id, {
         name: itemName.trim(),
         price: priceNum,
-        category: itemCategory
+        category: itemCategory,
+        variants: parsedVariants.length > 0 ? parsedVariants : undefined
       });
     } else {
       addMenuItem({
         name: itemName.trim(),
         price: priceNum,
-        category: itemCategory
+        category: itemCategory,
+        variants: parsedVariants.length > 0 ? parsedVariants : undefined
       });
     }
     
@@ -305,6 +314,11 @@ export default function MenuManagement() {
                         </View>
                         <View style={styles.itemPriceRow}>
                           <Text style={styles.itemCardPrice}>Rs. {item.price.toFixed(0)}</Text>
+                          {item.variants && item.variants.length > 0 && (
+                            <Text style={{ fontSize: 11, color: '#D5A943', fontWeight: '600' }}>
+                              ({item.variants.length} Options)
+                            </Text>
+                          )}
                           <View style={styles.statusPill}>
                             <View style={styles.statusDot} />
                             <Text style={styles.statusPillText}>Available</Text>
@@ -359,9 +373,16 @@ export default function MenuManagement() {
                         <Text style={styles.catBadgeText}>{item.category}</Text>
                       </View>
                     </View>
-                    <Text style={[styles.tableCell, { fontWeight: '700', color: '#4a121a' }]}>
-                      Rs. {item.price.toFixed(0)}
-                    </Text>
+                    <View style={styles.tableCell}>
+                      <Text style={{ fontWeight: '700', color: '#4a121a' }}>
+                        Rs. {item.price.toFixed(0)}
+                      </Text>
+                      {item.variants && item.variants.length > 0 && (
+                        <Text style={{ fontSize: 11, color: '#D5A943', fontWeight: '600', marginTop: 2 }}>
+                          {item.variants.length} Options
+                        </Text>
+                      )}
+                    </View>
                     <View style={styles.tableCell}>
                       <View style={styles.statusPill}>
                         <View style={styles.statusDot} />
@@ -510,6 +531,56 @@ export default function MenuManagement() {
                 </ScrollView>
               </View>
             )}
+
+            <View style={{ marginTop: 16 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                <Text style={styles.inputLabel}>Variants (Optional)</Text>
+                <TouchableOpacity 
+                  style={{ backgroundColor: 'rgba(213, 169, 67, 0.1)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}
+                  onPress={() => setItemVariants([...itemVariants, { name: '', price: '' }])}
+                >
+                  <Text style={{ color: '#D5A943', fontWeight: 'bold', fontSize: 12 }}>+ Add Option</Text>
+                </TouchableOpacity>
+              </View>
+              
+              {itemVariants.map((variant, idx) => (
+                <View key={idx} style={{ flexDirection: 'row', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.modalInput, { flex: 2, marginBottom: 0 }]}
+                    placeholder="e.g. Small"
+                    placeholderTextColor="#8E8E93"
+                    value={variant.name}
+                    onChangeText={(val) => {
+                      const newVars = [...itemVariants];
+                      newVars[idx].name = val;
+                      setItemVariants(newVars);
+                    }}
+                  />
+                  <TextInput
+                    style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
+                    placeholder="Price"
+                    placeholderTextColor="#8E8E93"
+                    keyboardType="numeric"
+                    value={variant.price}
+                    onChangeText={(val) => {
+                      const newVars = [...itemVariants];
+                      newVars[idx].price = val;
+                      setItemVariants(newVars);
+                    }}
+                  />
+                  <TouchableOpacity 
+                    style={{ padding: 8 }}
+                    onPress={() => {
+                      const newVars = [...itemVariants];
+                      newVars.splice(idx, 1);
+                      setItemVariants(newVars);
+                    }}
+                  >
+                    <Ionicons name="trash" size={20} color="#e74c3c" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
             
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setItemModalVisible(false)}>

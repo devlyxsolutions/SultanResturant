@@ -643,25 +643,15 @@
       "id": "m1791107573660"
     },
     {
-      "id": "m6",
-      "name": "Fajita Pizza",
-      "price": 1200,
-      "category": "Mains",
+      "name": "Chicken Fajita",
+      "price": 150,
+      "category": "Pizzas",
+      "id": "m1791112001222",
       "variants": [
-        { "name": "Small (7\")", "price": 850 },
-        { "name": "Medium (10\")", "price": 1400 },
-        { "name": "Large (13\")", "price": 1950 },
-        { "name": "Family (16\")", "price": 2500 }
-      ]
-    },
-    {
-      "id": "m7",
-      "name": "Mutton Ribs",
-      "price": 3500,
-      "category": "Desi",
-      "variants": [
-        { "name": "Half KG", "price": 3500 },
-        { "name": "1 KG", "price": 6800 }
+        { "name": "Small (7\")", "price": 450 },
+        { "name": "Medium (10\")", "price": 850 },
+        { "name": "Large (13\")", "price": 1400 },
+        { "name": "Family (16\")", "price": 1800 }
       ]
     }
   ],
@@ -670,7 +660,8 @@
     "Mains",
     "Desserts",
     "Drinks",
-    "Desi"
+    "Desi",
+    "Pizzas"
   ],
   "zones": [
     "Main Hall",
