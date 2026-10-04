@@ -51,6 +51,9 @@ export default function ManagerPOS() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
 
+  // Variant Modal
+  const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
+
   // Payment State
   const [discountAmount, setDiscountAmount] = useState('0');
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
@@ -170,6 +173,11 @@ export default function ManagerPOS() {
   };
 
   const addToCart = (item: MenuItem) => {
+    if (item.variants && item.variants.length > 0) {
+      setVariantModalItem(item);
+      return;
+    }
+    
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
@@ -177,6 +185,24 @@ export default function ManagerPOS() {
       }
       return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, completed: false }];
     });
+  };
+
+  const handleVariantSelect = (variant: {name: string, price: number}) => {
+    if (!variantModalItem) return;
+    
+    // Create a unique ID for this variant combo so different variants don't stack
+    const variantId = `${variantModalItem.id}-${variant.name}`;
+    const variantName = `${variantModalItem.name} (${variant.name})`;
+    
+    setCart(prev => {
+      const existing = prev.find(i => i.id === variantId);
+      if (existing) {
+        return prev.map(i => i.id === variantId ? { ...i, qty: i.qty + 1 } : i);
+      }
+      return [...prev, { id: variantId, name: variantName, price: variant.price, qty: 1, completed: false }];
+    });
+    
+    setVariantModalItem(null);
   };
 
   const updateQty = (id: string, delta: number) => {
@@ -223,8 +249,17 @@ export default function ManagerPOS() {
       const loadedItem = loadedCart.find(i => i.id === cartItem.id);
       const loadedQty = loadedItem ? loadedItem.qty : 0;
       if (cartItem.qty > loadedQty) {
+        // Need to recreate a dummy MenuItem for the variant since it doesn't exist directly in menuItems
+        const originalId = cartItem.id.split('-')[0];
+        const originalMenu = menuItems.find(m => m.id === originalId);
+        
         kotItems.push({
-          item: menuItems.find(m => m.id === cartItem.id) as MenuItem,
+          item: {
+            id: cartItem.id,
+            name: cartItem.name,
+            price: cartItem.price,
+            category: originalMenu ? originalMenu.category : 'Mains'
+          },
           qty: cartItem.qty - loadedQty
         });
       }
@@ -961,6 +996,37 @@ export default function ManagerPOS() {
         </View>
       </Modal>
 
+      {/* Variant Selection Modal */}
+      <Modal visible={!!variantModalItem} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 400 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Choose Option</Text>
+              <TouchableOpacity onPress={() => setVariantModalItem(null)}>
+                <Ionicons name="close" size={24} color="#000" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={{ textAlign: 'center', marginBottom: 20, color: '#666', fontSize: 16 }}>
+              {variantModalItem?.name}
+            </Text>
+
+            <View style={{ gap: 10 }}>
+              {variantModalItem?.variants?.map((v, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.variantBtn}
+                  onPress={() => handleVariantSelect(v)}
+                >
+                  <Text style={styles.variantName}>{v.name}</Text>
+                  <Text style={styles.variantPrice}>Rs. {v.price}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -1657,5 +1723,25 @@ const styles = StyleSheet.create({
     color: '#27ae60',
     fontWeight: '600',
     marginTop: 4,
+  },
+  variantBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+  },
+  variantName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  variantPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#D5A943',
   },
 });

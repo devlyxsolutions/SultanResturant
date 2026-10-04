@@ -43,11 +43,17 @@ export type Ticket = {
   roundNumber?: number;
 };
 
+export type MenuVariant = {
+  name: string;
+  price: number;
+};
+
 export type MenuItem = {
   id: string;
   name: string;
   price: number;
   category: string;
+  variants?: MenuVariant[];
 };
 
 export type Customer = {
@@ -196,6 +202,28 @@ const INITIAL_MENU: MenuItem[] = [
   { id: 'm3', name: 'Hummus & Pita', price: 650, category: 'Appetizers' },
   { id: 'm4', name: 'Kunafa', price: 850, category: 'Desserts' },
   { id: 'm5', name: 'Mint Margarita', price: 450, category: 'Drinks' },
+  { 
+    id: 'm6', 
+    name: 'Fajita Pizza', 
+    price: 1200, 
+    category: 'Mains',
+    variants: [
+      { name: 'Small (7")', price: 850 },
+      { name: 'Medium (10")', price: 1400 },
+      { name: 'Large (13")', price: 1950 },
+      { name: 'Family (16")', price: 2500 }
+    ]
+  },
+  {
+    id: 'm7',
+    name: 'Mutton Ribs',
+    price: 3500,
+    category: 'Mains',
+    variants: [
+      { name: 'Half KG', price: 3500 },
+      { name: '1 KG', price: 6800 }
+    ]
+  }
 ];
 
 const INITIAL_STAFF: StaffMember[] = [
