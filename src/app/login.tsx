@@ -7,6 +7,9 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  Modal,
+  Pressable,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -71,6 +74,11 @@ export default function LoginScreen() {
     setErrorMessage('');
   };
 
+  const closeModal = () => {
+    setSelectedRole(null);
+    setErrorMessage('');
+  };
+
   const handleLogin = () => {
     if (!selectedRole || !name.trim()) {
       setErrorMessage('Please select a staff role.');
@@ -100,6 +108,8 @@ export default function LoginScreen() {
     router.replace(ROLE_HOME[selectedRole] as Href);
   };
 
+  const selectedRoleObj = roles.find((r) => r.value === selectedRole);
+
   return (
     <IslamicBackground theme="burgundy" showCorners={true} showCenterLattice={true}>
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -111,7 +121,7 @@ export default function LoginScreen() {
                 <SultanLogo size="xl" width={130} height={130} />
               </View>
               <Text style={styles.title}>Sultan Staff Portal</Text>
-              <Text style={styles.subtitle}>Select your operational role & enter PIN</Text>
+              <Text style={styles.subtitle}>Select your operational role to sign in</Text>
             </View>
 
             {/* Role Cards Grid */}
@@ -120,29 +130,28 @@ export default function LoginScreen() {
                 const count = staff.filter(
                   (s) => s.role.toLowerCase() === r.value?.toLowerCase()
                 ).length;
-                const isSelected = selectedRole === r.value;
                 return (
                   <TouchableOpacity
                     key={r.value}
-                    style={[styles.roleCard, isSelected && styles.roleCardActive]}
+                    style={styles.roleCard}
                     onPress={() => handleRoleSelect(r.value)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.82}
                   >
-                    <View style={[styles.roleIconCircle, isSelected && styles.roleIconCircleActive]}>
+                    <View style={styles.roleIconCircle}>
                       <Ionicons
                         name={r.icon}
-                        size={24}
-                        color={isSelected ? '#451014' : '#D5A943'}
+                        size={26}
+                        color="#D5A943"
                       />
                     </View>
-                    <Text style={[styles.roleText, isSelected && styles.roleTextActive]}>
+                    <Text style={styles.roleText}>
                       {r.label}
                     </Text>
-                    <Text style={[styles.roleDesc, isSelected && styles.roleDescActive]}>
+                    <Text style={styles.roleDesc}>
                       {r.desc}
                     </Text>
-                    <View style={[styles.staffCountBadge, isSelected && styles.staffCountBadgeActive]}>
-                      <Text style={[styles.staffCountText, isSelected && styles.staffCountTextActive]}>
+                    <View style={styles.staffCountBadge}>
+                      <Text style={styles.staffCountText}>
                         {count} Staff Active
                       </Text>
                     </View>
@@ -151,43 +160,88 @@ export default function LoginScreen() {
               })}
             </View>
 
-            {/* Form Container (When Role is selected) */}
-            {selectedRole && (
-              <View style={styles.formContainer}>
-                <View style={styles.formHeader}>
-                  <View style={styles.activeRolePill}>
-                    <Ionicons name="shield-outline" size={15} color="#D5A943" />
-                    <Text style={styles.activeRoleText}>
-                      Signing in as {selectedRole.toUpperCase()}
-                    </Text>
+            {/* Back Button */}
+            <TouchableOpacity
+              style={styles.backButton}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+            >
+              <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 6 }} />
+              <Text style={styles.backButtonText}>Back to Welcome Screen</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+
+        {/* Modal Popup for Role Credentials */}
+        <Modal
+          visible={!!selectedRole}
+          transparent
+          animationType="fade"
+          onRequestClose={closeModal}
+        >
+          <Pressable style={styles.modalOverlay} onPress={closeModal}>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+              style={styles.modalContentWrapper}
+            >
+              <Pressable style={styles.modalCard} onPress={(e) => e.stopPropagation()}>
+                {/* Modal Header */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderLeft}>
+                    <View style={styles.modalRoleIconCircle}>
+                      <Ionicons
+                        name={selectedRoleObj?.icon || 'shield-checkmark-outline'}
+                        size={22}
+                        color="#451014"
+                      />
+                    </View>
+                    <View>
+                      <Text style={styles.modalTitle}>
+                        {selectedRoleObj?.label} Sign In
+                      </Text>
+                      <Text style={styles.modalSubtitle}>
+                        {selectedRoleObj?.desc}
+                      </Text>
+                    </View>
                   </View>
+                  <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    onPress={closeModal}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="close" size={20} color="#D5A943" />
+                  </TouchableOpacity>
                 </View>
+
+                {/* Divider */}
+                <View style={styles.modalDivider} />
 
                 {/* Quick Pick Staff Pills */}
                 {roleStaff.length > 0 && (
                   <View style={styles.quickPickContainer}>
-                    <Text style={styles.quickPickLabel}>Quick Select Profile:</Text>
+                    <Text style={styles.quickPickLabel}>Select Profile:</Text>
                     <View style={styles.quickPickPills}>
-                      {roleStaff.map((member) => (
-                        <TouchableOpacity
-                          key={member.id}
-                          style={[
-                            styles.staffPill,
-                            name.toLowerCase() === member.name.toLowerCase() && styles.staffPillActive,
-                          ]}
-                          onPress={() => selectStaffMember(member)}
-                        >
-                          <Text
+                      {roleStaff.map((member) => {
+                        const isChosen = name.toLowerCase() === member.name.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={member.id}
                             style={[
-                              styles.staffPillText,
-                              name.toLowerCase() === member.name.toLowerCase() &&
-                                styles.staffPillTextActive,
+                              styles.staffPill,
+                              isChosen && styles.staffPillActive,
                             ]}
+                            onPress={() => selectStaffMember(member)}
                           >
-                            {member.name} • ({member.shift})
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                            <Text
+                              style={[
+                                styles.staffPillText,
+                                isChosen && styles.staffPillTextActive,
+                              ]}
+                            >
+                              {member.name} • ({member.shift})
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
                 )}
@@ -202,7 +256,7 @@ export default function LoginScreen() {
 
                 {/* Name Input */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Staff Name</Text>
+                  <Text style={styles.inputLabel}>Staff Name / ID</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="person-outline" size={18} color="#D5A943" style={styles.fieldIcon} />
                     <TextInput
@@ -243,29 +297,33 @@ export default function LoginScreen() {
                   </View>
                 </View>
 
-                {/* Submit Button */}
-                <TouchableOpacity
-                  style={[styles.loginButton, (!name.trim() || !pin.trim()) && styles.loginButtonDisabled]}
-                  onPress={handleLogin}
-                  disabled={!name.trim() || !pin.trim()}
-                  activeOpacity={0.88}
-                >
-                  <Ionicons name="log-in-outline" size={20} color="#451014" />
-                  <Text style={styles.loginButtonText}>Enter Portal</Text>
-                </TouchableOpacity>
-              </View>
-            )}
+                {/* Action Buttons */}
+                <View style={styles.modalActions}>
+                  <TouchableOpacity
+                    style={[
+                      styles.loginButton,
+                      (!name.trim() || !pin.trim()) && styles.loginButtonDisabled,
+                    ]}
+                    onPress={handleLogin}
+                    disabled={!name.trim() || !pin.trim()}
+                    activeOpacity={0.88}
+                  >
+                    <Ionicons name="log-in-outline" size={20} color="#451014" />
+                    <Text style={styles.loginButtonText}>Enter Portal</Text>
+                  </TouchableOpacity>
 
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-            >
-              <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 6 }} />
-              <Text style={styles.backButtonText}>Back to Welcome Screen</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
+                  <TouchableOpacity
+                    style={styles.modalCancelBtn}
+                    onPress={closeModal}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalCancelText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </KeyboardAvoidingView>
+          </Pressable>
+        </Modal>
       </SafeAreaView>
     </IslamicBackground>
   );
@@ -282,7 +340,7 @@ const styles = StyleSheet.create({
   },
   content: {
     paddingHorizontal: 20,
-    maxWidth: 560,
+    maxWidth: 580,
     width: '100%',
     alignSelf: 'center',
   },
@@ -320,12 +378,12 @@ const styles = StyleSheet.create({
   },
   roleCard: {
     width: '48%',
-    backgroundColor: 'rgba(30, 7, 9, 0.75)',
-    paddingVertical: 16,
-    paddingHorizontal: 12,
+    backgroundColor: 'rgba(30, 7, 9, 0.85)',
+    paddingVertical: 18,
+    paddingHorizontal: 14,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.25)',
+    borderColor: 'rgba(213, 169, 67, 0.3)',
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
@@ -333,100 +391,133 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 4,
   },
-  roleCardActive: {
-    borderColor: '#D5A943',
-    backgroundColor: 'rgba(213, 169, 67, 0.2)',
-  },
   roleIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(213, 169, 67, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(213, 169, 67, 0.18)',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
-  },
-  roleIconCircleActive: {
-    backgroundColor: '#D5A943',
-    borderColor: '#FFF',
+    marginBottom: 10,
   },
   roleText: {
     fontSize: 16,
     fontWeight: '700',
     color: '#ffffff',
-  },
-  roleTextActive: {
-    color: '#D5A943',
+    marginBottom: 2,
   },
   roleDesc: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.6)',
-    marginTop: 2,
+    color: 'rgba(255,255,255,0.65)',
     textAlign: 'center',
   },
-  roleDescActive: {
-    color: 'rgba(255,255,255,0.9)',
-  },
   staffCountBadge: {
-    marginTop: 8,
-    paddingHorizontal: 8,
+    marginTop: 10,
+    paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 6,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-  },
-  staffCountBadgeActive: {
-    backgroundColor: 'rgba(213, 169, 67, 0.25)',
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.25)',
   },
   staffCountText: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.7)',
+    color: '#D5A943',
     fontWeight: '600',
   },
-  staffCountTextActive: {
-    color: '#D5A943',
-  },
-  formContainer: {
-    width: '100%',
-    backgroundColor: 'rgba(30, 7, 9, 0.85)',
-    borderRadius: 18,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
-    gap: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-  },
-  formHeader: {
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  activeRolePill: {
+  backButton: {
+    marginTop: 14,
+    padding: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    color: '#D5A943',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  /* Modal Popup Styles */
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(10, 2, 3, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalContentWrapper: {
+    width: '100%',
+    maxWidth: 480,
+    alignItems: 'center',
+  },
+  modalCard: {
+    width: '100%',
+    backgroundColor: '#2A070B',
+    borderRadius: 20,
+    padding: 22,
+    borderWidth: 1.8,
+    borderColor: '#D5A943',
+    gap: 14,
+    shadowColor: '#D5A943',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  modalHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  modalRoleIconCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  modalSubtitle: {
+    fontSize: 12,
+    color: '#D5A943',
+    fontWeight: '600',
+  },
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(213, 169, 67, 0.15)',
     borderWidth: 1,
     borderColor: 'rgba(213, 169, 67, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  activeRoleText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#D5A943',
-    letterSpacing: 0.5,
+  modalDivider: {
+    height: 1,
+    backgroundColor: 'rgba(213, 169, 67, 0.25)',
+    marginVertical: 2,
   },
   quickPickContainer: {
     marginBottom: 4,
   },
   quickPickLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#D5A943',
     textTransform: 'uppercase',
@@ -444,7 +535,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: 'rgba(255, 255, 255, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.2)',
+    borderColor: 'rgba(213, 169, 67, 0.25)',
   },
   staffPillActive: {
     backgroundColor: '#D5A943',
@@ -457,7 +548,7 @@ const styles = StyleSheet.create({
   },
   staffPillTextActive: {
     color: '#451014',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   errorBanner: {
     flexDirection: 'row',
@@ -497,10 +588,10 @@ const styles = StyleSheet.create({
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
     borderRadius: 10,
     borderWidth: 1.2,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
+    borderColor: 'rgba(213, 169, 67, 0.35)',
     paddingHorizontal: 12,
   },
   fieldIcon: {
@@ -516,15 +607,18 @@ const styles = StyleSheet.create({
     letterSpacing: 5,
     fontWeight: '700',
   },
+  modalActions: {
+    gap: 10,
+    marginTop: 4,
+  },
   loginButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#D5A943',
-    paddingVertical: 15,
+    paddingVertical: 14,
     borderRadius: 12,
     gap: 8,
-    marginTop: 6,
     borderWidth: 1.5,
     borderColor: '#E8C76D',
     shadowColor: '#D5A943',
@@ -543,16 +637,14 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  backButton: {
-    marginTop: 18,
-    padding: 12,
-    flexDirection: 'row',
+  modalCancelBtn: {
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  backButtonText: {
-    color: '#D5A943',
-    fontSize: 14,
-    fontWeight: '700',
+  modalCancelText: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });
