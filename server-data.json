@@ -646,13 +646,27 @@
       "name": "Chicken Fajita",
       "price": 150,
       "category": "Pizzas",
-      "id": "m1791112001222",
+      "id": "m1791112001222"
+    },
+    {
+      "name": "Chicken Cheese",
+      "price": 0,
+      "category": "Pizzas",
       "variants": [
-        { "name": "Small (7\")", "price": 450 },
-        { "name": "Medium (10\")", "price": 850 },
-        { "name": "Large (13\")", "price": 1400 },
-        { "name": "Family (16\")", "price": 1800 }
-      ]
+        {
+          "name": "Small",
+          "price": 850
+        },
+        {
+          "name": "Medium",
+          "price": 1200
+        },
+        {
+          "name": "Large",
+          "price": 1800
+        }
+      ],
+      "id": "m1791112898285"
     }
   ],
   "categories": [

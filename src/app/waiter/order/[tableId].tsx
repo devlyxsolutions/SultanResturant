@@ -9,7 +9,8 @@ import {
   Platform, 
   Alert, 
   StatusBar,
-  useWindowDimensions 
+  useWindowDimensions,
+  Modal 
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -29,6 +30,7 @@ export default function TableOrderScreen() {
   const [activeTab, setActiveTab] = useState<'menu' | 'order'>('menu');
   const [activeCat, setActiveCat] = useState('All');
   const [newCart, setNewCart] = useState<{ item: MenuItem; qty: number; notes?: string }[]>([]);
+  const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
   const [now] = useState(() => Date.now());
 
   const tables = useRestaurantStore(state => state.tables);
@@ -87,6 +89,10 @@ export default function TableOrderScreen() {
   const categories = ['All', ...storeCategories];
 
   const addToCart = (item: MenuItem) => {
+    if (item.variants && item.variants.length > 0) {
+      setVariantModalItem(item);
+      return;
+    }
     setNewCart(prev => {
       const existing = prev.find(i => i.item.id === item.id);
       if (existing) {
@@ -94,6 +100,29 @@ export default function TableOrderScreen() {
       }
       return [...prev, { item, qty: 1 }];
     });
+  };
+
+  const handleVariantSelect = (variant: {name: string, price: number}) => {
+    if (!variantModalItem) return;
+    
+    const variantId = `${variantModalItem.id}-${variant.name}`;
+    const variantName = `${variantModalItem.name} (${variant.name})`;
+    const variantItem: MenuItem = {
+      id: variantId,
+      name: variantName,
+      price: variant.price,
+      category: variantModalItem.category
+    };
+    
+    setNewCart(prev => {
+      const existing = prev.find(i => i.item.id === variantId);
+      if (existing) {
+        return prev.map(i => i.item.id === variantId ? { ...i, qty: i.qty + 1 } : i);
+      }
+      return [...prev, { item: variantItem, qty: 1 }];
+    });
+    
+    setVariantModalItem(null);
   };
 
   const updateCartQty = (itemId: string, delta: number) => {
@@ -531,6 +560,36 @@ export default function TableOrderScreen() {
           </View>
         )}
       </View>
+
+      {/* Variant Selection Modal */}
+      <Modal visible={!!variantModalItem} transparent animationType="slide">
+        <View style={styles.modalBg}>
+          <View style={[styles.modalCard, { maxWidth: 400 }]}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setVariantModalItem(null)}>
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+            
+            <Text style={styles.modalTitle}>Choose Option</Text>
+            <Text style={{ textAlign: 'center', marginBottom: 20, color: '#666', fontSize: 16 }}>
+              {variantModalItem?.name}
+            </Text>
+
+            <View style={{ gap: 10 }}>
+              {variantModalItem?.variants?.map((v, idx) => (
+                <TouchableOpacity
+                  key={idx}
+                  style={styles.variantBtn}
+                  onPress={() => handleVariantSelect(v)}
+                >
+                  <Text style={styles.variantName}>{v.name}</Text>
+                  <Text style={styles.variantPrice}>Rs. {v.price}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
@@ -1074,5 +1133,52 @@ const styles = StyleSheet.create({
     color: '#4a121a',
     fontSize: 14,
     fontWeight: '700',
+  },
+  modalBg: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    backgroundColor: '#fff',
+    width: '90%',
+    borderRadius: 16,
+    padding: 24,
+  },
+  closeBtn: {
+    alignSelf: 'flex-end',
+    marginBottom: 10,
+  },
+  closeBtnText: {
+    color: '#e74c3c',
+    fontWeight: 'bold',
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#4a121a',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  variantBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: '#F8F9FA',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    borderRadius: 10,
+  },
+  variantName: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  variantPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#D5A943',
   },
 });
