@@ -21,6 +21,7 @@ export default function SyncStatusBadge({ compact = false }: Props) {
     serverIp, 
     serverPort, 
     serverUrl,
+    isCloudDb,
     lastSyncedAt, 
     totalSyncedEvents, 
     forceSyncNow, 
@@ -118,7 +119,9 @@ export default function SyncStatusBadge({ compact = false }: Props) {
                 <View style={styles.statusIndicator}>
                   <View style={[styles.dotLarge, { backgroundColor: getDotColor() }]} />
                   <Text style={[styles.statusValue, { color: getDotColor() }]}>
-                    {isConnected ? 'ONLINE & SYNCED' : (isConnecting ? 'CONNECTING...' : 'OFFLINE / LOCAL STORAGE')}
+                    {isConnected 
+                      ? (isCloudDb ? 'ONLINE & CLOUD SYNCED (FIREBASE)' : 'ONLINE & SYNCED') 
+                      : (isConnecting ? 'CONNECTING...' : 'OFFLINE / LOCAL STORAGE')}
                   </Text>
                 </View>
               </View>
@@ -139,6 +142,15 @@ export default function SyncStatusBadge({ compact = false }: Props) {
                 <Text style={styles.statusValue}>{totalSyncedEvents} updates</Text>
               </View>
             </View>
+
+            {isCloudDb && (
+              <View style={{ backgroundColor: 'rgba(46, 204, 113, 0.12)', borderColor: '#2ecc71', borderWidth: 1, padding: 10, borderRadius: 8, marginBottom: 14, flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="cloud-done" size={20} color="#2ecc71" style={{ marginRight: 8 }} />
+                <Text style={{ color: '#2ecc71', fontSize: 12, flex: 1, fontWeight: '500' }}>
+                  Firebase Realtime Database is live! All devices (Waiters, Kitchen, POS) sync across the internet automatically.
+                </Text>
+              </View>
+            )}
 
             {/* Server IP / Cloud URL Config */}
             <Text style={styles.sectionLabel}>Server Address (Cloud URL or Local IP):</Text>

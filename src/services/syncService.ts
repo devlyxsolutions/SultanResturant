@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore, getOpsSyncState } from '../store/opsStore';
+import { isFirebaseConfigured, getFirebaseDb } from './firebase';
+import { ref, onValue, set, get } from 'firebase/database';
 
 export type SyncStatus = 'connected' | 'connecting' | 'offline';
 
@@ -11,6 +13,7 @@ export interface SyncInfo {
   serverIp: string;
   serverPort: number;
   serverUrl?: string;
+  isCloudDb?: boolean;
   lastSyncedAt: number | null;
   totalSyncedEvents: number;
   deviceId: string;
@@ -76,8 +79,7 @@ export function parseServerEndpoints(input: string): { wsUrl: string; httpUrl: s
     };
   }
 
-  // Cloud domain (e.g. sultan-hub.onrender.com or railway.app)
-  // Cloud domains on HTTPS use standard wss:// and https:// without port 5050
+  // Cloud domain (e.g. onrender.com, glitch.me, etc.)
   return {
     wsUrl: `wss://${trimmed}`,
     httpUrl: `https://${trimmed}`,
@@ -89,9 +91,10 @@ function notifyListeners() {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   const info: SyncInfo = {
     status: syncStatus,
-    serverIp: currentServerAddress,
+    serverIp: isFirebaseConfigured ? 'Firebase Cloud Database' : currentServerAddress,
     serverPort: SERVER_PORT,
-    serverUrl: wsUrl || displayAddress,
+    serverUrl: isFirebaseConfigured ? 'Firebase Realtime Cloud' : (wsUrl || displayAddress),
+    isCloudDb: isFirebaseConfigured,
     lastSyncedAt,
     totalSyncedEvents,
     deviceId: DEVICE_ID,
@@ -108,9 +111,10 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   listener({
     status: syncStatus,
-    serverIp: currentServerAddress,
+    serverIp: isFirebaseConfigured ? 'Firebase Cloud Database' : currentServerAddress,
     serverPort: SERVER_PORT,
-    serverUrl: wsUrl || displayAddress,
+    serverUrl: isFirebaseConfigured ? 'Firebase Realtime Cloud' : (wsUrl || displayAddress),
+    isCloudDb: isFirebaseConfigured,
     lastSyncedAt,
     totalSyncedEvents,
     deviceId: DEVICE_ID,
@@ -130,7 +134,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
     }
   } catch (e) {}
 
-  // 2. Check build-time environment variable (e.g., from Netlify build env)
+  // 2. Check build-time environment variable
   const envUrl = process.env.EXPO_PUBLIC_SYNC_SERVER_URL;
   if (envUrl && envUrl.trim()) {
     return envUrl.trim();
@@ -139,7 +143,6 @@ export async function resolveDefaultServerIp(): Promise<string> {
   // 3. If running in Web browser
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    // If hosted on Netlify, Vercel, etc. do NOT treat the static host as backend
     if (host.includes('netlify.app') || host.includes('vercel.app')) {
       return '';
     }
@@ -176,7 +179,86 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
+/** Initialize Firebase Realtime sync channel */
+function initFirebaseSync() {
+  const db = getFirebaseDb();
+  if (!db) return;
+
+  syncStatus = 'connecting';
+  notifyListeners();
+
+  const stateRef = ref(db, 'sultan_restaurant/live_state');
+
+  // Check if database is brand new and needs initial seed from current app data
+  get(stateRef).then((snapshot) => {
+    const data = snapshot.val();
+    if (!data || !data.state) {
+      const restState = useRestaurantStore.getState();
+      const opsState = getOpsSyncState();
+      const initialPayload = {
+        senderId: DEVICE_ID,
+        timestamp: Date.now(),
+        state: {
+          tables: restState.tables,
+          tickets: restState.tickets,
+          invoices: restState.invoices,
+          customers: restState.customers,
+          menuItems: restState.menuItems,
+          categories: restState.categories,
+          zones: restState.zones,
+          staff: restState.staff,
+          reservations: restState.reservations,
+          lastBillPaidAlert: restState.lastBillPaidAlert,
+          ...opsState,
+        },
+      };
+      set(stateRef, initialPayload).catch(() => {});
+    }
+  }).catch(() => {});
+
+  // Listen to remote changes in real-time
+  onValue(stateRef, (snapshot) => {
+    try {
+      const data = snapshot.val();
+      if (!data) return;
+
+      // Ignore messages sent by this same device
+      if (data.senderId === DEVICE_ID) return;
+
+      if (data.state) {
+        hasReceivedInitialSync = true;
+        isApplyingRemoteUpdate = true;
+        useRestaurantStore.getState().syncFromServer(data.state);
+        useOpsStore.getState().syncFromServer(data.state);
+        lastSyncedAt = Date.now();
+        totalSyncedEvents++;
+        syncStatus = 'connected';
+        notifyListeners();
+
+        setTimeout(() => {
+          isApplyingRemoteUpdate = false;
+        }, 300);
+      }
+    } catch (err) {
+      console.warn('[SyncService] Firebase parse error:', err);
+    }
+  }, (err) => {
+    console.warn('[SyncService] Firebase subscription error:', err);
+    syncStatus = 'offline';
+    notifyListeners();
+  });
+
+  syncStatus = 'connected';
+  lastSyncedAt = Date.now();
+  notifyListeners();
+}
+
 function connectWebSocket() {
+  if (isFirebaseConfigured) {
+    initFirebaseSync();
+    return;
+  }
+
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -275,10 +357,14 @@ function connectWebSocket() {
 }
 
 export function reconnect() {
-  connectWebSocket();
+  if (isFirebaseConfigured) {
+    initFirebaseSync();
+  } else {
+    connectWebSocket();
+  }
 }
 
-/** Broadcast local state changes to server and other devices */
+/** Broadcast local state changes to Firebase Cloud Database or WebSocket server */
 function broadcastLocalState() {
   if (isApplyingRemoteUpdate || !hasReceivedInitialSync) return;
 
@@ -304,9 +390,25 @@ function broadcastLocalState() {
     },
   };
 
-  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  // 1. If Firebase Cloud DB is active, push to Firebase Realtime Database
+  if (isFirebaseConfigured) {
+    const db = getFirebaseDb();
+    if (db) {
+      const stateRef = ref(db, 'sultan_restaurant/live_state');
+      set(stateRef, payload)
+        .then(() => {
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          notifyListeners();
+        })
+        .catch((err) => {
+          console.warn('[SyncService] Firebase write error:', err);
+        });
+      return;
+    }
+  }
 
-  // Try WebSocket first (instant)
+  // 2. Otherwise try WebSocket (LAN or cloud hub)
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
       ws.send(JSON.stringify(payload));
@@ -317,7 +419,8 @@ function broadcastLocalState() {
     } catch (e) {}
   }
 
-  // Fallback to HTTP POST if WebSocket is temporarily disconnected
+  // 3. Fallback to HTTP POST if WebSocket is temporarily disconnected
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (httpUrl) {
     try {
       fetch(`${httpUrl}/api/sync`, {
@@ -333,8 +436,12 @@ export async function initSyncService() {
   if (isInitialized) return;
   isInitialized = true;
 
-  currentServerAddress = await resolveDefaultServerIp();
-  connectWebSocket();
+  if (isFirebaseConfigured) {
+    initFirebaseSync();
+  } else {
+    currentServerAddress = await resolveDefaultServerIp();
+    connectWebSocket();
+  }
 
   const triggerDebouncedBroadcast = () => {
     if (isApplyingRemoteUpdate) return;
@@ -351,7 +458,34 @@ export async function initSyncService() {
   useOpsStore.subscribe(triggerDebouncedBroadcast);
 }
 
-export async function forceSyncNow() {
+export async function forceSyncNow(): Promise<boolean> {
+  if (isFirebaseConfigured) {
+    const db = getFirebaseDb();
+    if (db) {
+      try {
+        const stateRef = ref(db, 'sultan_restaurant/live_state');
+        const snap = await get(stateRef);
+        const data = snap.val();
+        if (data?.state) {
+          isApplyingRemoteUpdate = true;
+          hasReceivedInitialSync = true;
+          useRestaurantStore.getState().syncFromServer(data.state);
+          useOpsStore.getState().syncFromServer(data.state);
+          lastSyncedAt = Date.now();
+          syncStatus = 'connected';
+          notifyListeners();
+          setTimeout(() => {
+            isApplyingRemoteUpdate = false;
+          }, 300);
+          return true;
+        }
+      } catch (err) {
+        console.warn('[SyncService] Firebase forceSync error:', err);
+      }
+    }
+    return false;
+  }
+
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (!httpUrl) {
     reconnect();
