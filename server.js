@@ -111,7 +111,7 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  if (url.pathname === '/health' || url.pathname === '/api/status') {
+  if (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'online',

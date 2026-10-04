@@ -20,6 +20,7 @@ export default function SyncStatusBadge({ compact = false }: Props) {
     status, 
     serverIp, 
     serverPort, 
+    serverUrl,
     lastSyncedAt, 
     totalSyncedEvents, 
     forceSyncNow, 
@@ -45,7 +46,7 @@ export default function SyncStatusBadge({ compact = false }: Props) {
     setFeedbackMsg('Reconnecting to ' + ipInput.trim() + '...');
     await setCustomServerIp(ipInput.trim());
     setTimeout(() => {
-      setFeedbackMsg('Server IP updated.');
+      setFeedbackMsg('Server address updated.');
     }, 1500);
   };
 
@@ -57,7 +58,7 @@ export default function SyncStatusBadge({ compact = false }: Props) {
     if (ok) {
       setFeedbackMsg('Synchronized successfully!');
     } else {
-      setFeedbackMsg('Could not reach server at ' + serverIp + ':' + serverPort);
+      setFeedbackMsg('Could not reach server at ' + (serverUrl || serverIp || 'address'));
     }
   };
 
@@ -123,7 +124,9 @@ export default function SyncStatusBadge({ compact = false }: Props) {
               </View>
               <View style={styles.statusRow}>
                 <Text style={styles.statusLabel}>Master Hub Address:</Text>
-                <Text style={styles.statusValueBold}>ws://{serverIp}:{serverPort}</Text>
+                <Text style={styles.statusValueBold} numberOfLines={1}>
+                  {serverUrl || (serverIp ? `ws://${serverIp}:${serverPort}` : 'Not Configured')}
+                </Text>
               </View>
               {lastSyncedAt ? (
                 <View style={styles.statusRow}>
@@ -137,16 +140,17 @@ export default function SyncStatusBadge({ compact = false }: Props) {
               </View>
             </View>
 
-            {/* Server IP Config */}
-            <Text style={styles.sectionLabel}>Master Server IP (Host Computer):</Text>
+            {/* Server IP / Cloud URL Config */}
+            <Text style={styles.sectionLabel}>Server Address (Cloud URL or Local IP):</Text>
             <View style={styles.inputRow}>
               <TextInput 
                 style={styles.ipInput}
                 value={ipInput}
                 onChangeText={setIpInput}
-                placeholder="e.g. 192.168.1.16"
+                placeholder="e.g. sultan-hub.onrender.com or 192.168.1.16"
                 placeholderTextColor="#8E8E93"
-                keyboardType="numbers-and-punctuation"
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <TouchableOpacity style={styles.saveIpBtn} onPress={handleSaveIp}>
                 <Text style={styles.saveIpBtnText}>Connect</Text>
@@ -155,11 +159,11 @@ export default function SyncStatusBadge({ compact = false }: Props) {
 
             <View style={styles.quickPresetsRow}>
               <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.1.16')}>
-                <Text style={styles.presetChipText}>Use PC Wi-Fi IP (192.168.1.16)</Text>
+                <Text style={styles.presetChipText}>Local LAN (192.168.1.16)</Text>
               </TouchableOpacity>
               {Platform.OS === 'web' && (
                 <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('localhost')}>
-                  <Text style={styles.presetChipText}>Use localhost</Text>
+                  <Text style={styles.presetChipText}>localhost</Text>
                 </TouchableOpacity>
               )}
             </View>
