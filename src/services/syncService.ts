@@ -3,8 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore, getOpsSyncState } from '../store/opsStore';
-import { isFirebaseConfigured, getFirebaseDb } from './firebase';
-import { ref, onValue, set, get } from 'firebase/database';
+import { isFirebaseConfigured, getFirebaseDb, FIREBASE_REST_BASE_URL } from './firebase';
+import { ref, onValue, set } from 'firebase/database';
 
 export type SyncStatus = 'connected' | 'connecting' | 'offline';
 
@@ -23,6 +23,9 @@ const SERVER_PORT = 5050;
 const STORAGE_KEY_SERVER_IP = '@sultan_server_ip';
 export const DEVICE_ID = `dev_${Platform.OS}_${Math.random().toString(36).substring(2, 8)}`;
 
+const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_state.json`;
+const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
+
 let currentServerAddress = '192.168.1.16';
 let syncStatus: SyncStatus = 'offline';
 let lastSyncedAt: number | null = null;
@@ -31,8 +34,9 @@ let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 let debounceMutationTimer: ReturnType<typeof setTimeout> | null = null;
+let firebasePollingTimer: ReturnType<typeof setInterval> | null = null;
+let lastProcessedRemoteTimestamp: number = 0;
 let isApplyingRemoteUpdate = false;
-let hasReceivedInitialSync = false;
 let isInitialized = false;
 
 // Listeners for UI state updates
@@ -179,74 +183,119 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
-/** Initialize Firebase Realtime sync channel */
-function initFirebaseSync() {
-  const db = getFirebaseDb();
-  if (!db) return;
-
-  syncStatus = 'connecting';
-  notifyListeners();
-
-  const stateRef = ref(db, 'sultan_restaurant/live_state');
-
-  // Check if database is brand new and needs initial seed from current app data
-  get(stateRef).then((snapshot) => {
-    const data = snapshot.val();
-    if (!data || !data.state) {
-      const restState = useRestaurantStore.getState();
-      const opsState = getOpsSyncState();
-      const initialPayload = {
-        senderId: DEVICE_ID,
-        timestamp: Date.now(),
-        state: {
-          tables: restState.tables,
-          tickets: restState.tickets,
-          invoices: restState.invoices,
-          customers: restState.customers,
-          menuItems: restState.menuItems,
-          categories: restState.categories,
-          zones: restState.zones,
-          staff: restState.staff,
-          reservations: restState.reservations,
-          lastBillPaidAlert: restState.lastBillPaidAlert,
-          ...opsState,
-        },
-      };
-      set(stateRef, initialPayload).catch(() => {});
-    }
-  }).catch(() => {});
-
-  // Listen to remote changes in real-time
-  onValue(stateRef, (snapshot) => {
-    try {
-      const data = snapshot.val();
-      if (!data) return;
-
-      // Ignore messages sent by this same device
-      if (data.senderId === DEVICE_ID) return;
-
-      if (data.state) {
+/** Instantaneous state load from Firebase REST endpoint */
+async function fetchInitialFirebaseState() {
+  try {
+    const res = await fetch(FIREBASE_REST_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.state) {
         hasReceivedInitialSync = true;
         isApplyingRemoteUpdate = true;
+        lastProcessedRemoteTimestamp = data.timestamp || Date.now();
         useRestaurantStore.getState().syncFromServer(data.state);
         useOpsStore.getState().syncFromServer(data.state);
         lastSyncedAt = Date.now();
         totalSyncedEvents++;
         syncStatus = 'connected';
         notifyListeners();
-
         setTimeout(() => {
           isApplyingRemoteUpdate = false;
         }, 300);
+      } else {
+        hasReceivedInitialSync = true;
+        broadcastLocalState();
       }
-    } catch (err) {
-      console.warn('[SyncService] Firebase parse error:', err);
     }
-  }, (err) => {
-    console.warn('[SyncService] Firebase subscription error:', err);
-    syncStatus = 'offline';
-    notifyListeners();
-  });
+  } catch (e) {
+    console.warn('[SyncService] Initial REST fetch error:', e);
+  }
+}
+
+/** Lightweight heartbeat polling (every 2.5s) to guarantee background and network transition sync */
+async function pollFirebaseUpdates() {
+  if (isApplyingRemoteUpdate) return;
+  try {
+    const res = await fetch(FIREBASE_REST_LAST_UPDATED_URL);
+    if (!res.ok) return;
+    const lastUpdated = await res.json();
+    if (typeof lastUpdated === 'number' && lastUpdated > lastProcessedRemoteTimestamp) {
+      const stateRes = await fetch(FIREBASE_REST_URL);
+      if (stateRes.ok) {
+        const data = await stateRes.json();
+        if (data?.state && data.senderId !== DEVICE_ID) {
+          lastProcessedRemoteTimestamp = data.timestamp || lastUpdated;
+          isApplyingRemoteUpdate = true;
+          hasReceivedInitialSync = true;
+          useRestaurantStore.getState().syncFromServer(data.state);
+          useOpsStore.getState().syncFromServer(data.state);
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          syncStatus = 'connected';
+          notifyListeners();
+          setTimeout(() => {
+            isApplyingRemoteUpdate = false;
+          }, 300);
+        }
+      }
+    }
+  } catch (err) {
+    // Network retry on next interval
+  }
+}
+
+/** Initialize Firebase Realtime sync channel */
+function initFirebaseSync() {
+  syncStatus = 'connecting';
+  notifyListeners();
+
+  // 1. Instant initial load from Cloud
+  fetchInitialFirebaseState();
+
+  const db = getFirebaseDb();
+  if (db) {
+    const stateRef = ref(db, 'sultan_restaurant/live_state');
+
+    // 2. Real-time Firebase SDK WebSocket listener
+    onValue(stateRef, (snapshot) => {
+      try {
+        const data = snapshot.val();
+        if (!data) return;
+
+        if (data.senderId === DEVICE_ID) {
+          hasReceivedInitialSync = true;
+          return;
+        }
+
+        if (data.state) {
+          hasReceivedInitialSync = true;
+          if (data.timestamp && data.timestamp <= lastProcessedRemoteTimestamp) {
+            return;
+          }
+          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
+          isApplyingRemoteUpdate = true;
+          useRestaurantStore.getState().syncFromServer(data.state);
+          useOpsStore.getState().syncFromServer(data.state);
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          syncStatus = 'connected';
+          notifyListeners();
+
+          setTimeout(() => {
+            isApplyingRemoteUpdate = false;
+          }, 300);
+        }
+      } catch (err) {
+        console.warn('[SyncService] Firebase parse error:', err);
+      }
+    }, (err) => {
+      console.warn('[SyncService] Firebase subscription error:', err);
+    });
+  }
+
+  // 3. Fallback active heartbeat poll
+  if (firebasePollingTimer) clearInterval(firebasePollingTimer);
+  firebasePollingTimer = setInterval(pollFirebaseUpdates, 2500);
 
   syncStatus = 'connected';
   lastSyncedAt = Date.now();
@@ -366,15 +415,17 @@ export function reconnect() {
 
 /** Broadcast local state changes to Firebase Cloud Database or WebSocket server */
 function broadcastLocalState() {
-  if (isApplyingRemoteUpdate || !hasReceivedInitialSync) return;
+  if (isApplyingRemoteUpdate) return;
 
   const state = useRestaurantStore.getState();
   const opsState = getOpsSyncState();
+  const now = Date.now();
+  lastProcessedRemoteTimestamp = now;
 
   const payload = {
     type: 'CLIENT_UPDATE',
     senderId: DEVICE_ID,
-    timestamp: Date.now(),
+    timestamp: now,
     state: {
       tables: state.tables,
       tickets: state.tickets,
@@ -392,20 +443,37 @@ function broadcastLocalState() {
 
   // 1. If Firebase Cloud DB is active, push to Firebase Realtime Database
   if (isFirebaseConfigured) {
+    // A. Via Firebase Web SDK
     const db = getFirebaseDb();
     if (db) {
-      const stateRef = ref(db, 'sultan_restaurant/live_state');
-      set(stateRef, payload)
-        .then(() => {
-          lastSyncedAt = Date.now();
-          totalSyncedEvents++;
-          notifyListeners();
-        })
-        .catch((err) => {
-          console.warn('[SyncService] Firebase write error:', err);
-        });
-      return;
+      try {
+        const stateRef = ref(db, 'sultan_restaurant/live_state');
+        set(stateRef, payload).catch(() => {});
+      } catch (e) {}
     }
+
+    // B. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks)
+    fetch(FIREBASE_REST_URL, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then(() => {
+        fetch(FIREBASE_REST_LAST_UPDATED_URL, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(now),
+        }).catch(() => {});
+
+        lastSyncedAt = Date.now();
+        totalSyncedEvents++;
+        syncStatus = 'connected';
+        notifyListeners();
+      })
+      .catch((err) => {
+        console.warn('[SyncService] Firebase REST write error:', err);
+      });
+    return;
   }
 
   // 2. Otherwise try WebSocket (LAN or cloud hub)
@@ -460,28 +528,28 @@ export async function initSyncService() {
 
 export async function forceSyncNow(): Promise<boolean> {
   if (isFirebaseConfigured) {
-    const db = getFirebaseDb();
-    if (db) {
-      try {
-        const stateRef = ref(db, 'sultan_restaurant/live_state');
-        const snap = await get(stateRef);
-        const data = snap.val();
+    try {
+      const res = await fetch(FIREBASE_REST_URL);
+      if (res.ok) {
+        const data = await res.json();
         if (data?.state) {
-          isApplyingRemoteUpdate = true;
           hasReceivedInitialSync = true;
+          isApplyingRemoteUpdate = true;
+          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
           useRestaurantStore.getState().syncFromServer(data.state);
           useOpsStore.getState().syncFromServer(data.state);
           lastSyncedAt = Date.now();
           syncStatus = 'connected';
+          totalSyncedEvents++;
           notifyListeners();
           setTimeout(() => {
             isApplyingRemoteUpdate = false;
           }, 300);
           return true;
         }
-      } catch (err) {
-        console.warn('[SyncService] Firebase forceSync error:', err);
       }
+    } catch (err) {
+      console.warn('[SyncService] Firebase forceSync error:', err);
     }
     return false;
   }

@@ -15,6 +15,8 @@ export const isFirebaseConfigured = Boolean(
   firebaseConfig.databaseURL && firebaseConfig.apiKey
 );
 
+export const FIREBASE_REST_BASE_URL = (firebaseConfig.databaseURL || "https://sultan-resturant-default-rtdb.firebaseio.com").replace(/\/+$/, '');
+
 let dbInstance: Database | null = null;
 
 export function getFirebaseDb(): Database | null {
