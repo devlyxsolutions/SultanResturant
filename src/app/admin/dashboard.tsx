@@ -92,6 +92,34 @@ export default function AdminDashboard() {
       icon: 'cash-outline' as const,
       route: '/manager/shift',
       color: '#4a121a'
+    },
+    {
+      title: '5-Floor Command Center',
+      desc: 'Ground, 1st, Banquet, VIP Lounge & Rooftop BBQ live overview.',
+      icon: 'business-outline' as const,
+      route: '/admin/floors',
+      color: '#4a121a'
+    },
+    {
+      title: 'Business Insights & Trends',
+      desc: 'Floor revenue breakdown, hourly rush patterns, top sellers.',
+      icon: 'trending-up-outline' as const,
+      route: '/admin/insights',
+      color: '#D5A943'
+    },
+    {
+      title: 'Daily Expenses & Live P&L',
+      desc: 'Track restaurant purchases, cash outflows, and net margin.',
+      icon: 'wallet-outline' as const,
+      route: '/admin/expenses',
+      color: '#4a121a'
+    },
+    {
+      title: 'Guest Service Bells',
+      desc: 'Monitor live call waiter, water refill, and bill requests.',
+      icon: 'notifications-outline' as const,
+      route: '/manager/requests',
+      color: '#D5A943'
     }
   ];
 
