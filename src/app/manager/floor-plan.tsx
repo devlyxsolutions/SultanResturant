@@ -82,16 +82,20 @@ export default function FloorPlanScreen() {
       .getState()
       .tickets.filter((t) => t.tableId === table.id);
     let combinedItems: OrderItem[] = [];
-    tickets.forEach((ticket) => {
-      ticket.items.forEach((ti) => {
-        const existing = combinedItems.find((i) => i.id === ti.id);
-        if (existing) {
-          existing.qty += ti.qty;
-        } else {
-          combinedItems.push({ ...ti });
-        }
+    if (tickets.length > 0) {
+      tickets.forEach((ticket) => {
+        ticket.items.forEach((ti) => {
+          const existing = combinedItems.find((i) => i.id === ti.id);
+          if (existing) {
+            existing.qty += ti.qty;
+          } else {
+            combinedItems.push({ ...ti });
+          }
+        });
       });
-    });
+    } else if (table.orders && table.orders.length > 0) {
+      combinedItems = table.orders.map(o => ({ ...o }));
+    }
     const subTotal = combinedItems.reduce((sum, item) => sum + item.price * item.qty, 0);
     const tax = subTotal * 0.16;
     const total = subTotal + tax;

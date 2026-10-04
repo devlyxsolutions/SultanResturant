@@ -63,7 +63,7 @@ export default function KitchenDisplayScreen() {
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
 
-  const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
   const [now, setNow] = useState(() => Date.now());
   const [latestAlert, setLatestAlert] = useState<{
     id: string;
@@ -117,33 +117,42 @@ export default function KitchenDisplayScreen() {
     }
   }, [tickets]);
 
+  const activeTickets = tickets.filter((t) => t.status === 'cooking' || t.status === 'ready');
   const cookingCount = tickets.filter((t) => t.status === 'cooking').length;
   const readyCount = tickets.filter((t) => t.status === 'ready').length;
+  const servedCount = tickets.filter((t) => t.status === 'served').length;
   const addOnsCount = tickets.filter((t) => t.isAddOn && t.status === 'cooking').length;
 
   const filteredTickets = tickets.filter((t) => {
     if (activeFilter === 'cooking') return t.status === 'cooking';
     if (activeFilter === 'ready') return t.status === 'ready';
+    if (activeFilter === 'served') return t.status === 'served';
     if (activeFilter === 'addons') return t.isAddOn && t.status === 'cooking';
-    return true;
+    return t.status === 'cooking' || t.status === 'ready';
   });
 
   const handleTicketAction = (ticket: Ticket) => {
     if (ticket.status === 'cooking') {
       updateTicketStatus(ticket.id, 'ready');
-    } else {
+    } else if (ticket.status === 'ready') {
       // If already ready, bumping marks it dispatched / served
       bumpTicket(ticket.id);
+    } else {
+      // If served, clicking recalls it back to ready
+      updateTicketStatus(ticket.id, 'ready');
     }
   };
 
   const renderTicket = ({ item }: { item: Ticket }) => {
     const timeElapsedMinutes = Math.floor((now - item.timePlaced) / 60000);
     const isReady = item.status === 'ready';
+    const isServed = item.status === 'served';
     const isAddOn = !!item.isAddOn;
 
     let headerColor = isAddOn ? '#D5A943' : '#34C759'; // Gold for Add-on, Green (< 10 mins)
-    if (isReady) {
+    if (isServed) {
+      headerColor = '#48484A'; // Neutral slate for served
+    } else if (isReady) {
       headerColor = '#007AFF'; // Blue for ready to pick up
     } else if (timeElapsedMinutes >= 20) {
       headerColor = '#FF3B30'; // Red (> 20 mins)
@@ -158,7 +167,8 @@ export default function KitchenDisplayScreen() {
         style={[
           styles.ticketCard,
           isReady && styles.ticketCardReady,
-          isAddOn && !isReady && styles.ticketCardAddOn,
+          isAddOn && !isReady && !isServed && styles.ticketCardAddOn,
+          isServed && { opacity: 0.85, borderColor: '#48484A' },
         ]}
       >
         {/* Ticket Header */}
@@ -177,6 +187,11 @@ export default function KitchenDisplayScreen() {
                   <Text style={styles.readyTagText}>READY</Text>
                 </View>
               )}
+              {isServed && (
+                <View style={[styles.readyTag, { backgroundColor: '#3A3A3C' }]}>
+                  <Text style={[styles.readyTagText, { color: '#bbb' }]}>SERVED</Text>
+                </View>
+              )}
             </View>
             <Text style={styles.ticketTable} numberOfLines={1}>
               {item.tableName} • {item.server}
@@ -189,7 +204,7 @@ export default function KitchenDisplayScreen() {
         </View>
 
         {/* Add-On Notice Ribbon if this is extra items for table */}
-        {isAddOn && (
+        {isAddOn && !isServed && (
           <View style={styles.addOnRibbon}>
             <Ionicons name="add-circle" size={13} color="#D5A943" style={{ marginRight: 4 }} />
             <Text style={styles.addOnRibbonText}>
@@ -203,17 +218,17 @@ export default function KitchenDisplayScreen() {
           {item.items.map((food) => (
             <TouchableOpacity
               key={food.id}
-              style={[styles.foodRow, food.completed && styles.foodRowCompleted]}
-              onPress={() => toggleItem(item.id, food.id)}
+              style={[styles.foodRow, (food.completed || isServed) && styles.foodRowCompleted]}
+              onPress={() => !isServed && toggleItem(item.id, food.id)}
               activeOpacity={0.7}
             >
               <View
                 style={[
                   styles.qtyBox,
-                  food.completed && { backgroundColor: '#1E3A24' },
+                  (food.completed || isServed) && { backgroundColor: '#1E3A24' },
                 ]}
               >
-                {food.completed ? (
+                {(food.completed || isServed) ? (
                   <Ionicons name="checkmark" size={18} color="#34C759" />
                 ) : (
                   <Text style={styles.qtyText}>{food.qty}</Text>
@@ -223,7 +238,7 @@ export default function KitchenDisplayScreen() {
                 <Text
                   style={[
                     styles.foodName,
-                    food.completed && styles.textCompleted,
+                    (food.completed || isServed) && styles.textCompleted,
                   ]}
                 >
                   {food.name}
@@ -243,23 +258,25 @@ export default function KitchenDisplayScreen() {
         <TouchableOpacity
           style={[
             styles.bumpButton,
-            isReady ? styles.bumpButtonDispatched : (allItemsCompleted ? styles.bumpButtonReady : null),
+            isServed
+              ? { backgroundColor: '#2C2C2E', borderColor: '#48484A' }
+              : (isReady ? styles.bumpButtonDispatched : (allItemsCompleted ? styles.bumpButtonReady : null)),
           ]}
           onPress={() => handleTicketAction(item)}
           activeOpacity={0.8}
         >
           <Ionicons
-            name={isReady ? 'checkmark-done-circle' : (allItemsCompleted ? 'notifications' : 'chevron-forward-circle')}
+            name={isServed ? 'arrow-undo' : (isReady ? 'checkmark-done-circle' : (allItemsCompleted ? 'notifications' : 'chevron-forward-circle'))}
             size={18}
-            color={isReady ? '#fff' : (allItemsCompleted ? '#000' : '#888')}
+            color={isServed ? '#bbb' : (isReady ? '#fff' : (allItemsCompleted ? '#000' : '#888'))}
           />
           <Text
             style={[
               styles.bumpButtonText,
-              isReady ? styles.bumpTextWhite : (allItemsCompleted ? styles.bumpTextReady : null),
+              isServed ? { color: '#bbb' } : (isReady ? styles.bumpTextWhite : (allItemsCompleted ? styles.bumpTextReady : null)),
             ]}
           >
-            {isReady ? 'MARK DISPATCHED' : (allItemsCompleted ? 'NOTIFY SERVER (READY)' : 'MARK READY')}
+            {isServed ? 'DISPATCHED (TAP TO RECALL)' : (isReady ? 'MARK DISPATCHED' : (allItemsCompleted ? 'NOTIFY SERVER (READY)' : 'MARK READY'))}
           </Text>
         </TouchableOpacity>
       </View>
@@ -291,7 +308,7 @@ export default function KitchenDisplayScreen() {
               onPress={() => setActiveFilter('all')}
             >
               <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-                All ({tickets.length})
+                Active ({activeTickets.length})
               </Text>
             </TouchableOpacity>
 
@@ -324,6 +341,16 @@ export default function KitchenDisplayScreen() {
               <View style={[styles.dot, { backgroundColor: '#007AFF' }]} />
               <Text style={[styles.filterPillText, activeFilter === 'ready' && styles.filterPillTextActive]}>
                 Ready ({readyCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'served' && { backgroundColor: '#48484A', borderColor: '#636366' }]}
+              onPress={() => setActiveFilter('served')}
+            >
+              <Ionicons name="checkmark-done" size={12} color={activeFilter === 'served' ? '#fff' : '#8E8E93'} />
+              <Text style={[styles.filterPillText, activeFilter === 'served' && { color: '#fff' }]}>
+                Served ({servedCount})
               </Text>
             </TouchableOpacity>
           </View>

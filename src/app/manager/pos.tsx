@@ -66,10 +66,12 @@ export default function ManagerPOS() {
     setOrderType('dine-in');
     setTableModalVisible(false);
     
-    // Find all active tickets for this table to load running order
+    // Find all active tickets or saved table orders for this table to load running order
     const tableTickets = tickets.filter(t => t.tableId === tId);
+    const targetTable = tables.find(t => t.id === tId);
+    let combinedItems: OrderItem[] = [];
+
     if (tableTickets.length > 0) {
-      const combinedItems: OrderItem[] = [];
       tableTickets.forEach(ticket => {
         ticket.items.forEach(ti => {
           const existing = combinedItems.find(i => i.id === ti.id);
@@ -80,6 +82,11 @@ export default function ManagerPOS() {
           }
         });
       });
+    } else if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
+      combinedItems = targetTable.orders.map(o => ({ ...o }));
+    }
+
+    if (combinedItems.length > 0) {
       setCart(combinedItems);
       setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
       if (isMobile) {

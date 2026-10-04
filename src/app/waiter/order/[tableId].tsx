@@ -56,19 +56,33 @@ export default function TableOrderScreen() {
     timePlaced: number;
   }[] = [];
 
-  activeTickets.forEach(ticket => {
-    ticket.items.forEach(it => {
+  if (activeTickets.length > 0) {
+    activeTickets.forEach(ticket => {
+      ticket.items.forEach(it => {
+        alreadyOrderedItems.push({
+          id: it.id,
+          name: it.name,
+          price: it.price,
+          qty: it.qty,
+          status: ticket.status,
+          ticketId: ticket.id,
+          timePlaced: ticket.timePlaced,
+        });
+      });
+    });
+  } else if (table && table.orders && table.orders.length > 0) {
+    table.orders.forEach(it => {
       alreadyOrderedItems.push({
         id: it.id,
         name: it.name,
         price: it.price,
         qty: it.qty,
-        status: ticket.status,
-        ticketId: ticket.id,
-        timePlaced: ticket.timePlaced,
+        status: 'served',
+        ticketId: 'ORDER-SAVED',
+        timePlaced: Date.now(),
       });
     });
-  });
+  }
 
   const categories = ['All', ...storeCategories];
 

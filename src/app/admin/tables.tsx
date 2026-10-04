@@ -276,7 +276,7 @@ export default function AdminTables() {
                           Live Bill: <Text style={{ color: '#4a121a', fontWeight: '900' }}>Rs. {(table.billTotal || 0).toLocaleString()}</Text>
                         </Text>
                         <Text style={styles.ticketsCountText}>
-                          • {tableTickets.length} active KOT(s) in kitchen
+                          • {tableTickets.length > 0 ? `${tableTickets.length} active KOT(s) in kitchen` : `${table.orders?.length || 0} order item(s)`}
                         </Text>
                       </View>
                     )}

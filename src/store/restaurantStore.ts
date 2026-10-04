@@ -10,6 +10,7 @@ export type Table = {
   status: 'available' | 'occupied' | 'billed' | 'reserved';
   server?: string;
   billTotal?: number;
+  orders?: OrderItem[];
 };
 
 export type OrderItem = {
@@ -208,14 +209,33 @@ export const useRestaurantStore = create<RestaurantState>()(
         return {
           tickets: [...state.tickets, newTicket],
           tables: table 
-            ? state.tables.map(t => 
-                t.id === tableId ? { 
-                  ...t, 
-                  status: 'occupied', 
+            ? state.tables.map(t => {
+                if (t.id !== tableId) return t;
+                const existingOrders = t.orders || [];
+                const mergedOrders = existingOrders.map(o => ({ ...o }));
+                orderItems.forEach(oi => {
+                  const found = mergedOrders.find(m => m.id === oi.item.id);
+                  if (found) {
+                    found.qty += oi.qty;
+                  } else {
+                    mergedOrders.push({
+                      id: oi.item.id,
+                      name: oi.item.name,
+                      price: oi.item.price,
+                      qty: oi.qty,
+                      notes: oi.notes,
+                      completed: false
+                    });
+                  }
+                });
+                return {
+                  ...t,
+                  status: 'occupied',
                   server: serverName,
-                  billTotal: (t.billTotal || 0) + itemsTotal 
-                } : t
-              )
+                  billTotal: (t.billTotal || 0) + itemsTotal,
+                  orders: mergedOrders
+                };
+              })
             : state.tables
         };
       }),
@@ -237,7 +257,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         if (!ticket) return state;
 
         return {
-          tickets: state.tickets.filter(t => t.id !== ticketId),
+          tickets: state.tickets.map(t => t.id === ticketId ? { ...t, status: 'served' } : t),
         };
       }),
 
@@ -247,7 +267,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       settleBill: (tableId) => set((state) => ({
         tables: state.tables.map(t => 
-          t.id === tableId ? { ...t, status: 'available', billTotal: 0, server: undefined } : t
+          t.id === tableId ? { ...t, status: 'available', billTotal: 0, server: undefined, orders: [] } : t
         ),
         tickets: state.tickets.filter(t => t.tableId !== tableId)
       })),

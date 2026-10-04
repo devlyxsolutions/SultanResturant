@@ -157,8 +157,25 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
 
   for (const key of allowedKeys) {
     if (partialState[key] !== undefined) {
-      serverState[key] = partialState[key];
-      modified = true;
+      if (key === 'tickets') {
+        const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
+        const currentTables = partialState.tables || serverState.tables || [];
+        const hasOccupiedTables = currentTables.some(t => t.status === 'occupied' && (t.billTotal || 0) > 0);
+
+        if (incomingTickets.length > 0 || !hasOccupiedTables) {
+          serverState.tickets = incomingTickets;
+        } else {
+          // Guard: incoming tickets is empty, but tables are occupied!
+          // Preserve existing active tickets that belong to occupied tables
+          const occupiedIds = new Set(currentTables.filter(t => t.status === 'occupied').map(t => t.id));
+          const existingActive = (serverState.tickets || []).filter(t => occupiedIds.has(t.tableId));
+          serverState.tickets = existingActive.length > 0 ? existingActive : incomingTickets;
+        }
+        modified = true;
+      } else {
+        serverState[key] = partialState[key];
+        modified = true;
+      }
     }
   }
 

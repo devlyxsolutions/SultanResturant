@@ -27,6 +27,7 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 let debounceMutationTimer: ReturnType<typeof setTimeout> | null = null;
 let isApplyingRemoteUpdate = false;
+let hasReceivedInitialSync = false;
 let isInitialized = false;
 
 // Listeners for UI state updates
@@ -153,6 +154,7 @@ function connectWebSocket() {
 
         if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
+            hasReceivedInitialSync = true;
             isApplyingRemoteUpdate = true;
             useRestaurantStore.getState().syncFromServer(data.state);
             lastSyncedAt = Date.now();
@@ -200,7 +202,7 @@ export function reconnect() {
 
 /** Broadcast local state changes to server and other devices */
 function broadcastLocalState() {
-  if (isApplyingRemoteUpdate) return;
+  if (isApplyingRemoteUpdate || !hasReceivedInitialSync) return;
 
   const state = useRestaurantStore.getState();
   const payload = {
@@ -264,6 +266,7 @@ export async function forceSyncNow() {
     if (res.ok) {
       const serverState = await res.json();
       isApplyingRemoteUpdate = true;
+      hasReceivedInitialSync = true;
       useRestaurantStore.getState().syncFromServer(serverState);
       lastSyncedAt = Date.now();
       syncStatus = 'connected';

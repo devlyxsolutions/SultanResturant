@@ -40,7 +40,32 @@
       "status": "reserved"
     }
   ],
-  "tickets": [],
+  "tickets": [
+    {
+      "id": "KOT-1088",
+      "tableId": "1",
+      "tableName": "T-01",
+      "server": "Hamza Malik",
+      "timePlaced": 1791097000000,
+      "status": "cooking",
+      "items": [
+        {
+          "id": "m2",
+          "name": "Chicken Karahi",
+          "price": 1850,
+          "qty": 4,
+          "completed": false
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "price": 1450,
+          "qty": 2,
+          "completed": false
+        }
+      ]
+    }
+  ],
   "invoices": [
     {
       "id": "INV-76564",
