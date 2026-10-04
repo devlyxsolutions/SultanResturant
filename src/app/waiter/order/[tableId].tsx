@@ -18,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, MenuItem } from '../../../store/restaurantStore';
 import { useAuthStore } from '../../../store/authStore';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
+import { broadcastImmediately } from '../../../services/syncService';
 
 const COLORS = ['#FFF3E0', '#E8F5E9', '#E3F2FD', '#FCE4EC', '#E0F7FA'];
 
@@ -150,6 +151,7 @@ export default function TableOrderScreen() {
 
     const isAddOn = isExistingOrderActive;
     placeOrder(tableId as string, user?.name || 'Waiter', newCart, isAddOn);
+    broadcastImmediately();
 
     const message = isAddOn 
       ? `Add-on items sent to Kitchen! (KOT Generated & KDS Notified)`

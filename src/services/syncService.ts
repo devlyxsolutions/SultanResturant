@@ -36,6 +36,8 @@ let pingTimer: ReturnType<typeof setInterval> | null = null;
 let debounceMutationTimer: ReturnType<typeof setTimeout> | null = null;
 let firebasePollingTimer: ReturnType<typeof setInterval> | null = null;
 let lastProcessedRemoteTimestamp: number = 0;
+let lastProcessedPacketId: string = '';
+let sseConnection: any = null;
 let isApplyingRemoteUpdate = false;
 let hasReceivedInitialSync = false;
 let isInitialized = false;
@@ -191,8 +193,8 @@ async function fetchInitialFirebaseState() {
     if (res.ok) {
       const data = await res.json();
       if (data?.state) {
-        hasReceivedInitialSync = true;
         isApplyingRemoteUpdate = true;
+        lastProcessedPacketId = data.packetId || '';
         lastProcessedRemoteTimestamp = data.timestamp || Date.now();
         useRestaurantStore.getState().syncFromServer(data.state);
         useOpsStore.getState().syncFromServer(data.state);
@@ -202,9 +204,8 @@ async function fetchInitialFirebaseState() {
         notifyListeners();
         setTimeout(() => {
           isApplyingRemoteUpdate = false;
-        }, 300);
+        }, 150);
       } else {
-        hasReceivedInitialSync = true;
         broadcastLocalState();
       }
     }
@@ -213,66 +214,38 @@ async function fetchInitialFirebaseState() {
   }
 }
 
-/** Lightweight heartbeat polling (every 2.5s) to guarantee background and network transition sync */
-async function pollFirebaseUpdates() {
-  if (isApplyingRemoteUpdate) return;
-  try {
-    const res = await fetch(FIREBASE_REST_LAST_UPDATED_URL);
-    if (!res.ok) return;
-    const lastUpdated = await res.json();
-    if (typeof lastUpdated === 'number' && lastUpdated > lastProcessedRemoteTimestamp) {
-      const stateRes = await fetch(FIREBASE_REST_URL);
-      if (stateRes.ok) {
-        const data = await stateRes.json();
-        if (data?.state && data.senderId !== DEVICE_ID) {
-          lastProcessedRemoteTimestamp = data.timestamp || lastUpdated;
-          isApplyingRemoteUpdate = true;
-          hasReceivedInitialSync = true;
-          useRestaurantStore.getState().syncFromServer(data.state);
-          useOpsStore.getState().syncFromServer(data.state);
-          lastSyncedAt = Date.now();
-          totalSyncedEvents++;
-          syncStatus = 'connected';
-          notifyListeners();
-          setTimeout(() => {
-            isApplyingRemoteUpdate = false;
-          }, 300);
-        }
-      }
-    }
-  } catch (err) {
-    // Network retry on next interval
+/** Native browser Server-Sent Events (SSE) stream for zero-latency, sub-100ms real-time pushes */
+function initWebSSE() {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.EventSource) {
+    return;
   }
-}
 
-/** Initialize Firebase Realtime sync channel */
-function initFirebaseSync() {
-  syncStatus = 'connecting';
-  notifyListeners();
+  if (sseConnection) {
+    try {
+      sseConnection.close();
+    } catch (e) {}
+    sseConnection = null;
+  }
 
-  // 1. Instant initial load from Cloud
-  fetchInitialFirebaseState();
+  try {
+    const sse = new window.EventSource(FIREBASE_REST_URL);
+    sseConnection = sse;
 
-  const db = getFirebaseDb();
-  if (db) {
-    const stateRef = ref(db, 'sultan_restaurant/live_state');
-
-    // 2. Real-time Firebase SDK WebSocket listener
-    onValue(stateRef, (snapshot: any) => {
+    sse.addEventListener('put', (event: MessageEvent) => {
       try {
-        const data = snapshot?.val ? snapshot.val() : snapshot;
+        if (!event.data) return;
+        const payload = JSON.parse(event.data);
+        const data = payload?.data;
         if (!data) return;
 
-        if (data.senderId === DEVICE_ID) {
-          hasReceivedInitialSync = true;
-          return;
-        }
+        // Ignore updates sent by this device
+        if (data.senderId === DEVICE_ID) return;
+
+        // Ignore duplicates already processed
+        if (data.packetId && data.packetId === lastProcessedPacketId) return;
 
         if (data.state) {
-          hasReceivedInitialSync = true;
-          if (data.timestamp && data.timestamp <= lastProcessedRemoteTimestamp) {
-            return;
-          }
+          lastProcessedPacketId = data.packetId || '';
           lastProcessedRemoteTimestamp = data.timestamp || Date.now();
           isApplyingRemoteUpdate = true;
           useRestaurantStore.getState().syncFromServer(data.state);
@@ -284,7 +257,91 @@ function initFirebaseSync() {
 
           setTimeout(() => {
             isApplyingRemoteUpdate = false;
-          }, 300);
+          }, 150);
+        }
+      } catch (err) {
+        console.warn('[SyncService] SSE message parse error:', err);
+      }
+    });
+
+    sse.onerror = () => {
+      // EventSource automatically handles reconnection
+    };
+  } catch (err) {
+    console.warn('[SyncService] Failed to initialize SSE stream:', err);
+  }
+}
+
+/** High-frequency heartbeat polling (every 1s) to guarantee instant sync on mobile networks */
+async function pollFirebaseUpdates() {
+  if (isApplyingRemoteUpdate) return;
+  try {
+    const res = await fetch(FIREBASE_REST_LAST_UPDATED_URL);
+    if (!res.ok) return;
+    const lastUpdated = await res.json();
+    if (typeof lastUpdated === 'number' && lastUpdated !== lastProcessedRemoteTimestamp) {
+      const stateRes = await fetch(FIREBASE_REST_URL);
+      if (stateRes.ok) {
+        const data = await stateRes.json();
+        if (data?.state && data.senderId !== DEVICE_ID && data.packetId !== lastProcessedPacketId) {
+          lastProcessedPacketId = data.packetId || '';
+          lastProcessedRemoteTimestamp = data.timestamp || lastUpdated;
+          isApplyingRemoteUpdate = true;
+          useRestaurantStore.getState().syncFromServer(data.state);
+          useOpsStore.getState().syncFromServer(data.state);
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          syncStatus = 'connected';
+          notifyListeners();
+          setTimeout(() => {
+            isApplyingRemoteUpdate = false;
+          }, 150);
+        }
+      }
+    }
+  } catch (err) {
+    // Network retry on next 1-second pulse
+  }
+}
+
+/** Initialize Firebase Realtime sync channel with multi-tier real-time pipeline */
+function initFirebaseSync() {
+  syncStatus = 'connecting';
+  notifyListeners();
+
+  // 1. Instant initial load from Cloud
+  fetchInitialFirebaseState();
+
+  // 2. Browser SSE Stream for zero-latency instant updates (<100ms)
+  initWebSSE();
+
+  // 3. Real-time Firebase SDK WebSocket listener
+  const db = getFirebaseDb();
+  if (db) {
+    const stateRef = ref(db, 'sultan_restaurant/live_state');
+
+    onValue(stateRef, (snapshot) => {
+      try {
+        const data = snapshot.val();
+        if (!data) return;
+
+        if (data.senderId === DEVICE_ID) return;
+        if (data.packetId && data.packetId === lastProcessedPacketId) return;
+
+        if (data.state) {
+          lastProcessedPacketId = data.packetId || '';
+          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
+          isApplyingRemoteUpdate = true;
+          useRestaurantStore.getState().syncFromServer(data.state);
+          useOpsStore.getState().syncFromServer(data.state);
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          syncStatus = 'connected';
+          notifyListeners();
+
+          setTimeout(() => {
+            isApplyingRemoteUpdate = false;
+          }, 150);
         }
       } catch (err: any) {
         console.warn('[SyncService] Firebase parse error:', err);
@@ -294,9 +351,9 @@ function initFirebaseSync() {
     });
   }
 
-  // 3. Fallback active heartbeat poll
+  // 4. Ultra-responsive 1-second background pulse
   if (firebasePollingTimer) clearInterval(firebasePollingTimer);
-  firebasePollingTimer = setInterval(pollFirebaseUpdates, 2500);
+  firebasePollingTimer = setInterval(pollFirebaseUpdates, 1000);
 
   syncStatus = 'connected';
   lastSyncedAt = Date.now();
@@ -421,11 +478,14 @@ function broadcastLocalState() {
   const state = useRestaurantStore.getState();
   const opsState = getOpsSyncState();
   const now = Date.now();
+  const packetId = `${DEVICE_ID}_${now}_${Math.random().toString(36).substring(2, 7)}`;
+  lastProcessedPacketId = packetId;
   lastProcessedRemoteTimestamp = now;
 
   const payload = {
     type: 'CLIENT_UPDATE',
     senderId: DEVICE_ID,
+    packetId,
     timestamp: now,
     state: {
       tables: state.tables,
@@ -501,6 +561,15 @@ function broadcastLocalState() {
   }
 }
 
+/** Force immediate cloud broadcast without any debounce delay (e.g. for instant order placement) */
+export function broadcastImmediately() {
+  if (debounceMutationTimer) {
+    clearTimeout(debounceMutationTimer);
+    debounceMutationTimer = null;
+  }
+  broadcastLocalState();
+}
+
 export async function initSyncService() {
   if (isInitialized) return;
   isInitialized = true;
@@ -517,7 +586,7 @@ export async function initSyncService() {
     if (debounceMutationTimer) clearTimeout(debounceMutationTimer);
     debounceMutationTimer = setTimeout(() => {
       broadcastLocalState();
-    }, 450);
+    }, 50);
   };
 
   // Listen to local restaurant store mutations
