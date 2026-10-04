@@ -6,27 +6,30 @@ AI INSTRUCTION: You must strictly abide by the rules and context in this documen
 
 # PROJECT CONTEXT & SHARED AI BRAIN (`context.md`)
 
-> **Document Version:** 1.0.0  
-> **Last Synchronized:** [Insert Date - e.g., 2026-10-04]  
-> **Repository:** [Insert Repository Name / URL - e.g., SultanResturant]  
+> **Document Version:** 1.2.0  
+> **Last Synchronized:** 2026-10-04 21:26  
+> **Repository:** https://github.com/devlyxsolutions/SultanResturant  
 > **Target Branch:** `main`
 
 ---
 
 ## 1. Project Overview & Mission
 
-* **Project Name:** [Insert Project Name Here - e.g., Sultan Restaurant Management System]
-* **Core Mission:** [Insert 1-2 sentence core objective - e.g., High-performance, offline-capable, cross-platform POS and Restaurant Operations Suite designed for Web, Mobile (iOS/Android), and Kitchen Tablets.]
+* **Project Name:** Sultan Restaurant & Basement Playland Management Suite
+* **Core Mission:** High-performance, offline-capable, cross-platform POS and Restaurant Operations Suite designed for Web, Mobile (iOS/Android), Kitchen Tablets, and Basement Amusement Ticketing.
 * **Target Platforms:**
   * [x] Mobile (Waiters - iOS & Android via Expo / React Native)
-  * [x] Tablet / Desktop (Kitchen KDS & Cashier POS - Fullscreen Landscape / Web)
+  * [x] Tablet / Desktop (Kitchen KDS, Juice Bar & Cashier POS - Fullscreen Landscape / Web)
+  * [x] Playland Ticketing POS (Basement Jhoolay & Wristband Admission Terminal)
   * [x] Local LAN Server (Node.js WebSocket Hub on local port `5050`)
+  * [x] Firebase Realtime Cloud Database (Serverless live sync for static deployments)
 * **Primary Business Domains:**
-  * **Table Service & Floor Plan:** Visual status tracking, seating layout, table reservations, live bill accumulation.
-  * **Order Expediting (KDS):** Multi-round KOT tickets, sound chimes, urgency indicators, and bump bar actions.
-  * **Point of Sale (POS) & Cashier:** Split payments (Cash/Card/Online), invoice generation, tax & discount management.
-  * **Menu & Inventory:** Category hierarchies, real-time item availability, recipe tracking, and stock floats.
-  * **Shift & Staff Administration:** Shift handover reconciliation, role-based PIN access, and employee records.
+  * **Table Service & Floor Plan:** Visual 5-floor status tracking, seating layout, table reservations, live bill accumulation.
+  * **Order Expediting (KDS):** Multi-station routing (Main Kitchen vs Juice Bar), multi-round KOT tickets, sound chimes, urgency indicators, and bump bar actions.
+  * **Point of Sale (POS) & Cashier:** Split payments (Cash/Card/Online), multi-variant item pricing, invoice generation, tax & discount management.
+  * **Basement Playland POS:** Jhoolay & ride passes (Carousel, Roller Coaster, Bumper Cars, Soft Play, 9D VR), wristband issuance, and ride gate puncher.
+  * **Menu & Inventory:** Category hierarchies, real-time item availability (Chef 86), recipe tracking, and stock floats.
+  * **Shift & Expenses Administration:** Cash expense tracking, live shift P&L margin, handover reconciliation, role-based PIN access, and employee records.
 
 ---
 
@@ -124,6 +127,9 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
     │   ├── kitchen/            # Kitchen Display System (KDS)
     │   │   ├── _layout.tsx     # Fullscreen landscape KDS wrapper
     │   │   └── kds.tsx         # Live KOT queue, Audio chimes, Add-on gold badges
+    │   ├── playland/           # Sultan Basement Playland & Rides POS
+    │   │   ├── _layout.tsx     # Playland header, cashier status & logout
+    │   │   └── index.tsx       # Ride catalog, ticket checkout, wristband printer & gate punch
     │   └── manager/            # Manager Portal (Floor & Shifts)
     │       ├── _layout.tsx     # Manager navigation
     │       ├── dashboard.tsx   # Operations overview
@@ -134,12 +140,16 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
     ├── components/             # Reusable modular UI elements
     │   ├── SyncStatusBadge.tsx # WebSocket status indicator pill (Online/Connecting/Offline)
     │   ├── Invoice.tsx         # Thermal printable receipt generator
-    │   └── ...
+    │   ├── OrderSlip.tsx       # Kitchen & Juice Bar printable KOT slips
+    │   └── SultanLogo.tsx      # Scalable Sultan emblem & branding component
     ├── services/               # External network & hardware bridges
-    │   └── syncService.ts      # WebSocket client, auto-reconnect, IP detection
+    │   ├── syncService.ts      # WebSocket client, auto-reconnect, IP detection
+    │   └── firebase.ts         # Google Firebase Realtime Database cloud sync
     └── store/                  # Zustand state management
         ├── authStore.ts        # Staff sessions, PIN validation, active roles
         ├── restaurantStore.ts  # Tables, Tickets, Menu, Invoices, Customers
+        ├── opsStore.ts         # Inventory, stock movements, expenses, sold-out items
+        ├── playlandStore.ts    # Basement Jhoolay rides, tickets, passes, gate punching
         └── storage.ts          # Cross-platform persistent storage adapter
 ```
 
