@@ -91,7 +91,7 @@ export default function KitchenDisplayScreen() {
       return;
     }
 
-    const newlyAdded = tickets.filter((t) => !seenTicketIdsRef.current.has(t.id));
+    const newlyAdded = tickets.filter((t) => !seenTicketIdsRef.current.has(t.id) && t.status === 'cooking');
     tickets.forEach((t) => seenTicketIdsRef.current.add(t.id));
 
     if (newlyAdded.length > 0) {

@@ -154,6 +154,14 @@ export default function FloorPlanScreen() {
               </Text>
             </Text>
           </View>
+          {table.status === 'billed' && (
+            <View style={{ backgroundColor: '#FFF3E0', padding: 8, borderRadius: 8, marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="checkmark-circle" size={16} color="#E67E22" />
+              <Text style={{ color: '#E67E22', fontWeight: '800', fontSize: 12 }}>
+                BILL PAID • GUESTS CURRENTLY SEATED
+              </Text>
+            </View>
+          )}
         </View>
       ) : null}
 

@@ -152,24 +152,32 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers'];
+  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'lastBillPaidAlert'];
   let modified = false;
 
   for (const key of allowedKeys) {
     if (partialState[key] !== undefined) {
       if (key === 'tickets') {
         const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
-        const currentTables = partialState.tables || serverState.tables || [];
-        const hasOccupiedTables = currentTables.some(t => t.status === 'occupied' && (t.billTotal || 0) > 0);
+        // Preserve served status against stale downgrades
+        let mergedTickets = incomingTickets.map(inc => {
+          const existing = (serverState.tickets || []).find(et => et.id === inc.id);
+          if (existing && existing.status === 'served' && inc.status !== 'served') {
+            return existing;
+          }
+          return inc;
+        });
 
-        if (incomingTickets.length > 0 || !hasOccupiedTables) {
-          serverState.tickets = incomingTickets;
+        const currentTables = partialState.tables || serverState.tables || [];
+        const hasOccupiedTables = currentTables.some(t => (t.status === 'occupied' || t.status === 'billed') && (t.billTotal || 0) > 0);
+
+        if (mergedTickets.length > 0 || !hasOccupiedTables) {
+          serverState.tickets = mergedTickets;
         } else {
           // Guard: incoming tickets is empty, but tables are occupied!
-          // Preserve existing active tickets that belong to occupied tables
-          const occupiedIds = new Set(currentTables.filter(t => t.status === 'occupied').map(t => t.id));
+          const occupiedIds = new Set(currentTables.filter(t => t.status === 'occupied' || t.status === 'billed').map(t => t.id));
           const existingActive = (serverState.tickets || []).filter(t => occupiedIds.has(t.tableId));
-          serverState.tickets = existingActive.length > 0 ? existingActive : incomingTickets;
+          serverState.tickets = existingActive.length > 0 ? existingActive : mergedTickets;
         }
         modified = true;
       } else {

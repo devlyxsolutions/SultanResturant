@@ -11,6 +11,8 @@ export type Table = {
   server?: string;
   billTotal?: number;
   orders?: OrderItem[];
+  isPaid?: boolean;
+  lastInvoiceId?: string;
 };
 
 export type OrderItem = {
@@ -96,12 +98,15 @@ type RestaurantState = {
   menuItems: MenuItem[];
   categories: string[];
   zones: string[];
+  lastBillPaidAlert?: { tableId: string; tableName: string; billTotal: number; time: number } | null;
   
   // Actions
   placeOrder: (tableId: string, serverName: string, items: {item: MenuItem, qty: number, notes?: string}[], isAddOn?: boolean) => void;
   toggleTicketItem: (ticketId: string, itemId: string) => void;
   bumpTicket: (ticketId: string) => void;
   updateTicketStatus: (ticketId: string, status: Ticket['status']) => void;
+  markTableBilled: (tableId: string, invoiceId?: string) => void;
+  clearBillPaidAlert: () => void;
   settleBill: (tableId: string) => void;
   addMenuItem: (item: Omit<MenuItem, 'id'>) => void;
   updateMenuItem: (id: string, item: Partial<Omit<MenuItem, 'id'>>) => void;
@@ -265,11 +270,45 @@ export const useRestaurantStore = create<RestaurantState>()(
         tickets: state.tickets.map(t => t.id === ticketId ? { ...t, status } : t)
       })),
 
+      markTableBilled: (tableId, invoiceId) => set((state) => {
+        const table = state.tables.find(t => t.id === tableId);
+        const amount = table?.billTotal || 0;
+        const tableName = table ? table.name : `Table ${tableId}`;
+
+        return {
+          tables: state.tables.map(t => 
+            t.id === tableId ? { 
+              ...t, 
+              status: 'billed', 
+              isPaid: true, 
+              lastInvoiceId: invoiceId 
+            } : t
+          ),
+          lastBillPaidAlert: {
+            tableId,
+            tableName,
+            billTotal: amount,
+            time: Date.now()
+          }
+        };
+      }),
+
+      clearBillPaidAlert: () => set({ lastBillPaidAlert: null }),
+
       settleBill: (tableId) => set((state) => ({
         tables: state.tables.map(t => 
-          t.id === tableId ? { ...t, status: 'available', billTotal: 0, server: undefined, orders: [] } : t
+          t.id === tableId ? { 
+            ...t, 
+            status: 'available', 
+            billTotal: 0, 
+            server: undefined, 
+            orders: [], 
+            isPaid: false, 
+            lastInvoiceId: undefined 
+          } : t
         ),
-        tickets: state.tickets.filter(t => t.tableId !== tableId)
+        tickets: state.tickets.filter(t => t.tableId !== tableId),
+        lastBillPaidAlert: state.lastBillPaidAlert?.tableId === tableId ? null : state.lastBillPaidAlert
       })),
       
       saveInvoice: (invoice) => set((state) => ({
@@ -340,17 +379,32 @@ export const useRestaurantStore = create<RestaurantState>()(
         staff: (state.staff || []).filter(s => s.id !== id)
       })),
 
-      syncFromServer: (remoteState) => set((state) => ({
-        ...state,
-        ...(remoteState.tables ? { tables: remoteState.tables } : {}),
-        ...(remoteState.tickets ? { tickets: remoteState.tickets } : {}),
-        ...(remoteState.invoices ? { invoices: remoteState.invoices } : {}),
-        ...(remoteState.menuItems ? { menuItems: remoteState.menuItems } : {}),
-        ...(remoteState.categories ? { categories: remoteState.categories } : {}),
-        ...(remoteState.zones ? { zones: remoteState.zones } : {}),
-        ...(remoteState.staff ? { staff: remoteState.staff } : {}),
-        ...(remoteState.customers ? { customers: remoteState.customers } : {}),
-      })),
+      syncFromServer: (remoteState) => set((state) => {
+        let mergedTickets = remoteState.tickets;
+        if (remoteState.tickets && state.tickets) {
+          mergedTickets = remoteState.tickets.map(rt => {
+            const local = state.tickets.find(lt => lt.id === rt.id);
+            // If local already marked this ticket as served, don't let a stale remote packet revert it to cooking or ready!
+            if (local && local.status === 'served' && rt.status !== 'served') {
+              return local;
+            }
+            return rt;
+          });
+        }
+
+        return {
+          ...state,
+          ...(remoteState.tables ? { tables: remoteState.tables } : {}),
+          ...(mergedTickets ? { tickets: mergedTickets } : {}),
+          ...(remoteState.invoices ? { invoices: remoteState.invoices } : {}),
+          ...(remoteState.menuItems ? { menuItems: remoteState.menuItems } : {}),
+          ...(remoteState.categories ? { categories: remoteState.categories } : {}),
+          ...(remoteState.zones ? { zones: remoteState.zones } : {}),
+          ...(remoteState.staff ? { staff: remoteState.staff } : {}),
+          ...(remoteState.customers ? { customers: remoteState.customers } : {}),
+          ...(remoteState.lastBillPaidAlert !== undefined ? { lastBillPaidAlert: remoteState.lastBillPaidAlert } : {}),
+        };
+      }),
     }),
     {
       name: 'restaurant-storage',
@@ -358,52 +412,4 @@ export const useRestaurantStore = create<RestaurantState>()(
     }
   )
 );
-
-// Safe, debounced real-time cross-tab synchronization (no infinite loops)
-if (typeof window !== 'undefined') {
-  const TAB_ID = 'tab_' + Math.random().toString(36).substring(2, 9);
-  let channel: BroadcastChannel | null = null;
-  let isSyncing = false;
-  let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-
-  try {
-    if (typeof BroadcastChannel !== 'undefined') {
-      channel = new BroadcastChannel('sultan_restaurant_bus');
-      channel.onmessage = (event) => {
-        // Ignore messages from this tab or unknown messages
-        if (!event.data || event.data.senderId === TAB_ID) return;
-
-        if (event.data.type === 'SYNC_STORE') {
-          if (isSyncing) return;
-          isSyncing = true;
-
-          // Rehydrate safely without triggering an echo broadcast
-          Promise.resolve(useRestaurantStore.persist.rehydrate()).finally(() => {
-            setTimeout(() => {
-              isSyncing = false;
-            }, 600);
-          });
-        }
-      };
-    }
-  } catch (e) {
-    // BroadcastChannel not supported in this environment
-  }
-
-  // Broadcast local mutations to other open tabs with a safe 800ms debounce
-  useRestaurantStore.subscribe(() => {
-    // If the mutation was caused by an incoming remote rehydrate, do NOT echo back!
-    if (isSyncing) return;
-
-    if (debounceTimer) clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(() => {
-      if (isSyncing) return;
-      try {
-        if (channel) {
-          channel.postMessage({ type: 'SYNC_STORE', senderId: TAB_ID });
-        }
-      } catch (e) {}
-    }, 800);
-  });
-}
 

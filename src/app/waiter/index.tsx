@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore } from '../../store/restaurantStore';
@@ -9,6 +9,9 @@ export default function TablesScreen() {
   const router = useRouter();
   const tables = useRestaurantStore((state) => state.tables);
   const tickets = useRestaurantStore((state) => state.tickets);
+  const settleBill = useRestaurantStore((state) => state.settleBill);
+  const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
+  const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
 
   const readyTickets = tickets.filter((t) => t.status === 'ready');
 
@@ -18,6 +21,7 @@ export default function TablesScreen() {
 
   const renderTable = ({ item }: { item: typeof tables[0] }) => {
     const isOccupied = item.status === 'occupied';
+    const isBilled = item.status === 'billed' || item.isPaid;
 
     // Check if this table has any active tickets in kitchen
     const tableTickets = tickets.filter((t) => t.tableId === item.id);
@@ -27,8 +31,8 @@ export default function TablesScreen() {
 
     let statusColor = '#34C759'; // Available: Green
     if (isFoodReady) statusColor = '#007AFF'; // Food Ready: Blue
+    else if (isBilled) statusColor = '#E67E22'; // Billed/Paid: Orange/Amber
     else if (isOccupied) statusColor = '#FF3B30'; // Occupied: Red
-    else if (item.status === 'billed') statusColor = '#FFCC00'; // Billed: Yellow
     else if (item.status === 'reserved') statusColor = '#5856D6'; // Reserved: Purple
 
     return (
@@ -37,6 +41,7 @@ export default function TablesScreen() {
           styles.tableCard,
           { borderTopColor: statusColor },
           isFoodReady && styles.tableCardFoodReady,
+          isBilled && styles.tableCardBilled,
         ]}
         onPress={() => handleTablePress(item.id)}
         activeOpacity={0.7}
@@ -56,8 +61,16 @@ export default function TablesScreen() {
             <Text style={styles.billText}>Rs. {item.billTotal.toFixed(0)}</Text>
           )}
 
+          {/* Billed Notice */}
+          {isBilled && (
+            <View style={styles.billedPill}>
+              <Ionicons name="checkmark-circle" size={13} color="#E67E22" />
+              <Text style={styles.billedPillText}>BILL PAID • SEATED</Text>
+            </View>
+          )}
+
           {/* Kitchen Live Status Badge */}
-          {isFoodReady && (
+          {isFoodReady && !isBilled && (
             <View style={styles.foodReadyPill}>
               <Ionicons name="restaurant" size={13} color="#007AFF" />
               <Text style={styles.foodReadyPillText}>
@@ -65,7 +78,7 @@ export default function TablesScreen() {
               </Text>
             </View>
           )}
-          {isCooking && !isFoodReady && (
+          {isCooking && !isFoodReady && !isBilled && (
             <View style={styles.cookingPill}>
               <Ionicons name="flame" size={13} color="#FF9500" />
               <Text style={styles.cookingPillText}>
@@ -76,9 +89,29 @@ export default function TablesScreen() {
         </View>
 
         <View style={[styles.cardFooter, { backgroundColor: statusColor + '15' }]}>
-          <Text style={[styles.statusText, { color: statusColor }]}>
-            {isFoodReady ? 'SERVE NOW' : item.status.toUpperCase()}
+          <Text style={[styles.statusText, { color: statusColor, flex: 1 }]}>
+            {isFoodReady ? 'SERVE NOW' : (isBilled ? 'PAID (GUESTS SEATED)' : item.status.toUpperCase())}
           </Text>
+          {isBilled && (
+            <TouchableOpacity
+              style={styles.releaseTableBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                const msg = `Release ${item.name}? Table will become AVAILABLE for new guests.`;
+                if (Platform.OS === 'web') {
+                  if (window.confirm(msg)) settleBill(item.id);
+                } else {
+                  Alert.alert('Release Table', msg, [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Release', style: 'destructive', onPress: () => settleBill(item.id) },
+                  ]);
+                }
+              }}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.releaseTableBtnText}>Release</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -94,6 +127,29 @@ export default function TablesScreen() {
         </View>
         <SyncStatusBadge />
       </View>
+
+      {/* Real-time Bill Paid Alert Banner */}
+      {lastBillPaidAlert && (
+        <View style={styles.billPaidAlertBanner}>
+          <View style={styles.billPaidIconBox}>
+            <Ionicons name="card" size={20} color="#E67E22" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.billPaidAlertTitle}>
+              🔔 Bill Paid: {lastBillPaidAlert.tableName}!
+            </Text>
+            <Text style={styles.billPaidAlertDesc}>
+              Rs. {lastBillPaidAlert.billTotal?.toLocaleString()} collected. Guests are still seated — tap Release below when vacated.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.billPaidDismissBtn}
+            onPress={clearBillPaidAlert}
+          >
+            <Ionicons name="close" size={18} color="#666" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Notification banner if food is ready */}
       {readyTickets.length > 0 && (
@@ -263,8 +319,74 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#FF9500',
   },
+  tableCardBilled: {
+    borderColor: '#E67E22',
+    borderWidth: 1.5,
+  },
+  billedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF3E0',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  billedPillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#E67E22',
+  },
+  releaseTableBtn: {
+    backgroundColor: '#E67E22',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginRight: 10,
+  },
+  releaseTableBtnText: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  billPaidAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E1',
+    borderWidth: 1.5,
+    borderColor: '#FFE082',
+    borderRadius: 12,
+    padding: 12,
+    gap: 12,
+    marginBottom: 16,
+  },
+  billPaidIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#FFF3E0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  billPaidAlertTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#E67E22',
+  },
+  billPaidAlertDesc: {
+    fontSize: 12,
+    color: '#8D6E63',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  billPaidDismissBtn: {
+    padding: 6,
+  },
   cardFooter: {
     paddingVertical: 10,
+    paddingHorizontal: 12,
     alignItems: 'center',
   },
   statusText: {

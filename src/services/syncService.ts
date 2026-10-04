@@ -218,6 +218,7 @@ function broadcastLocalState() {
       categories: state.categories,
       zones: state.zones,
       staff: state.staff,
+      lastBillPaidAlert: state.lastBillPaidAlert,
     },
   };
 

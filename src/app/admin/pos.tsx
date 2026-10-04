@@ -22,6 +22,7 @@ export default function AdminPOS() {
   const saveInvoice = useRestaurantStore(state => state.saveInvoice);
   const placeOrder = useRestaurantStore(state => state.placeOrder);
   const settleBill = useRestaurantStore(state => state.settleBill);
+  const markTableBilled = useRestaurantStore(state => state.markTableBilled);
   const tickets = useRestaurantStore(state => state.tickets);
 
   // Menu State
@@ -57,8 +58,9 @@ export default function AdminPOS() {
   // Table Modal Filter
   const [tableModalZone, setTableModalZone] = useState('All');
 
-  // Print Preview
+  // Print Preview & Post-Payment Table Decision
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
+  const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
   const prefilledRef = useRef<string | null>(null);
 
   const handleTableSelect = (tId: string) => {
@@ -286,11 +288,11 @@ export default function AdminPOS() {
       payments: payments.filter(p => p.amount > 0)
     };
 
+    const targetTableId = selectedTableId;
+    const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
+    const wasDineIn = orderType === 'dine-in' && targetTableId;
+
     saveInvoice(invoice);
-    
-    if (orderType === 'dine-in' && selectedTableId) {
-      settleBill(selectedTableId);
-    }
     
     if (selectedCustomerObj) {
       updateCustomer(selectedCustomerObj.id, {
@@ -304,7 +306,17 @@ export default function AdminPOS() {
     setCheckoutModalVisible(false);
     setSelectedCustomerId('');
     setSelectedTableId('');
-    setGeneratedInvoice(invoice);
+
+    if (wasDineIn) {
+      // Prompt user whether to release table now or keep it billed because guests are still seated
+      setTableDecisionModal({
+        tableId: targetTableId,
+        tableName: targetTableName,
+        invoice,
+      });
+    } else {
+      setGeneratedInvoice(invoice);
+    }
   };
 
   const addPaymentMethod = () => setPayments([...payments, { type: 'cash', amount: 0 }]);
@@ -869,6 +881,83 @@ export default function AdminPOS() {
               <Text style={styles.printBtnText}>Print</Text>
             </TouchableOpacity>
           </ScrollView>
+        </View>
+      </Modal>
+
+      {/* Table Release Decision Modal (Prompt whether to free table or keep billed) */}
+      <Modal visible={!!tableDecisionModal} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 440, padding: 24, borderRadius: 16 }]}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: '#E8F5E9', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                <Ionicons name="checkmark-circle" size={44} color="#27ae60" />
+              </View>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#1C1C1E', textAlign: 'center' }}>
+                Payment Received!
+              </Text>
+              <Text style={{ fontSize: 14, color: '#666', marginTop: 4, textAlign: 'center' }}>
+                {tableDecisionModal?.tableName} • Rs. {tableDecisionModal?.invoice?.total?.toLocaleString()}
+              </Text>
+            </View>
+
+            <View style={{ backgroundColor: '#F8F9FA', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E5E5EA', marginBottom: 20 }}>
+              <Text style={{ fontSize: 14, color: '#333', lineHeight: 20, textAlign: 'center' }}>
+                Would you like to mark <Text style={{ fontWeight: 'bold' }}>{tableDecisionModal?.tableName}</Text> as <Text style={{ color: '#27ae60', fontWeight: 'bold' }}>AVAILABLE</Text> now, or keep it <Text style={{ color: '#E67E22', fontWeight: 'bold' }}>BILLED</Text> because guests are still seated?
+              </Text>
+            </View>
+
+            <View style={{ gap: 10 }}>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#27ae60',
+                  paddingVertical: 14,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+                onPress={() => {
+                  if (tableDecisionModal) {
+                    settleBill(tableDecisionModal.tableId);
+                    const inv = tableDecisionModal.invoice;
+                    setTableDecisionModal(null);
+                    setGeneratedInvoice(inv);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="checkmark-done" size={20} color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Release Table (Available Now)</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#FFF3E0',
+                  borderWidth: 1.5,
+                  borderColor: '#E67E22',
+                  paddingVertical: 14,
+                  borderRadius: 10,
+                  alignItems: 'center',
+                  flexDirection: 'row',
+                  justifyContent: 'center',
+                  gap: 8,
+                }}
+                onPress={() => {
+                  if (tableDecisionModal) {
+                    markTableBilled(tableDecisionModal.tableId, tableDecisionModal.invoice.id);
+                    const inv = tableDecisionModal.invoice;
+                    setTableDecisionModal(null);
+                    setGeneratedInvoice(inv);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="time" size={18} color="#E67E22" />
+                <Text style={{ color: '#E67E22', fontWeight: '800', fontSize: 15 }}>Keep Table (Guests Still Seated)</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
