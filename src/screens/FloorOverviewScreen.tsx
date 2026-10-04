@@ -22,7 +22,14 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const tables = useRestaurantStore((s) => s.tables) || [];
+  const rawTables = useRestaurantStore((s) => s.tables) || [];
+  // Deduplicate by id — guards against duplicate-id data from server
+  const seenIds = new Set<string>();
+  const tables = rawTables.filter((t) => {
+    if (seenIds.has(t.id)) return false;
+    seenIds.add(t.id);
+    return true;
+  });
   const tickets = useRestaurantStore((s) => s.tickets) || [];
   const addTable = useRestaurantStore((s) => s.addTable);
   const serviceRequests = useOpsStore((s) => s.serviceRequests) || [];
