@@ -1,4 +1,4 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import { 
   View, 
   Text, 
@@ -10,12 +10,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
+import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 
 export default function KitchenLayout() {
   const { ready, user, logout } = useRoleGuard(['kitchen', 'manager', 'admin']);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const router = useRouter();
+  const pathname = usePathname();
+  const unavailableCount = useOpsStore(s => s.unavailableItemIds?.length || 0);
+  const isAvailabilityScreen = pathname?.includes('availability');
 
   if (!ready) return null;
 
@@ -37,6 +42,28 @@ export default function KitchenLayout() {
         
         <View style={styles.headerRight}>
           <SyncStatusBadge compact={isMobile} />
+
+          <TouchableOpacity
+            style={[
+              styles.actionHeaderBtn,
+              { backgroundColor: isAvailabilityScreen ? '#333' : '#D84315' }
+            ]}
+            onPress={() => isAvailabilityScreen ? router.push('/kitchen/kds') : router.push('/kitchen/availability')}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons 
+              name={isAvailabilityScreen ? "restaurant-outline" : "close-circle-outline"} 
+              size={16} 
+              color="#fff" 
+              style={!isMobile ? { marginRight: 6 } : undefined} 
+            />
+            {!isMobile && (
+              <Text style={styles.actionHeaderBtnText}>
+                {isAvailabilityScreen ? 'Orders KDS' : `Sold Out (86)${unavailableCount > 0 ? ` [${unavailableCount}]` : ''}`}
+              </Text>
+            )}
+          </TouchableOpacity>
           
           {!isMobile && (
             <Text style={styles.stationName}>Chef: {user?.name}</Text>
@@ -148,6 +175,18 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '700',
     fontSize: 13,
+  },
+  actionHeaderBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  actionHeaderBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
   },
   content: {
     flex: 1,

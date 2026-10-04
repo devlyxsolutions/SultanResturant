@@ -167,7 +167,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert'];
+  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'serviceRequests', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds'];
   let modified = false;
 
   for (const key of allowedKeys) {

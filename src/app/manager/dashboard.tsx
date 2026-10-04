@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore } from '../../store/restaurantStore';
+import { useOpsStore } from '../../store/opsStore';
 
 export default function ManagerDashboard() {
   const router = useRouter();
@@ -23,10 +24,8 @@ export default function ManagerDashboard() {
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const occupiedCount = tables.filter(t => t.status === 'occupied').length;
 
-  // Live kitchen stats
-  const cookingCount = tickets.filter(t => t.status === 'cooking').length;
-  const readyCount = tickets.filter(t => t.status === 'ready').length;
-  const hasUrgent = readyCount > 0;
+  const serviceRequests = useOpsStore((state) => state.serviceRequests) || [];
+  const pendingRequestsCount = serviceRequests.filter((r) => r.status === 'pending').length;
 
   return (
     <ScrollView style={[styles.container, isMobile && styles.containerMobile]} showsVerticalScrollIndicator={false}>
@@ -50,17 +49,15 @@ export default function ManagerDashboard() {
             <Ionicons name="people" size={16} color="#7B1FA2" style={{ marginRight: 6 }} />
             <Text style={styles.kpiText}>{activeWaiters} Waiters • {activeKitchen} Kitchen</Text>
           </View>
-          {cookingCount > 0 && (
-            <View style={[styles.kpiPill, { backgroundColor: '#FFF3E0', borderColor: '#FF9500' }]}>
-              <Ionicons name="flame" size={16} color="#FF9500" style={{ marginRight: 6 }} />
-              <Text style={[styles.kpiText, { color: '#E65100' }]}>{cookingCount} Cooking</Text>
-            </View>
-          )}
-          {readyCount > 0 && (
-            <View style={[styles.kpiPill, { backgroundColor: '#E3F2FD', borderColor: '#007AFF' }]}>
-              <Ionicons name="checkmark-circle" size={16} color="#007AFF" style={{ marginRight: 6 }} />
-              <Text style={[styles.kpiText, { color: '#0058CC' }]}>{readyCount} Ready to Serve!</Text>
-            </View>
+          {pendingRequestsCount > 0 && (
+            <TouchableOpacity 
+              style={[styles.kpiPill, { backgroundColor: '#FFEBEE', borderColor: '#EF5350', borderWidth: 1 }]}
+              onPress={() => router.push('/manager/requests')}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="notifications" size={16} color="#C62828" style={{ marginRight: 6 }} />
+              <Text style={[styles.kpiText, { color: '#C62828', fontWeight: '700' }]}>{pendingRequestsCount} Bells Pending</Text>
+            </TouchableOpacity>
           )}
         </View>
         
@@ -245,6 +242,61 @@ export default function ManagerDashboard() {
                   ? `\u26a0\ufe0f ${readyCount} orders ready \u2014 check tables now!`
                   : `Manage table orders, send to kitchen & print bills.`}
               </Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/floors')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#EDE7F6' }]}>
+              <Ionicons name="business" size={24} color="#512DA8" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>5-Floor Multi-Level Command</Text>
+              <Text style={styles.cardDesc}>Ground, 1st, Banquet, VIP Lounge & Rooftop BBQ live state.</Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/requests')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#FFEBEE' }]}>
+              <Ionicons name="notifications" size={24} color="#C62828" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Guest Service Bells</Text>
+              <Text style={styles.cardDesc}>
+                {pendingRequestsCount > 0 
+                  ? `${pendingRequestsCount} active guest calls waiting for service.` 
+                  : 'Call Waiter, Water Refill, Bill, and Cleaning requests.'}
+              </Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/expenses')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#E0F2F1' }]}>
+              <Ionicons name="wallet" size={24} color="#00796B" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Daily Cash Expenses & P&L</Text>
+              <Text style={styles.cardDesc}>Log groceries, dairy, gas, utilities & shift net profit.</Text>
             </View>
             {isMobile && (
               <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
