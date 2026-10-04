@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
 
-export type Role = 'admin' | 'manager' | 'waiter' | 'kitchen' | 'juicebar' | null;
+export type Role = 'admin' | 'manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | null;
 
 interface User {
   id: string;
@@ -49,4 +49,5 @@ export const ROLE_HOME: Record<Exclude<Role, null>, string> = {
   waiter: '/waiter',
   kitchen: '/kitchen/kds',
   juicebar: '/juicebar/kds',
+  playland: '/playland',
 };

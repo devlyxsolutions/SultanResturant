@@ -89,7 +89,7 @@ export type Invoice = {
   payments: Payment[];
 };
 
-export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar';
+export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland';
 export type StaffShift = 'Morning' | 'Evening' | 'Night';
 export type StaffStatus = 'Active' | 'On Leave' | 'Inactive';
 
@@ -234,6 +234,7 @@ const INITIAL_STAFF: StaffMember[] = [
   { id: 'st3', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
   { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05' },
   { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12' },
+  { id: 'st6', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
 ];
 
 export const useRestaurantStore = create<RestaurantState>()(

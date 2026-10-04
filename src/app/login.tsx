@@ -25,6 +25,7 @@ const roles: { label: string; value: Role; icon: keyof typeof Ionicons.glyphMap;
   { label: 'Waiter', value: 'waiter', icon: 'walk-outline', desc: 'Tables & KOT Punch' },
   { label: 'Kitchen', value: 'kitchen', icon: 'restaurant-outline', desc: 'Live KDS Display' },
   { label: 'Juice Bar', value: 'juicebar', icon: 'cafe-outline', desc: 'Live Beverage Orders' },
+  { label: 'Playland', value: 'playland', icon: 'game-controller-outline', desc: 'Basement Rides & Tickets' },
 ];
 
 export default function LoginScreen() {
