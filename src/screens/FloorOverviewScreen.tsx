@@ -12,7 +12,6 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore, Table } from '../store/restaurantStore';
-import { useOpsStore } from '../store/opsStore';
 import { BRAND } from '../constants/brand';
 import { FLOOR_TEMPLATE, getFloorMeta, sortFloors } from '../constants/floors';
 import { money, percent } from '../utils/format';
@@ -32,7 +31,6 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
   });
   const tickets = useRestaurantStore((s) => s.tickets) || [];
   const addTable = useRestaurantStore((s) => s.addTable);
-  const serviceRequests = useOpsStore((s) => s.serviceRequests) || [];
 
   const [selectedFloor, setSelectedFloor] = useState<string>('All');
 
@@ -54,9 +52,6 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
 
     const floorTableIds = new Set(floorTables.map((t) => t.id));
     const activeTickets = tickets.filter((tk) => floorTableIds.has(tk.tableId));
-    const pendingRequests = serviceRequests.filter(
-      (sr) => sr.status !== 'resolved' && (floorTableIds.has(sr.tableId) || sr.zone === zone)
-    ).length;
 
     const meta = getFloorMeta(zone);
 
@@ -71,15 +66,14 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
       totalRevenue,
       totalSeats,
       activeTickets: activeTickets.length,
-      pendingRequests,
       occupancyRate: percent(occupied + billed, floorTables.length),
     };
   });
 
   const totalTables = tables.length;
   const totalOccupied = tables.filter((t) => t.status === 'occupied' || t.status === 'billed').length;
+  const totalAvailable = tables.filter((t) => t.status === 'available').length;
   const totalActiveRevenue = tables.reduce((sum, t) => sum + (t.billTotal || 0), 0);
-  const totalPendingRequests = serviceRequests.filter((r) => r.status !== 'resolved').length;
 
   // Filtered tables for the grid view
   const displayTables = selectedFloor === 'All'
@@ -159,11 +153,11 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           <Text style={styles.kpiMeta}>Orders Cooking / Ready</Text>
         </View>
         <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>Guest Service Calls</Text>
-          <Text style={[styles.kpiValue, { color: totalPendingRequests > 0 ? '#D32F2F' : BRAND.success }]}>
-            {totalPendingRequests} Pending
+          <Text style={styles.kpiLabel}>Available Tables</Text>
+          <Text style={[styles.kpiValue, { color: BRAND.success }]}>
+            {totalAvailable} Tables
           </Text>
-          <Text style={styles.kpiMeta}>Call Waiter / Refills</Text>
+          <Text style={styles.kpiMeta}>Ready for Seating</Text>
         </View>
       </View>
 
@@ -191,12 +185,6 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                   <Text style={styles.floorName}>{fs.zone}</Text>
                   <Text style={styles.floorBlurb} numberOfLines={1}>{fs.meta.blurb}</Text>
                 </View>
-                {fs.pendingRequests > 0 && (
-                  <View style={styles.alertPill}>
-                    <Ionicons name="notifications" size={12} color="#fff" />
-                    <Text style={styles.alertPillText}>{fs.pendingRequests}</Text>
-                  </View>
-                )}
               </View>
 
               <View style={styles.floorProgressBar}>

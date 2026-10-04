@@ -1,4 +1,4 @@
-import { Stack, useRouter, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 import { 
   View, 
   Text, 
@@ -10,7 +10,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
-import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import SultanLogo from '../../components/SultanLogo';
 
@@ -18,11 +17,6 @@ export default function WaiterLayout() {
   const { ready, user, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const router = useRouter();
-  const pathname = usePathname();
-  const requests = useOpsStore((s) => s.serviceRequests) || [];
-  const pendingCount = requests.filter((r) => r.status === 'pending').length;
-  const isRequestsRoute = pathname?.includes('requests');
 
   if (!ready) return null;
 
@@ -43,33 +37,6 @@ export default function WaiterLayout() {
         
         <View style={styles.headerRight}>
           <SyncStatusBadge compact={isMobile} />
-
-          <TouchableOpacity 
-            style={[
-              styles.bellButton, 
-              pendingCount > 0 ? styles.bellButtonAlert : styles.bellButtonNormal
-            ]}
-            onPress={() => isRequestsRoute ? router.push('/waiter') : router.push('/waiter/requests')}
-            activeOpacity={0.7}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <Ionicons 
-              name={isRequestsRoute ? "grid-outline" : "notifications"} 
-              size={17} 
-              color="#fff" 
-              style={!isMobile ? { marginRight: 5 } : undefined} 
-            />
-            {!isRequestsRoute && pendingCount > 0 && (
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>{pendingCount > 9 ? '9+' : pendingCount}</Text>
-              </View>
-            )}
-            {!isMobile && (
-              <Text style={styles.bellButtonText}>
-                {isRequestsRoute ? 'Tables' : `Bells${pendingCount > 0 ? ` (${pendingCount})` : ''}`}
-              </Text>
-            )}
-          </TouchableOpacity>
 
           <TouchableOpacity 
             style={[styles.logoutButton, isMobile && styles.logoutButtonMobile]}
