@@ -63,7 +63,7 @@ export default function KitchenDisplayScreen() {
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
   const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
-  const [stationFilter] = useState<'all' | 'main' | 'juice'>('main');
+  const [stationFilter] = useState<'all' | 'main' | 'juice'>('juice');
   const [now, setNow] = useState(() => Date.now());
   const [latestAlert, setLatestAlert] = useState<{
     id: string;
@@ -307,8 +307,8 @@ export default function KitchenDisplayScreen() {
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
           <View>
-            <Text style={styles.navTitle}>Sultan Kitchen Display</Text>
-            <Text style={styles.navSubtitle}>Live KOT & Order Expediting</Text>
+            <Text style={styles.navTitle}>Juice Bar Display</Text>
+            <Text style={styles.navSubtitle}>Live Beverage Orders</Text>
           </View>
         </View>
 

@@ -21,7 +21,7 @@ import {
   StaffStatus,
 } from '../../store/restaurantStore';
 
-const ROLES: StaffRole[] = ['Admin', 'Manager', 'Waiter', 'Kitchen'];
+const ROLES: StaffRole[] = ['Admin', 'Manager', 'Waiter', 'Kitchen', 'JuiceBar'];
 const SHIFTS: StaffShift[] = ['Morning', 'Evening', 'Night'];
 const STATUSES: StaffStatus[] = ['Active', 'On Leave', 'Inactive'];
 
@@ -58,6 +58,7 @@ export default function StaffManagementScreen() {
   const onLeaveCount = staff.filter((s) => s.status === 'On Leave').length;
   const waiterCount = staff.filter((s) => s.role === 'Waiter').length;
   const kitchenCount = staff.filter((s) => s.role === 'Kitchen').length;
+  const juiceBarCount = staff.filter((s) => s.role === 'JuiceBar').length;
 
   // Filtered List
   const filteredStaff = staff.filter((s) => {
@@ -239,8 +240,8 @@ export default function StaffManagementScreen() {
               <Ionicons name="restaurant" size={20} color="#5856D6" />
             </View>
             <View>
-              <Text style={styles.kpiValue}>{waiterCount}W / {kitchenCount}K</Text>
-              <Text style={styles.kpiLabel}>Floor/Kitchen</Text>
+              <Text style={styles.kpiValue}>{waiterCount}W / {kitchenCount}K / {juiceBarCount}J</Text>
+              <Text style={styles.kpiLabel}>Floor/Kitchen/Juice</Text>
             </View>
           </View>
         </View>

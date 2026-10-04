@@ -89,7 +89,7 @@ export type Invoice = {
   payments: Payment[];
 };
 
-export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen';
+export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar';
 export type StaffShift = 'Morning' | 'Evening' | 'Night';
 export type StaffStatus = 'Active' | 'On Leave' | 'Inactive';
 
