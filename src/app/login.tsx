@@ -108,7 +108,7 @@ export default function LoginScreen() {
             {/* Header with HD Logo */}
             <View style={styles.header}>
               <View style={styles.logoBadgeOuter}>
-                <SultanLogo size="md" width={68} height={68} />
+                <SultanLogo size="xl" width={130} height={130} />
               </View>
               <Text style={styles.title}>Sultan Staff Portal</Text>
               <Text style={styles.subtitle}>Select your operational role & enter PIN</Text>
@@ -291,8 +291,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   logoBadgeOuter: {
-    padding: 6,
-    borderRadius: 24,
+    padding: 8,
+    borderRadius: 28,
     backgroundColor: 'rgba(213, 169, 67, 0.12)',
     borderWidth: 1.5,
     borderColor: 'rgba(213, 169, 67, 0.35)',

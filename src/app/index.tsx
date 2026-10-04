@@ -21,8 +21,8 @@ export default function HomeScreen() {
             <View style={styles.logoContainer}>
               <SultanLogo
                 size={isMobile ? 'xl' : 'hero'}
-                width={isMobile ? 260 : 340}
-                height={isMobile ? 220 : 280}
+                width={isMobile ? 280 : 380}
+                height={isMobile ? 240 : 320}
               />
             </View>
 

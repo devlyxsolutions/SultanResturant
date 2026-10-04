@@ -14,12 +14,12 @@ interface SultanLogoProps {
 }
 
 const SIZE_MAP: Record<SultanLogoSize, { imgW: number; imgH: number; box: number; radius: number }> = {
-  xs: { imgW: 28, imgH: 28, box: 34, radius: 8 },
-  sm: { imgW: 38, imgH: 38, box: 46, radius: 10 },
-  md: { imgW: 56, imgH: 56, box: 68, radius: 16 },
-  lg: { imgW: 90, imgH: 90, box: 110, radius: 24 },
-  xl: { imgW: 160, imgH: 150, box: 180, radius: 32 },
-  hero: { imgW: 320, imgH: 280, box: 340, radius: 40 },
+  xs: { imgW: 32, imgH: 32, box: 38, radius: 8 },
+  sm: { imgW: 46, imgH: 46, box: 54, radius: 12 },
+  md: { imgW: 84, imgH: 84, box: 96, radius: 18 },
+  lg: { imgW: 130, imgH: 130, box: 150, radius: 26 },
+  xl: { imgW: 200, imgH: 190, box: 220, radius: 34 },
+  hero: { imgW: 380, imgH: 340, box: 400, radius: 44 },
 };
 
 export default function SultanLogo({
