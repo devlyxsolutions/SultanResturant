@@ -11,6 +11,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore } from '../../store/restaurantStore';
 import { useOpsStore } from '../../store/opsStore';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function ManagerDashboard() {
   const router = useRouter();
@@ -38,10 +39,15 @@ export default function ManagerDashboard() {
         
         {/* Header */}
         <View style={styles.headerSection}>
-          <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Manager Duty</Text>
-          <Text style={styles.dateText}>
-            {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+            <SultanLogo size="md" variant="circle" width={32} height={32} containerStyle={{ width: 48, height: 48, borderRadius: 24 }} />
+            <View>
+              <Text style={[styles.pageTitle, isMobile && styles.pageTitleMobile]}>Manager Duty</Text>
+              <Text style={styles.dateText}>
+                {new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* Quick Shift Summary Bar */}

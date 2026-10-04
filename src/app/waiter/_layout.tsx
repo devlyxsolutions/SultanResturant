@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function WaiterLayout() {
   const { ready, user, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
@@ -31,6 +32,7 @@ export default function WaiterLayout() {
       {/* App-like Header */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.headerLeft}>
+          <SultanLogo size="sm" width={28} height={28} style={{ marginRight: 8 }} />
           <Text style={[styles.headerTitle, isMobile && styles.headerTitleMobile]}>
             {isMobile ? 'Waiter' : 'Sultan Waiter'}
           </Text>

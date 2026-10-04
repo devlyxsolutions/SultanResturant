@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Invoice } from '../store/restaurantStore';
+import SultanLogo from './SultanLogo';
 
 type InvoiceProps = {
   invoice: Invoice;
@@ -13,6 +14,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
+        <SultanLogo size="md" variant="bare" width={54} height={50} style={{ marginBottom: 4 }} />
         <View style={styles.logoPlaceholder}>
           <Text style={styles.logoText}>SULTAN</Text>
           <Text style={styles.logoSubText}>RESTAURANT</Text>

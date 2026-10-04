@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function AdminLayout() {
   const { ready, user, logout } = useRoleGuard(['admin']);
@@ -27,6 +28,7 @@ export default function AdminLayout() {
       {/* Top Navigation Bar */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.headerLeft}>
+          <SultanLogo size="sm" width={28} height={28} style={{ marginRight: 8 }} />
           <Text style={[styles.headerTitle, isMobile && styles.headerTitleMobile]}>
             {isMobile ? 'Sultan' : 'Sultan Admin'}
           </Text>

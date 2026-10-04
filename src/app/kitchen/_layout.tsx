@@ -12,6 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function KitchenLayout() {
   const { ready, user, logout } = useRoleGuard(['kitchen', 'manager', 'admin']);
@@ -31,6 +32,7 @@ export default function KitchenLayout() {
       {/* High-Contrast Kitchen Header */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.headerLeft}>
+          <SultanLogo size="sm" width={26} height={26} style={{ marginRight: 8 }} />
           <Text style={[styles.headerTitle, isMobile && styles.headerTitleMobile]}>
             {isMobile ? 'KDS' : 'KITCHEN DISPLAY'}
           </Text>

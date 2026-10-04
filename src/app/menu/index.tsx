@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Platform }
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore } from '../../store/restaurantStore';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function CustomerMenuScreen() {
   const router = useRouter();
@@ -40,7 +41,8 @@ export default function CustomerMenuScreen() {
               <Ionicons name="arrow-back" size={24} color="#fff" />
             </TouchableOpacity>
             <View style={styles.heroTextContainer}>
-              <Text style={styles.heroTitle}>{"Sultan's Dine"}</Text>
+              <SultanLogo size="lg" width={60} height={55} style={{ marginBottom: 4 }} />
+              <Text style={styles.heroTitle}>Sultan Restaurant</Text>
               <Text style={styles.heroSubtitle}>A Royal Culinary Experience</Text>
             </View>
           </View>

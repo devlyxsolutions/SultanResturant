@@ -1,9 +1,11 @@
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, Link } from 'expo-router';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 600;
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
@@ -14,33 +16,35 @@ export default function HomeScreen() {
       <View style={styles.decorCircleBottom} />
 
       <View style={styles.content}>
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../../assets/images/sultan-logo.png')}
-            style={styles.logoImage}
-            resizeMode="contain"
-          />
-        </View>
+        <View style={styles.cardContainer}>
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('../../assets/images/sultan-logo.png')}
+              style={[styles.logoImage, isMobile ? styles.logoImageMobile : styles.logoImageDesktop]}
+              resizeMode="contain"
+            />
+          </View>
 
-        <View style={styles.welcomeTextContainer}>
-          <Text style={styles.welcomeTitle}>Authentic Dining Experience</Text>
-          <Text style={styles.welcomeSubtitle}>
-            Taste the royal flavors of the finest cuisine crafted with passion and tradition.
-          </Text>
-        </View>
+          <View style={styles.welcomeTextContainer}>
+            <Text style={styles.welcomeTitle}>Authentic Dining Experience</Text>
+            <Text style={styles.welcomeSubtitle}>
+              Taste the royal flavors of the finest cuisine crafted with passion and tradition.
+            </Text>
+          </View>
 
-        <View style={styles.buttonContainer}>
-          <Link href="/menu" asChild>
-            <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>View Digital Menu</Text>
-            </TouchableOpacity>
-          </Link>
+          <View style={styles.buttonContainer}>
+            <Link href="/menu" asChild>
+              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85}>
+                <Text style={styles.primaryButtonText}>View Digital Menu</Text>
+              </TouchableOpacity>
+            </Link>
 
-          <Link href="/login" asChild>
-            <TouchableOpacity style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Staff Login</Text>
-            </TouchableOpacity>
-          </Link>
+            <Link href="/login" asChild>
+              <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.85}>
+                <Text style={styles.secondaryButtonText}>Staff Login</Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -72,71 +76,89 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 24,
-    justifyContent: 'space-around',
+    paddingHorizontal: 20,
+    justifyContent: 'center',
     alignItems: 'center',
+  },
+  cardContainer: {
+    width: '100%',
+    maxWidth: 520,
+    flex: 1,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 32,
   },
   logoContainer: {
     alignItems: 'center',
-    marginTop: 40,
+    justifyContent: 'center',
+    marginTop: 10,
   },
   logoImage: {
-    width: 250,
+    marginBottom: 10,
+  },
+  logoImageDesktop: {
+    width: 320,
     height: 250,
-    marginBottom: 20,
+  },
+  logoImageMobile: {
+    width: 250,
+    height: 200,
   },
   welcomeTextContainer: {
     alignItems: 'center',
-    marginVertical: 40,
+    marginVertical: 24,
   },
   welcomeTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 16,
+    marginBottom: 12,
+    letterSpacing: 0.5,
   },
   welcomeSubtitle: {
-    fontSize: 16,
-    color: 'rgba(255,255,255,0.8)',
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
-    lineHeight: 24,
-    paddingHorizontal: 20,
+    lineHeight: 23,
+    paddingHorizontal: 16,
+    maxWidth: 420,
   },
   buttonContainer: {
     width: '100%',
-    gap: 16,
-    marginBottom: 40,
+    maxWidth: 440,
+    gap: 14,
+    marginBottom: 16,
   },
   primaryButton: {
     backgroundColor: '#D5A943',
-    paddingVertical: 18,
-    borderRadius: 12,
+    paddingVertical: 17,
+    borderRadius: 14,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.25,
     shadowRadius: 5,
-    elevation: 8,
+    elevation: 6,
   },
   primaryButtonText: {
     color: '#52171B',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
   secondaryButton: {
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(213, 169, 67, 0.08)',
     borderWidth: 2,
     borderColor: '#D5A943',
-    paddingVertical: 18,
-    borderRadius: 12,
+    paddingVertical: 17,
+    borderRadius: 14,
     alignItems: 'center',
   },
   secondaryButtonText: {
     color: '#D5A943',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: 'bold',
-    letterSpacing: 1,
+    letterSpacing: 0.8,
   },
 });

@@ -12,6 +12,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function ManagerLayout() {
   // Admin can also open manager screens (e.g. Inventory from the admin dashboard)
@@ -27,6 +28,13 @@ export default function ManagerLayout() {
       
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.headerLeft}>
+          <SultanLogo 
+            size="xs" 
+            variant="circle" 
+            width={20} 
+            height={20} 
+            containerStyle={{ marginRight: 8, width: 32, height: 32, borderRadius: 16 }} 
+          />
           <Text style={[styles.headerTitle, isMobile && styles.headerTitleMobile]}>
             {isMobile ? 'Manager' : 'Sultan Manager'}
           </Text>

@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, type Href } from 'expo-router';
 import { useAuthStore, Role, ROLE_HOME } from '../store/authStore';
 import { useRestaurantStore, StaffMember } from '../store/restaurantStore';
+import SultanLogo from '../components/SultanLogo';
 
 const roles: { label: string; value: Role; icon: keyof typeof Ionicons.glyphMap }[] = [
   { label: 'Admin', value: 'admin', icon: 'shield-checkmark-outline' },
@@ -103,9 +104,13 @@ export default function LoginScreen() {
         <View style={styles.content}>
           {/* Logo / Header */}
           <View style={styles.header}>
-            <View style={styles.brandIconBox}>
-              <Ionicons name="restaurant" size={32} color="#D5A943" />
-            </View>
+            <SultanLogo 
+              size="lg" 
+              variant="circle" 
+              width={66}
+              height={66}
+              containerStyle={{ marginBottom: 14 }}
+            />
             <Text style={styles.title}>Sultan Restaurant</Text>
             <Text style={styles.subtitle}>Select your staff role & enter PIN to access</Text>
           </View>
