@@ -86,25 +86,32 @@ export default function MenuManagement() {
   };
 
   const handleSaveItem = () => {
-    if (!itemName.trim() || !itemPrice.trim() || !itemCategory) {
-      const msg = 'Please enter item name and valid price.';
+    const parsedVariants = itemVariants
+      .filter(v => v.name.trim() !== '' && !isNaN(parseFloat(v.price)))
+      .map(v => ({ name: v.name.trim(), price: parseFloat(v.price) }));
+
+    const hasVariants = parsedVariants.length > 0;
+
+    if (!itemName.trim() || !itemCategory) {
+      const msg = 'Please enter item name and category.';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Error', msg);
       return;
     }
     
-    const priceNum = parseFloat(itemPrice);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      const msg = 'Please enter a valid positive price.';
+    let priceNum = parseFloat(itemPrice);
+    if (!hasVariants && (isNaN(priceNum) || priceNum <= 0)) {
+      const msg = 'Please enter a valid positive main price (or add variants instead).';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Error', msg);
       return;
     }
 
-    const parsedVariants = itemVariants
-      .filter(v => v.name.trim() !== '' && !isNaN(parseFloat(v.price)))
-      .map(v => ({ name: v.name.trim(), price: parseFloat(v.price) }));
+    if (hasVariants && isNaN(priceNum)) {
+      priceNum = 0; // Default to 0 if it's left empty but variants are provided
+    }
 
+    // parsedVariants logic moved above
     if (editingItem) {
       updateMenuItem(editingItem.id, {
         name: itemName.trim(),
@@ -313,7 +320,9 @@ export default function MenuManagement() {
                           </View>
                         </View>
                         <View style={styles.itemPriceRow}>
-                          <Text style={styles.itemCardPrice}>Rs. {item.price.toFixed(0)}</Text>
+                          <Text style={styles.itemCardPrice}>
+                            {item.price > 0 ? `Rs. ${item.price.toFixed(0)}` : 'Variant based'}
+                          </Text>
                           {item.variants && item.variants.length > 0 && (
                             <Text style={{ fontSize: 11, color: '#D5A943', fontWeight: '600' }}>
                               ({item.variants.length} Options)
@@ -375,7 +384,7 @@ export default function MenuManagement() {
                     </View>
                     <View style={styles.tableCell}>
                       <Text style={{ fontWeight: '700', color: '#4a121a' }}>
-                        Rs. {item.price.toFixed(0)}
+                        {item.price > 0 ? `Rs. ${item.price.toFixed(0)}` : 'Variant based'}
                       </Text>
                       {item.variants && item.variants.length > 0 && (
                         <Text style={{ fontSize: 11, color: '#D5A943', fontWeight: '600', marginTop: 2 }}>
