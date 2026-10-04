@@ -1,14 +1,29 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, useWindowDimensions } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, useWindowDimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link } from 'expo-router';
+import { Link, useRouter } from 'expo-router';
+import { useAuthStore } from '../store/authStore';
 import IslamicBackground from '../components/IslamicBackground';
 import SultanLogo from '../components/SultanLogo';
 import { Ionicons } from '@expo/vector-icons';
 
 export default function HomeScreen() {
+  const router = useRouter();
+  const user = useAuthStore((state) => state.user);
+  const hasHydrated = useAuthStore((state) => state.hasHydrated);
   const { width } = useWindowDimensions();
   const isMobile = width < 600;
+
+  // On Native Mobile APK, launch straight into Waiter Terminal
+  useEffect(() => {
+    if (hasHydrated) {
+      if (user?.role === 'waiter') {
+        router.replace('/waiter');
+      } else if (Platform.OS !== 'web') {
+        router.replace('/login?role=waiter' as any);
+      }
+    }
+  }, [hasHydrated, user, router]);
 
   return (
     <IslamicBackground theme="burgundy" showCorners={true} showCenterLattice={true}>
@@ -44,17 +59,24 @@ export default function HomeScreen() {
 
             {/* Action Buttons */}
             <View style={styles.buttonContainer}>
-              <Link href="/menu" asChild>
+              <Link href="/login?role=waiter" asChild>
                 <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88}>
-                  <Ionicons name="restaurant-outline" size={20} color="#451014" style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryButtonText}>View Digital Menu</Text>
+                  <Ionicons name="walk" size={20} color="#451014" style={{ marginRight: 8 }} />
+                  <Text style={styles.primaryButtonText}>Waiter Terminal Login</Text>
                 </TouchableOpacity>
               </Link>
 
-              <Link href="/login" asChild>
+              <Link href="/menu" asChild>
                 <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.88}>
-                  <Ionicons name="key-outline" size={19} color="#D5A943" style={{ marginRight: 8 }} />
-                  <Text style={styles.secondaryButtonText}>Staff Portal & PIN Login</Text>
+                  <Ionicons name="restaurant-outline" size={19} color="#D5A943" style={{ marginRight: 8 }} />
+                  <Text style={styles.secondaryButtonText}>View Digital Menu</Text>
+                </TouchableOpacity>
+              </Link>
+
+              <Link href="/login?all=true" asChild>
+                <TouchableOpacity style={[styles.secondaryButton, { marginTop: 8, borderColor: 'rgba(213, 169, 67, 0.25)', backgroundColor: 'transparent' }]} activeOpacity={0.88}>
+                  <Ionicons name="key-outline" size={16} color="#A38F78" style={{ marginRight: 6 }} />
+                  <Text style={[styles.secondaryButtonText, { color: '#A38F78', fontSize: 13 }]}>Admin & Management Portal</Text>
                 </TouchableOpacity>
               </Link>
             </View>

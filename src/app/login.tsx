@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, type Href } from 'expo-router';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
 import { useAuthStore, Role, ROLE_HOME } from '../store/authStore';
 import { useRestaurantStore, StaffMember } from '../store/restaurantStore';
 import SultanLogo from '../components/SultanLogo';
@@ -30,17 +30,32 @@ const roles: { label: string; value: Role; icon: keyof typeof Ionicons.glyphMap;
 
 export default function LoginScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ role?: string; all?: string }>();
   const login = useAuthStore((state) => state.login);
   const user = useAuthStore((state) => state.user);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
 
   const staff = useRestaurantStore((state) => state.staff) || [];
 
-  const [selectedRole, setSelectedRole] = useState<Role>(null);
+  const isWaiterApp = (Platform.OS !== 'web' || params.role === 'waiter') && params.all !== 'true';
+
+  const [selectedRole, setSelectedRole] = useState<Role>(isWaiterApp ? 'waiter' : null);
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [showPin, setShowPin] = useState(false);
+
+  // Auto-select waiter role if on waiter app
+  useEffect(() => {
+    if (isWaiterApp) {
+      setSelectedRole('waiter');
+      const waiters = staff.filter((s) => s.role.toLowerCase() === 'waiter' && s.status === 'Active');
+      if (waiters.length > 0 && !name) {
+        setName(waiters[0].name);
+        setPin(waiters[0].pin);
+      }
+    }
+  }, [isWaiterApp, staff]);
 
   // Already signed in? Go straight to role's home.
   useEffect(() => {
@@ -121,60 +136,195 @@ export default function LoginScreen() {
               <View style={styles.logoBadgeOuter}>
                 <SultanLogo size="xl" width={130} height={130} />
               </View>
-              <Text style={styles.title}>Sultan Staff Portal</Text>
-              <Text style={styles.subtitle}>Select your operational role to sign in</Text>
+              <Text style={styles.title}>
+                {isWaiterApp ? 'Sultan Waiter Terminal' : 'Sultan Staff Portal'}
+              </Text>
+              <Text style={styles.subtitle}>
+                {isWaiterApp ? 'Floor Service & Tables Order Punch' : 'Select your operational role to sign in'}
+              </Text>
             </View>
 
-            {/* Role Cards Grid */}
-            <View style={styles.rolesGrid}>
-              {roles.map((r) => {
-                const count = staff.filter(
-                  (s) => s.role.toLowerCase() === r.value?.toLowerCase()
-                ).length;
-                return (
+            {isWaiterApp ? (
+              <View style={styles.modalCard}>
+                {/* Card Header */}
+                <View style={styles.modalHeader}>
+                  <View style={styles.modalHeaderLeft}>
+                    <View style={styles.modalRoleIconCircle}>
+                      <Ionicons name="walk" size={22} color="#451014" />
+                    </View>
+                    <View>
+                      <Text style={styles.modalTitle}>Waiter Portal Sign In</Text>
+                      <Text style={styles.modalSubtitle}>Tables & Live KOT Dispatch</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.modalDivider} />
+
+                {/* Quick Pick Staff Pills */}
+                {roleStaff.length > 0 && (
+                  <View style={styles.quickPickContainer}>
+                    <Text style={styles.quickPickLabel}>Active Waiters on Shift:</Text>
+                    <View style={styles.quickPickPills}>
+                      {roleStaff.map((member) => {
+                        const isChosen = name.toLowerCase() === member.name.toLowerCase();
+                        return (
+                          <TouchableOpacity
+                            key={member.id}
+                            style={[
+                              styles.staffPill,
+                              isChosen && styles.staffPillActive,
+                            ]}
+                            onPress={() => selectStaffMember(member)}
+                          >
+                            <Text
+                              style={[
+                                styles.staffPillText,
+                                isChosen && styles.staffPillTextActive,
+                              ]}
+                            >
+                              {member.name} • ({member.shift})
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+                )}
+
+                {/* Error Banner */}
+                {errorMessage.length > 0 && (
+                  <View style={styles.errorBanner}>
+                    <Ionicons name="alert-circle" size={18} color="#FF6B6B" />
+                    <Text style={styles.errorText}>{errorMessage}</Text>
+                  </View>
+                )}
+
+                {/* Waiter Name Input */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.inputLabel}>Waiter Name / ID</Text>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="person-outline" size={18} color="#D5A943" style={styles.fieldIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder="Enter waiter name"
+                      placeholderTextColor="rgba(255,255,255,0.4)"
+                      value={name}
+                      onChangeText={(val) => {
+                        setName(val);
+                        if (errorMessage) setErrorMessage('');
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* PIN Input */}
+                <View style={styles.inputGroup}>
+                  <View style={styles.pinLabelRow}>
+                    <Text style={styles.inputLabel}>4-Digit Security PIN</Text>
+                    <TouchableOpacity onPress={() => setShowPin(!showPin)}>
+                      <Text style={styles.showPinText}>{showPin ? 'Hide PIN' : 'Show PIN'}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={styles.inputWrapper}>
+                    <Ionicons name="key-outline" size={18} color="#D5A943" style={styles.fieldIcon} />
+                    <TextInput
+                      style={[styles.input, styles.pinInput]}
+                      placeholder="••••"
+                      placeholderTextColor="rgba(255,255,255,0.4)"
+                      secureTextEntry={!showPin}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                      value={pin}
+                      onChangeText={(val) => {
+                        setPin(val);
+                        if (errorMessage) setErrorMessage('');
+                      }}
+                    />
+                  </View>
+                </View>
+
+                {/* Login Button */}
+                <View style={styles.modalActions}>
                   <TouchableOpacity
-                    key={r.value}
-                    style={styles.roleCard}
-                    onPress={() => handleRoleSelect(r.value)}
-                    activeOpacity={0.82}
+                    style={[
+                      styles.loginButton,
+                      (!name.trim() || !pin.trim()) && styles.loginButtonDisabled,
+                    ]}
+                    onPress={handleLogin}
+                    disabled={!name.trim() || !pin.trim()}
+                    activeOpacity={0.88}
                   >
-                    <View style={styles.roleIconCircle}>
-                      <Ionicons
-                        name={r.icon}
-                        size={26}
-                        color="#D5A943"
-                      />
-                    </View>
-                    <Text style={styles.roleText}>
-                      {r.label}
-                    </Text>
-                    <Text style={styles.roleDesc}>
-                      {r.desc}
-                    </Text>
-                    <View style={styles.staffCountBadge}>
-                      <Text style={styles.staffCountText}>
-                        {count} Staff Active
-                      </Text>
-                    </View>
+                    <Ionicons name="log-in-outline" size={20} color="#451014" />
+                    <Text style={styles.loginButtonText}>Enter Floor Plan & Tables</Text>
                   </TouchableOpacity>
-                );
-              })}
-            </View>
+                </View>
 
-            {/* Back Button */}
-            <TouchableOpacity
-              style={styles.backButton}
-              onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-            >
-              <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 6 }} />
-              <Text style={styles.backButtonText}>Back to Welcome Screen</Text>
-            </TouchableOpacity>
+                {Platform.OS === 'web' && (
+                  <TouchableOpacity
+                    style={{ marginTop: 16, alignItems: 'center' }}
+                    onPress={() => router.push('/login?all=true' as any)}
+                  >
+                    <Text style={{ color: '#D5A943', fontSize: 13, textDecorationLine: 'underline' }}>
+                      Switch to Full Staff Portal
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            ) : (
+              <>
+                {/* Role Cards Grid */}
+                <View style={styles.rolesGrid}>
+                  {roles.map((r) => {
+                    const count = staff.filter(
+                      (s) => s.role.toLowerCase() === r.value?.toLowerCase()
+                    ).length;
+                    return (
+                      <TouchableOpacity
+                        key={r.value}
+                        style={styles.roleCard}
+                        onPress={() => handleRoleSelect(r.value)}
+                        activeOpacity={0.82}
+                      >
+                        <View style={styles.roleIconCircle}>
+                          <Ionicons
+                            name={r.icon}
+                            size={26}
+                            color="#D5A943"
+                          />
+                        </View>
+                        <Text style={styles.roleText}>
+                          {r.label}
+                        </Text>
+                        <Text style={styles.roleDesc}>
+                          {r.desc}
+                        </Text>
+                        <View style={styles.staffCountBadge}>
+                          <Text style={styles.staffCountText}>
+                            {count} Staff Active
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Back Button */}
+                <TouchableOpacity
+                  style={styles.backButton}
+                  onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+                >
+                  <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 6 }} />
+                  <Text style={styles.backButtonText}>Back to Welcome Screen</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </ScrollView>
 
         {/* Modal Popup for Role Credentials */}
         <Modal
-          visible={!!selectedRole}
+          visible={!isWaiterApp && !!selectedRole}
           transparent
           animationType="fade"
           onRequestClose={closeModal}
