@@ -24,6 +24,11 @@ export default function ManagerDashboard() {
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const occupiedCount = tables.filter(t => t.status === 'occupied').length;
 
+  // Live kitchen stats for badges
+  const cookingCount = tickets.filter(t => t.status === 'cooking').length;
+  const readyCount = tickets.filter(t => t.status === 'ready').length;
+  const hasUrgent = readyCount > 0;
+
   const serviceRequests = useOpsStore((state) => state.serviceRequests) || [];
   const pendingRequestsCount = serviceRequests.filter((r) => r.status === 'pending').length;
 
