@@ -7,11 +7,13 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import OrderSlip from '../../components/OrderSlip';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -73,6 +75,8 @@ export default function KitchenDisplayScreen() {
     itemCount: number;
     server: string;
   } | null>(null);
+
+  const [printingTicket, setPrintingTicket] = useState<Ticket | null>(null);
 
   // Track seen tickets to trigger notification on newly incoming tickets
   const seenTicketIdsRef = useRef<Set<string>>(new Set(tickets.map((t) => t.id)));
@@ -209,9 +213,18 @@ export default function KitchenDisplayScreen() {
               {item.tableName} • {item.server}
             </Text>
           </View>
-          <View style={styles.timeBadge}>
-            <Ionicons name="time-outline" size={14} color="#fff" />
-            <Text style={styles.timeText}>{timeElapsedMinutes}m</Text>
+          <View style={{ alignItems: 'flex-end', gap: 6 }}>
+            <View style={styles.timeBadge}>
+              <Ionicons name="time-outline" size={14} color="#fff" />
+              <Text style={styles.timeText}>{timeElapsedMinutes}m</Text>
+            </View>
+            <TouchableOpacity 
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
+              onPress={() => setPrintingTicket(item)}
+            >
+              <Ionicons name="print-outline" size={12} color="#fff" />
+              <Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>PRINT</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -446,6 +459,26 @@ export default function KitchenDisplayScreen() {
           />
         )}
       </View>
+
+      {/* Print Preview Modal */}
+      <Modal visible={!!printingTicket} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <ScrollView contentContainerStyle={styles.printPreviewContent}>
+            <TouchableOpacity style={styles.closeBtn} onPress={() => setPrintingTicket(null)}>
+              <Text style={styles.closeBtnText}>Close</Text>
+            </TouchableOpacity>
+            
+            {printingTicket && <OrderSlip ticket={printingTicket} />}
+            
+            <TouchableOpacity style={styles.printBtnAction} onPress={() => {
+                if (typeof window !== 'undefined') window.print();
+            }}>
+              <Text style={styles.printBtnText}>Print Slip</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -807,5 +840,50 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,0.25)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  printPreviewContent: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 24,
+    marginVertical: 40,
+    width: '100%',
+    maxWidth: 420,
+    alignSelf: 'center',
+    alignItems: 'center',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    zIndex: 10,
+    backgroundColor: '#f1f2f6',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  closeBtnText: {
+    color: '#333',
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+  printBtnAction: {
+    backgroundColor: '#D5A943',
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    borderRadius: 12,
+    marginTop: 20,
+    width: '100%',
+    alignItems: 'center',
+  },
+  printBtnText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '800',
   },
 });

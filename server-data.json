@@ -45,12 +45,21 @@
       "zone": "Main Hall",
       "name": "T-02",
       "seats": 2,
-      "status": "available",
-      "billTotal": 0,
-      "orders": [],
+      "status": "occupied",
+      "billTotal": 200,
+      "orders": [
+        {
+          "id": "m1791115451707",
+          "name": "mangoo shake",
+          "price": 200,
+          "qty": 1,
+          "completed": false
+        }
+      ],
       "isPaid": false,
       "x": 40,
-      "y": 320
+      "y": 320,
+      "server": "Sara Ahmed"
     },
     {
       "id": "3",
@@ -366,6 +375,26 @@
           "price": 150,
           "qty": 3,
           "completed": false
+        }
+      ]
+    },
+    {
+      "id": "KOT-4676",
+      "tableId": "2",
+      "tableName": "T-02",
+      "server": "Sara Ahmed",
+      "timePlaced": 1791115535699,
+      "status": "cooking",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "items": [
+        {
+          "id": "m1791115451707",
+          "name": "mangoo shake",
+          "price": 200,
+          "qty": 1,
+          "completed": false,
+          "station": "juice"
         }
       ]
     }
@@ -709,6 +738,13 @@
         }
       ],
       "id": "m1791112898285"
+    },
+    {
+      "name": "mangoo shake",
+      "price": 200,
+      "category": "Drinks",
+      "station": "juice",
+      "id": "m1791115451707"
     }
   ],
   "categories": [
