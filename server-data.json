@@ -95,6 +95,244 @@
       "seats": 6,
       "status": "available",
       "id": "t1791104164902"
+    },
+    {
+      "name": "G-01",
+      "zone": "Ground Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "t1791106748755"
+    },
+    {
+      "name": "G-02",
+      "zone": "Ground Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "t1791106748755"
+    },
+    {
+      "name": "G-03",
+      "zone": "Ground Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "t1791106748756"
+    },
+    {
+      "name": "G-04",
+      "zone": "Ground Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "tGF04"
+    },
+    {
+      "name": "G-05",
+      "zone": "Ground Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tGF05"
+    },
+    {
+      "name": "G-06",
+      "zone": "Ground Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tGF06"
+    },
+    {
+      "name": "G-07",
+      "zone": "Ground Floor",
+      "seats": 2,
+      "status": "available",
+      "id": "t1791106748757"
+    },
+    {
+      "name": "G-08",
+      "zone": "Ground Floor",
+      "seats": 2,
+      "status": "available",
+      "id": "tGF08"
+    },
+    {
+      "name": "G-09",
+      "zone": "Ground Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tGF09"
+    },
+    {
+      "name": "G-10",
+      "zone": "Ground Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "tGF10"
+    },
+    {
+      "name": "F1-01",
+      "zone": "1st Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "t1791106748758"
+    },
+    {
+      "name": "F1-02",
+      "zone": "1st Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "tF102"
+    },
+    {
+      "name": "F1-03",
+      "zone": "1st Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "tF103"
+    },
+    {
+      "name": "F1-04",
+      "zone": "1st Floor",
+      "seats": 4,
+      "status": "available",
+      "id": "tF104"
+    },
+    {
+      "name": "F1-05",
+      "zone": "1st Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "t1791106748759"
+    },
+    {
+      "name": "F1-06",
+      "zone": "1st Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tF106"
+    },
+    {
+      "name": "F1-07",
+      "zone": "1st Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tF107"
+    },
+    {
+      "name": "F1-08",
+      "zone": "1st Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tF108"
+    },
+    {
+      "name": "F1-09",
+      "zone": "1st Floor",
+      "seats": 2,
+      "status": "available",
+      "id": "t1791106748760"
+    },
+    {
+      "name": "F1-10",
+      "zone": "1st Floor",
+      "seats": 2,
+      "status": "available",
+      "id": "tF110"
+    },
+    {
+      "name": "F2-01",
+      "zone": "2nd Floor",
+      "seats": 10,
+      "status": "available",
+      "id": "tF201"
+    },
+    {
+      "name": "F2-02",
+      "zone": "2nd Floor",
+      "seats": 10,
+      "status": "available",
+      "id": "tF202"
+    },
+    {
+      "name": "F2-03",
+      "zone": "2nd Floor",
+      "seats": 12,
+      "status": "available",
+      "id": "tF203"
+    },
+    {
+      "name": "F2-04",
+      "zone": "2nd Floor",
+      "seats": 12,
+      "status": "available",
+      "id": "t1791106748761"
+    },
+    {
+      "name": "F2-05",
+      "zone": "2nd Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tF205"
+    },
+    {
+      "name": "F2-06",
+      "zone": "2nd Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tF206"
+    },
+    {
+      "name": "F2-07",
+      "zone": "2nd Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tF207"
+    },
+    {
+      "name": "F2-08",
+      "zone": "2nd Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "t1791106748762"
+    },
+    {
+      "name": "F3-01",
+      "zone": "3rd Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tF301"
+    },
+    {
+      "name": "F3-02",
+      "zone": "3rd Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tF302"
+    },
+    {
+      "name": "F3-03",
+      "zone": "3rd Floor",
+      "seats": 8,
+      "status": "available",
+      "id": "tF303"
+    },
+    {
+      "name": "F3-04",
+      "zone": "3rd Floor",
+      "seats": 10,
+      "status": "available",
+      "id": "t1791106748763"
+    },
+    {
+      "name": "F3-05",
+      "zone": "3rd Floor",
+      "seats": 12,
+      "status": "available",
+      "id": "tF305"
+    },
+    {
+      "name": "F3-06",
+      "zone": "3rd Floor",
+      "seats": 6,
+      "status": "available",
+      "id": "tF306"
     }
   ],
   "tickets": [

@@ -24,7 +24,14 @@ export default function ServiceRequestsScreen({ backRoute = '/manager/dashboard'
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
-  const tables = useRestaurantStore((s) => s.tables) || [];
+  const rawTables = useRestaurantStore((s) => s.tables) || [];
+  // Deduplicate by id — guards against duplicate-id data from server
+  const seenIds = new Set<string>();
+  const tables = rawTables.filter((t) => {
+    if (seenIds.has(t.id)) return false;
+    seenIds.add(t.id);
+    return true;
+  });
   const requests = useOpsStore((s) => s.serviceRequests) || [];
   const addRequest = useOpsStore((s) => s.addServiceRequest);
   const acknowledge = useOpsStore((s) => s.acknowledgeRequest);
