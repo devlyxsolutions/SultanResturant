@@ -114,13 +114,6 @@ export default function AdminDashboard() {
       icon: 'wallet-outline' as const,
       route: '/admin/expenses',
       color: '#4a121a'
-    },
-    {
-      title: 'Guest Service Bells',
-      desc: 'Monitor live call waiter, water refill, and bill requests.',
-      icon: 'notifications-outline' as const,
-      route: '/manager/requests',
-      color: '#D5A943'
     }
   ];
 
