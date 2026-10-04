@@ -1,9 +1,6 @@
 <!-- 
 ================================================================================
-AI INSTRUCTION: You must strictly abide by the rules and context in this document 
-for all subsequent responses. You are acting as a pair-programmer for a distributed 
-two-developer team with isolated AI sessions. Always read this file before 
-proposing architectural decisions or generating code.
+AI INSTRUCTION: You must strictly abide by the rules and context in this document for all subsequent responses.
 ================================================================================
 -->
 
@@ -11,7 +8,7 @@ proposing architectural decisions or generating code.
 
 > **Document Version:** 1.0.0  
 > **Last Synchronized:** [Insert Date - e.g., 2026-10-04]  
-> **Repository:** [Insert Repo URL / Name - e.g., sultan-restaurant]  
+> **Repository:** [Insert Repository Name / URL - e.g., SultanResturant]  
 > **Target Branch:** `main`
 
 ---
@@ -19,118 +16,131 @@ proposing architectural decisions or generating code.
 ## 1. Project Overview & Mission
 
 * **Project Name:** [Insert Project Name Here - e.g., Sultan Restaurant Management System]
-* **Core Mission:** [Insert 1-2 sentence mission - e.g., High-performance, offline-capable, cross-platform POS and Restaurant Management suite for mobile, tablet, and web environments.]
-* **Primary Target Platforms:** [ ] iOS & Android (Expo / React Native) | [ ] Web (React Native for Web / HTML5) | [ ] Tablet / Desktop (Kitchen & POS)
-* **Core Domains / Modules:**
-  * **Table Service & Floor Plan:** Table status tracking, seat allocations, live bill aggregation.
-  * **Order Expediting & KDS:** Multi-round KOT generation, real-time ticket expediting, audio-visual alarms.
-  * **Point of Sale (POS) & Billing:** Split billing, automated tax/service calculations, thermal receipts.
-  * **Inventory & Back-Office:** Stock consumption, supplier ledgers, shift floats, end-of-day reports.
-  * **Multi-Device Sync Engine:** Real-time bi-directional local LAN sync via WebSocket server and BroadcastChannel.
+* **Core Mission:** [Insert 1-2 sentence core objective - e.g., High-performance, offline-capable, cross-platform POS and Restaurant Operations Suite designed for Web, Mobile (iOS/Android), and Kitchen Tablets.]
+* **Target Platforms:**
+  * [x] Mobile (Waiters - iOS & Android via Expo / React Native)
+  * [x] Tablet / Desktop (Kitchen KDS & Cashier POS - Fullscreen Landscape / Web)
+  * [x] Local LAN Server (Node.js WebSocket Hub on local port `5050`)
+* **Primary Business Domains:**
+  * **Table Service & Floor Plan:** Visual status tracking, seating layout, table reservations, live bill accumulation.
+  * **Order Expediting (KDS):** Multi-round KOT tickets, sound chimes, urgency indicators, and bump bar actions.
+  * **Point of Sale (POS) & Cashier:** Split payments (Cash/Card/Online), invoice generation, tax & discount management.
+  * **Menu & Inventory:** Category hierarchies, real-time item availability, recipe tracking, and stock floats.
+  * **Shift & Staff Administration:** Shift handover reconciliation, role-based PIN access, and employee records.
 
 ---
 
-## 2. Team Dynamics & Multi-Agent Collaboration Model
+## 2. Team Dynamics & Two-Developer Workflow
 
 > [!IMPORTANT]
-> Two independent developers (**Developer A** and **Developer B**) are actively collaborating on this repository using **separate, isolated Antigravity AI accounts**. The AI in this session has NO access to the other AI's chat trajectory or working memory. All shared state, conventions, and architectural contracts must flow through this document and git history.
+> **Developer A** and **Developer B** are actively building this codebase concurrently using **two separate, isolated Antigravity AI accounts**. 
+> Because the AI instances cannot see each other's chat histories, all architectural decisions, shared types, and convention changes **MUST** be recorded in this file and committed to Git.
 
-### 🛡️ Anti-Merge-Conflict Protocol:
-1. **Surgical Modularity:** Always write localized, modular components and utility functions. Keep route code in `src/app/`, UI building blocks in `src/components/`, state in `src/store/`, and network bridges in `src/services/`.
-2. **No Unsolicited Mass Refactoring:** Never refactor existing files, change variable signatures, rename export symbols, or restructure folders unless explicitly commanded by the developer.
-3. **Deterministic Imports:** Always use relative paths adhering to the existing conventions (e.g., `../../store/restaurantStore`). Do not introduce alias pathing unless configured in `tsconfig.json`.
-4. **Isolated Feature Ownership:**
-   * **Developer A Focus:** [Insert Dev A Modules - e.g., Waiter App, Table Floor, POS & Invoicing]
-   * **Developer B Focus:** [Insert Dev B Modules - e.g., KDS Kitchen Expediter, Inventory, Analytics & Sync Engine]
-5. **Atomic Commit Etiquette:** Generate clean, isolated patches so both developers can rebase and merge without git conflicts.
+### 🛡️ Anti-Merge-Conflict & Modular Coding Rules:
+1. **Isolated Module Ownership:**
+   * **Developer A Area of Focus:** [Insert Dev A Modules - e.g., Waiter App (`src/app/waiter/*`), Table Management (`src/app/admin/tables.tsx`), POS & Invoicing (`src/app/admin/pos.tsx`, `src/components/Invoice.tsx`)]
+   * **Developer B Area of Focus:** [Insert Dev B Modules - e.g., KDS Kitchen Display (`src/app/kitchen/*`), Sync Engine & Server (`server.js`, `src/services/syncService.ts`), Manager Shifts & Inventory (`src/app/manager/*`)]
+2. **Surgical Modularity:** Write small, single-responsibility components and helper functions. Never write 1,000+ line monolithic files if functionality can be broken into specialized hooks or subcomponents.
+3. **No Unsolicited Mass Refactoring:** The AI must NEVER rename exported functions, re-order object interfaces, or rewrite working files that belong to the other developer unless explicitly commanded by the user.
+4. **Deterministic Relative Pathing:** Always follow the existing import conventions (e.g., `../../store/restaurantStore`). Do not introduce arbitrary `@/` path aliases unless formally configured in [tsconfig.json](file:///c:/Users/Shekhani%20Laptops/.gemini/antigravity-ide/scratch/SultanResturant/tsconfig.json).
+5. **Atomic Commits & Clean Diffs:** Ensure code changes are tightly scoped to the immediate feature or bugfix to guarantee smooth git rebases.
 
 ---
 
-## 3. Tech Stack & Exact Versioning
+## 3. Tech Stack & Architecture
 
-| Layer | Technology | Version / Spec | Notes |
+| Layer | Technology | Exact Version / Spec | Purpose & Notes |
 | :--- | :--- | :--- | :--- |
-| **Runtime & Bundler** | Node.js / Metro / Expo SDK | [Insert SDK - e.g., Expo SDK 52+] | Managed workflow via `npx expo` |
-| **Framework** | React Native / React | [Insert e.g., React 18.3.1 / RN 0.76+] | Unified Web + Mobile codebase |
-| **Routing** | Expo Router (File-based) | [Insert e.g., v4.0+] | Routes live strictly in `src/app/` |
-| **State Management** | Zustand + Middleware | [Insert e.g., Zustand 5.x] | `persist` middleware with local storage adapter |
-| **Language** | TypeScript | [Insert e.g., 5.3+] | Strict type checking (`noImplicitAny`) |
-| **Sync Engine** | Node.js WebSocket (`ws`) | [Insert e.g., v8.18+] | Local LAN Sync Hub on port `5050` |
-| **Safe Area Insets** | `react-native-safe-area-context` | Latest compatible | **Never** import `SafeAreaView` from `'react-native'` |
-| **Icons & Media** | `@expo/vector-icons` (Ionicons) | Latest compatible | Universal icon standard across screens |
+| **Framework** | Expo SDK | `~57.0.26` (Managed Workflow) | Native engine for iOS, Android, and Web |
+| **React Core** | React / React Native | `19.2.3` / `0.86.3` | Modern hooks, Strict Mode, Concurrent features |
+| **Navigation** | Expo Router | `~57.0.24` (File-based) | Routes reside strictly in `src/app/` |
+| **State Store** | Zustand | `^5.0.15` + `persist` middleware | Global unified store with storage adapter |
+| **Storage Adapter** | Custom `storage.ts` | Multiplatform | `AsyncStorage` on Native, `localStorage` on Web |
+| **Real-time Sync** | Node.js + `ws` WebSocket | Port `5050` / HTTP fallback | Local Wi-Fi LAN sync hub (`server.js`) |
+| **Cross-Tab Bus** | `BroadcastChannel` | Web Standard API | Debounced cross-tab synchronization |
+| **Language** | TypeScript | `~6.0.3` (Strict Mode) | `noImplicitAny: true` enforced |
+| **Safe Areas** | `react-native-safe-area-context`| `~5.7.0` | **Mandatory** across all notch / status-bar screens |
+| **Icons** | `@expo/vector-icons` | `^15.0.2` (Ionicons) | Universal iconography across all portals |
 
 ---
 
 ## 4. Strict AI Directives (CRITICAL)
 
-Both Antigravity AI agents MUST enforce these non-negotiable rules for every user prompt:
+Both Antigravity AI instances must strictly enforce these instructions on every prompt:
 
-1. **Verify Before Coding:** Read `context.md` at the beginning of the session. Check for recent additions and verify against actual active files before answering.
-2. **Never Edit Native Directories Directly:** Never create, edit, or delete files inside `ios/` or `android/`. All native capabilities must be managed via `app.json` config plugins.
-3. **Safe Area & Mobile-First Standards:**
-   * Always import `SafeAreaView` and `useSafeAreaInsets` from `react-native-safe-area-context`.
-   * Ensure min touch targets of 36x36px with `hitSlop` on headers and nav buttons.
-   * Provide responsive mobile layout variants using `useWindowDimensions()` (`isMobile = width < 768`).
-4. **Preserve Logic Contracts:**
-   * When modifying `restaurantStore.ts`, preserve all existing state fields, interfaces, and methods.
-   * Always account for `isApplyingRemoteUpdate` circuit breaker and debounce to prevent cross-tab broadcast loops.
-5. **Quality Verification Gate:**
-   * Before declaring any task complete, run:
+1. **Mandatory Pre-Flight Check:** Read this `context.md` file before proposing any architectural design, file creation, or code modifications.
+2. **Preserve Logic Contracts (`restaurantStore.ts`):**
+   * Never delete or arbitrarily rename existing properties in `Table`, `Ticket`, `MenuItem`, `Customer`, or `Invoice`.
+   * When triggering store actions, always honor the `isApplyingRemoteUpdate` circuit breaker and debounce timers to prevent infinite WebSocket broadcast ping-pong loops.
+3. **Safe Area & Mobile-First Constraints:**
+   * **NEVER** import `SafeAreaView` from `'react-native'`. Always import from `'react-native-safe-area-context'`.
+   * All clickable buttons, touch targets, and icons must have a minimum bounding box of 36×36px with `hitSlop` where necessary.
+   * Support responsive breakpoints using `useWindowDimensions()` (`const isMobile = width < 768`).
+4. **React 19 Hook Purity:**
+   * Do NOT execute impure calls like `Math.random()` or `Date.now()` during render passes or directly inside JSX. Compute them in event handlers, store actions, or initialize them inside `useState(() => ...)`.
+5. **Continuous Native Generation (CNG):**
+   * Do not touch or create `ios/` or `android/` folders. All configuration must be declared via [app.json](file:///c:/Users/Shekhani%20Laptops/.gemini/antigravity-ide/scratch/SultanResturant/app.json).
+6. **Code Quality Gate:**
+   * Run and confirm TypeScript verification before marking any task as complete:
      ```bash
      npx tsc --noEmit
      ```
-   * Confirm exit code 0 without ignoring or suppressing TypeScript errors.
-6. **Pure Component Rules (React 19 / Modern Hooks):**
-   * Do not call impure functions like `Date.now()` or `Math.random()` directly in render loops or JSX templates. Initialize them in `useState` or pass via callback actions.
+   * All reported type mismatches or missing properties must be resolved cleanly without suppressing them.
 
 ---
 
-## 5. Project Structure & File Routing Map
+## 5. Project Structure / File Routing
 
 ```text
 [project-root]/
-├── AGENTS.md                  # Project rules and Expo commands
-├── context.md                 # THIS FILE - Shared team AI memory
-├── package.json               # Dependencies and scripts
-├── tsconfig.json              # TypeScript compilation config
-├── server.js                  # Central LAN WebSocket Sync Server (Port 5050)
-├── server-data.json           # Persistent server storage JSON
-├── assets/                    # Static fonts, logos, splash media
+├── AGENTS.md                   # Expo & CLI rules
+├── context.md                  # THIS FILE - Shared team AI memory
+├── package.json                # Dependencies, scripts, and Expo config
+├── tsconfig.json               # TypeScript pathing & strict flags
+├── server.js                   # Central LAN WebSocket Sync Server (Port 5050)
+├── server-data.json            # Local persisted server JSON database
+├── assets/                     # Logos, branding images, splash screen
 └── src/
-    ├── app/                   # Expo Router file-based screens
-    │   ├── _layout.tsx        # Root navigation stack & auth providers
-    │   ├── index.tsx          # App landing / Role selection
-    │   ├── login.tsx          # Staff PIN & Role authentication screen
-    │   ├── admin/             # Admin portal (Staff, Menu, Reports, Tables)
-    │   │   ├── _layout.tsx    # Admin layout with safe-area header
-    │   │   ├── dashboard.tsx  # KPI metrics & analytics
-    │   │   ├── menu.tsx       # Dish & Category management
-    │   │   ├── staff.tsx      # Waiter/Chef/Cashier accounts & PINs
-    │   │   ├── tables.tsx     # Floor plan and seating configuration
-    │   │   └── reports.tsx    # Sales & inventory reporting
-    │   ├── waiter/            # Waiter portal (Mobile Floor & Order Entry)
-    │   │   ├── _layout.tsx    # Waiter top nav & logout controls
-    │   │   ├── index.tsx      # Table grid with live cooking/ready alerts
+    ├── app/                    # File-based navigation routes (Expo Router)
+    │   ├── _layout.tsx         # Root layout (Stack, Sync init, Splash screen)
+    │   ├── index.tsx           # Customer landing & role gateway
+    │   ├── login.tsx           # Staff PIN & Role authentication screen
+    │   ├── menu/               # Customer Digital Menu
+    │   │   └── index.tsx       # Public menu catalog
+    │   ├── admin/              # Admin Portal (Full system management)
+    │   │   ├── _layout.tsx     # Admin header & navigation tabs
+    │   │   ├── dashboard.tsx   # Real-time analytics, revenue, KOT stats
+    │   │   ├── pos.tsx         # Full-featured POS terminal (Dine-In, Takeaway, Split Bill)
+    │   │   ├── menu.tsx        # Menu dishes & category editor
+    │   │   ├── tables.tsx      # Table setup & seating layout
+    │   │   ├── staff.tsx       # Staff credentials, shifts, & PIN codes
+    │   │   ├── customers.tsx   # CRM customer history & ledger
+    │   │   └── reports.tsx     # Financial, sales, & shift audit reports
+    │   ├── waiter/             # Waiter Mobile Portal (Floor & Orders)
+    │   │   ├── _layout.tsx     # Waiter header & logout controls
+    │   │   ├── index.tsx       # Visual table floor grid (Cooking / Ready indicators)
     │   │   └── order/
     │   │       └── [tableId].tsx # Dual-tab Running Order & Add-on Cart
-    │   ├── kitchen/           # Kitchen Display System (KDS)
-    │   │   ├── _layout.tsx    # Fullscreen landscape KDS shell
-    │   │   └── kds.tsx        # Live KOT queue, Audio bell, Add-on highlights
-    │   └── manager/           # Floor manager & Cashier terminal
-    │       ├── _layout.tsx    # Manager navigation
-    │       ├── pos.tsx        # Quick counter & takeaway checkout
-    │       ├── inventory.tsx  # Stock & ingredient tracking
-    │       └── shift.tsx      # Cash register & shift float balancing
-    ├── components/            # Reusable UI components
-    │   ├── SyncStatusBadge.tsx# WebSocket LAN connection indicator
-    │   ├── Invoice.tsx        # Thermal printable receipt generator
+    │   ├── kitchen/            # Kitchen Display System (KDS)
+    │   │   ├── _layout.tsx     # Fullscreen landscape KDS wrapper
+    │   │   └── kds.tsx         # Live KOT queue, Audio chimes, Add-on gold badges
+    │   └── manager/            # Manager Portal (Floor & Shifts)
+    │       ├── _layout.tsx     # Manager navigation
+    │       ├── dashboard.tsx   # Operations overview
+    │       ├── pos.tsx         # Manager checkout terminal
+    │       ├── floor-plan.tsx  # Floor status viewer
+    │       ├── shift.tsx       # Cash drawer & shift float balancing
+    │       └── inventory.tsx   # Ingredient & stock management
+    ├── components/             # Reusable modular UI elements
+    │   ├── SyncStatusBadge.tsx # WebSocket status indicator pill (Online/Connecting/Offline)
+    │   ├── Invoice.tsx         # Thermal printable receipt generator
     │   └── ...
-    ├── services/              # External services & adapters
-    │   └── syncService.ts     # Client WebSocket sync client engine
-    └── store/                 # State management layer
-        ├── authStore.ts       # User login state & role verification
-        ├── restaurantStore.ts # Central store (Tables, Tickets, Menu, Invoices)
-        └── storage.ts         # Multiplatform persistent storage adapter
+    ├── services/               # External network & hardware bridges
+    │   └── syncService.ts      # WebSocket client, auto-reconnect, IP detection
+    └── store/                  # Zustand state management
+        ├── authStore.ts        # Staff sessions, PIN validation, active roles
+        ├── restaurantStore.ts  # Tables, Tickets, Menu, Invoices, Customers
+        └── storage.ts          # Cross-platform persistent storage adapter
 ```
 
 ---
@@ -138,26 +148,32 @@ Both Antigravity AI agents MUST enforce these non-negotiable rules for every use
 ## 6. Current Status & Dynamic Work Log
 
 ### 🟢 Completed Milestones:
-* [x] **Core Restaurant Foundation:** Full role-based routing (Admin, Manager, Waiter, Kitchen).
+* [x] **Foundation & Role-Based Routing:** Full separation of Admin, Manager, Waiter, and Kitchen portals.
 * [x] **Safe-Area Navigation & Mobile Layout:** Fixed top header notch clipping across all layout screens with responsive touch targets.
 * [x] **Central LAN Sync Hub:** Multi-device synchronization engine (`server.js` on port `5050`) syncing tickets, tables, and reservations across phones, tablets, and laptops.
 * [x] **Table Service Add-On Order Flow:** Re-opening occupied tables shows live running orders; waiters can dispatch Add-on items (Round 2, 3...) without losing previous order data.
-* [x] **KDS Real-Time Add-On Notifications:** Web Audio chime alerts, top banner notifications, and gold border highlights for follow-up kitchen orders.
+* [x] **KDS Audio & Visual Add-On Alerts:** Web Audio chime alerts, top banner notifications, and gold border highlights for follow-up kitchen orders.
+* [x] **POS Terminal & Receipt Generation:** Complete order checkout, discount/tax calculations, split payments, and thermal receipt template.
 * [x] **KDS Bump Protection & Paid Table Release Prompt:** Addressed ticket bounce loop; POS now prompts whether to release table immediately or keep seated after payment.
 * [x] **Table Transfer & Merge Engine:** Live order transfer from one table to any available table with automatic KOT re-routing; Table merging combines running tabs and orders cleanly.
 * [x] **Advance Table Reservation System:** Booking management with Guest Name, Phone, Date, Time Slot, Party Size, Notes, and one-tap Seating Check-in integrated into Admin and Manager Floor Plan.
+* [x] **Branding & Logo Transparency:** Fixed background color mismatch between screen container and logo by generating a clean transparent PNG (`assets/images/sultan-logo.png`) and unifying background to Sultan Royal Burgundy (`#52171B`).
 
 ### 🟡 Active Tasks (In Progress):
 * **Developer A:** Table & Floor Management Enhancements & Real-time Server Sync.
 * **Developer B:** Offline Queue Recovery & Sync Reconnection Resilience.
 
 ### 🔴 Next Up / Backlog:
-* [ ] Thermal receipt Bluetooth / ESC-POS printer integration.
-* [ ] Multi-zone floor plan visual drag-and-drop editor.
-* [ ] Kitchen bump bar hardware keyboard shortcuts.
-* [ ] Customer loyalty & discount promo code engine.
+* [ ] Hardware thermal printer ESC/POS network & Bluetooth protocol.
+* [ ] Visual drag-and-drop table layout editor for custom dining halls.
+* [ ] Customer loyalty points and discount coupon redemption engine.
+* [ ] Kitchen bump bar physical USB/Bluetooth keycode bindings.
 
-### ⚠️ Known Gotchas & Watch-outs:
-* **Audio Context Autoplay:** Web browsers require an initial user gesture before playing Web Audio chimes; KDS includes a manual "Chime Test" trigger in the top bar.
+### ⚠️ Known Gotchas & Architectural Watch-outs:
+* **Web Audio Autoplay Policy:** Browsers require an initial user interaction (click/touch) before playing Web Audio chimes; KDS includes a manual "Chime Test" trigger in the top bar.
 * **WebSocket IP Binding:** When running on local Wi-Fi, ensure `server.js` IP in `syncService.ts` matches the host computer's IPv4 address (`192.168.x.x`).
+<<<<<<< HEAD
 * **Table Transfer Synchronization:** When a table is transferred, KDS tickets are automatically remapped to the target table name and ID so the kitchen serves the right station.
+=======
+* **Cross-Tab Broadcast Echo:** Do not trigger store sync broadcasts when applying updates received from `BroadcastChannel` or the WebSocket server (guarded by `isApplyingRemoteUpdate`).
+>>>>>>> 2112944 (feat: add transparent logo, harmonize theme background (#52171B), and update shared context.md)

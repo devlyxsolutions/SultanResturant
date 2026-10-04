@@ -7,7 +7,7 @@ export default function HomeScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
+      <StatusBar barStyle="light-content" backgroundColor="#52171B" />
       
       {/* Background Decor */}
       <View style={styles.decorCircleTop} />
@@ -16,7 +16,7 @@ export default function HomeScreen() {
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Image 
-            source={require('../../assets/images/sultan-logo.png.jpg')}
+            source={require('../../assets/images/sultan-logo.png')}
             style={styles.logoImage}
             resizeMode="contain"
           />
@@ -50,7 +50,7 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4a121a', // Deep Burgundy from the logo
+    backgroundColor: '#52171B', // Sultan Royal Burgundy
   },
   decorCircleTop: {
     position: 'absolute',
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   primaryButtonText: {
-    color: '#4a121a',
+    color: '#52171B',
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
