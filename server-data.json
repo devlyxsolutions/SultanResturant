@@ -5,10 +5,40 @@
       "zone": "Main Hall",
       "name": "T-01",
       "seats": 4,
-      "status": "available",
-      "billTotal": 0,
-      "orders": [],
-      "isPaid": false
+      "status": "occupied",
+      "billTotal": 10200,
+      "orders": [
+        {
+          "id": "m1791112898285-Small",
+          "name": "Chicken Cheese (Small)",
+          "price": 850,
+          "qty": 3,
+          "completed": false
+        },
+        {
+          "id": "m1791112898285-Medium",
+          "name": "Chicken Cheese (Medium)",
+          "price": 1200,
+          "qty": 3,
+          "completed": false
+        },
+        {
+          "id": "m1791112898285-Large",
+          "name": "Chicken Cheese (Large)",
+          "price": 1800,
+          "qty": 2,
+          "completed": false
+        },
+        {
+          "id": "m1791112001222",
+          "name": "Chicken Fajita",
+          "price": 150,
+          "qty": 3,
+          "completed": false
+        }
+      ],
+      "isPaid": false,
+      "server": "Sara Ahmed"
     },
     {
       "id": "2",
@@ -47,47 +77,10 @@
       "zone": "VIP",
       "name": "V-01",
       "seats": 8,
-      "status": "occupied",
-      "occupiedSince": 1791104217880,
-      "server": "Sara Ahmed",
-      "billTotal": 5250,
-      "orders": [
-        {
-          "id": "m2",
-          "name": "Chicken Karahi",
-          "price": 1850,
-          "qty": 1,
-          "completed": false
-        },
-        {
-          "id": "m4",
-          "name": "Kunafa",
-          "price": 850,
-          "qty": 1,
-          "completed": false
-        },
-        {
-          "id": "m1",
-          "name": "Sultan Kebab",
-          "price": 1450,
-          "qty": 1,
-          "completed": false
-        },
-        {
-          "id": "m3",
-          "name": "Hummus & Pita",
-          "price": 650,
-          "qty": 1,
-          "completed": false
-        },
-        {
-          "id": "m5",
-          "name": "Mint Margarita",
-          "price": 450,
-          "qty": 1,
-          "completed": false
-        }
-      ]
+      "status": "available",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false
     },
     {
       "name": "MC-01",
@@ -337,14 +330,55 @@
   ],
   "tickets": [
     {
-      "id": "KOT-3029",
-      "tableId": "5",
-      "tableName": "V-01 (Add-on #1)",
+      "id": "KOT-3443",
+      "tableId": "1",
+      "tableName": "T-01",
       "server": "Sara Ahmed",
-      "timePlaced": 1791104239793,
-      "status": "served",
-      "isAddOn": true,
+      "timePlaced": 1791113761830,
+      "status": "cooking",
+      "isAddOn": false,
       "roundNumber": 1,
+      "items": [
+        {
+          "id": "m1791112898285-Small",
+          "name": "Chicken Cheese (Small)",
+          "price": 850,
+          "qty": 3,
+          "completed": false
+        },
+        {
+          "id": "m1791112898285-Medium",
+          "name": "Chicken Cheese (Medium)",
+          "price": 1200,
+          "qty": 3,
+          "completed": false
+        },
+        {
+          "id": "m1791112898285-Large",
+          "name": "Chicken Cheese (Large)",
+          "price": 1800,
+          "qty": 2,
+          "completed": false
+        },
+        {
+          "id": "m1791112001222",
+          "name": "Chicken Fajita",
+          "price": 150,
+          "qty": 3,
+          "completed": false
+        }
+      ]
+    }
+  ],
+  "invoices": [
+    {
+      "id": "INV-82441",
+      "orderType": "dine-in",
+      "server": "Admin POS",
+      "timePlaced": 1791114162500,
+      "timeSettled": 1791114162500,
+      "tableName": "V-01",
+      "tableId": "5",
       "items": [
         {
           "id": "m2",
@@ -381,10 +415,18 @@
           "qty": 1,
           "completed": true
         }
+      ],
+      "subTotal": 5250,
+      "discount": 0,
+      "tax": 840,
+      "total": 6090,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 6090
+        }
       ]
-    }
-  ],
-  "invoices": [
+    },
     {
       "id": "INV-64799",
       "orderType": "dine-in",

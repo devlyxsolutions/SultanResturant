@@ -183,7 +183,7 @@ export default function ManagerPOS() {
       if (existing) {
         return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
       }
-      return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, completed: false }];
+      return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, completed: false, station: item.station || 'main' }];
     });
   };
 
@@ -199,7 +199,7 @@ export default function ManagerPOS() {
       if (existing) {
         return prev.map(i => i.id === variantId ? { ...i, qty: i.qty + 1 } : i);
       }
-      return [...prev, { id: variantId, name: variantName, price: variant.price, qty: 1, completed: false }];
+      return [...prev, { id: variantId, name: variantName, price: variant.price, qty: 1, completed: false, station: variantModalItem.station || 'main' }];
     });
     
     setVariantModalItem(null);
@@ -258,7 +258,8 @@ export default function ManagerPOS() {
             id: cartItem.id,
             name: cartItem.name,
             price: cartItem.price,
-            category: originalMenu ? originalMenu.category : 'Mains'
+            category: originalMenu ? originalMenu.category : 'Mains',
+            station: (cartItem as any).station || (originalMenu?.station) || 'main'
           },
           qty: cartItem.qty - loadedQty
         });

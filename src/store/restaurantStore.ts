@@ -29,6 +29,7 @@ export type OrderItem = {
   qty: number;
   notes?: string;
   completed: boolean;
+  station?: 'main' | 'juice';
 };
 
 export type Ticket = {
@@ -54,6 +55,7 @@ export type MenuItem = {
   price: number;
   category: string;
   variants?: MenuVariant[];
+  station?: 'main' | 'juice';
 };
 
 export type Customer = {
@@ -283,7 +285,8 @@ export const useRestaurantStore = create<RestaurantState>()(
             price: oi.item.price,
             qty: oi.qty,
             notes: oi.notes,
-            completed: false
+            completed: false,
+            station: oi.item.station || 'main'
           }))
         };
 

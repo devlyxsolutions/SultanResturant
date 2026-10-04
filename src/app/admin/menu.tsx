@@ -39,6 +39,7 @@ export default function MenuManagement() {
   const [itemPrice, setItemPrice] = useState('');
   const [itemCategory, setItemCategory] = useState(categories[0] || 'Mains');
   const [itemVariants, setItemVariants] = useState<{name: string, price: string}[]>([]);
+  const [itemStation, setItemStation] = useState<'main' | 'juice'>('main');
   const [isDropdownOpen, setDropdownOpen] = useState(false);
 
   // Category Modal state
@@ -70,6 +71,7 @@ export default function MenuManagement() {
     setItemName('');
     setItemPrice('');
     setItemCategory(categories[0] || 'Mains');
+    setItemStation('main');
     setItemVariants([]);
     setDropdownOpen(false);
     setItemModalVisible(true);
@@ -80,6 +82,7 @@ export default function MenuManagement() {
     setItemName(item.name);
     setItemPrice(item.price.toString());
     setItemCategory(item.category);
+    setItemStation((item.station as 'main'|'juice') || 'main');
     setItemVariants(item.variants ? item.variants.map(v => ({ name: v.name, price: v.price.toString() })) : []);
     setDropdownOpen(false);
     setItemModalVisible(true);
@@ -117,6 +120,7 @@ export default function MenuManagement() {
         name: itemName.trim(),
         price: priceNum,
         category: itemCategory,
+        station: itemStation,
         variants: parsedVariants.length > 0 ? parsedVariants : undefined
       });
     } else {
@@ -124,6 +128,7 @@ export default function MenuManagement() {
         name: itemName.trim(),
         price: priceNum,
         category: itemCategory,
+        station: itemStation,
         variants: parsedVariants.length > 0 ? parsedVariants : undefined
       });
     }
@@ -540,6 +545,29 @@ export default function MenuManagement() {
                 </ScrollView>
               </View>
             )}
+
+            <Text style={[styles.inputLabel, { marginTop: 16 }]}>Station / Preparation Area</Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity 
+                style={[
+                  styles.dropdownBtn, 
+                  { flex: 1, justifyContent: 'center', borderColor: itemStation === 'main' ? '#D5A943' : '#E5E5EA', backgroundColor: itemStation === 'main' ? '#FFF9F0' : '#FAFAFA' }
+                ]}
+                onPress={() => setItemStation('main')}
+              >
+                <Text style={[styles.dropdownBtnText, { color: itemStation === 'main' ? '#D5A943' : '#1C1C1E', textAlign: 'center' }]}>Main Kitchen</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[
+                  styles.dropdownBtn, 
+                  { flex: 1, justifyContent: 'center', borderColor: itemStation === 'juice' ? '#D5A943' : '#E5E5EA', backgroundColor: itemStation === 'juice' ? '#FFF9F0' : '#FAFAFA' }
+                ]}
+                onPress={() => setItemStation('juice')}
+              >
+                <Text style={[styles.dropdownBtnText, { color: itemStation === 'juice' ? '#D5A943' : '#1C1C1E', textAlign: 'center' }]}>Juice Bar</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={{ marginTop: 16 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>

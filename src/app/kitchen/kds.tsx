@@ -62,8 +62,8 @@ export default function KitchenDisplayScreen() {
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
-
   const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
+  const [stationFilter, setStationFilter] = useState<'all' | 'main' | 'juice'>('all');
   const [now, setNow] = useState(() => Date.now());
   const [latestAlert, setLatestAlert] = useState<{
     id: string;
@@ -123,13 +123,25 @@ export default function KitchenDisplayScreen() {
   const servedCount = tickets.filter((t) => t.status === 'served').length;
   const addOnsCount = tickets.filter((t) => t.isAddOn && t.status === 'cooking').length;
 
-  const filteredTickets = tickets.filter((t) => {
-    if (activeFilter === 'cooking') return t.status === 'cooking';
-    if (activeFilter === 'ready') return t.status === 'ready';
-    if (activeFilter === 'served') return t.status === 'served';
-    if (activeFilter === 'addons') return t.isAddOn && t.status === 'cooking';
-    return t.status === 'cooking' || t.status === 'ready';
-  });
+  const filteredTickets = tickets
+    .map(t => {
+      // Filter the items within the ticket by station
+      const matchingItems = stationFilter === 'all' 
+        ? t.items 
+        : t.items.filter(i => (i.station || 'main') === stationFilter);
+        
+      return { ...t, items: matchingItems };
+    })
+    .filter((t) => {
+      // Don't show tickets that have no items for this station
+      if (t.items.length === 0) return false;
+      
+      if (activeFilter === 'cooking') return t.status === 'cooking';
+      if (activeFilter === 'ready') return t.status === 'ready';
+      if (activeFilter === 'served') return t.status === 'served';
+      if (activeFilter === 'addons') return t.isAddOn && t.status === 'cooking';
+      return t.status === 'cooking' || t.status === 'ready';
+    });
 
   const handleTicketAction = (ticket: Ticket) => {
     if (ticket.status === 'cooking') {
@@ -302,6 +314,35 @@ export default function KitchenDisplayScreen() {
 
         {/* Status Filter Badges, Audio Test & Sync Hub Badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          
+          {/* Station Filter */}
+          <View style={[styles.filterPills, { marginRight: 10 }]}>
+            <TouchableOpacity
+              style={[styles.filterPill, stationFilter === 'all' && styles.filterPillActive]}
+              onPress={() => setStationFilter('all')}
+            >
+              <Text style={[styles.filterPillText, stationFilter === 'all' && styles.filterPillTextActive]}>
+                All Stations
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, stationFilter === 'main' && styles.filterPillActive]}
+              onPress={() => setStationFilter('main')}
+            >
+              <Text style={[styles.filterPillText, stationFilter === 'main' && styles.filterPillTextActive]}>
+                Main Kitchen
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, stationFilter === 'juice' && styles.filterPillActive]}
+              onPress={() => setStationFilter('juice')}
+            >
+              <Text style={[styles.filterPillText, stationFilter === 'juice' && styles.filterPillTextActive]}>
+                Juice Bar
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <View style={styles.filterPills}>
             <TouchableOpacity
               style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
