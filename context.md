@@ -140,13 +140,16 @@ Both Antigravity AI agents MUST enforce these non-negotiable rules for every use
 ### 🟢 Completed Milestones:
 * [x] **Core Restaurant Foundation:** Full role-based routing (Admin, Manager, Waiter, Kitchen).
 * [x] **Safe-Area Navigation & Mobile Layout:** Fixed top header notch clipping across all layout screens with responsive touch targets.
-* [x] **Central LAN Sync Hub:** Multi-device synchronization engine (`server.js` on port `5050`) syncing tickets and table states across phones, tablets, and laptops.
+* [x] **Central LAN Sync Hub:** Multi-device synchronization engine (`server.js` on port `5050`) syncing tickets, tables, and reservations across phones, tablets, and laptops.
 * [x] **Table Service Add-On Order Flow:** Re-opening occupied tables shows live running orders; waiters can dispatch Add-on items (Round 2, 3...) without losing previous order data.
 * [x] **KDS Real-Time Add-On Notifications:** Web Audio chime alerts, top banner notifications, and gold border highlights for follow-up kitchen orders.
+* [x] **KDS Bump Protection & Paid Table Release Prompt:** Addressed ticket bounce loop; POS now prompts whether to release table immediately or keep seated after payment.
+* [x] **Table Transfer & Merge Engine:** Live order transfer from one table to any available table with automatic KOT re-routing; Table merging combines running tabs and orders cleanly.
+* [x] **Advance Table Reservation System:** Booking management with Guest Name, Phone, Date, Time Slot, Party Size, Notes, and one-tap Seating Check-in integrated into Admin and Manager Floor Plan.
 
 ### 🟡 Active Tasks (In Progress):
-* **Developer A:** [Insert Dev A Current Task - e.g., POS Billing Integration with Table Checkout & Bill Settlement]
-* **Developer B:** [Insert Dev B Current Task - e.g., Offline Queue Recovery & Sync Reconnection Resilience]
+* **Developer A:** Table & Floor Management Enhancements & Real-time Server Sync.
+* **Developer B:** Offline Queue Recovery & Sync Reconnection Resilience.
 
 ### 🔴 Next Up / Backlog:
 * [ ] Thermal receipt Bluetooth / ESC-POS printer integration.
@@ -157,3 +160,4 @@ Both Antigravity AI agents MUST enforce these non-negotiable rules for every use
 ### ⚠️ Known Gotchas & Watch-outs:
 * **Audio Context Autoplay:** Web browsers require an initial user gesture before playing Web Audio chimes; KDS includes a manual "Chime Test" trigger in the top bar.
 * **WebSocket IP Binding:** When running on local Wi-Fi, ensure `server.js` IP in `syncService.ts` matches the host computer's IPv4 address (`192.168.x.x`).
+* **Table Transfer Synchronization:** When a table is transferred, KDS tickets are automatically remapped to the target table name and ID so the kitchen serves the right station.

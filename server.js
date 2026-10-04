@@ -50,6 +50,21 @@ const INITIAL_STATE = {
     { id: 'st3', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
     { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05' },
     { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12' },
+  ],
+  reservations: [
+    {
+      id: 'res-1',
+      tableId: '5',
+      tableName: 'V-01',
+      customerName: 'Hamza Malik',
+      phone: '03219988776',
+      guestsCount: 6,
+      reservationDate: new Date().toISOString().split('T')[0],
+      timeSlot: '08:30 PM',
+      status: 'confirmed',
+      notes: 'Birthday celebration, requested quiet corner',
+      createdAt: Date.now() - 3600000,
+    }
   ]
 };
 
@@ -152,7 +167,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'lastBillPaidAlert'];
+  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert'];
   let modified = false;
 
   for (const key of allowedKeys) {

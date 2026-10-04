@@ -5,18 +5,20 @@
       "zone": "Main Hall",
       "name": "T-01",
       "seats": 4,
-      "status": "occupied",
-      "server": "Hamza Malik",
-      "billTotal": 10300
+      "status": "available",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false
     },
     {
       "id": "2",
       "zone": "Main Hall",
       "name": "T-02",
       "seats": 2,
-      "status": "occupied",
-      "billTotal": 45,
-      "server": "Junaid"
+      "status": "available",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false
     },
     {
       "id": "3",
@@ -30,7 +32,20 @@
       "zone": "Rooftop",
       "name": "R-01",
       "seats": 4,
-      "status": "available"
+      "status": "billed",
+      "server": "Manager POS",
+      "billTotal": 650,
+      "orders": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false
+        }
+      ],
+      "isPaid": true,
+      "lastInvoiceId": "INV-64799"
     },
     {
       "id": "5",
@@ -42,12 +57,90 @@
   ],
   "tickets": [
     {
-      "id": "KOT-1088",
-      "tableId": "1",
+      "id": "KOT-5964",
+      "tableId": "4",
+      "tableName": "R-01",
+      "server": "Manager POS",
+      "timePlaced": 1791102512307,
+      "status": "served",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false
+        }
+      ]
+    }
+  ],
+  "invoices": [
+    {
+      "id": "INV-64799",
+      "orderType": "dine-in",
+      "server": "Manager POS",
+      "timePlaced": 1791102518737,
+      "timeSettled": 1791102518737,
+      "tableName": "R-01",
+      "tableId": "4",
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false
+        }
+      ],
+      "subTotal": 650,
+      "discount": 0,
+      "tax": 104,
+      "total": 754,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 754
+        }
+      ]
+    },
+    {
+      "id": "INV-67393",
+      "orderType": "dine-in",
+      "server": "Manager POS",
+      "timePlaced": 1791101802081,
+      "timeSettled": 1791101802081,
+      "tableName": "T-02",
+      "tableId": "2",
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false
+        }
+      ],
+      "subTotal": 650,
+      "discount": 0,
+      "tax": 104,
+      "total": 754,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 754
+        }
+      ]
+    },
+    {
+      "id": "INV-52570",
+      "orderType": "dine-in",
+      "server": "Manager POS",
+      "timePlaced": 1791101668857,
+      "timeSettled": 1791101668857,
       "tableName": "T-01",
-      "server": "Hamza Malik",
-      "timePlaced": 1791097000000,
-      "status": "ready",
+      "tableId": "1",
       "items": [
         {
           "id": "m2",
@@ -63,10 +156,18 @@
           "qty": 2,
           "completed": true
         }
+      ],
+      "subTotal": 10300,
+      "discount": 0,
+      "tax": 1648,
+      "total": 11948,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 11948
+        }
       ]
-    }
-  ],
-  "invoices": [
+    },
     {
       "id": "INV-76564",
       "orderType": "takeaway",
@@ -290,5 +391,26 @@
       "shift": "Night",
       "joinedDate": "2025-05-12"
     }
-  ]
+  ],
+  "reservations": [
+    {
+      "id": "res-1",
+      "tableId": "5",
+      "tableName": "V-01",
+      "customerName": "Hamza Malik",
+      "phone": "03219988776",
+      "guestsCount": 6,
+      "reservationDate": "2026-10-04",
+      "timeSlot": "08:30 PM",
+      "status": "confirmed",
+      "notes": "Birthday celebration, requested quiet corner",
+      "createdAt": 1791101802081
+    }
+  ],
+  "lastBillPaidAlert": {
+    "tableId": "4",
+    "tableName": "R-01",
+    "billTotal": 650,
+    "time": 1791102521368
+  }
 }

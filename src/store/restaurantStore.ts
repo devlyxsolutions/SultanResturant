@@ -13,6 +13,8 @@ export type Table = {
   orders?: OrderItem[];
   isPaid?: boolean;
   lastInvoiceId?: string;
+  occupiedSince?: number;
+  reservationId?: string;
 };
 
 export type OrderItem = {
@@ -89,6 +91,20 @@ export type StaffMember = {
   joinedDate?: string;
 };
 
+export type Reservation = {
+  id: string;
+  tableId: string;
+  tableName: string;
+  customerName: string;
+  phone: string;
+  guestsCount: number;
+  reservationDate: string; // YYYY-MM-DD
+  timeSlot: string; // e.g. "08:00 PM"
+  status: 'confirmed' | 'seated' | 'cancelled';
+  notes?: string;
+  createdAt: number;
+};
+
 type RestaurantState = {
   tables: Table[];
   tickets: Ticket[];
@@ -98,6 +114,7 @@ type RestaurantState = {
   menuItems: MenuItem[];
   categories: string[];
   zones: string[];
+  reservations: Reservation[];
   lastBillPaidAlert?: { tableId: string; tableName: string; billTotal: number; time: number } | null;
   
   // Actions
@@ -108,6 +125,13 @@ type RestaurantState = {
   markTableBilled: (tableId: string, invoiceId?: string) => void;
   clearBillPaidAlert: () => void;
   settleBill: (tableId: string) => void;
+  transferTable: (fromTableId: string, toTableId: string) => void;
+  mergeTables: (primaryTableId: string, secondaryTableId: string) => void;
+  assignTableServer: (tableId: string, serverName: string) => void;
+  addReservation: (res: Omit<Reservation, 'id' | 'createdAt' | 'status'> & { status?: Reservation['status'] }) => void;
+  updateReservation: (id: string, updates: Partial<Reservation>) => void;
+  cancelReservation: (id: string) => void;
+  seatReservation: (reservationId: string) => void;
   addMenuItem: (item: Omit<MenuItem, 'id'>) => void;
   updateMenuItem: (id: string, item: Partial<Omit<MenuItem, 'id'>>) => void;
   deleteMenuItem: (id: string) => void;
@@ -134,7 +158,23 @@ const INITIAL_TABLES: Table[] = [
   { id: '2', zone: 'Main Hall', name: 'T-02', seats: 2, status: 'occupied', billTotal: 45.00, server: 'Junaid' },
   { id: '3', zone: 'Main Hall', name: 'T-03', seats: 4, status: 'available' },
   { id: '4', zone: 'Rooftop', name: 'R-01', seats: 4, status: 'available' },
-  { id: '5', zone: 'VIP', name: 'V-01', seats: 8, status: 'reserved' },
+  { id: '5', zone: 'VIP', name: 'V-01', seats: 8, status: 'reserved', reservationId: 'res-1' },
+];
+
+const INITIAL_RESERVATIONS: Reservation[] = [
+  {
+    id: 'res-1',
+    tableId: '5',
+    tableName: 'V-01',
+    customerName: 'Hamza Malik',
+    phone: '03219988776',
+    guestsCount: 6,
+    reservationDate: new Date().toISOString().split('T')[0],
+    timeSlot: '08:30 PM',
+    status: 'confirmed',
+    notes: 'Birthday celebration, requested quiet corner',
+    createdAt: Date.now() - 3600000,
+  }
 ];
 
 const INITIAL_CUSTOMERS: Customer[] = [
@@ -166,6 +206,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       invoices: [],
       customers: INITIAL_CUSTOMERS,
       staff: INITIAL_STAFF,
+      reservations: INITIAL_RESERVATIONS,
       tickets: [
         {
           id: 'KOT-1042',
@@ -304,12 +345,228 @@ export const useRestaurantStore = create<RestaurantState>()(
             server: undefined, 
             orders: [], 
             isPaid: false, 
-            lastInvoiceId: undefined 
+            lastInvoiceId: undefined,
+            occupiedSince: undefined
           } : t
         ),
         tickets: state.tickets.filter(t => t.tableId !== tableId),
         lastBillPaidAlert: state.lastBillPaidAlert?.tableId === tableId ? null : state.lastBillPaidAlert
       })),
+
+      transferTable: (fromTableId, toTableId) => set((state) => {
+        const fromTable = state.tables.find(t => t.id === fromTableId);
+        const toTable = state.tables.find(t => t.id === toTableId);
+        if (!fromTable || !toTable || toTable.status === 'occupied' || toTable.status === 'billed') {
+          return state;
+        }
+
+        const updatedTables = state.tables.map(t => {
+          if (t.id === toTableId) {
+            return {
+              ...t,
+              status: fromTable.status,
+              billTotal: fromTable.billTotal || 0,
+              orders: fromTable.orders ? [...fromTable.orders] : [],
+              server: fromTable.server,
+              isPaid: fromTable.isPaid,
+              lastInvoiceId: fromTable.lastInvoiceId,
+              occupiedSince: fromTable.occupiedSince || Date.now(),
+            };
+          }
+          if (t.id === fromTableId) {
+            return {
+              ...t,
+              status: 'available' as const,
+              billTotal: 0,
+              orders: [],
+              server: undefined,
+              isPaid: false,
+              lastInvoiceId: undefined,
+              occupiedSince: undefined,
+            };
+          }
+          return t;
+        });
+
+        const updatedTickets = state.tickets.map(tk => {
+          if (tk.tableId === fromTableId) {
+            return {
+              ...tk,
+              tableId: toTableId,
+              tableName: `${toTable.name} (from ${fromTable.name})`
+            };
+          }
+          return tk;
+        });
+
+        let updatedAlert = state.lastBillPaidAlert;
+        if (updatedAlert && updatedAlert.tableId === fromTableId) {
+          updatedAlert = {
+            ...updatedAlert,
+            tableId: toTableId,
+            tableName: toTable.name
+          };
+        }
+
+        return {
+          tables: updatedTables,
+          tickets: updatedTickets,
+          lastBillPaidAlert: updatedAlert
+        };
+      }),
+
+      mergeTables: (primaryTableId, secondaryTableId) => set((state) => {
+        const primary = state.tables.find(t => t.id === primaryTableId);
+        const secondary = state.tables.find(t => t.id === secondaryTableId);
+        if (!primary || !secondary) return state;
+
+        // Combine orders
+        const combinedOrders = (primary.orders || []).map(o => ({ ...o }));
+        (secondary.orders || []).forEach(secItem => {
+          const found = combinedOrders.find(o => o.id === secItem.id);
+          if (found) {
+            found.qty += secItem.qty;
+          } else {
+            combinedOrders.push({ ...secItem });
+          }
+        });
+
+        const newBillTotal = (primary.billTotal || 0) + (secondary.billTotal || 0);
+
+        const updatedTables = state.tables.map(t => {
+          if (t.id === primaryTableId) {
+            return {
+              ...t,
+              orders: combinedOrders,
+              billTotal: newBillTotal,
+              status: (primary.status === 'billed' && secondary.status === 'billed') ? 'billed' as const : 'occupied' as const,
+            };
+          }
+          if (t.id === secondaryTableId) {
+            return {
+              ...t,
+              status: 'available' as const,
+              billTotal: 0,
+              orders: [],
+              server: undefined,
+              isPaid: false,
+              lastInvoiceId: undefined,
+              occupiedSince: undefined,
+            };
+          }
+          return t;
+        });
+
+        const updatedTickets = state.tickets.map(tk => {
+          if (tk.tableId === secondaryTableId) {
+            return {
+              ...tk,
+              tableId: primaryTableId,
+              tableName: `${primary.name} (Merged ${secondary.name})`
+            };
+          }
+          return tk;
+        });
+
+        return {
+          tables: updatedTables,
+          tickets: updatedTickets
+        };
+      }),
+
+      assignTableServer: (tableId, serverName) => set((state) => ({
+        tables: state.tables.map(t => t.id === tableId ? { ...t, server: serverName } : t)
+      })),
+
+      addReservation: (res) => set((state) => {
+        const newId = `res-${Date.now()}`;
+        const newReservation: Reservation = {
+          ...res,
+          id: newId,
+          status: res.status || 'confirmed',
+          createdAt: Date.now()
+        };
+
+        const updatedTables = state.tables.map(t => {
+          if (t.id === res.tableId) {
+            return {
+              ...t,
+              status: 'reserved' as const,
+              reservationId: newId,
+            };
+          }
+          return t;
+        });
+
+        return {
+          reservations: [newReservation, ...state.reservations],
+          tables: updatedTables
+        };
+      }),
+
+      updateReservation: (id, updates) => set((state) => {
+        const targetRes = state.reservations.find(r => r.id === id);
+        if (!targetRes) return state;
+
+        const updatedRes = { ...targetRes, ...updates };
+
+        let updatedTables = state.tables;
+        if (updates.tableId && updates.tableId !== targetRes.tableId) {
+          updatedTables = updatedTables.map(t => {
+            if (t.id === targetRes.tableId && t.status === 'reserved') {
+              return { ...t, status: 'available' as const, reservationId: undefined };
+            }
+            if (t.id === updates.tableId) {
+              return { ...t, status: 'reserved' as const, reservationId: id };
+            }
+            return t;
+          });
+        }
+
+        return {
+          reservations: state.reservations.map(r => r.id === id ? updatedRes : r),
+          tables: updatedTables
+        };
+      }),
+
+      cancelReservation: (id) => set((state) => {
+        const targetRes = state.reservations.find(r => r.id === id);
+        if (!targetRes) return state;
+
+        const updatedTables = state.tables.map(t => {
+          if (t.id === targetRes.tableId && t.status === 'reserved') {
+            return { ...t, status: 'available' as const, reservationId: undefined };
+          }
+          return t;
+        });
+
+        return {
+          reservations: state.reservations.map(r => r.id === id ? { ...r, status: 'cancelled' as const } : r),
+          tables: updatedTables
+        };
+      }),
+
+      seatReservation: (reservationId) => set((state) => {
+        const targetRes = state.reservations.find(r => r.id === reservationId);
+        if (!targetRes) return state;
+
+        const updatedTables = state.tables.map(t => {
+          if (t.id === targetRes.tableId) {
+            return {
+              ...t,
+              status: 'occupied' as const,
+              occupiedSince: Date.now(),
+              reservationId: undefined
+            };
+          }
+          return t;
+        });
+
+        return {
+          reservations: state.reservations.map(r => r.id === reservationId ? { ...r, status: 'seated' as const } : r),
+          tables: updatedTables
+        };
+      }),
       
       saveInvoice: (invoice) => set((state) => ({
         invoices: [invoice, ...state.invoices]
@@ -402,6 +659,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
           ...(remoteState.staff ? { staff: remoteState.staff } : {}),
           ...(remoteState.customers ? { customers: remoteState.customers } : {}),
+          ...(remoteState.reservations ? { reservations: remoteState.reservations } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? { lastBillPaidAlert: remoteState.lastBillPaidAlert } : {}),
         };
       }),
