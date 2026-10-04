@@ -37,6 +37,7 @@ let debounceMutationTimer: ReturnType<typeof setTimeout> | null = null;
 let firebasePollingTimer: ReturnType<typeof setInterval> | null = null;
 let lastProcessedRemoteTimestamp: number = 0;
 let isApplyingRemoteUpdate = false;
+let hasReceivedInitialSync = false;
 let isInitialized = false;
 
 // Listeners for UI state updates
