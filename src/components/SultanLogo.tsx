@@ -36,7 +36,7 @@ export default function SultanLogo({
 
   const imageElem = (
     <Image
-      source={require('../../assets/images/sultan-logo-hd.png')}
+      source={require('../../assets/images/sultan-logo.png')}
       style={[
         {
           width: finalWidth,
