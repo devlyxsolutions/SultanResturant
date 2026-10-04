@@ -1,78 +1,78 @@
-import { View, Text, StyleSheet, TouchableOpacity, StatusBar, Image, useWindowDimensions } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, StatusBar, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, Link } from 'expo-router';
+import { Link } from 'expo-router';
+import IslamicBackground from '../components/IslamicBackground';
+import SultanLogo from '../components/SultanLogo';
+import { Ionicons } from '@expo/vector-icons';
 
 export default function HomeScreen() {
-  const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 600;
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle="light-content" backgroundColor="#52171B" />
-      
-      {/* Background Decor */}
-      <View style={styles.decorCircleTop} />
-      <View style={styles.decorCircleBottom} />
+    <IslamicBackground theme="burgundy" showCorners={true} showCenterLattice={true}>
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <StatusBar barStyle="light-content" backgroundColor="#451014" />
 
-      <View style={styles.content}>
-        <View style={styles.cardContainer}>
-          <View style={styles.logoContainer}>
-            <Image 
-              source={require('../../assets/images/sultan-logo.png')}
-              style={[styles.logoImage, isMobile ? styles.logoImageMobile : styles.logoImageDesktop]}
-              resizeMode="contain"
-            />
-          </View>
+        <View style={styles.content}>
+          <View style={styles.cardContainer}>
+            {/* Ultra Crisp Sultan Logo */}
+            <View style={styles.logoContainer}>
+              <SultanLogo
+                size={isMobile ? 'xl' : 'hero'}
+                width={isMobile ? 260 : 340}
+                height={isMobile ? 220 : 280}
+              />
+            </View>
 
-          <View style={styles.welcomeTextContainer}>
-            <Text style={styles.welcomeTitle}>Authentic Dining Experience</Text>
-            <Text style={styles.welcomeSubtitle}>
-              Taste the royal flavors of the finest cuisine crafted with passion and tradition.
-            </Text>
-          </View>
+            {/* Title & Tagline */}
+            <View style={styles.welcomeTextContainer}>
+              <View style={styles.royalDivider}>
+                <View style={styles.dividerLine} />
+                <View style={styles.dividerStar}>
+                  <Ionicons name="sparkles" size={14} color="#D5A943" />
+                </View>
+                <View style={styles.dividerLine} />
+              </View>
 
-          <View style={styles.buttonContainer}>
-            <Link href="/menu" asChild>
-              <TouchableOpacity style={styles.primaryButton} activeOpacity={0.85}>
-                <Text style={styles.primaryButtonText}>View Digital Menu</Text>
-              </TouchableOpacity>
-            </Link>
+              <Text style={styles.welcomeTitle}>Authentic Dining Experience</Text>
+              <Text style={styles.welcomeSubtitle}>
+                Taste the royal flavors of the finest Arabian & Continental cuisine crafted with passion and heritage.
+              </Text>
+            </View>
 
-            <Link href="/login" asChild>
-              <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.85}>
-                <Text style={styles.secondaryButtonText}>Staff Login</Text>
-              </TouchableOpacity>
-            </Link>
+            {/* Action Buttons */}
+            <View style={styles.buttonContainer}>
+              <Link href="/menu" asChild>
+                <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88}>
+                  <Ionicons name="restaurant-outline" size={20} color="#451014" style={{ marginRight: 8 }} />
+                  <Text style={styles.primaryButtonText}>View Digital Menu</Text>
+                </TouchableOpacity>
+              </Link>
+
+              <Link href="/login" asChild>
+                <TouchableOpacity style={styles.secondaryButton} activeOpacity={0.88}>
+                  <Ionicons name="key-outline" size={19} color="#D5A943" style={{ marginRight: 8 }} />
+                  <Text style={styles.secondaryButtonText}>Staff Portal & PIN Login</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
+
+            {/* Footer Royal Badge */}
+            <View style={styles.footerNote}>
+              <Text style={styles.footerText}>⚡ LAN Multi-Screen Realtime Order Hub Active</Text>
+            </View>
           </View>
         </View>
-      </View>
-    </SafeAreaView>
+      </SafeAreaView>
+    </IslamicBackground>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#52171B', // Sultan Royal Burgundy
-  },
-  decorCircleTop: {
-    position: 'absolute',
-    top: -100,
-    right: -50,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: 'rgba(213, 169, 67, 0.05)',
-  },
-  decorCircleBottom: {
-    position: 'absolute',
-    bottom: -50,
-    left: -100,
-    width: 250,
-    height: 250,
-    borderRadius: 125,
-    backgroundColor: 'rgba(213, 169, 67, 0.05)',
   },
   content: {
     flex: 1,
@@ -82,83 +82,118 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     width: '100%',
-    maxWidth: 520,
+    maxWidth: 540,
     flex: 1,
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 32,
+    paddingVertical: 20,
   },
   logoContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
-  },
-  logoImage: {
-    marginBottom: 10,
-  },
-  logoImageDesktop: {
-    width: 320,
-    height: 250,
-  },
-  logoImageMobile: {
-    width: 250,
-    height: 200,
+    marginVertical: 10,
   },
   welcomeTextContainer: {
     alignItems: 'center',
-    marginVertical: 24,
+    marginVertical: 18,
+    paddingHorizontal: 12,
+  },
+  royalDivider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: 220,
+    marginBottom: 14,
+    gap: 8,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(213, 169, 67, 0.4)',
+  },
+  dividerStar: {
+    paddingHorizontal: 4,
   },
   welcomeTitle: {
-    fontSize: 26,
-    fontWeight: '700',
+    fontSize: 27,
+    fontWeight: '800',
     color: '#ffffff',
     textAlign: 'center',
-    marginBottom: 12,
-    letterSpacing: 0.5,
+    marginBottom: 10,
+    letterSpacing: 0.6,
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 6,
   },
   welcomeSubtitle: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.88)',
     textAlign: 'center',
     lineHeight: 23,
-    paddingHorizontal: 16,
-    maxWidth: 420,
+    maxWidth: 440,
   },
   buttonContainer: {
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 420,
     gap: 14,
+    marginTop: 10,
     marginBottom: 16,
   },
   primaryButton: {
+    flexDirection: 'row',
     backgroundColor: '#D5A943',
-    paddingVertical: 17,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 14,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    elevation: 6,
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#E8C76D',
+    shadowColor: '#D5A943',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 8,
   },
   primaryButtonText: {
-    color: '#52171B',
+    color: '#451014',
     fontSize: 17,
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   secondaryButton: {
-    backgroundColor: 'rgba(213, 169, 67, 0.08)',
-    borderWidth: 2,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(69, 16, 20, 0.75)',
+    borderWidth: 1.8,
     borderColor: '#D5A943',
-    paddingVertical: 17,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
     borderRadius: 14,
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 4,
   },
   secondaryButtonText: {
     color: '#D5A943',
-    fontSize: 17,
-    fontWeight: 'bold',
-    letterSpacing: 0.8,
+    fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  footerNote: {
+    marginTop: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: 'rgba(213, 169, 67, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.25)',
+  },
+  footerText: {
+    fontSize: 12,
+    color: '#D5A943',
+    fontWeight: '600',
   },
 });
