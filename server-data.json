@@ -1,0 +1,269 @@
+{
+  "tables": [
+    {
+      "id": "1",
+      "zone": "Main Hall",
+      "name": "T-01",
+      "seats": 4,
+      "status": "occupied",
+      "server": "Hamza Malik",
+      "billTotal": 10300
+    },
+    {
+      "id": "2",
+      "zone": "Main Hall",
+      "name": "T-02",
+      "seats": 2,
+      "status": "occupied",
+      "billTotal": 45,
+      "server": "Junaid"
+    },
+    {
+      "id": "3",
+      "zone": "Main Hall",
+      "name": "T-03",
+      "seats": 4,
+      "status": "available"
+    },
+    {
+      "id": "4",
+      "zone": "Rooftop",
+      "name": "R-01",
+      "seats": 4,
+      "status": "available"
+    },
+    {
+      "id": "5",
+      "zone": "VIP",
+      "name": "V-01",
+      "seats": 8,
+      "status": "reserved"
+    }
+  ],
+  "tickets": [],
+  "invoices": [
+    {
+      "id": "INV-76564",
+      "orderType": "takeaway",
+      "server": "Manager POS",
+      "timePlaced": 1791096846685,
+      "timeSettled": 1791096846685,
+      "customer": {
+        "id": "c1",
+        "name": "Zubair Tariq",
+        "phone": "03009876543",
+        "address": "DHA Phase 5, Lahore",
+        "totalOrders": 15,
+        "totalSpent": 39908
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 2,
+          "completed": false
+        }
+      ],
+      "subTotal": 1300,
+      "discount": 0,
+      "tax": 208,
+      "total": 1508,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 1508
+        }
+      ]
+    },
+    {
+      "id": "INV-84323",
+      "orderType": "takeaway",
+      "server": "Manager POS",
+      "timePlaced": 1791096822205,
+      "timeSettled": 1791096822205,
+      "customer": {
+        "id": "c3",
+        "name": "Bilal Siddiqui",
+        "phone": "03331122334",
+        "address": "Model Town, Block C",
+        "totalOrders": 3,
+        "totalSpent": 7500
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 2,
+          "completed": false
+        }
+      ],
+      "subTotal": 1300,
+      "discount": 0,
+      "tax": 208,
+      "total": 1508,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 1508
+        }
+      ]
+    },
+    {
+      "id": "INV-76976",
+      "orderType": "takeaway",
+      "server": "Manager POS",
+      "timePlaced": 1791096801301,
+      "timeSettled": 1791096801301,
+      "customer": {
+        "id": "c1",
+        "name": "Zubair Tariq",
+        "phone": "03009876543",
+        "address": "DHA Phase 5, Lahore",
+        "totalOrders": 14,
+        "totalSpent": 38400
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 2,
+          "completed": false
+        }
+      ],
+      "subTotal": 1300,
+      "discount": 0,
+      "tax": 208,
+      "total": 1508,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 1508
+        }
+      ]
+    }
+  ],
+  "customers": [
+    {
+      "id": "c1",
+      "name": "Zubair Tariq",
+      "phone": "03009876543",
+      "address": "DHA Phase 5, Lahore",
+      "totalOrders": 16,
+      "totalSpent": 41416
+    },
+    {
+      "id": "c2",
+      "name": "Fatima Noor",
+      "phone": "03214567890",
+      "address": "Gulberg III, Lahore",
+      "totalOrders": 6,
+      "totalSpent": 16200
+    },
+    {
+      "id": "c3",
+      "name": "Bilal Siddiqui",
+      "phone": "03331122334",
+      "address": "Model Town, Block C",
+      "totalOrders": 4,
+      "totalSpent": 9008
+    }
+  ],
+  "menuItems": [
+    {
+      "id": "m1",
+      "name": "Sultan Kebab",
+      "price": 1450,
+      "category": "Mains"
+    },
+    {
+      "id": "m2",
+      "name": "Chicken Karahi",
+      "price": 1850,
+      "category": "Mains"
+    },
+    {
+      "id": "m3",
+      "name": "Hummus & Pita",
+      "price": 650,
+      "category": "Appetizers"
+    },
+    {
+      "id": "m4",
+      "name": "Kunafa",
+      "price": 850,
+      "category": "Desserts"
+    },
+    {
+      "id": "m5",
+      "name": "Mint Margarita",
+      "price": 450,
+      "category": "Drinks"
+    }
+  ],
+  "categories": [
+    "Appetizers",
+    "Mains",
+    "Desserts",
+    "Drinks"
+  ],
+  "zones": [
+    "Main Hall",
+    "Rooftop",
+    "VIP"
+  ],
+  "staff": [
+    {
+      "id": "st1",
+      "name": "Junaid Ahsan",
+      "phone": "+92 300 1234567",
+      "role": "Admin",
+      "pin": "1122",
+      "status": "Active",
+      "shift": "Morning",
+      "joinedDate": "2025-01-15"
+    },
+    {
+      "id": "st2",
+      "name": "Ali Khan",
+      "phone": "+92 301 7654321",
+      "role": "Manager",
+      "pin": "2233",
+      "status": "Active",
+      "shift": "Morning",
+      "joinedDate": "2025-02-01"
+    },
+    {
+      "id": "st3",
+      "name": "Chef Omar",
+      "phone": "+92 302 9876543",
+      "role": "Kitchen",
+      "pin": "3344",
+      "status": "Active",
+      "shift": "Evening",
+      "joinedDate": "2025-03-10"
+    },
+    {
+      "id": "st4",
+      "name": "Sara Ahmed",
+      "phone": "+92 303 5556677",
+      "role": "Waiter",
+      "pin": "4455",
+      "status": "Active",
+      "shift": "Evening",
+      "joinedDate": "2025-04-05"
+    },
+    {
+      "id": "st5",
+      "name": "Hamza Malik",
+      "phone": "+92 304 4443322",
+      "role": "Waiter",
+      "pin": "5566",
+      "status": "On Leave",
+      "shift": "Night",
+      "joinedDate": "2025-05-12"
+    }
+  ]
+}
