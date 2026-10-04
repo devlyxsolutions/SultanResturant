@@ -257,9 +257,9 @@ function initFirebaseSync() {
     const stateRef = ref(db, 'sultan_restaurant/live_state');
 
     // 2. Real-time Firebase SDK WebSocket listener
-    onValue(stateRef, (snapshot) => {
+    onValue(stateRef, (snapshot: any) => {
       try {
-        const data = snapshot.val();
+        const data = snapshot?.val ? snapshot.val() : snapshot;
         if (!data) return;
 
         if (data.senderId === DEVICE_ID) {
@@ -285,10 +285,10 @@ function initFirebaseSync() {
             isApplyingRemoteUpdate = false;
           }, 300);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.warn('[SyncService] Firebase parse error:', err);
       }
-    }, (err) => {
+    }, (err: any) => {
       console.warn('[SyncService] Firebase subscription error:', err);
     });
   }
