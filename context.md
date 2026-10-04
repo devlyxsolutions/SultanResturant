@@ -162,6 +162,7 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
 ### 🟡 Active Tasks (In Progress):
 * **Developer A:** Table & Floor Management Enhancements & Real-time Server Sync.
 * **Developer B:** Offline Queue Recovery & Sync Reconnection Resilience.
+* **Business Features Session (Shekhani laptop):** Working ONLY in NEW files to avoid conflicts: `src/store/opsStore.ts`, `src/screens/*`, `src/app/*/insights|floors|expenses|requests|availability.tsx`, plus small additive edits to `syncService.ts` / `server.js` (extra sync keys) and dashboard link cards. Will NOT touch `tables.tsx`, `floor-plan.tsx`, `waiter/index.tsx` or core actions in `restaurantStore.ts`. Planned: 5-floor template, floor overview, business insights, service requests (call waiter), real inventory, sold-out (86) list, expenses & daily closing, guest feedback.
 
 ### 🔴 Next Up / Backlog:
 * [ ] Hardware thermal printer ESC/POS network & Bluetooth protocol.
@@ -172,8 +173,6 @@ Both Antigravity AI instances must strictly enforce these instructions on every 
 ### ⚠️ Known Gotchas & Architectural Watch-outs:
 * **Web Audio Autoplay Policy:** Browsers require an initial user interaction (click/touch) before playing Web Audio chimes; KDS includes a manual "Chime Test" trigger in the top bar.
 * **WebSocket IP Binding:** When running on local Wi-Fi, ensure `server.js` IP in `syncService.ts` matches the host computer's IPv4 address (`192.168.x.x`).
-<<<<<<< HEAD
 * **Table Transfer Synchronization:** When a table is transferred, KDS tickets are automatically remapped to the target table name and ID so the kitchen serves the right station.
-=======
 * **Cross-Tab Broadcast Echo:** Do not trigger store sync broadcasts when applying updates received from `BroadcastChannel` or the WebSocket server (guarded by `isApplyingRemoteUpdate`).
->>>>>>> 2112944 (feat: add transparent logo, harmonize theme background (#52171B), and update shared context.md)
+* **Merge Hygiene:** After resolving any git conflict, run `git grep -n "<<<<<<<\|>>>>>>>"` BEFORE `git add`/commit to make sure no conflict markers remain.
