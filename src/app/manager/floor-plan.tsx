@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, Table, OrderItem, Reservation } from '../../store/restaurantStore';
 import InvoiceComponent from '../../components/Invoice';
+import { broadcastImmediately } from '../../services/syncService';
 
 const TABLE_LAYOUTS: Record<string, { x: number; y: number; shape: 'square' | 'round' | 'rectangle' }> = {
   '1': { x: 30, y: 80, shape: 'square' },
@@ -38,8 +39,10 @@ export default function FloorPlanScreen() {
   const isMobile = width < 768;
 
   const tables = useRestaurantStore((state) => state.tables);
+  const tickets = useRestaurantStore((state) => state.tickets || []);
   const reservations = useRestaurantStore((state) => state.reservations || []);
   const settleBill = useRestaurantStore((state) => state.settleBill);
+  const serveTableTickets = useRestaurantStore((state) => state.serveTableTickets);
   const transferTable = useRestaurantStore((state) => state.transferTable);
   const mergeTables = useRestaurantStore((state) => state.mergeTables);
   const addReservation = useRestaurantStore((state) => state.addReservation);
@@ -101,8 +104,19 @@ export default function FloorPlanScreen() {
     }
   };
 
+  const getTableEffectiveStatus = (table: Table) => {
+    const tableTickets = (tickets || []).filter(t => t.tableId === table.id);
+    if (tableTickets.some(t => t.status === 'ready')) return 'ready';
+    if (table.status === 'billed' || table.isPaid) return 'billed';
+    if (table.status === 'occupied' || tableTickets.some(t => t.status === 'cooking')) return 'occupied';
+    if (table.status === 'reserved') return 'reserved';
+    return 'available';
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
+      case 'ready':
+        return '#007AFF'; // Food Ready: Blue
       case 'available':
         return '#34C759';
       case 'occupied':
@@ -118,6 +132,8 @@ export default function FloorPlanScreen() {
 
   const getStatusBg = (status: string) => {
     switch (status) {
+      case 'ready':
+        return '#E3F2FD';
       case 'available':
         return '#E8F5E9';
       case 'occupied':
@@ -422,7 +438,9 @@ export default function FloorPlanScreen() {
     const matchingReservation = reservations.find(
       r => r.status === 'confirmed' && (r.id === table.reservationId || r.tableId === table.id)
     );
-    const isBusy = table.status === 'occupied' || table.status === 'billed';
+    const effectiveStatus = getTableEffectiveStatus(table);
+    const isBusy = table.status === 'occupied' || table.status === 'billed' || effectiveStatus === 'ready' || effectiveStatus === 'occupied';
+    const isReady = effectiveStatus === 'ready';
     const isReserved = table.status === 'reserved';
     const isMergedChild = !!table.mergedInto;
     const parentTable = isMergedChild ? tables.find(t => t.id === table.mergedInto) : null;
@@ -437,9 +455,9 @@ export default function FloorPlanScreen() {
             </Text>
           </View>
           <View
-            style={[styles.statusBadge, { backgroundColor: getStatusColor(table.status) }]}
+            style={[styles.statusBadge, { backgroundColor: getStatusColor(effectiveStatus) }]}
           >
-            <Text style={styles.statusText}>{table.status.toUpperCase()}</Text>
+            <Text style={styles.statusText}>{effectiveStatus === 'ready' ? 'FOOD READY' : table.status.toUpperCase()}</Text>
           </View>
         </View>
 
@@ -586,9 +604,23 @@ export default function FloorPlanScreen() {
             </>
           )}
 
-          {/* Busy Table Actions (Occupied or Billed) */}
+          {/* Busy Table Actions (Occupied, Food Ready, or Billed) */}
           {isBusy && !isMergedChild && (
             <>
+              {isReady && (
+                <TouchableOpacity
+                  style={[styles.actionBtnSolid, { backgroundColor: '#007AFF' }]}
+                  onPress={() => {
+                    serveTableTickets(table.id);
+                    broadcastImmediately();
+                    showNotification('Food Served', `All ready orders marked as served for ${table.name}!`);
+                  }}
+                >
+                  <Ionicons name="checkmark-done-circle-outline" size={20} color="#fff" />
+                  <Text style={styles.actionBtnTextSolid}>Mark All as Served</Text>
+                </TouchableOpacity>
+              )}
+
               <TouchableOpacity
                 style={styles.actionBtnSuccess}
                 onPress={() => {
@@ -771,6 +803,10 @@ export default function FloorPlanScreen() {
             <Text style={styles.legendText}>Occupied</Text>
           </View>
           <View style={styles.legendItem}>
+            <View style={[styles.legendDot, { backgroundColor: '#007AFF' }]} />
+            <Text style={styles.legendText}>Food Ready</Text>
+          </View>
+          <View style={styles.legendItem}>
             <View style={[styles.legendDot, { backgroundColor: getStatusColor('billed') }]} />
             <Text style={styles.legendText}>Billed</Text>
           </View>
@@ -827,8 +863,9 @@ export default function FloorPlanScreen() {
                   y: table.y ?? (TABLE_LAYOUTS[table.id]?.y ?? (60 + (Math.floor(index / 3) * 125))),
                   shape: table.shape ?? (TABLE_LAYOUTS[table.id]?.shape ?? 'square'),
                 };
-                const color = getStatusColor(table.status);
-                const bgColor = getStatusBg(table.status);
+                const effectiveStatus = getTableEffectiveStatus(table);
+                const color = getStatusColor(effectiveStatus);
+                const bgColor = getStatusBg(effectiveStatus);
                 const isSelected = liveSelectedTable?.id === table.id;
 
                 let tableWidth = 85;
@@ -861,6 +898,12 @@ export default function FloorPlanScreen() {
                     {isMoveMode && (
                       <View style={styles.moveHandleBadge}>
                         <Ionicons name="move" size={10} color="#fff" />
+                      </View>
+                    )}
+                    {effectiveStatus === 'ready' && (
+                      <View style={styles.readyFloaterBadge}>
+                        <Ionicons name="restaurant" size={9} color="#fff" />
+                        <Text style={styles.readyFloaterText}>READY</Text>
                       </View>
                     )}
                     <Text style={[styles.tableName, { color }]}>{table.name}</Text>
@@ -1014,19 +1057,9 @@ export default function FloorPlanScreen() {
               </TouchableOpacity>
             </View>
             {billInvoice && (
-              <View style={styles.printPreviewContent}>
+              <ScrollView contentContainerStyle={[styles.printPreviewContent, { paddingVertical: 12 }]}>
                 <InvoiceComponent invoice={billInvoice} />
-                <TouchableOpacity
-                  style={styles.printBtn}
-                  onPress={() => {
-                    if (Platform.OS === 'web') window.print();
-                    else Alert.alert('Print', 'Printing triggered.');
-                  }}
-                >
-                  <Ionicons name="print-outline" size={20} color="#fff" />
-                  <Text style={styles.printBtnText}>Print Bill</Text>
-                </TouchableOpacity>
-              </View>
+              </ScrollView>
             )}
           </View>
         </View>
@@ -1639,6 +1672,31 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  readyFloaterBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#007AFF',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    elevation: 4,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.35,
+    shadowRadius: 3,
+  },
+  readyFloaterText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.4,
   },
   tableName: {
     fontSize: 17,

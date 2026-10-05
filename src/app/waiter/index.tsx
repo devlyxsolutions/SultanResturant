@@ -4,12 +4,14 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore } from '../../store/restaurantStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import { broadcastImmediately } from '../../services/syncService';
 
 export default function TablesScreen() {
   const router = useRouter();
   const tables = useRestaurantStore((state) => state.tables);
   const tickets = useRestaurantStore((state) => state.tickets);
   const settleBill = useRestaurantStore((state) => state.settleBill);
+  const serveTableTickets = useRestaurantStore((state) => state.serveTableTickets);
   const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
   const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
 
@@ -104,7 +106,7 @@ export default function TablesScreen() {
         <View style={[styles.cardFooter, { backgroundColor: statusColor + '15' }]}>
           <View style={{ flex: 1 }}>
             <Text style={[styles.statusText, { color: statusColor }]}>
-              {isFoodReady ? 'SERVE NOW' : (isBilled ? 'PAID (GUESTS SEATED)' : item.status.toUpperCase())}
+              {isFoodReady ? 'FOOD READY' : (isBilled ? 'PAID (GUESTS SEATED)' : item.status.toUpperCase())}
             </Text>
             {assignedServer && (isOccupied || isBilled) && (
               <Text style={styles.serverFooterText} numberOfLines={1}>
@@ -112,6 +114,24 @@ export default function TablesScreen() {
               </Text>
             )}
           </View>
+          {isFoodReady && !isBilled && (
+            <TouchableOpacity
+              style={styles.serveNowBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                serveTableTickets(item.id);
+                broadcastImmediately();
+                const msg = `Food served for ${item.name}!`;
+                if (Platform.OS !== 'web') {
+                  Alert.alert('Served', msg);
+                }
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-done-circle" size={15} color="#fff" style={{ marginRight: 4 }} />
+              <Text style={styles.serveNowBtnText}>Serve Now</Text>
+            </TouchableOpacity>
+          )}
           {isBilled && (
             <TouchableOpacity
               style={styles.releaseTableBtn}
@@ -358,6 +378,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     color: '#E67E22',
+  },
+  serveNowBtn: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 8,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  serveNowBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.3,
   },
   releaseTableBtn: {
     backgroundColor: '#E67E22',

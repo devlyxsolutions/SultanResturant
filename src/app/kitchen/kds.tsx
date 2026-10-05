@@ -13,7 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
-import OrderSlip from '../../components/OrderSlip';
+import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -471,7 +471,11 @@ export default function KitchenDisplayScreen() {
             {printingTicket && <OrderSlip ticket={printingTicket} />}
             
             <TouchableOpacity style={styles.printBtnAction} onPress={() => {
-                if (typeof window !== 'undefined') window.print();
+                if (printingTicket) {
+                  printOrderSlip(printingTicket);
+                } else if (typeof window !== 'undefined') {
+                  window.print();
+                }
             }}>
               <Text style={styles.printBtnText}>Print Slip</Text>
             </TouchableOpacity>

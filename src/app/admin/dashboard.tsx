@@ -46,6 +46,13 @@ export default function AdminDashboard() {
       color: '#D5A943'
     },
     {
+      title: 'Invoices & Orders',
+      desc: 'All customer bills, order details, reprint & void records.',
+      icon: 'receipt-outline' as const,
+      route: '/admin/invoices',
+      color: '#4a121a'
+    },
+    {
       title: 'Menu Catalog',
       desc: 'Add or edit categories, items, and pricing.',
       icon: 'restaurant-outline' as const,

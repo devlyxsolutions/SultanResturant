@@ -1,9 +1,21 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, MenuItem, OrderItem, Payment, Customer, Table } from '../../store/restaurantStore';
+import { useRestaurantStore, MenuItem, OrderItem, Payment, Invoice } from '../../store/restaurantStore';
+import { useAuthStore } from '../../store/authStore';
+import { broadcastImmediately } from '../../services/syncService';
 import InvoiceComponent from '../../components/Invoice';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+
+function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSettled'>): Invoice {
+  const now = Date.now();
+  return {
+    ...data,
+    id: `INV-${Math.floor(Math.random() * 90000) + 10000}`,
+    timePlaced: now,
+    timeSettled: now,
+  };
+}
 
 export default function ManagerPOS() {
   const router = useRouter();
@@ -11,6 +23,8 @@ export default function ManagerPOS() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
+
+  const user = useAuthStore(state => state.user);
   
   const menuItems = useRestaurantStore(state => state.menuItems);
   const categories = useRestaurantStore(state => state.categories);
@@ -24,6 +38,7 @@ export default function ManagerPOS() {
   const settleBill = useRestaurantStore(state => state.settleBill);
   const markTableBilled = useRestaurantStore(state => state.markTableBilled);
   const tickets = useRestaurantStore(state => state.tickets);
+  const [selectedServer, setSelectedServer] = useState<string>('');
 
   // Menu State
   const [activeCategory, setActiveCategory] = useState<string>(categories[0] || '');
@@ -89,6 +104,13 @@ export default function ManagerPOS() {
       });
     } else if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
       combinedItems = targetTable.orders.map(o => ({ ...o }));
+    }
+
+    const foundWaiter = targetTable?.server || tableTickets.find(t => t.server && !t.server.toLowerCase().includes('pos'))?.server;
+    if (foundWaiter) {
+      setSelectedServer(foundWaiter);
+    } else {
+      setSelectedServer('');
     }
 
     if (combinedItems.length > 0) {
@@ -300,19 +322,31 @@ export default function ManagerPOS() {
   };
 
 
-  const finalizeOrder = () => {
+  const handleFinalizeOrder = () => {
     if (remaining > 0.01) { // Floating point safety
       if (Platform.OS === 'web') window.alert("Please collect full payment before checking out.");
       else Alert.alert("Incomplete Payment", "Please collect full payment before checking out.");
       return;
     }
 
-    const invoice = {
-      id: `INV-${Math.floor(Math.random() * 90000) + 10000}`,
+    const targetTableId = selectedTableId;
+    const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
+    const wasDineIn = orderType === 'dine-in' && targetTableId;
+
+    // Detect who took the order vs who is cashier
+    const targetTableTickets = targetTableId ? tickets.filter(t => t.tableId === targetTableId) : [];
+    const waiterFromTickets = targetTableTickets.find(t => t.server && !t.server.toLowerCase().includes('pos'))?.server;
+    const waiterFromTable = selectedTableObj?.server && !selectedTableObj.server.toLowerCase().includes('pos') ? selectedTableObj.server : undefined;
+
+    const currentUserName = user?.name ? (user.name.includes('(Manager)') ? user.name : `${user.name} (Manager)`) : 'Ali Khan (Manager)';
+    const orderCreator = selectedServer || waiterFromTable || waiterFromTickets || (wasDineIn ? 'Sara Ahmed (Waiter)' : currentUserName);
+    const cashierName = currentUserName;
+
+    const invoice = createInvoicePayload({
       orderType,
-      server: 'Manager POS',
-      timePlaced: Date.now(),
-      timeSettled: Date.now(),
+      server: orderCreator,
+      orderTakenBy: orderCreator,
+      cashier: cashierName,
       customer: selectedCustomerObj,
       tableName: selectedTableObj?.name,
       tableId: selectedTableObj?.id,
@@ -322,13 +356,10 @@ export default function ManagerPOS() {
       tax,
       total,
       payments: payments.filter(p => p.amount > 0)
-    };
-
-    const targetTableId = selectedTableId;
-    const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
-    const wasDineIn = orderType === 'dine-in' && targetTableId;
+    });
 
     saveInvoice(invoice);
+    broadcastImmediately();
     
     if (selectedCustomerObj) {
       updateCustomer(selectedCustomerObj.id, {
@@ -742,10 +773,21 @@ export default function ManagerPOS() {
                 {tables
                   .filter(t => tableModalZone === 'All' || t.zone === tableModalZone)
                   .map(t => {
-                    const isBusy = t.status === 'occupied' || t.status === 'billed';
-                    const isSelected = selectedTableId === t.id;
                     const tableTickets = tickets.filter(tk => tk.tableId === t.id);
-                    const statusColor = t.status === 'available' ? '#27ae60' : (t.status === 'occupied' ? '#e74c3c' : '#f39c12');
+                    const isFoodReady = tableTickets.some(tk => tk.status === 'ready');
+                    const hasActiveTickets = tableTickets.some(tk => tk.status === 'cooking' || tk.status === 'ready');
+                    const isBusy = t.status === 'occupied' || t.status === 'billed' || hasActiveTickets;
+                    const isSelected = selectedTableId === t.id;
+                    const statusColor = isFoodReady 
+                      ? '#007AFF' 
+                      : (t.status === 'billed' 
+                          ? '#f39c12' 
+                          : (isBusy ? '#e74c3c' : '#27ae60'));
+                    const statusLabel = isFoodReady 
+                      ? 'FOOD READY' 
+                      : (t.status === 'billed' 
+                          ? 'BILLED' 
+                          : (isBusy ? 'OCCUPIED' : 'AVAILABLE'));
 
                     return (
                       <TouchableOpacity 
@@ -764,7 +806,7 @@ export default function ManagerPOS() {
                             <View style={[styles.tableCardStatusBadge, { backgroundColor: statusColor + '18', borderColor: statusColor }]}>
                               <View style={[styles.tableCardStatusDot, { backgroundColor: statusColor }]} />
                               <Text style={[styles.tableCardStatusText, { color: statusColor }]}>
-                                {t.status.toUpperCase()}
+                                {statusLabel}
                               </Text>
                             </View>
                           </View>
@@ -891,7 +933,7 @@ export default function ManagerPOS() {
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.saveBtn, remaining > 0 && {backgroundColor: '#ccc'}]} 
-                onPress={finalizeOrder}
+                onPress={handleFinalizeOrder}
                 disabled={remaining > 0.01}
               >
                 <Text style={{color:'#fff', fontWeight: 'bold'}}>Confirm & Generate Invoice</Text>
@@ -904,18 +946,12 @@ export default function ManagerPOS() {
       {/* Print Preview Modal */}
       <Modal visible={!!generatedInvoice} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <ScrollView contentContainerStyle={styles.printPreviewContent}>
+          <ScrollView contentContainerStyle={[styles.printPreviewContent, { paddingVertical: 24 }]}>
             <TouchableOpacity style={styles.closeBtn} onPress={() => setGeneratedInvoice(null)}>
-              <Text style={styles.closeBtnText}>Close</Text>
+              <Text style={styles.closeBtnText}>✕ Close Preview</Text>
             </TouchableOpacity>
             
             {generatedInvoice && <InvoiceComponent invoice={generatedInvoice} />}
-            
-            <TouchableOpacity style={styles.printBtnAction} onPress={() => {
-                if (typeof window !== 'undefined') window.print();
-            }}>
-              <Text style={styles.printBtnText}>Print</Text>
-            </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
@@ -1442,7 +1478,7 @@ const styles = StyleSheet.create({
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24,
+    padding: 12,
   },
   modalHeader: {
     flexDirection: 'row',

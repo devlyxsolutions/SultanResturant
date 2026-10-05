@@ -132,6 +132,23 @@ export default function ManagerDashboard() {
 
           <TouchableOpacity 
             style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/invoices')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#FDF2F0' }]}>
+              <Ionicons name="receipt" size={24} color="#4a121a" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Invoices & Order History</Text>
+              <Text style={styles.cardDesc}>Complete order receipts, reprint bills & payment records.</Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
             onPress={() => router.push('/manager/shift')}
             activeOpacity={0.7}
           >

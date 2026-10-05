@@ -39,6 +39,8 @@ export default function TableOrderScreen() {
   const menuItems = useRestaurantStore(state => state.menuItems);
   const storeCategories = useRestaurantStore(state => state.categories);
   const placeOrder = useRestaurantStore(state => state.placeOrder);
+  const serveTableTickets = useRestaurantStore(state => state.serveTableTickets);
+  const updateTicketStatus = useRestaurantStore(state => state.updateTicketStatus);
   const user = useAuthStore(state => state.user);
 
   const table = tables.find(t => t.id === tableId);
@@ -82,7 +84,7 @@ export default function TableOrderScreen() {
         qty: it.qty,
         status: 'served',
         ticketId: 'ORDER-SAVED',
-        timePlaced: Date.now(),
+        timePlaced: now,
       });
     });
   }
@@ -150,7 +152,10 @@ export default function TableOrderScreen() {
     if (newCart.length === 0) return;
 
     const isAddOn = isExistingOrderActive;
-    placeOrder(tableId as string, user?.name || 'Waiter', newCart, isAddOn);
+    const waiterName = user?.name 
+      ? (user.name.includes('(Waiter)') ? user.name : `${user.name} (Waiter)`) 
+      : 'Sara Ahmed (Waiter)';
+    placeOrder(tableId as string, waiterName, newCart, isAddOn);
     broadcastImmediately();
 
     const message = isAddOn 
@@ -371,6 +376,32 @@ export default function TableOrderScreen() {
                     <Text style={styles.sectionSubtotal}>Rs. {alreadyOrderedTotal.toLocaleString()}</Text>
                   </View>
 
+                  {activeTickets.some(t => t.status === 'ready') && (
+                    <View style={styles.readyAlertBanner}>
+                      <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="restaurant" size={20} color="#007AFF" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.readyAlertTitle}>Food is Ready!</Text>
+                          <Text style={styles.readyAlertSubtitle}>Kitchen has dispatched orders for this table</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.readyServeBtn}
+                        onPress={() => {
+                          serveTableTickets(tableId as string);
+                          broadcastImmediately();
+                          if (Platform.OS !== 'web') {
+                            Alert.alert('Served', 'All ready items marked as served!');
+                          }
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="checkmark-done" size={15} color="#fff" style={{ marginRight: 4 }} />
+                        <Text style={styles.readyServeBtnText}>Serve All</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   {alreadyOrderedItems.map((item, idx) => (
                     <View key={`${item.ticketId}-${idx}`} style={styles.existingItemRow}>
                       <View style={styles.existingQtyBadge}>
@@ -383,14 +414,27 @@ export default function TableOrderScreen() {
                         </Text>
                       </View>
                       <View style={styles.existingStatusWrap}>
-                        <View style={[
-                          styles.foodStatusPill, 
-                          item.status === 'served' 
-                            ? styles.statusServed 
-                            : item.status === 'ready' 
-                              ? styles.statusReady 
-                              : styles.statusCooking
-                        ]}>
+                        <TouchableOpacity 
+                          style={[
+                            styles.foodStatusPill, 
+                            item.status === 'served' 
+                              ? styles.statusServed 
+                              : item.status === 'ready' 
+                                ? styles.statusReady 
+                                : styles.statusCooking
+                          ]}
+                          onPress={() => {
+                            if (item.status === 'ready') {
+                              updateTicketStatus(item.ticketId, 'served');
+                              broadcastImmediately();
+                              if (Platform.OS !== 'web') {
+                                Alert.alert('Served', `${item.name} served!`);
+                              }
+                            }
+                          }}
+                          disabled={item.status !== 'ready'}
+                          activeOpacity={0.7}
+                        >
                           <Ionicons 
                             name={
                               item.status === 'served' 
@@ -413,9 +457,9 @@ export default function TableOrderScreen() {
                             styles.foodStatusText,
                             { color: item.status === 'served' ? '#34C759' : item.status === 'ready' ? '#007AFF' : '#FF9500' }
                           ]}>
-                            {item.status === 'served' ? 'SERVED' : item.status === 'ready' ? 'READY' : 'COOKING'}
+                            {item.status === 'served' ? 'SERVED' : item.status === 'ready' ? 'READY (SERVE)' : 'COOKING'}
                           </Text>
-                        </View>
+                        </TouchableOpacity>
                         <Text style={styles.existingItemPrice}>Rs. {(item.price * item.qty).toLocaleString()}</Text>
                       </View>
                     </View>
@@ -911,6 +955,45 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '800',
     color: '#4a121a',
+  },
+  readyAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EBF5FF',
+    borderWidth: 1.5,
+    borderColor: '#007AFF',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+    gap: 10,
+  },
+  readyAlertTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0055B3',
+  },
+  readyAlertSubtitle: {
+    fontSize: 11,
+    color: '#4A6984',
+    marginTop: 1,
+  },
+  readyServeBtn: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  readyServeBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '800',
   },
   existingItemRow: {
     flexDirection: 'row',

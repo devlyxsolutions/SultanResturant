@@ -79,6 +79,8 @@ export type Invoice = {
   tableName?: string;
   customer?: Customer;
   server: string;
+  orderTakenBy?: string;
+  cashier?: string;
   timePlaced: number;
   timeSettled: number;
   items: OrderItem[];
@@ -87,6 +89,11 @@ export type Invoice = {
   tax: number;
   total: number;
   payments: Payment[];
+  status?: 'settled' | 'voided' | 'refunded';
+  voidReason?: string;
+  voidedAt?: number;
+  voidedBy?: string;
+  notes?: string;
 };
 
 export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland';
@@ -137,6 +144,7 @@ type RestaurantState = {
   toggleTicketItem: (ticketId: string, itemId: string) => void;
   bumpTicket: (ticketId: string) => void;
   updateTicketStatus: (ticketId: string, status: Ticket['status']) => void;
+  serveTableTickets: (tableId: string) => void;
   markTableBilled: (tableId: string, invoiceId?: string) => void;
   clearBillPaidAlert: () => void;
   settleBill: (tableId: string) => void;
@@ -158,6 +166,8 @@ type RestaurantState = {
   addZone: (zoneName: string) => void;
   deleteZone: (zoneName: string) => void;
   saveInvoice: (invoice: Invoice) => void;
+  voidInvoice: (invoiceId: string, reason?: string, voidedBy?: string) => void;
+  deleteInvoice: (invoiceId: string) => void;
   addCustomer: (customer: Omit<Customer, 'id' | 'totalOrders' | 'totalSpent'>) => void;
   updateCustomer: (id: string, customer: Partial<Customer>) => void;
   deleteCustomer: (id: string) => void;
@@ -236,6 +246,50 @@ const INITIAL_STAFF: StaffMember[] = [
   { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12' },
   { id: 'st6', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
 ];
+
+/**
+ * Reconciles tables with active tickets:
+ * If a table has active tickets (cooking, ready, or unbilled served orders),
+ * its status MUST be 'occupied' with its active bill and server preserved,
+ * preventing any race condition where a table displays as 'available' while food is in progress.
+ */
+export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): Table[] {
+  if (!tables || !Array.isArray(tables)) return [];
+  const safeTickets = Array.isArray(tickets) ? tickets : [];
+
+  return tables.map(table => {
+    // If table is already marked billed, preserve billed state until settled
+    if (table.status === 'billed') return table;
+
+    const tableTickets = safeTickets.filter(t => t.tableId === table.id);
+    const activeCookingOrReady = tableTickets.filter(t => t.status === 'cooking' || t.status === 'ready');
+    const hasUnbilledTickets = tableTickets.some(t => t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
+
+    if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
+      const ticketTotal = tableTickets.reduce((sum, t) =>
+        sum + (t.items || []).reduce((itemSum, item) => itemSum + ((item.price || 0) * (item.qty || 1)), 0),
+        0
+      );
+
+      const orders = (table.orders && table.orders.length > 0)
+        ? table.orders
+        : tableTickets.flatMap(t => (t.items || []).map(i => ({ ...i })));
+
+      const serverName = table.server || (tableTickets.length > 0 ? tableTickets[tableTickets.length - 1].server : undefined);
+
+      return {
+        ...table,
+        status: 'occupied',
+        billTotal: (table.billTotal && table.billTotal > 0) ? table.billTotal : ticketTotal,
+        orders,
+        server: serverName || table.server,
+        isPaid: false,
+      };
+    }
+
+    return table;
+  });
+}
 
 export const useRestaurantStore = create<RestaurantState>()(
   persist(
@@ -349,6 +403,22 @@ export const useRestaurantStore = create<RestaurantState>()(
       updateTicketStatus: (ticketId, status) => set((state) => ({
         tickets: state.tickets.map(t => t.id === ticketId ? { ...t, status } : t)
       })),
+
+      serveTableTickets: (tableId) => set((state) => {
+        const hasReady = state.tickets.some(t => t.tableId === tableId && t.status === 'ready');
+        if (!hasReady) return state;
+
+        const updatedTickets = state.tickets.map(t =>
+          (t.tableId === tableId && t.status === 'ready') ? { ...t, status: 'served' as const } : t
+        );
+
+        return {
+          tickets: updatedTickets,
+          tables: state.tables.map(t => 
+            t.id === tableId && t.status !== 'billed' ? { ...t, status: 'occupied' } : t
+          ),
+        };
+      }),
 
       markTableBilled: (tableId, invoiceId) => set((state) => {
         const table = state.tables.find(t => t.id === tableId);
@@ -624,6 +694,24 @@ export const useRestaurantStore = create<RestaurantState>()(
         invoices: [invoice, ...state.invoices]
       })),
 
+      voidInvoice: (invoiceId, reason, voidedBy) => set((state) => ({
+        invoices: state.invoices.map(inv =>
+          inv.id === invoiceId
+            ? {
+                ...inv,
+                status: 'voided' as const,
+                voidReason: reason || 'Voided by authorized manager',
+                voidedAt: Date.now(),
+                voidedBy: voidedBy || 'Staff',
+              }
+            : inv
+        )
+      })),
+
+      deleteInvoice: (invoiceId) => set((state) => ({
+        invoices: state.invoices.filter(inv => inv.id !== invoiceId)
+      })),
+
       addCustomer: (customer) => set((state) => ({
         customers: [...state.customers, { ...customer, id: `c${Date.now()}`, totalOrders: 0, totalSpent: 0 }]
       })),
@@ -701,11 +789,22 @@ export const useRestaurantStore = create<RestaurantState>()(
           });
         }
 
+        const rawTables = remoteState.tables || state.tables;
+        const finalTickets = mergedTickets || state.tickets;
+        const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
+
         return {
           ...state,
-          ...(remoteState.tables ? { tables: remoteState.tables } : {}),
+          tables: reconciledTables,
           ...(mergedTickets ? { tickets: mergedTickets } : {}),
-          ...(remoteState.invoices ? { invoices: remoteState.invoices } : {}),
+          ...(remoteState.invoices ? {
+            invoices: (() => {
+              const remoteList = remoteState.invoices || [];
+              const remoteMap = new Map(remoteList.map(i => [i.id, i]));
+              const localUnsynced = state.invoices.filter(i => !remoteMap.has(i.id));
+              return [...localUnsynced, ...remoteList];
+            })()
+          } : {}),
           ...(remoteState.menuItems ? { menuItems: remoteState.menuItems } : {}),
           ...(remoteState.categories ? { categories: remoteState.categories } : {}),
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
@@ -719,6 +818,11 @@ export const useRestaurantStore = create<RestaurantState>()(
     {
       name: 'restaurant-storage',
       storage: appStorage,
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
+        }
+      },
     }
   )
 );

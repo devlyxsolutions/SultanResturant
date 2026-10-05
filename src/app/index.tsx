@@ -74,9 +74,9 @@ export default function HomeScreen() {
               </Link>
 
               <Link href="/login?all=true" asChild>
-                <TouchableOpacity style={[styles.secondaryButton, { marginTop: 8, borderColor: 'rgba(213, 169, 67, 0.25)', backgroundColor: 'transparent' }]} activeOpacity={0.88}>
+                <TouchableOpacity style={styles.adminPortalButton} activeOpacity={0.88}>
                   <Ionicons name="key-outline" size={16} color="#A38F78" style={{ marginRight: 6 }} />
-                  <Text style={[styles.secondaryButtonText, { color: '#A38F78', fontSize: 13 }]}>Admin & Management Portal</Text>
+                  <Text style={styles.adminPortalButtonText}>Admin & Management Portal</Text>
                 </TouchableOpacity>
               </Link>
             </View>
@@ -201,6 +201,24 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: '#D5A943',
     fontSize: 16,
+    fontWeight: '700',
+    letterSpacing: 0.6,
+  },
+  adminPortalButton: {
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
+    borderWidth: 1.8,
+    borderColor: 'rgba(213, 169, 67, 0.25)',
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 8,
+  },
+  adminPortalButtonText: {
+    color: '#A38F78',
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: 0.6,
   },
