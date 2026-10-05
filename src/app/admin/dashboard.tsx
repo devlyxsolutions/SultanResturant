@@ -121,6 +121,13 @@ export default function AdminDashboard() {
       icon: 'wallet-outline' as const,
       route: '/admin/expenses',
       color: '#4a121a'
+    },
+    {
+      title: 'Playland Hub & Invoices',
+      desc: 'View ticket sales invoices, add jhooley/rides & set time-based variant pricing.',
+      icon: 'color-palette-outline' as const,
+      route: '/admin/playland',
+      color: '#D5A943'
     }
   ];
 

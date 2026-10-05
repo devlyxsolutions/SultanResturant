@@ -27,10 +27,10 @@ export default function PlaylandLayout() {
             <View style={styles.titleRow}>
               <Text style={styles.portalTitle}>SULTAN PLAYLAND</Text>
               <View style={styles.basementBadge}>
-                <Text style={styles.basementText}>BASEMENT</Text>
+                <Text style={styles.basementText}>TICKETING COUNTER</Text>
               </View>
             </View>
-            <Text style={styles.portalSubtitle}>Rides, Jhoolay & Ticketing Hub</Text>
+            <Text style={styles.portalSubtitle}>Kids Rides & Services Terminal</Text>
           </View>
         </View>
 
@@ -46,7 +46,7 @@ export default function PlaylandLayout() {
             onPress={() => router.replace('/login')}
             activeOpacity={0.75}
           >
-            <Ionicons name="swap-horizontal" size={16} color="#D5A943" />
+            <Ionicons name="swap-horizontal" size={16} color="#4a121a" />
             <Text style={styles.switchRoleText}>Switch</Text>
           </TouchableOpacity>
 
@@ -55,7 +55,7 @@ export default function PlaylandLayout() {
             onPress={handleLogout}
             activeOpacity={0.75}
           >
-            <Ionicons name="log-out-outline" size={18} color="#FF6B6B" />
+            <Ionicons name="log-out-outline" size={18} color="#FF3B30" />
           </TouchableOpacity>
         </View>
       </View>
@@ -71,11 +71,11 @@ export default function PlaylandLayout() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#380B0F',
+    backgroundColor: '#4a121a',
   },
   header: {
     height: 60,
-    backgroundColor: '#451014',
+    backgroundColor: '#4a121a',
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(213, 169, 67, 0.4)',
     flexDirection: 'row',
@@ -108,11 +108,11 @@ const styles = StyleSheet.create({
   basementText: {
     fontSize: 9,
     fontWeight: '800',
-    color: '#451014',
+    color: '#4a121a',
   },
   portalSubtitle: {
     fontSize: 11,
-    color: 'rgba(213, 169, 67, 0.85)',
+    color: 'rgba(213, 169, 67, 0.9)',
     fontWeight: '500',
   },
   headerRight: {
@@ -126,10 +126,10 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.25)',
+    borderColor: 'rgba(213, 169, 67, 0.3)',
   },
   cashierName: {
     fontSize: 12,
@@ -142,15 +142,13 @@ const styles = StyleSheet.create({
     gap: 4,
     paddingHorizontal: 10,
     paddingVertical: 5,
-    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    backgroundColor: '#D5A943',
     borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
   },
   switchRoleText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#D5A943',
+    fontWeight: '800',
+    color: '#4a121a',
   },
   logoutBtn: {
     width: 32,
@@ -164,6 +162,6 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    backgroundColor: '#1C0507',
+    backgroundColor: '#F8F9FA', // Clean light background
   },
 });
