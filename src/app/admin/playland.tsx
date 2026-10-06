@@ -330,7 +330,7 @@ export default function AdminPlaylandManagement() {
         <View style={styles.metricsGrid}>
           <View style={[styles.metricCard, { borderLeftColor: '#D5A943' }]}>
             <View style={styles.metricHeader}>
-              <Text style={styles.metricLabel}>Today's Playland Sales</Text>
+              <Text style={styles.metricLabel}>{"Today's Playland Sales"}</Text>
               <Ionicons name="cash-outline" size={20} color="#D5A943" />
             </View>
             <Text style={styles.metricValue}>PKR {metrics.todaySales.toLocaleString()}</Text>

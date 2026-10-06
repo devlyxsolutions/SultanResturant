@@ -158,7 +158,7 @@ export default function AdminCustomers() {
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={48} color="#ccc" />
             <Text style={styles.emptyText}>No customers found</Text>
-            <Text style={styles.emptySubtext}>Try another search term or click "Add Customer"</Text>
+            <Text style={styles.emptySubtext}>{'Try another search term or click "Add Customer"'}</Text>
           </View>
         ) : (
           filteredCustomers.map(cust => (

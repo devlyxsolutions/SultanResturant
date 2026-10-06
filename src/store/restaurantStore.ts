@@ -49,6 +49,14 @@ export type MenuVariant = {
   price: number;
 };
 
+export type ComboItem = {
+  menuItemId: string;
+  name: string;
+  qty: number;
+  price?: number;
+  variantName?: string;
+};
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -56,6 +64,19 @@ export type MenuItem = {
   category: string;
   variants?: MenuVariant[];
   station?: 'main' | 'juice';
+  // Option 3: Image & Visuals
+  imageUri?: string;
+  description?: string;
+  badge?: string; // e.g., 'Chef Special', 'Best Seller', 'Family Deal', 'Discount 20%'
+  // Option 4: Inventory, Cost & Profit Margin Tracking
+  costPrice?: number;
+  trackStock?: boolean;
+  stockQty?: number;
+  lowStockThreshold?: number;
+  // Option 5: Deals & Combo Packs
+  isDeal?: boolean;
+  dealItems?: ComboItem[];
+  dealOriginalPrice?: number;
 };
 
 export type Customer = {
@@ -158,6 +179,7 @@ type RestaurantState = {
   addMenuItem: (item: Omit<MenuItem, 'id'>) => void;
   updateMenuItem: (id: string, item: Partial<Omit<MenuItem, 'id'>>) => void;
   deleteMenuItem: (id: string) => void;
+  adjustMenuItemStock: (id: string, deltaOrQuantity: number, mode?: 'set' | 'add') => void;
   addCategory: (categoryName: string) => void;
   deleteCategory: (categoryName: string) => void;
   addTable: (table: Omit<Table, 'id' | 'status'> & { status?: Table['status'] }) => void;
@@ -209,16 +231,87 @@ const INITIAL_CUSTOMERS: Customer[] = [
 ];
 
 const INITIAL_MENU: MenuItem[] = [
-  { id: 'm1', name: 'Sultan Kebab', price: 1450, category: 'Mains' },
-  { id: 'm2', name: 'Chicken Karahi', price: 1850, category: 'Mains' },
-  { id: 'm3', name: 'Hummus & Pita', price: 650, category: 'Appetizers' },
-  { id: 'm4', name: 'Kunafa', price: 850, category: 'Desserts' },
-  { id: 'm5', name: 'Mint Margarita', price: 450, category: 'Drinks' },
+  {
+    id: 'm1',
+    name: 'Sultan Kebab',
+    price: 1450,
+    costPrice: 650,
+    category: 'Mains',
+    imageUri: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80',
+    description: 'Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.',
+    badge: 'Chef Special',
+    trackStock: true,
+    stockQty: 35,
+    lowStockThreshold: 10,
+    station: 'main'
+  },
+  {
+    id: 'm2',
+    name: 'Chicken Karahi',
+    price: 1850,
+    costPrice: 820,
+    category: 'Mains',
+    imageUri: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80',
+    description: 'Fresh chicken cooked in pure desi ghee, fresh tomatoes, ginger and green chillies.',
+    badge: 'Best Seller',
+    trackStock: true,
+    stockQty: 22,
+    lowStockThreshold: 5,
+    station: 'main'
+  },
+  {
+    id: 'm3',
+    name: 'Hummus & Pita',
+    price: 650,
+    costPrice: 220,
+    category: 'Appetizers',
+    imageUri: 'https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80',
+    description: 'Creamy chickpea dip with extra virgin olive oil and freshly baked pita bread.',
+    badge: 'Healthy',
+    trackStock: true,
+    stockQty: 40,
+    lowStockThreshold: 10,
+    station: 'main'
+  },
+  {
+    id: 'm4',
+    name: 'Kunafa',
+    price: 850,
+    costPrice: 320,
+    category: 'Desserts',
+    imageUri: 'https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80',
+    description: 'Crunchy golden pastry filled with stretchy sweet cheese, soaked in rose syrup & pistachios.',
+    badge: 'Signature',
+    trackStock: true,
+    stockQty: 18,
+    lowStockThreshold: 6,
+    station: 'main'
+  },
+  {
+    id: 'm5',
+    name: 'Mint Margarita',
+    price: 450,
+    costPrice: 120,
+    category: 'Drinks',
+    imageUri: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80',
+    description: 'Blended fresh mint leaves, lemon juice, soda and crushed ice.',
+    badge: 'Chilled',
+    trackStock: true,
+    stockQty: 50,
+    lowStockThreshold: 15,
+    station: 'juice'
+  },
   { 
     id: 'm6', 
     name: 'Fajita Pizza', 
-    price: 1200, 
+    price: 1400,
+    costPrice: 550,
     category: 'Mains',
+    imageUri: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
+    description: 'Crispy crust loaded with fajita chicken, bell peppers, olives and mozzarella.',
+    badge: 'Popular',
+    trackStock: false,
+    station: 'main',
     variants: [
       { name: 'Small (7")', price: 850 },
       { name: 'Medium (10")', price: 1400 },
@@ -230,11 +323,64 @@ const INITIAL_MENU: MenuItem[] = [
     id: 'm7',
     name: 'Mutton Ribs',
     price: 3500,
+    costPrice: 1800,
     category: 'Mains',
+    imageUri: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80',
+    description: 'Slow-smoked juicy mutton ribs marinated in Sultan royal rub.',
+    badge: 'Signature',
+    trackStock: true,
+    stockQty: 8,
+    lowStockThreshold: 4,
+    station: 'main',
     variants: [
       { name: 'Half KG', price: 3500 },
       { name: '1 KG', price: 6800 }
     ]
+  },
+  {
+    id: 'deal1',
+    name: 'Sultan Family Feast (4-5 Persons)',
+    price: 4999,
+    costPrice: 2300,
+    category: 'Deals',
+    imageUri: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80',
+    description: 'Complete family banquet: 1x Chicken Karahi + 2x Sultan Kebabs + 1x Medium Pizza + 2x Mint Margaritas + 1x Kunafa Dessert.',
+    badge: 'Family Deal',
+    isDeal: true,
+    dealOriginalPrice: 6050,
+    dealItems: [
+      { menuItemId: 'm2', name: 'Chicken Karahi', qty: 1, price: 1850 },
+      { menuItemId: 'm1', name: 'Sultan Kebab', qty: 2, price: 1450 },
+      { menuItemId: 'm6', name: 'Fajita Pizza (Medium)', qty: 1, price: 1400 },
+      { menuItemId: 'm5', name: 'Mint Margarita', qty: 2, price: 450 },
+      { menuItemId: 'm4', name: 'Kunafa', qty: 1, price: 850 }
+    ],
+    trackStock: true,
+    stockQty: 15,
+    lowStockThreshold: 5,
+    station: 'main'
+  },
+  {
+    id: 'deal2',
+    name: 'Royal Couple Platter (2 Persons)',
+    price: 2850,
+    costPrice: 1250,
+    category: 'Deals',
+    imageUri: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80',
+    description: 'Perfect for two: 2x Sultan Kebabs + 1x Hummus & Pita + 2x Mint Margaritas + 1x Kunafa Dessert.',
+    badge: 'Couple Deal',
+    isDeal: true,
+    dealOriginalPrice: 3400,
+    dealItems: [
+      { menuItemId: 'm1', name: 'Sultan Kebab', qty: 2, price: 1450 },
+      { menuItemId: 'm3', name: 'Hummus & Pita', qty: 1, price: 650 },
+      { menuItemId: 'm5', name: 'Mint Margarita', qty: 2, price: 450 },
+      { menuItemId: 'm4', name: 'Kunafa', qty: 1, price: 850 }
+    ],
+    trackStock: true,
+    stockQty: 20,
+    lowStockThreshold: 5,
+    station: 'main'
   }
 ];
 
@@ -313,7 +459,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
       ],
       menuItems: INITIAL_MENU,
-      categories: ['Appetizers', 'Mains', 'Desserts', 'Drinks'],
+      categories: ['Appetizers', 'Mains', 'Desserts', 'Drinks', 'Deals'],
       zones: ['Main Hall', 'Rooftop', 'VIP'],
 
       placeOrder: (tableId, serverName, orderItems, isAddOn) => set((state) => {
@@ -345,8 +491,17 @@ export const useRestaurantStore = create<RestaurantState>()(
           }))
         };
 
+        const updatedMenuItems = state.menuItems.map(m => {
+          const match = orderItems.find(oi => oi.item.id === m.id);
+          if (match && m.trackStock && typeof m.stockQty === 'number') {
+            return { ...m, stockQty: Math.max(0, m.stockQty - match.qty) };
+          }
+          return m;
+        });
+
         return {
           tickets: [...state.tickets, newTicket],
+          menuItems: updatedMenuItems,
           tables: table 
             ? state.tables.map(t => {
                 if (t.id !== tableId) return t;
@@ -734,6 +889,15 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       deleteMenuItem: (id) => set((state) => ({
         menuItems: state.menuItems.filter(m => m.id !== id)
+      })),
+
+      adjustMenuItemStock: (id, deltaOrQuantity, mode = 'add') => set((state) => ({
+        menuItems: state.menuItems.map(m => {
+          if (m.id !== id) return m;
+          const current = typeof m.stockQty === 'number' ? m.stockQty : 0;
+          const newQty = mode === 'set' ? Math.max(0, deltaOrQuantity) : Math.max(0, current + deltaOrQuantity);
+          return { ...m, trackStock: true, stockQty: newQty };
+        })
       })),
 
       addCategory: (categoryName) => set((state) => ({

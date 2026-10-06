@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
-  useWindowDimensions,
   Platform,
   Alert,
 } from 'react-native';
@@ -20,12 +19,10 @@ import { money, formatTime, startOfDay } from '../utils/format';
 
 export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
-  const invoices = useRestaurantStore((s) => s.invoices) || [];
-  const expenses = useOpsStore((s) => s.expenses) || [];
+  const invoices = useRestaurantStore((s) => s.invoices);
+  const expenses = useOpsStore((s) => s.expenses);
   const addExpense = useOpsStore((s) => s.addExpense);
   const deleteExpense = useOpsStore((s) => s.deleteExpense);
 
@@ -34,19 +31,26 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   const [note, setNote] = useState('');
   const [method, setMethod] = useState<ExpenseMethod>('cash');
   const [filterPeriod, setFilterPeriod] = useState<'today' | 'all'>('today');
+  const [todayStart] = useState(() => startOfDay(Date.now()));
 
-  const todayStart = startOfDay(Date.now());
-
-  // Filtered lists
-  const filteredExpenses = filterPeriod === 'today'
-    ? expenses.filter((e) => e.at >= todayStart)
-    : expenses;
-
-  const todayInvoices = invoices.filter((inv) => (inv.timeSettled || inv.timePlaced) >= todayStart);
-  const todayRevenue = todayInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
-
-  const totalExpenseAmount = filteredExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
-  const netProfitToday = todayRevenue - totalExpenseAmount;
+  const { filteredExpenses, todayInvoices, todayRevenue, totalExpenseAmount, netProfitToday } = useMemo(() => {
+    const invList = invoices || [];
+    const expList = expenses || [];
+    const filtered = filterPeriod === 'today'
+      ? expList.filter((e) => e.at >= todayStart)
+      : expList;
+    const invs = invList.filter((inv) => (inv.timeSettled || inv.timePlaced) >= todayStart);
+    const rev = invs.reduce((sum, inv) => sum + (inv.total || 0), 0);
+    const expTotal = filtered.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const profit = rev - expTotal;
+    return {
+      filteredExpenses: filtered,
+      todayInvoices: invs,
+      todayRevenue: rev,
+      totalExpenseAmount: expTotal,
+      netProfitToday: profit,
+    };
+  }, [filterPeriod, expenses, invoices, todayStart]);
 
   const handleAdd = () => {
     const num = parseFloat(amount);
@@ -105,14 +109,14 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       {/* P&L Financial Summary Bar */}
       <View style={styles.pnlCard}>
         <View style={styles.pnlHeader}>
-          <Text style={styles.pnlTitle}>Today's Financial Balance (P&L)</Text>
+          <Text style={styles.pnlTitle}>{"Today's Financial Balance (P&L)"}</Text>
           <Text style={styles.pnlDate}>
             {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
           </Text>
         </View>
         <View style={styles.pnlRow}>
           <View style={styles.pnlCol}>
-            <Text style={styles.pnlLabel}>Today's Inflow (Sales)</Text>
+            <Text style={styles.pnlLabel}>{"Today's Inflow (Sales)"}</Text>
             <Text style={[styles.pnlVal, { color: BRAND.success }]}>{money(todayRevenue)}</Text>
             <Text style={styles.pnlMeta}>{todayInvoices.length} Bills Settled</Text>
           </View>
@@ -249,7 +253,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
                 <Text style={styles.itemCategory}>{exp.category}</Text>
                 <Text style={styles.itemAmount}>- {money(exp.amount)}</Text>
               </View>
-              {exp.note && <Text style={styles.itemNote}>"{exp.note}"</Text>}
+              {exp.note && <Text style={styles.itemNote}>{`"${exp.note}"`}</Text>}
               <Text style={styles.itemMeta}>
                 Paid via {exp.method.toUpperCase()} • Recorded by {exp.paidBy || 'Staff'} at {formatTime(exp.at)}
               </Text>

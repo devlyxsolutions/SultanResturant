@@ -70,14 +70,38 @@ export default function CustomerMenuScreen() {
           <View style={styles.grid}>
             {filteredItems.map(item => (
               <View key={item.id} style={styles.menuCard}>
-                <Image source={{ uri: getFallbackImage(item.category) }} style={styles.itemImage} />
+                <Image 
+                  source={{ uri: item.imageUri || getFallbackImage(item.category) }} 
+                  style={styles.itemImage} 
+                />
                 <View style={styles.itemContent}>
                   <View style={styles.itemHeader}>
-                    <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.itemPrice}>Rs. {item.price.toFixed(0)}</Text>
+                    <View style={{ flex: 1, marginRight: 8 }}>
+                      <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+                      {item.badge && (
+                        <View style={styles.badgePill}>
+                          <Text style={styles.badgePillText}>{item.badge}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={styles.itemPrice}>Rs. {item.price.toFixed(0)}</Text>
+                      {item.dealOriginalPrice && item.dealOriginalPrice > item.price && (
+                        <Text style={styles.dealSavingsText}>Save Rs. {(item.dealOriginalPrice - item.price).toFixed(0)}</Text>
+                      )}
+                    </View>
                   </View>
-                  <Text style={styles.itemDesc} numberOfLines={2}>Delicious {item.name.toLowerCase()} prepared fresh.</Text>
+
+                  <Text style={styles.itemDesc} numberOfLines={2}>
+                    {item.description || `Delicious ${item.name.toLowerCase()} prepared fresh by royal Sultan chefs.`}
+                  </Text>
                   
+                  {item.isDeal && item.dealItems && item.dealItems.length > 0 && (
+                    <Text style={styles.comboIncludesText} numberOfLines={1}>
+                      Includes: {item.dealItems.map(d => `${d.qty}x ${d.name}`).join(' • ')}
+                    </Text>
+                  )}
+
                   <TouchableOpacity style={styles.addBtn}>
                     <Ionicons name="add" size={20} color="#D5A943" />
                   </TouchableOpacity>
@@ -249,5 +273,34 @@ const styles = StyleSheet.create({
     borderColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgePill: {
+    backgroundColor: '#FFF9F0',
+    borderColor: '#D5A943',
+    borderWidth: 1,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginTop: 2,
+  },
+  badgePillText: {
+    color: '#8c6b1b',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  dealSavingsText: {
+    color: '#6A1B9A',
+    fontSize: 10,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  comboIncludesText: {
+    fontSize: 11,
+    color: '#6A1B9A',
+    backgroundColor: '#FAF5FF',
+    padding: 4,
+    borderRadius: 4,
+    marginVertical: 4,
   }
 });

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, useWindowDimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, MenuItem, OrderItem, Payment, Invoice } from '../../store/restaurantStore';
 import { useAuthStore } from '../../store/authStore';
@@ -443,16 +443,66 @@ export default function AdminPOS() {
 
           <ScrollView style={styles.itemsScroll}>
             <View style={styles.itemsGrid}>
-              {filteredItems.map(item => (
-                <TouchableOpacity
-                  key={item.id}
-                  style={[styles.itemCard, isMobile && { width: '47%', minWidth: 130 }]}
-                  onPress={() => addToCart(item)}
-                >
-                  <Text style={styles.itemName}>{item.name}</Text>
-                  <Text style={styles.itemPrice}>Rs. {item.price}</Text>
-                </TouchableOpacity>
-              ))}
+              {filteredItems.map(item => {
+                const isOut = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0;
+                const isLow = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= (item.lowStockThreshold || 5);
+
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    style={[
+                      styles.itemCard, 
+                      isMobile && { width: '47%', minWidth: 130 },
+                      isOut && { opacity: 0.6, borderColor: '#ffcdd2' }
+                    ]}
+                    onPress={() => addToCart(item)}
+                    activeOpacity={0.7}
+                  >
+                    {item.imageUri ? (
+                      <Image 
+                        source={{ uri: item.imageUri }} 
+                        style={{ width: '100%', height: 75, borderRadius: 8, marginBottom: 8 }} 
+                      />
+                    ) : null}
+
+                    {item.badge && (
+                      <View style={{
+                        position: 'absolute',
+                        top: 6,
+                        right: 6,
+                        backgroundColor: item.isDeal ? 'rgba(106, 27, 154, 0.85)' : 'rgba(213, 169, 67, 0.9)',
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 4,
+                        zIndex: 2,
+                      }}>
+                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{item.badge}</Text>
+                      </View>
+                    )}
+
+                    <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
+                    <Text style={styles.itemPrice}>Rs. {item.price}</Text>
+
+                    {item.trackStock && (
+                      <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{
+                          width: 6,
+                          height: 6,
+                          borderRadius: 3,
+                          backgroundColor: isOut ? '#d32f2f' : (isLow ? '#ef6c00' : '#2e7d32')
+                        }} />
+                        <Text style={{
+                          fontSize: 10,
+                          fontWeight: '700',
+                          color: isOut ? '#d32f2f' : (isLow ? '#ef6c00' : '#2e7d32')
+                        }}>
+                          {isOut ? 'Sold Out' : `${item.stockQty} left`}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
               {filteredItems.length === 0 && <Text style={{margin: 20}}>No items found.</Text>}
             </View>
           </ScrollView>

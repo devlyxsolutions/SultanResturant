@@ -39,23 +39,15 @@ export default function LoginScreen() {
 
   const isWaiterApp = (Platform.OS !== 'web' || params.role === 'waiter') && params.all !== 'true';
 
+  const defaultWaiter = isWaiterApp
+    ? staff.find((s) => s.role.toLowerCase() === 'waiter' && s.status === 'Active')
+    : undefined;
+
   const [selectedRole, setSelectedRole] = useState<Role>(isWaiterApp ? 'waiter' : null);
-  const [name, setName] = useState('');
-  const [pin, setPin] = useState('');
+  const [name, setName] = useState(defaultWaiter?.name || '');
+  const [pin, setPin] = useState(defaultWaiter?.pin || '');
   const [errorMessage, setErrorMessage] = useState('');
   const [showPin, setShowPin] = useState(false);
-
-  // Auto-select waiter role if on waiter app
-  useEffect(() => {
-    if (isWaiterApp) {
-      setSelectedRole('waiter');
-      const waiters = staff.filter((s) => s.role.toLowerCase() === 'waiter' && s.status === 'Active');
-      if (waiters.length > 0 && !name) {
-        setName(waiters[0].name);
-        setPin(waiters[0].pin);
-      }
-    }
-  }, [isWaiterApp, staff]);
 
   // Already signed in? Go straight to role's home.
   useEffect(() => {

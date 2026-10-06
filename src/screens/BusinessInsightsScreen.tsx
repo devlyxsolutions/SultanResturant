@@ -1,40 +1,38 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  useWindowDimensions,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRestaurantStore, Invoice } from '../store/restaurantStore';
+import { useRestaurantStore } from '../store/restaurantStore';
 import { BRAND } from '../constants/brand';
 import { FLOOR_TEMPLATE, sortFloors } from '../constants/floors';
 import { money, percent, hourLabel } from '../utils/format';
 
 export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
 
-  const invoices = useRestaurantStore((s) => s.invoices) || [];
-  const tables = useRestaurantStore((s) => s.tables) || [];
+  const invoices = useRestaurantStore((s) => s.invoices);
+  const tables = useRestaurantStore((s) => s.tables);
 
   const [period, setPeriod] = useState<'today' | 'week' | 'all'>('all');
+  const [now] = useState(() => Date.now());
 
-  const now = Date.now();
-  const oneDayAgo = now - 24 * 60 * 60 * 1000;
-  const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
-
-  const filteredInvoices = invoices.filter((inv) => {
-    const t = inv.timeSettled || inv.timePlaced;
-    if (period === 'today') return t >= oneDayAgo;
-    if (period === 'week') return t >= oneWeekAgo;
-    return true;
-  });
+  const filteredInvoices = useMemo(() => {
+    const list = invoices || [];
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+    const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
+    return list.filter((inv) => {
+      const t = inv.timeSettled || inv.timePlaced;
+      if (period === 'today') return t >= oneDayAgo;
+      if (period === 'week') return t >= oneWeekAgo;
+      return true;
+    });
+  }, [invoices, period, now]);
 
   const totalSales = filteredInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalBills = filteredInvoices.length;
@@ -51,7 +49,7 @@ export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' 
 
   // Floor revenue breakdown (map invoice tableId to table.zone)
   const tableZoneMap = new Map<string, string>();
-  tables.forEach((t) => tableZoneMap.set(t.id, t.zone || 'Ground Floor'));
+  (tables || []).forEach((t) => tableZoneMap.set(t.id, t.zone || 'Ground Floor'));
 
   const floorRevenueMap: Record<string, number> = {};
   dineInInvoices.forEach((inv) => {
@@ -159,7 +157,7 @@ export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Floor-wise Dine-In Revenue Breakdown</Text>
         <Text style={styles.cardSubtitle}>
-          Sales performance distributed across Sultan's 5 dining levels:
+          {"Sales performance distributed across Sultan's 5 dining levels:"}
         </Text>
 
         <View style={styles.floorList}>

@@ -159,7 +159,7 @@ export default function PlaylandCounterScreen() {
           <View style={styles.todayPill}>
             <Ionicons name="sparkles" size={15} color="#D5A943" />
             <Text style={styles.todayPillText}>
-              Today's Sales: <Text style={{ color: '#4a121a', fontWeight: '800' }}>PKR {todayMetrics.todaySales.toLocaleString()}</Text> ({todayMetrics.todayCount} Tickets)
+              {"Today's Sales: "}<Text style={{ color: '#4a121a', fontWeight: '800' }}>PKR {todayMetrics.todaySales.toLocaleString()}</Text> ({todayMetrics.todayCount} Tickets)
             </Text>
           </View>
 
