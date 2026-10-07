@@ -41,7 +41,7 @@ export default function ManagerPOS() {
   const [selectedServer, setSelectedServer] = useState<string>('');
 
   // Menu State
-  const [activeCategory, setActiveCategory] = useState<string>(categories[0] || '');
+  const [activeCategory, setActiveCategory] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Cart & Order State
@@ -163,9 +163,19 @@ export default function ManagerPOS() {
 
   // Computed Items
   const filteredItems = menuItems.filter(item => {
-    const matchesCat = item.category === activeCategory || searchQuery.length > 0;
-    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCat && matchesSearch;
+    const q = searchQuery.toLowerCase().trim();
+    const matchesSearch = !q || 
+      item.name.toLowerCase().includes(q) || 
+      item.category.toLowerCase().includes(q) ||
+      (item.badge && item.badge.toLowerCase().includes(q));
+
+    if (!matchesSearch) return false;
+
+    if (activeCategory === 'All') return true;
+    if (activeCategory === '🎁 Deals & Combos' || activeCategory === 'Deals') {
+      return item.isDeal || item.category === 'Deals';
+    }
+    return item.category === activeCategory;
   });
 
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -195,6 +205,14 @@ export default function ManagerPOS() {
   };
 
   const addToCart = (item: MenuItem) => {
+    // Check Stock
+    if (item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0) {
+      const msg = `⚠️ "${item.name}" is currently Sold Out in kitchen inventory.`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Sold Out', msg);
+      return;
+    }
+
     if (item.variants && item.variants.length > 0) {
       setVariantModalItem(item);
       return;
@@ -203,6 +221,12 @@ export default function ManagerPOS() {
     setCart(prev => {
       const existing = prev.find(i => i.id === item.id);
       if (existing) {
+        if (item.trackStock && typeof item.stockQty === 'number' && existing.qty >= item.stockQty) {
+          const msg = `⚠️ Stock Limit: Only ${item.stockQty} portions of "${item.name}" available.`;
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Stock Limit', msg);
+          return prev;
+        }
         return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
       }
       return [...prev, { id: item.id, name: item.name, price: item.price, qty: 1, completed: false, station: item.station || 'main' }];
@@ -212,6 +236,13 @@ export default function ManagerPOS() {
   const handleVariantSelect = (variant: {name: string, price: number}) => {
     if (!variantModalItem) return;
     
+    if (variantModalItem.trackStock && typeof variantModalItem.stockQty === 'number' && variantModalItem.stockQty <= 0) {
+      const msg = `⚠️ "${variantModalItem.name}" is currently Sold Out.`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Sold Out', msg);
+      return;
+    }
+
     // Create a unique ID for this variant combo so different variants don't stack
     const variantId = `${variantModalItem.id}-${variant.name}`;
     const variantName = `${variantModalItem.name} (${variant.name})`;
@@ -219,6 +250,12 @@ export default function ManagerPOS() {
     setCart(prev => {
       const existing = prev.find(i => i.id === variantId);
       if (existing) {
+        if (variantModalItem.trackStock && typeof variantModalItem.stockQty === 'number' && existing.qty >= variantModalItem.stockQty) {
+          const msg = `⚠️ Stock Limit: Only ${variantModalItem.stockQty} portions available.`;
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Stock Limit', msg);
+          return prev;
+        }
         return prev.map(i => i.id === variantId ? { ...i, qty: i.qty + 1 } : i);
       }
       return [...prev, { id: variantId, name: variantName, price: variant.price, qty: 1, completed: false, station: variantModalItem.station || 'main' }];
@@ -229,7 +266,19 @@ export default function ManagerPOS() {
 
   const updateQty = (id: string, delta: number) => {
     setCart(prev => prev.map(i => {
-      if (i.id === id) return { ...i, qty: Math.max(1, i.qty + delta) };
+      if (i.id === id) {
+        if (delta > 0) {
+          const baseId = i.id.split('-')[0];
+          const menuItem = menuItems.find(m => m.id === baseId || m.id === i.id);
+          if (menuItem && menuItem.trackStock && typeof menuItem.stockQty === 'number' && i.qty >= menuItem.stockQty) {
+            const msg = `⚠️ Stock Limit: Only ${menuItem.stockQty} portions available for "${menuItem.name}".`;
+            if (Platform.OS === 'web') window.alert(msg);
+            else Alert.alert('Stock Limit', msg);
+            return i;
+          }
+        }
+        return { ...i, qty: Math.max(1, i.qty + delta) };
+      }
       return i;
     }));
   };
@@ -465,7 +514,7 @@ export default function ManagerPOS() {
 
           {!searchQuery && (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catScroll}>
-              {categories.map(cat => (
+              {['All', '🎁 Deals & Combos', ...categories.filter(c => c !== 'Deals' && c !== 'All')].map(cat => (
                 <TouchableOpacity 
                   key={cat}
                   style={[styles.catBtn, activeCategory === cat && styles.catBtnActive]}
@@ -477,7 +526,7 @@ export default function ManagerPOS() {
             </ScrollView>
           )}
 
-          <ScrollView style={styles.itemsScroll}>
+          <ScrollView style={styles.itemsScroll} showsVerticalScrollIndicator={false}>
             <View style={styles.itemsGrid}>
               {filteredItems.map(item => {
                 const isOut = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0;
@@ -489,57 +538,98 @@ export default function ManagerPOS() {
                     style={[
                       styles.itemCard, 
                       isMobile && { width: '47%', minWidth: 130 },
-                      isOut && { opacity: 0.6, borderColor: '#ffcdd2' }
+                      isOut && { opacity: 0.65, borderColor: '#ffcdd2', backgroundColor: '#fff9f9' }
                     ]}
                     onPress={() => addToCart(item)}
                     activeOpacity={0.7}
                   >
+                    {/* Top Badges */}
+                    {item.isDeal ? (
+                      <View style={styles.dealBadge}>
+                        <Ionicons name="gift" size={10} color="#fff" style={{ marginRight: 3 }} />
+                        <Text style={styles.dealBadgeText}>COMBO DEAL</Text>
+                      </View>
+                    ) : null}
+
+                    {item.badge ? (
+                      <View style={[
+                        styles.promoBadge,
+                        item.badge.includes('Chef') ? { backgroundColor: '#4a121a' } : 
+                        item.badge.includes('Best') || item.badge.includes('Popular') ? { backgroundColor: '#D5A943' } :
+                        { backgroundColor: '#e67e22' }
+                      ]}>
+                        <Text style={styles.promoBadgeText}>{item.badge}</Text>
+                      </View>
+                    ) : null}
+
+                    {/* Image / Fallback Container */}
                     {item.imageUri ? (
                       <Image 
                         source={{ uri: item.imageUri }} 
-                        style={{ width: '100%', height: 75, borderRadius: 8, marginBottom: 8 }} 
+                        style={styles.itemImage}
+                        resizeMode="cover"
                       />
-                    ) : null}
-
-                    {item.badge && (
-                      <View style={{
-                        position: 'absolute',
-                        top: 6,
-                        right: 6,
-                        backgroundColor: item.isDeal ? 'rgba(106, 27, 154, 0.85)' : 'rgba(213, 169, 67, 0.9)',
-                        paddingHorizontal: 6,
-                        paddingVertical: 2,
-                        borderRadius: 4,
-                        zIndex: 2,
-                      }}>
-                        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800' }}>{item.badge}</Text>
+                    ) : (
+                      <View style={styles.itemPlaceholderImage}>
+                        <Ionicons name={item.isDeal ? "gift-outline" : "restaurant-outline"} size={26} color="#8E8E93" />
                       </View>
                     )}
 
+                    {/* Item Details */}
                     <Text style={styles.itemName} numberOfLines={2}>{item.name}</Text>
-                    <Text style={styles.itemPrice}>Rs. {item.price}</Text>
 
+                    {/* Deal Breakdown Preview */}
+                    {item.isDeal && item.dealItems && item.dealItems.length > 0 && (
+                      <View style={styles.dealItemsPreview}>
+                        <Text style={styles.dealItemsPreviewText} numberOfLines={2}>
+                          {item.dealItems.map(d => `${d.qty}x ${d.name}`).join(' • ')}
+                        </Text>
+                      </View>
+                    )}
+
+                    {/* Variant Indicator */}
+                    {item.variants && item.variants.length > 0 && (
+                      <View style={styles.variantBadge}>
+                        <Ionicons name="options-outline" size={11} color="#4a121a" />
+                        <Text style={styles.variantBadgeText}>{item.variants.length} Sizes</Text>
+                      </View>
+                    )}
+
+                    {/* Price & Savings */}
+                    <View style={styles.priceRow}>
+                      <Text style={styles.itemPrice}>Rs. {item.price.toLocaleString()}</Text>
+                      {item.dealOriginalPrice && item.dealOriginalPrice > item.price ? (
+                        <Text style={styles.itemOriginalPrice}>Rs. {item.dealOriginalPrice.toLocaleString()}</Text>
+                      ) : null}
+                    </View>
+
+                    {/* Stock Status Indicator */}
                     {item.trackStock && (
-                      <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <View style={{
-                          width: 6,
-                          height: 6,
-                          borderRadius: 3,
-                          backgroundColor: isOut ? '#d32f2f' : (isLow ? '#ef6c00' : '#2e7d32')
-                        }} />
-                        <Text style={{
-                          fontSize: 10,
-                          fontWeight: '700',
-                          color: isOut ? '#d32f2f' : (isLow ? '#ef6c00' : '#2e7d32')
-                        }}>
-                          {isOut ? 'Sold Out' : `${item.stockQty} left`}
+                      <View style={[
+                        styles.stockPill,
+                        isOut ? styles.stockPillOut : (isLow ? styles.stockPillLow : styles.stockPillIn)
+                      ]}>
+                        <View style={[
+                          styles.stockDot,
+                          isOut ? { backgroundColor: '#d32f2f' } : (isLow ? { backgroundColor: '#ef6c00' } : { backgroundColor: '#2e7d32' })
+                        ]} />
+                        <Text style={[
+                          styles.stockPillText,
+                          isOut ? { color: '#d32f2f' } : (isLow ? { color: '#ef6c00' } : { color: '#2e7d32' })
+                        ]}>
+                          {isOut ? 'Sold Out' : (isLow ? `Low: ${item.stockQty} left` : `${item.stockQty} in stock`)}
                         </Text>
                       </View>
                     )}
                   </TouchableOpacity>
                 );
               })}
-              {filteredItems.length === 0 && <Text style={{margin: 20}}>No items found.</Text>}
+              {filteredItems.length === 0 && (
+                <View style={{ padding: 40, alignItems: 'center', width: '100%' }}>
+                  <Ionicons name="search-outline" size={40} color="#ccc" />
+                  <Text style={{ marginTop: 10, color: '#888', fontSize: 15 }}>No matching menu items found</Text>
+                </View>
+              )}
             </View>
           </ScrollView>
 
@@ -659,26 +749,57 @@ export default function ManagerPOS() {
           </View>
 
           {/* Cart List */}
-          <ScrollView style={styles.cartScroll}>
+          <ScrollView style={styles.cartScroll} showsVerticalScrollIndicator={false}>
             {cart.length === 0 ? (
-              <Text style={{textAlign: 'center', color: '#888', marginTop: 20}}>Cart is empty</Text>
+              <View style={{ padding: 30, alignItems: 'center' }}>
+                <Ionicons name="cart-outline" size={44} color="#ccc" />
+                <Text style={{ textAlign: 'center', color: '#888', marginTop: 10, fontSize: 14 }}>
+                  Cart is empty. Tap menu items to add.
+                </Text>
+              </View>
             ) : (
-              cart.map(item => (
-                <View key={item.id} style={styles.cartItem}>
-                  <View style={styles.cartItemInfo}>
-                    <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
-                    <Text style={styles.cartItemPrice}>Rs. {item.price}</Text>
+              cart.map(item => {
+                const baseId = item.id.split('-')[0];
+                const baseMenu = menuItems.find(m => m.id === baseId || m.id === item.id);
+
+                return (
+                  <View key={item.id} style={styles.cartItem}>
+                    {/* Item Thumbnail */}
+                    {baseMenu?.imageUri ? (
+                      <Image source={{ uri: baseMenu.imageUri }} style={styles.cartItemThumb} />
+                    ) : (
+                      <View style={styles.cartItemPlaceholder}>
+                        <Ionicons name={baseMenu?.isDeal ? "gift" : "restaurant"} size={14} color="#4a121a" />
+                      </View>
+                    )}
+
+                    <View style={styles.cartItemInfo}>
+                      <Text style={styles.cartItemName} numberOfLines={1}>{item.name}</Text>
+                      {baseMenu?.isDeal && baseMenu?.dealItems && baseMenu.dealItems.length > 0 && (
+                        <Text style={styles.cartDealBreakdown} numberOfLines={1}>
+                          Includes: {baseMenu.dealItems.map(d => `${d.qty}x ${d.name}`).join(', ')}
+                        </Text>
+                      )}
+                      <Text style={styles.cartItemPrice}>
+                        Rs. {item.price.toLocaleString()} × {item.qty} = <Text style={{ fontWeight: '800', color: '#4a121a' }}>Rs. {(item.price * item.qty).toLocaleString()}</Text>
+                      </Text>
+                    </View>
+
+                    <View style={styles.qtyControls}>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, -1)}>
+                        <Text style={styles.qtyBtnText}>-</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.qtyText}>{item.qty}</Text>
+                      <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, 1)}>
+                        <Text style={styles.qtyBtnText}>+</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.deleteBtn} onPress={() => removeFromCart(item.id)}>
+                        <Ionicons name="trash-outline" size={16} color="#e74c3c" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.qtyControls}>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, -1)}><Text style={styles.qtyBtnText}>-</Text></TouchableOpacity>
-                    <Text style={styles.qtyText}>{item.qty}</Text>
-                    <TouchableOpacity style={styles.qtyBtn} onPress={() => updateQty(item.id, 1)}><Text style={styles.qtyBtnText}>+</Text></TouchableOpacity>
-                    <TouchableOpacity style={styles.deleteBtn} onPress={() => removeFromCart(item.id)}>
-                      <Ionicons name="trash-outline" size={16} color="#e74c3c" />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))
+                );
+              })
             )}
           </ScrollView>
 
@@ -1084,32 +1205,84 @@ export default function ManagerPOS() {
       </Modal>
 
       {/* Variant Selection Modal */}
-      <Modal visible={!!variantModalItem} transparent animationType="slide">
+      <Modal visible={!!variantModalItem} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { maxWidth: 400 }]}>
+          <View style={[styles.modalContent, { maxWidth: 460, borderRadius: 16, padding: 22 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Choose Option</Text>
-              <TouchableOpacity onPress={() => setVariantModalItem(null)}>
-                <Ionicons name="close" size={24} color="#000" />
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                {variantModalItem?.imageUri ? (
+                  <Image source={{ uri: variantModalItem.imageUri }} style={{ width: 48, height: 48, borderRadius: 10 }} />
+                ) : (
+                  <View style={{ width: 48, height: 48, borderRadius: 10, backgroundColor: '#FFF2F3', alignItems: 'center', justifyContent: 'center' }}>
+                    <Ionicons name="restaurant" size={24} color="#4a121a" />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.modalTitle} numberOfLines={1}>{variantModalItem?.name}</Text>
+                  <Text style={{ fontSize: 12, color: '#8E8E93', marginTop: 2 }}>
+                    {variantModalItem?.category} • Select Portion / Size
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setVariantModalItem(null)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={24} color="#666" />
               </TouchableOpacity>
             </View>
-            
-            <Text style={{ textAlign: 'center', marginBottom: 20, color: '#666', fontSize: 16 }}>
-              {variantModalItem?.name}
+
+            {variantModalItem?.trackStock && typeof variantModalItem.stockQty === 'number' && (
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: variantModalItem.stockQty <= (variantModalItem.lowStockThreshold || 5) ? '#FFF3E0' : '#E8F5E9',
+                paddingHorizontal: 12,
+                paddingVertical: 8,
+                borderRadius: 8,
+                marginBottom: 16,
+                gap: 6,
+              }}>
+                <Ionicons 
+                  name={variantModalItem.stockQty <= 0 ? "close-circle" : (variantModalItem.stockQty <= (variantModalItem.lowStockThreshold || 5) ? "alert-circle" : "checkmark-circle")} 
+                  size={16} 
+                  color={variantModalItem.stockQty <= 0 ? "#d32f2f" : (variantModalItem.stockQty <= (variantModalItem.lowStockThreshold || 5) ? "#e65100" : "#2e7d32")} 
+                />
+                <Text style={{
+                  fontSize: 12,
+                  fontWeight: '700',
+                  color: variantModalItem.stockQty <= 0 ? "#d32f2f" : (variantModalItem.stockQty <= (variantModalItem.lowStockThreshold || 5) ? "#e65100" : "#2e7d32")
+                }}>
+                  {variantModalItem.stockQty <= 0 ? "Sold Out in Inventory" : `Live Kitchen Inventory: ${variantModalItem.stockQty} portions available`}
+                </Text>
+              </View>
+            )}
+
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#4a121a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Available Portions & Sizes
             </Text>
 
-            <View style={{ gap: 10 }}>
-              {variantModalItem?.variants?.map((v, idx) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={styles.variantBtn}
-                  onPress={() => handleVariantSelect(v)}
-                >
-                  <Text style={styles.variantName}>{v.name}</Text>
-                  <Text style={styles.variantPrice}>Rs. {v.price}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 10 }}>
+                {variantModalItem?.variants?.map((v, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={styles.variantOptionCard}
+                    onPress={() => handleVariantSelect(v)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.variantOptionName}>{v.name}</Text>
+                      <Text style={styles.variantOptionSub}>Single serving portion</Text>
+                    </View>
+                    <View style={styles.variantOptionPriceContainer}>
+                      <Text style={styles.variantOptionPrice}>Rs. {v.price.toLocaleString()}</Text>
+                      <View style={styles.variantAddPill}>
+                        <Ionicons name="add" size={14} color="#fff" />
+                        <Text style={styles.variantAddText}>Add</Text>
+                      </View>
+                    </View>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1238,16 +1411,16 @@ const styles = StyleSheet.create({
   },
   catScroll: {
     flexGrow: 0,
-    marginBottom: 20,
+    marginBottom: 16,
   },
   catBtn: {
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    backgroundColor: '#eee',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    backgroundColor: '#fff',
     borderRadius: 20,
-    marginRight: 10,
+    marginRight: 8,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: '#E5E5EA',
   },
   catBtnActive: {
     backgroundColor: '#4a121a',
@@ -1255,7 +1428,8 @@ const styles = StyleSheet.create({
   },
   catText: {
     color: '#333',
-    fontWeight: '600',
+    fontWeight: '700',
+    fontSize: 13,
   },
   catTextActive: {
     color: '#fff',
@@ -1266,30 +1440,146 @@ const styles = StyleSheet.create({
   itemsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
+    gap: 14,
   },
   itemCard: {
-    width: '30%',
-    minWidth: 150,
+    width: '31%',
+    minWidth: 145,
     backgroundColor: '#fff',
-    padding: 16,
-    borderRadius: 12,
+    padding: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#eee',
-    alignItems: 'center',
+    borderColor: '#EAEAEA',
     elevation: 2,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 6 },
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.06)' }
+    }),
+  },
+  itemImage: {
+    width: '100%',
+    height: 85,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  itemPlaceholderImage: {
+    width: '100%',
+    height: 85,
+    borderRadius: 10,
+    marginBottom: 8,
+    backgroundColor: '#F7F7F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dealBadge: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: '#6a1b9a',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    zIndex: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  dealBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  promoBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    zIndex: 2,
+  },
+  promoBadgeText: {
+    color: '#fff',
+    fontSize: 9,
+    fontWeight: '800',
   },
   itemName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 8,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    marginBottom: 4,
+  },
+  dealItemsPreview: {
+    backgroundColor: '#F3E5F5',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 6,
+  },
+  dealItemsPreviewText: {
+    fontSize: 10,
+    color: '#6a1b9a',
+    fontWeight: '600',
+  },
+  variantBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFF2F3',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+    marginBottom: 6,
+  },
+  variantBadgeText: {
+    fontSize: 10,
+    color: '#4a121a',
+    fontWeight: '700',
+  },
+  priceRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: 6,
+    marginTop: 2,
   },
   itemPrice: {
-    fontSize: 16,
-    color: '#D5A943',
-    fontWeight: 'bold',
+    fontSize: 15,
+    color: '#4a121a',
+    fontWeight: '800',
+  },
+  itemOriginalPrice: {
+    fontSize: 11,
+    color: '#8E8E93',
+    textDecorationLine: 'line-through',
+  },
+  stockPill: {
+    marginTop: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+    gap: 4,
+  },
+  stockPillIn: {
+    backgroundColor: '#E8F5E9',
+  },
+  stockPillLow: {
+    backgroundColor: '#FFF3E0',
+  },
+  stockPillOut: {
+    backgroundColor: '#FFEBEE',
+  },
+  stockDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+  },
+  stockPillText: {
+    fontSize: 10,
+    fontWeight: '700',
   },
   cartArea: {
     flex: 1,
@@ -1369,24 +1659,44 @@ const styles = StyleSheet.create({
   },
   cartItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#f5f5f5',
+    gap: 10,
+  },
+  cartItemThumb: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#f5f5f5',
+  },
+  cartItemPlaceholder: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: '#FFF2F3',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cartItemInfo: {
     flex: 1,
   },
   cartItemName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  cartDealBreakdown: {
+    fontSize: 11,
+    color: '#6a1b9a',
+    marginTop: 1,
   },
   cartItemPrice: {
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
+    marginTop: 2,
   },
   qtyControls: {
     flexDirection: 'row',
@@ -1405,18 +1715,62 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   qtyText: {
-    marginHorizontal: 12,
-    fontSize: 16,
+    marginHorizontal: 8,
+    fontSize: 14,
     fontWeight: 'bold',
   },
   deleteBtn: {
-    width: 32,
-    height: 32,
+    width: 30,
+    height: 30,
     backgroundColor: '#ffebee',
-    borderRadius: 16,
+    borderRadius: 15,
     justifyContent: 'center',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 6,
+  },
+  variantOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FAFAFC',
+    padding: 14,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
+  },
+  variantOptionName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  variantOptionSub: {
+    fontSize: 11,
+    color: '#8E8E93',
+    marginTop: 2,
+  },
+  variantOptionPriceContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  variantOptionPrice: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#4a121a',
+  },
+  variantAddPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#4a121a',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  variantAddText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   cartFooter: {
     padding: 16,
