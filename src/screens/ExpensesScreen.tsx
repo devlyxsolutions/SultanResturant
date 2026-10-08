@@ -43,7 +43,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
     const filtered = filterPeriod === 'today'
       ? expList.filter((e) => e.at >= todayStart)
       : expList;
-    const invs = invList.filter((inv) => (inv.timeSettled || inv.timePlaced) >= todayStart);
+    const invs = invList.filter((inv) => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= todayStart);
     const rev = invs.reduce((sum, inv) => sum + (inv.total || 0), 0);
     const expTotal = filtered.reduce((sum, e) => sum + (e.amount || 0), 0);
     const profit = rev - expTotal;

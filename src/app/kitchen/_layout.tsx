@@ -22,6 +22,7 @@ export default function KitchenLayout() {
   const pathname = usePathname();
   const unavailableCount = useOpsStore(s => s.unavailableItemIds?.length || 0);
   const isAvailabilityScreen = pathname?.includes('availability');
+  const isDayScreen = pathname?.includes('day');
 
   if (!ready) return null;
 
@@ -44,6 +45,28 @@ export default function KitchenLayout() {
         
         <View style={styles.headerRight}>
           <SyncStatusBadge compact={isMobile} />
+
+          <TouchableOpacity
+            style={[
+              styles.actionHeaderBtn,
+              { backgroundColor: isDayScreen ? '#D5A943' : '#333' }
+            ]}
+            onPress={() => isDayScreen ? router.push('/kitchen/kds') : router.push('/kitchen/day')}
+            activeOpacity={0.8}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons 
+              name={isDayScreen ? "restaurant-outline" : "flame-outline"} 
+              size={16} 
+              color={isDayScreen ? '#1A1A1A' : '#fff'} 
+              style={!isMobile ? { marginRight: 6 } : undefined} 
+            />
+            {!isMobile && (
+              <Text style={[styles.actionHeaderBtnText, isDayScreen && { color: '#1A1A1A', fontWeight: '800' }]}>
+                {isDayScreen ? 'Orders KDS' : 'Chef Day Ops'}
+              </Text>
+            )}
+          </TouchableOpacity>
 
           <TouchableOpacity
             style={[

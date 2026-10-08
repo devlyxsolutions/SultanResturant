@@ -23,7 +23,7 @@ export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' 
   const [now] = useState(() => Date.now());
 
   const filteredInvoices = useMemo(() => {
-    const list = invoices || [];
+    const list = (invoices || []).filter((inv) => inv.status !== 'voided');
     const oneDayAgo = now - 24 * 60 * 60 * 1000;
     const oneWeekAgo = now - 7 * 24 * 60 * 60 * 1000;
     return list.filter((inv) => {

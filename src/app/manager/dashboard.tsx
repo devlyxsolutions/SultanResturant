@@ -323,6 +323,40 @@ export default function ManagerDashboard() {
               <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
             )}
           </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/kitchen-handover')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#FBE9E7' }]}>
+              <Ionicons name="clipboard" size={24} color="#52171B" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>Kitchen Handover & Requisition</Text>
+              <Text style={styles.cardDesc}>Issue store stock, hand cash & monitor shift consumption.</Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.card, isMobile && styles.cardMobile]}
+            onPress={() => router.push('/manager/kitchen-returns')}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
+              <Ionicons name="checkmark-done-circle" size={24} color="#2E7D32" />
+            </View>
+            <View style={styles.cardInfo}>
+              <Text style={styles.cardTitle}>EOD Returns & Store Restock</Text>
+              <Text style={styles.cardDesc}>Verify chef physical closing counts, variance & restock.</Text>
+            </View>
+            {isMobile && (
+              <Ionicons name="chevron-forward" size={18} color="#C7C7CC" />
+            )}
+          </TouchableOpacity>
           
         </View>
 

@@ -361,10 +361,21 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
           </View>
         </View>
 
-        <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
-          <Ionicons name="add" size={20} color="#FFFFFF" />
-          <Text style={styles.addBtnText}>Add Item</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <TouchableOpacity
+            style={[styles.addBtn, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: BRAND.border }]}
+            onPress={() => router.push('/admin/suppliers' as any)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="bus-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+            <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>Suppliers Hub</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
+            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Text style={styles.addBtnText}>Add Item</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* KPI Cards Row */}

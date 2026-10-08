@@ -27,18 +27,19 @@ export default function ReportsScreen() {
   today.setHours(0, 0, 0, 0);
 
   // Time filtering
-  let filteredInvoices = invoices;
+  const validInvoices = (invoices || []).filter((inv) => inv.status !== 'voided');
+  let filteredInvoices = validInvoices;
   if (timeRange === 'Today') {
-    filteredInvoices = invoices.filter((inv) => inv.timeSettled >= today.getTime());
+    filteredInvoices = validInvoices.filter((inv) => (inv.timeSettled || inv.timePlaced) >= today.getTime());
   } else if (timeRange === 'This Week') {
     const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
-    filteredInvoices = invoices.filter((inv) => inv.timeSettled >= weekAgo.getTime());
+    filteredInvoices = validInvoices.filter((inv) => (inv.timeSettled || inv.timePlaced) >= weekAgo.getTime());
   } else if (timeRange === 'This Month') {
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-    filteredInvoices = invoices.filter((inv) => inv.timeSettled >= monthAgo.getTime());
+    filteredInvoices = validInvoices.filter((inv) => (inv.timeSettled || inv.timePlaced) >= monthAgo.getTime());
   }
 
-  const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + inv.total, 0);
+  const totalRevenue = filteredInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalOrders = filteredInvoices.length;
   const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
   const activeTables = tables.filter((t) => t.status !== 'available').length;

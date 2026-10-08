@@ -492,9 +492,13 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
 
         const updatedMenuItems = state.menuItems.map(m => {
-          const match = orderItems.find(oi => oi.item.id === m.id);
-          if (match && m.trackStock && typeof m.stockQty === 'number') {
-            return { ...m, stockQty: Math.max(0, m.stockQty - match.qty) };
+          if (!m.trackStock || typeof m.stockQty !== 'number') return m;
+          const matchingQty = orderItems
+            .filter(oi => oi.item.id === m.id || oi.item.id.startsWith(`${m.id}-`))
+            .reduce((sum, oi) => sum + oi.qty, 0);
+
+          if (matchingQty > 0) {
+            return { ...m, stockQty: Math.max(0, m.stockQty - matchingQty) };
           }
           return m;
         });

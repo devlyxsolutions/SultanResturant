@@ -25,8 +25,8 @@ export default function AdminDashboard() {
   const today = new Date();
   today.setHours(0,0,0,0);
   
-  const todaysInvoices = invoices.filter(inv => inv.timeSettled >= today.getTime());
-  const todaysSales = todaysInvoices.reduce((sum, inv) => sum + inv.total, 0);
+  const todaysInvoices = invoices.filter(inv => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= today.getTime());
+  const todaysSales = todaysInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const activeOrders = tickets.length;
   const activeTables = tables.filter(t => t.status !== 'available').length;
 
@@ -81,6 +81,13 @@ export default function AdminDashboard() {
       color: '#D5A943'
     },
     {
+      title: 'Suppliers & Vendors',
+      desc: 'Procurement, vendor ledgers, PO bills & dues.',
+      icon: 'bus-outline' as const,
+      route: '/admin/suppliers',
+      color: '#4a121a'
+    },
+    {
       title: 'Table Blueprint',
       desc: 'Manage dining halls, VIP zones, and tables.',
       icon: 'grid-outline' as const,
@@ -120,6 +127,41 @@ export default function AdminDashboard() {
       desc: 'Track restaurant purchases, cash outflows, and net margin.',
       icon: 'wallet-outline' as const,
       route: '/admin/expenses',
+      color: '#4a121a'
+    },
+    {
+      title: 'Kitchen Handover & Requisition',
+      desc: 'Store inventory par levels, requisition drafting & chef hand cash handover.',
+      icon: 'clipboard-outline' as const,
+      route: '/admin/kitchen-handover',
+      color: '#4a121a'
+    },
+    {
+      title: 'Recipe BOM & Grams',
+      desc: 'Exact gram weights, spices, wastage % and food cost per dish & variant.',
+      icon: 'restaurant-outline' as const,
+      route: '/admin/recipes',
+      color: '#D5A943'
+    },
+    {
+      title: 'Chef Day Console (Live)',
+      desc: 'Live on-hand inventory, taste/masala ± adjustments & market cash buys.',
+      icon: 'flame-outline' as const,
+      route: '/kitchen/day',
+      color: '#4a121a'
+    },
+    {
+      title: 'EOD Returns & Restock',
+      desc: 'Reconcile chef closing counts, audit variances & approve store restock.',
+      icon: 'checkmark-done-circle-outline' as const,
+      route: '/admin/kitchen-returns',
+      color: '#D5A943'
+    },
+    {
+      title: 'Dish Costing & Profit Margins',
+      desc: 'Live food cost engine, target margin optimizer & 1-tap menu price updater.',
+      icon: 'calculator-outline' as const,
+      route: '/admin/costing',
       color: '#4a121a'
     },
     {

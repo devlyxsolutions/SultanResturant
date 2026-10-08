@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
 import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore, getOpsSyncState } from '../store/opsStore';
+import { useKitchenStore, getKitchenSyncState } from '../store/kitchenStore';
 import { isFirebaseConfigured, getFirebaseDb, FIREBASE_REST_BASE_URL } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
 
@@ -41,6 +42,13 @@ let sseConnection: any = null;
 let isApplyingRemoteUpdate = false;
 let hasReceivedInitialSync = false;
 let isInitialized = false;
+
+function applyRemoteState(state: any) {
+  if (!state || typeof state !== 'object') return;
+  useRestaurantStore.getState().syncFromServer(state);
+  useOpsStore.getState().syncFromServer(state);
+  useKitchenStore.getState().syncFromServer(state);
+}
 
 // Listeners for UI state updates
 const statusListeners = new Set<(info: SyncInfo) => void>();
@@ -196,8 +204,7 @@ async function fetchInitialFirebaseState() {
         isApplyingRemoteUpdate = true;
         lastProcessedPacketId = data.packetId || '';
         lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-        useRestaurantStore.getState().syncFromServer(data.state);
-        useOpsStore.getState().syncFromServer(data.state);
+        applyRemoteState(data.state);
         lastSyncedAt = Date.now();
         totalSyncedEvents++;
         syncStatus = 'connected';
@@ -248,8 +255,7 @@ function initWebSSE() {
           lastProcessedPacketId = data.packetId || '';
           lastProcessedRemoteTimestamp = data.timestamp || Date.now();
           isApplyingRemoteUpdate = true;
-          useRestaurantStore.getState().syncFromServer(data.state);
-          useOpsStore.getState().syncFromServer(data.state);
+          applyRemoteState(data.state);
           lastSyncedAt = Date.now();
           totalSyncedEvents++;
           syncStatus = 'connected';
@@ -287,8 +293,7 @@ async function pollFirebaseUpdates() {
           lastProcessedPacketId = data.packetId || '';
           lastProcessedRemoteTimestamp = data.timestamp || lastUpdated;
           isApplyingRemoteUpdate = true;
-          useRestaurantStore.getState().syncFromServer(data.state);
-          useOpsStore.getState().syncFromServer(data.state);
+          applyRemoteState(data.state);
           lastSyncedAt = Date.now();
           totalSyncedEvents++;
           syncStatus = 'connected';
@@ -332,8 +337,7 @@ function initFirebaseSync() {
           lastProcessedPacketId = data.packetId || '';
           lastProcessedRemoteTimestamp = data.timestamp || Date.now();
           isApplyingRemoteUpdate = true;
-          useRestaurantStore.getState().syncFromServer(data.state);
-          useOpsStore.getState().syncFromServer(data.state);
+          applyRemoteState(data.state);
           lastSyncedAt = Date.now();
           totalSyncedEvents++;
           syncStatus = 'connected';
@@ -422,8 +426,7 @@ function connectWebSocket() {
           if (data.state) {
             hasReceivedInitialSync = true;
             isApplyingRemoteUpdate = true;
-            useRestaurantStore.getState().syncFromServer(data.state);
-            useOpsStore.getState().syncFromServer(data.state);
+            applyRemoteState(data.state);
             lastSyncedAt = Date.now();
             totalSyncedEvents++;
             notifyListeners();
@@ -477,6 +480,7 @@ function broadcastLocalState() {
 
   const state = useRestaurantStore.getState();
   const opsState = getOpsSyncState();
+  const kitchenState = getKitchenSyncState();
   const now = Date.now();
   const packetId = `${DEVICE_ID}_${now}_${Math.random().toString(36).substring(2, 7)}`;
   lastProcessedPacketId = packetId;
@@ -499,6 +503,7 @@ function broadcastLocalState() {
       reservations: state.reservations,
       lastBillPaidAlert: state.lastBillPaidAlert,
       ...opsState,
+      ...kitchenState,
     },
   };
 
@@ -594,6 +599,9 @@ export async function initSyncService() {
 
   // Listen to operations store mutations
   useOpsStore.subscribe(triggerDebouncedBroadcast);
+
+  // Listen to kitchen operations store mutations
+  useKitchenStore.subscribe(triggerDebouncedBroadcast);
 }
 
 export async function forceSyncNow(): Promise<boolean> {
@@ -606,8 +614,7 @@ export async function forceSyncNow(): Promise<boolean> {
           hasReceivedInitialSync = true;
           isApplyingRemoteUpdate = true;
           lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-          useRestaurantStore.getState().syncFromServer(data.state);
-          useOpsStore.getState().syncFromServer(data.state);
+          applyRemoteState(data.state);
           lastSyncedAt = Date.now();
           syncStatus = 'connected';
           totalSyncedEvents++;
@@ -636,8 +643,7 @@ export async function forceSyncNow(): Promise<boolean> {
       const serverState = await res.json();
       isApplyingRemoteUpdate = true;
       hasReceivedInitialSync = true;
-      useRestaurantStore.getState().syncFromServer(serverState);
-      useOpsStore.getState().syncFromServer(serverState);
+      applyRemoteState(serverState);
       lastSyncedAt = Date.now();
       syncStatus = 'connected';
       notifyListeners();

@@ -30,7 +30,7 @@ export default function ShiftManagement() {
   // Calculate live shift statistics from settled invoices today
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-  const shiftInvoices = invoices.filter(inv => inv.timeSettled >= startOfDay.getTime());
+  const shiftInvoices = (invoices || []).filter(inv => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= startOfDay.getTime());
 
   const totalCashSales = shiftInvoices.reduce((sum, inv) => {
     const cashAmt = inv.payments
