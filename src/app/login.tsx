@@ -14,8 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
-import { useAuthStore, Role, ROLE_HOME } from '../store/authStore';
-import { useRestaurantStore, StaffMember } from '../store/restaurantStore';
+import { useAuthStore, Role, ROLE_HOME, useRestaurantStore, StaffMember } from '../store';
 import SultanLogo from '../components/SultanLogo';
 import IslamicBackground from '../components/IslamicBackground';
 

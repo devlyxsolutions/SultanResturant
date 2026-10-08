@@ -15,8 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, MenuItem } from '../../../store/restaurantStore';
-import { useAuthStore } from '../../../store/authStore';
+import { useRestaurantStore, MenuItem, useAuthStore } from '../../../store';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../../services/syncService';
 

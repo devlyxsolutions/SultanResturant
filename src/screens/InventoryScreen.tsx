@@ -21,9 +21,10 @@ import {
   INVENTORY_CATEGORIES,
   getStockLevel,
   StockLevel,
-} from '../store/opsStore';
-import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
-import { useAuthStore } from '../store/authStore';
+  useRestaurantStore,
+  MenuItem,
+  useAuthStore,
+} from '../store';
 import { BRAND } from '../constants/brand';
 import { money, formatTime, formatDay, toWhatsAppNumber } from '../utils/format';
 

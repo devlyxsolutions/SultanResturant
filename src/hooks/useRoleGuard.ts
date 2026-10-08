@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'expo-router';
-import { useAuthStore, Role } from '../store/authStore';
+import { useAuthStore, Role } from '../store';
 
 /**
  * Protects a role section. Waits for the saved session to load,

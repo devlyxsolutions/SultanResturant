@@ -11,9 +11,13 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useOpsStore, EXPENSE_CATEGORIES, ExpenseMethod } from '../store/opsStore';
-import { useRestaurantStore } from '../store/restaurantStore';
-import { useAuthStore } from '../store/authStore';
+import {
+  useOpsStore,
+  EXPENSE_CATEGORIES,
+  ExpenseMethod,
+  useRestaurantStore,
+  useAuthStore,
+} from '../store';
 import { BRAND } from '../constants/brand';
 import { money, formatTime, startOfDay } from '../utils/format';
 

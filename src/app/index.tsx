@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, StatusBar, useWindowDimensions, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Link, useRouter } from 'expo-router';
-import { useAuthStore } from '../store/authStore';
+import { useAuthStore } from '../store';
 import IslamicBackground from '../components/IslamicBackground';
 import SultanLogo from '../components/SultanLogo';
 import { Ionicons } from '@expo/vector-icons';

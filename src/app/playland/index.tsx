@@ -17,8 +17,8 @@ import {
   PlaylandRideVariant,
   PlaylandTicket,
   PlaylandCustomer,
-} from '../../store/playlandStore';
-import { useAuthStore } from '../../store/authStore';
+  useAuthStore,
+} from '../../store';
 
 const WRISTBAND_COLORS = [
   { name: 'Gold', hex: '#D5A943' },

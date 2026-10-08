@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Modal, Alert, Platform, useWindowDimensions, Image } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, MenuItem, OrderItem, Payment, Invoice } from '../../store/restaurantStore';
-import { useAuthStore } from '../../store/authStore';
+import { useRestaurantStore, MenuItem, OrderItem, Payment, Invoice, useAuthStore } from '../../store';
 import { broadcastImmediately } from '../../services/syncService';
 import InvoiceComponent from '../../components/Invoice';
 import { useRouter, useLocalSearchParams } from 'expo-router';
