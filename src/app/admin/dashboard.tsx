@@ -77,7 +77,7 @@ export default function AdminDashboard() {
       title: 'Inventory & Stock',
       desc: 'Track raw ingredients and stock warning levels.',
       icon: 'cube-outline' as const,
-      route: '/manager/inventory',
+      route: '/admin/inventory',
       color: '#D5A943'
     },
     {

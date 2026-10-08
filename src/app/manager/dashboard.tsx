@@ -10,6 +10,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore } from '../../store/restaurantStore';
+import { useOpsStore, getStockLevel } from '../../store/opsStore';
 import SultanLogo from '../../components/SultanLogo';
 
 export default function ManagerDashboard() {
@@ -23,6 +24,13 @@ export default function ManagerDashboard() {
   const tables = useRestaurantStore((state) => state.tables) || [];
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const occupiedCount = tables.filter(t => t.status === 'occupied').length;
+
+  // Real-time inventory alerts
+  const inventory = useOpsStore((state) => state.inventory) || [];
+  const lowStockItems = inventory.filter((item) => {
+    const level = getStockLevel(item);
+    return level === 'low' || level === 'critical' || level === 'out';
+  });
 
   // Live kitchen stats for badges
   const cookingCount = tickets.filter(t => t.status === 'cooking').length;
@@ -77,20 +85,40 @@ export default function ManagerDashboard() {
         )}
 
         {/* Urgent Alerts Section */}
-        <View style={[styles.alertCard, isMobile && styles.alertCardMobile]}>
-          <View style={styles.alertHeader}>
-            <Ionicons name="warning" size={22} color="#e74c3c" />
-            <Text style={styles.alertTitle}>Stock & Inventory Notice</Text>
+        {lowStockItems.length > 0 ? (
+          <View style={[styles.alertCard, isMobile && styles.alertCardMobile]}>
+            <View style={styles.alertHeader}>
+              <Ionicons name="warning" size={22} color="#e74c3c" />
+              <Text style={styles.alertTitle}>Stock & Inventory Notice ({lowStockItems.length} Low)</Text>
+            </View>
+            <Text style={styles.alertDesc}>
+              {lowStockItems.slice(0, 3).map(i => i.name).join(', ')}
+              {lowStockItems.length > 3 ? ` and ${lowStockItems.length - 3} more items` : ''} are below reorder threshold.
+            </Text>
+            <TouchableOpacity 
+              style={styles.alertButton} 
+              onPress={() => router.push('/manager/inventory')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.alertButtonText}>Manage Stock Levels</Text>
+            </TouchableOpacity>
           </View>
-          <Text style={styles.alertDesc}>Chicken Karahi, Mint Leaves, and Pepsi are below reorder threshold.</Text>
-          <TouchableOpacity 
-            style={styles.alertButton} 
-            onPress={() => router.push('/manager/inventory')}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.alertButtonText}>Manage Stock Levels</Text>
-          </TouchableOpacity>
-        </View>
+        ) : (
+          <View style={[styles.alertCard, isMobile && styles.alertCardMobile, { borderLeftColor: '#27ae60' }]}>
+            <View style={styles.alertHeader}>
+              <Ionicons name="checkmark-circle" size={22} color="#27ae60" />
+              <Text style={[styles.alertTitle, { color: '#27ae60' }]}>Inventory Health Normal</Text>
+            </View>
+            <Text style={styles.alertDesc}>All kitchen raw materials and pantry items are well above reorder thresholds.</Text>
+            <TouchableOpacity 
+              style={[styles.alertButton, { backgroundColor: '#27ae60' }]} 
+              onPress={() => router.push('/manager/inventory')}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.alertButtonText}>View Raw Materials</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Manager Actions */}
         <Text style={styles.sectionTitle}>Shift Operations</Text>
