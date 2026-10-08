@@ -21,10 +21,8 @@ import {
   INVENTORY_CATEGORIES,
   getStockLevel,
   StockLevel,
-  useRestaurantStore,
-  MenuItem,
-  useAuthStore,
-} from '../store';
+} from '../store/opsStore';
+import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
 import { BRAND } from '../constants/brand';
 import { money, formatTime, formatDay, toWhatsAppNumber } from '../utils/format';
 
@@ -39,7 +37,6 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const user = useAuthStore((s) => s.user);
   const inventory = useOpsStore((s) => s.inventory);
   const stockMovements = useOpsStore((s) => s.stockMovements);
   const addInventoryItem = useOpsStore((s) => s.addInventoryItem);
@@ -247,7 +244,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       movementType,
       qtyNum,
       movementNote.trim() || undefined,
-      user?.name || 'Staff'
+      'Staff'
     );
 
     setShowMovementModal(false);
