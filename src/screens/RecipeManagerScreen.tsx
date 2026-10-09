@@ -90,6 +90,8 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
 
   // Target margin calculator inside recipe details
   const [calcMarginPct, setCalcMarginPct] = useState(kitchenSettings.targetMarginPct);
+  // Interactive batch scaling multiplier (1x, 5x, 10x, 25x, 50x)
+  const [batchScale, setBatchScale] = useState<number>(1);
 
   // Filtered menu items
   const filteredMenuItems = useMemo(() => {
@@ -579,18 +581,59 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                       </TouchableOpacity>
                     </View>
 
+                    {/* Interactive Batch Scaling Selector */}
+                    <View style={styles.batchScaleBar}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Ionicons name="calculator-outline" size={16} color={BRAND.burgundy} />
+                        <Text style={styles.batchScaleLabel}>Batch Scaling Calculator:</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {[
+                          { scale: 1, label: '1x Single' },
+                          { scale: 5, label: '5x Platter' },
+                          { scale: 10, label: '10x Party' },
+                          { scale: 25, label: '25x Handi' },
+                          { scale: 50, label: '50x Bulk Deg' },
+                        ].map((b) => (
+                          <TouchableOpacity
+                            key={b.scale}
+                            style={[styles.batchScaleChip, batchScale === b.scale && styles.batchScaleChipActive]}
+                            onPress={() => setBatchScale(b.scale)}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={[styles.batchScaleChipText, batchScale === b.scale && styles.batchScaleChipTextActive]}>
+                              {b.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                      {batchScale > 1 && (
+                        <View style={styles.batchCostHighlight}>
+                          <Text style={styles.batchCostHighlightText}>
+                            Total {batchScale}x Prep Cost: <Text style={{ fontWeight: '900' }}>{money(currentCost.totalCost * batchScale)}</Text>
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+
                     <View style={styles.tableHeader}>
                       <Text style={[styles.th, { flex: 3 }]}>Ingredient & Role</Text>
-                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Qty / Dish</Text>
+                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
+                        {batchScale > 1 ? `Scaled Qty (${batchScale}x)` : 'Qty / Dish'}
+                      </Text>
                       <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Trim/Waste</Text>
                       <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Unit Cost</Text>
-                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Dish Cost</Text>
+                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
+                        {batchScale > 1 ? `Batch Cost (${batchScale}x)` : 'Dish Cost'}
+                      </Text>
                       <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>% Share</Text>
                     </View>
 
                     {currentCost.lines.map((line, idx) => {
                       const ing = currentRecipe.ingredients[idx];
                       const roleMeta = INGREDIENT_ROLES.find((r) => r.id === ing?.role);
+                      const scaledQty = line.portionQty * batchScale;
+                      const scaledCost = line.cost * batchScale;
 
                       return (
                         <View key={`${line.inventoryItemId}-${idx}`} style={styles.tableRow}>
@@ -615,9 +658,18 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                             </View>
                           </View>
 
-                          <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '600' }]}>
-                            {line.portionQty.toFixed(1)} {line.unit}
-                          </Text>
+                          <View style={{ flex: 2, alignItems: 'flex-end' }}>
+                            <Text style={[styles.td, { fontWeight: '700' }]}>
+                              {scaledQty >= 1000 && (line.unit === 'g' || line.unit === 'ml')
+                                ? `${(scaledQty / 1000).toFixed(2)} ${line.unit === 'g' ? 'kg' : 'L'}`
+                                : `${scaledQty.toFixed(1)} ${line.unit}`}
+                            </Text>
+                            {batchScale > 1 && (
+                              <Text style={{ fontSize: 9, color: BRAND.muted }}>
+                                {line.portionQty.toFixed(1)} {line.unit} / plate
+                              </Text>
+                            )}
+                          </View>
 
                           <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.muted }]}>
                             {ing?.wastagePct ? `+${ing.wastagePct}%` : '0%'}
@@ -628,7 +680,7 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                           </Text>
 
                           <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700', color: BRAND.ink }]}>
-                            {money(line.cost)}
+                            {money(scaledCost)}
                           </Text>
 
                           <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.burgundy, fontWeight: '600' }]}>
@@ -1842,5 +1894,55 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '700',
     color: BRAND.ink,
+  },
+  batchScaleBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    backgroundColor: '#FAF7F0',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  batchScaleLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  batchScaleChip: {
+    paddingVertical: 5,
+    paddingHorizontal: 9,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  batchScaleChipActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  batchScaleChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.ink,
+  },
+  batchScaleChipTextActive: {
+    color: '#FFFFFF',
+  },
+  batchCostHighlight: {
+    backgroundColor: BRAND.goldLight,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: BRAND.gold,
+    marginLeft: 'auto',
+  },
+  batchCostHighlightText: {
+    fontSize: 11,
+    color: BRAND.goldDark,
   },
 });

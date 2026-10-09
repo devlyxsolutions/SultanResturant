@@ -141,6 +141,43 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
     }, 0);
   }, [quantities, inventory]);
 
+  const handleQuickFillPars = () => {
+    const next: Record<string, string> = { ...quantities };
+    cookingItems.forEach((i) => {
+      const par = kitchenSettings.par[i.id] || 0;
+      const avg = avgUsage.get(i.id) || 0;
+      const sug = Math.max(par, avg * 1.15);
+      if (sug > 0) {
+        next[i.id] = String(roundQty(sug, i.unit));
+      }
+    });
+    setQuantities(next);
+  };
+
+  const handleClearAllQuantities = () => {
+    setQuantities({});
+  };
+
+  const handleSetItemPar = (itemId: string, parVal: number) => {
+    const item = inventory.find((i) => i.id === itemId);
+    if (!item) return;
+    setQuantities((prev) => ({
+      ...prev,
+      [itemId]: String(roundQty(parVal, item.unit)),
+    }));
+  };
+
+  const handleAdjustItemQty = (itemId: string, delta: number) => {
+    const item = inventory.find((i) => i.id === itemId);
+    if (!item) return;
+    const current = parseFloat(quantities[itemId] || '0') || 0;
+    const next = Math.max(0, current + delta);
+    setQuantities((prev) => ({
+      ...prev,
+      [itemId]: next > 0 ? String(roundQty(next, item.unit)) : '',
+    }));
+  };
+
   const activeIssuedValue = useMemo(() => {
     if (!activeSession) return 0;
     return activeSession.lines.reduce(
@@ -186,7 +223,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
       lines,
     });
 
-    if (res.ok) showAlert('Draft Saved', 'Kitchen requisition draft save ho gaya.');
+    if (res.ok) showAlert('Draft Saved', 'Kitchen requisition draft saved successfully.');
     else showAlert('Error', res.error);
   };
 
@@ -225,7 +262,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
     if (issueRes.ok) {
       showAlert(
         'Handover Successful',
-        `Store Inventory se maal deduct ho gaya aur Head Chef (${headChef}) ko handover ho gaya.`
+        `Inventory deducted from store and successfully handed over to Head Chef (${headChef}).`
       );
     } else {
       showAlert('Issue Failed', issueRes.error);
@@ -236,14 +273,14 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
     if (!activeSession) return;
     const q = parseFloat(topUpQty);
     if (!q || q <= 0) {
-      showAlert('Invalid', 'Quantity enter karein.');
+      showAlert('Invalid', 'Please enter a valid quantity.');
       return;
     }
     const res = issueTopUp(activeSession.id, topUpItemId, q, 'Admin');
     if (res.ok) {
       setShowTopUpModal(false);
       setTopUpQty('');
-      showAlert('Top-Up Issued', 'Store se maal kitchen stock mein add ho gaya.');
+      showAlert('Top-Up Issued', 'Store items transferred to active kitchen stock successfully.');
     } else {
       showAlert('Failed', res.error);
     }
@@ -292,7 +329,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
                 {activeSession ? 'LIVE ISSUED' : draftSession ? 'DRAFT READY' : 'NO SESSION'}
               </Text>
               <Text style={styles.kpiSub}>
-                {activeSession ? activeSession.dayLabel : 'Requisition prepare karein'}
+                {activeSession ? activeSession.dayLabel : 'Ready to prepare requisition'}
               </Text>
             </View>
           </View>
@@ -317,7 +354,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
             <View style={{ flex: 1 }}>
               <Text style={styles.seedBannerTitle}>Sultan Starter Recipes Ready</Text>
               <Text style={styles.seedBannerSub}>
-                Sultan Kebab, Chicken Karahi, Hummus, Kunafa, Fajita Pizza aur Mint Margarita ki standard gram-per-portion recipes 1 tap mein load karein.
+                Load standard gram-per-portion recipes for Sultan Kebab, Chicken Karahi, Hummus, Kunafa, Fajita Pizza, and Mint Margarita with 1 tap.
               </Text>
             </View>
             <TouchableOpacity style={styles.seedBtn} onPress={handleSeedStarter} activeOpacity={0.85}>
@@ -403,7 +440,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
                 {draftSession ? 'Edit Kitchen Requisition Draft' : 'New Kitchen Requisition & Handover'}
               </Text>
               <Text style={styles.sectionSub}>
-                Store stock inspect karein, head chef aur hand cash set karein, aur kitchen ko maal issue karein.
+                Review store inventory balance, assign shift head chef and petty cash float, and issue ingredients to kitchen.
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -460,7 +497,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
                 keyboardType="numeric"
                 placeholder="5000"
               />
-              <Text style={styles.inputHint}>Market se sabzi/emergency khareedne ke liye</Text>
+              <Text style={styles.inputHint}>Petty cash float for emergency local market purchases</Text>
             </View>
 
             <View style={styles.formCol}>
@@ -474,7 +511,7 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
             </View>
           </View>
 
-          {/* Requisition Table Filter Bar */}
+          {/* Requisition Table Filter & Quick Actions Bar */}
           <View style={styles.filterRow}>
             <View style={styles.searchBox}>
               <Ionicons name="search" size={16} color={BRAND.muted} style={{ marginRight: 6 }} />
@@ -487,18 +524,41 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
             </View>
 
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ flexGrow: 0 }}>
-              {categories.map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.catPill, filterCategory === cat && styles.catPillActive]}
-                  onPress={() => setFilterCategory(cat)}
-                >
-                  <Text style={[styles.catPillText, filterCategory === cat && styles.catPillTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              {categories.map((cat) => {
+                const count = cat === 'All' ? cookingItems.length : cookingItems.filter(i => i.category === cat).length;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catPill, filterCategory === cat && styles.catPillActive]}
+                    onPress={() => setFilterCategory(cat)}
+                  >
+                    <Text style={[styles.catPillText, filterCategory === cat && styles.catPillTextActive]}>
+                      {cat} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                style={styles.quickActionBtn}
+                onPress={handleQuickFillPars}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="flash" size={13} color="#FFFFFF" style={{ marginRight: 4 }} />
+                <Text style={styles.quickActionBtnText}>Auto-Fill Daily Par</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.quickClearBtn}
+                onPress={handleClearAllQuantities}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="refresh" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
+                <Text style={styles.quickClearBtnText}>Reset All</Text>
+              </TouchableOpacity>
+            </View>
 
             <View style={styles.reqTotalBox}>
               <Text style={styles.reqTotalLabel}>Requisition Value:</Text>
@@ -509,10 +569,10 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
           {/* Requisition Table */}
           <View style={styles.reqTable}>
             <View style={styles.tableHeaderRow}>
-              <Text style={[styles.th, { flex: 3 }]}>Raw Material Ingredient</Text>
-              <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Stock (Phele Kitna Hai)</Text>
-              <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Par / Avg</Text>
-              <Text style={[styles.th, { flex: 2.2, textAlign: 'right' }]}>Request to Issue</Text>
+              <Text style={[styles.th, { flex: 2.8 }]}>Raw Material Ingredient</Text>
+              <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Stock (Available)</Text>
+              <Text style={[styles.th, { flex: 1.4, textAlign: 'right' }]}>Par / Avg</Text>
+              <Text style={[styles.th, { flex: 2.8, textAlign: 'right' }]}>Request to Issue</Text>
               <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Line Value</Text>
             </View>
 
@@ -522,11 +582,12 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
               const isOverStock = reqNum > item.stock;
               const par = kitchenSettings.par[item.id] || 0;
               const avg = avgUsage.get(item.id) || 0;
+              const sugVal = Math.max(par, avg * 1.15);
               const lineCost = reqNum * (item.costPerUnit || 0);
 
               return (
                 <View key={item.id} style={styles.tableRow}>
-                  <View style={{ flex: 3 }}>
+                  <View style={{ flex: 2.8 }}>
                     <Text style={styles.itemName}>{item.name}</Text>
                     <Text style={styles.itemCategory}>
                       {item.category} • Cost: {money(item.costPerUnit || 0)} / {item.unit}
@@ -550,14 +611,30 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
                     )}
                   </View>
 
-                  <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
+                  <View style={{ flex: 1.4, alignItems: 'flex-end' }}>
                     <Text style={styles.td}>
                       {par > 0 ? `${par} ${item.unit}` : avg > 0 ? `~${roundQty(avg, item.unit)}` : '-'}
                     </Text>
                   </View>
 
-                  <View style={{ flex: 2.2, alignItems: 'flex-end' }}>
+                  <View style={{ flex: 2.8, alignItems: 'flex-end' }}>
                     <View style={styles.qtyInputWrap}>
+                      {sugVal > 0 && (
+                        <TouchableOpacity
+                          style={styles.quickParBtn}
+                          onPress={() => handleSetItemPar(item.id, sugVal)}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.quickParBtnText}>Par</Text>
+                        </TouchableOpacity>
+                      )}
+                      <TouchableOpacity
+                        style={styles.stepBtn}
+                        onPress={() => handleAdjustItemQty(item.id, -1)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="remove" size={12} color={BRAND.ink} />
+                      </TouchableOpacity>
                       <TextInput
                         style={[
                           styles.qtyInput,
@@ -569,11 +646,18 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
                         value={reqVal}
                         onChangeText={(t) => setQuantities({ ...quantities, [item.id]: t })}
                       />
+                      <TouchableOpacity
+                        style={styles.stepBtn}
+                        onPress={() => handleAdjustItemQty(item.id, 1)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="add" size={12} color={BRAND.burgundy} />
+                      </TouchableOpacity>
                       <Text style={styles.unitSuffix}>{item.unit}</Text>
                     </View>
                     {isOverStock && (
                       <Text style={styles.overStockWarning}>
-                        Store mein sirf {item.stock} {item.unit} hai!
+                        Only {item.stock} {item.unit} available in store inventory!
                       </Text>
                     )}
                   </View>
@@ -1064,6 +1148,58 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: BRAND.danger,
     fontWeight: '800',
+  },
+  quickActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 6,
+  },
+  quickActionBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  quickClearBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  quickClearBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.ink,
+  },
+  quickParBtn: {
+    backgroundColor: '#E8F5E9',
+    borderWidth: 1,
+    borderColor: '#A5D6A7',
+    paddingHorizontal: 5,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginRight: 2,
+  },
+  quickParBtnText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#2E7D32',
+  },
+  stepBtn: {
+    width: 22,
+    height: 30,
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalOverlay: {
     flex: 1,

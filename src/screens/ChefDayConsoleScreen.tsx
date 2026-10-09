@@ -105,6 +105,14 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
     return Array.from(set);
   }, [liveLines]);
 
+  const depletedLines = useMemo(() => {
+    return liveLines.filter((l) => l.status === 'out');
+  }, [liveLines]);
+
+  const lowLines = useMemo(() => {
+    return liveLines.filter((l) => l.status === 'low');
+  }, [liveLines]);
+
   // Cash Ledger for Active Session
   const sessionCashEntries = useMemo(() => {
     if (!activeSession) return [];
@@ -462,6 +470,29 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
               </View>
             </View>
 
+            {/* Critical Stock Depletion Alert Banner */}
+            {depletedLines.length > 0 && (
+              <View style={styles.criticalAlertBanner}>
+                <Ionicons name="warning" size={20} color="#DC2626" />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.criticalAlertTitle}>
+                    Critical Depletion: {depletedLines.length} Item{depletedLines.length > 1 ? 's' : ''} Exhausted
+                  </Text>
+                  <Text style={styles.criticalAlertSub}>
+                    {depletedLines.map((d) => d.itemName).join(', ')} • Request urgent store top-up or purchase locally.
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.criticalAlertBtn}
+                  onPress={() => setMarketModalOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="cash-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.criticalAlertBtnText}>Buy Local</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
             {/* Category Filter Chips */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.catChips}>
               <TouchableOpacity
@@ -683,7 +714,7 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>Kitchen Taste & Spoilage Adjustment</Text>
-                <Text style={styles.modalSubtitle}>&ldquo;taste uper neeche, masala uper neeche, spill/kharab record&rdquo;</Text>
+                <Text style={styles.modalSubtitle}>Log recipe seasoning adjustments, batch variance, spills, or kitchen waste</Text>
               </View>
               <TouchableOpacity onPress={() => setAdjustModalOpen(false)}>
                 <Ionicons name="close" size={24} color={BRAND.muted} />
@@ -718,7 +749,35 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
                     keyboardType="numeric"
                     placeholder="e.g. 0.5"
                   />
-                  <Text style={styles.inputHint}>In ingredient&apos;s native kitchen unit</Text>
+                  {/* Quick Preset Increment Chips */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 6 }}>
+                    {[0.1, 0.25, 0.5, 1.0, 2.0].map((step) => (
+                      <TouchableOpacity
+                        key={step}
+                        style={styles.quickStepChip}
+                        onPress={() => {
+                          const cur = parseFloat(adjustQty) || 0;
+                          setAdjustQty(String(Number((cur + step).toFixed(2))));
+                        }}
+                      >
+                        <Text style={styles.quickStepChipText}>+{step}</Text>
+                      </TouchableOpacity>
+                    ))}
+                    {[-0.1, -0.25, -0.5].map((step) => (
+                      <TouchableOpacity
+                        key={step}
+                        style={[styles.quickStepChip, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}
+                        onPress={() => {
+                          const cur = parseFloat(adjustQty) || 0;
+                          const val = Math.max(0, cur + step);
+                          setAdjustQty(val > 0 ? String(Number(val.toFixed(2))) : '');
+                        }}
+                      >
+                        <Text style={[styles.quickStepChipText, { color: '#DC2626' }]}>{step}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <Text style={[styles.inputHint, { marginTop: 4 }]}>In ingredient&apos;s native kitchen unit</Text>
                 </View>
 
                 <View style={[styles.formCol, { flex: 1 }]}>
@@ -760,7 +819,7 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
                   value={adjustNote}
                   onChangeText={setAdjustNote}
                   multiline
-                  placeholder="e.g. Customer requested extra spicy gravy, added 200g butter and 50g garam masala..."
+                  placeholder="e.g. Customer requested extra spicy gravy, added 200g butter and 50g spice mix..."
                 />
               </View>
             </ScrollView>
@@ -860,7 +919,7 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
                   style={styles.input}
                   value={marketNote}
                   onChangeText={setMarketNote}
-                  placeholder="e.g. Bought from sabzi mandi stall #4"
+                  placeholder="e.g. Purchased fresh mint and lemons from local produce market"
                 />
               </View>
             </View>
@@ -1009,7 +1068,7 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
                   value={closingNotes}
                   onChangeText={setClosingNotes}
                   multiline
-                  placeholder="e.g. Mutton marination kept in chiller #2 for tomorrow morning..."
+                  placeholder="e.g. Marinated meats safely stored in chiller #2 for tomorrow morning shift..."
                 />
               </View>
             </ScrollView>
@@ -1700,5 +1759,52 @@ const styles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     marginTop: 2,
+  },
+  quickStepChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+  },
+  quickStepChipText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+  },
+  criticalAlertBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 8,
+    padding: 10,
+    marginBottom: 12,
+  },
+  criticalAlertTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#991B1B',
+  },
+  criticalAlertSub: {
+    fontSize: 10,
+    color: '#B91C1C',
+    marginTop: 2,
+  },
+  criticalAlertBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    marginLeft: 8,
+  },
+  criticalAlertBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
   },
 });

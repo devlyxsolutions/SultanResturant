@@ -311,7 +311,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const handleResetDefaults = () => {
     confirmAction(
       'Reset Sultan Default Vendors',
-      'This will restore standard pre-configured Sultan Restaurant suppliers (Poultry, Meat, Mandi, Spices, Dairy, LPG, Packaging). Continue?',
+      'This will restore standard pre-configured Sultan Restaurant suppliers (Poultry, Meat, Fresh Produce, Spices, Dairy, LPG, Packaging). Continue?',
       () => {
         populateDefaultSuppliers();
         showAlert('Restored', 'Default Sultan Restaurant vendors restored.');

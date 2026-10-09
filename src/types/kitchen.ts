@@ -41,7 +41,7 @@ export type SessionLine = {
   itemName: string;
   unit: string;
   category: string;
-  /** Snapshot of store stock when the requisition was prepared ("inventory kitna hai"). */
+  /** Snapshot of store stock when the requisition was prepared (starting available balance). */
   storeStockAtRequest: number;
   par: number;
   suggested: number;
@@ -178,12 +178,12 @@ export const MANUAL_REASON_META: Record<
   ManualUsageReason,
   { label: string; icon: string; color: string; hint: string; signed: 'plus' | 'minus' | 'plus' }
 > = {
-  taste_up: { label: 'Taste Up (masala/oil +)', icon: 'trending-up-outline', color: '#C62828', hint: 'Recipe se zyada dala', signed: 'plus' },
-  taste_down: { label: 'Taste Down (kam dala)', icon: 'trending-down-outline', color: '#2E7D32', hint: 'Recipe se kam dala - bacha', signed: 'minus' },
-  extra_masala: { label: 'Extra Masala / Tarka', icon: 'flame-outline', color: '#E65100', hint: 'Batch ko theek karne ke liye', signed: 'plus' },
-  spoilage: { label: 'Spoilage / Kharab', icon: 'trash-outline', color: '#6A1B9A', hint: 'Kharab ho gaya', signed: 'plus' },
-  spill: { label: 'Spill / Girna', icon: 'water-outline', color: '#0277BD', hint: 'Ghir gaya / zaya', signed: 'plus' },
-  staff_meal: { label: 'Staff Meal', icon: 'people-outline', color: '#4E342E', hint: 'Staff khana', signed: 'plus' },
-  recook: { label: 'Re-cook / Remake', icon: 'refresh-outline', color: '#00695C', hint: 'Dish dobara bani', signed: 'plus' },
-  other: { label: 'Other', icon: 'ellipsis-horizontal-circle-outline', color: '#546E7A', hint: 'Dusri wajah', signed: 'plus' },
+  taste_up: { label: 'Seasoning / Spice Up', icon: 'trending-up-outline', color: '#C62828', hint: 'Used extra spices or oil above recipe standard', signed: 'plus' },
+  taste_down: { label: 'Mild / Spice Reduced', icon: 'trending-down-outline', color: '#2E7D32', hint: 'Used less spices than recipe standard (saved)', signed: 'minus' },
+  extra_masala: { label: 'Tarka & Flavor Adjustment', icon: 'flame-outline', color: '#E65100', hint: 'Additional tempering or seasoning added to batch', signed: 'plus' },
+  spoilage: { label: 'Spoilage / Expired', icon: 'trash-outline', color: '#6A1B9A', hint: 'Discarded due to expiration or quality defect', signed: 'plus' },
+  spill: { label: 'Accidental Spill / Loss', icon: 'water-outline', color: '#0277BD', hint: 'Accidentally dropped, burned, or wasted', signed: 'plus' },
+  staff_meal: { label: 'Staff Meal Allocation', icon: 'people-outline', color: '#4E342E', hint: 'Ingredients consumed for employee dinner', signed: 'plus' },
+  recook: { label: 'Re-cook / Dish Remake', icon: 'refresh-outline', color: '#00695C', hint: 'Portion remade due to customer preference', signed: 'plus' },
+  other: { label: 'Other Operational Loss', icon: 'ellipsis-horizontal-circle-outline', color: '#546E7A', hint: 'Other custom kitchen operational adjustment', signed: 'plus' },
 };

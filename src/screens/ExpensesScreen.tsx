@@ -200,7 +200,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
         <Text style={styles.inputLabel}>Description / Supplier / Voucher Note</Text>
         <TextInput
           style={styles.noteInput}
-          placeholder="e.g. 5kg Boneless Chicken from Sabzi Mandi vendor..."
+          placeholder="e.g. 5kg Boneless Chicken from wholesale meat supplier..."
           placeholderTextColor={BRAND.muted}
           value={note}
           onChangeText={setNote}

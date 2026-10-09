@@ -230,12 +230,12 @@ export const useKitchenStore = create<KitchenState>()(
       issueSession: (id, by) => {
         const state = get();
         const session = state.kitchenSessions.find((s) => s.id === id);
-        if (!session) return fail('Session nahi mila.');
-        if (session.status !== 'draft') return fail('Yeh session pehle hi issue ho chuka hai.');
+        if (!session) return fail('Session not found.');
+        if (session.status !== 'draft') return fail('This session has already been issued.');
         const busy = state.kitchenSessions.find(
           (s) => s.status === 'issued' || s.status === 'pending_approval'
         );
-        if (busy) return fail(`Pehle chal raha session (${busy.dayLabel}) close/approve karein.`);
+        if (busy) return fail(`Another kitchen shift (${busy.dayLabel}) is currently active. Please close or approve it first.`);
 
         const ops = useOpsStore.getState();
         const now = Date.now();
@@ -251,7 +251,7 @@ export const useKitchenStore = create<KitchenState>()(
           };
         });
 
-        if (lines.every((l) => l.issued <= 0)) return fail('Store mein koi bhi requested item stock mein nahi hai.');
+        if (lines.every((l) => l.issued <= 0)) return fail('None of the requested ingredients are currently available in store stock.');
 
         lines.forEach((l) => {
           if (l.issued > 0) {
@@ -283,12 +283,12 @@ export const useKitchenStore = create<KitchenState>()(
       issueTopUp: (sessionId, itemId, qty, by) => {
         const state = get();
         const session = state.kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'issued') return fail('Active session nahi hai.');
-        if (!(qty > 0)) return fail('Quantity 0 se zyada honi chahiye.');
+        if (!session || session.status !== 'issued') return fail('No active kitchen shift found.');
+        if (!(qty > 0)) return fail('Quantity must be greater than 0.');
         const ops = useOpsStore.getState();
         const item = ops.inventory.find((i) => i.id === itemId);
-        if (!item) return fail('Item inventory mein nahi mila.');
-        if (item.stock < qty) return fail(`Store mein sirf ${item.stock} ${item.unit} bacha hai.`);
+        if (!item) return fail('Item not found in store inventory.');
+        if (item.stock < qty) return fail(`Store has only ${item.stock} ${item.unit} available in stock.`);
 
         ops.recordStockMovement(itemId, 'usage', qty, `Top-up to Head Chef - ${session.dayLabel}`, by);
 
@@ -323,10 +323,10 @@ export const useKitchenStore = create<KitchenState>()(
 
       recordManualUsage: ({ sessionId, itemId, qty, reason, dish, note, by }) => {
         const session = get().kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'issued') return fail('Active session nahi hai.');
+        if (!session || session.status !== 'issued') return fail('No active kitchen shift found.');
         const line = session.lines.find((l) => l.itemId === itemId);
-        if (!line) return fail('Yeh item is session mein issue nahi hua.');
-        if (!(qty > 0)) return fail('Quantity 0 se zyada honi chahiye.');
+        if (!line) return fail('This item was not issued in the current session.');
+        if (!(qty > 0)) return fail('Quantity must be greater than 0.');
         const delta = reason === 'taste_down' ? -qty : qty;
         const entry: ManualUsage = {
           id: uid('mu'),
@@ -347,13 +347,13 @@ export const useKitchenStore = create<KitchenState>()(
       addCashEntry: ({ sessionId, amount, note, itemId, qty, by }) => {
         const state = get();
         const session = state.kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'issued') return fail('Active session nahi hai.');
-        if (!(amount > 0)) return fail('Amount 0 se zyada hona chahiye.');
+        if (!session || session.status !== 'issued') return fail('No active kitchen shift found.');
+        if (!(amount > 0)) return fail('Amount must be greater than 0.');
 
         const spent = state.kitchenCash.filter((c) => c.sessionId === sessionId).reduce((a, c) => a + c.amount, 0);
         if (spent + amount > session.cashHandedOver + 0.5) {
           return fail(
-            `Hand cash khatam: Rs. ${Math.max(0, session.cashHandedOver - spent).toLocaleString()} bacha hai.`
+            `Insufficient hand cash: Only Rs. ${Math.max(0, session.cashHandedOver - spent).toLocaleString()} remaining.`
           );
         }
 
@@ -418,7 +418,7 @@ export const useKitchenStore = create<KitchenState>()(
       submitClosing: ({ sessionId, counts, cashReturned, notes, by }) => {
         const state = get();
         const session = state.kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'issued') return fail('Close karne ke liye active session chahiye.');
+        if (!session || session.status !== 'issued') return fail('An active shift is required to submit closing count.');
 
         const live = computeLiveLines(session, state.kitchenConsumption, state.kitchenManualUsage);
         const lines: SessionLine[] = live.map((l) => {
@@ -472,7 +472,7 @@ export const useKitchenStore = create<KitchenState>()(
       approveSession: (sessionId, by, note) => {
         const state = get();
         const session = state.kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'pending_approval') return fail('Approval ke liye pending session nahi hai.');
+        if (!session || session.status !== 'pending_approval') return fail('No shift session awaiting approval.');
 
         const ops = useOpsStore.getState();
         session.lines.forEach((l) => {
@@ -521,11 +521,11 @@ export const useKitchenStore = create<KitchenState>()(
 
       rejectClosing: (sessionId, by, note) => {
         const session = get().kitchenSessions.find((s) => s.id === sessionId);
-        if (!session || session.status !== 'pending_approval') return fail('Pending session nahi hai.');
+        if (!session || session.status !== 'pending_approval') return fail('No shift session awaiting approval.');
         set((s) => ({
           kitchenSessions: s.kitchenSessions.map((x) =>
             x.id === sessionId
-              ? { ...x, status: 'issued', rejectionNote: `${by}: ${note || 'Dobara count karein'}` }
+              ? { ...x, status: 'issued', rejectionNote: `${by}: ${note || 'Please recount inventory'}` }
               : x
           ),
         }));
