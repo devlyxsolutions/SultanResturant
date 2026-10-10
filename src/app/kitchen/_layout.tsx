@@ -51,7 +51,7 @@ export default function KitchenLayout() {
               styles.actionHeaderBtn,
               { backgroundColor: isDayScreen ? '#D5A943' : '#333' }
             ]}
-            onPress={() => isDayScreen ? router.push('/kitchen/kds') : router.push('/kitchen/day')}
+            onPress={() => isDayScreen ? router.push('/kitchen/kds' as any) : router.push('/kitchen/day' as any)}
             activeOpacity={0.8}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >

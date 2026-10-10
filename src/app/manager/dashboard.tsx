@@ -326,7 +326,7 @@ export default function ManagerDashboard() {
 
           <TouchableOpacity 
             style={[styles.card, isMobile && styles.cardMobile]}
-            onPress={() => router.push('/manager/kitchen-handover')}
+            onPress={() => router.push('/manager/kitchen-handover' as any)}
             activeOpacity={0.7}
           >
             <View style={[styles.iconBox, { backgroundColor: '#FBE9E7' }]}>
@@ -343,7 +343,7 @@ export default function ManagerDashboard() {
 
           <TouchableOpacity 
             style={[styles.card, isMobile && styles.cardMobile]}
-            onPress={() => router.push('/manager/kitchen-returns')}
+            onPress={() => router.push('/manager/kitchen-returns' as any)}
             activeOpacity={0.7}
           >
             <View style={[styles.iconBox, { backgroundColor: '#E8F5E9' }]}>
