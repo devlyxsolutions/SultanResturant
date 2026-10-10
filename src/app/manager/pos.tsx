@@ -387,7 +387,7 @@ export default function ManagerPOS() {
     const waiterFromTable = selectedTableObj?.server && !selectedTableObj.server.toLowerCase().includes('pos') ? selectedTableObj.server : undefined;
 
     const currentUserName = user?.name ? (user.name.includes('(Manager)') ? user.name : `${user.name} (Manager)`) : 'Ali Khan (Manager)';
-    const orderCreator = selectedServer || waiterFromTable || waiterFromTickets || (wasDineIn ? 'Sara Ahmed (Waiter)' : currentUserName);
+    const orderCreator = selectedServer || waiterFromTable || waiterFromTickets || (wasDineIn ? 'Sara Ahmed (Order Taker)' : currentUserName);
     const cashierName = currentUserName;
 
     const invoice = createInvoicePayload({

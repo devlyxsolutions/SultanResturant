@@ -62,7 +62,7 @@ export default function ManagerDashboard() {
           </View>
           <View style={styles.kpiPill}>
             <Ionicons name="people" size={16} color="#7B1FA2" style={{ marginRight: 6 }} />
-            <Text style={styles.kpiText}>{activeWaiters} Waiters • {activeKitchen} Kitchen</Text>
+            <Text style={styles.kpiText}>{activeWaiters} Order Takers • {activeKitchen} Kitchen</Text>
           </View>
         </View>
         
@@ -75,7 +75,7 @@ export default function ManagerDashboard() {
                 🔔 {readyCount} Order{readyCount > 1 ? 's' : ''} Ready for Pickup!
               </Text>
               <Text style={styles.urgentBannerDesc}>
-                Food is at the pass — direct waiters to serve tables immediately.
+                Food is at the pass — direct order takers to serve tables immediately.
               </Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/waiter')} style={styles.urgentBannerBtn}>
@@ -272,7 +272,7 @@ export default function ManagerDashboard() {
             </View>
             <View style={styles.cardInfo}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
-                <Text style={styles.cardTitle}>Waiter Table Handheld</Text>
+                <Text style={styles.cardTitle}>Order Taker Handheld</Text>
                 {occupiedCount > 0 && (
                   <View style={[styles.liveBadge, { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' }]}>
                     <Text style={[styles.liveBadgeText, { color: '#C62828' }]}>{occupiedCount} occupied</Text>
@@ -282,7 +282,7 @@ export default function ManagerDashboard() {
               <Text style={styles.cardDesc}>
                 {hasUrgent 
                   ? `\u26a0\ufe0f ${readyCount} orders ready \u2014 check tables now!`
-                  : `Manage table orders, send to kitchen & print bills.`}
+                  : `Floor-based table orders, send to kitchen & punch KOT.`}
               </Text>
             </View>
             {isMobile && (

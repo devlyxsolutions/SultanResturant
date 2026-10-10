@@ -151,10 +151,10 @@ export default function TableOrderScreen() {
     if (newCart.length === 0) return;
 
     const isAddOn = isExistingOrderActive;
-    const waiterName = user?.name 
-      ? (user.name.includes('(Waiter)') ? user.name : `${user.name} (Waiter)`) 
-      : 'Sara Ahmed (Waiter)';
-    placeOrder(tableId as string, waiterName, newCart, isAddOn);
+    const orderTakerName = user?.name 
+      ? (user.name.includes('(Order Taker)') ? user.name : `${user.name} (Order Taker)`) 
+      : 'Sara Ahmed (Order Taker)';
+    placeOrder(tableId as string, orderTakerName, newCart, isAddOn);
     broadcastImmediately();
 
     const message = isAddOn 

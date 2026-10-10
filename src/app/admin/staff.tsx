@@ -20,10 +20,16 @@ import {
   StaffShift,
   StaffStatus,
 } from '../../store/restaurantStore';
+import { sortFloors } from '../../constants/floors';
 
 const ROLES: StaffRole[] = ['Admin', 'Manager', 'Waiter', 'Kitchen', 'JuiceBar'];
 const SHIFTS: StaffShift[] = ['Morning', 'Evening', 'Night'];
 const STATUSES: StaffStatus[] = ['Active', 'On Leave', 'Inactive'];
+
+export const formatRoleName = (role: StaffRole | string) => {
+  if (role === 'Waiter') return 'Order Taker';
+  return role;
+};
 
 export default function StaffManagementScreen() {
   const router = useRouter();
@@ -31,9 +37,25 @@ export default function StaffManagementScreen() {
   const isMobile = width < 768;
 
   const staff = useRestaurantStore((state) => state.staff) || [];
+  const tables = useRestaurantStore((state) => state.tables) || [];
+  const zones = useRestaurantStore((state) => state.zones) || [];
   const addStaff = useRestaurantStore((state) => state.addStaff);
   const updateStaff = useRestaurantStore((state) => state.updateStaff);
   const deleteStaff = useRestaurantStore((state) => state.deleteStaff);
+
+  const availableFloors = sortFloors(
+    Array.from(
+      new Set([
+        ...zones,
+        ...tables.map((t) => t.zone),
+        'Ground Floor',
+        '1st Floor',
+        '2nd Floor',
+        '3rd Floor',
+        'Rooftop',
+      ].filter(Boolean))
+    )
+  );
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleFilter, setActiveRoleFilter] = useState<string>('All');
@@ -50,6 +72,7 @@ export default function StaffManagementScreen() {
   const [formShift, setFormShift] = useState<StaffShift>('Morning');
   const [formStatus, setFormStatus] = useState<StaffStatus>('Active');
   const [formPin, setFormPin] = useState('');
+  const [formAssignedZones, setFormAssignedZones] = useState<string[]>(['Ground Floor']);
   const [formError, setFormError] = useState('');
 
   // Stats
@@ -69,7 +92,10 @@ export default function StaffManagementScreen() {
       s.name.toLowerCase().includes(query) ||
       (s.phone && s.phone.toLowerCase().includes(query)) ||
       s.role.toLowerCase().includes(query) ||
-      s.shift.toLowerCase().includes(query);
+      (s.role === 'Waiter' && 'order taker'.includes(query)) ||
+      s.shift.toLowerCase().includes(query) ||
+      (s.assignedZone && s.assignedZone.toLowerCase().includes(query)) ||
+      (s.assignedZones && s.assignedZones.some((z) => z.toLowerCase().includes(query)));
     return matchesRole && matchesSearch;
   });
 
@@ -113,6 +139,7 @@ export default function StaffManagementScreen() {
     setFormShift('Morning');
     setFormStatus('Active');
     setFormPin(Math.floor(1000 + Math.random() * 9000).toString());
+    setFormAssignedZones(['Ground Floor']);
     setFormError('');
     setModalVisible(true);
   };
@@ -125,6 +152,13 @@ export default function StaffManagementScreen() {
     setFormShift(member.shift);
     setFormStatus(member.status);
     setFormPin(member.pin);
+    const initialZones =
+      member.assignedZones && member.assignedZones.length > 0
+        ? member.assignedZones
+        : member.assignedZone
+        ? [member.assignedZone]
+        : ['All Floors'];
+    setFormAssignedZones(initialZones);
     setFormError('');
     setModalVisible(true);
   };
@@ -139,23 +173,26 @@ export default function StaffManagementScreen() {
       return;
     }
 
+    const primaryZone = formAssignedZones.includes('All Floors')
+      ? 'All Floors'
+      : formAssignedZones[0] || 'All Floors';
+
+    const staffPayload = {
+      name: formName.trim(),
+      phone: formPhone.trim(),
+      role: formRole,
+      shift: formShift,
+      status: formStatus,
+      pin: formPin.trim(),
+      assignedZone: formRole === 'Waiter' ? primaryZone : undefined,
+      assignedZones: formRole === 'Waiter' ? formAssignedZones : undefined,
+    };
+
     if (editingStaff) {
-      updateStaff(editingStaff.id, {
-        name: formName.trim(),
-        phone: formPhone.trim(),
-        role: formRole,
-        shift: formShift,
-        status: formStatus,
-        pin: formPin.trim(),
-      });
+      updateStaff(editingStaff.id, staffPayload);
     } else {
       addStaff({
-        name: formName.trim(),
-        phone: formPhone.trim(),
-        role: formRole,
-        shift: formShift,
-        status: formStatus,
-        pin: formPin.trim(),
+        ...staffPayload,
         joinedDate: new Date().toISOString().split('T')[0],
       });
     }
@@ -240,8 +277,8 @@ export default function StaffManagementScreen() {
               <Ionicons name="restaurant" size={20} color="#5856D6" />
             </View>
             <View>
-              <Text style={styles.kpiValue}>{waiterCount}W / {kitchenCount}K / {juiceBarCount}J</Text>
-              <Text style={styles.kpiLabel}>Floor/Kitchen/Juice</Text>
+              <Text style={styles.kpiValue}>{waiterCount} OT / {kitchenCount}K / {juiceBarCount}J</Text>
+              <Text style={styles.kpiLabel}>Order Takers / Kitchen / Juice</Text>
             </View>
           </View>
         </View>
@@ -252,7 +289,7 @@ export default function StaffManagementScreen() {
             <Ionicons name="search" size={18} color="#8E8E93" style={styles.searchIcon} />
             <TextInput
               style={styles.searchInput}
-              placeholder="Search employee, role, phone..."
+              placeholder="Search employee, role, floor, phone..."
               placeholderTextColor="#8E8E93"
               value={searchQuery}
               onChangeText={setSearchQuery}
@@ -274,7 +311,7 @@ export default function StaffManagementScreen() {
                 <Text
                   style={[styles.roleTabText, activeRoleFilter === role && styles.roleTabTextActive]}
                 >
-                  {role} {role === 'All' ? `(${totalStaff})` : `(${staff.filter((s) => s.role === role).length})`}
+                  {formatRoleName(role)} {role === 'All' ? `(${totalStaff})` : `(${staff.filter((s) => s.role === role).length})`}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -314,10 +351,20 @@ export default function StaffManagementScreen() {
                       ]}
                     >
                       <Text style={[styles.roleBadgeText, { color: getRoleColor(member.role) }]}>
-                        {member.role}
+                        {formatRoleName(member.role)}
                       </Text>
                     </View>
                   </View>
+
+                  {/* Floor Assignment badge for Order Takers */}
+                  {member.role === 'Waiter' && (
+                    <View style={styles.cardFloorRow}>
+                      <Ionicons name="business" size={13} color="#007AFF" />
+                      <Text style={styles.cardFloorText}>
+                        Assigned Floor: <Text style={{ fontWeight: '700', color: '#1C1C1E' }}>{member.assignedZone || (member.assignedZones && member.assignedZones.length > 0 ? member.assignedZones.join(', ') : 'All Floors')}</Text>
+                      </Text>
+                    </View>
+                  )}
 
                   {/* Middle: Shift, Status & PIN */}
                   <View style={styles.mobileCardMetaRow}>
@@ -394,11 +441,11 @@ export default function StaffManagementScreen() {
           /* Desktop Table View */
           <View style={styles.tableCard}>
             <View style={styles.tableHeader}>
-              <Text style={[styles.tableColHeader, { flex: 2.5 }]}>Employee</Text>
-              <Text style={[styles.tableColHeader, { flex: 1.2 }]}>Role</Text>
-              <Text style={[styles.tableColHeader, { flex: 1.2 }]}>Shift</Text>
-              <Text style={[styles.tableColHeader, { flex: 1.2 }]}>Status</Text>
-              <Text style={[styles.tableColHeader, { flex: 1.4 }]}>Security PIN</Text>
+              <Text style={[styles.tableColHeader, { flex: 2.3 }]}>Employee</Text>
+              <Text style={[styles.tableColHeader, { flex: 1.5 }]}>Role & Floor</Text>
+              <Text style={[styles.tableColHeader, { flex: 1.1 }]}>Shift</Text>
+              <Text style={[styles.tableColHeader, { flex: 1.1 }]}>Status</Text>
+              <Text style={[styles.tableColHeader, { flex: 1.3 }]}>Security PIN</Text>
               <Text style={[styles.tableColHeader, { flex: 1, textAlign: 'right' }]}>Actions</Text>
             </View>
 
@@ -407,7 +454,7 @@ export default function StaffManagementScreen() {
               return (
                 <View key={member.id} style={styles.tableRow}>
                   {/* Employee Name + Phone */}
-                  <View style={[styles.tableCell, { flex: 2.5, flexDirection: 'row', alignItems: 'center' }]}>
+                  <View style={[styles.tableCell, { flex: 2.3, flexDirection: 'row', alignItems: 'center' }]}>
                     <View
                       style={[
                         styles.avatarBox,
@@ -428,22 +475,32 @@ export default function StaffManagementScreen() {
                     </View>
                   </View>
 
-                  {/* Role Badge */}
-                  <View style={[styles.tableCell, { flex: 1.2, justifyContent: 'center' }]}>
-                    <View
-                      style={[
-                        styles.roleBadge,
-                        { backgroundColor: getRoleColor(member.role) + '15' },
-                      ]}
-                    >
-                      <Text style={[styles.roleBadgeText, { color: getRoleColor(member.role) }]}>
-                        {member.role}
-                      </Text>
+                  {/* Role Badge + Floor */}
+                  <View style={[styles.tableCell, { flex: 1.5, justifyContent: 'center' }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                      <View
+                        style={[
+                          styles.roleBadge,
+                          { backgroundColor: getRoleColor(member.role) + '15' },
+                        ]}
+                      >
+                        <Text style={[styles.roleBadgeText, { color: getRoleColor(member.role) }]}>
+                          {formatRoleName(member.role)}
+                        </Text>
+                      </View>
+                      {member.role === 'Waiter' && (
+                        <View style={styles.tableFloorBadge}>
+                          <Ionicons name="business-outline" size={11} color="#007AFF" />
+                          <Text style={styles.tableFloorText} numberOfLines={1}>
+                            {member.assignedZone || (member.assignedZones && member.assignedZones.length > 0 ? member.assignedZones.join(', ') : 'All Floors')}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
 
                   {/* Shift */}
-                  <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                  <View style={[styles.tableCell, { flex: 1.1, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
                     <Ionicons name={getShiftIcon(member.shift)} size={16} color="#666" />
                     <Text style={styles.shiftText}>{member.shift}</Text>
                   </View>
@@ -604,12 +661,92 @@ export default function StaffManagementScreen() {
                           formRole === r && styles.formPillTextActive,
                         ]}
                       >
-                        {r}
+                        {formatRoleName(r)}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
+
+              {/* Floor / Zone Assignment for Order Takers */}
+              {formRole === 'Waiter' && (
+                <View style={[styles.formGroup, styles.floorAssignmentBox]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="business" size={16} color="#007AFF" />
+                      <Text style={styles.formLabelHighlighted}>Assigned Floor / Zone *</Text>
+                    </View>
+                    <View style={styles.floorAccessBadge}>
+                      <Text style={styles.floorAccessBadgeText}>Order Taker Access</Text>
+                    </View>
+                  </View>
+                  <Text style={styles.formSubLabel}>
+                    This Order Taker will ONLY see and take orders for tables belonging to their assigned floor.
+                  </Text>
+
+                  <View style={styles.floorChipsWrap}>
+                    <TouchableOpacity
+                      style={[
+                        styles.floorChip,
+                        formAssignedZones.includes('All Floors') && styles.floorChipActiveAll,
+                      ]}
+                      onPress={() => setFormAssignedZones(['All Floors'])}
+                    >
+                      <Ionicons
+                        name="grid-outline"
+                        size={14}
+                        color={formAssignedZones.includes('All Floors') ? '#fff' : '#4a121a'}
+                      />
+                      <Text
+                        style={[
+                          styles.floorChipText,
+                          formAssignedZones.includes('All Floors') && styles.floorChipTextActive,
+                        ]}
+                      >
+                        All Floors (Full Access)
+                      </Text>
+                    </TouchableOpacity>
+
+                    {availableFloors.map((floor) => {
+                      const isSelected =
+                        !formAssignedZones.includes('All Floors') && formAssignedZones.includes(floor);
+                      return (
+                        <TouchableOpacity
+                          key={floor}
+                          style={[
+                            styles.floorChip,
+                            isSelected && styles.floorChipActive,
+                          ]}
+                          onPress={() => {
+                            if (formAssignedZones.includes('All Floors')) {
+                              setFormAssignedZones([floor]);
+                            } else if (isSelected) {
+                              const next = formAssignedZones.filter((f) => f !== floor);
+                              setFormAssignedZones(next.length === 0 ? ['All Floors'] : next);
+                            } else {
+                              setFormAssignedZones([...formAssignedZones, floor]);
+                            }
+                          }}
+                        >
+                          <Ionicons
+                            name="business-outline"
+                            size={14}
+                            color={isSelected ? '#fff' : '#1C1C1E'}
+                          />
+                          <Text
+                            style={[
+                              styles.floorChipText,
+                              isSelected && styles.floorChipTextActive,
+                            ]}
+                          >
+                            {floor}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
               {/* Shift Selection */}
               <View style={styles.formGroup}>
@@ -693,7 +830,7 @@ export default function StaffManagementScreen() {
                   keyboardType="numeric"
                   maxLength={6}
                 />
-                <Text style={styles.formHelperText}>Used by employee to log in to Waiter, Kitchen, or Manager apps.</Text>
+                <Text style={styles.formHelperText}>Used by employee to log in to Order Taker, Kitchen, or Manager apps.</Text>
               </View>
             </ScrollView>
 
@@ -1193,6 +1330,97 @@ const styles = StyleSheet.create({
   saveBtnText: {
     fontSize: 13,
     fontWeight: '700',
+    color: '#fff',
+  },
+  cardFloorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#EBF3FF',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  cardFloorText: {
+    fontSize: 12,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  tableFloorBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#EBF3FF',
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 5,
+  },
+  tableFloorText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '700',
+  },
+  floorAssignmentBox: {
+    backgroundColor: '#F4F7FC',
+    borderWidth: 1,
+    borderColor: '#D4E2F6',
+    borderRadius: 10,
+    padding: 12,
+  },
+  formLabelHighlighted: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#007AFF',
+  },
+  floorAccessBadge: {
+    backgroundColor: '#007AFF15',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  floorAccessBadgeText: {
+    fontSize: 11,
+    color: '#007AFF',
+    fontWeight: '700',
+  },
+  formSubLabel: {
+    fontSize: 11,
+    color: '#666',
+    marginBottom: 10,
+    lineHeight: 15,
+  },
+  floorChipsWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  floorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#D4E2F6',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  floorChipActive: {
+    backgroundColor: '#007AFF',
+    borderColor: '#007AFF',
+  },
+  floorChipActiveAll: {
+    backgroundColor: '#4a121a',
+    borderColor: '#4a121a',
+  },
+  floorChipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1C1C1E',
+  },
+  floorChipTextActive: {
     color: '#fff',
   },
 });

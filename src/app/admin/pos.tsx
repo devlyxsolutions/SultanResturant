@@ -408,7 +408,7 @@ export default function AdminPOS() {
     const waiterFromTable = selectedTableObj?.server && !selectedTableObj.server.toLowerCase().includes('pos') ? selectedTableObj.server : undefined;
 
     const currentUserName = user?.name ? (user.name.includes('(Admin)') ? user.name : `${user.name} (Admin)`) : 'Junaid Ahsan (Admin)';
-    const orderCreator = selectedServer || waiterFromTable || waiterFromTickets || (wasDineIn ? 'Sara Ahmed (Waiter)' : currentUserName);
+    const orderCreator = selectedServer || waiterFromTable || waiterFromTickets || (wasDineIn ? 'Sara Ahmed (Order Taker)' : currentUserName);
     const cashierName = currentUserName;
 
     const invoice = createInvoicePayload({

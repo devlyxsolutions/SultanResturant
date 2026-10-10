@@ -4,10 +4,13 @@ import { appStorage } from './storage';
 
 export type Role = 'admin' | 'manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | null;
 
-interface User {
+export interface User {
   id: string;
   name: string;
   role: Role;
+  staffId?: string;
+  assignedZone?: string;
+  assignedZones?: string[];
 }
 
 interface AuthState {
@@ -15,7 +18,12 @@ interface AuthState {
   isAuthenticated: boolean;
   /** True once the saved session has been loaded from storage. */
   hasHydrated: boolean;
-  login: (name: string, role: Role) => void;
+  login: (
+    name: string,
+    role: Role,
+    meta?: { staffId?: string; assignedZone?: string; assignedZones?: string[] }
+  ) => void;
+  updateUserZones: (assignedZone?: string, assignedZones?: string[]) => void;
   logout: () => void;
   setHasHydrated: (value: boolean) => void;
 }
@@ -26,7 +34,28 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isAuthenticated: false,
       hasHydrated: false,
-      login: (name, role) => set({ user: { id: Date.now().toString(), name, role }, isAuthenticated: true }),
+      login: (name, role, meta) =>
+        set({
+          user: {
+            id: meta?.staffId || Date.now().toString(),
+            name,
+            role,
+            staffId: meta?.staffId,
+            assignedZone: meta?.assignedZone,
+            assignedZones: meta?.assignedZones,
+          },
+          isAuthenticated: true,
+        }),
+      updateUserZones: (assignedZone, assignedZones) =>
+        set((state) => ({
+          user: state.user
+            ? {
+                ...state.user,
+                assignedZone: assignedZone ?? state.user.assignedZone,
+                assignedZones: assignedZones ?? state.user.assignedZones,
+              }
+            : null,
+        })),
       logout: () => set({ user: null, isAuthenticated: false }),
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),

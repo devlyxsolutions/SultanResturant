@@ -62,7 +62,7 @@ export default function HomeScreen() {
               <Link href="/login?role=waiter" asChild>
                 <TouchableOpacity style={styles.primaryButton} activeOpacity={0.88}>
                   <Ionicons name="walk" size={20} color="#451014" style={{ marginRight: 8 }} />
-                  <Text style={styles.primaryButtonText}>Waiter Terminal Login</Text>
+                  <Text style={styles.primaryButtonText}>Order Taker Terminal Login</Text>
                 </TouchableOpacity>
               </Link>
 

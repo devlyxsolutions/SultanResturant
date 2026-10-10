@@ -21,7 +21,7 @@ import IslamicBackground from '../components/IslamicBackground';
 const roles: { label: string; value: Role; icon: keyof typeof Ionicons.glyphMap; desc: string }[] = [
   { label: 'Admin', value: 'admin', icon: 'shield-checkmark-outline', desc: 'Full System & POS' },
   { label: 'Manager', value: 'manager', icon: 'business-outline', desc: '5-Floor & Ledger' },
-  { label: 'Waiter', value: 'waiter', icon: 'walk-outline', desc: 'Tables & KOT Punch' },
+  { label: 'Order Taker', value: 'waiter', icon: 'walk-outline', desc: 'Floor Tables & KOT Punch' },
   { label: 'Kitchen', value: 'kitchen', icon: 'restaurant-outline', desc: 'Live KDS Display' },
   { label: 'Juice Bar', value: 'juicebar', icon: 'cafe-outline', desc: 'Live Beverage Orders' },
   { label: 'Playland', value: 'playland', icon: 'game-controller-outline', desc: 'Basement Rides & Tickets' },
@@ -111,7 +111,11 @@ export default function LoginScreen() {
     }
 
     setErrorMessage('');
-    login(name.trim(), selectedRole);
+    login(name.trim(), selectedRole, {
+      staffId: matchedMember?.id,
+      assignedZone: matchedMember?.assignedZone,
+      assignedZones: matchedMember?.assignedZones,
+    });
     router.replace(ROLE_HOME[selectedRole] as Href);
   };
 
@@ -128,10 +132,10 @@ export default function LoginScreen() {
                 <SultanLogo size="xl" width={130} height={130} />
               </View>
               <Text style={styles.title}>
-                {isWaiterApp ? 'Sultan Waiter Terminal' : 'Sultan Staff Portal'}
+                {isWaiterApp ? 'Sultan Order Taker Terminal' : 'Sultan Staff Portal'}
               </Text>
               <Text style={styles.subtitle}>
-                {isWaiterApp ? 'Floor Service & Tables Order Punch' : 'Select your operational role to sign in'}
+                {isWaiterApp ? 'Floor Tables & Live Order Punch' : 'Select your operational role to sign in'}
               </Text>
             </View>
 
@@ -144,8 +148,8 @@ export default function LoginScreen() {
                       <Ionicons name="walk" size={22} color="#451014" />
                     </View>
                     <View>
-                      <Text style={styles.modalTitle}>Waiter Portal Sign In</Text>
-                      <Text style={styles.modalSubtitle}>Tables & Live KOT Dispatch</Text>
+                      <Text style={styles.modalTitle}>Order Taker Sign In</Text>
+                      <Text style={styles.modalSubtitle}>Floor Tables & Live KOT Dispatch</Text>
                     </View>
                   </View>
                 </View>
@@ -155,10 +159,11 @@ export default function LoginScreen() {
                 {/* Quick Pick Staff Pills */}
                 {roleStaff.length > 0 && (
                   <View style={styles.quickPickContainer}>
-                    <Text style={styles.quickPickLabel}>Active Waiters on Shift:</Text>
+                    <Text style={styles.quickPickLabel}>Active Order Takers on Shift:</Text>
                     <View style={styles.quickPickPills}>
                       {roleStaff.map((member) => {
                         const isChosen = name.toLowerCase() === member.name.toLowerCase();
+                        const floorText = member.assignedZone || (member.assignedZones && member.assignedZones.length > 0 ? member.assignedZones.join(', ') : 'All Floors');
                         return (
                           <TouchableOpacity
                             key={member.id}
@@ -174,7 +179,7 @@ export default function LoginScreen() {
                                 isChosen && styles.staffPillTextActive,
                               ]}
                             >
-                              {member.name} • ({member.shift})
+                              {member.name} • 🏢 {floorText} ({member.shift})
                             </Text>
                           </TouchableOpacity>
                         );
@@ -191,14 +196,14 @@ export default function LoginScreen() {
                   </View>
                 )}
 
-                {/* Waiter Name Input */}
+                {/* Order Taker Name Input */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Waiter Name / ID</Text>
+                  <Text style={styles.inputLabel}>Order Taker Name / ID</Text>
                   <View style={styles.inputWrapper}>
                     <Ionicons name="person-outline" size={18} color="#D5A943" style={styles.fieldIcon} />
                     <TextInput
                       style={styles.input}
-                      placeholder="Enter waiter name"
+                      placeholder="Enter order taker name"
                       placeholderTextColor="rgba(255,255,255,0.4)"
                       value={name}
                       onChangeText={(val) => {
@@ -379,7 +384,7 @@ export default function LoginScreen() {
                                 isChosen && styles.staffPillTextActive,
                               ]}
                             >
-                              {member.name} • ({member.shift})
+                              {member.name}{member.assignedZone ? ` • 🏢 ${member.assignedZone}` : ''} • ({member.shift})
                             </Text>
                           </TouchableOpacity>
                         );

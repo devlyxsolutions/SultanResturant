@@ -800,7 +800,11 @@
       "pin": "4455",
       "status": "Active",
       "shift": "Evening",
-      "joinedDate": "2025-04-05"
+      "joinedDate": "2025-04-05",
+      "assignedZone": "Ground Floor",
+      "assignedZones": [
+        "Ground Floor"
+      ]
     },
     {
       "id": "st5",
@@ -810,7 +814,11 @@
       "pin": "5566",
       "status": "On Leave",
       "shift": "Night",
-      "joinedDate": "2025-05-12"
+      "joinedDate": "2025-05-12",
+      "assignedZone": "1st Floor",
+      "assignedZones": [
+        "1st Floor"
+      ]
     }
   ],
   "reservations": [

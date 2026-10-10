@@ -606,7 +606,7 @@ export default function AdminTables() {
       <View style={[styles.header, isMobile && { paddingHorizontal: 14 }]}>
         <View style={{ flex: 1, minWidth: 200 }}>
           <Text style={styles.title}>Table & Floor Management</Text>
-          <Text style={styles.subtitle}>Live sync with POS, Waiter app & Kitchen KDS</Text>
+          <Text style={styles.subtitle}>Live sync with POS, Order Taker app & Kitchen KDS</Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={[styles.headerBtn, styles.headerBtnGhost]} onPress={() => openAddReservationModal()}>

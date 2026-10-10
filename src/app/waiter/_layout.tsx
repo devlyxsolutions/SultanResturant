@@ -13,10 +13,24 @@ import { useRoleGuard } from '../../hooks/useRoleGuard';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import SultanLogo from '../../components/SultanLogo';
 
+import { useRestaurantStore } from '../../store';
+
 export default function WaiterLayout() {
   const { ready, user, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  const staff = useRestaurantStore((state) => state.staff) || [];
+  const currentStaff = staff.find(
+    (s) =>
+      (user?.staffId && s.id === user.staffId) ||
+      (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
+  );
+  const floorLabel =
+    currentStaff?.assignedZone ||
+    (currentStaff?.assignedZones && currentStaff.assignedZones.length > 0
+      ? currentStaff.assignedZones.join(', ')
+      : user?.assignedZone || (user?.assignedZones?.length ? user.assignedZones.join(', ') : ''));
 
   if (!ready) return null;
 
@@ -28,10 +42,12 @@ export default function WaiterLayout() {
         <View style={styles.headerLeft}>
           <SultanLogo size="sm" width={28} height={28} style={{ marginRight: 8 }} />
           <Text style={[styles.headerTitle, isMobile && styles.headerTitleMobile]}>
-            {isMobile ? 'Waiter' : 'Sultan Waiter'}
+            {isMobile ? 'Order Taker' : 'Sultan Order Taker'}
           </Text>
           <View style={styles.staffTag}>
-            <Text style={styles.staffTagText}>{user?.name || 'Staff'}</Text>
+            <Text style={styles.staffTagText}>
+              {user?.name || 'Staff'}{floorLabel ? ` • ${floorLabel}` : ''}
+            </Text>
           </View>
         </View>
         
