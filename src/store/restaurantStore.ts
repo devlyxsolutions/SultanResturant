@@ -5,7 +5,10 @@ import { appStorage } from './storage';
 export type Table = {
   id: string;
   name: string;
+  floor?: string;
   zone: string;
+  seatingType?: 'tables' | 'couches' | 'majlis';
+  cabinNumber?: string;
   seats: number;
   status: 'available' | 'occupied' | 'billed' | 'reserved';
   server?: string;
@@ -203,18 +206,33 @@ type RestaurantState = {
 
 // Initial Mock Data
 const INITIAL_TABLES: Table[] = [
-  { id: '1', zone: 'Main Hall', name: 'T-01', seats: 4, status: 'available' },
-  { id: '2', zone: 'Main Hall', name: 'T-02', seats: 2, status: 'occupied', billTotal: 45.00, server: 'Junaid' },
-  { id: '3', zone: 'Main Hall', name: 'T-03', seats: 4, status: 'available' },
-  { id: '4', zone: 'Rooftop', name: 'R-01', seats: 4, status: 'available' },
-  { id: '5', zone: 'VIP', name: 'V-01', seats: 8, status: 'reserved', reservationId: 'res-1' },
+  // Ground Floor
+  { id: '1', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-01', seats: 4, status: 'available' },
+  { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'occupied', billTotal: 2500, server: 'Junaid' },
+  { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
+  { id: '4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
+  { id: '5', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
+
+  // 1st Floor
+  { id: 'f1-t1', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T01', seats: 4, status: 'available' },
+  { id: 'f1-t2', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T02', seats: 6, status: 'available' },
+  { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
+  { id: 'f1-c2', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 2', seats: 6, status: 'occupied', billTotal: 4800, server: 'Sara Ahmed' },
+  { id: 'f1-m1', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
+  { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'occupied', billTotal: 12500, server: 'Hamza' },
+  { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
+  { id: 'f1-m4', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 4', name: 'Cabin 4', seats: 6, status: 'reserved', reservationId: 'res-1' },
+
+  // Rooftop
+  { id: 'rt-1', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-01', seats: 4, status: 'available' },
+  { id: 'rt-2', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Sky Cabin 1', seats: 8, status: 'available' },
 ];
 
 const INITIAL_RESERVATIONS: Reservation[] = [
   {
     id: 'res-1',
-    tableId: '5',
-    tableName: 'V-01',
+    tableId: 'f1-m4',
+    tableName: 'Cabin 4',
     customerName: 'Hamza Malik',
     phone: '03219988776',
     guestsCount: 6,

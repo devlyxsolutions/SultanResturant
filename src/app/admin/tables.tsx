@@ -14,6 +14,17 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, Table, Reservation } from '../../store/restaurantStore';
+import SeatingTypeIcon from '../../components/SeatingTypeIcon';
+import {
+  SEATING_ZONES,
+  SEATING_ZONE_TYPES,
+  SeatingZoneType,
+  FLOOR_ORDER,
+  getTableFloor,
+  getTableSeatingType,
+  getFloorMeta,
+  sortFloors,
+} from '../../constants/floors';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 type TabKey = 'tables' | 'reservations' | 'zones';
@@ -77,7 +88,8 @@ export default function AdminTables() {
 
   const [activeTab, setActiveTab] = useState<TabKey>('tables');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [zoneFilter, setZoneFilter] = useState<string>('all');
+  const [floorFilter, setFloorFilter] = useState<string>('all');
+  const [seatingTypeFilter, setSeatingTypeFilter] = useState<'all' | SeatingZoneType>('all');
   const [search, setSearch] = useState('');
   const [resFilter, setResFilter] = useState<'all' | Reservation['status']>('confirmed');
 
@@ -85,12 +97,13 @@ export default function AdminTables() {
   const [actionTableId, setActionTableId] = useState<string | null>(null);
   const actionTable = actionTableId ? tables.find((t) => t.id === actionTableId) || null : null;
 
-  // Table form
+  // Table & Cabin form
   const [tableModalVisible, setTableModalVisible] = useState(false);
   const [editingTable, setEditingTable] = useState<Table | null>(null);
+  const [formFloor, setFormFloor] = useState<string>('1st Floor');
+  const [formSeatingType, setFormSeatingType] = useState<SeatingZoneType>('majlis');
   const [formName, setFormName] = useState('');
-  const [formZone, setFormZone] = useState('');
-  const [formSeats, setFormSeats] = useState('');
+  const [formSeats, setFormSeats] = useState('8');
 
   // Zone form
   const [zoneModalVisible, setZoneModalVisible] = useState(false);
@@ -119,6 +132,12 @@ export default function AdminTables() {
   const reservationForTable = (t: Table) =>
     reservations.find((r) => r.status === 'confirmed' && (r.id === t.reservationId || r.tableId === t.id));
 
+  // Floors list
+  const availableFloors = useMemo(() => {
+    const discovered = tables.map((t) => getTableFloor(t));
+    return sortFloors([...FLOOR_ORDER, ...zones, ...discovered]);
+  }, [tables, zones]);
+
   // ---------- Metrics ----------
   const counts = useMemo(() => {
     const c = { available: 0, occupied: 0, billed: 0, reserved: 0 };
@@ -134,50 +153,122 @@ export default function AdminTables() {
   const upcomingCount = reservations.filter((r) => r.status === 'confirmed').length;
 
   // ---------- Filtering ----------
-  const filteredTables = tables.filter((t) => {
-    if (statusFilter !== 'all' && t.status !== statusFilter) return false;
-    if (zoneFilter !== 'all' && t.zone !== zoneFilter) return false;
-    if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
-    return true;
-  });
-  const zonesToRender = (zoneFilter === 'all' ? zones : [zoneFilter]).filter((z) =>
-    filteredTables.some((t) => t.zone === z)
-  );
-  const orphanTables = filteredTables.filter((t) => !zones.includes(t.zone));
+  const filteredTables = useMemo(() => {
+    return tables.filter((t) => {
+      if (statusFilter !== 'all' && t.status !== statusFilter) return false;
+      const tFloor = getTableFloor(t);
+      if (floorFilter !== 'all' && tFloor.toLowerCase() !== floorFilter.toLowerCase()) return false;
+      const tType = getTableSeatingType(t);
+      if (seatingTypeFilter !== 'all' && tType !== seatingTypeFilter) return false;
+      if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
+      return true;
+    });
+  }, [tables, statusFilter, floorFilter, seatingTypeFilter, search]);
+
+  // Scope metrics by active floor
+  const scopedTables = useMemo(() => {
+    if (floorFilter === 'all') return tables;
+    return tables.filter((t) => getTableFloor(t).toLowerCase() === floorFilter.toLowerCase());
+  }, [tables, floorFilter]);
+
+  // 3-Zone Breakdown & Cabin summary for the selected floor (or entire restaurant)
+  const zoneSummary = useMemo(() => {
+    const tablesList = scopedTables.filter((t) => getTableSeatingType(t) === 'tables');
+    const couchesList = scopedTables.filter((t) => getTableSeatingType(t) === 'couches');
+    const majlisList = scopedTables.filter((t) => getTableSeatingType(t) === 'majlis');
+
+    return {
+      tables: {
+        count: tablesList.length,
+        seats: tablesList.reduce((s, t) => s + t.seats, 0),
+        available: tablesList.filter((t) => t.status === 'available').length,
+      },
+      couches: {
+        count: couchesList.length,
+        seats: couchesList.reduce((s, t) => s + t.seats, 0),
+        available: couchesList.filter((t) => t.status === 'available').length,
+      },
+      majlis: {
+        cabinsCount: majlisList.length,
+        sittingCapacity: majlisList.reduce((s, t) => s + t.seats, 0),
+        availableCabins: majlisList.filter((t) => t.status === 'available').length,
+        cabins: majlisList,
+      },
+    };
+  }, [scopedTables]);
 
   const filteredReservations = reservations
     .filter((r) => resFilter === 'all' || r.status === resFilter)
     .sort((a, b) => (a.reservationDate + a.timeSlot).localeCompare(b.reservationDate + b.timeSlot));
 
-  // ---------- Table CRUD ----------
-  const openAddTableModal = () => {
+  // ---------- Table & Cabin CRUD ----------
+  const openAddTableModal = (defaultFloor?: string, defaultType?: SeatingZoneType) => {
     setEditingTable(null);
-    setFormName('');
-    setFormZone(zones[0] || '');
-    setFormSeats('4');
+    const chosenFloor = defaultFloor || (floorFilter !== 'all' ? floorFilter : '1st Floor');
+    const chosenType = defaultType || (seatingTypeFilter !== 'all' ? seatingTypeFilter : 'majlis');
+    setFormFloor(chosenFloor);
+    setFormSeatingType(chosenType);
+
+    const floorItems = tables.filter(
+      (t) => getTableFloor(t).toLowerCase() === chosenFloor.toLowerCase() && getTableSeatingType(t) === chosenType
+    );
+    const nextNum = floorItems.length + 1;
+
+    if (chosenType === 'majlis') {
+      setFormName(`Cabin ${nextNum}`);
+      setFormSeats('8');
+    } else if (chosenType === 'couches') {
+      setFormName(`Couch ${nextNum}`);
+      setFormSeats('6');
+    } else {
+      const meta = getFloorMeta(chosenFloor);
+      setFormName(`${meta.short || 'T'}-${String(nextNum).padStart(2, '0')}`);
+      setFormSeats('4');
+    }
     setTableModalVisible(true);
   };
 
   const openEditTableModal = (table: Table) => {
     setActionTableId(null);
     setEditingTable(table);
+    setFormFloor(getTableFloor(table));
+    setFormSeatingType(getTableSeatingType(table));
     setFormName(table.name);
-    setFormZone(table.zone);
     setFormSeats(table.seats.toString());
     setTableModalVisible(true);
   };
 
   const handleSaveTable = () => {
     const seatsNum = parseInt(formSeats, 10);
-    if (!formName.trim() || !formZone.trim()) return notify('Missing info', 'Please enter a table name and select a zone.');
-    if (isNaN(seatsNum) || seatsNum <= 0) return notify('Invalid seats', 'Seats must be a positive number.');
-    const duplicate = tables.some((t) => t.name.toLowerCase() === formName.trim().toLowerCase() && t.id !== editingTable?.id);
-    if (duplicate) return notify('Duplicate name', `A table named ${formName.trim()} already exists.`);
+    if (!formName.trim() || !formFloor.trim()) {
+      return notify('Missing info', 'Please enter a name/number and select a floor.');
+    }
+    if (isNaN(seatsNum) || seatsNum <= 0) {
+      return notify('Invalid capacity', 'Sitting capacity must be a positive number.');
+    }
+    const duplicate = tables.some(
+      (t) => t.name.toLowerCase() === formName.trim().toLowerCase() && t.id !== editingTable?.id
+    );
+    if (duplicate) {
+      return notify('Duplicate name', `An entry named "${formName.trim()}" already exists.`);
+    }
+
+    const payload: Partial<Table> = {
+      name: formName.trim(),
+      floor: formFloor,
+      zone: formFloor, // keep zone identical to floor for backward compatibility
+      seatingType: formSeatingType,
+      cabinNumber: formSeatingType === 'majlis' ? formName.trim() : undefined,
+      seats: seatsNum,
+    };
 
     if (editingTable) {
-      updateTable(editingTable.id, { name: formName.trim(), zone: formZone, seats: seatsNum });
+      updateTable(editingTable.id, payload);
     } else {
-      addTable({ name: formName.trim(), zone: formZone, seats: seatsNum, status: 'available' });
+      addTable({
+        ...payload,
+        status: 'available',
+      } as any);
     }
     setTableModalVisible(false);
   };
@@ -399,26 +490,59 @@ export default function AdminTables() {
     const primary = table.mergedInto ? tableById(table.mergedInto) : undefined;
     const linkedChildren = tables.filter((t) => t.mergedInto === table.id);
 
+    const seatingType = getTableSeatingType(table);
+    const floorName = getTableFloor(table);
+    const zoneMeta = SEATING_ZONES[seatingType];
+    const isMajlis = seatingType === 'majlis';
+    const isCouch = seatingType === 'couches';
+
     return (
       <View key={`${table.id}-${table.name}-${index ?? 0}`} style={{ width: `${100 / columns}%`, padding: 6 }}>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => setActionTableId(table.id)}
-          style={[styles.tile, { borderColor: meta.color + '40' }]}
+          style={[
+            styles.tile,
+            { borderColor: meta.color + '40' },
+            isMajlis && { backgroundColor: '#FDF8F5', borderColor: '#4a121a30' },
+          ]}
         >
-          <View style={[styles.tileStrip, { backgroundColor: meta.color }]} />
+          <View style={[styles.tileStrip, { backgroundColor: isMajlis ? '#4a121a' : isCouch ? '#E65100' : meta.color }]} />
           <View style={styles.tileBody}>
+            {/* Top row with seating icon and name */}
             <View style={styles.tileTopRow}>
-              <Text style={styles.tileName} numberOfLines={1}>{table.name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+                <View
+                  style={[
+                    styles.tileIconBubble,
+                    { backgroundColor: isMajlis ? '#4a121a14' : isCouch ? '#E6510014' : '#1976D214' },
+                  ]}
+                >
+                  <SeatingTypeIcon type={seatingType} size={17} color={zoneMeta.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tileName} numberOfLines={1}>{table.name}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={[styles.tileTypeBadge, { color: zoneMeta.color }]}>
+                      {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch' : '🍽️ Table'}
+                    </Text>
+                    <Text style={styles.tileDot}>•</Text>
+                    <Text style={styles.tileFloorTag} numberOfLines={1}>{floorName}</Text>
+                  </View>
+                </View>
+              </View>
               <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
                 <Ionicons name={meta.icon} size={11} color={meta.color} />
                 <Text style={[styles.statusPillText, { color: meta.color }]}>{meta.label}</Text>
               </View>
             </View>
 
-            <View style={styles.tileMetaRow}>
-              <Ionicons name="people-outline" size={13} color="#8E8E93" />
-              <Text style={styles.tileMetaText}>{table.seats} seats</Text>
+            {/* Capacity row */}
+            <View style={[styles.tileCapacityRow, isMajlis && styles.tileMajlisCapacityRow]}>
+              <Ionicons name="people" size={13} color={isMajlis ? '#4a121a' : '#636366'} />
+              <Text style={[styles.tileCapacityText, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
+                {isMajlis ? `Cabin Sitting Capacity: ${table.seats} Guests` : `${table.seats} Seats Capacity`}
+              </Text>
               {table.server ? (
                 <>
                   <Text style={styles.dot}>•</Text>
@@ -485,21 +609,28 @@ export default function AdminTables() {
     const isBusy = t.status === 'occupied' || t.status === 'billed';
     const res = reservationForTable(t);
     const primary = t.mergedInto ? tableById(t.mergedInto) : undefined;
+    const seatingType = getTableSeatingType(t);
+    const floorName = getTableFloor(t);
+    const zoneMeta = SEATING_ZONES[seatingType];
+    const isMajlis = seatingType === 'majlis';
 
     return (
       <View style={styles.sheetBody}>
         <View style={styles.sheetHeader}>
-          <View style={[styles.sheetIcon, { backgroundColor: meta.bg }]}>
-            <Ionicons name="restaurant" size={22} color={meta.color} />
+          <View style={[styles.sheetIcon, { backgroundColor: isMajlis ? '#4a121a15' : meta.bg }]}>
+            <SeatingTypeIcon type={seatingType} size={24} color={zoneMeta.color} />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.sheetTitle}>{t.name}</Text>
-            <Text style={styles.sheetSub}>{t.zone} • {t.seats} seats • {meta.label}</Text>
+            <Text style={styles.sheetSub}>
+              {floorName} • {zoneMeta.label} • {isMajlis ? `Cabin Capacity: ${t.seats} Guests` : `${t.seats} Seats`} • {meta.label}
+            </Text>
           </View>
           <TouchableOpacity onPress={() => setActionTableId(null)} hitSlop={10} style={styles.closeBtn}>
             <Ionicons name="close" size={20} color="#8E8E93" />
           </TouchableOpacity>
         </View>
+
 
         {isBusy && !primary && (
           <View style={[styles.sheetInfo, { backgroundColor: meta.bg }]}>
@@ -605,20 +736,34 @@ export default function AdminTables() {
       {/* Header */}
       <View style={[styles.header, isMobile && { paddingHorizontal: 14 }]}>
         <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={styles.title}>Table & Floor Management</Text>
-          <Text style={styles.subtitle}>Live sync with POS, Order Taker app & Kitchen KDS</Text>
+          <Text style={styles.title}>Floor & Zone Management</Text>
+          <Text style={styles.subtitle}>Floors, Couches, Tables & Arabian Majlis Cabins</Text>
         </View>
         <View style={styles.headerActions}>
           <TouchableOpacity style={[styles.headerBtn, styles.headerBtnGhost]} onPress={() => openAddReservationModal()}>
             <Ionicons name="calendar-outline" size={16} color={STATUS_META.reserved.color} />
-            {!isMobile && <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>New Reservation</Text>}
+            {!isMobile && <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Reservation</Text>}
           </TouchableOpacity>
           <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={activeTab === 'zones' ? () => { setFormNewZone(''); setZoneModalVisible(true); } : openAddTableModal}
+            style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+            onPress={() => openAddTableModal(undefined, 'majlis')}
           >
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.headerBtnText}>{activeTab === 'zones' ? 'Add Zone' : 'Add Table'}</Text>
+            <SeatingTypeIcon type="majlis" size={16} color="#fff" />
+            <Text style={styles.headerBtnText}>+ Cabin</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
+            onPress={() => openAddTableModal(undefined, 'couches')}
+          >
+            <SeatingTypeIcon type="couches" size={16} color="#fff" />
+            <Text style={styles.headerBtnText}>+ Couch</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
+            onPress={() => openAddTableModal(undefined, 'tables')}
+          >
+            <SeatingTypeIcon type="tables" size={16} color="#fff" />
+            <Text style={styles.headerBtnText}>+ Table</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -646,7 +791,9 @@ export default function AdminTables() {
             return (
               <TouchableOpacity key={tab.key} style={[styles.segmentItem, active && styles.segmentItemActive]} onPress={() => setActiveTab(tab.key)}>
                 <Ionicons name={active ? tab.icon : (`${tab.icon}-outline` as IconName)} size={16} color={active ? '#fff' : '#636366'} />
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{tab.label}</Text>
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                  {tab.key === 'zones' ? 'Floors & Cabins' : tab.label}
+                </Text>
                 {!!tab.badge && (
                   <View style={[styles.segmentBadge, active && { backgroundColor: GOLD }]}>
                     <Text style={styles.segmentBadgeText}>{tab.badge}</Text>
@@ -660,12 +807,13 @@ export default function AdminTables() {
         {/* ---------- FLOOR TAB ---------- */}
         {activeTab === 'tables' && (
           <>
+            {/* Search and Status filters */}
             <View style={styles.toolbar}>
               <View style={styles.searchBox}>
                 <Ionicons name="search" size={16} color="#8E8E93" />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search table…"
+                  placeholder="Search tables, couches, cabins…"
                   placeholderTextColor="#AEAEB2"
                   value={search}
                   onChangeText={setSearch}
@@ -692,42 +840,168 @@ export default function AdminTables() {
               </ScrollView>
             </View>
 
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, marginBottom: 6 }}>
-              {['all', ...zones].map((z) => {
-                const active = zoneFilter === z;
-                return (
-                  <TouchableOpacity key={z} style={[styles.zoneChip, active && styles.zoneChipActive]} onPress={() => setZoneFilter(z)}>
-                    <Text style={[styles.zoneChipText, active && { color: BRAND }]}>{z === 'all' ? 'All zones' : z}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+            {/* Tier 1: Floor Filter Pills */}
+            <View style={{ marginBottom: 6 }}>
+              <Text style={styles.filterSectionTitle}>Select Floor:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {['all', ...availableFloors].map((fl) => {
+                  const active = floorFilter === fl;
+                  const count = fl === 'all' ? tables.length : tables.filter((t) => getTableFloor(t).toLowerCase() === fl.toLowerCase()).length;
+                  const meta = fl !== 'all' ? getFloorMeta(fl) : null;
+                  return (
+                    <TouchableOpacity
+                      key={fl}
+                      style={[
+                        styles.floorFilterChip,
+                        active && { backgroundColor: BRAND, borderColor: BRAND },
+                      ]}
+                      onPress={() => setFloorFilter(fl)}
+                    >
+                      {meta && <Ionicons name={meta.icon as any} size={14} color={active ? '#fff' : BRAND} />}
+                      <Text style={[styles.floorFilterChipText, active && { color: '#fff' }]}>
+                        {fl === 'all' ? 'All Floors' : fl}
+                      </Text>
+                      <View style={[styles.countBadge, active && { backgroundColor: '#ffffff30' }]}>
+                        <Text style={[styles.countBadgeText, active && { color: '#fff' }]}>{count}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
 
-            {zonesToRender.map((zone) => {
-              const zoneTables = filteredTables.filter((t) => t.zone === zone);
-              const free = zoneTables.filter((t) => t.status === 'available').length;
-              return (
-                <View key={zone} style={styles.zoneSection}>
-                  <View style={styles.zoneHeader}>
-                    <Text style={styles.zoneTitle}>{zone}</Text>
-                    <Text style={styles.zoneMeta}>{free} free of {zoneTables.length}</Text>
-                  </View>
-                  <View style={styles.grid}>{zoneTables.map(renderTile)}</View>
-                </View>
-              );
-            })}
-            {orphanTables.length > 0 && (
-              <View style={styles.zoneSection}>
-                <View style={styles.zoneHeader}>
-                  <Text style={styles.zoneTitle}>Unassigned</Text>
-                </View>
-                <View style={styles.grid}>{orphanTables.map(renderTile)}</View>
+            {/* Tier 2: Seating Zone Pills (Couches, Tables, Majlis Sitting) */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={styles.filterSectionTitle}>Seating Zone Type:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                <TouchableOpacity
+                  style={[styles.zoneTypeChip, seatingTypeFilter === 'all' && styles.zoneTypeChipActive]}
+                  onPress={() => setSeatingTypeFilter('all')}
+                >
+                  <Text style={[styles.zoneTypeChipText, seatingTypeFilter === 'all' && { color: '#fff' }]}>
+                    All Types ({scopedTables.length})
+                  </Text>
+                </TouchableOpacity>
+
+                {SEATING_ZONE_TYPES.map((type) => {
+                  const meta = SEATING_ZONES[type];
+                  const active = seatingTypeFilter === type;
+                  const count = scopedTables.filter((t) => getTableSeatingType(t) === type).length;
+                  return (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.zoneTypeChip,
+                        active && { backgroundColor: meta.color, borderColor: meta.color },
+                      ]}
+                      onPress={() => setSeatingTypeFilter(type)}
+                    >
+                      <SeatingTypeIcon type={type} size={16} color={active ? '#fff' : meta.color} />
+                      <Text style={[styles.zoneTypeChipText, active && { color: '#fff' }]}>
+                        {meta.label} ({count})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Zone Capacity & Cabin Overview Banner */}
+            <View style={styles.zoneSummaryBanner}>
+              <View style={styles.zoneSummaryHeader}>
+                <Ionicons name="stats-chart" size={16} color={BRAND} />
+                <Text style={styles.zoneSummaryTitle}>
+                  {floorFilter === 'all' ? 'Overall Restaurant Capacity' : `${floorFilter} Seating & Cabins`}
+                </Text>
               </View>
-            )}
+
+              <View style={styles.zoneSummaryCardsRow}>
+                {/* Dining Tables Summary */}
+                <View style={[styles.zoneSummaryMiniCard, { borderColor: '#1976D230' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.miniIconBubble, { backgroundColor: '#1976D218' }]}>
+                      <SeatingTypeIcon type="tables" size={15} color="#1976D2" />
+                    </View>
+                    <Text style={[styles.miniCardTitle, { color: '#1976D2' }]}>Tables</Text>
+                  </View>
+                  <Text style={styles.miniCardCount}>{zoneSummary.tables.count} Tables</Text>
+                  <Text style={styles.miniCardSub}>
+                    {zoneSummary.tables.seats} Seats • {zoneSummary.tables.available} Free
+                  </Text>
+                </View>
+
+                {/* Couches Summary */}
+                <View style={[styles.zoneSummaryMiniCard, { borderColor: '#E6510030' }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.miniIconBubble, { backgroundColor: '#E6510018' }]}>
+                      <SeatingTypeIcon type="couches" size={15} color="#E65100" />
+                    </View>
+                    <Text style={[styles.miniCardTitle, { color: '#E65100' }]}>Couches</Text>
+                  </View>
+                  <Text style={styles.miniCardCount}>{zoneSummary.couches.count} Couches</Text>
+                  <Text style={styles.miniCardSub}>
+                    {zoneSummary.couches.seats} Seats • {zoneSummary.couches.available} Free
+                  </Text>
+                </View>
+
+                {/* Majlis Sitting & Cabins Summary */}
+                <View style={[styles.zoneSummaryMiniCard, styles.majlisSummaryHighlight]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={[styles.miniIconBubble, { backgroundColor: '#4a121a18' }]}>
+                      <SeatingTypeIcon type="majlis" size={15} color="#4a121a" />
+                    </View>
+                    <Text style={[styles.miniCardTitle, { color: '#4a121a' }]}>Majlis Sitting</Text>
+                  </View>
+                  <Text style={[styles.miniCardCount, { color: '#4a121a' }]}>
+                    {zoneSummary.majlis.cabinsCount} Cabins
+                  </Text>
+                  <Text style={[styles.miniCardSub, { color: '#4a121a', fontWeight: '700' }]}>
+                    {zoneSummary.majlis.sittingCapacity} Guests Capacity • {zoneSummary.majlis.availableCabins} Free
+                  </Text>
+                </View>
+              </View>
+
+              {/* Individual Cabin sitting capacity tags */}
+              {zoneSummary.majlis.cabins.length > 0 && (
+                <View style={styles.cabinsTagsContainer}>
+                  <Text style={styles.cabinsTagsLabel}>🕌 Majlis Cabins Breakdown:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                    {zoneSummary.majlis.cabins.map((cabin) => (
+                      <TouchableOpacity
+                        key={cabin.id}
+                        style={[
+                          styles.cabinCapacityTag,
+                          cabin.status === 'occupied' && { borderColor: '#D64541', backgroundColor: '#FDEDEC' },
+                          cabin.status === 'reserved' && { borderColor: '#7D3C98', backgroundColor: '#F4ECF7' },
+                        ]}
+                        onPress={() => setActionTableId(cabin.id)}
+                      >
+                        <SeatingTypeIcon type="majlis" size={12} color="#4a121a" />
+                        <Text style={styles.cabinTagName}>{cabin.name}</Text>
+                        <View style={styles.cabinTagCapacity}>
+                          <Text style={styles.cabinTagCapacityText}>{cabin.seats} Guests</Text>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
+            </View>
+
+            {/* Grid of Tables, Couches, and Majlis Cabins */}
+            <View style={styles.grid}>{filteredTables.map(renderTile)}</View>
+
             {filteredTables.length === 0 && (
               <View style={styles.emptyState}>
                 <Ionicons name="grid-outline" size={40} color="#C7C7CC" />
-                <Text style={styles.emptyText}>No tables match these filters.</Text>
+                <Text style={styles.emptyText}>No tables, couches, or cabins match these filters.</Text>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { marginTop: 12 }]}
+                  onPress={() => openAddTableModal()}
+                >
+                  <Ionicons name="add" size={16} color="#fff" />
+                  <Text style={styles.headerBtnText}>Add Seating</Text>
+                </TouchableOpacity>
               </View>
             )}
           </>
@@ -814,37 +1088,164 @@ export default function AdminTables() {
           </>
         )}
 
-        {/* ---------- ZONES TAB ---------- */}
+        {/* ---------- FLOORS & CABINS DIRECTORY TAB ---------- */}
         {activeTab === 'zones' && (
-          <View style={styles.grid}>
-            {zones.map((zone) => {
-              const zt = tables.filter((t) => t.zone === zone);
-              const seats = zt.reduce((s, t) => s + t.seats, 0);
-              const busy = zt.filter((t) => t.status !== 'available').length;
+          <View style={{ gap: 16 }}>
+            {availableFloors.map((floorName) => {
+              const floorTables = tables.filter((t) => getTableFloor(t).toLowerCase() === floorName.toLowerCase());
+              const meta = getFloorMeta(floorName);
+              const tableItems = floorTables.filter((t) => getTableSeatingType(t) === 'tables');
+              const couchItems = floorTables.filter((t) => getTableSeatingType(t) === 'couches');
+              const majlisItems = floorTables.filter((t) => getTableSeatingType(t) === 'majlis');
+              const totalFloorSeats = floorTables.reduce((s, t) => s + t.seats, 0);
+
               return (
-                <View key={zone} style={{ width: `${100 / Math.min(columns, 3)}%`, padding: 6 }}>
-                  <View style={styles.zoneCard}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={[styles.statIcon, { backgroundColor: BRAND + '14' }]}>
-                        <Ionicons name="map" size={18} color={BRAND} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.zoneCardTitle}>{zone}</Text>
-                        <Text style={styles.zoneMeta}>{zt.length} tables • {seats} seats</Text>
-                      </View>
-                      <TouchableOpacity onPress={() => handleDeleteZone(zone)} hitSlop={8} style={styles.closeBtn}>
-                        <Ionicons name="trash-outline" size={18} color="#D64541" />
-                      </TouchableOpacity>
+                <View key={floorName} style={styles.floorCardContainer}>
+                  {/* Floor Header */}
+                  <View style={styles.floorCardHeader}>
+                    <View style={[styles.floorHeaderBadge, { backgroundColor: meta.color + '15' }]}>
+                      <Ionicons name={meta.icon as any} size={20} color={meta.color} />
                     </View>
-                    <View style={styles.progressTrack}>
-                      <View style={[styles.progressFill, { width: `${zt.length ? (busy / zt.length) * 100 : 0}%` }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.floorCardName}>{floorName}</Text>
+                      <Text style={styles.floorCardBlurb}>{meta.blurb}</Text>
                     </View>
-                    <Text style={styles.zoneMeta}>{busy} in use • {zt.length - busy} free</Text>
+                    <View style={styles.floorHeaderStats}>
+                      <Text style={styles.floorTotalCount}>{floorTables.length} Total Units</Text>
+                      <Text style={styles.floorTotalSeats}>{totalFloorSeats} Total Capacity</Text>
+                    </View>
+                  </View>
+
+                  {/* 3 Seating Zones inside this Floor */}
+                  <View style={styles.floorZonesGrid}>
+                    {/* Zone 1: Dining Tables */}
+                    <View style={[styles.floorZoneBox, { borderColor: '#1976D230' }]}>
+                      <View style={styles.floorZoneBoxHeader}>
+                        <View style={[styles.miniIconBubble, { backgroundColor: '#1976D218' }]}>
+                          <SeatingTypeIcon type="tables" size={16} color="#1976D2" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.floorZoneTitle, { color: '#1976D2' }]}>Tables Zone</Text>
+                          <Text style={styles.floorZoneSub}>
+                            {tableItems.length} Tables • {tableItems.reduce((s, t) => s + t.seats, 0)} Seats
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.tinyAddBtn, { backgroundColor: '#1976D2' }]}
+                          onPress={() => openAddTableModal(floorName, 'tables')}
+                        >
+                          <Ionicons name="add" size={13} color="#fff" />
+                          <Text style={styles.tinyAddBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.unitPillsRow}>
+                        {tableItems.map((tbl) => (
+                          <TouchableOpacity
+                            key={tbl.id}
+                            style={[
+                              styles.unitPill,
+                              tbl.status !== 'available' && { backgroundColor: '#FDEDEC', borderColor: '#D64541' },
+                            ]}
+                            onPress={() => setActionTableId(tbl.id)}
+                          >
+                            <Text style={styles.unitPillName}>{tbl.name}</Text>
+                            <Text style={styles.unitPillSeats}>({tbl.seats}s)</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {tableItems.length === 0 && <Text style={styles.noUnitsText}>No dining tables yet.</Text>}
+                      </View>
+                    </View>
+
+                    {/* Zone 2: Couches */}
+                    <View style={[styles.floorZoneBox, { borderColor: '#E6510030' }]}>
+                      <View style={styles.floorZoneBoxHeader}>
+                        <View style={[styles.miniIconBubble, { backgroundColor: '#E6510018' }]}>
+                          <SeatingTypeIcon type="couches" size={16} color="#E65100" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.floorZoneTitle, { color: '#E65100' }]}>Couches Zone</Text>
+                          <Text style={styles.floorZoneSub}>
+                            {couchItems.length} Couches • {couchItems.reduce((s, t) => s + t.seats, 0)} Seats
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.tinyAddBtn, { backgroundColor: '#E65100' }]}
+                          onPress={() => openAddTableModal(floorName, 'couches')}
+                        >
+                          <Ionicons name="add" size={13} color="#fff" />
+                          <Text style={styles.tinyAddBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.unitPillsRow}>
+                        {couchItems.map((couch) => (
+                          <TouchableOpacity
+                            key={couch.id}
+                            style={[
+                              styles.unitPill,
+                              couch.status !== 'available' && { backgroundColor: '#FDEDEC', borderColor: '#D64541' },
+                            ]}
+                            onPress={() => setActionTableId(couch.id)}
+                          >
+                            <Text style={styles.unitPillName}>{couch.name}</Text>
+                            <Text style={styles.unitPillSeats}>({couch.seats}s)</Text>
+                          </TouchableOpacity>
+                        ))}
+                        {couchItems.length === 0 && <Text style={styles.noUnitsText}>No couches yet.</Text>}
+                      </View>
+                    </View>
+
+                    {/* Zone 3: Arabian Majlis Cabins */}
+                    <View style={[styles.floorZoneBox, styles.majlisFloorZoneBox]}>
+                      <View style={styles.floorZoneBoxHeader}>
+                        <View style={[styles.miniIconBubble, { backgroundColor: '#4a121a18' }]}>
+                          <SeatingTypeIcon type="majlis" size={16} color="#4a121a" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.floorZoneTitle, { color: '#4a121a' }]}>Majlis Sitting Cabins</Text>
+                          <Text style={[styles.floorZoneSub, { color: '#4a121a' }]}>
+                            {majlisItems.length} Cabins • {majlisItems.reduce((s, t) => s + t.seats, 0)} Guests Sitting Capacity
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.tinyAddBtn, { backgroundColor: '#4a121a' }]}
+                          onPress={() => openAddTableModal(floorName, 'majlis')}
+                        >
+                          <Ionicons name="add" size={13} color="#fff" />
+                          <Text style={styles.tinyAddBtnText}>Add Cabin</Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Detailed Cabins List */}
+                      <View style={styles.unitPillsRow}>
+                        {majlisItems.map((cabin) => (
+                          <TouchableOpacity
+                            key={cabin.id}
+                            style={[
+                              styles.cabinDetailedCard,
+                              cabin.status === 'occupied' && { borderColor: '#D64541', backgroundColor: '#FDEDEC' },
+                              cabin.status === 'reserved' && { borderColor: '#7D3C98', backgroundColor: '#F4ECF7' },
+                            ]}
+                            onPress={() => setActionTableId(cabin.id)}
+                          >
+                            <SeatingTypeIcon type="majlis" size={14} color="#4a121a" />
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.cabinDetailedName}>{cabin.name}</Text>
+                              <Text style={styles.cabinDetailedCapacity}>
+                                Sitting Capacity: {cabin.seats} Guests
+                              </Text>
+                            </View>
+                            <View style={[styles.statusMiniDot, { backgroundColor: STATUS_META[cabin.status].color }]} />
+                          </TouchableOpacity>
+                        ))}
+                        {majlisItems.length === 0 && (
+                          <Text style={styles.noUnitsText}>No Majlis Cabins configured on this floor.</Text>
+                        )}
+                      </View>
+                    </View>
                   </View>
                 </View>
               );
             })}
-            {zones.length === 0 && <Text style={styles.emptyText}>No zones yet. Add one to get started.</Text>}
           </View>
         )}
       </ScrollView>
@@ -858,37 +1259,148 @@ export default function AdminTables() {
         </TouchableOpacity>
       </Modal>
 
-      {/* ---------- Add / edit table ---------- */}
+      {/* ---------- Add / Edit Seating / Cabin Modal ---------- */}
       <Modal visible={tableModalVisible} transparent animationType="fade" onRequestClose={() => setTableModalVisible(false)}>
         <View style={styles.overlay}>
           <View style={styles.dialog}>
-            <Text style={styles.dialogTitle}>{editingTable ? 'Edit table' : 'Add new table'}</Text>
-            <Text style={styles.label}>Table name</Text>
-            <TextInput style={styles.input} placeholder="e.g. T-06" value={formName} onChangeText={setFormName} />
-            <Text style={styles.label}>Zone</Text>
-            <View style={styles.wrapRow}>
-              {zones.map((z) => (
-                <TouchableOpacity key={z} style={[styles.chip, formZone === z && { backgroundColor: BRAND, borderColor: BRAND }]} onPress={() => setFormZone(z)}>
-                  <Text style={[styles.chipText, formZone === z && { color: '#fff' }]}>{z}</Text>
-                </TouchableOpacity>
-              ))}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <SeatingTypeIcon type={formSeatingType} size={22} color={SEATING_ZONES[formSeatingType].color} />
+              <Text style={styles.dialogTitle}>
+                {editingTable
+                  ? `Edit ${SEATING_ZONES[formSeatingType].unitLabel}`
+                  : `Add ${SEATING_ZONES[formSeatingType].unitLabel}`}
+              </Text>
             </View>
-            <Text style={styles.label}>Seats</Text>
+
+            {/* Select Floor */}
+            <Text style={styles.label}>Floor Location</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 12 }}>
+              {availableFloors.map((fl) => {
+                const active = formFloor === fl;
+                const meta = getFloorMeta(fl);
+                return (
+                  <TouchableOpacity
+                    key={fl}
+                    style={[styles.chip, active && { backgroundColor: BRAND, borderColor: BRAND }]}
+                    onPress={() => setFormFloor(fl)}
+                  >
+                    <Ionicons name={meta.icon as any} size={13} color={active ? '#fff' : BRAND} />
+                    <Text style={[styles.chipText, active && { color: '#fff' }]}>{fl}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Select Seating Zone Type (Tables, Couches, Majlis Sitting) */}
+            <Text style={styles.label}>Seating Zone Type</Text>
+            <View style={styles.seatingTypePickerRow}>
+              {SEATING_ZONE_TYPES.map((type) => {
+                const meta = SEATING_ZONES[type];
+                const active = formSeatingType === type;
+                return (
+                  <TouchableOpacity
+                    key={type}
+                    style={[
+                      styles.seatingTypeChoiceCard,
+                      active && { borderColor: meta.color, backgroundColor: `${meta.color}10` },
+                    ]}
+                    onPress={() => {
+                      setFormSeatingType(type);
+                      setFormSeats(String(meta.defaultSeats));
+                      if (!editingTable) {
+                        const floorItems = tables.filter(
+                          (t) => getTableFloor(t).toLowerCase() === formFloor.toLowerCase() && getTableSeatingType(t) === type
+                        );
+                        const nextNum = floorItems.length + 1;
+                        if (type === 'majlis') setFormName(`Cabin ${nextNum}`);
+                        else if (type === 'couches') setFormName(`Couch ${nextNum}`);
+                        else setFormName(`${getFloorMeta(formFloor).short || 'T'}-${String(nextNum).padStart(2, '0')}`);
+                      }
+                    }}
+                  >
+                    <SeatingTypeIcon type={type} size={22} color={active ? meta.color : '#8E8E93'} />
+                    <Text style={[styles.seatingTypeChoiceTitle, active && { color: meta.color, fontWeight: '900' }]}>
+                      {meta.label}
+                    </Text>
+                    <Text style={styles.seatingTypeChoiceSub}>{meta.unitLabel}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            {/* Dynamic Label for Name / Number */}
+            <Text style={styles.label}>
+              {formSeatingType === 'majlis'
+                ? 'Majlis Cabin Name / Number *'
+                : formSeatingType === 'couches'
+                ? 'Couch Name / Number *'
+                : 'Table Name / Number *'}
+            </Text>
+            <TextInput
+              style={styles.input}
+              placeholder={
+                formSeatingType === 'majlis'
+                  ? 'e.g. Cabin 1, Royal Cabin A'
+                  : formSeatingType === 'couches'
+                  ? 'e.g. Couch 1, Sofa Lounge 2'
+                  : 'e.g. T-01, Table 5'
+              }
+              value={formName}
+              onChangeText={setFormName}
+            />
+
+            {/* Dynamic Label for Sitting Capacity */}
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={styles.label}>
+                {formSeatingType === 'majlis'
+                  ? 'Cabin Sitting Capacity (Guests) *'
+                  : formSeatingType === 'couches'
+                  ? 'Couch Sitting Capacity (Guests) *'
+                  : 'Table Sitting Capacity (Seats) *'}
+              </Text>
+              <Text style={{ fontSize: 12, color: SEATING_ZONES[formSeatingType].color, fontWeight: '700' }}>
+                {formSeats} Guests
+              </Text>
+            </View>
+
+            {formSeatingType === 'majlis' && (
+              <Text style={styles.helperText}>
+                🕌 Traditional Arabian floor seating private cabin. Specify guest capacity for this cabin.
+              </Text>
+            )}
+
             <View style={styles.stepper}>
-              <TouchableOpacity style={styles.stepBtn} onPress={() => setFormSeats(String(Math.max(1, (parseInt(formSeats, 10) || 1) - 1)))}>
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => setFormSeats(String(Math.max(1, (parseInt(formSeats, 10) || 1) - 1)))}
+              >
                 <Ionicons name="remove" size={18} color={BRAND} />
               </TouchableOpacity>
-              <TextInput style={styles.stepInput} value={formSeats} onChangeText={setFormSeats} keyboardType="numeric" />
-              <TouchableOpacity style={styles.stepBtn} onPress={() => setFormSeats(String((parseInt(formSeats, 10) || 0) + 1))}>
+              <TextInput
+                style={styles.stepInput}
+                value={formSeats}
+                onChangeText={setFormSeats}
+                keyboardType="numeric"
+              />
+              <TouchableOpacity
+                style={styles.stepBtn}
+                onPress={() => setFormSeats(String((parseInt(formSeats, 10) || 0) + 1))}
+              >
                 <Ionicons name="add" size={18} color={BRAND} />
               </TouchableOpacity>
             </View>
+
             <View style={styles.dialogActions}>
               <TouchableOpacity style={styles.ghostBtn} onPress={() => setTableModalVisible(false)}>
                 <Text style={styles.ghostBtnText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveTable}>
-                <Text style={styles.primaryBtnText}>Save table</Text>
+              <TouchableOpacity
+                style={[styles.primaryBtn, { backgroundColor: SEATING_ZONES[formSeatingType].color }]}
+                onPress={handleSaveTable}
+              >
+                <Text style={styles.primaryBtnText}>
+                  {editingTable ? 'Save Changes' : `Create ${SEATING_ZONES[formSeatingType].unitLabel}`}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1316,4 +1828,193 @@ const styles = StyleSheet.create({
   capacityBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
   capacityTitle: { fontSize: 14, fontWeight: '900' },
   capacitySub: { fontSize: 12, color: '#636366', marginTop: 2 },
+
+  // --- Multi-Zone & Floor Styles ---
+  filterSectionTitle: { fontSize: 11, fontWeight: '800', color: '#8E8E93', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 },
+  floorFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+  },
+  floorFilterChipText: { fontSize: 13, fontWeight: '800', color: '#1C1C1E' },
+  countBadge: {
+    backgroundColor: '#F2F2F7',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  countBadgeText: { fontSize: 11, fontWeight: '800', color: '#636366' },
+
+  zoneTypeChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    borderRadius: 12,
+    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: '#E5E1DA',
+  },
+  zoneTypeChipActive: { backgroundColor: BRAND, borderColor: BRAND },
+  zoneTypeChipText: { fontSize: 13, fontWeight: '800', color: '#1C1C1E' },
+
+  zoneSummaryBanner: {
+    backgroundColor: '#fff',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#EFECE6',
+    marginBottom: 14,
+    gap: 12,
+  },
+  zoneSummaryHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  zoneSummaryTitle: { fontSize: 14, fontWeight: '900', color: BRAND },
+  zoneSummaryCardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  zoneSummaryMiniCard: {
+    flex: 1,
+    minWidth: 120,
+    backgroundColor: '#FCFBF9',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1.5,
+    gap: 3,
+  },
+  majlisSummaryHighlight: {
+    backgroundColor: '#FFFAF7',
+    borderColor: '#4a121a',
+  },
+  miniIconBubble: { width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  miniCardTitle: { fontSize: 12, fontWeight: '900' },
+  miniCardCount: { fontSize: 16, fontWeight: '900', color: '#1C1C1E' },
+  miniCardSub: { fontSize: 11, color: '#636366', fontWeight: '600' },
+
+  cabinsTagsContainer: {
+    backgroundColor: '#FDF7F4',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#4a121a20',
+  },
+  cabinsTagsLabel: { fontSize: 11, fontWeight: '800', color: '#4a121a', marginBottom: 4 },
+  cabinCapacityTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#4a121a40',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  cabinTagName: { fontSize: 12, fontWeight: '800', color: '#1C1C1E' },
+  cabinTagCapacity: { backgroundColor: '#4a121a15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  cabinTagCapacityText: { fontSize: 11, fontWeight: '800', color: '#4a121a' },
+
+  tileIconBubble: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  tileTypeBadge: { fontSize: 10, fontWeight: '800' },
+  tileDot: { fontSize: 10, color: '#C7C7CC' },
+  tileFloorTag: { fontSize: 10, color: '#8E8E93', fontWeight: '700' },
+  tileCapacityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F7F7F8',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  tileMajlisCapacityRow: { backgroundColor: '#4a121a10' },
+  tileCapacityText: { fontSize: 12, fontWeight: '700', color: '#3A3A3C' },
+
+  // --- Directory Tab Styles ---
+  floorCardContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: '#ECE8E1',
+    padding: 16,
+    gap: 14,
+  },
+  floorCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  floorHeaderBadge: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  floorCardName: { fontSize: 18, fontWeight: '900', color: BRAND },
+  floorCardBlurb: { fontSize: 12, color: '#8E8E93', fontWeight: '600' },
+  floorHeaderStats: { alignItems: 'flex-end' },
+  floorTotalCount: { fontSize: 13, fontWeight: '800', color: '#1C1C1E' },
+  floorTotalSeats: { fontSize: 11, color: '#8E8E93', fontWeight: '600' },
+
+  floorZonesGrid: { gap: 10 },
+  floorZoneBox: {
+    backgroundColor: '#FCFBF9',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    padding: 12,
+    gap: 10,
+  },
+  majlisFloorZoneBox: {
+    backgroundColor: '#FFFAF7',
+    borderColor: '#4a121a50',
+  },
+  floorZoneBoxHeader: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  floorZoneTitle: { fontSize: 14, fontWeight: '900' },
+  floorZoneSub: { fontSize: 11, color: '#8E8E93', fontWeight: '600' },
+  tinyAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 9, paddingVertical: 5, borderRadius: 7 },
+  tinyAddBtnText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+
+  unitPillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  unitPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fff',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+  },
+  unitPillName: { fontSize: 12, fontWeight: '800', color: '#1C1C1E' },
+  unitPillSeats: { fontSize: 11, color: '#8E8E93', fontWeight: '600' },
+  noUnitsText: { fontSize: 12, color: '#AEAEB2', fontStyle: 'italic', paddingVertical: 4 },
+
+  cabinDetailedCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#4a121a30',
+    minWidth: 160,
+  },
+  cabinDetailedName: { fontSize: 13, fontWeight: '900', color: '#1C1C1E' },
+  cabinDetailedCapacity: { fontSize: 11, color: '#4a121a', fontWeight: '700' },
+  statusMiniDot: { width: 8, height: 8, borderRadius: 4 },
+
+  // --- Modal Seating Picker ---
+  seatingTypePickerRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  seatingTypeChoiceCard: {
+    flex: 1,
+    backgroundColor: '#FCFBF9',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E1DA',
+    padding: 10,
+    alignItems: 'center',
+    gap: 4,
+  },
+  seatingTypeChoiceTitle: { fontSize: 12, fontWeight: '800', color: '#1C1C1E', textAlign: 'center' },
+  seatingTypeChoiceSub: { fontSize: 10, color: '#8E8E93' },
+  helperText: { fontSize: 11, color: '#4a121a', fontStyle: 'italic', marginBottom: 8, backgroundColor: '#4a121a10', padding: 8, borderRadius: 8 },
 });

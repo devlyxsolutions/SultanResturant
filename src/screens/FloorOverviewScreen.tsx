@@ -11,10 +11,11 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRestaurantStore, Table } from '../store/restaurantStore';
+import { useRestaurantStore } from '../store/restaurantStore';
 import { BRAND } from '../constants/brand';
-import { FLOOR_TEMPLATE, getFloorMeta, sortFloors } from '../constants/floors';
+import { FLOOR_TEMPLATE, getFloorMeta, sortFloors, getTableFloor, getTableSeatingType, SEATING_ZONES } from '../constants/floors';
 import { money, percent } from '../utils/format';
+import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
 export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
@@ -42,13 +43,18 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
 
   // Aggregate stats per floor
   const floorStats = allZones.map((zone) => {
-    const floorTables = tables.filter((t) => (t.zone || 'Main Hall').toLowerCase() === zone.toLowerCase());
+    const floorTables = tables.filter((t) => getTableFloor(t).toLowerCase() === zone.toLowerCase());
     const occupied = floorTables.filter((t) => t.status === 'occupied').length;
     const billed = floorTables.filter((t) => t.status === 'billed').length;
     const reserved = floorTables.filter((t) => t.status === 'reserved').length;
     const available = floorTables.filter((t) => t.status === 'available').length;
     const totalRevenue = floorTables.reduce((sum, t) => sum + (t.billTotal || 0), 0);
     const totalSeats = floorTables.reduce((sum, t) => sum + (t.seats || 4), 0);
+
+    const tablesList = floorTables.filter((t) => getTableSeatingType(t) === 'tables');
+    const couchesList = floorTables.filter((t) => getTableSeatingType(t) === 'couches');
+    const majlisList = floorTables.filter((t) => getTableSeatingType(t) === 'majlis');
+    const majlisSeats = majlisList.reduce((sum, t) => sum + (t.seats || 8), 0);
 
     const floorTableIds = new Set(floorTables.map((t) => t.id));
     const activeTickets = tickets.filter((tk) => floorTableIds.has(tk.tableId));
@@ -65,6 +71,10 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
       available,
       totalRevenue,
       totalSeats,
+      tablesZoneCount: tablesList.length,
+      couchesZoneCount: couchesList.length,
+      majlisCabinsCount: majlisList.length,
+      majlisSeats,
       activeTickets: activeTickets.length,
       occupancyRate: percent(occupied + billed, floorTables.length),
     };
@@ -215,6 +225,24 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                   <Text style={[styles.metricVal, { color: BRAND.burgundy }]}>{money(fs.totalRevenue)}</Text>
                 </View>
               </View>
+
+              {/* 3-Zone Distribution Chips */}
+              <View style={styles.floorZonesRow}>
+                <View style={styles.floorZoneChip}>
+                  <SeatingTypeIcon type="tables" size={12} color="#1976D2" />
+                  <Text style={styles.floorZoneChipText}>{fs.tablesZoneCount} Tables</Text>
+                </View>
+                <View style={styles.floorZoneChip}>
+                  <SeatingTypeIcon type="couches" size={12} color="#E65100" />
+                  <Text style={styles.floorZoneChipText}>{fs.couchesZoneCount} Couches</Text>
+                </View>
+                <View style={[styles.floorZoneChip, { backgroundColor: '#4a121a15', borderColor: '#4a121a30' }]}>
+                  <SeatingTypeIcon type="majlis" size={12} color="#4a121a" />
+                  <Text style={[styles.floorZoneChipText, { color: '#4a121a', fontWeight: '800' }]}>
+                    {fs.majlisCabinsCount} Cabins ({fs.majlisSeats} Guests)
+                  </Text>
+                </View>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -227,7 +255,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
             {selectedFloor === 'All' ? 'All Tables' : `${selectedFloor} Tables`} ({displayTables.length})
           </Text>
           <Text style={styles.sectionSubtitle}>
-            Tap any table to open in Manager Floor Plan or POS
+            Tap any table, couch, or cabin to open in Manager Floor Plan or POS
           </Text>
         </View>
         {selectedFloor !== 'All' && (
@@ -239,6 +267,12 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
 
       <View style={styles.tablesGrid}>
         {displayTables.map((t) => {
+          const type = getTableSeatingType(t);
+          const floorName = getTableFloor(t);
+          const isMajlis = type === 'majlis';
+          const isCouch = type === 'couches';
+          const zoneMeta = SEATING_ZONES[type];
+
           let statusBg = '#E8F5E9';
           let statusText = '#2E7D32';
           if (t.status === 'occupied') {
@@ -255,22 +289,28 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           return (
             <TouchableOpacity
               key={t.id}
-              style={styles.tableTile}
+              style={[styles.tableTile, isMajlis && { backgroundColor: '#FFFAF7', borderColor: '#4a121a40' }]}
               onPress={() => router.push(`/manager/pos?prefillTableId=${t.id}` as any)}
               activeOpacity={0.8}
             >
               <View style={styles.tileHeader}>
-                <Text style={styles.tileName}>{t.name}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                  <SeatingTypeIcon type={type} size={16} color={zoneMeta.color} />
+                  <Text style={styles.tileName} numberOfLines={1}>{t.name}</Text>
+                </View>
                 <View style={[styles.tileBadge, { backgroundColor: statusBg }]}>
                   <Text style={[styles.tileBadgeText, { color: statusText }]}>
                     {t.status.toUpperCase()}
                   </Text>
                 </View>
               </View>
-              <Text style={styles.tileZone}>{t.zone || 'Ground Floor'}</Text>
+              <Text style={[styles.tileZone, { color: zoneMeta.color }]}>
+                {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch' : '🍽️ Table'} • {floorName}
+              </Text>
               <View style={styles.tileFooter}>
-                <Text style={styles.tileSeats}>
-                  <Ionicons name="people-outline" size={13} color={BRAND.muted} /> {t.seats} seats
+                <Text style={[styles.tileSeats, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
+                  <Ionicons name="people-outline" size={13} color={isMajlis ? '#4a121a' : BRAND.muted} />{' '}
+                  {isMajlis ? `${t.seats} Guests Capacity` : `${t.seats} seats`}
                 </Text>
                 {t.billTotal !== undefined && t.billTotal > 0 && (
                   <Text style={styles.tileBill}>{money(t.billTotal)}</Text>
@@ -528,5 +568,30 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '800',
     color: BRAND.burgundy,
+  },
+  floorZonesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 10,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F0EFEA',
+  },
+  floorZoneChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F8F9FA',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#E9ECEF',
+  },
+  floorZoneChipText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: BRAND.ink,
   },
 });
