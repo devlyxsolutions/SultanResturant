@@ -391,7 +391,7 @@ export default function AdminTables() {
   };
 
   // ---------- Render helpers ----------
-  const renderTile = (table: Table) => {
+  const renderTile = (table: Table, index?: number) => {
     const meta = STATUS_META[table.status];
     const isBusy = table.status === 'occupied' || table.status === 'billed';
     const kotCount = tickets.filter((t) => t.tableId === table.id && t.status !== 'served').length;
@@ -400,7 +400,7 @@ export default function AdminTables() {
     const linkedChildren = tables.filter((t) => t.mergedInto === table.id);
 
     return (
-      <View key={table.id} style={{ width: `${100 / columns}%`, padding: 6 }}>
+      <View key={`${table.id}-${table.name}-${index ?? 0}`} style={{ width: `${100 / columns}%`, padding: 6 }}>
         <TouchableOpacity
           activeOpacity={0.85}
           onPress={() => setActionTableId(table.id)}

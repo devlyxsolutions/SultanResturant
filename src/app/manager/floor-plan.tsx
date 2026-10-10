@@ -877,7 +877,7 @@ export default function FloorPlanScreen() {
 
                 return (
                   <TouchableOpacity
-                    key={table.id}
+                    key={`${table.id}-${table.name}-${index}`}
                     style={[
                       styles.tableShape,
                       {

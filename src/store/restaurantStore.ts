@@ -403,7 +403,19 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
   if (!tables || !Array.isArray(tables)) return [];
   const safeTickets = Array.isArray(tickets) ? tickets : [];
 
-  return tables.map(table => {
+  // Guarantee every table has a unique ID across the application
+  const seenIds = new Map<string, number>();
+  const sanitizedTables = tables.map((t, idx) => {
+    const rawId = t.id || `t_${idx}`;
+    const count = seenIds.get(rawId) || 0;
+    seenIds.set(rawId, count + 1);
+    if (count > 0) {
+      return { ...t, id: `${rawId}_${count + 1}` };
+    }
+    return { ...t, id: rawId };
+  });
+
+  return sanitizedTables.map(table => {
     // If table is already marked billed, preserve billed state until settled
     if (table.status === 'billed') return table;
 
