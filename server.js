@@ -7,42 +7,331 @@ const WebSocketServer = WebSocket.Server;
 const PORT = process.env.PORT || 5050;
 const DATA_FILE = path.join(__dirname, 'server-data.json');
 
-// Default initial state
+// Preset visual fallbacks for rich mobile display
+const PRESET_VISUALS = {
+  'sultan kebab': {
+    imageUri: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&q=80',
+    description: 'Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.',
+    badge: 'Chef Special',
+    rating: 4.9,
+    prepTime: 20,
+    category: 'Mains'
+  },
+  'chicken karahi': {
+    imageUri: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80',
+    description: 'Fresh chicken cooked in pure desi ghee, fresh tomatoes, ginger and green chillies.',
+    badge: 'Best Seller',
+    rating: 4.8,
+    prepTime: 25,
+    category: 'Karahi & Handi'
+  },
+  'beef karahii': {
+    imageUri: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80',
+    description: 'Tender beef shank cuts slow-cooked in rich spiced tomato & black pepper gravy.',
+    badge: 'Signature',
+    rating: 4.9,
+    prepTime: 30,
+    category: 'Karahi & Handi'
+  },
+  'chicken fajita': {
+    imageUri: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80',
+    description: 'Crispy crust loaded with fajita chicken, bell peppers, olives and melted mozzarella.',
+    badge: 'Hot',
+    rating: 4.7,
+    prepTime: 18,
+    category: 'Fast Food'
+  },
+  'chicken cheese': {
+    imageUri: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80',
+    description: 'Double cheese layer topped with marinated grilled chicken breast chunks.',
+    badge: 'Popular',
+    rating: 4.8,
+    prepTime: 18,
+    category: 'Fast Food'
+  },
+  'mangoo shake': {
+    imageUri: 'https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=800&q=80',
+    description: 'Thick mango pulp blended with traditional kulfa ice cream and dry fruits.',
+    badge: 'Chilled',
+    rating: 4.9,
+    prepTime: 10,
+    category: 'Drinks'
+  },
+  'mint margarita': {
+    imageUri: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=80',
+    description: 'Blended fresh mint leaves, lemon juice, soda and crushed ice.',
+    badge: 'Refreshing',
+    rating: 4.8,
+    prepTime: 8,
+    category: 'Drinks'
+  },
+  'kunafa': {
+    imageUri: 'https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=800&q=80',
+    description: 'Crunchy golden pastry filled with sweet cheese, soaked in rose syrup & pistachios.',
+    badge: 'Royal Sweet',
+    rating: 4.9,
+    prepTime: 15,
+    category: 'Desserts'
+  },
+  'hummus & pita': {
+    imageUri: 'https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=800&q=80',
+    description: 'Creamy chickpea dip with extra virgin olive oil and freshly baked pita bread.',
+    badge: 'Healthy',
+    rating: 4.6,
+    prepTime: 10,
+    category: 'Appetizers'
+  }
+};
+
+// Default Playland attractions & rides catalog
+const DEFAULT_PLAYLAND_RIDES = [
+  {
+    id: 'PL-R1',
+    name: 'Sultan Royal Carousel',
+    category: 'jhoola',
+    price: 200,
+    variants: [
+      { id: 'v1-1', name: '5 Mins', durationMinutes: 5, price: 200 },
+      { id: 'v1-2', name: '10 Mins', durationMinutes: 10, price: 350 },
+      { id: 'v1-3', name: '15 Mins', durationMinutes: 15, price: 480 },
+    ],
+    icon: 'color-palette-outline',
+    minAge: '2+ yrs',
+    duration: '5 Mins',
+    capacity: 16,
+    isActive: true,
+    color: '#D5A943',
+  },
+  {
+    id: 'PL-R2',
+    name: 'Mini Roller Coaster',
+    category: 'jhoola',
+    price: 300,
+    variants: [
+      { id: 'v2-1', name: '3 Mins (1 Round)', durationMinutes: 3, price: 300 },
+      { id: 'v2-2', name: '6 Mins (2 Rounds)', durationMinutes: 6, price: 500 },
+    ],
+    icon: 'rocket-outline',
+    minAge: '5+ yrs',
+    duration: '3 Mins',
+    capacity: 12,
+    isActive: true,
+    color: '#FF6B6B',
+  },
+  {
+    id: 'PL-R3',
+    name: 'Sultan Bumper Cars',
+    category: 'jhoola',
+    price: 250,
+    variants: [
+      { id: 'v3-1', name: '6 Mins', durationMinutes: 6, price: 250 },
+      { id: 'v3-2', name: '12 Mins', durationMinutes: 12, price: 450 },
+    ],
+    icon: 'car-sport-outline',
+    minAge: '4+ yrs',
+    duration: '6 Mins',
+    capacity: 10,
+    isActive: true,
+    color: '#4D96FF',
+  },
+  {
+    id: 'PL-R4',
+    name: 'Sultan Jungle Safari Train',
+    category: 'jhoola',
+    price: 180,
+    variants: [
+      { id: 'v4-1', name: '8 Mins', durationMinutes: 8, price: 180 },
+      { id: 'v4-2', name: '15 Mins', durationMinutes: 15, price: 300 },
+    ],
+    icon: 'train-outline',
+    minAge: 'All Ages',
+    duration: '8 Mins',
+    capacity: 20,
+    isActive: true,
+    color: '#6BCB77',
+  },
+  {
+    id: 'PL-R5',
+    name: 'Flying Chair Swings',
+    category: 'jhoola',
+    price: 220,
+    variants: [
+      { id: 'v5-1', name: '5 Mins', durationMinutes: 5, price: 220 },
+      { id: 'v5-2', name: '10 Mins', durationMinutes: 10, price: 380 },
+    ],
+    icon: 'planet-outline',
+    minAge: '6+ yrs',
+    duration: '5 Mins',
+    capacity: 14,
+    isActive: true,
+    color: '#FFD93D',
+  },
+  {
+    id: 'PL-R6',
+    name: 'Toddler Soft Play Kingdom',
+    category: 'softplay',
+    price: 350,
+    variants: [
+      { id: 'v6-1', name: '30 Mins', durationMinutes: 30, price: 350 },
+      { id: 'v6-2', name: '60 Mins (1 Hour)', durationMinutes: 60, price: 600 },
+      { id: 'v6-3', name: 'Unlimited Day', durationMinutes: 300, price: 1000 },
+    ],
+    icon: 'happy-outline',
+    minAge: '1-6 yrs',
+    duration: '30 Mins',
+    capacity: 25,
+    isActive: true,
+    color: '#FF9F45',
+  },
+  {
+    id: 'PL-R7',
+    name: '9D Virtual Reality Cinema',
+    category: 'vr',
+    price: 350,
+    variants: [
+      { id: 'v7-1', name: '1 Ride (10 Mins)', durationMinutes: 10, price: 350 },
+      { id: 'v7-2', name: '2 Rides (20 Mins)', durationMinutes: 20, price: 600 },
+    ],
+    icon: 'glasses-outline',
+    minAge: '7+ yrs',
+    duration: '10 Mins',
+    capacity: 6,
+    isActive: true,
+    color: '#9C27B0',
+  },
+  {
+    id: 'PL-R8',
+    name: 'Arcade Master Card',
+    category: 'arcade',
+    price: 500,
+    variants: [
+      { id: 'v8-1', name: '500 Balance', durationMinutes: 0, price: 500 },
+      { id: 'v8-2', name: '1000 Balance (+200 Bonus)', durationMinutes: 0, price: 1000 },
+      { id: 'v8-3', name: '2000 Balance (+500 Bonus)', durationMinutes: 0, price: 2000 },
+    ],
+    icon: 'game-controller-outline',
+    minAge: 'All Ages',
+    duration: 'Tokens',
+    capacity: 50,
+    isActive: true,
+    color: '#00BCD4',
+  },
+  {
+    id: 'PL-R9',
+    name: 'Sultan VIP Unlimited Mega Pass',
+    category: 'pass',
+    price: 1500,
+    variants: [
+      { id: 'v9-1', name: 'Single Child Full Pass (3 Hours)', durationMinutes: 180, price: 1500 },
+      { id: 'v9-2', name: 'Family Pass (2 Kids, 3 Hours)', durationMinutes: 180, price: 2700 },
+    ],
+    icon: 'star-outline',
+    minAge: 'All Ages',
+    duration: '3 Hours',
+    capacity: 100,
+    isActive: true,
+    color: '#D5A943',
+  }
+];
+
+// Initial state template
 const INITIAL_STATE = {
   tables: [
-    { id: '1', zone: 'Main Hall', name: 'T-01', seats: 4, status: 'available' },
-    { id: '2', zone: 'Main Hall', name: 'T-02', seats: 2, status: 'occupied', billTotal: 45.00, server: 'Junaid' },
-    { id: '3', zone: 'Main Hall', name: 'T-03', seats: 4, status: 'available' },
-    { id: '4', zone: 'Rooftop', name: 'R-01', seats: 4, status: 'available' },
-    { id: '5', zone: 'VIP', name: 'V-01', seats: 8, status: 'reserved' },
+    // Ground Floor
+    { id: '1', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-01', seats: 4, status: 'available' },
+    { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'available' },
+    { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
+    { id: '4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
+    { id: '5', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
+
+    // 1st Floor
+    { id: 'f1-t1', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T01', seats: 4, status: 'available' },
+    { id: 'f1-t2', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T02', seats: 6, status: 'available' },
+    { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
+    { id: 'f1-m1', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
+    { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
+    { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
+
+    // 2nd Floor
+    { id: 'f2-t1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'tables', name: 'F2-T01', seats: 4, status: 'available' },
+    { id: 'f2-m1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 10, status: 'available' },
+
+    // 3rd Floor
+    { id: 'f3-t1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'tables', name: 'F3-T01', seats: 6, status: 'available' },
+    { id: 'f3-m1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'majlis', cabinNumber: 'Royal Cabin 1', name: 'Royal Cabin 1', seats: 14, status: 'available' },
+
+    // Rooftop
+    { id: 'rt-1', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-01', seats: 4, status: 'available' },
+    { id: 'rt-2', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Sky Cabin 1', name: 'Sky Cabin 1', seats: 8, status: 'available' },
+    { id: 'rt-3', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Sky Cabin 2', name: 'Sky Cabin 2', seats: 8, status: 'available' }
   ],
-  tickets: [
+  tickets: [],
+  onlineOrders: [],
+  invoices: [],
+  customers: [],
+  serviceRequests: [],
+  playlandTickets: [],
+  playlandRides: DEFAULT_PLAYLAND_RIDES,
+  appUsers: [
     {
-      id: 'KOT-1042',
-      tableId: '2',
-      tableName: 'T-02',
-      server: 'Junaid',
-      timePlaced: Date.now() - 12 * 60000,
-      status: 'cooking',
-      items: [
-        { id: 'm1', name: 'Sultan Kebab', price: 1450, qty: 2, completed: false },
-      ]
+      id: 'usr-1',
+      name: 'Hamza Sheikh',
+      phone: '03219876543',
+      password: 'password123',
+      address: 'House #42, Street 7, Block F, Johar Town, Lahore',
+      deviceInfo: 'iPhone 15 Pro (iOS 18.1)',
+      registeredAt: Date.now() - 48 * 3600000,
+      lastLoginAt: Date.now() - 15 * 60000,
+      totalOrders: 3,
+      totalSpent: 8450,
+      status: 'Active'
+    },
+    {
+      id: 'usr-2',
+      name: 'Ayesha Khan',
+      phone: '03331122334',
+      password: 'password123',
+      address: 'Suite 304, Mega Tower, Gulberg II, Lahore',
+      deviceInfo: 'Samsung Galaxy S24 (Android 14)',
+      registeredAt: Date.now() - 24 * 3600000,
+      lastLoginAt: Date.now() - 2 * 3600000,
+      totalOrders: 1,
+      totalSpent: 2805,
+      status: 'Active'
     }
   ],
-  invoices: [],
-  customers: [
-    { id: 'c1', name: 'Zubair Tariq', phone: '03009876543', address: 'DHA Phase 5, Lahore', totalOrders: 14, totalSpent: 38400 },
-    { id: 'c2', name: 'Fatima Noor', phone: '03214567890', address: 'Gulberg III, Lahore', totalOrders: 6, totalSpent: 16200 },
-    { id: 'c3', name: 'Bilal Siddiqui', phone: '03331122334', address: 'Model Town, Block C', totalOrders: 3, totalSpent: 7500 },
+  appUserLogs: [
+    {
+      id: 'log-1',
+      userId: 'usr-1',
+      name: 'Hamza Sheikh',
+      phone: '03219876543',
+      action: 'LOGIN',
+      deviceInfo: 'iPhone 15 Pro (iOS 18.1)',
+      timestamp: Date.now() - 15 * 60000,
+      details: 'Customer logged in successfully from mobile app'
+    },
+    {
+      id: 'log-2',
+      userId: 'usr-2',
+      name: 'Ayesha Khan',
+      phone: '03331122334',
+      action: 'SIGNUP',
+      deviceInfo: 'Samsung Galaxy S24 (Android 14)',
+      timestamp: Date.now() - 24 * 3600000,
+      details: 'New user registered via mobile app'
+    }
   ],
   menuItems: [
-    { id: 'm1', name: 'Sultan Kebab', price: 1450, category: 'Mains' },
-    { id: 'm2', name: 'Chicken Karahi', price: 1850, category: 'Mains' },
-    { id: 'm3', name: 'Hummus & Pita', price: 650, category: 'Appetizers' },
-    { id: 'm4', name: 'Kunafa', price: 850, category: 'Desserts' },
-    { id: 'm5', name: 'Mint Margarita', price: 450, category: 'Drinks' },
+    { id: 'm1', name: 'Sultan Kebab', price: 1450, category: 'Mains', station: 'main' },
+    { id: 'm2', name: 'Chicken Karahi', price: 1850, category: 'Karahi & Handi', station: 'main', variants: [{ name: 'Half', price: 1100 }, { name: 'Full', price: 1850 }] },
+    { id: 'm3', name: 'Hummus & Pita', price: 650, category: 'Appetizers', station: 'main' },
+    { id: 'm4', name: 'Kunafa', price: 850, category: 'Desserts', station: 'juice' },
+    { id: 'm5', name: 'Mint Margarita', price: 450, category: 'Drinks', station: 'juice' },
+    { id: 'deal-1', name: 'Sultan Family Feast (4-5 Persons)', price: 4999, category: 'Deals', isDeal: true, dealOriginalPrice: 6200, badge: 'Family Deal' },
+    { id: 'deal-2', name: 'Royal Couple Platter (2 Persons)', price: 2850, category: 'Deals', isDeal: true, dealOriginalPrice: 3500, badge: 'Couple Deal' }
   ],
-  categories: ['Appetizers', 'Mains', 'Desserts', 'Drinks'],
+  categories: ['All', 'Mains', 'Karahi & Handi', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'],
   zones: ['Main Hall', 'Rooftop', 'VIP'],
   staff: [
     { id: 'st1', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
@@ -55,7 +344,7 @@ const INITIAL_STATE = {
     {
       id: 'res-1',
       tableId: '5',
-      tableName: 'V-01',
+      tableName: 'Cabin 2',
       customerName: 'Hamza Malik',
       phone: '03219988776',
       guestsCount: 6,
@@ -76,6 +365,18 @@ try {
   if (fs.existsSync(DATA_FILE)) {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     serverState = { ...INITIAL_STATE, ...JSON.parse(raw) };
+    if (!serverState.onlineOrders) serverState.onlineOrders = [];
+    if (!serverState.appUsers) serverState.appUsers = INITIAL_STATE.appUsers;
+    if (!serverState.appUserLogs) serverState.appUserLogs = INITIAL_STATE.appUserLogs;
+    if (!Array.isArray(serverState.serviceRequests)) serverState.serviceRequests = [];
+    if (!Array.isArray(serverState.reservations)) serverState.reservations = INITIAL_STATE.reservations || [];
+    if (!Array.isArray(serverState.playlandTickets)) serverState.playlandTickets = [];
+    if (!Array.isArray(serverState.playlandRides) || serverState.playlandRides.length === 0) {
+      serverState.playlandRides = DEFAULT_PLAYLAND_RIDES;
+    }
+    if (!serverState.tables || serverState.tables.length < 10 || !serverState.tables.some(t => t.seatingType === 'majlis')) {
+      serverState.tables = INITIAL_STATE.tables;
+    }
     console.log('[Sultan Hub] Loaded saved database from server-data.json');
   } else {
     fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_STATE, null, 2));
@@ -85,7 +386,7 @@ try {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
 }
 
-// Debounced file save to avoid disk spam
+// Debounced file save to avoid disk thrashing
 let saveTimer = null;
 function persistState() {
   if (saveTimer) clearTimeout(saveTimer);
@@ -95,15 +396,82 @@ function persistState() {
     } catch (e) {
       console.error('[Sultan Hub] Failed to save state to disk:', e.message);
     }
-  }, 1000);
+  }, 800);
 }
 
-// Create HTTP server
-const server = http.createServer((req, res) => {
-  // Enable CORS for all devices and web ports
+// Simple in-memory rate limiter for public endpoints
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const MAX_REQUESTS_PER_WINDOW = 200;
+const rateLimitMap = new Map();
+
+function checkRateLimit(ip) {
+  const now = Date.now();
+  const record = rateLimitMap.get(ip) || { count: 0, resetTime: now + RATE_LIMIT_WINDOW_MS };
+
+  if (now > record.resetTime) {
+    record.count = 1;
+    record.resetTime = now + RATE_LIMIT_WINDOW_MS;
+    rateLimitMap.set(ip, record);
+    return true;
+  }
+
+  record.count++;
+  rateLimitMap.set(ip, record);
+  return record.count <= MAX_REQUESTS_PER_WINDOW;
+}
+
+// Helper: Sanitize public menu item (Strip sensitive margin, cost, supplier notes)
+function sanitizeMenuItem(item) {
+  const lowerName = (item.name || '').toLowerCase().trim();
+  const visual = PRESET_VISUALS[lowerName] || {};
+
+  return {
+    id: item.id || `m-${Date.now()}`,
+    name: item.name,
+    urduName: item.urduName || undefined,
+    price: Number(item.price) || 0,
+    category: item.category || visual.category || 'Mains',
+    description: item.description || visual.description || `${item.name} prepared freshly with authentic royal spices.`,
+    imageUrl: item.imageUri || item.imageUrl || visual.imageUri || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80',
+    badge: item.badge || visual.badge || undefined,
+    isPopular: item.isPopular || item.badge === 'Chef Special' || item.badge === 'Best Seller',
+    isAvailable: item.isAvailable !== false,
+    rating: Number(item.rating || visual.rating || 4.8),
+    preparationTimeMinutes: Number(item.preparationTimeMinutes || visual.prepTime || 20),
+    variants: Array.isArray(item.variants) ? item.variants.map(v => ({ name: v.name, price: Number(v.price) })) : undefined,
+    isDeal: Boolean(item.isDeal),
+    dealOriginalPrice: item.dealOriginalPrice ? Number(item.dealOriginalPrice) : undefined,
+    dealItems: item.dealItems || undefined
+  };
+}
+
+// Helper: Read JSON request body
+function readRequestBody(req) {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', chunk => { body += chunk; });
+    req.on('end', () => {
+      try {
+        resolve(body ? JSON.parse(body) : {});
+      } catch (e) {
+        reject(new Error('Invalid JSON format'));
+      }
+    });
+    req.on('error', err => reject(err));
+  });
+}
+
+// Central Request Handler
+async function handleRequest(req, res) {
+  const clientIp = req.socket.remoteAddress || 'unknown';
+
+  // Security Headers & CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.setHeader('Access-Control-Allow-Private-Network', 'true');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
@@ -111,19 +479,1191 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Rate Limiting Enforcement
+  if (!checkRateLimit(clientIp)) {
+    res.writeHead(429, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Rate limit reached. Please wait a moment.' }));
+    return;
+  }
+
   const url = new URL(req.url, `http://${req.headers.host}`);
 
+  // 1. Health / System Status
   if (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/status') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'online',
-      server: 'Sultan Central POS Hub',
+      server: 'Sultan Central POS & Mobile Hub',
       clientsCount: wss ? wss.clients.size : 0,
+      activeMenuCount: (serverState.menuItems || []).length,
+      registeredAppUsers: (serverState.appUsers || []).length,
       timestamp: Date.now()
     }));
     return;
   }
 
+  // -------------------------------------------------------------
+  // CUSTOMER AUTHENTICATION ENDPOINTS (Sign Up & Login)
+  // -------------------------------------------------------------
+
+  // POST /api/auth/register
+  if (url.pathname === '/api/auth/register' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { name, phone, password, address, deviceInfo } = payload;
+
+      if (!name || !phone || !password) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Name, phone number and password are required' }));
+        return;
+      }
+
+      const cleanPhone = phone.trim().replace(/\D/g, '');
+      const existingUser = (serverState.appUsers || []).find(u => u.phone.replace(/\D/g, '') === cleanPhone);
+
+      if (existingUser) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'An account with this phone number already exists. Please log in.' }));
+        return;
+      }
+
+      const newUser = {
+        id: `usr-${Date.now()}`,
+        name: name.trim(),
+        phone: phone.trim(),
+        password: password.trim(),
+        address: address ? address.trim() : '',
+        deviceInfo: deviceInfo || 'Mobile App',
+        registeredAt: Date.now(),
+        lastLoginAt: Date.now(),
+        totalOrders: 0,
+        totalSpent: 0,
+        status: 'Active'
+      };
+
+      if (!serverState.appUsers) serverState.appUsers = [];
+      serverState.appUsers.unshift(newUser);
+
+      // Audit Log Entry
+      const logEntry = {
+        id: `log-${Date.now()}`,
+        userId: newUser.id,
+        name: newUser.name,
+        phone: newUser.phone,
+        action: 'SIGNUP',
+        deviceInfo: newUser.deviceInfo,
+        timestamp: Date.now(),
+        details: 'User created a new account on mobile app'
+      };
+      if (!serverState.appUserLogs) serverState.appUserLogs = [];
+      serverState.appUserLogs.unshift(logEntry);
+
+      // Also ensure this user exists in Customer CRM
+      if (!serverState.customers) serverState.customers = [];
+      const crmCustomer = serverState.customers.find(c => c.phone.replace(/\D/g, '') === cleanPhone);
+      if (!crmCustomer) {
+        serverState.customers.unshift({
+          id: `crm-${Date.now()}`,
+          name: newUser.name,
+          phone: newUser.phone,
+          address: newUser.address,
+          totalOrders: 0,
+          totalSpent: 0,
+          firstVisit: Date.now(),
+          tags: ['Mobile App User']
+        });
+      }
+
+      persistState();
+
+      // Broadcast new registration to admin web app
+      broadcastToClients({
+        type: 'APP_USER_REGISTERED',
+        user: { id: newUser.id, name: newUser.name, phone: newUser.phone, registeredAt: newUser.registeredAt },
+        log: logEntry,
+        timestamp: Date.now()
+      });
+
+      // Issue mock JWT token
+      const token = `sultan_jwt_${newUser.id}_${Date.now()}`;
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        token,
+        user: {
+          id: newUser.id,
+          name: newUser.name,
+          phone: newUser.phone,
+          address: newUser.address,
+          role: 'customer'
+        },
+        message: 'Account created successfully! Welcome to Sultan Restaurant.'
+      }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // POST /api/auth/login
+  if (url.pathname === '/api/auth/login' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { phone, password, deviceInfo } = payload;
+
+      if (!phone || !password) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Phone number and password are required' }));
+        return;
+      }
+
+      const cleanPhone = phone.trim().replace(/\D/g, '');
+      const user = (serverState.appUsers || []).find(u => u.phone.replace(/\D/g, '') === cleanPhone);
+
+      if (!user) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'No account found with this phone number. Please sign up.' }));
+        return;
+      }
+
+      if (user.password !== password.trim()) {
+        res.writeHead(401, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Invalid password. Please try again.' }));
+        return;
+      }
+
+      user.lastLoginAt = Date.now();
+      if (deviceInfo) user.deviceInfo = deviceInfo;
+
+      // Audit Log Entry
+      const logEntry = {
+        id: `log-${Date.now()}`,
+        userId: user.id,
+        name: user.name,
+        phone: user.phone,
+        action: 'LOGIN',
+        deviceInfo: user.deviceInfo,
+        timestamp: Date.now(),
+        details: 'Customer logged in to mobile app'
+      };
+      if (!serverState.appUserLogs) serverState.appUserLogs = [];
+      serverState.appUserLogs.unshift(logEntry);
+
+      persistState();
+
+      // Broadcast login event to admin dashboard
+      broadcastToClients({
+        type: 'APP_USER_LOGIN',
+        user: { id: user.id, name: user.name, phone: user.phone, lastLoginAt: user.lastLoginAt },
+        log: logEntry,
+        timestamp: Date.now()
+      });
+
+      const token = `sultan_jwt_${user.id}_${Date.now()}`;
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          phone: user.phone,
+          address: user.address,
+          role: 'customer'
+        },
+        message: `Welcome back, ${user.name}!`
+      }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // POST /api/auth/google (Google One-Tap / Social Sign-In)
+  if (url.pathname === '/api/auth/google' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { email, name, googleId, photoUrl, deviceInfo } = payload;
+
+      if (!email || !name) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Email and Name are required for Google Sign-In' }));
+        return;
+      }
+
+      const cleanEmail = email.trim().toLowerCase();
+      let user = (serverState.appUsers || []).find(u => (u.email && u.email.toLowerCase() === cleanEmail) || u.googleId === googleId);
+
+      if (!user) {
+        user = {
+          id: `usr-g-${Date.now()}`,
+          name: name.trim(),
+          email: cleanEmail,
+          googleId: googleId || `gid-${Date.now()}`,
+          phone: payload.phone ? payload.phone.trim() : '',
+          photoUrl: photoUrl || '',
+          address: payload.address ? payload.address.trim() : '',
+          deviceInfo: deviceInfo || 'Google Mobile App',
+          registeredAt: Date.now(),
+          lastLoginAt: Date.now(),
+          totalOrders: 0,
+          totalSpent: 0,
+          status: 'Active',
+          authProvider: 'google'
+        };
+
+        if (!serverState.appUsers) serverState.appUsers = [];
+        serverState.appUsers.unshift(user);
+
+        // CRM Entry
+        if (!serverState.customers) serverState.customers = [];
+        serverState.customers.unshift({
+          id: `crm-g-${Date.now()}`,
+          name: user.name,
+          phone: user.phone || 'Google User',
+          email: user.email,
+          address: user.address,
+          totalOrders: 0,
+          totalSpent: 0,
+          firstVisit: Date.now(),
+          tags: ['Google Sign-In User']
+        });
+      } else {
+        user.lastLoginAt = Date.now();
+        if (photoUrl) user.photoUrl = photoUrl;
+        if (deviceInfo) user.deviceInfo = deviceInfo;
+      }
+
+      // Audit Log
+      const logEntry = {
+        id: `log-${Date.now()}`,
+        userId: user.id,
+        name: user.name,
+        phone: user.phone || user.email,
+        action: 'GOOGLE_SIGNIN',
+        deviceInfo: user.deviceInfo || 'Mobile App',
+        timestamp: Date.now(),
+        details: `Signed in with Google Account (${user.email})`
+      };
+      if (!serverState.appUserLogs) serverState.appUserLogs = [];
+      serverState.appUserLogs.unshift(logEntry);
+
+      persistState();
+
+      broadcastToClients({
+        type: 'APP_USER_LOGIN',
+        user: { id: user.id, name: user.name, email: user.email, phone: user.phone, lastLoginAt: user.lastLoginAt },
+        log: logEntry,
+        timestamp: Date.now()
+      });
+
+      const token = `sultan_jwt_g_${user.id}_${Date.now()}`;
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        token,
+        user: {
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          phone: user.phone,
+          address: user.address,
+          photoUrl: user.photoUrl,
+          role: 'customer'
+        },
+        message: `Welcome ${user.name}! Signed in via Google.`
+      }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // ADMIN DASHBOARD VISIBILITY ENDPOINTS (App Installs, Users & Logs)
+  // -------------------------------------------------------------
+
+  // GET /api/admin/app-users
+  if (url.pathname === '/api/admin/app-users' && req.method === 'GET') {
+    const users = (serverState.appUsers || []).map(u => ({
+      id: u.id,
+      name: u.name,
+      phone: u.phone,
+      address: u.address,
+      deviceInfo: u.deviceInfo || 'Mobile App',
+      registeredAt: u.registeredAt,
+      lastLoginAt: u.lastLoginAt,
+      totalOrders: u.totalOrders || 0,
+      totalSpent: u.totalSpent || 0,
+      status: u.status || 'Active'
+    }));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      totalUsers: users.length,
+      users,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // GET /api/admin/app-logs
+  if (url.pathname === '/api/admin/app-logs' && req.method === 'GET') {
+    const logs = serverState.appUserLogs || [];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      count: logs.length,
+      logs,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // GET /api/admin/online-orders
+  if (url.pathname === '/api/admin/online-orders' && req.method === 'GET') {
+    const orders = serverState.onlineOrders || [];
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      count: orders.length,
+      orders,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // ADMIN MENU MANAGEMENT (Category-wise with Image Upload/URL)
+  // -------------------------------------------------------------
+
+  // POST /api/admin/menu-items (Add dish with category & picture)
+  if (url.pathname === '/api/admin/menu-items' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { name, price, category, description, imageUrl, imageUri, badge, preparationTimeMinutes, variants } = payload;
+
+      if (!name || price === undefined || !category) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Name, price, and category are required' }));
+        return;
+      }
+
+      const newItem = {
+        id: `m-${Date.now()}`,
+        name: name.trim(),
+        price: Number(price),
+        category: category.trim(),
+        description: description ? description.trim() : `${name} prepared freshly at Sultan Restaurant.`,
+        imageUri: imageUrl || imageUri || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80',
+        badge: badge ? badge.trim() : undefined,
+        rating: 4.9,
+        preparationTimeMinutes: preparationTimeMinutes ? Number(preparationTimeMinutes) : 20,
+        isAvailable: true,
+        variants: Array.isArray(variants) ? variants : undefined
+      };
+
+      if (!serverState.menuItems) serverState.menuItems = [];
+      serverState.menuItems.unshift(newItem);
+
+      // Auto-register category if not present
+      if (!serverState.categories) serverState.categories = ['All', 'Mains', 'Karahi & Handi', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'];
+      if (!serverState.categories.includes(newItem.category)) {
+        serverState.categories.push(newItem.category);
+      }
+
+      persistState();
+
+      // Real-time broadcast to mobile app and web POS!
+      broadcastToClients({
+        type: 'MENU_ITEM_ADDED',
+        item: sanitizeMenuItem(newItem),
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        data: sanitizeMenuItem(newItem),
+        message: `Dish "${newItem.name}" added successfully and synced to Mobile App!`
+      }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // DELETE /api/admin/menu-items/:id
+  if (url.pathname.startsWith('/api/admin/menu-items/') && req.method === 'DELETE') {
+    const itemId = url.pathname.split('/').pop();
+    if (!serverState.menuItems) serverState.menuItems = [];
+    serverState.menuItems = serverState.menuItems.filter(m => m.id !== itemId);
+    persistState();
+
+    broadcastToClients({
+      type: 'MENU_ITEM_DELETED',
+      itemId,
+      timestamp: Date.now()
+    });
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, message: 'Item deleted' }));
+    return;
+  }
+
+  // POST /api/admin/categories
+  if (url.pathname === '/api/admin/categories' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { category } = payload;
+      if (!category) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Category name is required' }));
+        return;
+      }
+
+      if (!serverState.categories) serverState.categories = [];
+      if (!serverState.categories.includes(category.trim())) {
+        serverState.categories.push(category.trim());
+      }
+      persistState();
+
+      broadcastToClients({
+        type: 'CATEGORIES_UPDATED',
+        categories: serverState.categories,
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, categories: serverState.categories }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // PUBLIC MENU, DEALS & ORDERING ENDPOINTS
+  // -------------------------------------------------------------
+
+  // 2. Safe Public Menu Endpoint: GET /api/public/menu or /api/menu
+  if ((url.pathname === '/api/public/menu' || url.pathname === '/api/menu') && req.method === 'GET') {
+    const categoryFilter = url.searchParams.get('category');
+    let items = (serverState.menuItems || []).map(sanitizeMenuItem);
+
+    if (items.length < 5) {
+      items = Object.keys(PRESET_VISUALS).map((k, idx) => {
+        const v = PRESET_VISUALS[k];
+        return {
+          id: `preset-${idx + 1}`,
+          name: k.replace(/\b\w/g, l => l.toUpperCase()),
+          price: 950 + idx * 150,
+          category: v.category,
+          description: v.description,
+          imageUrl: v.imageUri,
+          badge: v.badge,
+          isPopular: true,
+          isAvailable: true,
+          rating: v.rating,
+          preparationTimeMinutes: v.prepTime
+        };
+      });
+    }
+
+    if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
+      const catLower = categoryFilter.toLowerCase();
+      items = items.filter(item => 
+        (item.category || '').toLowerCase().includes(catLower) ||
+        (item.name || '').toLowerCase().includes(catLower)
+      );
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: items,
+      count: items.length,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // 3. Safe Public Categories: GET /api/public/categories or /api/categories
+  if ((url.pathname === '/api/public/categories' || url.pathname === '/api/categories') && req.method === 'GET') {
+    const rawCategories = serverState.categories || ['All', 'Mains', 'Karahi & Handi', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'];
+    const uniqueCategories = Array.from(new Set(['All', ...rawCategories]));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: uniqueCategories,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // 4. Safe Public Deals: GET /api/public/deals
+  if (url.pathname === '/api/public/deals' && req.method === 'GET') {
+    const deals = (serverState.menuItems || [])
+      .filter(item => item.isDeal || (item.category && item.category.toLowerCase() === 'deals'))
+      .map(sanitizeMenuItem);
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: deals,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // 4b. Safe Public Tables & Floors: GET /api/public/tables
+  if (url.pathname === '/api/public/tables' && req.method === 'GET') {
+    const floorFilter = url.searchParams.get('floor');
+    let tables = (serverState.tables || []).map(t => ({
+      id: t.id,
+      name: t.name,
+      floor: t.floor || t.zone || 'Ground Floor',
+      zone: t.zone || 'Ground Floor',
+      seatingType: t.seatingType || (t.name.toLowerCase().includes('cabin') ? 'majlis' : (t.name.toLowerCase().includes('couch') ? 'couches' : 'tables')),
+      cabinNumber: t.cabinNumber,
+      seats: t.seats || 4,
+      status: t.status || 'available'
+    }));
+
+    if (floorFilter && floorFilter !== 'All') {
+      tables = tables.filter(t => (t.floor || '').toLowerCase() === floorFilter.toLowerCase());
+    }
+
+    const availableFloors = Array.from(new Set(tables.map(t => t.floor).filter(Boolean)));
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      floors: availableFloors.length > 0 ? availableFloors : ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
+      data: tables,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // 5. Order Placement: POST /api/public/orders or /api/orders
+  if ((url.pathname === '/api/public/orders' || url.pathname === '/api/orders') && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+
+      if (!payload.items || !Array.isArray(payload.items) || payload.items.length === 0) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Order must contain at least one valid item' }));
+        return;
+      }
+
+      // Mandatory User Verification for Order Placement
+      const customerName = payload.customerName || payload.customer?.name;
+      const customerPhone = payload.customerPhone || payload.customer?.phone;
+
+      if (!customerName || !customerPhone) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Customer Name and Phone Number are required to place an order.' }));
+        return;
+      }
+
+      const orderType = payload.orderType || (payload.tableInfo || payload.tableId ? 'dine_in' : (payload.takeaway ? 'takeaway' : 'delivery'));
+
+      // Authoritative server-side price calculation
+      const dbItems = serverState.menuItems || [];
+      let calculatedSubtotal = 0;
+      const verifiedItems = [];
+
+      for (const cartItem of payload.items) {
+        const menuItemId = cartItem.menuItem ? cartItem.menuItem.id : cartItem.id;
+        const qty = Math.max(1, parseInt(cartItem.quantity || cartItem.qty || 1, 10));
+        
+        const dbItem = dbItems.find(m => m.id === menuItemId);
+        let unitPrice = dbItem ? Number(dbItem.price) : (Number(cartItem.price) || 0);
+
+        if (cartItem.selectedVariant && dbItem && Array.isArray(dbItem.variants)) {
+          const v = dbItem.variants.find(vr => vr.name === cartItem.selectedVariant);
+          if (v) unitPrice = Number(v.price);
+        }
+
+        calculatedSubtotal += unitPrice * qty;
+        const itemName = dbItem ? dbItem.name : (cartItem.menuItem?.name || cartItem.name || 'Food Item');
+        const itemImage = dbItem?.imageUrl || cartItem.menuItem?.imageUrl || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80';
+        const itemStation = dbItem?.station || (['Drinks', 'Beverages', 'Desserts', 'Juices', 'Beverages & Desserts'].includes(dbItem?.category) ? 'juice' : 'main');
+
+        verifiedItems.push({
+          id: menuItemId,
+          name: itemName,
+          unitPrice,
+          price: unitPrice,
+          qty,
+          quantity: qty,
+          totalPrice: unitPrice * qty,
+          selectedVariant: cartItem.selectedVariant || undefined,
+          station: itemStation,
+          notes: cartItem.specialInstructions || cartItem.notes || undefined,
+          menuItem: {
+            id: menuItemId,
+            name: itemName,
+            price: unitPrice,
+            description: dbItem?.description || '',
+            category: dbItem?.category || 'Mains',
+            imageUrl: itemImage,
+            isAvailable: true,
+            station: itemStation,
+          }
+        });
+      }
+
+      // Recipe BOM auto-deduction from inventory if configured
+      if (Array.isArray(serverState.recipes) && Array.isArray(serverState.inventory) && serverState.recipes.length > 0) {
+        for (const it of verifiedItems) {
+          const recipe = serverState.recipes.find(r => r.menuItemId === it.id);
+          if (recipe && Array.isArray(recipe.ingredients)) {
+            const portions = Number(recipe.yieldPortions) || 1;
+            for (const ing of recipe.ingredients) {
+              const invItem = serverState.inventory.find(inv => inv.id === ing.inventoryItemId);
+              if (invItem) {
+                const deductQty = (ing.qty / portions) * it.qty;
+                invItem.currentStock = Math.max(0, (invItem.currentStock || 0) - deductQty);
+                invItem.updatedAt = Date.now();
+              }
+            }
+          }
+        }
+      }
+
+      // For Dine-In or Express Takeaway, delivery fee is 0
+      const deliveryFee = (orderType === 'dine_in' || orderType === 'takeaway') ? 0 : (calculatedSubtotal >= 2500 ? 0 : 150);
+      const tax = Math.round(calculatedSubtotal * 0.05); // 5% GST
+      const grandTotal = calculatedSubtotal + deliveryFee + tax;
+
+      const orderId = `ORD-${Date.now().toString().slice(-6)}`;
+      const orderNumber = `SLT-${Math.floor(1000 + Math.random() * 9000)}`;
+      const roundNum = payload.roundNumber ? parseInt(payload.roundNumber, 10) : 1;
+      const isAddOn = roundNum > 1 || payload.isAddOn || false;
+
+      // Table details if Dine-in
+      const tableInfo = payload.tableInfo || {};
+      const targetTableId = payload.tableId || tableInfo.tableId || (orderType === 'dine_in' ? 'DINE-IN-APP' : (orderType === 'takeaway' ? 'EXPRESS-TAKEAWAY' : 'DELIVERY'));
+      const targetTableName = payload.tableName || tableInfo.tableName || (
+        orderType === 'dine_in' 
+          ? `${tableInfo.floor || 'Floor'} • ${tableInfo.seatingType || 'Table'} ${tableInfo.tableName || tableInfo.tableNumber || ''}`
+          : (orderType === 'takeaway' ? `Express Takeaway: ${customerName}` : `Delivery: ${customerName}`)
+      );
+
+      const newOrder = {
+        id: orderId,
+        orderNumber,
+        source: 'mobile_app',
+        orderType: orderType, // 'dine_in' | 'takeaway' | 'delivery'
+        floor: tableInfo.floor || undefined,
+        seatingType: tableInfo.seatingType || undefined, // 'tables' | 'couches' | 'majlis'
+        tableId: targetTableId,
+        tableName: targetTableName,
+        cabinNumber: tableInfo.cabinNumber || undefined,
+        roundNumber: roundNum,
+        isAddOn,
+        customer: {
+          id: payload.customerId || undefined,
+          name: customerName,
+          phone: customerPhone,
+          address: payload.deliveryAddress ? `${payload.deliveryAddress.addressLine}, ${payload.deliveryAddress.area}` : (orderType === 'dine_in' ? `In-Restaurant: ${targetTableName}` : (orderType === 'takeaway' ? 'Sultan Express Takeaway Counter' : 'Lahore, Pakistan'))
+        },
+        items: verifiedItems,
+        subtotal: calculatedSubtotal,
+        deliveryFee,
+        tax,
+        total: grandTotal,
+        paymentMethod: payload.paymentMethod || (orderType === 'dine_in' || orderType === 'takeaway' ? 'pay_at_counter' : 'cash_on_delivery'),
+        isPaid: payload.paymentMethod === 'card' || payload.paymentMethod === 'easypaisa' || payload.paymentMethod === 'jazzcash',
+        status: 'PENDING', // PENDING -> CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY / SERVED
+        createdAt: Date.now(),
+        estimatedDeliveryMinutes: orderType === 'dine_in' ? 20 : (orderType === 'takeaway' ? 15 : 35)
+      };
+
+      // Create Kitchen Ticket (KOT)
+      const kotTicket = {
+        id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+        orderId: newOrder.id,
+        orderNumber: newOrder.orderNumber,
+        tableId: targetTableId,
+        tableName: targetTableName,
+        server: orderType === 'dine_in' ? `App Customer (Round ${roundNum})` : (orderType === 'takeaway' ? 'Mobile Express Takeaway' : 'Mobile App Delivery'),
+        timePlaced: Date.now(),
+        status: 'cooking',
+        roundNumber: roundNum,
+        isAddOn,
+        items: verifiedItems.map(it => ({
+          id: it.id,
+          name: it.name,
+          price: it.unitPrice,
+          qty: it.qty,
+          notes: it.notes,
+          station: it.station || 'main',
+          completed: false
+        }))
+      };
+
+      // If Dine-In and valid table exists, occupy the table
+      if (orderType === 'dine_in' && targetTableId && targetTableId !== 'DINE-IN-APP') {
+        const foundTable = (serverState.tables || []).find(t => t.id === targetTableId || t.name.toLowerCase() === targetTableName.toLowerCase());
+        if (foundTable) {
+          foundTable.status = 'occupied';
+          foundTable.server = customerName;
+          foundTable.billTotal = (foundTable.billTotal || 0) + grandTotal;
+          if (!foundTable.orders) foundTable.orders = [];
+          foundTable.orders.push(...verifiedItems.map(it => ({
+            id: it.id,
+            name: it.name,
+            price: it.unitPrice,
+            qty: it.qty,
+            completed: false
+          })));
+        }
+      }
+
+      // Persist to central state
+      if (!serverState.onlineOrders) serverState.onlineOrders = [];
+      serverState.onlineOrders.unshift(newOrder);
+
+      if (!serverState.tickets) serverState.tickets = [];
+      serverState.tickets.unshift(kotTicket);
+
+      // Update customer total orders & spent in appUsers and customers
+      if (serverState.appUsers) {
+        const u = serverState.appUsers.find(au => au.phone.replace(/\D/g, '') === customerPhone.replace(/\D/g, ''));
+        if (u) {
+          u.totalOrders = (u.totalOrders || 0) + 1;
+          u.totalSpent = (u.totalSpent || 0) + grandTotal;
+        }
+      }
+
+      // Log Order Placed event
+      if (!serverState.appUserLogs) serverState.appUserLogs = [];
+      serverState.appUserLogs.unshift({
+        id: `log-${Date.now()}`,
+        name: customerName,
+        phone: customerPhone,
+        action: 'ORDER_PLACED',
+        deviceInfo: 'Mobile App',
+        timestamp: Date.now(),
+        details: `Placed order #${newOrder.orderNumber} (Rs. ${grandTotal.toLocaleString()})`
+      });
+
+      persistState();
+
+      // Broadcast Real-Time Alert to Web POS, Waiter & Kitchen Screens!
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'APP_ORDER',
+        timestamp: Date.now()
+      });
+
+      broadcastToClients({
+        type: 'NEW_ORDER_ALERT',
+        order: newOrder,
+        ticket: kotTicket,
+        soundAlert: true,
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        data: newOrder,
+        message: 'Order created and dispatched to Sultan Kitchen successfully!'
+      }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: `Invalid order data: ${err.message}` }));
+    }
+    return;
+  }
+
+  // 6a. Safe Public Orders List: GET /api/public/orders
+  if (url.pathname === '/api/public/orders' && req.method === 'GET') {
+    const customerId = url.searchParams.get('customerId');
+    const phone = url.searchParams.get('phone');
+    let orders = serverState.onlineOrders || [];
+
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      orders = orders.filter(o => o.customer?.phone?.replace(/\D/g, '').includes(cleanPhone));
+    } else if (customerId) {
+      orders = orders.filter(o => o.customer?.id === customerId);
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      success: true,
+      data: orders,
+      count: orders.length,
+      timestamp: Date.now()
+    }));
+    return;
+  }
+
+  // 6b. Track Single Order: GET /api/public/orders/:id
+  if (url.pathname.startsWith('/api/public/orders/') && req.method === 'GET') {
+    const orderId = url.pathname.split('/').pop();
+    const order = (serverState.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
+
+    if (!order) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Order not found' }));
+      return;
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: order }));
+    return;
+  }
+
+  // 7. Rider / Kitchen Status Progression: PATCH /api/public/orders/:id/status
+  if (url.pathname.startsWith('/api/public/orders/') && url.pathname.endsWith('/status') && req.method === 'PATCH') {
+    const parts = url.pathname.split('/');
+    const orderId = parts[parts.length - 2];
+
+    try {
+      const payload = await readRequestBody(req);
+      const { status, riderName, riderPhone, assignedWaiter, managerNotes } = payload;
+      const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'SERVED', 'CANCELLED'];
+      
+      if (!validStatuses.includes(status)) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }));
+        return;
+      }
+
+      const order = (serverState.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
+      if (!order) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Order not found' }));
+        return;
+      }
+
+      order.status = status;
+      if (riderName) order.riderName = riderName;
+      if (riderPhone) order.riderPhone = riderPhone;
+      if (assignedWaiter) order.assignedWaiter = assignedWaiter;
+      if (managerNotes) order.managerNotes = managerNotes;
+      order.updatedAt = Date.now();
+
+      const ticket = (serverState.tickets || []).find(t => t.orderId === order.id);
+      if (ticket) {
+        if (status === 'CONFIRMED' || status === 'PREPARING') ticket.status = 'cooking';
+        else if (status === 'READY' || status === 'READY_FOR_PICKUP') ticket.status = 'ready';
+        else if (status === 'DELIVERED' || status === 'SERVED') ticket.status = 'served';
+      }
+
+      persistState();
+
+      broadcastToClients({
+        type: 'ORDER_STATUS_CHANGED',
+        orderId: order.id,
+        orderNumber: order.orderNumber,
+        status,
+        riderName: order.riderName,
+        riderPhone: order.riderPhone,
+        assignedWaiter: order.assignedWaiter,
+        timestamp: Date.now()
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: order, message: `Status updated to ${status}` }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // 7b. Service Requests: GET, POST & PATCH /api/public/service-requests
+  if (url.pathname === '/api/public/service-requests' && req.method === 'GET') {
+    const tableId = url.searchParams.get('tableId');
+    let reqs = serverState.serviceRequests || [];
+    if (tableId) {
+      reqs = reqs.filter(r => r.tableId === tableId);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: reqs }));
+    return;
+  }
+
+  if (url.pathname === '/api/public/service-requests' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { tableId, tableName, zone, type, note, source } = payload;
+      if (!tableId || !type) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'tableId and type are required' }));
+        return;
+      }
+
+      const newReq = {
+        id: `sr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        tableId,
+        tableName: tableName || `Table ${tableId}`,
+        zone: zone || 'Dining Hall',
+        type, // 'call_waiter' | 'bill' | 'water' | 'cleaning' | 'complaint'
+        note: note || '',
+        status: 'pending',
+        source: source || 'guest',
+        createdAt: Date.now()
+      };
+
+      if (!serverState.serviceRequests) serverState.serviceRequests = [];
+      serverState.serviceRequests.unshift(newReq);
+      persistState();
+
+      // Real-time Audio/Visual Alert to Waiter & Manager screens
+      broadcastToClients({
+        type: 'SERVICE_REQUEST_ALERT',
+        request: newReq,
+        soundAlert: true,
+        timestamp: Date.now()
+      });
+
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'GUEST_SERVICE_REQUEST',
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: newReq, message: 'Service request dispatched to floor staff' }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  if (url.pathname.startsWith('/api/public/service-requests/') && req.method === 'PATCH') {
+    const parts = url.pathname.split('/');
+    const reqId = parts[parts.length - 1];
+    try {
+      const payload = await readRequestBody(req);
+      const targetReq = (serverState.serviceRequests || []).find(r => r.id === reqId);
+      if (!targetReq) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Service request not found' }));
+        return;
+      }
+      if (payload.status) targetReq.status = payload.status;
+      if (payload.acknowledgedBy) {
+        targetReq.acknowledgedBy = payload.acknowledgedBy;
+        targetReq.acknowledgedAt = Date.now();
+      }
+      if (payload.status === 'resolved') targetReq.resolvedAt = Date.now();
+
+      persistState();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'SERVICE_REQUEST_RESOLVED',
+        timestamp: Date.now()
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: targetReq }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // 7c. Table Reservations: GET & POST /api/public/reservations
+  if (url.pathname === '/api/public/reservations' && req.method === 'GET') {
+    const phone = url.searchParams.get('phone');
+    let resList = serverState.reservations || [];
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      resList = resList.filter(r => (r.phone || '').replace(/\D/g, '') === cleanPhone);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: resList }));
+    return;
+  }
+
+  if (url.pathname === '/api/public/reservations' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { customerName, phone, guestsCount, reservationDate, timeSlot, tableId, tableName, floor, seatingCategory, notes, preOrderItems, preOrderTotal } = payload;
+      if (!customerName || !phone || !reservationDate || !timeSlot) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Customer name, phone, date, and time slot are required' }));
+        return;
+      }
+
+      // Pick or find a table if not specified
+      let assignedTableId = tableId;
+      let assignedTableName = tableName;
+      if (!assignedTableId) {
+        const availableTable = (serverState.tables || []).find(t => 
+          t.status === 'available' && 
+          (!floor || t.floor === floor) &&
+          (!seatingCategory || t.seatingType === seatingCategory)
+        );
+        if (availableTable) {
+          assignedTableId = availableTable.id;
+          assignedTableName = availableTable.name;
+        } else {
+          assignedTableId = 'RES-AUTO';
+          assignedTableName = `Reserved (${guestsCount} guests)`;
+        }
+      }
+
+      const newReservation = {
+        id: `res-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        tableId: assignedTableId,
+        tableName: assignedTableName,
+        customerName,
+        phone,
+        guestsCount: Number(guestsCount) || 2,
+        reservationDate,
+        timeSlot,
+        floor: floor || 'Ground Floor',
+        seatingCategory: seatingCategory || 'tables',
+        status: 'confirmed',
+        notes: notes || '',
+        preOrderItems: Array.isArray(preOrderItems) ? preOrderItems : [],
+        preOrderTotal: Number(preOrderTotal) || 0,
+        createdAt: Date.now()
+      };
+
+      if (!serverState.reservations) serverState.reservations = [];
+      serverState.reservations.unshift(newReservation);
+
+      // Lock table on SRE blueprint as 'reserved' (Purple)
+      if (assignedTableId && assignedTableId !== 'RES-AUTO') {
+        const tbl = (serverState.tables || []).find(t => t.id === assignedTableId);
+        if (tbl) {
+          tbl.status = 'reserved';
+          tbl.reservationId = newReservation.id;
+          tbl.server = `${customerName} (Reserved)`;
+        }
+      }
+
+      persistState();
+
+      broadcastToClients({
+        type: 'RESERVATION_CONFIRMED',
+        reservation: newReservation,
+        timestamp: Date.now()
+      });
+
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'TABLE_RESERVATION',
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: newReservation, message: 'Table reserved successfully' }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // 7d. Playland Rides: GET /api/public/playland/rides
+  if (url.pathname === '/api/public/playland/rides' && req.method === 'GET') {
+    const rides = (serverState.playlandRides && serverState.playlandRides.length > 0) ? serverState.playlandRides : DEFAULT_PLAYLAND_RIDES;
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: rides }));
+    return;
+  }
+
+  // 7e. Playland Tickets: GET & POST /api/public/playland/tickets
+  if (url.pathname === '/api/public/playland/tickets' && req.method === 'GET') {
+    const phone = url.searchParams.get('phone');
+    let tickets = serverState.playlandTickets || [];
+    if (phone) {
+      const cleanPhone = phone.replace(/\D/g, '');
+      tickets = tickets.filter(t => (t.parentPhone || '').replace(/\D/g, '') === cleanPhone);
+    }
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, data: tickets }));
+    return;
+  }
+
+  if (url.pathname === '/api/public/playland/tickets' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { childName, parentName, parentPhone, childAge, items, totalAmount, paymentMethod, wristbandColor, notes } = payload;
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'At least one ride item is required' }));
+        return;
+      }
+      if (!parentPhone) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Parent phone number is required' }));
+        return;
+      }
+
+      const ticketCode = `PL-${Math.floor(100000 + Math.random() * 900000)}`;
+      const newTicket = {
+        id: `pltk-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        ticketCode,
+        childName: childName || 'Guest Child',
+        parentName: parentName || 'Guest Parent',
+        parentPhone,
+        childAge: childAge || undefined,
+        wristbandColor: wristbandColor || '#D5A943',
+        notes: notes || undefined,
+        items,
+        totalAmount: Number(totalAmount) || items.reduce((acc, it) => acc + (it.price * (it.qty || 1)), 0),
+        paymentMethod: paymentMethod || 'online',
+        issuedAt: Date.now(),
+        issuedBy: 'Customer Mobile App',
+        status: 'active',
+        redeemedRidesCount: 0
+      };
+
+      if (!serverState.playlandTickets) serverState.playlandTickets = [];
+      serverState.playlandTickets.unshift(newTicket);
+      persistState();
+
+      broadcastToClients({
+        type: 'NEW_PLAYLAND_TICKET',
+        ticket: newTicket,
+        timestamp: Date.now()
+      });
+
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'APP_PLAYLAND_TICKET',
+        timestamp: Date.now()
+      });
+
+      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, data: newTicket, message: 'Playland digital ticket issued' }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // 8. Legacy / Central Web POS Sync: GET & POST /api/sync
   if (url.pathname === '/api/sync' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(serverState));
@@ -131,30 +1671,45 @@ const server = http.createServer((req, res) => {
   }
 
   if (url.pathname === '/api/sync' && req.method === 'POST') {
-    let body = '';
-    req.on('data', chunk => { body += chunk; });
-    req.on('end', () => {
-      try {
-        const data = JSON.parse(body);
-        if (data.state) {
-          applyStateUpdate(data.state, data.senderId);
-        }
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, timestamp: Date.now() }));
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
+    try {
+      const data = await readRequestBody(req);
+      if (data.state) {
+        applyStateUpdate(data.state, data.senderId);
       }
-    });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, timestamp: Date.now() }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
     return;
   }
 
-  res.writeHead(404, { 'Content-Type': 'text/plain' });
-  res.end('Sultan Restaurant Sync Hub');
-});
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Endpoint not found', server: 'Sultan Restaurant Hub' }));
+}
 
-// Create WebSocket Server on the same HTTP server
-const wss = new WebSocketServer({ server });
+// Multi-port HTTP & WebSocket Servers (5050, 5000, 80)
+const server = http.createServer(handleRequest);
+const server5000 = http.createServer(handleRequest);
+let server80 = null;
+try {
+  server80 = http.createServer(handleRequest);
+} catch (e) {}
+
+const wss = new WebSocketServer({ noServer: true });
+
+function bindUpgrade(srv) {
+  if (!srv) return;
+  srv.on('upgrade', (request, socket, head) => {
+    wss.handleUpgrade(request, socket, head, (ws) => {
+      wss.emit('connection', ws, request);
+    });
+  });
+}
+bindUpgrade(server);
+bindUpgrade(server5000);
+if (server80) bindUpgrade(server80);
 
 function broadcastToClients(msgObj, excludeWs = null) {
   const payload = JSON.stringify(msgObj);
@@ -169,14 +1724,13 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'serviceRequests', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords'];
+  const allowedKeys = ['tables', 'tickets', 'onlineOrders', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords'];
   let modified = false;
 
   for (const key of allowedKeys) {
     if (partialState[key] !== undefined) {
       if (key === 'tickets') {
         const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
-        // Preserve served status against stale downgrades
         let mergedTickets = incomingTickets.map(inc => {
           const existing = (serverState.tickets || []).find(et => et.id === inc.id);
           if (existing && existing.status === 'served' && inc.status !== 'served') {
@@ -191,7 +1745,6 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         if (mergedTickets.length > 0 || !hasOccupiedTables) {
           serverState.tickets = mergedTickets;
         } else {
-          // Guard: incoming tickets is empty, but tables are occupied!
           const occupiedIds = new Set(currentTables.filter(t => t.status === 'occupied' || t.status === 'billed').map(t => t.id));
           const existingActive = (serverState.tickets || []).filter(t => occupiedIds.has(t.tableId));
           serverState.tickets = existingActive.length > 0 ? existingActive : mergedTickets;
@@ -206,7 +1759,6 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
 
   if (modified) {
     persistState();
-    // Broadcast to all other connected devices!
     broadcastToClients({
       type: 'SERVER_BROADCAST',
       state: serverState,
@@ -220,7 +1772,6 @@ wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;
   console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
 
-  // Send full current state immediately to newly connected device
   ws.send(JSON.stringify({
     type: 'INIT_STATE',
     state: serverState,
@@ -252,9 +1803,24 @@ wss.on('connection', (ws, req) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`=================================================`);
-  console.log(`🏰 SULTAN RESTAURANT CENTRAL POS HUB ONLINE`);
+  console.log(`🏰 SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
   console.log(`📡 Port: ${PORT} (All network interfaces 0.0.0.0)`);
-  console.log(`🌐 Local Wi-Fi Sync Address: ws://192.168.1.16:${PORT}`);
-  console.log(`📱 Connect your Mobile, Tablet & PC to this hub`);
+  console.log(`👤 Auth API: http://localhost:${PORT}/api/auth/login`);
+  console.log(`📊 Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+  console.log(`🌐 Public Menu: http://localhost:${PORT}/api/public/menu`);
+  console.log(`📦 Online Orders: http://localhost:${PORT}/api/public/orders`);
+  console.log(`⚡ WebSocket URL: ws://localhost:${PORT}`);
   console.log(`=================================================`);
 });
+
+server5000.listen(5000, '0.0.0.0', () => {
+  console.log(`📡 Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+}).on('error', (err) => {
+  console.log('[Sultan Hub] Port 5000 listener:', err.message);
+});
+
+if (server80) {
+  server80.listen(80, '0.0.0.0', () => {
+    console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+  }).on('error', () => {});
+}

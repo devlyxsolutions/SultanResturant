@@ -65,7 +65,7 @@ export default function KitchenDisplayScreen() {
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
   const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
-  const [stationFilter] = useState<'all' | 'main' | 'juice'>('main');
+  const [stationFilter] = useState<'all' | 'main' | 'juice'>('all');
   const [now, setNow] = useState(() => Date.now());
   const [latestAlert, setLatestAlert] = useState<{
     id: string;
@@ -88,7 +88,127 @@ export default function KitchenDisplayScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // Watch for new tickets arriving (from waiter device / server sync)
+  // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
+  useEffect(() => {
+    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
+    
+    // Fetch active kitchen tickets and reconcile confirmed app orders
+    const fetchLiveTickets = async () => {
+      try {
+        // 1. Fetch tickets from sync endpoint
+        const res = await fetch(`http://${host}:5000/api/sync`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
+            useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
+          }
+        }
+
+        // 2. Also reconcile online orders that are CONFIRMED / PREPARING / READY
+        const ordersRes = await fetch(`http://${host}:5000/api/admin/online-orders`);
+        if (ordersRes.ok) {
+          const ordersData = await ordersRes.json();
+          if (ordersData.success && Array.isArray(ordersData.orders)) {
+            const activeAppOrders = ordersData.orders.filter((o: any) => 
+              o.status === 'CONFIRMED' || o.status === 'PREPARING' || o.status === 'READY'
+            );
+
+            const store = useRestaurantStore.getState();
+            const currentTickets = store.tickets || [];
+            let hasNew = false;
+            const updated = [...currentTickets];
+
+            for (const order of activeAppOrders) {
+              const kotId = `KOT-${(order.orderNumber || '').replace(/\D/g, '') || order.id.slice(-4)}`;
+              const existing = updated.find(t => t.id === kotId || (t as any).orderId === order.id);
+
+              if (!existing) {
+                const isDineIn = order.orderType === 'dine_in';
+                const newT: Ticket = {
+                  id: kotId,
+                  orderId: order.id,
+                  orderNumber: order.orderNumber,
+                  tableId: order.tableId || (isDineIn ? 'app-table' : 'delivery'),
+                  tableName: order.tableName || (isDineIn ? `${order.floor || 'Floor'} Table` : `Delivery: ${order.customer?.name || 'Customer'}`),
+                  server: isDineIn ? (order.assignedWaiter || 'Floor Server') : 'Mobile App Delivery',
+                  timePlaced: order.createdAt || Date.now(),
+                  status: (order.status === 'READY' ? 'ready' : 'cooking') as any,
+                  items: (order.items || []).map((it: any) => ({
+                    id: it.id || `it-${Date.now()}`,
+                    name: it.name || it.menuItem?.name || 'Dish Item',
+                    price: it.unitPrice || it.price || 0,
+                    qty: it.qty || it.quantity || 1,
+                    notes: it.notes || it.specialInstructions,
+                    completed: false,
+                    station: 'main'
+                  }))
+                };
+                updated.unshift(newT);
+                hasNew = true;
+              } else if (order.status === 'READY' && existing.status !== 'ready') {
+                existing.status = 'ready';
+                hasNew = true;
+              }
+            }
+
+            if (hasNew) {
+              store.syncFromServer({ tickets: updated });
+            }
+          }
+        }
+      } catch (e) {}
+    };
+
+    fetchLiveTickets();
+    const pollInterval = setInterval(fetchLiveTickets, 3500);
+
+    // 2. Direct real-time WebSocket stream for instant KOT Chime & Alert Banner
+    const wsUrl = `ws://${host}:5000`;
+    let socket: WebSocket | null = null;
+    try {
+      socket = new WebSocket(wsUrl);
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
+            const currentTickets = useRestaurantStore.getState().tickets || [];
+            if (!currentTickets.some((t: Ticket) => t.id === msg.ticket.id)) {
+              useRestaurantStore.getState().syncFromServer({
+                tickets: [msg.ticket, ...currentTickets]
+              });
+              playKitchenChime(false);
+              setLatestAlert({
+                id: msg.ticket.id,
+                tableName: msg.ticket.tableName,
+                isAddOn: false,
+                itemCount: (msg.ticket.items || []).reduce((s: number, it: any) => s + (it.qty || 1), 0),
+                server: msg.ticket.server
+              });
+            }
+          } else if (msg.type === 'ORDER_STATUS_CHANGED') {
+            const currentTickets = useRestaurantStore.getState().tickets || [];
+            const updated = currentTickets.map((t: Ticket) => {
+              if ((t as any).orderId === msg.orderId || (t as any).orderNumber === msg.orderNumber) {
+                const s = msg.status === 'READY' || msg.status === 'READY_FOR_PICKUP' ? 'ready' : (msg.status === 'SERVED' || msg.status === 'DELIVERED' ? 'served' : 'cooking');
+                return { ...t, status: s as any };
+              }
+              return t;
+            });
+            useRestaurantStore.getState().syncFromServer({ tickets: updated });
+          }
+        } catch (e) {}
+      };
+    } catch (e) {}
+
+    return () => {
+      clearInterval(pollInterval);
+      if (socket) {
+        try { socket.close(); } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Watch for new tickets arriving in local store to trigger audio chime
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -148,11 +268,28 @@ export default function KitchenDisplayScreen() {
     });
 
   const handleTicketAction = (ticket: Ticket) => {
+    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
+    const orderId = (ticket as any).orderId;
+
     if (ticket.status === 'cooking') {
       updateTicketStatus(ticket.id, 'ready');
+      if (orderId) {
+        fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'READY' })
+        }).catch(() => {});
+      }
     } else if (ticket.status === 'ready') {
       // If already ready, bumping marks it dispatched / served
       bumpTicket(ticket.id);
+      if (orderId) {
+        fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'SERVED' })
+        }).catch(() => {});
+      }
     } else {
       // If served, clicking recalls it back to ready
       updateTicketStatus(ticket.id, 'ready');

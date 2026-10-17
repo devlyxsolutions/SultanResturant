@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -41,6 +41,43 @@ export default function MenuManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   
+  // Success Feedback Message
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
+
+  // Sync with live central backend on mount
+  useEffect(() => {
+    const fetchLiveCatalog = async () => {
+      const ports = [5000, 5050, 80];
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      
+      for (const p of ports) {
+        try {
+          const url = p === 80 ? `http://${host}/api/public/menu` : `http://${host}:${p}/api/public/menu`;
+          const res = await fetch(url);
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            useRestaurantStore.setState({ menuItems: json.data });
+            break;
+          }
+        } catch (e) {}
+      }
+
+      for (const p of ports) {
+        try {
+          const url = p === 80 ? `http://${host}/api/public/categories` : `http://${host}:${p}/api/public/categories`;
+          const res = await fetch(url);
+          const json = await res.json();
+          if (json.success && Array.isArray(json.data) && json.data.length > 0) {
+            useRestaurantStore.setState({ categories: json.data.filter((c: string) => c.toLowerCase() !== 'all') });
+            break;
+          }
+        } catch (e) {}
+      }
+    };
+
+    fetchLiveCatalog();
+  }, []);
+
   // Item Modal state (Add / Edit)
   const [isItemModalVisible, setItemModalVisible] = useState(false);
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null);
@@ -345,27 +382,29 @@ export default function MenuManagement() {
   };
 
   // -------------------------------------------------------------
-  // Save Item Handler
+  // Save Item Handler (With Auto-Sync to Backend & Mobile App)
   // -------------------------------------------------------------
-  const handleSaveItem = () => {
+  const handleSaveItem = async () => {
     const parsedVariants = itemVariants
       .filter(v => v.name.trim() !== '' && !isNaN(parseFloat(v.price)))
       .map(v => ({ name: v.name.trim(), price: parseFloat(v.price) }));
 
     const hasVariants = parsedVariants.length > 0;
 
-    if (!itemName.trim() || !itemCategory) {
-      const msg = 'Please enter item name and category.';
+    if (!itemName.trim()) {
+      const msg = 'Please enter a name for the dish.';
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Error', msg);
+      else Alert.alert('Missing Name', msg);
       return;
     }
+
+    const finalCategory = itemCategory || (categories[0] || 'Mains');
     
     let priceNum = parseFloat(itemPrice);
-    if (!hasVariants && (isNaN(priceNum) || priceNum < 0)) {
-      const msg = 'Please enter a valid price (or add variants).';
+    if (!hasVariants && (isNaN(priceNum) || priceNum <= 0)) {
+      const msg = 'Please enter a valid selling price in Rs. (e.g. 1200)';
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Error', msg);
+      else Alert.alert('Missing Price', msg);
       return;
     }
 
@@ -385,7 +424,7 @@ export default function MenuManagement() {
       name: itemName.trim(),
       price: priceNum,
       costPrice: parsedCost,
-      category: itemCategory,
+      category: finalCategory,
       station: itemStation,
       description: itemDescription.trim() || undefined,
       badge: itemBadge.trim() || undefined,
@@ -404,13 +443,61 @@ export default function MenuManagement() {
     } else {
       addMenuItem(itemPayload);
     }
-    
+
     setItemModalVisible(false);
+
+    // Sync directly to Sultan Backend Hub (instantly reflected on Mobile App)
+    try {
+      const ports = [5000, 5050, 80];
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      for (const p of ports) {
+        try {
+          const url = p === 80 ? `http://${host}/api/admin/menu-items` : `http://${host}:${p}/api/admin/menu-items`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: itemPayload.name,
+              price: itemPayload.price,
+              category: itemPayload.category,
+              description: itemPayload.description,
+              imageUrl: itemPayload.imageUri,
+              imageUri: itemPayload.imageUri,
+              badge: itemPayload.badge,
+              variants: itemPayload.variants,
+            }),
+          });
+          if (res.ok) {
+            console.log(`[Menu] Dish synced successfully to ${url}`);
+            break;
+          }
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    setSaveSuccessMsg(`✨ Dish "${itemPayload.name}" saved & synced to Mobile App!`);
+    setTimeout(() => setSaveSuccessMsg(null), 5000);
   };
 
-  const handleDeleteItem = (item: MenuItem) => {
-    const confirmDelete = () => {
+  const handleDeleteItem = async (item: MenuItem) => {
+    const confirmDelete = async () => {
       deleteMenuItem(item.id);
+
+      // Sync deletion to Backend
+      try {
+        const ports = [5000, 5050, 80];
+        const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+        for (const p of ports) {
+          try {
+            const url = p === 80 ? `http://${host}/api/admin/menu-items/${item.id}` : `http://${host}:${p}/api/admin/menu-items/${item.id}`;
+            const res = await fetch(url, { method: 'DELETE' });
+            if (res.ok) break;
+          } catch (e) {}
+        }
+      } catch (e) {}
+
+      setSaveSuccessMsg(`Dish "${item.name}" removed from menu.`);
+      setTimeout(() => setSaveSuccessMsg(null), 4000);
     };
 
     if (Platform.OS === 'web') {
@@ -449,24 +536,45 @@ export default function MenuManagement() {
   // -------------------------------------------------------------
   // Category Management Handlers
   // -------------------------------------------------------------
-  const handleAddCategory = () => {
-    if (!newCatName.trim()) {
+  const handleAddCategory = async () => {
+    const catName = newCatName.trim();
+    if (!catName) {
       const msg = 'Please enter a category name';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Error', msg);
       return;
     }
     
-    if (categories.some(c => c.toLowerCase() === newCatName.trim().toLowerCase())) {
+    if (categories.some(c => c.toLowerCase() === catName.toLowerCase())) {
       const msg = 'This category already exists.';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Duplicate', msg);
       return;
     }
 
-    addCategory(newCatName.trim());
+    addCategory(catName);
     setCatModalVisible(false);
     setNewCatName('');
+
+    // Sync category to backend
+    try {
+      const ports = [5000, 5050, 80];
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      for (const p of ports) {
+        try {
+          const url = p === 80 ? `http://${host}/api/admin/categories` : `http://${host}:${p}/api/admin/categories`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: catName }),
+          });
+          if (res.ok) break;
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    setSaveSuccessMsg(`Category "${catName}" added & synced to Mobile App!`);
+    setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 
   const handleDeleteCategory = (catName: string) => {
@@ -530,6 +638,27 @@ export default function MenuManagement() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* Sync Success Notification Toast */}
+      {saveSuccessMsg && (
+        <View style={{
+          backgroundColor: '#064e3b',
+          borderColor: '#10b981',
+          borderWidth: 1.5,
+          borderRadius: 12,
+          paddingHorizontal: 16,
+          paddingVertical: 12,
+          marginBottom: 16,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}>
+          <Ionicons name="checkmark-circle" size={24} color="#34d399" />
+          <Text style={{ color: '#ecfdf5', fontSize: 14, fontWeight: '700', flex: 1 }}>
+            {saveSuccessMsg}
+          </Text>
+        </View>
+      )}
 
       {/* KPI Overview Banner */}
       <View style={styles.kpiContainer}>
@@ -671,11 +800,11 @@ export default function MenuManagement() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.categoryPillsScroll}
           >
-            {['All', ...categories].map(cat => {
+            {Array.from(new Set(['All', ...categories])).map((cat, idx) => {
               const isSelected = selectedCategoryFilter === cat;
               return (
                 <TouchableOpacity
-                  key={cat}
+                  key={`${cat}-${idx}`}
                   style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
                   onPress={() => setSelectedCategoryFilter(cat)}
                   activeOpacity={0.7}
@@ -1159,6 +1288,131 @@ export default function MenuManagement() {
                       </ScrollView>
                     </View>
                   )}
+
+                  {/* Selling Price & Cost Price */}
+                  <View style={{ flexDirection: 'row', gap: 12 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>Selling Price (Rs.) *</Text>
+                      <TextInput 
+                        style={styles.modalInput} 
+                        placeholder="e.g. 1200" 
+                        placeholderTextColor="#8E8E93"
+                        keyboardType="numeric" 
+                        value={itemPrice} 
+                        onChangeText={setItemPrice} 
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.inputLabel}>Cost Price (Rs.) (Optional)</Text>
+                      <TextInput 
+                        style={styles.modalInput} 
+                        placeholder="e.g. 600" 
+                        placeholderTextColor="#8E8E93"
+                        keyboardType="numeric" 
+                        value={itemCostPrice} 
+                        onChangeText={setItemCostPrice} 
+                      />
+                    </View>
+                  </View>
+
+                  {/* Photo / Image Selection */}
+                  <Text style={[styles.inputLabel, { marginTop: 4 }]}>Dish Photo / Image (Syncs to Mobile App & Web)</Text>
+                  
+                  {itemImageUri ? (
+                    <View style={styles.imagePreviewContainer}>
+                      <Image source={{ uri: itemImageUri }} style={styles.imagePreview} resizeMode="cover" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontWeight: '700', fontSize: 13, color: BRAND.ink }}>Photo Attached</Text>
+                        <Text style={{ fontSize: 11, color: BRAND.muted, marginVertical: 4 }} numberOfLines={1}>
+                          {itemImageUri.startsWith('data:') ? 'Custom Uploaded Photo' : itemImageUri}
+                        </Text>
+                        <TouchableOpacity 
+                          style={styles.clearImageBtn}
+                          onPress={() => setItemImageUri('')}
+                        >
+                          <Ionicons name="trash-outline" size={14} color={BRAND.danger} style={{ marginRight: 4 }} />
+                          <Text style={{ color: BRAND.danger, fontSize: 12, fontWeight: '700' }}>Remove Photo</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Image URL input & Upload button */}
+                  <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+                    <TextInput 
+                      style={[styles.modalInput, { flex: 1, marginBottom: 0 }]} 
+                      placeholder="Paste Image URL or pick preset below..." 
+                      placeholderTextColor="#8E8E93"
+                      value={itemImageUri} 
+                      onChangeText={setItemImageUri} 
+                    />
+                    <TouchableOpacity 
+                      style={{
+                        backgroundColor: BRAND.burgundySoft,
+                        borderColor: BRAND.gold,
+                        borderWidth: 1,
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4
+                      }}
+                      onPress={pickImageFromDevice}
+                      disabled={isUploadingImage}
+                    >
+                      <Ionicons name="cloud-upload-outline" size={16} color={BRAND.burgundy} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: BRAND.burgundy }}>
+                        {isUploadingImage ? 'Uploading...' : 'Upload'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 1-Tap Quick Food Image Presets */}
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.muted, marginBottom: 6 }}>
+                    Quick 1-Tap Food Photos:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {FOOD_PRESETS.slice(0, 10).map(p => (
+                        <TouchableOpacity
+                          key={p.id}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            backgroundColor: itemImageUri === p.imageUri ? BRAND.burgundy : '#F3F4F6',
+                            borderWidth: 1,
+                            borderColor: itemImageUri === p.imageUri ? BRAND.burgundy : '#E5E7EB',
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5
+                          }}
+                          onPress={() => {
+                            setItemImageUri(p.imageUri);
+                            if (!itemName) setItemName(p.name);
+                            if (!itemPrice) setItemPrice(p.defaultPrice.toString());
+                            if (!itemCostPrice && p.defaultCost) setItemCostPrice(p.defaultCost.toString());
+                            if (!itemDescription && p.description) setItemDescription(p.description);
+                            if (!itemBadge && p.badge) setItemBadge(p.badge);
+                          }}
+                        >
+                          <Ionicons 
+                            name={p.icon as any || 'restaurant-outline'} 
+                            size={14} 
+                            color={itemImageUri === p.imageUri ? '#fff' : BRAND.ink} 
+                          />
+                          <Text style={{
+                            fontSize: 12,
+                            fontWeight: '600',
+                            color: itemImageUri === p.imageUri ? '#fff' : BRAND.ink
+                          }}>
+                            {p.name.replace('Sultan ', '').replace('Royal ', '')}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </ScrollView>
 
                   {/* Station / Preparation Area */}
                   <Text style={[styles.inputLabel, { marginTop: 14 }]}>Kitchen Routing / Station</Text>

@@ -20,6 +20,7 @@ import AppSidebar, { NavItem } from '../../components/layout/AppSidebar';
 
 const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Dashboard', route: '/admin/dashboard', icon: 'grid-outline' },
+  { label: 'App Orders Command', route: '/admin/app-orders', icon: 'phone-portrait-outline', badge: 'Live App' },
   { label: 'POS Terminal', route: '/admin/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Live Shift & Cash', route: '/admin/shift', icon: 'time-outline' },
   { label: 'Invoices & Orders', route: '/admin/invoices', icon: 'receipt-outline' },
@@ -32,6 +33,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Suppliers & Vendors', route: '/admin/suppliers', icon: 'bus-outline' },
   { label: 'Table Blueprint', route: '/admin/tables', icon: 'grid-outline' },
   { label: 'Customer CRM', route: '/admin/customers', icon: 'person-outline' },
+  { label: 'Mobile App Users & Logs', route: '/admin/app-users', icon: 'phone-portrait-outline', badge: 'App' },
   { label: 'Floor Command', route: '/admin/floors', icon: 'business-outline' },
   { label: 'Business Insights', route: '/admin/insights', icon: 'trending-up-outline' },
   { label: 'Live Expenses', route: '/admin/expenses', icon: 'wallet-outline' },

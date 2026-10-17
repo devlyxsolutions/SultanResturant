@@ -37,6 +37,8 @@ export type OrderItem = {
 
 export type Ticket = {
   id: string;
+  orderId?: string;
+  orderNumber?: string;
   tableId: string;
   tableName: string;
   server: string;
@@ -149,6 +151,7 @@ export type Invoice = {
   discountEventId?: string;
   discountEventTitle?: string;
   tax: number;
+  serviceCharge?: number;
   total: number;
   payments: Payment[];
   status?: 'settled' | 'voided' | 'refunded';
@@ -156,6 +159,7 @@ export type Invoice = {
   voidedAt?: number;
   voidedBy?: string;
   notes?: string;
+  packagingNotes?: string;
   refundAmount?: number;
   returnStatus?: 'none' | 'partial' | 'full';
   returnIds?: string[];

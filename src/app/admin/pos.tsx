@@ -19,7 +19,13 @@ function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSet
   };
 }
 
-export default function AdminPOS() {
+export default function AdminPOS({
+  backRoute = '/admin/dashboard',
+  shiftRoute = '/admin/shift',
+}: {
+  backRoute?: string;
+  shiftRoute?: string;
+} = {}) {
   const router = useRouter();
   const { prefillTableId } = useLocalSearchParams();
   const { width } = useWindowDimensions();
@@ -34,7 +40,7 @@ export default function AdminPOS() {
         moduleName="POS Billing Terminal"
         urduModuleName="پی او ایس بلنگ ٹرمینل"
         requiredPermission="canAccessPOS"
-        backRoute="/admin/dashboard"
+        backRoute={backRoute}
       />
     );
   }
@@ -89,6 +95,14 @@ export default function AdminPOS() {
   const [promoModalVisible, setPromoModalVisible] = useState(false);
   const [promoCodeInput, setPromoCodeInput] = useState('');
   const [discountAmount, setDiscountAmount] = useState('0');
+  const [discountType, setDiscountType] = useState<'flat' | 'percent'>('flat');
+  const [discountPercent, setDiscountPercent] = useState('');
+  const [applyServiceCharge, setApplyServiceCharge] = useState(true);
+  const [serviceChargeRate, setServiceChargeRate] = useState(5);
+  const [customWeightInput, setCustomWeightInput] = useState('');
+  const [orderCookingNotes, setOrderCookingNotes] = useState('');
+  const [orderPackagingNotes, setOrderPackagingNotes] = useState('');
+  const [drawerPulseAlert, setDrawerPulseAlert] = useState<string | null>(null);
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
 
   // Table Modal Filter
@@ -197,10 +211,19 @@ export default function AdminPOS() {
   });
 
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
-  const discountVal = parseFloat(discountAmount) || 0;
+  let discountVal = 0;
+  if (discountType === 'percent') {
+    const pct = parseFloat(discountPercent) || 0;
+    discountVal = Math.round(subTotal * (pct / 100));
+  } else {
+    discountVal = parseFloat(discountAmount) || 0;
+  }
+  discountVal = Math.min(discountVal, subTotal);
+
   const afterDiscount = Math.max(0, subTotal - discountVal);
-  const tax = afterDiscount * 0.16;
-  const total = afterDiscount + tax;
+  const tax = Math.round(afterDiscount * 0.16); // 16% GST
+  const serviceCharge = applyServiceCharge ? Math.round(afterDiscount * (serviceChargeRate / 100)) : 0;
+  const total = afterDiscount + tax + serviceCharge;
 
   const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
   const remaining = total - totalPaid;
@@ -386,6 +409,58 @@ export default function AdminPOS() {
     setVariantModalItem(null);
   };
 
+  const handleWeightSelect = (weightKg: number, weightLabel: string) => {
+    if (!variantModalItem) return;
+    const basePrice = variantModalItem.price;
+    const calculatedPrice = Math.max(1, Math.round(basePrice * weightKg));
+    const weightId = `${variantModalItem.id}-${weightLabel.replace(/\s+/g, '_')}`;
+    const weightName = `${variantModalItem.name} (${weightLabel})`;
+
+    setCart(prev => {
+      const existing = prev.find(i => i.id === weightId);
+      if (existing) {
+        return prev.map(i => i.id === weightId ? { ...i, qty: i.qty + 1 } : i);
+      }
+      return [
+        ...prev,
+        {
+          id: weightId,
+          name: weightName,
+          price: calculatedPrice,
+          qty: 1,
+          completed: false,
+          station: variantModalItem.station || 'main'
+        }
+      ];
+    });
+
+    setVariantModalItem(null);
+    setCustomWeightInput('');
+  };
+
+  const handlePulseCashDrawer = () => {
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && ((window as any).AudioContext || (window as any).webkitAudioContext)) {
+        const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+        const ctx = new AudioCtx();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, ctx.currentTime);
+        osc.frequency.exponentialRampToValueAtTime(1400, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.35, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.25);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.25);
+      }
+    } catch {}
+
+    setDrawerPulseAlert('⚡ Electronic Cash Drawer Pulse Sent (ESC/POS: \\x1B\\x70\\x00\\x19\\xFA) - Drawer Opened');
+    setTimeout(() => setDrawerPulseAlert(null), 3500);
+  };
+
   const updateQty = (id: string, delta: number) => {
     setCart(prev => prev.map(i => {
       if (i.id === id) {
@@ -530,7 +605,10 @@ export default function AdminPOS() {
       discountEventId: selectedEventCampaign?.id,
       discountEventTitle: selectedEventCampaign?.title,
       tax,
+      serviceCharge,
       total,
+      notes: orderCookingNotes.trim() || undefined,
+      packagingNotes: orderPackagingNotes.trim() || undefined,
       payments: payments.filter(p => p.amount > 0)
     });
 
@@ -604,6 +682,9 @@ export default function AdminPOS() {
     setCart([]);
     setSelectedEventCampaign(null);
     setDiscountAmount('0');
+    setDiscountPercent('');
+    setOrderCookingNotes('');
+    setOrderPackagingNotes('');
     setCheckoutModalVisible(false);
     setSelectedCustomerId('');
     setSelectedTableId('');
@@ -671,13 +752,32 @@ export default function AdminPOS() {
           <View style={[styles.headerRow, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                <TouchableOpacity style={{marginRight: 10}} onPress={() => (router.canGoBack() ? router.back() : router.replace('/admin/dashboard'))}>
+                <TouchableOpacity style={{marginRight: 10}} onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}>
                   <Ionicons name="chevron-back" size={26} color="#1C1C1E" />
                 </TouchableOpacity>
                 <Text style={[styles.title, isMobile && { fontSize: 20 }]}>POS Terminal</Text>
               </View>
 
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity 
+                  style={{
+                    flexDirection: 'row', 
+                    alignItems: 'center', 
+                    backgroundColor: '#FEF3C7', 
+                    paddingHorizontal: 10, 
+                    paddingVertical: 6, 
+                    borderRadius: 8, 
+                    borderWidth: 1, 
+                    borderColor: '#F59E0B', 
+                    gap: 5
+                  }} 
+                  onPress={handlePulseCashDrawer}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="flash" size={15} color="#B45309" />
+                  <Text style={{color: '#B45309', fontWeight: '800', fontSize: 12}}>Open Drawer</Text>
+                </TouchableOpacity>
+
                 <TouchableOpacity 
                   style={{
                     flexDirection: 'row', 
@@ -690,7 +790,7 @@ export default function AdminPOS() {
                     borderColor: '#E8DFC9', 
                     gap: 5
                   }} 
-                  onPress={() => router.push('/admin/shift')}
+                  onPress={() => router.push(shiftRoute as any)}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="time-outline" size={16} color="#52171B" />
@@ -706,6 +806,13 @@ export default function AdminPOS() {
                 </TouchableOpacity>
               </View>
             </View>
+
+            {drawerPulseAlert && (
+              <View style={{ backgroundColor: '#D1FAE5', borderColor: '#10B981', borderWidth: 1, padding: 8, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 }}>
+                <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                <Text style={{ color: '#065F46', fontWeight: '700', fontSize: 12 }}>{drawerPulseAlert}</Text>
+              </View>
+            )}
 
             <View style={[styles.searchBox, isMobile && { width: '100%' }]}>
               <Ionicons name="search" size={18} color="#888" />
@@ -1049,30 +1156,111 @@ export default function AdminPOS() {
               )}
             </View>
 
-            <View style={styles.discountRow}>
-              <Text style={styles.label}>Discount (Rs): </Text>
-              <TextInput 
-                style={styles.discountInput}
-                keyboardType="numeric"
-                value={discountAmount}
-                onChangeText={setDiscountAmount}
-              />
+            {/* Discount Mode Switcher (% vs Flat Rs) */}
+            <View style={{ marginTop: 6, marginBottom: 8 }}>
+              <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 8, padding: 2, marginBottom: 6 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 5, borderRadius: 6, alignItems: 'center', backgroundColor: discountType === 'flat' ? '#fff' : 'transparent' }}
+                  onPress={() => { setDiscountType('flat'); setDiscountPercent(''); }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: discountType === 'flat' ? '#4a121a' : '#64748B' }}>
+                    Flat Cash (Rs.)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 5, borderRadius: 6, alignItems: 'center', backgroundColor: discountType === 'percent' ? '#fff' : 'transparent' }}
+                  onPress={() => { setDiscountType('percent'); setDiscountAmount('0'); }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: discountType === 'percent' ? '#4a121a' : '#64748B' }}>
+                    Percentage (%)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {discountType === 'flat' ? (
+                <View style={styles.discountRow}>
+                  <Text style={styles.label}>Cash Discount (Rs): </Text>
+                  <TextInput 
+                    style={styles.discountInput}
+                    keyboardType="numeric"
+                    placeholder="0"
+                    value={discountAmount}
+                    onChangeText={setDiscountAmount}
+                  />
+                </View>
+              ) : (
+                <View>
+                  <View style={styles.discountRow}>
+                    <Text style={styles.label}>Discount (%): </Text>
+                    <TextInput 
+                      style={styles.discountInput}
+                      keyboardType="numeric"
+                      placeholder="e.g. 10"
+                      value={discountPercent}
+                      onChangeText={setDiscountPercent}
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4, justifyContent: 'flex-end' }}>
+                    {['5', '10', '15', '20', '25'].map(pct => (
+                      <TouchableOpacity
+                        key={pct}
+                        style={{ backgroundColor: discountPercent === pct ? '#4a121a' : '#E2E8F0', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6 }}
+                        onPress={() => setDiscountPercent(pct)}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: discountPercent === pct ? '#fff' : '#334155' }}>{pct}%</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
+            {/* Service Charge Toggle & Rate */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+              <TouchableOpacity 
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+                onPress={() => setApplyServiceCharge(!applyServiceCharge)}
+              >
+                <Ionicons name={applyServiceCharge ? "checkbox" : "square-outline"} size={17} color={applyServiceCharge ? "#4a121a" : "#94A3B8"} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Dine-In Service Charge</Text>
+              </TouchableOpacity>
+              {applyServiceCharge && (
+                <View style={{ flexDirection: 'row', gap: 4 }}>
+                  {[5, 10].map(rate => (
+                    <TouchableOpacity
+                      key={rate}
+                      style={{ backgroundColor: serviceChargeRate === rate ? '#4a121a' : '#E2E8F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}
+                      onPress={() => setServiceChargeRate(rate)}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: serviceChargeRate === rate ? '#fff' : '#475569' }}>{rate}%</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
             
             <View style={styles.totalsRow}>
               <Text style={styles.totalsLabel}>Subtotal</Text>
               <Text style={styles.totalsValue}>Rs. {subTotal.toFixed(0)}</Text>
             </View>
+            {discountVal > 0 && (
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Discount {discountType === 'percent' && discountPercent ? `(${discountPercent}%)` : ''}</Text>
+                <Text style={[styles.totalsValue, { color: '#059669' }]}>- Rs. {discountVal.toFixed(0)}</Text>
+              </View>
+            )}
             <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>Discount</Text>
-              <Text style={styles.totalsValue}>- Rs. {discountVal.toFixed(0)}</Text>
-            </View>
-            <View style={styles.totalsRow}>
-              <Text style={styles.totalsLabel}>Tax (16%)</Text>
+              <Text style={styles.totalsLabel}>GST Tax (16%)</Text>
               <Text style={styles.totalsValue}>Rs. {tax.toFixed(0)}</Text>
             </View>
+            {serviceCharge > 0 && (
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>Service Charge ({serviceChargeRate}%)</Text>
+                <Text style={styles.totalsValue}>Rs. {serviceCharge.toFixed(0)}</Text>
+              </View>
+            )}
             <View style={[styles.totalsRow, styles.grandTotalRow]}>
-              <Text style={styles.grandTotalLabel}>Total</Text>
+              <Text style={styles.grandTotalLabel}>Net Total</Text>
               <Text style={styles.grandTotalValue}>Rs. {total.toFixed(0)}</Text>
             </View>
             
@@ -1281,22 +1469,43 @@ export default function AdminPOS() {
                 <ScrollView style={{maxHeight: 300, marginTop: 10}}>
                   {customers
                     .filter(c => c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) || c.phone.includes(customerSearchQuery))
-                    .map(c => (
-                    <TouchableOpacity 
-                      key={c.id} 
-                      style={styles.selectRow}
-                      onPress={() => {
-                        setSelectedCustomerId(c.id);
-                        setCustomerModalVisible(false);
-                      }}
-                    >
-                      <View>
-                        <Text style={{fontWeight:'bold'}}>{c.name}</Text>
-                        <Text style={{color:'#666'}}>{c.phone}</Text>
-                      </View>
-                      <Ionicons name="chevron-forward" size={20} color="#ccc" />
-                    </TouchableOpacity>
-                  ))}
+                    .map(c => {
+                      const tier = (c.tier || 'Regular').toUpperCase();
+                      const tierColor = tier === 'VIP' ? '#B45309' : tier === 'GOLD' ? '#D97706' : tier === 'SILVER' ? '#2563EB' : '#15803D';
+                      const tierBg = tier === 'VIP' ? '#FEF3C7' : tier === 'GOLD' ? '#FFFBEB' : tier === 'SILVER' ? '#EFF6FF' : '#F0FDF4';
+
+                      return (
+                        <TouchableOpacity 
+                          key={c.id} 
+                          style={[styles.selectRow, { paddingVertical: 10 }]}
+                          onPress={() => {
+                            setSelectedCustomerId(c.id);
+                            setCustomerModalVisible(false);
+                          }}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontWeight: '800', fontSize: 14, color: '#1E293B' }}>{c.name}</Text>
+                              <View style={{ backgroundColor: tierBg, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: tierColor + '40' }}>
+                                <Text style={{ color: tierColor, fontSize: 10, fontWeight: '900' }}>👑 {tier}</Text>
+                              </View>
+                            </View>
+                            <Text style={{ color: '#64748B', fontSize: 12, marginTop: 2 }}>
+                              {can('canViewCustomerContacts') ? c.phone : c.phone.replace(/(\d{4})\d{4}(\d{3})/, '$1****$2')}
+                            </Text>
+                            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                              <Text style={{ fontSize: 11, color: '#059669', fontWeight: '700' }}>
+                                💰 Spent: Rs. {(c.totalSpent || 0).toLocaleString()}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#6366F1', fontWeight: '700' }}>
+                                🍽️ Visits: {c.totalOrders || 0}
+                              </Text>
+                            </View>
+                          </View>
+                          <Ionicons name="chevron-forward" size={20} color="#94A3B8" />
+                        </TouchableOpacity>
+                      );
+                    })}
                 </ScrollView>
                 <TouchableOpacity style={styles.createNewBtn} onPress={() => {
                   setCustomerName(''); setCustomerPhone(''); setCustomerAddress(''); setIsCreatingNewCustomer(true);
@@ -1490,6 +1699,50 @@ export default function AdminPOS() {
               </TouchableOpacity>
             </ScrollView>
 
+            {/* Order-Level Special Cooking & Packaging Notes */}
+            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, marginVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155', marginBottom: 6 }}>
+                📝 Order-Level Special Cooking & Packaging Notes
+              </Text>
+              
+              <TextInput
+                style={[styles.input, { marginBottom: 6, fontSize: 13, backgroundColor: '#fff' }]}
+                placeholder="Cooking Notes (e.g. Less spicy, starter first, crisp naan)..."
+                value={orderCookingNotes}
+                onChangeText={setOrderCookingNotes}
+              />
+              <TextInput
+                style={[styles.input, { marginBottom: 6, fontSize: 13, backgroundColor: '#fff' }]}
+                placeholder="Packaging Notes (e.g. Separate sauces, pack to-go boxes, cutlery)..."
+                value={orderPackagingNotes}
+                onChangeText={setOrderPackagingNotes}
+              />
+              
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 2 }}>
+                {[
+                  '🌶️ Less Spicy', 
+                  '🥡 Pack To-Go Boxes', 
+                  '🥣 Gravy Separate', 
+                  '🍴 Extra Cutlery & Napkins',
+                  '⚡ Rush Table'
+                ].map((notePreset) => (
+                  <TouchableOpacity
+                    key={notePreset}
+                    style={{ backgroundColor: '#EDE9FE', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 5 }}
+                    onPress={() => {
+                      if (notePreset.includes('Pack') || notePreset.includes('Separate') || notePreset.includes('Cutlery')) {
+                        setOrderPackagingNotes(prev => prev ? `${prev}, ${notePreset}` : notePreset);
+                      } else {
+                        setOrderCookingNotes(prev => prev ? `${prev}, ${notePreset}` : notePreset);
+                      }
+                    }}
+                  >
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#5B21B6' }}>+ {notePreset}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setCheckoutModalVisible(false)}>
                 <Text>Back</Text>
@@ -1647,32 +1900,110 @@ export default function AdminPOS() {
               </View>
             )}
 
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#4a121a', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Available Portions & Sizes
-            </Text>
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              {variantModalItem?.variants && variantModalItem.variants.length > 0 && (
+                <View style={{ marginBottom: 16 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#4a121a', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                    Portion Sizes (Small / Medium / Large)
+                  </Text>
+                  <View style={{ gap: 8 }}>
+                    {variantModalItem.variants.map((v, idx) => (
+                      <TouchableOpacity
+                        key={idx}
+                        style={styles.variantOptionCard}
+                        onPress={() => handleVariantSelect(v)}
+                        activeOpacity={0.7}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.variantOptionName}>{v.name}</Text>
+                          <Text style={styles.variantOptionSub}>Single serving portion</Text>
+                        </View>
+                        <View style={styles.variantOptionPriceContainer}>
+                          <Text style={styles.variantOptionPrice}>Rs. {v.price.toLocaleString()}</Text>
+                          <View style={styles.variantAddPill}>
+                            <Ionicons name="add" size={14} color="#fff" />
+                            <Text style={styles.variantAddText}>Add</Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
 
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-              <View style={{ gap: 10 }}>
-                {variantModalItem?.variants?.map((v, idx) => (
+              {/* Weight-Based Pricing Engine (Quarter, Half, Full Kilogram) */}
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0', marginTop: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="scale-outline" size={16} color="#4a121a" />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#4a121a', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      Weight-Based Dish Pricing (Per KG)
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#059669' }}>
+                    Rs. {(variantModalItem?.price || 0).toLocaleString()} / kg
+                  </Text>
+                </View>
+
+                {/* Quick Presets: Quarter, Half, Full KG */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                  {[
+                    { label: 'Quarter Kg (0.25 kg)', weight: 0.25, short: '1/4 Kg' },
+                    { label: 'Half Kg (0.50 kg)', weight: 0.50, short: '1/2 Kg' },
+                    { label: 'Full Kg (1.00 kg)', weight: 1.00, short: '1.0 Kg' },
+                  ].map((preset) => {
+                    const price = Math.round((variantModalItem?.price || 0) * preset.weight);
+                    return (
+                      <TouchableOpacity
+                        key={preset.weight}
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#fff',
+                          borderWidth: 1.5,
+                          borderColor: '#CBD5E1',
+                          borderRadius: 8,
+                          paddingVertical: 8,
+                          paddingHorizontal: 6,
+                          alignItems: 'center'
+                        }}
+                        onPress={() => handleWeightSelect(preset.weight, preset.label)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#1E293B' }}>{preset.short}</Text>
+                        <Text style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>{preset.weight} kg</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '900', color: '#4a121a', marginTop: 4 }}>
+                          Rs. {price.toLocaleString()}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Custom Weight in KG */}
+                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0, fontSize: 13, backgroundColor: '#fff' }]}
+                    keyboardType="numeric"
+                    placeholder="Enter custom weight (e.g. 0.75 or 1.5 kg)..."
+                    value={customWeightInput}
+                    onChangeText={setCustomWeightInput}
+                  />
                   <TouchableOpacity
-                    key={idx}
-                    style={styles.variantOptionCard}
-                    onPress={() => handleVariantSelect(v)}
-                    activeOpacity={0.7}
+                    style={[styles.saveBtn, { paddingHorizontal: 14, backgroundColor: '#4a121a' }]}
+                    onPress={() => {
+                      const wt = parseFloat(customWeightInput);
+                      if (wt && wt > 0) {
+                        handleWeightSelect(wt, `${wt} kg`);
+                      } else {
+                        const msg = 'Please enter a valid weight in kilograms (e.g. 0.75).';
+                        if (Platform.OS === 'web') window.alert(msg);
+                        else Alert.alert('Invalid Weight', msg);
+                      }
+                    }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.variantOptionName}>{v.name}</Text>
-                      <Text style={styles.variantOptionSub}>Single serving portion</Text>
-                    </View>
-                    <View style={styles.variantOptionPriceContainer}>
-                      <Text style={styles.variantOptionPrice}>Rs. {v.price.toLocaleString()}</Text>
-                      <View style={styles.variantAddPill}>
-                        <Ionicons name="add" size={14} color="#fff" />
-                        <Text style={styles.variantAddText}>Add</Text>
-                      </View>
-                    </View>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 12 }}>+ Add Weight</Text>
                   </TouchableOpacity>
-                ))}
+                </View>
               </View>
             </ScrollView>
           </View>

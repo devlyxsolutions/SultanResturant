@@ -52,6 +52,12 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
       text += `Discount: - Rs. ${(invoice.discount || 0).toLocaleString()}\n`;
     }
     text += `GST Tax (16%): Rs. ${(invoice.tax || 0).toLocaleString()}\n`;
+    if ((invoice.serviceCharge || 0) > 0) {
+      text += `Service Charge: Rs. ${(invoice.serviceCharge || 0).toLocaleString()}\n`;
+    }
+    if (invoice.notes || invoice.packagingNotes) {
+      text += `Notes: ${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}\n`;
+    }
     text += `================================\n`;
     text += `NET PAYABLE: Rs. ${(invoice.total || 0).toLocaleString()}\n`;
     text += `================================\n`;
@@ -465,6 +471,18 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         <span>GST Tax (16%):</span>
         <span style="font-weight: bold;">Rs. ${(invoice.tax || 0).toLocaleString()}</span>
       </div>
+      ${(invoice.serviceCharge || 0) > 0 ? `
+        <div class="summary-row">
+          <span>Service Charge:</span>
+          <span style="font-weight: bold;">Rs. ${(invoice.serviceCharge || 0).toLocaleString()}</span>
+        </div>
+      ` : ''}
+      ${(invoice.notes || invoice.packagingNotes) ? `
+        <div class="summary-row" style="font-size: 11px; color: #555; margin-top: 4px;">
+          <span>Special Instructions:</span>
+          <span style="font-style: italic;">${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}</span>
+        </div>
+      ` : ''}
 
       <div class="double-line"></div>
 
@@ -690,6 +708,20 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
           <Text style={styles.summaryKey}>GST Tax (16%):</Text>
           <Text style={styles.summaryVal}>Rs. ${(invoice.tax || 0).toLocaleString()}</Text>
         </View>
+        {(invoice.serviceCharge || 0) > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>Service Charge:</Text>
+            <Text style={styles.summaryVal}>Rs. ${(invoice.serviceCharge || 0).toLocaleString()}</Text>
+          </View>
+        )}
+        {(invoice.notes || invoice.packagingNotes) && (
+          <View style={[styles.summaryRow, { marginTop: 4 }]}>
+            <Text style={[styles.summaryKey, { fontSize: 11, color: '#666' }]}>Instructions:</Text>
+            <Text style={[styles.summaryVal, { fontSize: 11, color: '#666', fontStyle: 'italic' }]}>
+              {[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}
+            </Text>
+          </View>
+        )}
 
         <Text style={styles.dashedLine}>================================</Text>
 

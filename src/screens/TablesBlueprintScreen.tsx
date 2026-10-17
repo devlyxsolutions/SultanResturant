@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import {
   SEATING_ZONE_TYPES,
   SeatingZoneType,
   FLOOR_ORDER,
+  FLOOR_TEMPLATE,
   getTableFloor,
   getTableSeatingType,
   getFloorMeta,
@@ -149,6 +150,47 @@ export default function TablesBlueprintScreen({
   const [resTimeSlot, setResTimeSlot] = useState('08:00 PM');
   const [resGuestsCount, setResGuestsCount] = useState('4');
   const [resNotes, setResNotes] = useState('');
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 30000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const handlePopulateDefault5Floors = () => {
+    const msg = 'Auto-generate standard Sultan 5-Floor seating layout (Ground, 1st, 2nd Banquet, 3rd VIP Lounge, and Rooftop BBQ)? Existing tables will be preserved.';
+    const doPopulate = () => {
+      let created = 0;
+      FLOOR_TEMPLATE.forEach((f) => {
+        const existingForFloor = tables.filter((t) => (t.zone || '').toLowerCase() === f.zone.toLowerCase());
+        if (existingForFloor.length === 0) {
+          f.seats.forEach((seatCount, idx) => {
+            const tableNum = String(idx + 1).padStart(2, '0');
+            addTable({
+              name: `${f.prefix}-${tableNum}`,
+              floor: f.zone,
+              zone: f.zone,
+              seats: seatCount,
+              status: 'available',
+            });
+            created++;
+          });
+        }
+      });
+      const alertMsg = created > 0 ? `Successfully auto-generated ${created} tables across Sultan 5 Floors!` : 'All 5 Sultan floors already have tables configured.';
+      if (Platform.OS === 'web') window.alert(alertMsg);
+      else Alert.alert('5-Floor Auto-Generator', alertMsg);
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(msg)) doPopulate();
+    } else {
+      Alert.alert('5-Floor Auto-Generator', msg, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Auto-Generate', onPress: doPopulate }
+      ]);
+    }
+  };
 
   const tableById = (id?: string) => tables.find((t) => t.id === id);
   const reservationForTable = (t: Table) =>
@@ -524,6 +566,27 @@ export default function TablesBlueprintScreen({
     const isMajlis = seatingType === 'majlis';
     const isCouch = seatingType === 'couches';
 
+    // Live Table Seating Elapsed Time Duration Stopwatch (Feature 22)
+    const tableTickets = tickets.filter(t => t.tableId === table.id);
+    const earliestTicketTime = tableTickets.length > 0 ? Math.min(...tableTickets.map(t => t.timePlaced)) : undefined;
+    const occupiedStartTime = table.occupiedSince || earliestTicketTime;
+    
+    let tableOccupiedElapsed: { text: string; color: string; bg: string; border: string } | null = null;
+    if (isBusy && occupiedStartTime) {
+      const elapsedMins = Math.max(0, Math.floor((now - occupiedStartTime) / 60000));
+      let text = `${elapsedMins}m`;
+      if (elapsedMins >= 60) {
+        text = `${Math.floor(elapsedMins / 60)}h ${elapsedMins % 60}m`;
+      }
+      if (elapsedMins < 30) {
+        tableOccupiedElapsed = { text, color: '#15803D', bg: '#DCFCE7', border: '#86EFAC' };
+      } else if (elapsedMins < 60) {
+        tableOccupiedElapsed = { text, color: '#B45309', bg: '#FEF3C7', border: '#FCD34D' };
+      } else {
+        tableOccupiedElapsed = { text, color: '#B91C1C', bg: '#FEE2E2', border: '#FCA5A5' };
+      }
+    }
+
     return (
       <View key={`${table.id}-${table.name}-${index ?? 0}`} style={{ width: `${100 / columns}%`, padding: 6 }}>
         <TouchableOpacity
@@ -588,9 +651,29 @@ export default function TablesBlueprintScreen({
                 </View>
               ) : isBusy ? (
                 <View style={{ gap: 4 }}>
-                  <Text style={styles.tileBill}>
-                    {canViewRevenue ? `Rs. ${(table.billTotal || 0).toLocaleString()}` : 'Rs. ••••••'}
-                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={styles.tileBill}>
+                      {canViewRevenue ? `Rs. ${(table.billTotal || 0).toLocaleString()}` : 'Rs. ••••••'}
+                    </Text>
+                    {tableOccupiedElapsed && (
+                      <View style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 3,
+                        backgroundColor: tableOccupiedElapsed.bg,
+                        paddingHorizontal: 6,
+                        paddingVertical: 2,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: tableOccupiedElapsed.border
+                      }}>
+                        <Ionicons name="stopwatch-outline" size={11} color={tableOccupiedElapsed.color} />
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: tableOccupiedElapsed.color }}>
+                          ⏱️ {tableOccupiedElapsed.text}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
                   <Text style={styles.tileSub}>
                     {kotCount > 0 ? `${kotCount} KOT in kitchen` : `${table.orders?.length || 0} item(s)`}
                     {table.status === 'billed' ? ' • Paid' : ''}
@@ -796,6 +879,13 @@ export default function TablesBlueprintScreen({
           </View>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
+            onPress={handlePopulateDefault5Floors}
+          >
+            <Ionicons name="sparkles" size={16} color="#fff" />
+            <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
             onPress={() => router.push(floorsRoute as any)}

@@ -22,6 +22,7 @@ import { getManagerRouteRule, isManagerRouteAllowed } from '../../constants/mana
 
 const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Dashboard', route: '/manager/dashboard', icon: 'grid-outline' },
+  { label: 'App Orders Command', route: '/manager/app-orders', icon: 'phone-portrait-outline', badge: 'Live App' },
   { label: 'POS Terminal', route: '/manager/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Floor Plan', route: '/manager/floor-plan', icon: 'business-outline' },
   { label: 'Live Shift & Cash', route: '/manager/shift', icon: 'time-outline' },

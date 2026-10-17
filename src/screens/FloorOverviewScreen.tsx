@@ -286,6 +286,16 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
             statusText = '#512DA8';
           }
 
+          const isBusy = t.status === 'occupied' || t.status === 'billed';
+          const tableTickets = tickets.filter(tk => tk.tableId === t.id);
+          const earliestTime = tableTickets.length > 0 ? Math.min(...tableTickets.map(tk => tk.timePlaced)) : undefined;
+          const occupiedTime = t.occupiedSince || earliestTime;
+          let stopwatchStr: string | null = null;
+          if (isBusy && occupiedTime) {
+            const mins = Math.max(0, Math.floor((Date.now() - occupiedTime) / 60000));
+            stopwatchStr = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins}m`;
+          }
+
           return (
             <TouchableOpacity
               key={t.id}
@@ -312,9 +322,17 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                   <Ionicons name="people-outline" size={13} color={isMajlis ? '#4a121a' : BRAND.muted} />{' '}
                   {isMajlis ? `${t.seats} Guests Capacity` : `${t.seats} seats`}
                 </Text>
-                {t.billTotal !== undefined && t.billTotal > 0 && (
-                  <Text style={styles.tileBill}>{money(t.billTotal)}</Text>
-                )}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  {stopwatchStr && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, gap: 2 }}>
+                      <Ionicons name="stopwatch-outline" size={10} color="#B45309" />
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#B45309' }}>⏱️ {stopwatchStr}</Text>
+                    </View>
+                  )}
+                  {t.billTotal !== undefined && t.billTotal > 0 && (
+                    <Text style={styles.tileBill}>{money(t.billTotal)}</Text>
+                  )}
+                </View>
               </View>
             </TouchableOpacity>
           );
