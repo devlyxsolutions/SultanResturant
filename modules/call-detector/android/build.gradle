@@ -1,0 +1,37 @@
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+
+group = 'com.sultan.calldetector'
+version = '1.0.0'
+
+def expoModulesCorePlugin = new File(project(":expo-modules-core").projectDir.absolutePath, "ExpoModulesCorePlugin.gradle")
+apply from: expoModulesCorePlugin
+applyKotlinExpoModulesCorePlugin()
+
+android {
+    namespace "com.sultan.calldetector"
+    compileSdkVersion Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
+
+    defaultConfig {
+        minSdkVersion Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
+        targetSdkVersion Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+}
+
+dependencies {
+    implementation project(':expo-modules-core')
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk8"
+    implementation "androidx.core:core-ktx:1.13.1"
+    implementation "com.facebook.react:react-android"
+}

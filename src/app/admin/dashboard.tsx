@@ -508,6 +508,16 @@ export default function AdminDashboard() {
             ))}
           </View>
 
+          {/* Quick Action Caller ID Button */}
+          <TouchableOpacity
+            style={styles.actionCallBtn}
+            onPress={() => router.push('/admin/call-log' as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="call" size={15} color={BRAND.burgundy} />
+            <Text style={styles.actionCallBtnText}>Caller ID</Text>
+          </TouchableOpacity>
+
           {/* Quick Action POS Button */}
           {can('canAccessPOS') && (
             <TouchableOpacity
@@ -1194,6 +1204,27 @@ const styles = StyleSheet.create({
   },
   filterBtnTextActive: {
     color: BRAND.burgundy,
+    fontWeight: '800',
+  },
+  actionCallBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  actionCallBtnText: {
+    color: BRAND.burgundy,
+    fontSize: 13,
     fontWeight: '800',
   },
   actionPosBtn: {

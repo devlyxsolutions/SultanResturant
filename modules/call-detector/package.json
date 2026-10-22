@@ -1,0 +1,7 @@
+{
+  "name": "call-detector",
+  "version": "1.0.0",
+  "description": "Native Android incoming call detection module for Sultan Restaurant POS",
+  "main": "src/index.ts",
+  "types": "src/index.ts"
+}

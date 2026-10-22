@@ -101,6 +101,8 @@ export type Customer = {
   firstVisit?: number;
   lastVisit?: number;
   favoriteDishes?: string[];
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type ItemFeedback = {

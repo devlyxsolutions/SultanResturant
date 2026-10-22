@@ -33,6 +33,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Suppliers & Vendors', route: '/admin/suppliers', icon: 'bus-outline' },
   { label: 'Table Blueprint', route: '/admin/tables', icon: 'grid-outline' },
   { label: 'Customer CRM', route: '/admin/customers', icon: 'person-outline' },
+  { label: 'Caller ID & Call Log', route: '/admin/call-log', icon: 'call-outline', badge: 'CALLS' },
   { label: 'Mobile App Users & Logs', route: '/admin/app-users', icon: 'phone-portrait-outline', badge: 'App' },
   { label: 'Floor Command', route: '/admin/floors', icon: 'business-outline' },
   { label: 'Business Insights', route: '/admin/insights', icon: 'trending-up-outline' },

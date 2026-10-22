@@ -27,7 +27,14 @@ export default function AdminPOS({
   shiftRoute?: string;
 } = {}) {
   const router = useRouter();
-  const { prefillTableId } = useLocalSearchParams();
+  const {
+    prefillTableId,
+    prefillCustomerId,
+    prefillCustomerPhone,
+    prefillCustomerName,
+    prefillCustomerAddress,
+    orderType: paramOrderType,
+  } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
@@ -192,6 +199,38 @@ export default function AdminPOS({
       handleTableSelect(prefillTableId);
     }
   }, [prefillTableId]);
+
+  const prefilledCustRef = useRef<string | null>(null);
+  useEffect(() => {
+    const custKey = (prefillCustomerId || prefillCustomerPhone) as string | undefined;
+    if (custKey && prefilledCustRef.current !== custKey) {
+      prefilledCustRef.current = custKey;
+      if (prefillCustomerId && typeof prefillCustomerId === 'string') {
+        setSelectedCustomerId(prefillCustomerId);
+      }
+      setSelectedTableId('');
+      setOrderType(
+        paramOrderType === 'takeaway' || paramOrderType === 'delivery'
+          ? paramOrderType
+          : 'delivery'
+      );
+      if (prefillCustomerName && typeof prefillCustomerName === 'string') {
+        setCustomerName(prefillCustomerName);
+      }
+      if (prefillCustomerPhone && typeof prefillCustomerPhone === 'string') {
+        setCustomerPhone(prefillCustomerPhone);
+      }
+      if (prefillCustomerAddress && typeof prefillCustomerAddress === 'string') {
+        setCustomerAddress(prefillCustomerAddress);
+      }
+    }
+  }, [
+    prefillCustomerId,
+    prefillCustomerPhone,
+    prefillCustomerName,
+    prefillCustomerAddress,
+    paramOrderType,
+  ]);
 
   // Computed Items
   const filteredItems = menuItems.filter(item => {
