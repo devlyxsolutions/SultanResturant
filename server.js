@@ -331,8 +331,9 @@ const INITIAL_STATE = {
     { id: 'deal-1', name: 'Sultan Family Feast (4-5 Persons)', price: 4999, category: 'Deals', isDeal: true, dealOriginalPrice: 6200, badge: 'Family Deal' },
     { id: 'deal-2', name: 'Royal Couple Platter (2 Persons)', price: 2850, category: 'Deals', isDeal: true, dealOriginalPrice: 3500, badge: 'Couple Deal' }
   ],
-  categories: ['All', 'Mains', 'Karahi & Handi', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'],
-  zones: ['Main Hall', 'Rooftop', 'VIP'],
+  categories: ['All', 'Mains', 'Karahi & Handi', 'Chinese', 'Continental', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'],
+  zones: ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
+  regions: ['Pakistani', 'Chinese', 'Continental', 'Fast Food'],
   staff: [
     { id: 'st1', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
     { id: 'st2', name: 'Ali Khan', phone: '+92 301 7654321', role: 'Manager', pin: '2233', status: 'Active', shift: 'Morning', joinedDate: '2025-02-01' },

@@ -32,6 +32,16 @@ import { broadcastImmediately } from '../services/syncService';
 import InvoiceComponent from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SultanLogo from '../components/SultanLogo';
+import {
+  getTableFloor,
+  getTableSeatingType,
+  getFloorMeta,
+  sortFloors,
+  FLOOR_ORDER,
+  SeatingZoneType,
+  SEATING_ZONES,
+} from '../constants/floors';
+import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
 function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSettled'>): Invoice {
   const now = Date.now();
@@ -41,6 +51,24 @@ function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSet
     timePlaced: now,
     timeSettled: now,
   };
+}
+
+function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
+  const c = (catName || '').toLowerCase().trim();
+  if (c === 'all') return 'grid';
+  if (c.includes('appetizer') || c.includes('starter') || c.includes('snack') || c.includes('fries') || c.includes('pita') || c.includes('hummus')) return 'pizza';
+  if (c.includes('main') || c.includes('karahi') || c.includes('handi') || c.includes('curry') || c.includes('gravy')) return 'flame';
+  if (c.includes('bbq') || c.includes('grill') || c.includes('kebab') || c.includes('tikka') || c.includes('ribs') || c.includes('shinwari')) return 'bonfire';
+  if (c.includes('dessert') || c.includes('sweet') || c.includes('cake') || c.includes('kunafa') || c.includes('ice') || c.includes('lava') || c.includes('halwa')) return 'ice-cream';
+  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('margarita') || c.includes('tea') || c.includes('coffee') || c.includes('soda')) return 'wine';
+  if (c.includes('deal') || c.includes('combo') || c.includes('special') || c.includes('feast') || c.includes('offer')) return 'pricetags';
+  if (c.includes('rice') || c.includes('biryani') || c.includes('pulao')) return 'restaurant';
+  if (c.includes('bread') || c.includes('naan') || c.includes('roti') || c.includes('kulcha')) return 'nutrition';
+  if (c.includes('burger') || c.includes('sandwich') || c.includes('wrap')) return 'fast-food';
+  if (c.includes('pizza')) return 'pizza';
+  if (c.includes('fish') || c.includes('seafood') || c.includes('prawn')) return 'fish';
+  if (c.includes('salad') || c.includes('diet') || c.includes('green')) return 'leaf';
+  return 'restaurant';
 }
 
 interface POSTerminalScreenProps {
@@ -79,6 +107,7 @@ export default function POSTerminalScreen({
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [categoryViewMode, setCategoryViewMode] = useState<'grid' | 'list'>('grid');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [pendingOrderSearchQuery, setPendingOrderSearchQuery] = useState('');
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -101,6 +130,7 @@ export default function POSTerminalScreen({
   // Restaurant Store
   const menuItems = useRestaurantStore(state => state.menuItems);
   const categories = useRestaurantStore(state => state.categories);
+  const regions = useRestaurantStore(state => state.regions) || [];
   const customers = useRestaurantStore(state => state.customers);
   const tables = useRestaurantStore(state => state.tables);
   const zones = useRestaurantStore(state => state.zones);
@@ -110,6 +140,9 @@ export default function POSTerminalScreen({
   const placeOrder = useRestaurantStore(state => state.placeOrder);
   const settleBill = useRestaurantStore(state => state.settleBill);
   const markTableBilled = useRestaurantStore(state => state.markTableBilled);
+  const dismissTicket = useRestaurantStore(state => state.dismissTicket);
+  const clearTableTickets = useRestaurantStore(state => state.clearTableTickets);
+  const clearAllOldTickets = useRestaurantStore(state => state.clearAllOldTickets);
   const tickets = useRestaurantStore(state => state.tickets);
 
   // Shift Store
@@ -119,6 +152,7 @@ export default function POSTerminalScreen({
 
   // Menu State
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
+  const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
 
@@ -154,12 +188,75 @@ export default function POSTerminalScreen({
   const [discountAmount, setDiscountAmount] = useState('0');
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
 
-  // Table Modal Filter
-  const [tableModalZone, setTableModalZone] = useState('All');
+  const dynamicFloors = useRestaurantStore(state => state.floors);
+
+  // Available floors computed identically to TablesBlueprintScreen (Sultan Architecture)
+  const availableFloors = useMemo(() => {
+    const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);
+    if (configured.length > 0) {
+      const extraWithTables = Array.from(
+        new Set(
+          tables
+            .map((t) => getTableFloor(t).trim())
+            .filter((fl) => fl && !configured.some((c) => c.toLowerCase() === fl.toLowerCase()))
+        )
+      );
+      return [...configured, ...extraWithTables];
+    }
+    const discovered = Array.from(new Set(tables.map((t) => getTableFloor(t)).filter(Boolean)));
+    return sortFloors(discovered.length > 0 ? discovered : FLOOR_ORDER);
+  }, [dynamicFloors, tables]);
+
+  // Table & Cabin Modal Multi-dimensional Filters
+  const [tableModalFloor, setTableModalFloor] = useState<string>('All');
+  const [tableModalSeatingType, setTableModalSeatingType] = useState<'all' | SeatingZoneType>('all');
+  const [tableModalStatus, setTableModalStatus] = useState<'all' | 'available' | 'occupied'>('all');
+  const [floorDropdownOpen, setFloorDropdownOpen] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+  const [isCatSearchFocused, setIsCatSearchFocused] = useState(false);
+  const [isTableSearchFocused, setIsTableSearchFocused] = useState(false);
+  const [isCustSearchFocused, setIsCustSearchFocused] = useState(false);
+  const [isPendingSearchFocused, setIsPendingSearchFocused] = useState(false);
+
+  // Filtered Tables & Cabins for Modal
+  const filteredModalTables = useMemo(() => {
+    return tables.filter(t => {
+      // 1. Floor Filter
+      const tFloor = getTableFloor(t);
+      if (tableModalFloor !== 'All' && tFloor.toLowerCase() !== tableModalFloor.toLowerCase()) {
+        return false;
+      }
+      // 2. Seating Type Filter ('tables' | 'couches' | 'majlis')
+      const tType = getTableSeatingType(t);
+      if (tableModalSeatingType !== 'all' && tType !== tableModalSeatingType) {
+        return false;
+      }
+      // 3. Status Filter
+      if (tableModalStatus !== 'all') {
+        if (tableModalStatus === 'available' && t.status !== 'available') return false;
+        if (tableModalStatus === 'occupied' && t.status !== 'occupied' && t.status !== 'billed') return false;
+      }
+      // 4. Search Filter
+      if (tableSearchQuery.trim()) {
+        const q = tableSearchQuery.toLowerCase().trim();
+        const matchesName = t.name.toLowerCase().includes(q);
+        const matchesFloor = tFloor.toLowerCase().includes(q);
+        const matchesServer = Boolean(t.server && t.server.toLowerCase().includes(q));
+        const matchesType = tType.toLowerCase().includes(q) || (tType === 'majlis' && ('majlis'.includes(q) || 'cabin'.includes(q)));
+        if (!matchesName && !matchesFloor && !matchesServer && !matchesType) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [tables, tableModalFloor, tableModalSeatingType, tableModalStatus, tableSearchQuery]);
 
   // Print Preview & Post-Payment Table Decision
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
+  const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
+  const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
   const prefilledRef = useRef<string | null>(null);
 
   // Toggle Fullscreen (Browser Kiosk)
@@ -220,6 +317,7 @@ export default function POSTerminalScreen({
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
         settleBill(selectedTableId);
+        clearTableTickets(selectedTableId);
         setCart([]);
         setLoadedCart([]);
         setSelectedTableId('');
@@ -232,6 +330,7 @@ export default function POSTerminalScreen({
           style: 'destructive', 
           onPress: () => {
             settleBill(selectedTableId);
+            clearTableTickets(selectedTableId);
             setCart([]);
             setLoadedCart([]);
             setSelectedTableId('');
@@ -299,6 +398,21 @@ export default function POSTerminalScreen({
     return list.filter(c => c.toLowerCase().includes(q));
   }, [categories, menuItems, categorySearchQuery]);
 
+  // Live dish count map per category
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = {
+      ALL: (menuItems || []).length,
+    };
+    (menuItems || []).forEach(m => {
+      if (m.category) {
+        const key = m.category.trim();
+        counts[key] = (counts[key] || 0) + 1;
+        counts[key.toUpperCase()] = (counts[key.toUpperCase()] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [menuItems]);
+
   // Filtered Menu Items
   const filteredItems = useMemo(() => {
     return (menuItems || []).filter(item => {
@@ -306,9 +420,17 @@ export default function POSTerminalScreen({
       const matchesSearch = !q || 
         item.name.toLowerCase().includes(q) || 
         (item.category && item.category.toLowerCase().includes(q)) ||
+        (item.region && item.region.toLowerCase().includes(q)) ||
         (item.badge && item.badge.toLowerCase().includes(q));
 
       if (!matchesSearch) return false;
+
+      // Region / Cuisine filter
+      if (activeRegion !== 'ALL') {
+        if ((item.region || '').trim().toLowerCase() !== activeRegion.trim().toLowerCase()) {
+          return false;
+        }
+      }
 
       if (activeCategory === 'ALL' || activeCategory === 'All') return true;
       if (activeCategory === '🎁 Deals & Combos' || activeCategory === 'Deals') {
@@ -316,7 +438,7 @@ export default function POSTerminalScreen({
       }
       return (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
     });
-  }, [menuItems, searchQuery, activeCategory]);
+  }, [menuItems, searchQuery, activeCategory, activeRegion]);
 
   // Financial Calculations
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -326,11 +448,234 @@ export default function POSTerminalScreen({
   const tax = afterDiscount * 0.16;
   const total = afterDiscount + tax + deliveryCharges;
 
-  const totalPaid = payments.reduce((sum, p) => sum + p.amount, 0);
-  const remaining = total - totalPaid;
+  const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const remaining = Math.max(0, total - totalPaid);
+  const changeDue = Math.max(0, totalPaid - total);
+
+  const handleSetFullPayment = () => {
+    const exact = Math.round(total);
+    setPayments(prev => [{ type: prev[0]?.type || 'cash', amount: exact }]);
+  };
+
+  const handleSetPaymentAmount = (amt: number) => {
+    setPayments(prev => [{ type: prev[0]?.type || 'cash', amount: amt }]);
+  };
+
+  const handleCancelRunningOrder = (ticketId: string) => {
+    const confirmMsg = `Are you sure you want to cancel and remove Ticket #${ticketId}?`;
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        dismissTicket(ticketId);
+        if (loadedTicketId === ticketId) setLoadedTicketId(null);
+      }
+    } else {
+      Alert.alert('Cancel Order', confirmMsg, [
+        { text: 'Keep Order', style: 'cancel' },
+        { 
+          text: 'Yes, Cancel', 
+          style: 'destructive', 
+          onPress: () => {
+            dismissTicket(ticketId);
+            if (loadedTicketId === ticketId) setLoadedTicketId(null);
+          }
+        }
+      ]);
+    }
+  };
+
+  const handleClearAllOrphanTickets = () => {
+    if ((tickets || []).length === 0) return;
+    const confirmMsg = "Are you sure you want to clear all running tickets? This will purge all old pending orders.";
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        clearAllOldTickets();
+        setLoadedTicketId(null);
+      }
+    } else {
+      Alert.alert('Purge Running Orders', confirmMsg, [
+        { text: 'Cancel', style: 'cancel' },
+        { 
+          text: 'Clear All', 
+          style: 'destructive', 
+          onPress: () => {
+            clearAllOldTickets();
+            setLoadedTicketId(null);
+          }
+        }
+      ]);
+    }
+  };
 
   const selectedCustomerObj = customers.find(c => c.id === selectedCustomerId);
   const selectedTableObj = tables.find(t => t.id === selectedTableId);
+
+  // ------------------------------------------------------------------
+  // GLOBAL POS KEYBOARD SHORTCUTS ENGINE
+  // ------------------------------------------------------------------
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
+
+      // F1 or Ctrl+K / Ctrl+/: Focus Dish Search Bar
+      if (e.key === 'F1' || (e.ctrlKey && (e.key === 'k' || e.key === 'K' || e.key === '/'))) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      // Escape: Close active modal or clear search
+      if (e.key === 'Escape') {
+        if (shortcutsModalVisible) {
+          setShortcutsModalVisible(false);
+          return;
+        }
+        if (checkoutModalVisible) {
+          setCheckoutModalVisible(false);
+          return;
+        }
+        if (pendingOrdersModalVisible) {
+          setPendingOrdersModalVisible(false);
+          return;
+        }
+        if (tableModalVisible) {
+          setTableModalVisible(false);
+          return;
+        }
+        if (customerModalVisible) {
+          setCustomerModalVisible(false);
+          return;
+        }
+        if (discountModalVisible) {
+          setDiscountModalVisible(false);
+          return;
+        }
+        if (variantModalItem) {
+          setVariantModalItem(null);
+          return;
+        }
+        if (tableDecisionModal) {
+          setTableDecisionModal(null);
+          return;
+        }
+        if (searchQuery) {
+          setSearchQuery('');
+          return;
+        }
+        searchInputRef.current?.blur();
+        return;
+      }
+
+      // If Checkout Modal is open
+      if (checkoutModalVisible) {
+        // F10 or Ctrl+F: Full Payment
+        if (e.key === 'F10' || (e.ctrlKey && (e.key === 'f' || e.key === 'F'))) {
+          e.preventDefault();
+          handleSetFullPayment();
+          return;
+        }
+        // Enter: Finalize and Confirm Payment
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleFinalizeOrder();
+          return;
+        }
+      }
+
+      // If typing inside an input/search, don't trigger regular navigation keys unless using F-keys
+      if (isInput && !e.key.startsWith('F')) {
+        return;
+      }
+
+      // F2: Dine-in Mode / Select Table
+      if (e.key === 'F2') {
+        e.preventDefault();
+        handleOrderTypeChange('dine-in');
+        return;
+      }
+
+      // F3: Takeaway Mode
+      if (e.key === 'F3') {
+        e.preventDefault();
+        handleOrderTypeChange('takeaway');
+        return;
+      }
+
+      // F4: Delivery Mode
+      if (e.key === 'F4') {
+        e.preventDefault();
+        handleOrderTypeChange('delivery');
+        return;
+      }
+
+      // F6 or Ctrl+R: Running Orders Modal
+      if (e.key === 'F6' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+        e.preventDefault();
+        setPendingOrdersModalVisible(prev => !prev);
+        return;
+      }
+
+      // F7 or Ctrl+D: Apply Discount Modal
+      if (e.key === 'F7' || (e.ctrlKey && (e.key === 'd' || e.key === 'D'))) {
+        e.preventDefault();
+        setDiscountModalVisible(true);
+        return;
+      }
+
+      // F8 or Ctrl+H: Hold / Send KOT to Kitchen
+      if (e.key === 'F8' || (e.ctrlKey && (e.key === 'h' || e.key === 'H'))) {
+        e.preventDefault();
+        if (cart.length > 0) {
+          sendToKitchen();
+        }
+        return;
+      }
+
+      // F9 or Ctrl+Enter: Proceed to Payment / Checkout
+      if (e.key === 'F9' || (e.ctrlKey && e.key === 'Enter')) {
+        e.preventDefault();
+        if (cart.length > 0) {
+          openCheckout();
+        }
+        return;
+      }
+
+      // F11 or '?' key: Open Shortcuts Cheat Sheet
+      if (e.key === 'F11' || (!isInput && e.key === '?')) {
+        e.preventDefault();
+        setShortcutsModalVisible(prev => !prev);
+        return;
+      }
+
+      // F12 or Ctrl+Delete: Clear Cart / New Order
+      if (e.key === 'F12' || (e.ctrlKey && e.key === 'Delete')) {
+        e.preventDefault();
+        if (cart.length > 0) {
+          clearCart();
+        }
+        return;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    checkoutModalVisible,
+    pendingOrdersModalVisible,
+    tableModalVisible,
+    customerModalVisible,
+    discountModalVisible,
+    variantModalItem,
+    tableDecisionModal,
+    shortcutsModalVisible,
+    cart,
+    total,
+    remaining,
+    searchQuery,
+    orderType,
+  ]);
 
   // Recalculate Promo Discount
   useEffect(() => {
@@ -534,11 +879,14 @@ export default function POSTerminalScreen({
       else Alert.alert("Customer Contact Required", msg);
       return;
     }
-    setPayments([{ type: 'cash', amount: total }]);
+    // Pre-fill payment with exact full amount
+    setPayments([{ type: 'cash', amount: Math.round(total) }]);
     setCheckoutModalVisible(true);
   };
 
   const handleCreateBillFromTicket = (ticket: typeof tickets[0], autoOpenCheckout = true) => {
+    setLoadedTicketId(ticket.id);
+
     const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
     const targetTable = isTable ? tables.find(t => 
       t.id === ticket.tableId || 
@@ -562,6 +910,10 @@ export default function POSTerminalScreen({
 
     if (autoOpenCheckout) {
       setTimeout(() => {
+        const ticketSub = ticket.items.reduce((s, it) => s + (it.price * it.qty), 0);
+        const ticketTax = ticketSub * 0.16;
+        const ticketTotal = Math.round(ticketSub + ticketTax);
+        setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
       }, 150);
     } else if (isMobile) {
@@ -570,9 +922,13 @@ export default function POSTerminalScreen({
   };
 
   const handleFinalizeOrder = () => {
-    if (remaining > 0.01) {
-      if (Platform.OS === 'web') window.alert("Please collect full payment before checking out.");
-      else Alert.alert("Incomplete Payment", "Please collect full payment before checking out.");
+    const totalCollected = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+    const remainingToCollect = total - totalCollected;
+
+    if (remainingToCollect > 0.01) {
+      const msg = `Please collect full payment. Remaining due: Rs. ${remainingToCollect.toFixed(2)}`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert("Incomplete Payment", msg);
       return;
     }
 
@@ -583,6 +939,22 @@ export default function POSTerminalScreen({
     const currentUserName = user?.name ? (user.name.includes('(Admin)') ? user.name : `${user.name} (Admin)`) : 'Junaid Ahsan (Admin)';
     const orderCreator = selectedServer || (wasDineIn ? 'Sara Ahmed' : currentUserName);
     const cashierName = currentUserName;
+
+    const changeDueAmount = Math.max(0, totalCollected - total);
+
+    const invoicePayments = payments
+      .filter(p => (Number(p.amount) || 0) > 0)
+      .map(p => {
+        if (p.type === 'cash' && changeDueAmount > 0) {
+          return {
+            ...p,
+            tendered: p.amount,
+            amount: Math.max(0, p.amount - changeDueAmount),
+            change: changeDueAmount,
+          };
+        }
+        return p;
+      });
 
     const invoice = createInvoicePayload({
       orderType,
@@ -597,7 +969,9 @@ export default function POSTerminalScreen({
       discount: discountVal,
       tax,
       total,
-      payments: payments.filter(p => p.amount > 0)
+      payments: invoicePayments,
+      tenderedAmount: totalCollected,
+      changeReturned: changeDueAmount,
     });
 
     const unsentKotItems: { item: MenuItem; qty: number }[] = [];
@@ -628,6 +1002,21 @@ export default function POSTerminalScreen({
     }
 
     saveInvoice(invoice);
+
+    // Clean up ticket from pending orders
+    if (loadedTicketId) {
+      dismissTicket(loadedTicketId);
+      setLoadedTicketId(null);
+    }
+    if (targetTableId) {
+      clearTableTickets(targetTableId);
+    } else if (orderType === 'takeaway' || orderType === 'delivery') {
+      const matching = (tickets || []).find(t => t.tableId === orderType);
+      if (matching) {
+        dismissTicket(matching.id);
+      }
+    }
+
     broadcastImmediately();
 
     if (selectedCustomerObj) {
@@ -709,6 +1098,20 @@ export default function POSTerminalScreen({
             </Text>
           </TouchableOpacity>
 
+          {/* Keyboard Shortcuts Capsule Button */}
+          <TouchableOpacity 
+            style={styles.keyboardCapsuleBtn}
+            onPress={() => setShortcutsModalVisible(true)}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Keyboard Shortcuts (Press F11 or ?)' } as any) : {})}
+          >
+            <Ionicons name="keypad-outline" size={14} color="#D4AF37" />
+            <Text style={styles.keyboardCapsuleText}>Shortcuts</Text>
+            <View style={styles.keyInlinePill}>
+              <Text style={styles.keyInlinePillText}>F11</Text>
+            </View>
+          </TouchableOpacity>
+
           {Platform.OS === 'web' && (
             <TouchableOpacity 
               style={styles.iconSquareBtn}
@@ -763,17 +1166,64 @@ export default function POSTerminalScreen({
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'menu') && (
           <View style={[styles.categorySidebar, isMobile && styles.categorySidebarMobile]}>
-            <Text style={styles.categoryHeading}>CATEGORIES</Text>
+            {/* Header: Title + Total Badge + Grid/List Toggle */}
+            <View style={styles.categoryHeaderRow}>
+              <View style={styles.categoryTitleGroup}>
+                <View style={styles.categoryTitleIconOrb}>
+                  <Ionicons name="apps" size={12} color="#E5B83B" />
+                </View>
+                <Text style={styles.categoryHeading}>CATEGORIES</Text>
+                <View style={styles.categoryCountPill}>
+                  <Text style={styles.categoryCountPillText}>{categoryTiles.length + 1}</Text>
+                </View>
+              </View>
 
-            <View style={styles.quickFindBox}>
-              <View style={styles.quickFindIconOrb}>
-                <Ionicons name="search" size={12} color="#D4AF37" />
+              {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
+              {!isMobile && (
+                <View style={styles.categoryViewSwitcher}>
+                  <TouchableOpacity 
+                    style={[styles.viewSwitchBtn, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
+                    onPress={() => setCategoryViewMode('grid')}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Ionicons 
+                      name="grid" 
+                      size={11} 
+                      color={categoryViewMode === 'grid' ? '#1E293B' : '#A38B7C'} 
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.viewSwitchBtn, categoryViewMode === 'list' && styles.viewSwitchBtnActive]}
+                    onPress={() => setCategoryViewMode('list')}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Ionicons 
+                      name="list" 
+                      size={13} 
+                      color={categoryViewMode === 'list' ? '#1E293B' : '#A38B7C'} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+
+            {/* Quick Find Category Search Box */}
+            <View 
+              style={[styles.quickFindBox, isCatSearchFocused && styles.quickFindBoxFocused]}
+              {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+            >
+              <View style={[styles.quickFindIconOrb, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
+                <Ionicons name="search" size={12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
               </View>
               <TextInput
                 style={styles.quickFindInput}
-                placeholder="Quick find category..."
-                placeholderTextColor="rgba(254, 243, 199, 0.45)"
+                placeholder="Find category..."
+                placeholderTextColor="#64748B"
                 value={categorySearchQuery}
+                onFocus={() => setIsCatSearchFocused(true)}
+                onBlur={() => setIsCatSearchFocused(false)}
                 onChangeText={setCategorySearchQuery}
               />
               {categorySearchQuery ? (
@@ -783,67 +1233,174 @@ export default function POSTerminalScreen({
               ) : null}
             </View>
 
+            {/* Categories Scrollable Container */}
             <ScrollView 
               style={styles.categoriesScroll}
-              contentContainerStyle={styles.categoriesGrid}
+              contentContainerStyle={[
+                styles.categoriesContainer,
+                categoryViewMode === 'grid' && styles.categoriesGrid,
+                categoryViewMode === 'list' && styles.categoriesList,
+              ]}
               showsVerticalScrollIndicator={false}
               horizontal={isMobile}
             >
-              {/* ALL Category Button */}
-              <TouchableOpacity
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-                style={[
-                  styles.categoryTile,
-                  (activeCategory === 'ALL' || activeCategory === 'All') && styles.categoryTileActive
-                ]}
-                onPress={() => setActiveCategory('ALL')}
-                activeOpacity={0.8}
-              >
-                <Ionicons 
-                  name="grid" 
-                  size={18} 
-                  color={(activeCategory === 'ALL' || activeCategory === 'All') ? '#1E293B' : '#E2E8F0'} 
-                />
-                <Text style={[
-                  styles.categoryTileText,
-                  (activeCategory === 'ALL' || activeCategory === 'All') && styles.categoryTileTextActive
-                ]}>
-                  ALL
-                </Text>
-              </TouchableOpacity>
+              {/* ALL Category Item */}
+              {(() => {
+                const isAllActive = activeCategory === 'ALL' || activeCategory === 'All';
+                const allCount = (menuItems || []).length;
+                return (
+                  <TouchableOpacity
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+                    style={[
+                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
+                      isAllActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
+                    ]}
+                    onPress={() => setActiveCategory('ALL')}
+                    activeOpacity={0.8}
+                  >
+                    {categoryViewMode === 'grid' ? (
+                      <>
+                        <View style={styles.tileTopRow}>
+                          <View style={[styles.tileIconOrb, isAllActive && styles.tileIconOrbActive]}>
+                            <Ionicons 
+                              name="grid" 
+                              size={13} 
+                              color={isAllActive ? '#1E293B' : '#E5B83B'} 
+                            />
+                          </View>
+                          <View style={[styles.tileCountBadge, isAllActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isAllActive && styles.tileCountTextActive]}>
+                              {allCount}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.categoryTileText, isAllActive && styles.categoryTileTextActive]}>
+                          ALL
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={[styles.listIconOrb, isAllActive && styles.listIconOrbActive]}>
+                          <Ionicons 
+                            name="grid" 
+                            size={14} 
+                            color={isAllActive ? '#1E293B' : '#E5B83B'} 
+                          />
+                        </View>
+                        <Text style={[styles.categoryListText, isAllActive && styles.categoryListTextActive]} numberOfLines={1}>
+                          ALL ITEMS
+                        </Text>
+                        <View style={[styles.listCountBadge, isAllActive && styles.listCountBadgeActive]}>
+                          <Text style={[styles.listCountText, isAllActive && styles.listCountTextActive]}>
+                            {allCount}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })()}
 
-              {/* Dynamic Categories Tiles (2 per row) */}
+              {/* Dynamic Categories */}
               {categoryTiles.map(cat => {
                 const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
+                const count = categoryCounts[cat] || categoryCounts[cat.toUpperCase()] || 0;
+                const iconName = getCategoryIcon(cat);
+
                 return (
                   <TouchableOpacity
                     key={cat}
                     {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                     style={[
-                      styles.categoryTile,
-                      isActive && styles.categoryTileActive
+                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
+                      isActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
                     ]}
                     onPress={() => setActiveCategory(cat)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name="restaurant" 
-                      size={16} 
-                      color={isActive ? '#1E293B' : '#E2E8F0'} 
-                    />
-                    <Text 
-                      style={[
-                        styles.categoryTileText,
-                        isActive && styles.categoryTileTextActive
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {cat.toUpperCase()}
-                    </Text>
+                    {categoryViewMode === 'grid' ? (
+                      <>
+                        <View style={styles.tileTopRow}>
+                          <View style={[styles.tileIconOrb, isActive && styles.tileIconOrbActive]}>
+                            <Ionicons 
+                              name={iconName} 
+                              size={13} 
+                              color={isActive ? '#1E293B' : '#E5B83B'} 
+                            />
+                          </View>
+                          <View style={[styles.tileCountBadge, isActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isActive && styles.tileCountTextActive]}>
+                              {count}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text 
+                          style={[styles.categoryTileText, isActive && styles.categoryTileTextActive]}
+                          numberOfLines={2}
+                        >
+                          {cat.toUpperCase()}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={[styles.listIconOrb, isActive && styles.listIconOrbActive]}>
+                          <Ionicons 
+                            name={iconName} 
+                            size={14} 
+                            color={isActive ? '#1E293B' : '#E5B83B'} 
+                          />
+                        </View>
+                        <Text 
+                          style={[styles.categoryListText, isActive && styles.categoryListTextActive]}
+                          numberOfLines={1}
+                        >
+                          {cat.toUpperCase()}
+                        </Text>
+                        <View style={[styles.listCountBadge, isActive && styles.listCountBadgeActive]}>
+                          <Text style={[styles.listCountText, isActive && styles.listCountTextActive]}>
+                            {count}
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
+
+            {/* Bottom Status & Quick Filter Panel */}
+            {!isMobile && (
+              <View style={styles.categoryBottomPanel}>
+                <View style={styles.bottomStatusHeader}>
+                  <Text style={styles.bottomStatusTitle}>FILTER</Text>
+                  <Text style={styles.bottomStatusCount}>
+                    {(activeCategory === 'ALL' || activeCategory === 'All') 
+                      ? `${(menuItems || []).length} items` 
+                      : `${categoryCounts[activeCategory] || categoryCounts[activeCategory.toUpperCase()] || 0} items`}
+                  </Text>
+                </View>
+
+                <View style={styles.bottomActiveCard}>
+                  <View style={styles.bottomActiveIconOrb}>
+                    <Ionicons name={getCategoryIcon(activeCategory)} size={12} color="#D4AF37" />
+                  </View>
+                  <Text style={styles.bottomActiveName} numberOfLines={1}>
+                    {activeCategory.toUpperCase()}
+                  </Text>
+                  {(activeCategory !== 'ALL' && activeCategory !== 'All') && (
+                    <TouchableOpacity 
+                      style={styles.bottomResetPill}
+                      onPress={() => setActiveCategory('ALL')}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <Ionicons name="close" size={10} color="#FFFFFF" />
+                      <Text style={styles.bottomResetText}>Reset</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
           </View>
         )}
 
@@ -866,22 +1423,29 @@ export default function POSTerminalScreen({
                 >
                   <Ionicons name="time" size={13} color="#D97706" />
                   <Text style={styles.runningOrdersText}>Running Orders</Text>
+                  <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>
                   <View style={styles.runningOrdersBadge}>
-                    <Text style={styles.runningOrdersBadgeText}>{tickets.length}</Text>
+                    <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
                   </View>
                 </TouchableOpacity>
               </View>
 
               {/* Sultan Royal Luxury Search Bar */}
-              <View style={styles.searchPillBox}>
-                <View style={styles.searchIconOrb}>
-                  <Ionicons name="search" size={15} color="#52141C" />
+              <View 
+                style={[styles.searchPillBox, isSearchFocused && styles.searchPillBoxFocused]}
+                {...(Platform.OS === 'web' ? ({ className: 'search-pill-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+              >
+                <View style={[styles.searchIconOrb, isSearchFocused && styles.searchIconOrbFocused]}>
+                  <Ionicons name="search" size={15} color={isSearchFocused ? '#D4AF37' : '#52141C'} />
                 </View>
                 <TextInput
+                  ref={searchInputRef}
                   style={styles.searchPillInput}
-                  placeholder="Search dishes, codes, or categories..."
+                  placeholder="Search dishes, codes, or categories... (Press F1)"
                   placeholderTextColor="#8A7A70"
                   value={searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
                   onChangeText={setSearchQuery}
                 />
                 {searchQuery ? (
@@ -894,12 +1458,64 @@ export default function POSTerminalScreen({
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.searchShortcutBadge}>
-                    <Ionicons name="sparkles" size={11} color="#B45309" style={{ marginRight: 3 }} />
-                    <Text style={styles.searchShortcutText}>MENU</Text>
+                    <Text style={styles.searchShortcutText}>F1</Text>
                   </View>
                 )}
               </View>
             </View>
+
+            {/* Region / Cuisine Quick Filter Pills */}
+            {regions.length > 0 && (
+              <View style={styles.posRegionFilterRow}>
+                <View style={styles.posRegionFilterLead}>
+                  <Ionicons name="globe-outline" size={13} color="#D4AF37" />
+                  <Text style={styles.posRegionFilterLeadText}>Cuisine:</Text>
+                </View>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.posRegionScroll}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.posRegionChip,
+                      activeRegion === 'ALL' && styles.posRegionChipActive,
+                    ]}
+                    onPress={() => setActiveRegion('ALL')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[
+                      styles.posRegionChipText,
+                      activeRegion === 'ALL' && styles.posRegionChipTextActive,
+                    ]}>
+                      All Cuisines
+                    </Text>
+                  </TouchableOpacity>
+
+                  {regions.map(r => {
+                    const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        style={[
+                          styles.posRegionChip,
+                          isSelected && styles.posRegionChipActive,
+                        ]}
+                        onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[
+                          styles.posRegionChipText,
+                          isSelected && styles.posRegionChipTextActive,
+                        ]}>
+                          {r}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
 
             {/* Dishes Grid */}
             <ScrollView 
@@ -955,11 +1571,21 @@ export default function POSTerminalScreen({
                           </View>
                         )}
 
-                        {/* Category Chip overlayed on top left */}
-                        <View style={styles.dishCardCategoryChip}>
-                          <Text style={styles.dishCardCategory} numberOfLines={1}>
-                            {(item.category || 'Mains').toUpperCase()}
-                          </Text>
+                        {/* Category & Region Chips */}
+                        <View style={styles.dishCardChipsRow}>
+                          <View style={styles.dishCardCategoryChip}>
+                            <Text style={styles.dishCardCategory} numberOfLines={1}>
+                              {(item.category || 'Mains').toUpperCase()}
+                            </Text>
+                          </View>
+                          {item.region ? (
+                            <View style={styles.dishCardRegionChip}>
+                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+                              <Text style={styles.dishCardRegionText} numberOfLines={1}>
+                                {item.region}
+                              </Text>
+                            </View>
+                          ) : null}
                         </View>
 
                         {/* Special Badge tag */}
@@ -1041,6 +1667,9 @@ export default function POSTerminalScreen({
                 <Text style={[styles.orderTypeTabText, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
                   Takeaway
                 </Text>
+                <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
+                  <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1051,6 +1680,9 @@ export default function POSTerminalScreen({
                 <Text style={[styles.orderTypeTabText, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
                   Dine-in
                 </Text>
+                <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
+                  <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
+                </View>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -1061,19 +1693,27 @@ export default function POSTerminalScreen({
                 <Text style={[styles.orderTypeTabText, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
                   Delivery
                 </Text>
+                <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
+                  <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
+                </View>
               </TouchableOpacity>
             </View>
 
             {/* Table or Customer Bar depending on Order Type */}
             {orderType === 'dine-in' ? (
               <View style={styles.tableCabinBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
                   <Ionicons name="restaurant" size={14} color="#D97706" />
                   <Text style={styles.tableCabinLabel}>Table / Cabin:</Text>
                   <View style={styles.tableCabinPill}>
                     <Text style={styles.tableCabinPillText}>
                       {selectedTableObj ? selectedTableObj.name : 'None'}
                     </Text>
+                    {selectedTableObj && (
+                      <Text style={styles.tableCabinPillSub}>
+                        ({getTableFloor(selectedTableObj)} • {getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
+                      </Text>
+                    )}
                   </View>
                 </View>
 
@@ -1224,8 +1864,13 @@ export default function POSTerminalScreen({
                 disabled={cart.length === 0}
                 activeOpacity={0.85}
               >
-                <Ionicons name="card-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.proceedPayBtnText}>PROCEED TO PAYMENT</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="card-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.proceedPayBtnText}>PROCEED TO PAYMENT</Text>
+                </View>
+                <View style={styles.btnShortcutBadge}>
+                  <Text style={styles.btnShortcutBadgeText}>F9</Text>
+                </View>
               </TouchableOpacity>
 
               {/* Action Button 2: HOLD / PENDING ORDER */}
@@ -1236,8 +1881,13 @@ export default function POSTerminalScreen({
                 disabled={cart.length === 0}
                 activeOpacity={0.85}
               >
-                <Ionicons name="pause-circle-outline" size={15} color="#52141C" style={{ marginRight: 6 }} />
-                <Text style={styles.holdOrderBtnText}>HOLD / PENDING ORDER</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="pause-circle-outline" size={15} color="#52141C" style={{ marginRight: 6 }} />
+                  <Text style={styles.holdOrderBtnText}>HOLD / PENDING ORDER</Text>
+                </View>
+                <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.1)', borderColor: 'rgba(82, 20, 28, 0.25)' }]}>
+                  <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
+                </View>
               </TouchableOpacity>
             </View>
           </View>
@@ -1245,77 +1895,326 @@ export default function POSTerminalScreen({
       </View>
 
       {/* ========================================================
-          MODAL: DINING TABLE SELECTION
+          MODAL: DINING TABLE & CABIN SELECTION (SULTAN ARCHITECTURE)
           ======================================================== */}
       <Modal visible={tableModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 680 }]}>
+          <View style={[styles.modalBox, { maxWidth: 760, maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderTitle}>Select Table / Cabin</Text>
-              <TouchableOpacity onPress={() => setTableModalVisible(false)}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.modalHeaderTitle}>Select Table / Cabin</Text>
+                <View style={styles.modalCountBadge}>
+                  <Text style={styles.modalCountBadgeText}>
+                    {filteredModalTables.length} {filteredModalTables.length === 1 ? 'Unit' : 'Units'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity 
+                onPress={() => {
+                  setTableModalVisible(false);
+                  setFloorDropdownOpen(false);
+                }} 
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
                 <Ionicons name="close" size={22} color="#1E293B" />
               </TouchableOpacity>
             </View>
 
-            {/* Table Search Bar */}
-            <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
-              <View style={styles.modalSearchBar}>
-                <View style={styles.modalSearchIconOrb}>
-                  <Ionicons name="search" size={14} color="#52141C" />
-                </View>
-                <TextInput 
-                  style={styles.modalSearchInput}
-                  placeholder="Search table by name or zone..."
-                  placeholderTextColor="#8A7A70"
-                  value={tableSearchQuery}
-                  onChangeText={setTableSearchQuery}
-                />
-                {tableSearchQuery ? (
-                  <TouchableOpacity onPress={() => setTableSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={16} color="#D4AF37" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </View>
-
-            <View style={styles.modalZonesRow}>
-              {['All', ...zones].map(z => (
-                <TouchableOpacity
-                  key={z}
-                  style={[styles.modalZonePill, tableModalZone === z && styles.modalZonePillActive]}
-                  onPress={() => setTableModalZone(z)}
+            {/* Control Toolbar Container */}
+            <View style={styles.modalControlToolbar}>
+              {/* Row 1: Search Input & Floor Dropdown */}
+              <View style={styles.modalToolbarTopRow}>
+                {/* Search Bar */}
+                <View 
+                  style={[styles.modalSearchBar, isTableSearchFocused && styles.modalSearchBarFocused]}
+                  {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
                 >
-                  <Text style={[styles.modalZoneText, tableModalZone === z && styles.modalZoneTextActive]}>{z}</Text>
-                </TouchableOpacity>
-              ))}
+                  <Ionicons name="search" size={15} color={isTableSearchFocused ? '#D4AF37' : '#52141C'} style={{ marginLeft: 2 }} />
+                  <TextInput 
+                    style={styles.modalSearchInput}
+                    placeholder="Search table, server or majlis..."
+                    placeholderTextColor="#94A3B8"
+                    value={tableSearchQuery}
+                    onFocus={() => setIsTableSearchFocused(true)}
+                    onBlur={() => setIsTableSearchFocused(false)}
+                    onChangeText={setTableSearchQuery}
+                  />
+                  {tableSearchQuery ? (
+                    <TouchableOpacity onPress={() => setTableSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  ) : null}
+                </View>
+
+                {/* Floor Dropdown Trigger */}
+                <View style={{ position: 'relative' }}>
+                  <TouchableOpacity
+                    style={[styles.floorDropdownBtn, floorDropdownOpen && styles.floorDropdownBtnActive]}
+                    onPress={() => setFloorDropdownOpen(prev => !prev)}
+                    activeOpacity={0.85}
+                  >
+                    <View style={[
+                      styles.floorDropdownBadge,
+                      tableModalFloor !== 'All' && getFloorMeta(tableModalFloor, dynamicFloors)?.color 
+                        ? { backgroundColor: getFloorMeta(tableModalFloor, dynamicFloors).color } 
+                        : null
+                    ]}>
+                      <Text style={styles.floorDropdownBadgeText}>
+                        {tableModalFloor === 'All' ? 'ALL' : (getFloorMeta(tableModalFloor, dynamicFloors)?.short || tableModalFloor.slice(0, 2).toUpperCase())}
+                      </Text>
+                    </View>
+                    <Text style={styles.floorDropdownSelectedText} numberOfLines={1}>
+                      {tableModalFloor === 'All' ? 'All Floors' : tableModalFloor}
+                    </Text>
+                    <View style={styles.floorDropdownCountPill}>
+                      <Text style={styles.floorDropdownCountText}>
+                        {tableModalFloor === 'All' ? tables.length : tables.filter(t => getTableFloor(t).toLowerCase() === tableModalFloor.toLowerCase()).length}
+                      </Text>
+                    </View>
+                    <Ionicons name={floorDropdownOpen ? "chevron-up" : "chevron-down"} size={13} color="#52141C" />
+                  </TouchableOpacity>
+
+                  {/* Floor Dropdown Floating Popover */}
+                  {floorDropdownOpen && (
+                    <View style={styles.floorDropdownMenu}>
+                      <View style={styles.floorDropdownMenuHeader}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="business" size={13} color="#52141C" />
+                          <Text style={styles.floorDropdownMenuHeaderTitle}>Select Restaurant Floor</Text>
+                        </View>
+                        <TouchableOpacity onPress={() => setFloorDropdownOpen(false)}>
+                          <Ionicons name="close-circle" size={17} color="#94A3B8" />
+                        </TouchableOpacity>
+                      </View>
+                      <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
+                        {['All', ...availableFloors].map(fl => {
+                          const isActive = tableModalFloor === fl;
+                          const isAll = fl === 'All';
+                          const meta = !isAll ? getFloorMeta(fl, dynamicFloors) : null;
+                          const count = isAll
+                            ? tables.length
+                            : tables.filter(t => getTableFloor(t).toLowerCase() === fl.toLowerCase()).length;
+
+                          return (
+                            <TouchableOpacity
+                              key={fl}
+                              style={[styles.floorDropdownOption, isActive && styles.floorDropdownOptionActive]}
+                              onPress={() => {
+                                setTableModalFloor(fl);
+                                setFloorDropdownOpen(false);
+                              }}
+                            >
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                <View style={[
+                                  styles.floorOptionBadge,
+                                  meta?.color ? { backgroundColor: meta.color } : isAll ? { backgroundColor: '#52141C' } : null
+                                ]}>
+                                  <Text style={styles.floorOptionBadgeText}>
+                                    {isAll ? 'ALL' : meta?.short || fl.slice(0, 2).toUpperCase()}
+                                  </Text>
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.floorOptionName, isActive && styles.floorOptionNameActive]}>
+                                    {isAll ? 'All Floors / Zones' : fl}
+                                  </Text>
+                                </View>
+                              </View>
+
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <View style={[styles.floorOptionCountPill, isActive && styles.floorOptionCountPillActive]}>
+                                  <Text style={[styles.floorOptionCountText, isActive && styles.floorOptionCountTextActive]}>
+                                    {count}
+                                  </Text>
+                                </View>
+                                {isActive && (
+                                  <Ionicons name="checkmark-circle" size={16} color="#D4AF37" />
+                                )}
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Row 2: Sub-Filter Controls */}
+              <View style={styles.modalSubFilterRow}>
+                {/* Seating Type Segmented Filter */}
+                <View style={styles.seatingTypeFilterBox}>
+                  {(
+                    [
+                      { id: 'all', label: 'All Units' },
+                      { id: 'tables', label: '🍽️ Tables' },
+                      { id: 'couches', label: '🛋️ Couches' },
+                      { id: 'majlis', label: '🕌 Majlis' },
+                    ] as const
+                  ).map(st => {
+                    const active = tableModalSeatingType === st.id;
+                    return (
+                      <TouchableOpacity
+                        key={st.id}
+                        style={[styles.seatingTypeBtn, active && styles.seatingTypeBtnActive]}
+                        onPress={() => setTableModalSeatingType(st.id)}
+                      >
+                        <Text style={[styles.seatingTypeBtnText, active && styles.seatingTypeBtnTextActive]}>
+                          {st.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Status Segmented Filter */}
+                <View style={styles.statusFilterBox}>
+                  {(
+                    [
+                      { id: 'all', label: 'All' },
+                      { id: 'available', label: '🟢 Free' },
+                      { id: 'occupied', label: '🔴 Busy' },
+                    ] as const
+                  ).map(st => {
+                    const active = tableModalStatus === st.id;
+                    return (
+                      <TouchableOpacity
+                        key={st.id}
+                        style={[styles.statusFilterBtn, active && styles.statusFilterBtnActive]}
+                        onPress={() => setTableModalStatus(st.id)}
+                      >
+                        <Text style={[styles.statusFilterBtnText, active && styles.statusFilterBtnTextActive]}>
+                          {st.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
             </View>
 
-            <ScrollView style={{ maxHeight: 360, padding: 14 }}>
-              <View style={styles.tablesModalGrid}>
-                {tables
-                  .filter(t => tableModalZone === 'All' || t.zone === tableModalZone)
-                  .filter(t => !tableSearchQuery || t.name.toLowerCase().includes(tableSearchQuery.toLowerCase()) || t.zone.toLowerCase().includes(tableSearchQuery.toLowerCase()))
-                  .map(t => (
-                    <TouchableOpacity
-                      key={t.id}
-                      style={[
-                        styles.tableModalCard,
-                        t.status === 'occupied' && styles.tableModalCardBusy,
-                        t.status === 'available' && styles.tableModalCardAvail
-                      ]}
-                      onPress={() => handleTableSelect(t.id)}
-                    >
-                      <Text style={styles.tableModalCardName}>{t.name}</Text>
-                      <Text style={styles.tableModalCardMeta}>{t.zone} • {t.seats} seats</Text>
-                      <Text style={[
-                        styles.tableModalCardStatus,
-                        t.status === 'available' ? { color: '#059669' } : { color: '#DC2626' }
-                      ]}>
-                        {t.status.toUpperCase()}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-              </View>
+            {/* Tier 3: Grid of Sultan Tables & Cabins */}
+            <ScrollView style={{ maxHeight: 380, padding: 14 }}>
+              {filteredModalTables.length === 0 ? (
+                <View style={styles.emptyTablesModalBox}>
+                  <Ionicons name="search-outline" size={36} color="#CBD5E1" />
+                  <Text style={styles.emptyTablesModalTitle}>No Tables or Cabins Match</Text>
+                  <Text style={styles.emptyTablesModalSub}>Try resetting the floor, seating type, or search query.</Text>
+                  <TouchableOpacity
+                    style={styles.resetModalFiltersBtn}
+                    onPress={() => {
+                      setTableModalFloor('All');
+                      setTableModalSeatingType('all');
+                      setTableModalStatus('all');
+                      setTableSearchQuery('');
+                      setFloorDropdownOpen(false);
+                    }}
+                  >
+                    <Text style={styles.resetModalFiltersBtnText}>Reset All Filters</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.tablesModalGrid}>
+                  {filteredModalTables.map(t => {
+                    const tFloor = getTableFloor(t);
+                    const tType = getTableSeatingType(t);
+                    const isSelected = selectedTableId === t.id;
+                    const isOccupied = t.status === 'occupied' || t.status === 'billed';
+                    const isMajlis = tType === 'majlis';
+                    const isCouch = tType === 'couches';
+                    const meta = getFloorMeta(tFloor, dynamicFloors);
+
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[
+                          styles.tableModalCard,
+                          isOccupied && styles.tableModalCardBusy,
+                          t.status === 'available' && styles.tableModalCardAvail,
+                          isMajlis && styles.tableModalCardMajlis,
+                          isSelected && styles.tableModalCardSelected
+                        ]}
+                        onPress={() => handleTableSelect(t.id)}
+                        activeOpacity={0.85}
+                      >
+                        {/* Top Strip with Floor Accent */}
+                        <View style={[styles.tableCardTopStrip, { backgroundColor: meta.color || '#D4AF37' }]} />
+
+                        {/* Header Row: Type Icon + Name + Status */}
+                        <View style={styles.tableCardHeaderRow}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 6 }}>
+                            <View style={[
+                              styles.tableTypeIconOrb,
+                              isMajlis && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: 'rgba(217, 119, 6, 0.3)' },
+                              isCouch && { backgroundColor: 'rgba(99, 102, 241, 0.12)', borderColor: 'rgba(99, 102, 241, 0.3)' }
+                            ]}>
+                              <SeatingTypeIcon type={tType} size={13} color={isMajlis ? '#B45309' : isCouch ? '#4F46E5' : '#52141C'} />
+                            </View>
+                            <Text style={styles.tableModalCardName} numberOfLines={1}>
+                              {t.name}
+                            </Text>
+                          </View>
+
+                          <View style={[
+                            styles.tableStatusBadge,
+                            t.status === 'available' ? styles.tableStatusBadgeAvail :
+                            t.status === 'billed' ? styles.tableStatusBadgeBilled :
+                            styles.tableStatusBadgeOccupied
+                          ]}>
+                            <Text style={[
+                              styles.tableStatusBadgeText,
+                              t.status === 'available' ? { color: '#059669' } :
+                              t.status === 'billed' ? { color: '#D97706' } :
+                              { color: '#DC2626' }
+                            ]}>
+                              {t.status.toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Floor and Type Badges */}
+                        <View style={styles.tableCardTagsRow}>
+                          <View style={styles.tableModalCardFloorTag}>
+                            <Text style={styles.tableModalCardFloorTagText}>{tFloor}</Text>
+                          </View>
+                          <View style={[
+                            styles.tableTypePill,
+                            isMajlis && { backgroundColor: '#FEF3C7' },
+                            isCouch && { backgroundColor: '#EEF2FF' }
+                          ]}>
+                            <Text style={[
+                              styles.tableTypePillText,
+                              isMajlis && { color: '#92400E' },
+                              isCouch && { color: '#3730A3' }
+                            ]}>
+                              {isMajlis ? 'Majlis Cabin' : isCouch ? 'VIP Couch' : 'Dining Table'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Capacity Row */}
+                        <View style={styles.tableCardCapacityRow}>
+                          <Ionicons name="people-outline" size={12} color="#64748B" />
+                          <Text style={styles.tableCardCapacityText}>
+                            {isMajlis ? `Cabin: ${t.seats} Guests` : `${t.seats} Seats`}
+                          </Text>
+                        </View>
+
+                        {/* Active Bill / Waiter Footer if Busy */}
+                        {isOccupied && (
+                          <View style={styles.tableCardBillFooter}>
+                            {t.billTotal && t.billTotal > 0 ? (
+                              <Text style={styles.tableCardBillText}>Rs. {t.billTotal.toLocaleString()}</Text>
+                            ) : null}
+                            <Text style={styles.tableCardServerText} numberOfLines={1}>
+                              Waiter: {t.server || 'Assigned'}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </ScrollView>
           </View>
         </View>
@@ -1381,15 +2280,20 @@ export default function POSTerminalScreen({
                 </View>
               ) : (
                 <View>
-                  <View style={[styles.modalSearchBar, { marginBottom: 12 }]}>
-                    <View style={styles.modalSearchIconOrb}>
-                      <Ionicons name="search" size={14} color="#52141C" />
+                  <View 
+                    style={[styles.modalSearchBar, isCustSearchFocused && styles.modalSearchBarFocused, { marginBottom: 12 }]}
+                    {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+                  >
+                    <View style={[styles.modalSearchIconOrb, isCustSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.2)', borderColor: '#D4AF37' }]}>
+                      <Ionicons name="search" size={14} color={isCustSearchFocused ? '#D4AF37' : '#52141C'} />
                     </View>
                     <TextInput 
                       style={styles.modalSearchInput}
                       placeholder="Search customer by name or phone..."
                       placeholderTextColor="#8A7A70"
                       value={customerSearchQuery}
+                      onFocus={() => setIsCustSearchFocused(true)}
+                      onBlur={() => setIsCustSearchFocused(false)}
                       onChangeText={setCustomerSearchQuery}
                     />
                     {customerSearchQuery ? (
@@ -1449,43 +2353,155 @@ export default function POSTerminalScreen({
 
             <View style={{ padding: 18 }}>
               <View style={styles.checkoutTotalCard}>
-                <Text style={styles.checkoutTotalCardLabel}>TOTAL AMOUNT DUE</Text>
+                <Text style={styles.checkoutTotalCardLabel}>TOTAL AMOUNT DUE (کل بل رقم)</Text>
                 <Text style={styles.checkoutTotalCardVal}>Rs. {total.toFixed(2)}</Text>
               </View>
 
-              {/* Payment Row */}
-              <View style={{ marginVertical: 10 }}>
+              {/* Full Payment Quick Action Button */}
+              <TouchableOpacity
+                style={styles.fullPaymentBtn}
+                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                onPress={handleSetFullPayment}
+                activeOpacity={0.85}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <Ionicons name="flash" size={17} color="#D4AF37" style={{ marginRight: 6 }} />
+                  <Text style={styles.fullPaymentBtnText}>
+                    ⚡ FULL PAYMENT (Exact Rs. {Math.round(total).toLocaleString()})
+                  </Text>
+                </View>
+                <View style={styles.keyInlinePill}>
+                  <Text style={styles.keyInlinePillText}>F10</Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Payment Method & Cash Tendered Input */}
+              <View style={{ marginVertical: 12 }}>
+                <Text style={styles.paymentInputSectionLabel}>Payment Method & Cash Tendered:</Text>
                 {payments.map((p, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 8 }}>
-                    <View style={styles.payTypeSelector}>
-                      {(['cash', 'card', 'online'] as const).map(m => (
-                        <TouchableOpacity
-                          key={m}
-                          style={[styles.payTypePill, p.type === m && styles.payTypePillActive]}
-                          onPress={() => updatePayment(idx, 'type', m)}
-                        >
-                          <Text style={[styles.payTypePillText, p.type === m && styles.payTypePillTextActive]}>
-                            {m.toUpperCase()}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
+                  <View key={idx} style={{ marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <View style={styles.payTypeSelector}>
+                        {(['cash', 'card', 'online'] as const).map(m => (
+                          <TouchableOpacity
+                            key={m}
+                            style={[styles.payTypePill, p.type === m && styles.payTypePillActive]}
+                            onPress={() => updatePayment(idx, 'type', m)}
+                          >
+                            <Text style={[styles.payTypePillText, p.type === m && styles.payTypePillTextActive]}>
+                              {m.toUpperCase()}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+
+                      <View style={{ flex: 1, position: 'relative' }}>
+                        <TextInput 
+                          style={styles.payAmountInput}
+                          keyboardType="numeric"
+                          placeholder="Amount received..."
+                          placeholderTextColor="#94A3B8"
+                          value={p.amount > 0 ? p.amount.toString() : ''}
+                          onChangeText={v => updatePayment(idx, 'amount', v)}
+                        />
+                        {p.amount > 0 && (
+                          <TouchableOpacity 
+                            style={styles.payInputClearBtn}
+                            onPress={() => updatePayment(idx, 'amount', '0')}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
 
-                    <TextInput 
-                      style={styles.payAmountInput}
-                      keyboardType="numeric"
-                      value={p.amount.toString()}
-                      onChangeText={v => updatePayment(idx, 'amount', v)}
-                    />
+                    {/* Quick Cash Note Chips */}
+                    {p.type === 'cash' && (
+                      <View style={styles.quickNotesRow}>
+                        <Text style={styles.quickNotesLabel}>Quick Notes:</Text>
+                        <TouchableOpacity 
+                          style={styles.quickNoteChip} 
+                          onPress={() => handleSetPaymentAmount(Math.round(total))}
+                        >
+                          <Text style={styles.quickNoteChipText}>Exact</Text>
+                        </TouchableOpacity>
+                        {total <= 500 && (
+                          <TouchableOpacity 
+                            style={styles.quickNoteChip} 
+                            onPress={() => handleSetPaymentAmount(500)}
+                          >
+                            <Text style={styles.quickNoteChipText}>500</Text>
+                          </TouchableOpacity>
+                        )}
+                        {total <= 1000 && (
+                          <TouchableOpacity 
+                            style={styles.quickNoteChip} 
+                            onPress={() => handleSetPaymentAmount(1000)}
+                          >
+                            <Text style={styles.quickNoteChipText}>1,000</Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity 
+                          style={styles.quickNoteChip} 
+                          onPress={() => handleSetPaymentAmount(total <= 2000 ? 2000 : Math.ceil(total / 1000) * 1000)}
+                        >
+                          <Text style={styles.quickNoteChipText}>
+                            {total <= 2000 ? '2,000' : `${(Math.ceil(total / 1000) * 1000).toLocaleString()}`}
+                          </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.quickNoteChip} 
+                          onPress={() => handleSetPaymentAmount(5000)}
+                        >
+                          <Text style={styles.quickNoteChipText}>5,000</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 ))}
               </View>
 
+              {/* Dynamic Change to Return / Remaining Status Card */}
+              {changeDue > 0.01 ? (
+                <View style={styles.changeReturnCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                    <Ionicons name="cash-outline" size={18} color="#059669" />
+                    <Text style={styles.changeReturnTitle}>CHANGE TO RETURN (گاہک کو واپس کرنی رقم)</Text>
+                  </View>
+                  <Text style={styles.changeReturnAmount}>Rs. {changeDue.toFixed(2)}</Text>
+                  <Text style={styles.changeReturnSubtitle}>
+                    Customer gave: Rs. {totalPaid.toLocaleString()}  •  Net Bill: Rs. {total.toFixed(2)}
+                  </Text>
+                </View>
+              ) : remaining > 0.01 ? (
+                <View style={styles.remainingCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Ionicons name="alert-circle-outline" size={17} color="#D97706" />
+                    <Text style={styles.remainingText}>
+                      Remaining to Collect: <Text style={{ fontWeight: '900', color: '#B45309' }}>Rs. {remaining.toFixed(2)}</Text>
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.exactPaidCard}>
+                  <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 6 }} />
+                  <Text style={styles.exactPaidText}>Exact Amount Paid — No Change Due</Text>
+                </View>
+              )}
+
               <TouchableOpacity 
-                style={[styles.proceedPayBtn, remaining > 0.01 && { opacity: 0.55 }, { marginTop: 10 }]}
+                style={[styles.proceedPayBtn, remaining > 0.01 && { opacity: 0.55 }, { marginTop: 12 }]}
                 onPress={handleFinalizeOrder}
+                activeOpacity={0.85}
               >
-                <Text style={styles.proceedPayBtnText}>CONFIRM PAYMENT & PRINT BILL</Text>
+                <Text style={styles.proceedPayBtnText}>
+                  {remaining > 0.01 
+                    ? `COLLECT REMAINING (Rs. ${remaining.toFixed(0)})` 
+                    : changeDue > 0 
+                      ? `CONFIRM PAYMENT & PRINT (Return: Rs. ${changeDue.toFixed(0)})`
+                      : 'CONFIRM PAYMENT & PRINT BILL'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1499,7 +2515,19 @@ export default function POSTerminalScreen({
         <View style={styles.modalOverlay}>
           <View style={[styles.modalBox, { maxWidth: 580 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderTitle}>Running Orders ({tickets.length})</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.modalHeaderTitle}>Running Orders ({(tickets || []).length})</Text>
+                {(tickets || []).length > 0 && (
+                  <TouchableOpacity
+                    style={styles.clearAllTicketsBtn}
+                    onPress={handleClearAllOrphanTickets}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                    <Text style={styles.clearAllTicketsBtnText}>Clear All</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               <TouchableOpacity onPress={() => setPendingOrdersModalVisible(false)}>
                 <Ionicons name="close" size={22} color="#1E293B" />
               </TouchableOpacity>
@@ -1507,15 +2535,20 @@ export default function POSTerminalScreen({
 
             {/* Running Orders Search Bar */}
             <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
-              <View style={styles.modalSearchBar}>
-                <View style={styles.modalSearchIconOrb}>
-                  <Ionicons name="search" size={14} color="#52141C" />
+              <View 
+                style={[styles.modalSearchBar, isPendingSearchFocused && styles.modalSearchBarFocused]}
+                {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+              >
+                <View style={[styles.modalSearchIconOrb, isPendingSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)' }]}>
+                  <Ionicons name="search" size={14} color={isPendingSearchFocused ? '#D4AF37' : '#52141C'} />
                 </View>
                 <TextInput 
                   style={styles.modalSearchInput}
                   placeholder="Search ticket #, table, or server..."
                   placeholderTextColor="#8A7A70"
                   value={pendingOrderSearchQuery}
+                  onFocus={() => setIsPendingSearchFocused(true)}
+                  onBlur={() => setIsPendingSearchFocused(false)}
                   onChangeText={setPendingOrderSearchQuery}
                 />
                 {pendingOrderSearchQuery ? (
@@ -1527,7 +2560,7 @@ export default function POSTerminalScreen({
             </View>
 
             <ScrollView style={{ maxHeight: 420, padding: 14 }}>
-              {tickets.filter(t => !pendingOrderSearchQuery || 
+              {(tickets || []).filter(t => !pendingOrderSearchQuery || 
                 t.id.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) || 
                 t.tableId?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) ||
                 t.server?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase())
@@ -1537,7 +2570,7 @@ export default function POSTerminalScreen({
                   <Text style={{ color: '#64748B', fontWeight: '700' }}>No active running orders found.</Text>
                 </View>
               ) : (
-                tickets
+                (tickets || [])
                   .filter(t => !pendingOrderSearchQuery || 
                     t.id.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) || 
                     t.tableId?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) ||
@@ -1592,8 +2625,18 @@ export default function POSTerminalScreen({
                           ))}
                         </View>
 
-                        {/* Interactive Action Row: Create Bill & Settle / Load to Cart */}
+                        {/* Interactive Action Row: Cancel / Load Cart / Create Bill & Settle */}
                         <View style={styles.ticketActionRow}>
+                          <TouchableOpacity
+                            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                            style={styles.ticketCancelBtn}
+                            onPress={() => handleCancelRunningOrder(t.id)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
+                            <Text style={styles.ticketCancelBtnText}>Cancel</Text>
+                          </TouchableOpacity>
+
                           <TouchableOpacity
                             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
                             style={styles.ticketCartBtn}
@@ -1639,6 +2682,7 @@ export default function POSTerminalScreen({
                 style={[styles.proceedPayBtn, { marginBottom: 8 }]}
                 onPress={() => {
                   settleBill(tableDecisionModal.tableId);
+                  clearTableTickets(tableDecisionModal.tableId);
                   setGeneratedInvoice(tableDecisionModal.invoice);
                   setTableDecisionModal(null);
                 }}
@@ -1650,6 +2694,7 @@ export default function POSTerminalScreen({
                 style={styles.holdOrderBtn}
                 onPress={() => {
                   markTableBilled(tableDecisionModal.tableId);
+                  clearTableTickets(tableDecisionModal.tableId);
                   setGeneratedInvoice(tableDecisionModal.invoice);
                   setTableDecisionModal(null);
                 }}
@@ -1660,6 +2705,103 @@ export default function POSTerminalScreen({
           </View>
         </Modal>
       )}
+
+      {/* ========================================================
+          MODAL: KEYBOARD SHORTCUTS CHEAT SHEET
+          ======================================================== */}
+      <Modal visible={shortcutsModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { maxWidth: 540, padding: 20 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="keypad" size={20} color="#D4AF37" />
+                <Text style={styles.modalHeaderTitle}>Keyboard Shortcuts (شارٹ کٹ کیز)</Text>
+              </View>
+              <TouchableOpacity onPress={() => setShortcutsModalVisible(false)}>
+                <Ionicons name="close" size={22} color="#1E293B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 460, marginTop: 10 }}>
+              <Text style={styles.shortcutSectionHeading}>ORDER & POS NAVIGATION</Text>
+              
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F1 / Ctrl+K</Text></View>
+                <Text style={styles.shortcutDescText}>Focus Dish Search Bar</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F2</Text></View>
+                <Text style={styles.shortcutDescText}>Dine-in Mode / Select Table</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F3</Text></View>
+                <Text style={styles.shortcutDescText}>Takeaway Order Mode</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F4</Text></View>
+                <Text style={styles.shortcutDescText}>Delivery Order Mode</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F6 / Ctrl+R</Text></View>
+                <Text style={styles.shortcutDescText}>Open Running / Pending Orders</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F7 / Ctrl+D</Text></View>
+                <Text style={styles.shortcutDescText}>Apply Discount / Event Promo</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F8 / Ctrl+H</Text></View>
+                <Text style={styles.shortcutDescText}>Hold / Send KOT to Kitchen</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F9 / Ctrl+Enter</Text></View>
+                <Text style={styles.shortcutDescText}>Proceed to Payment / Checkout</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F12</Text></View>
+                <Text style={styles.shortcutDescText}>Clear Cart / Reset Order</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>Esc</Text></View>
+                <Text style={styles.shortcutDescText}>Close Modal / Clear Search</Text>
+              </View>
+
+              <Text style={[styles.shortcutSectionHeading, { marginTop: 16 }]}>PAYMENT / CHECKOUT MODAL</Text>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={[styles.keyBadge, { backgroundColor: '#35080E', borderColor: '#D4AF37' }]}><Text style={[styles.keyBadgeText, { color: '#D4AF37' }]}>F10</Text></View>
+                <Text style={styles.shortcutDescText}>⚡ Full Payment (Fill exact bill amount)</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={[styles.keyBadge, { backgroundColor: '#059669', borderColor: '#10B981' }]}><Text style={[styles.keyBadgeText, { color: '#FFFFFF' }]}>Enter</Text></View>
+                <Text style={styles.shortcutDescText}>Confirm Payment & Print Receipt</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>Esc</Text></View>
+                <Text style={styles.shortcutDescText}>Cancel & Close Checkout Modal</Text>
+              </View>
+            </ScrollView>
+
+            <TouchableOpacity 
+              style={[styles.modalPrimaryBtn, { marginTop: 14 }]} 
+              onPress={() => setShortcutsModalVisible(false)}
+            >
+              <Text style={styles.modalPrimaryBtnText}>Close (Esc)</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* ========================================================
           MODAL: VARIANT / PORTION SELECTION (GLASSMORPHIC)
@@ -2056,51 +3198,113 @@ const styles = StyleSheet.create({
      LEFT: CATEGORIES (2-COL FROSTED GLASS TILES)
      -------------------------------------------------------- */
   categorySidebar: {
-    width: 180,
-    backgroundColor: 'rgba(28, 4, 7, 0.95)',
+    width: 200,
+    backgroundColor: '#190306',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        backgroundImage: 'radial-gradient(circle at 50% 50%, rgba(212, 175, 55, 0.05) 0%, transparent 65%), repeating-linear-gradient(45deg, rgba(0,0,0,0.18) 0px, rgba(0,0,0,0.18) 10px, transparent 10px, transparent 20px)',
-        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.15)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        backgroundImage: 'radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.08) 0%, transparent 70%), linear-gradient(180deg, rgba(32, 5, 10, 0.98) 0%, rgba(18, 2, 5, 0.98) 100%)',
+        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.25)',
       } as any
     }),
-    padding: 8,
+    padding: 10,
     borderRightWidth: 1.5,
-    borderRightColor: 'rgba(212, 175, 55, 0.25)',
+    borderRightColor: 'rgba(212, 175, 55, 0.28)',
   },
   categorySidebarMobile: {
     width: '100%',
     maxHeight: 110,
+    padding: 6,
+  },
+  categoryHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
+  },
+  categoryTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryTitleIconOrb: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   categoryHeading: {
-    fontSize: 10,
+    fontSize: 10.5,
     fontWeight: '900',
     color: '#E5B83B',
-    letterSpacing: 1.2,
-    marginTop: 4,
-    marginBottom: 6,
-    marginLeft: 2,
+    letterSpacing: 1.1,
+  },
+  categoryCountPill: {
+    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  categoryCountPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  categoryViewSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderRadius: 7,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    gap: 2,
+  },
+  viewSwitchBtn: {
+    width: 22,
+    height: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewSwitchBtnActive: {
+    backgroundColor: '#E5B83B',
   },
   quickFindBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.38)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderColor: 'rgba(212, 175, 55, 0.55)',
     borderRadius: 22,
     paddingHorizontal: 7,
     paddingRight: 9,
     height: 38,
-    marginBottom: 12,
+    marginBottom: 10,
     gap: 7,
     ...Platform.select({
       web: {
         backdropFilter: 'blur(12px)',
         WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 3px 14px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
-        transition: 'all 0.2s ease',
+        boxShadow: '0 3px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  quickFindBoxFocused: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFFFF',
+    transform: [{ scale: 1.03 }, { translateY: -1.5 }],
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(212, 175, 55, 0.4), 0 0 0 2.5px rgba(212, 175, 55, 0.55)',
       } as any
     }),
   },
@@ -2108,18 +3312,18 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderColor: 'rgba(212, 175, 55, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   quickFindInput: {
     flex: 1,
     height: '100%',
-    fontSize: 11.5,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingVertical: 0,
@@ -2134,54 +3338,236 @@ const styles = StyleSheet.create({
   categoriesScroll: {
     flex: 1,
   },
+  categoriesContainer: {
+    paddingBottom: 10,
+  },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 7,
+  },
+  categoriesList: {
+    flexDirection: 'column',
     gap: 6,
-    paddingBottom: 20,
   },
   categoryTile: {
     width: '48%',
-    height: 64,
-    backgroundColor: 'rgba(255, 255, 255, 0.06)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 5,
-    gap: 4,
+    height: 72,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.18)',
+    borderRadius: 12,
+    padding: 7,
+    justifyContent: 'space-between',
     ...Platform.select({
       web: {
         backdropFilter: 'blur(10px)',
         WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 3px 10px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.08)',
+        boxShadow: '0 3px 10px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)',
         cursor: 'pointer',
         transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
       } as any
     }),
   },
   categoryTileActive: {
-    backgroundColor: 'rgba(229, 184, 59, 0.95)',
+    backgroundColor: '#E5B83B',
     borderColor: '#FFE082',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 6px 18px rgba(229, 184, 59, 0.45), inset 0 1px 0 rgba(255,255,255,0.7)',
-        transform: 'translateY(-1px)',
+        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
+        boxShadow: '0 8px 22px rgba(229, 184, 59, 0.45), inset 0 1px 0 rgba(255,255,255,0.8)',
+        transform: 'translateY(-1.5px)',
       } as any
     }),
   },
+  tileTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tileIconOrb: {
+    width: 25,
+    height: 25,
+    borderRadius: 7,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileIconOrbActive: {
+    backgroundColor: 'rgba(30, 41, 59, 0.15)',
+    borderColor: 'rgba(30, 41, 59, 0.3)',
+  },
+  tileCountBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  tileCountBadgeActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  tileCountText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  tileCountTextActive: {
+    color: '#F8FAFC',
+  },
   categoryTileText: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#E2E8F0',
-    textAlign: 'center',
+    color: '#F1F5F9',
+    textAlign: 'left',
+    letterSpacing: 0.3,
   },
   categoryTileTextActive: {
     color: '#1E293B',
     fontWeight: '900',
+  },
+  categoryListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.18)',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)',
+        cursor: 'pointer',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  categoryListRowActive: {
+    backgroundColor: '#E5B83B',
+    borderColor: '#FFE082',
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
+        boxShadow: '0 6px 18px rgba(229, 184, 59, 0.4), inset 0 1px 0 rgba(255,255,255,0.8)',
+        transform: 'translateX(3px)',
+      } as any
+    }),
+  },
+  listIconOrb: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listIconOrbActive: {
+    backgroundColor: 'rgba(30, 41, 59, 0.15)',
+    borderColor: 'rgba(30, 41, 59, 0.3)',
+  },
+  categoryListText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F1F5F9',
+    letterSpacing: 0.3,
+  },
+  categoryListTextActive: {
+    color: '#1E293B',
+    fontWeight: '900',
+  },
+  listCountBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+  },
+  listCountBadgeActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  listCountText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  listCountTextActive: {
+    color: '#F8FAFC',
+  },
+  categoryBottomPanel: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(212, 175, 55, 0.22)',
+    gap: 6,
+  },
+  bottomStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+  },
+  bottomStatusTitle: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#A38B7C',
+    letterSpacing: 0.9,
+  },
+  bottomStatusCount: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#E5B83B',
+  },
+  bottomActiveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 7,
+  },
+  bottomActiveIconOrb: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomActiveName: {
+    flex: 1,
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: 0.4,
+  },
+  bottomResetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 2,
+  },
+  bottomResetText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
 
   /* --------------------------------------------------------
@@ -2279,6 +3665,16 @@ const styles = StyleSheet.create({
       } as any
     }),
   },
+  searchPillBoxFocused: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFFFF',
+    transform: [{ scale: 1.025 }, { translateY: -2 }],
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 28px rgba(212, 175, 55, 0.32), 0 0 0 2.5px rgba(212, 175, 55, 0.55)',
+      } as any
+    }),
+  },
   searchIconOrb: {
     width: 30,
     height: 30,
@@ -2288,6 +3684,10 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(212, 175, 55, 0.3)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  searchIconOrbFocused: {
+    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    borderColor: '#D4AF37',
   },
   searchPillInput: {
     flex: 1,
@@ -2463,14 +3863,45 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: 4,
   },
-  dishCardCategoryChip: {
-    backgroundColor: 'rgba(241, 245, 249, 0.75)',
-    borderRadius: 10,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
+  dishCardChipsRow: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    right: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    zIndex: 4,
+    flexWrap: 'wrap',
+  },
+  dishCardRegionChip: {
+    backgroundColor: 'rgba(82, 20, 28, 0.88)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.85)',
-    marginBottom: 6,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(6px)',
+        WebkitBackdropFilter: 'blur(6px)',
+      } as any,
+    }),
+  },
+  dishCardRegionText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FDE68A',
+  },
+  dishCardCategoryChip: {
+    backgroundColor: 'rgba(241, 245, 249, 0.85)',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
     ...Platform.select({
       web: {
         backdropFilter: 'blur(6px)',
@@ -2641,16 +4072,24 @@ const styles = StyleSheet.create({
     color: '#D97706',
   },
   tableCabinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(30, 41, 59, 0.9)',
     paddingHorizontal: 8,
     paddingVertical: 2.5,
     borderRadius: 8,
-    maxWidth: 120,
+    maxWidth: 260,
   },
   tableCabinPillText: {
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: '900',
+  },
+  tableCabinPillSub: {
+    color: '#F59E0B',
+    fontSize: 9.5,
+    fontWeight: '700',
+    marginLeft: 3,
   },
   changeTablePill: {
     flexDirection: 'row',
@@ -2938,32 +4377,54 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     color: '#0F172A',
   },
-  modalSearchBar: {
+  modalControlToolbar: {
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.9)',
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    paddingBottom: 10,
+    gap: 10,
+    zIndex: 100,
+  },
+  modalToolbarTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    gap: 10,
+    zIndex: 101,
+  },
+  modalSearchBar: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.38)',
-    borderRadius: 24,
-    paddingHorizontal: 8,
-    paddingRight: 10,
-    height: 42,
-    gap: 8,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 6,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.05), inset 0 1px 0 #FFFFFF',
+        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
+      } as any
+    }),
+  },
+  modalSearchBarFocused: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFFFF',
+    transform: [{ scale: 1.02 }, { translateY: -1.5 }],
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(212, 175, 55, 0.3), 0 0 0 2px rgba(212, 175, 55, 0.5)',
       } as any
     }),
   },
   modalSearchIconOrb: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.28)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -2976,7 +4437,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderWidth: 0,
     paddingVertical: 0,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
@@ -2984,29 +4445,274 @@ const styles = StyleSheet.create({
       } as any
     }),
   },
-  modalZonesRow: {
+  modalCountBadge: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  modalCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  floorDropdownBtn: {
     flexDirection: 'row',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.9)',
-  },
-  modalZonePill: {
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.55)',
+    borderRadius: 10,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    height: 38,
+    minWidth: 175,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+        transition: 'all 0.15s ease',
+      } as any
+    }),
+  },
+  floorDropdownBtnActive: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFBEB',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 10px rgba(212, 175, 55, 0.25)',
+      } as any
+    }),
+  },
+  floorDropdownBadge: {
+    backgroundColor: '#52141C',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+  },
+  floorDropdownBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  floorDropdownSelectedText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+    maxWidth: 95,
+  },
+  floorDropdownCountPill: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+  },
+  floorDropdownCountText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  floorDropdownMenu: {
+    position: 'absolute',
+    top: 44,
+    right: 0,
+    width: 250,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    backgroundColor: 'rgba(241, 245, 249, 0.85)',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    padding: 6,
+    zIndex: 9999,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.18)',
+      } as any,
+      default: {
+        elevation: 12,
+      }
+    }),
   },
-  modalZonePillActive: {
-    backgroundColor: '#35080E',
+  floorDropdownMenuHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241, 245, 249, 0.9)',
+    marginBottom: 4,
   },
-  modalZoneText: {
+  floorDropdownMenuHeaderTitle: {
     fontSize: 11,
-    color: '#64748B',
-    fontWeight: '700',
+    fontWeight: '900',
+    color: '#52141C',
+    letterSpacing: 0.3,
   },
-  modalZoneTextActive: {
+  floorDropdownOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginVertical: 1.5,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'background-color 0.1s ease',
+      } as any
+    }),
+  },
+  floorDropdownOptionActive: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.5)',
+  },
+  floorOptionBadge: {
+    backgroundColor: '#52141C',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    minWidth: 26,
+    alignItems: 'center',
+  },
+  floorOptionBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
+  },
+  floorOptionName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  floorOptionNameActive: {
+    color: '#52141C',
+    fontWeight: '900',
+  },
+  floorOptionCountPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  floorOptionCountPillActive: {
+    backgroundColor: 'rgba(82, 20, 28, 0.12)',
+  },
+  floorOptionCountText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  floorOptionCountTextActive: {
+    color: '#52141C',
+    fontWeight: '900',
+  },
+  modalSubFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  seatingTypeFilterBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 8,
+    padding: 2.5,
+    gap: 3,
+  },
+  seatingTypeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any
+    }),
+  },
+  seatingTypeBtnActive: {
+    backgroundColor: '#52141C',
+    ...Platform.select({
+      web: { boxShadow: '0 1px 4px rgba(82, 20, 28, 0.25)' } as any
+    }),
+  },
+  seatingTypeBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  seatingTypeBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  statusFilterBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 8,
+    padding: 2.5,
+    gap: 3,
+  },
+  statusFilterBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any
+    }),
+  },
+  statusFilterBtnActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } as any
+    }),
+  },
+  statusFilterBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  statusFilterBtnTextActive: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
+  emptyTablesModalBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 16,
+  },
+  emptyTablesModalTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#475569',
+    marginTop: 8,
+  },
+  emptyTablesModalSub: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  resetModalFiltersBtn: {
+    marginTop: 12,
+    backgroundColor: '#35080E',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  resetModalFiltersBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: '#FFFFFF',
   },
   tablesModalGrid: {
@@ -3016,40 +4722,156 @@ const styles = StyleSheet.create({
   },
   tableModalCard: {
     width: '31%',
-    backgroundColor: 'rgba(250, 250, 252, 0.85)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
-    padding: 10,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: 'rgba(226, 232, 240, 0.9)',
+    overflow: 'hidden',
+    position: 'relative',
+    paddingBottom: 8,
     ...Platform.select({
       web: {
         backdropFilter: 'blur(8px)',
         WebkitBackdropFilter: 'blur(8px)',
+        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+        cursor: 'pointer',
+        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
       } as any
     }),
   },
   tableModalCardAvail: {
-    borderColor: 'rgba(16, 185, 129, 0.5)',
-    backgroundColor: 'rgba(240, 253, 244, 0.85)',
+    borderColor: 'rgba(16, 185, 129, 0.45)',
+    backgroundColor: 'rgba(240, 253, 244, 0.55)',
   },
   tableModalCardBusy: {
-    borderColor: 'rgba(220, 38, 38, 0.5)',
-    backgroundColor: 'rgba(254, 242, 242, 0.85)',
+    borderColor: 'rgba(220, 38, 38, 0.45)',
+    backgroundColor: 'rgba(254, 242, 242, 0.55)',
+  },
+  tableModalCardMajlis: {
+    borderColor: 'rgba(217, 119, 6, 0.45)',
+    backgroundColor: 'rgba(255, 251, 235, 0.65)',
+  },
+  tableModalCardSelected: {
+    borderColor: '#D4AF37',
+    borderWidth: 2,
+    backgroundColor: '#FEF3C7',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 0 2px #D4AF37, 0 4px 14px rgba(212, 175, 55, 0.25)',
+      } as any
+    }),
+  },
+  tableCardTopStrip: {
+    height: 4,
+    width: '100%',
+  },
+  tableCardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 8,
+    paddingTop: 8,
+  },
+  tableTypeIconOrb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(82, 20, 28, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tableModalCardName: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 12.5,
+    fontWeight: '900',
     color: '#0F172A',
   },
-  tableModalCardMeta: {
-    fontSize: 10,
-    color: '#64748B',
-    marginTop: 2,
+  tableStatusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
   },
-  tableModalCardStatus: {
+  tableStatusBadgeAvail: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  tableStatusBadgeBilled: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  tableStatusBadgeOccupied: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FECACA',
+  },
+  tableStatusBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  tableCardTagsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  tableModalCardFloorTag: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+  },
+  tableModalCardFloorTagText: {
     fontSize: 9,
     fontWeight: '800',
-    marginTop: 4,
+    color: '#475569',
+  },
+  tableTypePill: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 5,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+  },
+  tableTypePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  tableCardCapacityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    marginTop: 6,
+  },
+  tableCardCapacityText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  tableCardBillFooter: {
+    marginTop: 6,
+    marginHorizontal: 8,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(226, 232, 240, 0.7)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tableCardBillText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#DC2626',
+  },
+  tableCardServerText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#8A7A70',
+    maxWidth: 90,
   },
   inputLabel: {
     fontSize: 11.5,
@@ -3194,12 +5016,166 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     fontSize: 13,
     fontWeight: '700',
+    paddingRight: 28,
     ...Platform.select({
       web: {
         outlineStyle: 'none',
         outlineWidth: 0,
       } as any
     }),
+  },
+  payInputClearBtn: {
+    position: 'absolute',
+    right: 8,
+    top: 9,
+  },
+  fullPaymentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#35080E',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    paddingVertical: 10,
+    borderRadius: 10,
+    marginBottom: 4,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 2px 8px rgba(53, 8, 14, 0.25)',
+      } as any
+    }),
+  },
+  fullPaymentBtnText: {
+    color: '#FBF8F2',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  paymentInputSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 6,
+  },
+  quickNotesRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+  },
+  quickNotesLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#94A3B8',
+    marginRight: 2,
+  },
+  quickNoteChip: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any
+    }),
+  },
+  quickNoteChipText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  changeReturnCard: {
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1.5,
+    borderColor: '#10B981',
+    borderRadius: 12,
+    padding: 12,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  changeReturnTitle: {
+    color: '#047857',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  changeReturnAmount: {
+    color: '#065F46',
+    fontSize: 24,
+    fontWeight: '900',
+    marginVertical: 2,
+  },
+  changeReturnSubtitle: {
+    color: '#059669',
+    fontSize: 10.5,
+    fontWeight: '600',
+  },
+  remainingCard: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 10,
+    padding: 10,
+    alignItems: 'center',
+    marginTop: 4,
+  },
+  remainingText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  exactPaidCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    borderRadius: 10,
+    padding: 9,
+    marginTop: 4,
+  },
+  exactPaidText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#166534',
+  },
+  ticketCancelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any
+    }),
+  },
+  ticketCancelBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  clearAllTicketsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  clearAllTicketsBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#DC2626',
   },
   ticketCard: {
     backgroundColor: 'rgba(255, 255, 255, 0.95)',
@@ -3414,4 +5390,201 @@ const styles = StyleSheet.create({
     color: '#64748B',
     marginTop: 2,
   },
+
+  /* --------------------------------------------------------
+     KEYBOARD SHORTCUT BADGES & CHEAT SHEET MODAL
+     -------------------------------------------------------- */
+  keyboardCapsuleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
+  },
+  keyboardCapsuleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#D4AF37',
+  },
+  keyInlinePill: {
+    backgroundColor: 'rgba(212, 175, 55, 0.25)',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+  },
+  keyInlinePillText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FDE68A',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  tabKeyBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.12)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 4,
+  },
+  tabKeyBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: 'rgba(255, 255, 255, 0.4)',
+  },
+  tabKeyBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#64748B',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  tabKeyBadgeTextActive: {
+    color: '#FFFFFF',
+  },
+  btnShortcutBadge: {
+    backgroundColor: 'rgba(255, 255, 255, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.45)',
+    borderRadius: 5,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+  btnShortcutBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  keyBadgeTiny: {
+    backgroundColor: 'rgba(217, 119, 6, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.35)',
+    borderRadius: 4,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    marginLeft: 3,
+    marginRight: 3,
+  },
+  keyBadgeTinyText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#B45309',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+  },
+  shortcutSectionHeading: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#8A7A70',
+    letterSpacing: 1.1,
+    marginBottom: 8,
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  shortcutItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241, 245, 249, 0.7)',
+  },
+  keyBadge: {
+    backgroundColor: '#1E293B',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderWidth: 1,
+    borderColor: '#334155',
+    minWidth: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keyBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#F8FAFC',
+    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    letterSpacing: 0.5,
+  },
+  shortcutDescText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#334155',
+    flex: 1,
+    marginLeft: 12,
+  },
+  posRegionFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.65)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.6)',
+  },
+  posRegionFilterLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginRight: 8,
+    paddingRight: 8,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(203, 213, 225, 0.6)',
+  },
+  posRegionFilterLeadText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#8A7A70',
+    letterSpacing: 0.3,
+  },
+  posRegionScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  posRegionChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 16,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
+  },
+  posRegionChipActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 6px rgba(82, 20, 28, 0.25)',
+      } as any,
+    }),
+  },
+  posRegionChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  posRegionChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
 });
+

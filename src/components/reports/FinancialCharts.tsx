@@ -44,12 +44,16 @@ export function SvgDonutChart({
   thickness = 26,
   centerTitle,
   centerSubtitle,
+  plain = false,
+  compactLegend = false,
 }: {
   data: DonutItem[];
   size?: number;
   thickness?: number;
   centerTitle?: string;
   centerSubtitle?: string;
+  plain?: boolean;
+  compactLegend?: boolean;
 }) {
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
   const total = data.reduce((acc, item) => acc + (item.value > 0 ? item.value : 0), 0);
@@ -61,7 +65,7 @@ export function SvgDonutChart({
   let accumulatedPercent = 0;
 
   return (
-    <View style={styles.donutContainer}>
+    <View style={[styles.donutContainer, plain && styles.plainContainer]}>
       <View style={{ width: size, height: size, position: 'relative', alignItems: 'center', justifyContent: 'center' }}>
         <Svg width={size} height={size}>
           {total === 0 ? (
@@ -74,7 +78,7 @@ export function SvgDonutChart({
               fill="transparent"
             />
           ) : (
-            <G rotation="-90" origin={`${center}, ${center}`}>
+            <G transform={`rotate(-90 ${center} ${center})`}>
               {data.map((item, idx) => {
                 if (item.value <= 0) return null;
                 const percent = item.value / total;
@@ -121,27 +125,31 @@ export function SvgDonutChart({
       </View>
 
       {/* Legend List */}
-      <View style={styles.legendContainer}>
+      <View style={[styles.legendContainer, compactLegend && styles.legendCompactGrid]}>
         {data.map((item, idx) => {
           const pct = total > 0 ? ((item.value / total) * 100).toFixed(1) : '0';
           const isSelected = selectedIdx === idx;
           return (
             <TouchableOpacity
               key={idx}
-              style={[styles.legendItem, isSelected && styles.legendItemActive]}
+              style={[
+                styles.legendItem, 
+                compactLegend && styles.legendItemCompact,
+                isSelected && styles.legendItemActive
+              ]}
               onPress={() => setSelectedIdx(isSelected ? null : idx)}
               activeOpacity={0.7}
             >
               <View style={[styles.legendDot, { backgroundColor: item.color }]} />
               <View style={styles.legendTextCol}>
                 <View style={styles.legendHeaderRow}>
-                  <Text style={styles.legendLabel} numberOfLines={1}>{item.label}</Text>
-                  <Text style={styles.legendPct}>{pct}%</Text>
+                  <Text style={[styles.legendLabel, compactLegend && styles.legendLabelCompact]} numberOfLines={1}>{item.label}</Text>
+                  <Text style={[styles.legendPct, compactLegend && styles.legendPctCompact]}>{pct}%</Text>
                 </View>
                 <View style={styles.legendSubRow}>
-                  <Text style={styles.legendValue}>{money(item.value)}</Text>
+                  <Text style={[styles.legendValue, compactLegend && styles.legendValueCompact]}>{money(item.value)}</Text>
                   {item.count !== undefined && (
-                    <Text style={styles.legendCount}>({item.count} orders)</Text>
+                    <Text style={[styles.legendCount, compactLegend && styles.legendCountCompact]}>({item.count} orders)</Text>
                   )}
                 </View>
               </View>
@@ -162,12 +170,16 @@ export function SvgVerticalBarChart({
   barWidth = 42,
   valuePrefix = 'Rs. ',
   showPercentages = true,
+  plain = false,
+  fitContainer = false,
 }: {
   data: BarItem[];
   height?: number;
   barWidth?: number;
   valuePrefix?: string;
   showPercentages?: boolean;
+  plain?: boolean;
+  fitContainer?: boolean;
 }) {
   const { width } = useWindowDimensions();
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
@@ -175,11 +187,18 @@ export function SvgVerticalBarChart({
   const maxValue = Math.max(...data.map((d) => Math.abs(d.value)), 1);
   const chartHeight = height - 50; // leave room for top value & bottom label
   const totalPositive = data.reduce((sum, d) => sum + (d.value > 0 ? d.value : 0), 0);
+  const calculatedMinWidth = fitContainer 
+    ? '100%' 
+    : Math.max(data.length * (barWidth + 18), Math.min(width - 80, 520));
 
   return (
-    <View style={styles.barChartContainer}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.barChartScroll}>
-        <View style={{ height, minWidth: Math.max(data.length * (barWidth + 24), width - 80) }}>
+    <View style={[styles.barChartContainer, plain && styles.plainContainer]}>
+      <ScrollView 
+        horizontal={!fitContainer} 
+        showsHorizontalScrollIndicator={false} 
+        contentContainerStyle={[styles.barChartScroll, fitContainer && { width: '100%' }]}
+      >
+        <View style={{ height, width: fitContainer ? '100%' : undefined, minWidth: calculatedMinWidth }}>
           {/* Subtle Gridlines */}
           <Svg width="100%" height={chartHeight} style={StyleSheet.absoluteFill}>
             {[0.25, 0.5, 0.75, 1].map((ratio) => {
@@ -459,17 +478,19 @@ export function HorizontalRankedBars({
   title,
   subtitle,
   valuePrefix = 'Rs. ',
+  plain = false,
 }: {
   items: Array<{ label: string; value: number; color?: string; count?: number; secondary?: string }>;
   title?: string;
   subtitle?: string;
   valuePrefix?: string;
+  plain?: boolean;
 }) {
   const maxValue = Math.max(...items.map((it) => it.value), 1);
   const totalValue = items.reduce((sum, it) => sum + it.value, 0);
 
   return (
-    <View style={styles.rankedCard}>
+    <View style={[styles.rankedCard, plain && styles.plainContainer]}>
       {title && (
         <View style={styles.rankedHeader}>
           <Text style={styles.rankedTitle}>{title}</Text>
@@ -605,6 +626,14 @@ export function PnLFlowWaterfallChart({
 }
 
 const styles = StyleSheet.create({
+  plainContainer: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    borderWidth: 0,
+    borderColor: 'transparent',
+    padding: 0,
+    gap: 12,
+  },
   donutContainer: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -656,6 +685,32 @@ const styles = StyleSheet.create({
   legendItemActive: {
     backgroundColor: '#F1F5F9',
     borderColor: '#CBD5E1',
+  },
+  legendCompactGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  legendItemCompact: {
+    flex: 1,
+    minWidth: 135,
+    paddingVertical: 5,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    gap: 6,
+  },
+  legendLabelCompact: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  legendPctCompact: {
+    fontSize: 10.5,
+  },
+  legendValueCompact: {
+    fontSize: 10.5,
+  },
+  legendCountCompact: {
+    fontSize: 9.5,
   },
   legendDot: {
     width: 12,

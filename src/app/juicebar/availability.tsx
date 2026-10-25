@@ -1,6 +1,6 @@
 import React from 'react';
 import ItemAvailabilityScreen from '../../screens/ItemAvailabilityScreen';
 
-export default function KitchenAvailabilityRoute() {
-  return <ItemAvailabilityScreen backRoute="/kitchen/kds" />;
+export default function JuiceAvailabilityRoute() {
+  return <ItemAvailabilityScreen backRoute="/juicebar/kds" />;
 }

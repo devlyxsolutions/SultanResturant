@@ -36,11 +36,18 @@ export default function MenuManagement() {
   const categories = useRestaurantStore(state => state.categories) || [];
   const addCategory = useRestaurantStore(state => state.addCategory);
   const deleteCategory = useRestaurantStore(state => state.deleteCategory);
+  const regions = useRestaurantStore(state => state.regions) || [];
+  const addRegion = useRestaurantStore(state => state.addRegion);
+  const updateRegion = useRestaurantStore(state => state.updateRegion);
+  const deleteRegion = useRestaurantStore(state => state.deleteRegion);
+  const restoreDefaultRestaurantMenu = useRestaurantStore(state => state.restoreDefaultRestaurantMenu);
+  const [isSyncingMenu, setIsSyncingMenu] = useState(false);
   
-  // Tabs: 'items' | 'deals' | 'stock' | 'categories'
-  const [activeTab, setActiveTab] = useState<'items' | 'deals' | 'stock' | 'categories'>('items');
+  // Tabs: 'items' | 'deals' | 'stock' | 'categories' | 'regions'
+  const [activeTab, setActiveTab] = useState<'items' | 'deals' | 'stock' | 'categories' | 'regions'>('items');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
+  const [selectedRegionFilter, setSelectedRegionFilter] = useState('All');
   
   // Success Feedback Message
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -89,11 +96,13 @@ export default function MenuManagement() {
   const [itemPrice, setItemPrice] = useState('');
   const [itemCostPrice, setItemCostPrice] = useState('');
   const [itemCategory, setItemCategory] = useState(categories[0] || 'Mains');
+  const [itemRegion, setItemRegion] = useState('');
   const [itemDescription, setItemDescription] = useState('');
   const [itemBadge, setItemBadge] = useState('');
   const [itemImageUri, setItemImageUri] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [itemStation, setItemStation] = useState<'main' | 'juice'>('main');
+  const [itemPrepTime, setItemPrepTime] = useState('15');
   const [itemVariants, setItemVariants] = useState<{ name: string; price: string }[]>([]);
   
   // Stock Tracking Form Fields (Option 4)
@@ -113,11 +122,17 @@ export default function MenuManagement() {
 
   // Dropdown states
   const [isCategoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [isRegionDropdownOpen, setRegionDropdownOpen] = useState(false);
   const [isBadgeDropdownOpen, setBadgeDropdownOpen] = useState(false);
 
   // Category Modal state
   const [isCatModalVisible, setCatModalVisible] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+
+  // Region Modal state
+  const [isRegionModalVisible, setRegionModalVisible] = useState(false);
+  const [editingRegion, setEditingRegion] = useState<string | null>(null);
+  const [regionNameInput, setRegionNameInput] = useState('');
 
   // -------------------------------------------------------------
   // KPI Calculations
@@ -158,6 +173,7 @@ export default function MenuManagement() {
       const matchesSearch = !q || 
         item.name.toLowerCase().includes(q) || 
         item.category.toLowerCase().includes(q) ||
+        (item.region && item.region.toLowerCase().includes(q)) ||
         (item.badge && item.badge.toLowerCase().includes(q)) ||
         (item.description && item.description.toLowerCase().includes(q));
 
@@ -173,12 +189,13 @@ export default function MenuManagement() {
 
       if (activeTab === 'items') {
         const matchesCat = selectedCategoryFilter === 'All' || item.category === selectedCategoryFilter;
-        return matchesCat;
+        const matchesRegion = selectedRegionFilter === 'All' || item.region === selectedRegionFilter;
+        return matchesCat && matchesRegion;
       }
 
       return true;
     });
-  }, [menuItems, activeTab, searchQuery, selectedCategoryFilter]);
+  }, [menuItems, activeTab, searchQuery, selectedCategoryFilter, selectedRegionFilter]);
 
   // Derived Categories Data
   const categoriesData = useMemo(() => {
@@ -195,6 +212,21 @@ export default function MenuManagement() {
     );
   }, [categoriesData, searchQuery]);
 
+  // Derived Regions Data
+  const regionsData = useMemo(() => {
+    return regions.map(reg => ({
+      id: reg,
+      name: reg,
+      itemsCount: menuItems.filter(i => i.region === reg).length
+    }));
+  }, [regions, menuItems]);
+
+  const filteredRegions = useMemo(() => {
+    return regionsData.filter(reg => 
+      reg.name.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [regionsData, searchQuery]);
+
   // -------------------------------------------------------------
   // Modal Open Handlers
   // -------------------------------------------------------------
@@ -205,10 +237,12 @@ export default function MenuManagement() {
     setItemPrice('');
     setItemCostPrice('');
     setItemCategory(isForDeal ? 'Deals' : (categories[0] || 'Mains'));
+    setItemRegion(selectedRegionFilter !== 'All' ? selectedRegionFilter : '');
     setItemDescription('');
     setItemBadge(isForDeal ? 'Family Deal' : '');
     setItemImageUri('');
     setItemStation('main');
+    setItemPrepTime(isForDeal ? '25' : '15');
     setItemVariants([]);
     setItemTrackStock(true);
     setItemStockQty('25');
@@ -217,6 +251,7 @@ export default function MenuManagement() {
     setItemDealItems([]);
     setItemDealOriginalPrice('');
     setCategoryDropdownOpen(false);
+    setRegionDropdownOpen(false);
     setBadgeDropdownOpen(false);
     setItemModalVisible(true);
   };
@@ -228,10 +263,12 @@ export default function MenuManagement() {
     setItemPrice(item.price ? item.price.toString() : '');
     setItemCostPrice(item.costPrice ? item.costPrice.toString() : '');
     setItemCategory(item.category || (categories[0] || 'Mains'));
+    setItemRegion(item.region || '');
     setItemDescription(item.description || '');
     setItemBadge(item.badge || '');
     setItemImageUri(item.imageUri || '');
     setItemStation((item.station as 'main'|'juice') || 'main');
+    setItemPrepTime(item.prepTimeMin ? item.prepTimeMin.toString() : (item.station === 'juice' ? '5' : '15'));
     setItemVariants(item.variants ? item.variants.map(v => ({ name: v.name, price: v.price.toString() })) : []);
     setItemTrackStock(Boolean(item.trackStock));
     setItemStockQty(typeof item.stockQty === 'number' ? item.stockQty.toString() : '20');
@@ -240,6 +277,7 @@ export default function MenuManagement() {
     setItemDealItems(item.dealItems || []);
     setItemDealOriginalPrice(item.dealOriginalPrice ? item.dealOriginalPrice.toString() : '');
     setCategoryDropdownOpen(false);
+    setRegionDropdownOpen(false);
     setBadgeDropdownOpen(false);
     setItemModalVisible(true);
   };
@@ -518,13 +556,21 @@ export default function MenuManagement() {
     const lowThreshNum = parseInt(itemLowStockThreshold, 10);
 
     const dealOrigPriceNum = parseFloat(itemDealOriginalPrice);
+    const prepTimeNum = parseFloat(itemPrepTime);
+    const parsedPrepTime = !isNaN(prepTimeNum) && prepTimeNum > 0 ? prepTimeNum : (itemStation === 'juice' ? 5 : 15);
 
     const itemPayload: Omit<MenuItem, 'id'> = {
       name: itemName.trim(),
       price: priceNum,
       costPrice: parsedCost,
+<<<<<<< HEAD
       category: finalCategory,
+=======
+      category: itemCategory,
+      region: itemRegion.trim() ? itemRegion.trim() : undefined,
+>>>>>>> 9210cb0 (feat: regional cuisines module, executive culinary analytics dashboard, juicebar updates and UI improvements)
       station: itemStation,
+      prepTimeMin: parsedPrepTime,
       description: itemDescription.trim() || undefined,
       badge: itemBadge.trim() || undefined,
       imageUri: itemImageUri.trim() || undefined,
@@ -700,12 +746,118 @@ export default function MenuManagement() {
     }
   };
 
+  // -------------------------------------------------------------
+  // Region Management Handlers (Add, Edit, Delete with Cascading updates)
+  // -------------------------------------------------------------
+  const openAddRegionModal = () => {
+    setEditingRegion(null);
+    setRegionNameInput('');
+    setRegionModalVisible(true);
+  };
+
+  const openEditRegionModal = (regionName: string) => {
+    setEditingRegion(regionName);
+    setRegionNameInput(regionName);
+    setRegionModalVisible(true);
+  };
+
+  const handleSaveRegion = () => {
+    const trimmed = regionNameInput.trim();
+    if (!trimmed) {
+      const msg = 'Please enter a region or cuisine name (e.g. Chinese, Continental, etc.).';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Invalid Name', msg);
+      return;
+    }
+
+    if (editingRegion) {
+      if (editingRegion.toLowerCase() !== trimmed.toLowerCase() && regions.some(r => r.toLowerCase() === trimmed.toLowerCase())) {
+        const msg = 'A region with this name already exists.';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Duplicate Region', msg);
+        return;
+      }
+      updateRegion(editingRegion, trimmed);
+    } else {
+      if (regions.some(r => r.toLowerCase() === trimmed.toLowerCase())) {
+        const msg = 'This region already exists.';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Duplicate Region', msg);
+        return;
+      }
+      addRegion(trimmed);
+    }
+    broadcastImmediately();
+    setRegionModalVisible(false);
+    setRegionNameInput('');
+    setEditingRegion(null);
+  };
+
+  const handleDeleteRegion = (regionName: string) => {
+    const assignedCount = menuItems.filter(i => i.region === regionName).length;
+    const confirmDelete = () => {
+      deleteRegion(regionName);
+      broadcastImmediately();
+    };
+
+    const warning = assignedCount > 0
+      ? `This region is currently assigned to ${assignedCount} dish(es). Deleting it will remove the region classification from those dishes.\n\nAre you sure you want to delete "${regionName}"?`
+      : `Are you sure you want to delete region "${regionName}"?`;
+
+    if (Platform.OS === 'web') {
+      if (window.confirm(warning)) confirmDelete();
+    } else {
+      Alert.alert('Delete Region', warning, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: confirmDelete }
+      ]);
+    }
+  };
+
   // Margin Calculation Helper
   const calculateMargin = (price: number, cost?: number) => {
     if (!cost || price <= 0) return null;
     const grossProfit = price - cost;
     const marginPct = Math.round((grossProfit / price) * 100);
     return { grossProfit, marginPct };
+  };
+
+  const handleFetchRestaurantMenu = async () => {
+    const doRestore = async () => {
+      try {
+        setIsSyncingMenu(true);
+        restoreDefaultRestaurantMenu();
+        broadcastImmediately();
+        const msg = 'Sultan Restaurant menu and categories successfully synced and broadcast to all devices!';
+        if (Platform.OS === 'web') {
+          window.alert(msg);
+        } else {
+          Alert.alert('Menu Synced', msg);
+        }
+      } catch (err: any) {
+        const errMsg = 'Failed to sync menu: ' + (err.message || '');
+        if (Platform.OS === 'web') window.alert(errMsg);
+        else Alert.alert('Error', errMsg);
+      } finally {
+        setIsSyncingMenu(false);
+      }
+    };
+
+    const confirmMsg = 'Do you want to reset & sync the authentic Sultan Restaurant menu (Kebabs, Karahi, Ribs, Biryani, Kunafa, Deals, etc.) across all devices and Cloud DB?';
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        await doRestore();
+      }
+    } else {
+      Alert.alert(
+        'Sync Sultan Restaurant Menu',
+        confirmMsg,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Sync Menu', onPress: doRestore }
+        ]
+      );
+    }
   };
 
   return (
@@ -721,6 +873,22 @@ export default function MenuManagement() {
 
         <View style={styles.headerButtons}>
           <TouchableOpacity 
+            style={[styles.addButton, { backgroundColor: '#1E3A8A' }]} 
+            onPress={handleFetchRestaurantMenu}
+            disabled={isSyncingMenu}
+            activeOpacity={0.8}
+          >
+            {isSyncingMenu ? (
+              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+            ) : (
+              <Ionicons name="sync-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+            )}
+            <Text style={[styles.addButtonText, { color: '#FFFFFF' }]}>
+              {isSyncingMenu ? 'Syncing...' : 'Fetch Sultan Menu'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             style={[styles.addButton, { backgroundColor: BRAND.burgundy }]} 
             onPress={() => openAddItemModal(true)}
             activeOpacity={0.8}
@@ -731,12 +899,20 @@ export default function MenuManagement() {
 
           <TouchableOpacity 
             style={styles.addButton} 
-            onPress={() => activeTab === 'categories' ? setCatModalVisible(true) : openAddItemModal(false)}
+            onPress={() => {
+              if (activeTab === 'categories') {
+                setCatModalVisible(true);
+              } else if (activeTab === 'regions') {
+                openAddRegionModal();
+              } else {
+                openAddItemModal(false);
+              }
+            }}
             activeOpacity={0.8}
           >
             <Ionicons name="add" size={18} color="#4a121a" style={{ marginRight: 4 }} />
             <Text style={styles.addButtonText}>
-              {activeTab === 'categories' ? 'New Category' : 'New Dish'}
+              {activeTab === 'categories' ? 'New Category' : (activeTab === 'regions' ? 'New Region' : 'New Dish')}
             </Text>
           </TouchableOpacity>
         </View>
@@ -877,6 +1053,22 @@ export default function MenuManagement() {
             Categories ({categories.length})
           </Text>
         </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'regions' && styles.tabActive]}
+          onPress={() => setActiveTab('regions')}
+          activeOpacity={0.7}
+        >
+          <Ionicons 
+            name="globe-outline" 
+            size={16} 
+            color={activeTab === 'regions' ? BRAND.burgundy : BRAND.muted} 
+            style={{ marginRight: 6 }} 
+          />
+          <Text style={[styles.tabText, activeTab === 'regions' && styles.tabTextActive]}>
+            Regions & Cuisines ({regions.length})
+          </Text>
+        </TouchableOpacity>
       </View>
 
       {/* Search & Category Filter Pills */}
@@ -887,7 +1079,7 @@ export default function MenuManagement() {
           </View>
           <TextInput 
             style={styles.searchInput}
-            placeholder={`Search dishes, combos, badges, prices...`}
+            placeholder={`Search dishes, combos, cuisines, badges, prices...`}
             placeholderTextColor="#8A7A70"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -905,6 +1097,7 @@ export default function MenuManagement() {
         </View>
 
         {activeTab === 'items' && (
+<<<<<<< HEAD
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -926,13 +1119,66 @@ export default function MenuManagement() {
               );
             })}
           </ScrollView>
+=======
+          <View style={{ gap: 8 }}>
+            {/* Category Filter Pills */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.categoryPillsScroll}
+            >
+              {['All', ...categories].map(cat => {
+                const isSelected = selectedCategoryFilter === cat;
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
+                    onPress={() => setSelectedCategoryFilter(cat)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            {/* Region / Cuisine Sub-Filter Bar */}
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[styles.categoryPillsScroll, { paddingTop: 2 }]}
+            >
+              <View style={styles.regionFilterLeadBadge}>
+                <Ionicons name="earth" size={12} color="#1E40AF" style={{ marginRight: 4 }} />
+                <Text style={styles.regionFilterLeadText}>Cuisine:</Text>
+              </View>
+              {['All', ...regions].map(reg => {
+                const isSelected = selectedRegionFilter === reg;
+                return (
+                  <TouchableOpacity
+                    key={reg}
+                    style={[styles.regionPill, isSelected && styles.regionPillActive]}
+                    onPress={() => setSelectedRegionFilter(reg)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.regionPillText, isSelected && styles.regionPillTextActive]}>
+                      {reg === 'All' ? 'All Cuisines' : reg}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+>>>>>>> 9210cb0 (feat: regional cuisines module, executive culinary analytics dashboard, juicebar updates and UI improvements)
         )}
       </View>
 
       {/* Main Content Area */}
       <View style={[styles.content, isMobile && styles.contentMobile]}>
         <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
-          {activeTab !== 'categories' ? (
+          {activeTab !== 'categories' && activeTab !== 'regions' ? (
             // ================= MENU ITEMS / DEALS / STOCK LIST =================
             filteredItems.length === 0 ? (
               <View style={styles.emptyWrap}>
@@ -963,33 +1209,45 @@ export default function MenuManagement() {
                         <View style={styles.itemInfo}>
                           <View style={styles.itemHeaderRow}>
                             <Text style={styles.itemCardName} numberOfLines={1}>{item.name}</Text>
-                            {item.badge && (
+                            {item.badge ? (
                               <View style={[styles.badgeTag, item.isDeal ? styles.dealBadgeTag : null]}>
                                 <Text style={[styles.badgeTagText, item.isDeal ? styles.dealBadgeTagText : null]}>
                                   {item.badge}
                                 </Text>
                               </View>
-                            )}
+                            ) : null}
                           </View>
 
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 3 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 3, flexWrap: 'wrap' }}>
                             <View style={styles.catBadge}>
                               <Text style={styles.catBadgeText}>{item.category}</Text>
                             </View>
+                            {item.region ? (
+                              <View style={styles.regionBadge}>
+                                <Ionicons name="earth" size={10} color="#1E40AF" style={{ marginRight: 3 }} />
+                                <Text style={styles.regionBadgeText}>{item.region}</Text>
+                              </View>
+                            ) : null}
                             <Text style={styles.stationText}>
                               {item.station === 'juice' ? '🍹 Juice Bar' : '🍳 Main Kitchen'}
                             </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFF8E7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
+                              <Ionicons name="timer-outline" size={11} color="#B45309" />
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>
+                                {item.prepTimeMin || (item.station === 'juice' ? 5 : 15)}m
+                              </Text>
+                            </View>
                           </View>
 
                           {/* Deal Combo Contents preview */}
-                          {item.isDeal && item.dealItems && item.dealItems.length > 0 && (
+                          {item.isDeal && item.dealItems && item.dealItems.length > 0 ? (
                             <View style={styles.comboPreviewWrap}>
                               <Text style={styles.comboPreviewTitle}>Includes:</Text>
                               <Text style={styles.comboPreviewText} numberOfLines={2}>
                                 {item.dealItems.map(d => `${d.qty}x ${d.name}`).join(' • ')}
                               </Text>
                             </View>
-                          )}
+                          ) : null}
 
                           {/* Pricing & Margin info */}
                           <View style={styles.itemPriceRow}>
@@ -997,11 +1255,11 @@ export default function MenuManagement() {
                               <Text style={styles.itemCardPrice}>
                                 {item.price > 0 ? money(item.price) : 'Variant based'}
                               </Text>
-                              {item.dealOriginalPrice && item.dealOriginalPrice > item.price && (
+                              {item.dealOriginalPrice && item.dealOriginalPrice > item.price ? (
                                 <Text style={styles.originalPriceText}>
                                   Save {money(item.dealOriginalPrice - item.price)}
                                 </Text>
-                              )}
+                              ) : null}
                             </View>
 
                             {/* Option 4: Margin Badge */}
@@ -1086,8 +1344,8 @@ export default function MenuManagement() {
               <View style={styles.table}>
                 <View style={styles.tableHeader}>
                   <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 2.2 }]}>Dish / Combo</Text>
-                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.1 }]}>Category & Area</Text>
-                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>Price / Cost</Text>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>Category & Region</Text>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.1 }]}>Price / Cost</Text>
                   <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1 }]}>Profit Margin</Text>
                   <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>Inventory Stock</Text>
                   <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>Actions</Text>
@@ -1112,30 +1370,43 @@ export default function MenuManagement() {
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <Text style={styles.tableItemName}>{item.name}</Text>
-                            {item.badge && (
+                            {item.badge ? (
                               <View style={[styles.badgeTagSmall, item.isDeal ? styles.dealBadgeTag : null]}>
                                 <Text style={[styles.badgeTagSmallText, item.isDeal ? styles.dealBadgeTagText : null]}>
                                   {item.badge}
                                 </Text>
                               </View>
-                            )}
+                            ) : null}
                           </View>
-                          {item.isDeal && item.dealItems && (
+                          {item.isDeal && item.dealItems && item.dealItems.length > 0 ? (
                             <Text style={styles.comboIncludedMini} numberOfLines={1}>
                               {item.dealItems.map(d => `${d.qty}x ${d.name}`).join(', ')}
                             </Text>
-                          )}
+                          ) : null}
                         </View>
                       </View>
 
-                      {/* Category & Station */}
-                      <View style={[styles.tableCell, { flex: 1.1 }]}>
-                        <View style={styles.catBadge}>
-                          <Text style={styles.catBadgeText}>{item.category}</Text>
+                      {/* Category & Region & Station & Prep Time */}
+                      <View style={[styles.tableCell, { flex: 1.2 }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                          <View style={styles.catBadge}>
+                            <Text style={styles.catBadgeText}>{item.category}</Text>
+                          </View>
+                          {item.region ? (
+                            <View style={styles.regionBadge}>
+                              <Ionicons name="earth" size={10} color="#1E40AF" style={{ marginRight: 2 }} />
+                              <Text style={styles.regionBadgeText}>{item.region}</Text>
+                            </View>
+                          ) : null}
                         </View>
-                        <Text style={styles.stationTextSmall}>
-                          {item.station === 'juice' ? '🍹 Juice Bar' : '🍳 Main Kitchen'}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
+                          <Text style={styles.stationTextSmall}>
+                            {item.station === 'juice' ? '🍹 Juice' : '🍳 Kitchen'}
+                          </Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>
+                            ⏱️ {item.prepTimeMin || (item.station === 'juice' ? 5 : 15)}m
+                          </Text>
+                        </View>
                       </View>
 
                       {/* Price & Cost */}
@@ -1228,7 +1499,7 @@ export default function MenuManagement() {
                 })}
               </View>
             )
-          ) : (
+          ) : activeTab === 'categories' ? (
             // ================= CATEGORIES LIST =================
             filteredCategories.length === 0 ? (
               <View style={styles.emptyWrap}>
@@ -1280,6 +1551,121 @@ export default function MenuManagement() {
                         onPress={() => handleDeleteCategory(cat.name)}
                       >
                         <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )
+          ) : (
+            // ================= REGIONS & CUISINES LIST =================
+            filteredRegions.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <Ionicons name="globe-outline" size={48} color="#ccc" />
+                <Text style={styles.emptyTitle}>No regions or cuisines found</Text>
+                <Text style={styles.emptySubtitle}>Click "New Region" above to add culinary regions like Pakistani, Chinese, Continental, etc.</Text>
+              </View>
+            ) : isMobile ? (
+              // MOBILE VIEW: REGION CARDS
+              <View style={styles.mobileCardsList}>
+                {filteredRegions.map(reg => (
+                  <View key={reg.id} style={styles.categoryCard}>
+                    <View style={styles.categoryCardLeft}>
+                      <View style={[styles.categoryIconBadge, { backgroundColor: '#EFF6FF' }]}>
+                        <Ionicons name="earth" size={22} color="#1D4ED8" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.categoryCardTitle}>{reg.name}</Text>
+                        <Text style={styles.categoryCardCount}>{reg.itemsCount} Dishes assigned</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <TouchableOpacity 
+                        style={[styles.editBtn, { backgroundColor: '#EFF6FF' }]}
+                        onPress={() => {
+                          setSelectedRegionFilter(reg.name);
+                          setActiveTab('items');
+                        }}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="restaurant-outline" size={13} color="#1D4ED8" style={{ marginRight: 3 }} />
+                        <Text style={[styles.editBtnText, { color: '#1D4ED8' }]}>Dishes</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.editBtn}
+                        onPress={() => openEditRegionModal(reg.name)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="pencil" size={13} color={BRAND.burgundy} style={{ marginRight: 3 }} />
+                        <Text style={styles.editBtnText}>Edit</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={styles.deleteCategoryBtn}
+                        onPress={() => handleDeleteRegion(reg.name)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : (
+              // DESKTOP VIEW: REGIONS TABLE
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 2 }]}>Region / Cuisine</Text>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>Assigned Dishes</Text>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2 }]}>Filter Dishes</Text>
+                  <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1.2, textAlign: 'right' }]}>Actions</Text>
+                </View>
+                
+                {filteredRegions.map(reg => (
+                  <View key={reg.id} style={styles.tableRow}>
+                    <View style={[styles.tableCell, { flex: 2, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                      <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="earth" size={18} color="#1D4ED8" />
+                      </View>
+                      <View>
+                        <Text style={{ fontWeight: '800', fontSize: 15, color: BRAND.ink }}>
+                          {reg.name}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: BRAND.muted, marginTop: 1 }}>
+                          Cuisine Classification
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.tableCell, { flex: 1.2 }]}>
+                      <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, alignSelf: 'flex-start' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                          {reg.itemsCount} Dishes
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.tableCell, { flex: 1.2 }]}>
+                      <TouchableOpacity
+                        style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6, alignSelf: 'flex-start' }}
+                        onPress={() => {
+                          setSelectedRegionFilter(reg.name);
+                          setActiveTab('items');
+                        }}
+                      >
+                        <Ionicons name="filter-outline" size={13} color="#1D4ED8" style={{ marginRight: 4 }} />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#1D4ED8' }}>View Dishes</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
+                      <TouchableOpacity 
+                        style={[styles.desktopActionBtn, { backgroundColor: BRAND.burgundySoft }]} 
+                        onPress={() => openEditRegionModal(reg.name)}
+                      >
+                        <Ionicons name="pencil" size={15} color={BRAND.burgundy} />
+                      </TouchableOpacity>
+                      <TouchableOpacity 
+                        style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]} 
+                        onPress={() => handleDeleteRegion(reg.name)}
+                      >
+                        <Ionicons name="trash-outline" size={15} color={BRAND.danger} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1558,6 +1944,54 @@ export default function MenuManagement() {
                     </View>
                   </ScrollView>
 
+                  {/* Region / Cuisine Dropdown */}
+                  <Text style={[styles.inputLabel, { marginTop: 14 }]}>Region / Cuisine</Text>
+                  <TouchableOpacity 
+                    style={styles.dropdownBtn}
+                    activeOpacity={0.8}
+                    onPress={() => setRegionDropdownOpen(!isRegionDropdownOpen)}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="globe-outline" size={16} color="#1E40AF" />
+                      <Text style={[styles.dropdownBtnText, !itemRegion && { color: '#8E8E93' }]}>
+                        {itemRegion || 'Select Region / Cuisine (Optional)'}
+                      </Text>
+                    </View>
+                    <Ionicons name={isRegionDropdownOpen ? "chevron-up" : "chevron-down"} size={20} color="#8E8E93" />
+                  </TouchableOpacity>
+                  
+                  {isRegionDropdownOpen && (
+                    <View style={styles.dropdownList}>
+                      <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
+                        <TouchableOpacity 
+                          style={[styles.dropdownItem, !itemRegion && styles.dropdownItemActive]}
+                          onPress={() => {
+                            setItemRegion('');
+                            setRegionDropdownOpen(false);
+                          }}
+                        >
+                          <Text style={[styles.dropdownItemText, !itemRegion && styles.dropdownItemTextActive]}>
+                            — None / Not Specified —
+                          </Text>
+                        </TouchableOpacity>
+                        {regions.map(reg => (
+                          <TouchableOpacity 
+                            key={reg}
+                            style={[styles.dropdownItem, itemRegion === reg && styles.dropdownItemActive]}
+                            onPress={() => {
+                              setItemRegion(reg);
+                              setRegionDropdownOpen(false);
+                            }}
+                          >
+                            <Text style={[styles.dropdownItemText, itemRegion === reg && styles.dropdownItemTextActive]}>
+                              🌍 {reg}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </ScrollView>
+                    </View>
+                  )}
+
                   {/* Station / Preparation Area */}
                   <Text style={[styles.inputLabel, { marginTop: 14 }]}>Kitchen Routing / Station</Text>
                   <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -1579,13 +2013,58 @@ export default function MenuManagement() {
                         styles.stationSelectBtn, 
                         itemStation === 'juice' && styles.stationSelectBtnActive
                       ]}
-                      onPress={() => setItemStation('juice')}
+                      onPress={() => {
+                        setItemStation('juice');
+                        if (itemPrepTime === '15') setItemPrepTime('5');
+                      }}
                     >
                       <Ionicons name="wine" size={18} color={itemStation === 'juice' ? BRAND.burgundy : BRAND.muted} style={{ marginRight: 6 }} />
                       <Text style={[styles.stationSelectText, itemStation === 'juice' && styles.stationSelectTextActive]}>
                         Juice & Drinks Bar
                       </Text>
                     </TouchableOpacity>
+                  </View>
+
+                  {/* Cooking / Preparation Time (Minutes) */}
+                  <Text style={[styles.inputLabel, { marginTop: 14 }]}>
+                    Cooking / Preparation Time (Minutes)
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[styles.modalInput, { flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 10 }]}>
+                      <Ionicons name="timer-outline" size={18} color="#8E8E93" style={{ marginRight: 8 }} />
+                      <TextInput 
+                        style={{ flex: 1, fontSize: 14, color: '#1C1C1E', height: '100%' }}
+                        placeholder="e.g. 15" 
+                        placeholderTextColor="#8E8E93"
+                        keyboardType="numeric"
+                        value={itemPrepTime} 
+                        onChangeText={setItemPrepTime} 
+                      />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#8E8E93' }}>Minutes</Text>
+                    </View>
+                  </View>
+
+                  {/* Quick Preset Buttons */}
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {['5', '10', '15', '20', '25', '35'].map((mins) => (
+                      <TouchableOpacity
+                        key={mins}
+                        style={[
+                          styles.badgeOptionPill,
+                          itemPrepTime === mins && styles.badgeOptionPillActive,
+                          { paddingHorizontal: 10, paddingVertical: 4 }
+                        ]}
+                        onPress={() => setItemPrepTime(mins)}
+                      >
+                        <Text style={[
+                          styles.badgeOptionPillText,
+                          itemPrepTime === mins && styles.badgeOptionPillTextActive,
+                          { fontSize: 11 }
+                        ]}>
+                          ⏱️ {mins} min
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
 
                   {/* Badge Selection */}
@@ -1983,7 +2462,7 @@ export default function MenuManagement() {
                       )}
 
                       {/* Original Value & Discount calculation */}
-                      {itemDealOriginalPrice && parseFloat(itemDealOriginalPrice) > 0 ? (
+                      {Boolean(itemDealOriginalPrice && parseFloat(itemDealOriginalPrice) > 0) ? (
                         <View style={styles.dealCalculationCard}>
                           <View style={styles.dealCalculationRow}>
                             <Text style={styles.dealCalcLabel}>Sum of Individual Dishes:</Text>
@@ -1995,14 +2474,14 @@ export default function MenuManagement() {
                               {itemPrice ? money(parseFloat(itemPrice)) : 'Set in Step 3'}
                             </Text>
                           </View>
-                          {itemPrice && parseFloat(itemPrice) < parseFloat(itemDealOriginalPrice) && (
+                          {Boolean(itemPrice && parseFloat(itemPrice) < parseFloat(itemDealOriginalPrice)) ? (
                             <View style={styles.dealSavingsBanner}>
                               <Ionicons name="sparkles" size={16} color={BRAND.purple} />
                               <Text style={styles.dealSavingsText}>
                                 Customer Saves {money(parseFloat(itemDealOriginalPrice) - parseFloat(itemPrice))} ({Math.round(((parseFloat(itemDealOriginalPrice) - parseFloat(itemPrice)) / parseFloat(itemDealOriginalPrice)) * 100)}% Discount)
                               </Text>
                             </View>
-                          )}
+                          ) : null}
                         </View>
                       ) : null}
 
@@ -2149,6 +2628,79 @@ export default function MenuManagement() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.saveBtn} onPress={handleAddCategory}>
                 <Text style={styles.saveBtnText}>Save Category</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add / Edit Region Modal */}
+      <Modal visible={isRegionModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, isMobile && styles.modalContentMobile, { maxWidth: 500 }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {editingRegion ? 'Edit Region / Cuisine' : 'Add New Region / Cuisine'}
+                </Text>
+                <Text style={styles.modalSub}>
+                  {editingRegion 
+                    ? `Updating "${editingRegion}" will automatically update all dishes assigned to it.` 
+                    : 'Add culinary regions like Pakistani, Chinese, Continental, Arabic, etc.'}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setRegionModalVisible(false)}>
+                <Ionicons name="close" size={24} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.inputLabel}>Region / Cuisine Name *</Text>
+            <TextInput 
+              style={styles.modalInput} 
+              placeholder="e.g. Chinese, Continental, Turkish, Arabic, Pakistani..." 
+              placeholderTextColor="#8E8E93"
+              value={regionNameInput} 
+              onChangeText={setRegionNameInput} 
+              autoFocus
+            />
+
+            {/* Quick Presets / Suggestions */}
+            <Text style={[styles.inputLabel, { marginTop: 12, marginBottom: 6 }]}>
+              Popular Regional Cuisines:
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 }}>
+              {['Pakistani', 'Chinese', 'Continental', 'Arabic', 'Turkish', 'Italian', 'Fast Food', 'Mexican', 'Thai'].map(preset => (
+                <TouchableOpacity
+                  key={preset}
+                  style={{
+                    backgroundColor: regionNameInput === preset ? '#EFF6FF' : '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: regionNameInput === preset ? '#3B82F6' : '#CBD5E1',
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                  }}
+                  onPress={() => setRegionNameInput(preset)}
+                >
+                  <Text style={{
+                    fontSize: 12,
+                    fontWeight: '700',
+                    color: regionNameInput === preset ? '#1D4ED8' : '#334155',
+                  }}>
+                    {preset}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setRegionModalVisible(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSaveRegion}>
+                <Text style={styles.saveBtnText}>
+                  {editingRegion ? 'Update Region' : 'Save Region'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2499,6 +3051,57 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: BRAND.ink,
     fontWeight: '600',
+  },
+  regionBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  regionBadgeText: {
+    fontSize: 10.5,
+    color: '#1E40AF',
+    fontWeight: '700',
+  },
+  regionFilterLeadBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 16,
+    marginRight: 4,
+  },
+  regionFilterLeadText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#1E40AF',
+  },
+  regionPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  regionPillActive: {
+    backgroundColor: '#1E40AF',
+    borderColor: '#1E40AF',
+  },
+  regionPillText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  regionPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   stationText: {
     fontSize: 11,

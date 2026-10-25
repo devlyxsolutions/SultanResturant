@@ -2,7 +2,9 @@
   "tables": [
     {
       "id": "1",
-      "zone": "Main Hall",
+      "floor": "Ground Floor",
+      "zone": "Ground Floor",
+      "seatingType": "tables",
       "name": "T-01",
       "seats": 4,
       "status": "occupied",
@@ -42,7 +44,9 @@
     },
     {
       "id": "2",
-      "zone": "Main Hall",
+      "floor": "Ground Floor",
+      "zone": "Ground Floor",
+      "seatingType": "tables",
       "name": "T-02",
       "seats": 2,
       "status": "reserved",
@@ -64,7 +68,9 @@
     },
     {
       "id": "3",
-      "zone": "Main Hall",
+      "floor": "Ground Floor",
+      "zone": "Ground Floor",
+      "seatingType": "tables",
       "name": "T-03",
       "seats": 4,
       "status": "available",
@@ -74,7 +80,9 @@
     },
     {
       "id": "4",
+      "floor": "Rooftop",
       "zone": "Rooftop",
+      "seatingType": "tables",
       "name": "R-01",
       "seats": 4,
       "status": "occupied",
@@ -93,7 +101,9 @@
     },
     {
       "id": "5",
-      "zone": "VIP",
+      "floor": "3rd Floor",
+      "zone": "3rd Floor",
+      "seatingType": "couches",
       "name": "V-01",
       "seats": 8,
       "status": "available",
@@ -103,7 +113,10 @@
     },
     {
       "name": "MC-01",
-      "zone": "Majlis Floor 1",
+      "floor": "1st Floor",
+      "zone": "1st Floor",
+      "seatingType": "majlis",
+      "cabinNumber": "MC-01",
       "seats": 6,
       "status": "available",
       "id": "t1791104164902"
@@ -2211,10 +2224,11 @@
     "Karahi & Handi"
   ],
   "zones": [
-    "Main Hall",
-    "Rooftop",
-    "VIP",
-    "Majlis Floor 1"
+    "Ground Floor",
+    "1st Floor",
+    "2nd Floor",
+    "3rd Floor",
+    "Rooftop"
   ],
   "staff": [
     {

@@ -99,8 +99,27 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         <span>Paid via ${p.type.toUpperCase()}:</span>
         <span style="font-weight: bold;">Rs. ${(p.amount || 0).toLocaleString()}</span>
       </div>
+      ${p.tendered && p.tendered > p.amount ? `
+        <div class="summary-row" style="color: #444; font-size: 90%;">
+          <span>Cash Tendered (وصول):</span>
+          <span>Rs. ${(p.tendered || 0).toLocaleString()}</span>
+        </div>
+        <div class="summary-row" style="color: #059669; font-weight: bold;">
+          <span>Change Returned (واپس رقم):</span>
+          <span>Rs. ${(p.change || (p.tendered - p.amount) || 0).toLocaleString()}</span>
+        </div>
+      ` : ''}
     `).join('')
-    : '';
+    : (invoice.tenderedAmount && invoice.changeReturned) ? `
+      <div class="summary-row">
+        <span>Cash Tendered (وصول):</span>
+        <span>Rs. ${(invoice.tenderedAmount || 0).toLocaleString()}</span>
+      </div>
+      <div class="summary-row" style="color: #059669; font-weight: bold;">
+        <span>Change Returned (واپس رقم):</span>
+        <span>Rs. ${(invoice.changeReturned || 0).toLocaleString()}</span>
+      </div>
+    ` : '';
 
   const htmlContent = `
     <!DOCTYPE html>
@@ -732,14 +751,39 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
         <Text style={styles.dashedLine}>================================</Text>
 
-        {invoice.payments && invoice.payments.length > 0 && (
+        {invoice.payments && invoice.payments.length > 0 ? (
           invoice.payments.map((p, idx) => (
-            <View key={idx} style={styles.summaryRow}>
-              <Text style={styles.summaryKey}>Paid via {p.type.toUpperCase()}:</Text>
-              <Text style={styles.summaryVal}>Rs. {(p.amount || 0).toLocaleString()}</Text>
-            </View>
+            <React.Fragment key={idx}>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryKey}>Paid via {p.type.toUpperCase()}:</Text>
+                <Text style={styles.summaryVal}>Rs. {(p.amount || 0).toLocaleString()}</Text>
+              </View>
+              {p.tendered && p.tendered > p.amount ? (
+                <>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryKey, { color: '#64748B' }]}>Cash Tendered (وصول):</Text>
+                    <Text style={[styles.summaryVal, { color: '#475569' }]}>Rs. {(p.tendered || 0).toLocaleString()}</Text>
+                  </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={[styles.summaryKey, { color: '#059669', fontWeight: 'bold' }]}>Change Returned (واپس):</Text>
+                    <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>Rs. {(p.change || (p.tendered - p.amount) || 0).toLocaleString()}</Text>
+                  </View>
+                </>
+              ) : null}
+            </React.Fragment>
           ))
-        )}
+        ) : (invoice.tenderedAmount && invoice.changeReturned) ? (
+          <>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryKey, { color: '#64748B' }]}>Cash Tendered (وصول):</Text>
+              <Text style={[styles.summaryVal, { color: '#475569' }]}>Rs. {(invoice.tenderedAmount || 0).toLocaleString()}</Text>
+            </View>
+            <View style={styles.summaryRow}>
+              <Text style={[styles.summaryKey, { color: '#059669', fontWeight: 'bold' }]}>Change Returned (واپس):</Text>
+              <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>Rs. {(invoice.changeReturned || 0).toLocaleString()}</Text>
+            </View>
+          </>
+        ) : null}
 
         <Text style={styles.dashedLine}>- - - - - - - - - - - - - - - - - - - - - -</Text>
 

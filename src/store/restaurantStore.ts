@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
+import { SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
+import { getTableFloor, getTableSeatingType } from '../constants/floors';
 
 export type Table = {
   id: string;
@@ -33,6 +35,30 @@ export type OrderItem = {
   notes?: string;
   completed: boolean;
   station?: 'main' | 'juice';
+  prepTimeMin?: number;
+  itemStatus?: 'pending' | 'cooking' | 'ready' | 'served';
+  readyAt?: number;
+  servedAt?: number;
+};
+
+export type StationStatusMap = {
+  main?: 'pending' | 'cooking' | 'ready' | 'served';
+  juice?: 'pending' | 'cooking' | 'ready' | 'served';
+};
+
+export type FoodReadyAlert = {
+  id: string;
+  ticketId: string;
+  tableId: string;
+  tableName: string;
+  server?: string;
+  station: 'main' | 'juice' | 'all';
+  stationLabel: string;
+  itemsSummary: string;
+  time: number;
+  type?: 'ready' | 'cooking_started' | 'item_ready';
+  singleItemName?: string;
+  estimatedMinutes?: number;
 };
 
 export type Ticket = {
@@ -43,10 +69,13 @@ export type Ticket = {
   tableName: string;
   server: string;
   timePlaced: number;
-  status: 'cooking' | 'ready' | 'served';
+  cookingStartedAt?: number;
+  estimatedPrepTime?: number;
+  status: 'pending' | 'cooking' | 'ready' | 'served';
   items: OrderItem[];
   isAddOn?: boolean;
   roundNumber?: number;
+  stationStatuses?: StationStatusMap;
 };
 
 export type MenuVariant = {
@@ -67,8 +96,10 @@ export type MenuItem = {
   name: string;
   price: number;
   category: string;
+  region?: string;
   variants?: MenuVariant[];
   station?: 'main' | 'juice';
+  prepTimeMin?: number; // Cooking / preparation time in minutes
   // Option 3: Image & Visuals
   imageUri?: string;
   description?: string;
@@ -131,6 +162,8 @@ export type InvoiceFeedback = {
 export type Payment = {
   type: 'cash' | 'card' | 'online';
   amount: number;
+  tendered?: number;
+  change?: number;
 };
 
 export * from '../types/returns';
@@ -156,6 +189,8 @@ export type Invoice = {
   serviceCharge?: number;
   total: number;
   payments: Payment[];
+  tenderedAmount?: number;
+  changeReturned?: number;
   status?: 'settled' | 'voided' | 'refunded';
   voidReason?: string;
   voidedAt?: number;
@@ -265,20 +300,28 @@ type RestaurantState = {
   staff: StaffMember[];
   menuItems: MenuItem[];
   categories: string[];
+  regions: string[];
   zones: string[];
   floors: Floor[];
   reservations: Reservation[];
-  lastBillPaidAlert?: { tableId: string; tableName: string; billTotal: number; time: number } | null;
+  lastBillPaidAlert?: { id?: string; tableId: string; tableName: string; billTotal: number; time: number } | null;
+  lastFoodReadyAlert?: FoodReadyAlert | null;
   
-  // Actions
   placeOrder: (tableId: string, serverName: string, items: {item: MenuItem, qty: number, notes?: string}[], isAddOn?: boolean) => void;
+  startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
+  markItemReady: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
+  markItemServed: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
   toggleTicketItem: (ticketId: string, itemId: string) => void;
-  bumpTicket: (ticketId: string) => void;
-  updateTicketStatus: (ticketId: string, status: Ticket['status']) => void;
+  bumpTicket: (ticketId: string, station?: 'main' | 'juice') => void;
+  updateTicketStatus: (ticketId: string, status: Ticket['status'], station?: 'main' | 'juice') => void;
   serveTableTickets: (tableId: string) => void;
   markTableBilled: (tableId: string, invoiceId?: string) => void;
   clearBillPaidAlert: (tableIdOrName?: string) => void;
+  clearFoodReadyAlert: (alertIdOrTableId?: string) => void;
   settleBill: (tableId: string) => void;
+  dismissTicket: (ticketId: string) => void;
+  clearTableTickets: (tableId: string) => void;
+  clearAllOldTickets: () => void;
   transferTable: (fromTableId: string, toTableId: string) => void;
   mergeTables: (primaryTableId: string, secondaryTableId: string) => void;
   assignTableServer: (tableId: string, serverName: string) => void;
@@ -292,6 +335,10 @@ type RestaurantState = {
   adjustMenuItemStock: (id: string, deltaOrQuantity: number, mode?: 'set' | 'add') => void;
   addCategory: (categoryName: string) => void;
   deleteCategory: (categoryName: string) => void;
+  addRegion: (regionName: string) => void;
+  updateRegion: (oldName: string, newName: string) => void;
+  deleteRegion: (regionName: string) => void;
+  restoreDefaultRestaurantMenu: () => void;
   addTable: (table: Omit<Table, 'id' | 'status'> & { status?: Table['status'] }) => void;
   updateTable: (id: string, table: Partial<Omit<Table, 'id'>>) => void;
   deleteTable: (id: string) => void;
@@ -398,6 +445,16 @@ const INITIAL_TABLES: Table[] = [
   { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'occupied', billTotal: 12500, server: 'Hamza' },
   { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
   { id: 'f1-m4', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 4', name: 'Cabin 4', seats: 6, status: 'reserved', reservationId: 'res-1' },
+
+  // 2nd Floor (Banquet & Executive)
+  { id: 'f2-t1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'tables', name: 'Banquet T-01', seats: 10, status: 'available' },
+  { id: 'f2-c1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'couches', name: 'Executive Couch 1', seats: 8, status: 'available' },
+  { id: 'f2-m1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'majlis', cabinNumber: 'Royal Cabin 1', name: 'Royal Cabin 1', seats: 12, status: 'available' },
+
+  // 3rd Floor (VIP & Royal Majlis)
+  { id: 'f3-t1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'tables', name: 'VIP T-01', seats: 6, status: 'available' },
+  { id: 'f3-c1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'couches', name: 'VIP Lounge 1', seats: 8, status: 'available' },
+  { id: 'f3-m1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'majlis', cabinNumber: 'Sultan Majlis 1', name: 'Sultan Majlis 1', seats: 14, status: 'available' },
 
   // Rooftop
   { id: 'rt-1', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-01', seats: 4, status: 'available' },
@@ -539,159 +596,9 @@ const INITIAL_FEEDBACKS: InvoiceFeedback[] = [
   }
 ];
 
-const INITIAL_MENU: MenuItem[] = [
-  {
-    id: 'm1',
-    name: 'Sultan Kebab',
-    price: 1450,
-    costPrice: 650,
-    category: 'Mains',
-    imageUri: 'https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80',
-    description: 'Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.',
-    badge: 'Chef Special',
-    trackStock: true,
-    stockQty: 35,
-    lowStockThreshold: 10,
-    station: 'main'
-  },
-  {
-    id: 'm2',
-    name: 'Chicken Karahi',
-    price: 1850,
-    costPrice: 820,
-    category: 'Mains',
-    imageUri: 'https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80',
-    description: 'Fresh chicken cooked in pure desi ghee, fresh tomatoes, ginger and green chillies.',
-    badge: 'Best Seller',
-    trackStock: true,
-    stockQty: 22,
-    lowStockThreshold: 5,
-    station: 'main'
-  },
-  {
-    id: 'm3',
-    name: 'Hummus & Pita',
-    price: 650,
-    costPrice: 220,
-    category: 'Appetizers',
-    imageUri: 'https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80',
-    description: 'Creamy chickpea dip with extra virgin olive oil and freshly baked pita bread.',
-    badge: 'Healthy',
-    trackStock: true,
-    stockQty: 40,
-    lowStockThreshold: 10,
-    station: 'main'
-  },
-  {
-    id: 'm4',
-    name: 'Kunafa',
-    price: 850,
-    costPrice: 320,
-    category: 'Desserts',
-    imageUri: 'https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80',
-    description: 'Crunchy golden pastry filled with stretchy sweet cheese, soaked in rose syrup & pistachios.',
-    badge: 'Signature',
-    trackStock: true,
-    stockQty: 18,
-    lowStockThreshold: 6,
-    station: 'main'
-  },
-  {
-    id: 'm5',
-    name: 'Mint Margarita',
-    price: 450,
-    costPrice: 120,
-    category: 'Drinks',
-    imageUri: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80',
-    description: 'Blended fresh mint leaves, lemon juice, soda and crushed ice.',
-    badge: 'Chilled',
-    trackStock: true,
-    stockQty: 50,
-    lowStockThreshold: 15,
-    station: 'juice'
-  },
-  { 
-    id: 'm6', 
-    name: 'Fajita Pizza', 
-    price: 1400,
-    costPrice: 550,
-    category: 'Mains',
-    imageUri: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80',
-    description: 'Crispy crust loaded with fajita chicken, bell peppers, olives and mozzarella.',
-    badge: 'Popular',
-    trackStock: false,
-    station: 'main',
-    variants: [
-      { name: 'Small (7")', price: 850 },
-      { name: 'Medium (10")', price: 1400 },
-      { name: 'Large (13")', price: 1950 },
-      { name: 'Family (16")', price: 2500 }
-    ]
-  },
-  {
-    id: 'm7',
-    name: 'Mutton Ribs',
-    price: 3500,
-    costPrice: 1800,
-    category: 'Mains',
-    imageUri: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80',
-    description: 'Slow-smoked juicy mutton ribs marinated in Sultan royal rub.',
-    badge: 'Signature',
-    trackStock: true,
-    stockQty: 8,
-    lowStockThreshold: 4,
-    station: 'main',
-    variants: [
-      { name: 'Half KG', price: 3500 },
-      { name: '1 KG', price: 6800 }
-    ]
-  },
-  {
-    id: 'deal1',
-    name: 'Sultan Family Feast (4-5 Persons)',
-    price: 4999,
-    costPrice: 2300,
-    category: 'Deals',
-    imageUri: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80',
-    description: 'Complete family banquet: 1x Chicken Karahi + 2x Sultan Kebabs + 1x Medium Pizza + 2x Mint Margaritas + 1x Kunafa Dessert.',
-    badge: 'Family Deal',
-    isDeal: true,
-    dealOriginalPrice: 6050,
-    dealItems: [
-      { menuItemId: 'm2', name: 'Chicken Karahi', qty: 1, price: 1850 },
-      { menuItemId: 'm1', name: 'Sultan Kebab', qty: 2, price: 1450 },
-      { menuItemId: 'm6', name: 'Fajita Pizza (Medium)', qty: 1, price: 1400 },
-      { menuItemId: 'm5', name: 'Mint Margarita', qty: 2, price: 450 },
-      { menuItemId: 'm4', name: 'Kunafa', qty: 1, price: 850 }
-    ],
-    trackStock: true,
-    stockQty: 15,
-    lowStockThreshold: 5,
-    station: 'main'
-  },
-  {
-    id: 'deal2',
-    name: 'Royal Couple Platter (2 Persons)',
-    price: 2850,
-    costPrice: 1250,
-    category: 'Deals',
-    imageUri: 'https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80',
-    description: 'Perfect for two: 2x Sultan Kebabs + 1x Hummus & Pita + 2x Mint Margaritas + 1x Kunafa Dessert.',
-    badge: 'Couple Deal',
-    isDeal: true,
-    dealOriginalPrice: 3400,
-    dealItems: [
-      { menuItemId: 'm1', name: 'Sultan Kebab', qty: 2, price: 1450 },
-      { menuItemId: 'm3', name: 'Hummus & Pita', qty: 1, price: 650 },
-      { menuItemId: 'm5', name: 'Mint Margarita', qty: 2, price: 450 },
-      { menuItemId: 'm4', name: 'Kunafa', qty: 1, price: 850 }
-    ],
-    trackStock: true,
-    stockQty: 20,
-    lowStockThreshold: 5,
-    station: 'main'
-  }
-];
+export const INITIAL_MENU: MenuItem[] = SULTAN_DEFAULT_MENU;
+export const INITIAL_CATEGORIES: string[] = SULTAN_DEFAULT_CATEGORIES;
+export const INITIAL_REGIONS: string[] = SULTAN_DEFAULT_REGIONS;
 
 const INITIAL_STAFF: StaffMember[] = [
   {
@@ -1032,8 +939,8 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     if (table.status === 'billed') return table;
 
     const tableTickets = safeTickets.filter(t => t.tableId === table.id);
-    const activeCookingOrReady = tableTickets.filter(t => t.status === 'cooking' || t.status === 'ready');
-    const hasUnbilledTickets = tableTickets.some(t => t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
+    const activeCookingOrReady = tableTickets.filter(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready');
+    const hasUnbilledTickets = tableTickets.some(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
 
     if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
       const ticketTotal = tableTickets.reduce((sum, t) =>
@@ -1096,7 +1003,8 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
       ],
       menuItems: INITIAL_MENU,
-      categories: ['Appetizers', 'Mains', 'Desserts', 'Drinks', 'Deals'],
+      categories: INITIAL_CATEGORIES,
+      regions: INITIAL_REGIONS,
       zones: INITIAL_FLOORS.map(f => f.name),
       floors: INITIAL_FLOORS,
 
@@ -1109,15 +1017,29 @@ export const useRestaurantStore = create<RestaurantState>()(
         const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
         const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
+        const hasMain = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'main');
+        const hasJuice = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'juice');
+
+        const maxPrepTime = Math.max(
+          ...orderItems.map(oi => oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15)),
+          10
+        );
+
         const newTicket: Ticket = {
           id: newTicketId,
           tableId, // can be dummy like 'takeaway' or actual tableId
           tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
           server: serverName,
           timePlaced: Date.now(),
-          status: 'cooking',
+          cookingStartedAt: undefined,
+          estimatedPrepTime: maxPrepTime,
+          status: 'pending',
           isAddOn: isActuallyAddOn,
           roundNumber: isActuallyAddOn ? roundNumber : 1,
+          stationStatuses: {
+            main: hasMain ? 'pending' : undefined,
+            juice: hasJuice ? 'pending' : undefined,
+          },
           items: orderItems.map(oi => ({
             id: oi.item.id,
             name: oi.item.name,
@@ -1125,7 +1047,9 @@ export const useRestaurantStore = create<RestaurantState>()(
             qty: oi.qty,
             notes: oi.notes,
             completed: false,
-            station: oi.item.station || 'main'
+            station: oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main'),
+            prepTimeMin: oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15),
+            itemStatus: 'pending',
           }))
         };
 
@@ -1141,8 +1065,9 @@ export const useRestaurantStore = create<RestaurantState>()(
           return m;
         });
 
+        notifySync();
         return {
-          tickets: [...state.tickets, newTicket],
+          tickets: [newTicket, ...state.tickets],
           menuItems: updatedMenuItems,
           tables: table 
             ? state.tables.map(t => {
@@ -1160,7 +1085,9 @@ export const useRestaurantStore = create<RestaurantState>()(
                       price: oi.item.price,
                       qty: oi.qty,
                       notes: oi.notes,
-                      completed: false
+                      completed: false,
+                      prepTimeMin: oi.item.prepTimeMin || 15,
+                      itemStatus: 'pending'
                     });
                   }
                 });
@@ -1176,44 +1103,475 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
-      toggleTicketItem: (ticketId, itemId) => set((state) => ({
-        tickets: state.tickets.map(t => {
-          if (t.id === ticketId) {
-            return {
-              ...t,
-              items: t.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i)
-            };
-          }
-          return t;
-        })
-      })),
-
-      bumpTicket: (ticketId) => set((state) => {
+      startCookingTicket: (ticketId, station) => set((state) => {
         const ticket = state.tickets.find(t => t.id === ticketId);
         if (!ticket) return state;
 
+        const now = Date.now();
+        const currentStationStatuses: StationStatusMap = {
+          main: ticket.items.some(i => (i.station || 'main') === 'main') 
+            ? (ticket.stationStatuses?.main || ticket.status) 
+            : undefined,
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
+            ? (ticket.stationStatuses?.juice || ticket.status) 
+            : undefined,
+        };
+
+        if (station) {
+          currentStationStatuses[station] = 'cooking';
+        } else {
+          if (currentStationStatuses.main) currentStationStatuses.main = 'cooking';
+          if (currentStationStatuses.juice) currentStationStatuses.juice = 'cooking';
+        }
+
+        const updatedItems: OrderItem[] = ticket.items.map(i => {
+          if (!station || (i.station || 'main') === station) {
+            const nextStatus: OrderItem['itemStatus'] = (i.itemStatus === 'ready' || i.itemStatus === 'served') ? i.itemStatus : 'cooking';
+            return {
+              ...i,
+              itemStatus: nextStatus
+            };
+          }
+          return i;
+        });
+
+        const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
+        let overallStatus: Ticket['status'] = 'cooking';
+        if (activeStatuses.every(s => s === 'served')) overallStatus = 'served';
+        else if (activeStatuses.every(s => s === 'ready' || s === 'served')) overallStatus = 'ready';
+        else if (activeStatuses.some(s => s === 'cooking')) overallStatus = 'cooking';
+        else if (activeStatuses.every(s => s === 'pending')) overallStatus = 'pending';
+
+        const stationLabel = station === 'juice' ? 'Juice Bar' : (station === 'main' ? 'Kitchen' : 'Kitchen & Bar');
+        const stationItems = ticket.items.filter(i => !station || (i.station || 'main') === station);
+        const maxPrep = Math.max(...stationItems.map(i => i.prepTimeMin || (station === 'juice' ? 5 : 15)), 10);
+
+        const cookingAlert: FoodReadyAlert = {
+          id: `cook_${ticket.id}_${station || 'all'}_${now}`,
+          ticketId: ticket.id,
+          tableId: ticket.tableId,
+          tableName: ticket.tableName,
+          server: ticket.server,
+          station: station || 'all',
+          stationLabel,
+          itemsSummary: `Cooking started! (Timer: ${maxPrep} mins)`,
+          type: 'cooking_started',
+          estimatedMinutes: maxPrep,
+          time: now,
+        };
+
+        notifySync();
         return {
-          tickets: state.tickets.map(t => t.id === ticketId ? { ...t, status: 'served' } : t),
+          tickets: state.tickets.map(t => t.id === ticketId ? {
+            ...t,
+            cookingStartedAt: t.cookingStartedAt || now,
+            status: overallStatus,
+            stationStatuses: currentStationStatuses,
+            items: updatedItems,
+          } : t),
+          lastFoodReadyAlert: cookingAlert,
         };
       }),
 
-      updateTicketStatus: (ticketId, status) => set((state) => ({
-        tickets: state.tickets.map(t => t.id === ticketId ? { ...t, status } : t)
-      })),
+      markItemReady: (ticketId, itemId, station) => set((state) => {
+        const ticket = state.tickets.find(t => t.id === ticketId);
+        if (!ticket) return state;
+
+        const targetItem = ticket.items.find(i => i.id === itemId);
+        if (!targetItem) return state;
+
+        const itemStation = (targetItem.station || 'main') as 'main' | 'juice';
+        const now = Date.now();
+
+        const updatedItems: OrderItem[] = ticket.items.map(i => {
+          if (i.id === itemId) {
+            return {
+              ...i,
+              itemStatus: 'ready' as const,
+              completed: true,
+              readyAt: now,
+            };
+          }
+          return i;
+        });
+
+        const stationItems = updatedItems.filter(i => (i.station || 'main') === itemStation);
+        const allStationItemsReadyOrServed = stationItems.length > 0 && stationItems.every(i => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed);
+
+        const currentStationStatuses: StationStatusMap = {
+          main: ticket.items.some(i => (i.station || 'main') === 'main') 
+            ? (ticket.stationStatuses?.main || ticket.status) 
+            : undefined,
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
+            ? (ticket.stationStatuses?.juice || ticket.status) 
+            : undefined,
+        };
+
+        if (allStationItemsReadyOrServed) {
+          currentStationStatuses[itemStation] = 'ready';
+        }
+
+        const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
+        let overallStatus: Ticket['status'] = ticket.status;
+        if (activeStatuses.every(s => s === 'served')) overallStatus = 'served';
+        else if (activeStatuses.every(s => s === 'ready' || s === 'served')) overallStatus = 'ready';
+
+        const alert: FoodReadyAlert = {
+          id: `item_ready_${ticket.id}_${itemId}_${now}`,
+          ticketId: ticket.id,
+          tableId: ticket.tableId,
+          tableName: ticket.tableName,
+          server: ticket.server,
+          station: itemStation,
+          stationLabel: itemStation === 'juice' ? 'Juice Bar' : 'Kitchen',
+          itemsSummary: `${targetItem.qty}x ${targetItem.name} (Ready to Serve Now!)`,
+          type: 'item_ready',
+          singleItemName: targetItem.name,
+          time: now,
+        };
+
+        notifySync();
+        return {
+          tickets: state.tickets.map(t => t.id === ticketId ? {
+            ...t,
+            items: updatedItems,
+            status: overallStatus,
+            stationStatuses: currentStationStatuses,
+          } : t),
+          lastFoodReadyAlert: alert,
+        };
+      }),
+
+      markItemServed: (ticketId, itemId, station) => set((state) => {
+        const ticket = state.tickets.find(t => t.id === ticketId);
+        if (!ticket) return state;
+
+        const targetItem = ticket.items.find(i => i.id === itemId);
+        if (!targetItem) return state;
+
+        const itemStation = (targetItem.station || 'main') as 'main' | 'juice';
+        const now = Date.now();
+
+        const updatedItems: OrderItem[] = ticket.items.map(i => {
+          if (i.id === itemId) {
+            return {
+              ...i,
+              itemStatus: 'served' as const,
+              completed: true,
+              servedAt: now,
+            };
+          }
+          return i;
+        });
+
+        const stationItems = updatedItems.filter(i => (i.station || 'main') === itemStation);
+        const allStationItemsServed = stationItems.length > 0 && stationItems.every(i => i.itemStatus === 'served');
+
+        const currentStationStatuses: StationStatusMap = {
+          main: ticket.items.some(i => (i.station || 'main') === 'main') 
+            ? (ticket.stationStatuses?.main || ticket.status) 
+            : undefined,
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
+            ? (ticket.stationStatuses?.juice || ticket.status) 
+            : undefined,
+        };
+
+        if (allStationItemsServed) {
+          currentStationStatuses[itemStation] = 'served';
+        }
+
+        const allItemsServed = updatedItems.every(i => i.itemStatus === 'served' || i.completed);
+        const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
+        let overallStatus: Ticket['status'] = ticket.status;
+        if (allItemsServed || activeStatuses.every(s => s === 'served')) {
+          overallStatus = 'served';
+        }
+
+        notifySync();
+        return {
+          tickets: state.tickets.map(t => t.id === ticketId ? {
+            ...t,
+            items: updatedItems,
+            status: overallStatus,
+            stationStatuses: currentStationStatuses,
+          } : t),
+        };
+      }),
+
+      toggleTicketItem: (ticketId, itemId) => set((state) => {
+        let updatedAlert: FoodReadyAlert | null = state.lastFoodReadyAlert || null;
+
+        const updatedTickets = state.tickets.map(t => {
+          if (t.id === ticketId) {
+            const targetItem = t.items.find(i => i.id === itemId);
+            const itemStation = (targetItem?.station || 'main') as 'main' | 'juice';
+
+            const updatedItems = t.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
+            
+            const currentStationStatuses: StationStatusMap = {
+              main: t.items.some(i => (i.station || 'main') === 'main') 
+                ? (t.stationStatuses?.main || t.status) 
+                : undefined,
+              juice: t.items.some(i => (i.station || 'main') === 'juice') 
+                ? (t.stationStatuses?.juice || t.status) 
+                : undefined,
+            };
+
+            const stationItems = updatedItems.filter(i => (i.station || 'main') === itemStation);
+            const allStationCompleted = stationItems.length > 0 && stationItems.every(i => i.completed);
+
+            if (allStationCompleted && currentStationStatuses[itemStation] === 'cooking') {
+              currentStationStatuses[itemStation] = 'ready';
+              const summary = stationItems.map(i => `${i.qty}x ${i.name}`).join(', ');
+              updatedAlert = {
+                id: `ready_${t.id}_${itemStation}_${Date.now()}`,
+                ticketId: t.id,
+                tableId: t.tableId,
+                tableName: t.tableName,
+                server: t.server,
+                station: itemStation,
+                stationLabel: itemStation === 'juice' ? 'Juice Bar' : 'Kitchen',
+                itemsSummary: summary || 'Items Ready for Pickup',
+                time: Date.now(),
+              };
+            } else if (!allStationCompleted && currentStationStatuses[itemStation] === 'ready') {
+              currentStationStatuses[itemStation] = 'cooking';
+            }
+
+            const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+            let overallStatus: Ticket['status'] = t.status;
+            if (activeStatuses.length > 0) {
+              if (activeStatuses.every(s => s === 'served')) {
+                overallStatus = 'served';
+              } else if (activeStatuses.every(s => s === 'ready' || s === 'served')) {
+                overallStatus = 'ready';
+              } else {
+                overallStatus = 'cooking';
+              }
+            }
+
+            return {
+              ...t,
+              items: updatedItems,
+              stationStatuses: currentStationStatuses,
+              status: overallStatus
+            };
+          }
+          return t;
+        });
+
+        notifySync();
+        return {
+          tickets: updatedTickets,
+          lastFoodReadyAlert: updatedAlert
+        };
+      }),
+
+      bumpTicket: (ticketId, station) => set((state) => {
+        const ticket = state.tickets.find(t => t.id === ticketId);
+        if (!ticket) return state;
+
+        let updatedAlert = state.lastFoodReadyAlert;
+        if (updatedAlert && updatedAlert.ticketId === ticketId && (!station || updatedAlert.station === station || updatedAlert.station === 'all')) {
+          updatedAlert = null;
+        }
+
+        if (station) {
+          const currentStationStatuses: StationStatusMap = {
+            main: ticket.items.some(i => (i.station || 'main') === 'main') 
+              ? (ticket.stationStatuses?.main || ticket.status) 
+              : undefined,
+            juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
+              ? (ticket.stationStatuses?.juice || ticket.status) 
+              : undefined,
+          };
+          currentStationStatuses[station] = 'served';
+
+          const updatedItems = ticket.items.map(item => {
+            if ((item.station || 'main') === station) {
+              return { ...item, completed: true };
+            }
+            return item;
+          });
+
+          const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+          const overallStatus = activeStatuses.length > 0 && activeStatuses.every(s => s === 'served')
+            ? 'served'
+            : (activeStatuses.every(s => s === 'ready' || s === 'served') ? 'ready' : 'cooking');
+
+          notifySync();
+          return {
+            tickets: state.tickets.map(t => t.id === ticketId ? {
+              ...t,
+              items: updatedItems,
+              stationStatuses: currentStationStatuses,
+              status: overallStatus
+            } : t),
+            lastFoodReadyAlert: updatedAlert
+          };
+        }
+
+        const allServedStatuses: StationStatusMap = {
+          main: ticket.items.some(i => (i.station || 'main') === 'main') ? 'served' : undefined,
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice') ? 'served' : undefined,
+        };
+
+        notifySync();
+        return {
+          tickets: state.tickets.map(t => t.id === ticketId ? {
+            ...t,
+            status: 'served',
+            items: t.items.map(i => ({ ...i, completed: true })),
+            stationStatuses: allServedStatuses
+          } : t),
+          lastFoodReadyAlert: updatedAlert
+        };
+      }),
+
+      updateTicketStatus: (ticketId, status, station) => set((state) => {
+        let updatedAlert: FoodReadyAlert | null = state.lastFoodReadyAlert || null;
+
+        const updatedTickets = state.tickets.map(t => {
+          if (t.id !== ticketId) return t;
+
+          if (station) {
+            const currentStationStatuses: StationStatusMap = {
+              main: t.items.some(i => (i.station || 'main') === 'main') 
+                ? (t.stationStatuses?.main || t.status) 
+                : undefined,
+              juice: t.items.some(i => (i.station || 'main') === 'juice') 
+                ? (t.stationStatuses?.juice || t.status) 
+                : undefined,
+            };
+            currentStationStatuses[station] = status;
+
+            const updatedItems = t.items.map(item => {
+              if ((item.station || 'main') === station) {
+                if (status === 'ready' || status === 'served') {
+                  return { ...item, completed: true };
+                } else if (status === 'cooking') {
+                  return { ...item, completed: false };
+                }
+              }
+              return item;
+            });
+
+            const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+            let overallStatus: Ticket['status'] = t.status;
+            if (activeStatuses.length > 0) {
+              if (activeStatuses.every(s => s === 'served')) {
+                overallStatus = 'served';
+              } else if (activeStatuses.every(s => s === 'ready' || s === 'served')) {
+                overallStatus = 'ready';
+              } else {
+                overallStatus = 'cooking';
+              }
+            } else {
+              overallStatus = status;
+            }
+
+            if (status === 'ready') {
+              const stationItems = t.items
+                .filter(i => (i.station || 'main') === station)
+                .map(i => `${i.qty}x ${i.name}`)
+                .join(', ');
+              updatedAlert = {
+                id: `ready_${t.id}_${station}_${Date.now()}`,
+                ticketId: t.id,
+                tableId: t.tableId,
+                tableName: t.tableName,
+                server: t.server,
+                station,
+                stationLabel: station === 'juice' ? 'Juice Bar' : 'Kitchen',
+                itemsSummary: stationItems || 'Items Ready for Pickup',
+                time: Date.now(),
+              };
+            } else if (status === 'served') {
+              if (updatedAlert && updatedAlert.ticketId === t.id && (updatedAlert.station === station || updatedAlert.station === 'all')) {
+                updatedAlert = null;
+              }
+            }
+
+            return {
+              ...t,
+              items: updatedItems,
+              stationStatuses: currentStationStatuses,
+              status: overallStatus
+            };
+          }
+
+          const fallbackStationStatuses: StationStatusMap = {
+            main: t.items.some(i => (i.station || 'main') === 'main') ? status : undefined,
+            juice: t.items.some(i => (i.station || 'main') === 'juice') ? status : undefined,
+          };
+
+          if (status === 'ready') {
+            const allItemsSummary = t.items.map(i => `${i.qty}x ${i.name}`).join(', ');
+            updatedAlert = {
+              id: `ready_${t.id}_all_${Date.now()}`,
+              ticketId: t.id,
+              tableId: t.tableId,
+              tableName: t.tableName,
+              server: t.server,
+              station: 'all',
+              stationLabel: 'Kitchen',
+              itemsSummary: allItemsSummary || 'Order Ready for Pickup',
+              time: Date.now(),
+            };
+          } else if (status === 'served') {
+            if (updatedAlert && updatedAlert.ticketId === t.id) {
+              updatedAlert = null;
+            }
+          }
+
+          return {
+            ...t,
+            status,
+            stationStatuses: fallbackStationStatuses
+          };
+        });
+
+        notifySync();
+        return {
+          tickets: updatedTickets,
+          lastFoodReadyAlert: updatedAlert
+        };
+      }),
 
       serveTableTickets: (tableId) => set((state) => {
-        const hasReady = state.tickets.some(t => t.tableId === tableId && t.status === 'ready');
+        const hasReady = state.tickets.some(
+          t => t.tableId === tableId && (t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')
+        );
         if (!hasReady) return state;
 
-        const updatedTickets = state.tickets.map(t =>
-          (t.tableId === tableId && t.status === 'ready') ? { ...t, status: 'served' as const } : t
-        );
+        const updatedTickets = state.tickets.map(t => {
+          if (t.tableId === tableId && (t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')) {
+            const servedStatuses: StationStatusMap = {
+              main: t.items.some(i => (i.station || 'main') === 'main') ? 'served' : undefined,
+              juice: t.items.some(i => (i.station || 'main') === 'juice') ? 'served' : undefined,
+            };
+            return {
+              ...t,
+              status: 'served' as const,
+              items: t.items.map(i => ({ ...i, completed: true })),
+              stationStatuses: servedStatuses
+            };
+          }
+          return t;
+        });
 
+        let updatedAlert = state.lastFoodReadyAlert;
+        if (updatedAlert && updatedAlert.tableId === tableId) {
+          updatedAlert = null;
+        }
+
+        notifySync();
         return {
           tickets: updatedTickets,
           tables: state.tables.map(t => 
             t.id === tableId && t.status !== 'billed' ? { ...t, status: 'occupied' } : t
           ),
+          lastFoodReadyAlert: updatedAlert
         };
       }),
 
@@ -1221,7 +1579,9 @@ export const useRestaurantStore = create<RestaurantState>()(
         const table = state.tables.find(t => t.id === tableId);
         const amount = table?.billTotal || 0;
         const tableName = table ? table.name : `Table ${tableId}`;
+        const now = Date.now();
 
+        notifySync();
         return {
           tables: state.tables.map(t => 
             t.id === tableId ? { 
@@ -1231,26 +1591,47 @@ export const useRestaurantStore = create<RestaurantState>()(
               lastInvoiceId: invoiceId 
             } : t
           ),
+          tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
           lastBillPaidAlert: {
+            id: `bill_${tableId}_${now}`,
             tableId,
             tableName,
             billTotal: amount,
-            time: Date.now()
+            time: now
           }
         };
       }),
 
       clearBillPaidAlert: (tableIdOrName?: string) => set((state) => {
         if (!tableIdOrName) {
+          notifySync();
           return { lastBillPaidAlert: null };
         }
         const alert = state.lastBillPaidAlert;
         if (!alert) return { lastBillPaidAlert: null };
         const query = tableIdOrName.trim().toLowerCase();
         const matches =
+          (alert.id && alert.id.toLowerCase() === query) ||
           alert.tableId.toLowerCase() === query ||
           alert.tableName.trim().toLowerCase() === query;
+        notifySync();
         return { lastBillPaidAlert: matches ? null : alert };
+      }),
+
+      clearFoodReadyAlert: (alertIdOrTableId?: string) => set((state) => {
+        if (!alertIdOrTableId) {
+          notifySync();
+          return { lastFoodReadyAlert: null };
+        }
+        const current = state.lastFoodReadyAlert;
+        if (!current) return { lastFoodReadyAlert: null };
+        const query = alertIdOrTableId.trim().toLowerCase();
+        const matches =
+          current.id === alertIdOrTableId ||
+          current.tableId.trim().toLowerCase() === query ||
+          current.tableName.trim().toLowerCase() === query;
+        notifySync();
+        return { lastFoodReadyAlert: matches ? null : current };
       }),
 
       settleBill: (tableId) => set((state) => {
@@ -1262,6 +1643,13 @@ export const useRestaurantStore = create<RestaurantState>()(
           (targetTableName && alert.tableName.trim().toLowerCase() === targetTableName.trim().toLowerCase())
         );
 
+        const foodAlert = state.lastFoodReadyAlert;
+        const matchesFoodAlert = foodAlert && (
+          foodAlert.tableId === tableId ||
+          (targetTableName && foodAlert.tableName.trim().toLowerCase() === targetTableName.trim().toLowerCase())
+        );
+
+        notifySync();
         return {
           tables: state.tables.map(t => 
             (t.id === tableId || t.mergedInto === tableId) ? { 
@@ -1278,7 +1666,29 @@ export const useRestaurantStore = create<RestaurantState>()(
             } : t
           ),
           tickets: state.tickets.filter(t => t.tableId !== tableId),
-          lastBillPaidAlert: matchesAlert ? null : state.lastBillPaidAlert
+          lastBillPaidAlert: matchesAlert ? null : state.lastBillPaidAlert,
+          lastFoodReadyAlert: matchesFoodAlert ? null : state.lastFoodReadyAlert
+        };
+      }),
+
+      dismissTicket: (ticketId) => set((state) => {
+        notifySync();
+        return {
+          tickets: (state.tickets || []).filter(t => t.id !== ticketId)
+        };
+      }),
+
+      clearTableTickets: (tableId) => set((state) => {
+        notifySync();
+        return {
+          tickets: (state.tickets || []).filter(t => t.tableId !== tableId)
+        };
+      }),
+
+      clearAllOldTickets: () => set((state) => {
+        notifySync();
+        return {
+          tickets: []
         };
       }),
 
@@ -1731,9 +2141,13 @@ export const useRestaurantStore = create<RestaurantState>()(
           const newCategories = (item.category && !state.categories.includes(item.category))
             ? [...state.categories, item.category]
             : state.categories;
+          const newRegions = (item.region && !state.regions?.includes(item.region))
+            ? [...(state.regions || []), item.region]
+            : (state.regions || []);
           return {
             menuItems: [...state.menuItems, { ...item, id: `m${Date.now()}` }],
             categories: newCategories,
+            regions: newRegions,
           };
         });
         notifySync();
@@ -1744,9 +2158,13 @@ export const useRestaurantStore = create<RestaurantState>()(
           const newCategories = (item.category && !state.categories.includes(item.category))
             ? [...state.categories, item.category]
             : state.categories;
+          const newRegions = (item.region && !state.regions?.includes(item.region))
+            ? [...(state.regions || []), item.region]
+            : (state.regions || []);
           return {
             menuItems: state.menuItems.map(m => m.id === id ? { ...m, ...item } : m),
             categories: newCategories,
+            regions: newRegions,
           };
         });
         notifySync();
@@ -1781,6 +2199,59 @@ export const useRestaurantStore = create<RestaurantState>()(
       deleteCategory: (categoryName) => {
         set((state) => ({
           categories: state.categories.filter(c => c !== categoryName)
+        }));
+        notifySync();
+      },
+
+      addRegion: (regionName) => {
+        const trimmed = regionName.trim();
+        if (!trimmed) return;
+        set((state) => ({
+          regions: (state.regions || []).includes(trimmed) ? (state.regions || []) : [...(state.regions || []), trimmed]
+        }));
+        notifySync();
+      },
+
+      updateRegion: (oldName, newName) => {
+        const trimmedOld = oldName.trim();
+        const trimmedNew = newName.trim();
+        if (!trimmedNew || trimmedOld === trimmedNew) return;
+        set((state) => {
+          const currentRegions = state.regions || [];
+          const updatedRegions = currentRegions.map(r => r === trimmedOld ? trimmedNew : r);
+          const finalRegions = Array.from(new Set(updatedRegions));
+          const updatedMenuItems = (state.menuItems || []).map(m =>
+            m.region === trimmedOld ? { ...m, region: trimmedNew } : m
+          );
+          return {
+            regions: finalRegions,
+            menuItems: updatedMenuItems,
+          };
+        });
+        notifySync();
+      },
+
+      deleteRegion: (regionName) => {
+        const trimmed = regionName.trim();
+        set((state) => {
+          const currentRegions = state.regions || [];
+          const updatedRegions = currentRegions.filter(r => r !== trimmed);
+          const updatedMenuItems = (state.menuItems || []).map(m =>
+            m.region === trimmed ? { ...m, region: undefined } : m
+          );
+          return {
+            regions: updatedRegions,
+            menuItems: updatedMenuItems,
+          };
+        });
+        notifySync();
+      },
+
+      restoreDefaultRestaurantMenu: () => {
+        set(() => ({
+          menuItems: SULTAN_DEFAULT_MENU,
+          categories: SULTAN_DEFAULT_CATEGORIES,
+          regions: SULTAN_DEFAULT_REGIONS,
         }));
         notifySync();
       },
@@ -1977,19 +2448,22 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       syncFromServer: (remoteState) => set((state) => {
         let mergedTickets = remoteState.tickets;
-        if (remoteState.tickets && state.tickets) {
-          mergedTickets = remoteState.tickets.map(rt => {
-            const local = state.tickets.find(lt => lt.id === rt.id);
-            // If local already marked this ticket as served, don't let a stale remote packet revert it to cooking or ready!
-            if (local && local.status === 'served' && rt.status !== 'served') {
-              return local;
-            }
-            return rt;
-          });
+        if (remoteState.tickets) {
+          const remoteList = Array.isArray(remoteState.tickets) ? remoteState.tickets : [];
+          mergedTickets = remoteList
+            .filter((rt) => !!rt && typeof rt === 'object' && !!rt.id)
+            .map((rt) => {
+              const local = (state.tickets || []).find((lt) => lt && lt.id === rt.id);
+              // If local already marked this ticket as served, don't let a stale remote packet revert it to cooking or ready!
+              if (local && local.status === 'served' && rt.status !== 'served') {
+                return { ...local, items: Array.isArray(local.items) ? local.items : [] };
+              }
+              return { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
+            });
         }
 
         const rawTables = remoteState.tables || state.tables;
-        const finalTickets = mergedTickets || state.tickets;
+        const finalTickets = mergedTickets || state.tickets || [];
         const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
 
         return {
@@ -2006,6 +2480,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           } : {}),
           ...(remoteState.menuItems ? { menuItems: remoteState.menuItems } : {}),
           ...(remoteState.categories ? { categories: remoteState.categories } : {}),
+          ...(remoteState.regions ? { regions: remoteState.regions } : {}),
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
           ...(remoteState.floors ? { floors: remoteState.floors } : {}),
           ...(remoteState.staff ? { staff: remoteState.staff } : {}),
@@ -2019,15 +2494,15 @@ export const useRestaurantStore = create<RestaurantState>()(
             lastBillPaidAlert: (() => {
               const incoming = remoteState.lastBillPaidAlert;
               if (!incoming) return null;
-              // Validate that table still exists and is currently billed
+              // Validate that table still exists and is currently billed / paid
               const matchingTable = reconciledTables.find(
                 t => t.id === incoming.tableId || t.name.trim().toLowerCase() === incoming.tableName.trim().toLowerCase()
               );
-              if (!matchingTable || matchingTable.status !== 'billed') {
+              if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid)) {
                 return null;
               }
-              // If alert is older than 30 minutes, discard
-              if (incoming.time && Date.now() - incoming.time > 30 * 60 * 1000) {
+              // If alert is older than 30 minutes (with skew buffer), discard
+              if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
                 return null;
               }
               return incoming;
@@ -2039,7 +2514,51 @@ export const useRestaurantStore = create<RestaurantState>()(
                 const matchingTable = reconciledTables.find(
                   t => t.id === local.tableId || t.name.trim().toLowerCase() === local.tableName.trim().toLowerCase()
                 );
-                if (!matchingTable || matchingTable.status !== 'billed' || (local.time && Date.now() - local.time > 30 * 60 * 1000)) {
+                if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid) || (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000)) {
+                  return null;
+                }
+                return local;
+              })()
+            } : {}
+          )),
+          ...(remoteState.lastFoodReadyAlert !== undefined ? {
+            lastFoodReadyAlert: (() => {
+              const incoming = remoteState.lastFoodReadyAlert;
+              if (!incoming) return null;
+              const isNonTable = incoming.tableId === 'takeaway' || incoming.tableId === 'delivery';
+              if (!isNonTable) {
+                const matchingTable = reconciledTables.find(
+                  t => t.id === incoming.tableId || t.name.trim().toLowerCase() === incoming.tableName.trim().toLowerCase()
+                );
+                const hasActiveTicket = finalTickets.some(
+                  tk => tk.tableId === incoming.tableId && tk.status !== 'served'
+                );
+                if ((!matchingTable || matchingTable.status === 'available') && !hasActiveTicket) {
+                  return null;
+                }
+              }
+              if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
+                return null;
+              }
+              return incoming;
+            })()
+          } : (
+            state.lastFoodReadyAlert ? {
+              lastFoodReadyAlert: (() => {
+                const local = state.lastFoodReadyAlert;
+                const isNonTable = local.tableId === 'takeaway' || local.tableId === 'delivery';
+                if (!isNonTable) {
+                  const matchingTable = reconciledTables.find(
+                    t => t.id === local.tableId || t.name.trim().toLowerCase() === local.tableName.trim().toLowerCase()
+                  );
+                  const hasActiveTicket = finalTickets.some(
+                    tk => tk.tableId === local.tableId && tk.status !== 'served'
+                  );
+                  if ((!matchingTable || matchingTable.status === 'available') && !hasActiveTicket) {
+                    return null;
+                  }
+                }
+                if (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000) {
                   return null;
                 }
                 return local;
@@ -2054,6 +2573,16 @@ export const useRestaurantStore = create<RestaurantState>()(
       storage: appStorage,
       onRehydrateStorage: () => (state) => {
         if (state) {
+          if (Array.isArray(state.tickets)) {
+            state.tickets = state.tickets
+              .filter((t) => !!t && typeof t === 'object' && !!t.id)
+              .map((t) => ({
+                ...t,
+                items: Array.isArray(t.items) ? t.items : [],
+              }));
+          } else {
+            state.tickets = [];
+          }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
             state.floors = INITIAL_FLOORS;
@@ -2064,17 +2593,26 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!state.salaryPayments || !Array.isArray(state.salaryPayments) || state.salaryPayments.length === 0) {
             state.salaryPayments = INITIAL_SALARY_PAYMENTS;
           }
-          // Clean out legacy ghost zones (e.g. 'Main Hall', 'VIP', 'Majlis Floor 1') that have no tables
-          const validFloorNames = (state.floors || []).map((f) => f.name.toLowerCase());
-          const tablesFloorNames = (state.tables || []).map((t) => (t.floor || t.zone || '').toLowerCase());
-          state.zones = (state.zones || []).filter(
-            (z) => validFloorNames.includes(z.toLowerCase()) || tablesFloorNames.includes(z.toLowerCase())
-          );
-          state.floors.forEach((f) => {
-            if (!state.zones.some((z) => z.toLowerCase() === f.name.toLowerCase())) {
-              state.zones.push(f.name);
-            }
+          if (!state.regions || !Array.isArray(state.regions) || state.regions.length === 0) {
+            state.regions = INITIAL_REGIONS;
+          }
+          // Normalize and assign true floor and seatingType to any table that has legacy or missing attributes
+          state.tables = (state.tables || []).map(t => {
+            const inferredFloor = getTableFloor(t);
+            const inferredType = getTableSeatingType(t);
+            const isLegacyZone = !t.floor || t.floor.toLowerCase().includes('main hall') || (t.zone && t.zone.toLowerCase().includes('main hall'));
+            return {
+              ...t,
+              floor: isLegacyZone ? inferredFloor : (t.floor || inferredFloor),
+              zone: isLegacyZone ? inferredFloor : (t.zone || inferredFloor),
+              seatingType: t.seatingType || inferredType,
+              cabinNumber: (t.seatingType === 'majlis' || inferredType === 'majlis') ? (t.cabinNumber || t.name) : t.cabinNumber,
+            };
           });
+
+          // Guarantee zones strictly match the configured floors, eliminating any ghost zones
+          const validFloorNames = (state.floors || INITIAL_FLOORS).map((f) => f.name);
+          state.zones = validFloorNames;
 
           // Purge stale or already-available bill paid alerts on rehydration
           if (state.lastBillPaidAlert) {
@@ -2089,6 +2627,22 @@ export const useRestaurantStore = create<RestaurantState>()(
               (state.lastBillPaidAlert.time && Date.now() - state.lastBillPaidAlert.time > 30 * 60 * 1000)
             ) {
               state.lastBillPaidAlert = null;
+            }
+          }
+
+          // Purge stale or already-available food ready alerts on rehydration
+          if (state.lastFoodReadyAlert) {
+            const matchingTable = state.tables.find(
+              (t) =>
+                t.id === state.lastFoodReadyAlert?.tableId ||
+                t.name.trim().toLowerCase() === state.lastFoodReadyAlert?.tableName.trim().toLowerCase()
+            );
+            if (
+              !matchingTable ||
+              matchingTable.status === 'available' ||
+              (state.lastFoodReadyAlert.time && Date.now() - state.lastFoodReadyAlert.time > 30 * 60 * 1000)
+            ) {
+              state.lastFoodReadyAlert = null;
             }
           }
         }

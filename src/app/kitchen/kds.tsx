@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,13 +7,18 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
-  Modal
+  Modal,
+  TextInput,
+  Alert,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
+import { useAuthStore } from '../../store/authStore';
+import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
+import { broadcastImmediately } from '../../services/syncService';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -64,8 +69,11 @@ export default function KitchenDisplayScreen() {
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
-  const [stationFilter] = useState<'all' | 'main' | 'juice'>('all');
+  const startCookingTicket = useRestaurantStore((state) => state.startCookingTicket);
+  const markItemReady = useRestaurantStore((state) => state.markItemReady);
+  const markItemServed = useRestaurantStore((state) => state.markItemServed);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'pending' | 'cooking' | 'ready' | 'addons' | 'served'>('all');
+  const stationFilter: 'main' = 'main';
   const [now, setNow] = useState(() => Date.now());
   const [latestAlert, setLatestAlert] = useState<{
     id: string;
@@ -78,13 +86,70 @@ export default function KitchenDisplayScreen() {
 
   const [printingTicket, setPrintingTicket] = useState<Ticket | null>(null);
 
+  // Kitchen Inventory Modal state
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [inventorySearch, setInventorySearch] = useState('');
+  const [inventoryCategory, setInventoryCategory] = useState('All');
+  const inventory = useOpsStore((s) => s.inventory);
+
+  const kitchenCategories = ['All', 'Meat', 'Produce', 'Spices', 'Grains', 'Dairy', 'Pantry', 'Packaging'];
+
+  const filteredKitchenInventory = useMemo(() => {
+    return (inventory || []).filter((item) => {
+      if (!item) return false;
+      const isJuiceItem = item.category === 'Juice & Fruits' || item.category === 'Beverages';
+      if (isJuiceItem && !(item.name || '').toLowerCase().includes('water') && !(item.name || '').toLowerCase().includes('tea')) {
+        return false;
+      }
+      if (inventoryCategory !== 'All' && item.category !== inventoryCategory) {
+        return false;
+      }
+      if (inventorySearch.trim()) {
+        const q = inventorySearch.toLowerCase();
+        const matchesName = (item.name || '').toLowerCase().includes(q);
+        const matchesUrdu = (item.urduName || '').toLowerCase().includes(q);
+        const matchesCode = (item.itemCode || '').toLowerCase().includes(q);
+        const matchesLoc = (item.location || '').toLowerCase().includes(q);
+        return matchesName || matchesUrdu || matchesCode || matchesLoc;
+      }
+      return true;
+    });
+  }, [inventory, inventoryCategory, inventorySearch]);
+
+  const lowStockCount = useMemo(() => {
+    return (inventory || []).filter((item) => {
+      if (!item) return false;
+      const isJuiceItem = item.category === 'Juice & Fruits' || item.category === 'Beverages';
+      if (isJuiceItem) return false;
+      return item.stock <= item.threshold;
+    }).length;
+  }, [inventory]);
+
+  const handleLogout = () => {
+    const doLogout = () => {
+      useAuthStore.getState().logout();
+      router.replace('/login');
+    };
+
+    if (Platform.OS === 'web') {
+      if (typeof window !== 'undefined' && window.confirm('Are you sure you want to log out of Kitchen KDS?')) {
+        doLogout();
+      }
+    } else {
+      Alert.alert('Logout Kitchen KDS', 'Are you sure you want to log out of the Kitchen Display?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Logout', style: 'destructive', onPress: doLogout },
+      ]);
+    }
+  };
+
   // Track seen tickets to trigger notification on newly incoming tickets
-  const seenTicketIdsRef = useRef<Set<string>>(new Set(tickets.map((t) => t.id)));
+  const seenTicketIdsRef = useRef<Set<string>>(new Set((tickets || []).filter((t) => !!t && !!t.id).map((t) => t.id)));
   const isInitialMount = useRef(true);
 
-  // Ticking clock so elapsed-time colors refresh automatically every 15s
+  // Live ticking clock (1s) so KOT countdown timer and elapsed-time colors refresh in real-time
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 15000);
+    const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -215,8 +280,18 @@ export default function KitchenDisplayScreen() {
       return;
     }
 
-    const newlyAdded = tickets.filter((t) => !seenTicketIdsRef.current.has(t.id) && t.status === 'cooking');
-    tickets.forEach((t) => seenTicketIdsRef.current.add(t.id));
+    const newlyAdded = (tickets || []).filter((t) => {
+      if (!t || !t.id) return false;
+      if (seenTicketIdsRef.current.has(t.id)) return false;
+      const items = Array.isArray(t.items) ? t.items : [];
+      const matchingItems = items.filter((i) => (i?.station || 'main') === stationFilter);
+      const stationStatus = (t.stationStatuses && t.stationStatuses[stationFilter]) ? t.stationStatuses[stationFilter]! : t.status;
+      return matchingItems.length > 0 && (stationStatus === 'pending' || stationStatus === 'cooking');
+    });
+
+    (tickets || []).forEach((t) => {
+      if (t?.id) seenTicketIdsRef.current.add(t.id);
+    });
 
     if (newlyAdded.length > 0) {
       const newest = newlyAdded[newlyAdded.length - 1];
@@ -224,12 +299,17 @@ export default function KitchenDisplayScreen() {
 
       playKitchenChime(isAddOn);
 
+      const items = Array.isArray(newest.items) ? newest.items : [];
+      const stationItemCount = items
+        .filter((i) => (i?.station || 'main') === stationFilter)
+        .reduce((sum, it) => sum + (it?.qty || 0), 0);
+
       setLatestAlert({
         id: newest.id,
         tableName: newest.tableName,
         isAddOn,
         roundNumber: newest.roundNumber,
-        itemCount: newest.items.reduce((sum, it) => sum + it.qty, 0),
+        itemCount: stationItemCount,
         server: newest.server,
       });
 
@@ -241,38 +321,46 @@ export default function KitchenDisplayScreen() {
     }
   }, [tickets]);
 
-  const activeTickets = tickets.filter((t) => t.status === 'cooking' || t.status === 'ready');
-  const cookingCount = tickets.filter((t) => t.status === 'cooking').length;
-  const readyCount = tickets.filter((t) => t.status === 'ready').length;
-  const servedCount = tickets.filter((t) => t.status === 'served').length;
-  const addOnsCount = tickets.filter((t) => t.isAddOn && t.status === 'cooking').length;
+  const stationTickets = (tickets || [])
+    .filter((t) => !!t && Array.isArray(t.items))
+    .map((t) => {
+      const items = Array.isArray(t.items) ? t.items : [];
+      const matchingItems = items.filter((i) => (i?.station || 'main') === stationFilter);
+      const stationStatus = (t.stationStatuses && t.stationStatuses[stationFilter])
+        ? t.stationStatuses[stationFilter]!
+        : t.status;
 
-  const filteredTickets = tickets
-    .map(t => {
-      // Filter the items within the ticket by station
-      const matchingItems = stationFilter === 'all' 
-        ? t.items 
-        : t.items.filter(i => (i.station || 'main') === stationFilter);
-        
-      return { ...t, items: matchingItems };
+      return { ...t, items: matchingItems, stationStatus };
     })
-    .filter((t) => {
-      // Don't show tickets that have no items for this station
-      if (t.items.length === 0) return false;
-      
-      if (activeFilter === 'cooking') return t.status === 'cooking';
-      if (activeFilter === 'ready') return t.status === 'ready';
-      if (activeFilter === 'served') return t.status === 'served';
-      if (activeFilter === 'addons') return t.isAddOn && t.status === 'cooking';
-      return t.status === 'cooking' || t.status === 'ready';
-    });
+    .filter((t) => Array.isArray(t.items) && t.items.length > 0);
 
-  const handleTicketAction = (ticket: Ticket) => {
+  const activeTickets = stationTickets.filter((t) => t.stationStatus === 'pending' || t.stationStatus === 'cooking' || t.stationStatus === 'ready');
+  const pendingCount = stationTickets.filter((t) => t.stationStatus === 'pending').length;
+  const cookingCount = stationTickets.filter((t) => t.stationStatus === 'cooking').length;
+  const readyCount = stationTickets.filter((t) => t.stationStatus === 'ready').length;
+  const servedCount = stationTickets.filter((t) => t.stationStatus === 'served').length;
+  const addOnsCount = stationTickets.filter((t) => t.isAddOn && (t.stationStatus === 'pending' || t.stationStatus === 'cooking')).length;
+
+  const filteredTickets = stationTickets.filter((t) => {
+    if (activeFilter === 'pending') return t.stationStatus === 'pending';
+    if (activeFilter === 'cooking') return t.stationStatus === 'cooking';
+    if (activeFilter === 'ready') return t.stationStatus === 'ready';
+    if (activeFilter === 'served') return t.stationStatus === 'served';
+    if (activeFilter === 'addons') return t.isAddOn && (t.stationStatus === 'pending' || t.stationStatus === 'cooking');
+    return t.stationStatus === 'pending' || t.stationStatus === 'cooking' || t.stationStatus === 'ready';
+  });
+
+  // Sort newest first so new orders appear at Column 1 and push earlier orders forward!
+  const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+
+  const handleTicketAction = (ticket: typeof stationTickets[0]) => {
     const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
     const orderId = (ticket as any).orderId;
 
-    if (ticket.status === 'cooking') {
-      updateTicketStatus(ticket.id, 'ready');
+    if (ticket.stationStatus === 'pending') {
+      startCookingTicket(ticket.id, stationFilter);
+    } else if (ticket.stationStatus === 'cooking') {
+      updateTicketStatus(ticket.id, 'ready', stationFilter);
       if (orderId) {
         fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
@@ -280,9 +368,8 @@ export default function KitchenDisplayScreen() {
           body: JSON.stringify({ status: 'READY' })
         }).catch(() => {});
       }
-    } else if (ticket.status === 'ready') {
-      // If already ready, bumping marks it dispatched / served
-      bumpTicket(ticket.id);
+    } else if (ticket.stationStatus === 'ready') {
+      bumpTicket(ticket.id, stationFilter);
       if (orderId) {
         fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
@@ -291,36 +378,62 @@ export default function KitchenDisplayScreen() {
         }).catch(() => {});
       }
     } else {
-      // If served, clicking recalls it back to ready
-      updateTicketStatus(ticket.id, 'ready');
+      updateTicketStatus(ticket.id, 'ready', stationFilter);
     }
+    broadcastImmediately();
+  };
+    } else {
+      updateTicketStatus(ticket.id, 'ready', stationFilter);
+    }
+    broadcastImmediately();
   };
 
-  const renderTicket = ({ item }: { item: Ticket }) => {
-    const timeElapsedMinutes = Math.floor((now - item.timePlaced) / 60000);
-    const isReady = item.status === 'ready';
-    const isServed = item.status === 'served';
+  const renderTicket = (item: typeof stationTickets[0]) => {
+    const items = Array.isArray(item.items) ? item.items : [];
+    const defaultPrepTime = 15;
+    const maxPrepTimeMin = items.length > 0
+      ? Math.max(...items.map((i) => i.prepTimeMin || defaultPrepTime))
+      : defaultPrepTime;
+
+    const isPending = item.stationStatus === 'pending';
+    const isCooking = item.stationStatus === 'cooking';
+    const isReady = item.stationStatus === 'ready';
+    const isServed = item.stationStatus === 'served';
     const isAddOn = !!item.isAddOn;
 
-    let headerColor = isAddOn ? '#D5A943' : '#34C759'; // Gold for Add-on, Green (< 10 mins)
+    // Countdown calculations
+    const startTime = item.cookingStartedAt || item.timePlaced || now;
+    const elapsedSeconds = isCooking ? Math.max(0, Math.floor((now - startTime) / 1000)) : 0;
+    const totalAllowedSeconds = maxPrepTimeMin * 60;
+    const remainingSeconds = totalAllowedSeconds - elapsedSeconds;
+    const isOverdue = isCooking && remainingSeconds <= 0;
+    const overdueSeconds = Math.abs(remainingSeconds);
+    const progressPct = Math.min(100, Math.max(0, (elapsedSeconds / totalAllowedSeconds) * 100));
+
+    let headerColor = '#10B981'; // Green on track
     if (isServed) {
-      headerColor = '#48484A'; // Neutral slate for served
+      headerColor = '#48484A'; // Neutral slate
     } else if (isReady) {
       headerColor = '#007AFF'; // Blue for ready to pick up
-    } else if (timeElapsedMinutes >= 20) {
-      headerColor = '#FF3B30'; // Red (> 20 mins)
-    } else if (timeElapsedMinutes >= 10) {
-      headerColor = '#FF9500'; // Amber (10-20 mins)
+    } else if (isPending) {
+      headerColor = '#D97706'; // Amber for awaiting start
+    } else if (isOverdue) {
+      headerColor = '#DC2626'; // Crimson red (> max prep time)
+    } else if (remainingSeconds <= 180) {
+      headerColor = '#EA580C'; // Orange for urgency (< 3 mins)
+    } else if (isAddOn) {
+      headerColor = '#D5A943'; // Gold for Add-on
     }
 
-    const allItemsCompleted = item.items.length > 0 && item.items.every((i) => i.completed);
+    const allItemsCompleted = items.length > 0 && items.every((i) => i.completed || i.itemStatus === 'ready' || i.itemStatus === 'served');
 
     return (
       <View
         style={[
           styles.ticketCard,
+          isPending && { borderColor: '#D97706', borderWidth: 1.5 },
           isReady && styles.ticketCardReady,
-          isAddOn && !isReady && !isServed && styles.ticketCardAddOn,
+          isAddOn && !isReady && !isServed && !isPending && styles.ticketCardAddOn,
           isServed && { opacity: 0.85, borderColor: '#48484A' },
         ]}
       >
@@ -329,6 +442,12 @@ export default function KitchenDisplayScreen() {
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <Text style={styles.ticketId}>{item.id}</Text>
+              {isPending && (
+                <View style={[styles.addOnTag, { backgroundColor: '#78350F' }]}>
+                  <Ionicons name="time" size={11} color="#FDE68A" />
+                  <Text style={[styles.addOnTagText, { color: '#FDE68A' }]}>QUEUED</Text>
+                </View>
+              )}
               {isAddOn && (
                 <View style={styles.addOnTag}>
                   <Ionicons name="flash" size={11} color="#000" />
@@ -351,9 +470,28 @@ export default function KitchenDisplayScreen() {
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
-            <View style={styles.timeBadge}>
-              <Ionicons name="time-outline" size={14} color="#fff" />
-              <Text style={styles.timeText}>{timeElapsedMinutes}m</Text>
+            <View style={[
+              styles.timeBadge, 
+              isPending && { backgroundColor: '#78350F' },
+              isOverdue && { backgroundColor: '#7F1D1D' },
+              isReady && { backgroundColor: '#1E3A8A' }
+            ]}>
+              <Ionicons 
+                name={isPending ? 'hourglass-outline' : isOverdue ? 'alert-circle' : isReady ? 'checkmark-circle' : 'timer-outline'} 
+                size={13} 
+                color={isOverdue ? '#FCA5A5' : isPending ? '#FDE68A' : '#fff'} 
+              />
+              <Text style={[styles.timeText, isOverdue && { color: '#FCA5A5' }, isPending && { color: '#FDE68A' }]}>
+                {isPending 
+                  ? `${maxPrepTimeMin}m (Est)` 
+                  : isReady
+                    ? 'READY'
+                    : isServed
+                      ? 'SERVED'
+                      : isOverdue 
+                        ? `+${Math.floor(overdueSeconds / 60)}m ${overdueSeconds % 60}s` 
+                        : `${Math.floor(remainingSeconds / 60)}:${(remainingSeconds % 60).toString().padStart(2, '0')}`}
+              </Text>
             </View>
             <TouchableOpacity 
               style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
@@ -364,6 +502,19 @@ export default function KitchenDisplayScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        {/* Live Timer Progress Bar (When Cooking) */}
+        {isCooking && (
+          <View style={{ height: 4, backgroundColor: 'rgba(0,0,0,0.3)', width: '100%' }}>
+            <View 
+              style={{ 
+                height: 4, 
+                backgroundColor: isOverdue ? '#EF4444' : remainingSeconds <= 180 ? '#F97316' : '#34D399', 
+                width: `${progressPct}%` 
+              }} 
+            />
+          </View>
+        )}
 
         {/* Add-On Notice Ribbon if this is extra items for table */}
         {isAddOn && !isServed && (
@@ -377,70 +528,164 @@ export default function KitchenDisplayScreen() {
 
         {/* Ticket Items */}
         <ScrollView style={styles.ticketBody} showsVerticalScrollIndicator={false}>
-          {item.items.map((food) => (
-            <TouchableOpacity
-              key={food.id}
-              style={[styles.foodRow, (food.completed || isServed) && styles.foodRowCompleted]}
-              onPress={() => !isServed && toggleItem(item.id, food.id)}
-              activeOpacity={0.7}
-            >
+          {items.map((food) => {
+            const isItemDone = food.completed || food.itemStatus === 'served' || isServed;
+            const isItemReady = food.itemStatus === 'ready';
+
+            return (
               <View
-                style={[
-                  styles.qtyBox,
-                  (food.completed || isServed) && { backgroundColor: '#1E3A24' },
-                ]}
+                key={food.id}
+                style={[styles.foodRow, isItemDone && styles.foodRowCompleted]}
               >
-                {(food.completed || isServed) ? (
-                  <Ionicons name="checkmark" size={18} color="#34C759" />
-                ) : (
-                  <Text style={styles.qtyText}>{food.qty}</Text>
-                )}
-              </View>
-              <View style={styles.foodDetails}>
-                <Text
+                <TouchableOpacity
                   style={[
-                    styles.foodName,
-                    (food.completed || isServed) && styles.textCompleted,
+                    styles.qtyBox,
+                    isItemDone && { backgroundColor: '#1E3A24' },
+                    isItemReady && { backgroundColor: '#1E3A5F' }
                   ]}
+                  onPress={() => {
+                    if (!isServed) {
+                      toggleItem(item.id, food.id);
+                      broadcastImmediately();
+                    }
+                  }}
+                  activeOpacity={0.7}
                 >
-                  {food.name}
-                </Text>
-                {food.notes ? (
-                  <View style={styles.notesContainer}>
-                    <Ionicons name="pencil" size={12} color="#D5A943" />
-                    <Text style={styles.foodNotes}>{food.notes}</Text>
+                  {isItemDone ? (
+                    <Ionicons name="checkmark" size={18} color="#34C759" />
+                  ) : isItemReady ? (
+                    <Ionicons name="flash" size={16} color="#60A5FA" />
+                  ) : (
+                    <Text style={styles.qtyText}>{food.qty}</Text>
+                  )}
+                </TouchableOpacity>
+
+                <View style={styles.foodDetails}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                    <Text
+                      style={[
+                        styles.foodName,
+                        isItemDone && styles.textCompleted,
+                      ]}
+                    >
+                      {food.name}
+                    </Text>
+                    <View style={styles.itemPrepPill}>
+                      <Ionicons name="stopwatch-outline" size={10} color="#D5A943" />
+                      <Text style={styles.itemPrepText}>{food.prepTimeMin || defaultPrepTime}m</Text>
+                    </View>
                   </View>
-                ) : null}
+
+                  {food.notes ? (
+                    <View style={styles.notesContainer}>
+                      <Ionicons name="pencil" size={12} color="#D5A943" />
+                      <Text style={styles.foodNotes}>{food.notes}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Fast Serve / Ready Actions for this item */}
+                  {!isServed && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                      {isItemReady ? (
+                        <>
+                          <View style={styles.itemReadyBadge}>
+                            <Ionicons name="flash" size={11} color="#60A5FA" />
+                            <Text style={styles.itemReadyBadgeText}>READY (AWAITING SERVER)</Text>
+                          </View>
+                          <TouchableOpacity
+                            style={styles.itemMarkServedBtn}
+                            onPress={() => {
+                              markItemServed(item.id, food.id, stationFilter);
+                              broadcastImmediately();
+                            }}
+                          >
+                            <Ionicons name="checkmark-done" size={11} color="#fff" />
+                            <Text style={styles.itemMarkServedBtnText}>SERVE</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : food.itemStatus === 'served' ? (
+                        <View style={styles.itemServedBadge}>
+                          <Ionicons name="checkmark-done-circle" size={12} color="#34C759" />
+                          <Text style={styles.itemServedBadgeText}>SERVED</Text>
+                        </View>
+                      ) : (
+                        <TouchableOpacity
+                          style={styles.itemFastReadyBtn}
+                          onPress={() => {
+                            markItemReady(item.id, food.id, stationFilter);
+                            broadcastImmediately();
+                          }}
+                        >
+                          <Ionicons name="flash" size={11} color="#000" />
+                          <Text style={styles.itemFastReadyBtnText}>SERVE FIRST / READY</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
-            </TouchableOpacity>
-          ))}
+            );
+          })}
         </ScrollView>
 
         {/* Ticket Footer / Action */}
-        <TouchableOpacity
-          style={[
-            styles.bumpButton,
-            isServed
-              ? { backgroundColor: '#2C2C2E', borderColor: '#48484A' }
-              : (isReady ? styles.bumpButtonDispatched : (allItemsCompleted ? styles.bumpButtonReady : null)),
-          ]}
-          onPress={() => handleTicketAction(item)}
-          activeOpacity={0.8}
-        >
-          <Ionicons
-            name={isServed ? 'arrow-undo' : (isReady ? 'checkmark-done-circle' : (allItemsCompleted ? 'notifications' : 'chevron-forward-circle'))}
-            size={18}
-            color={isServed ? '#bbb' : (isReady ? '#fff' : (allItemsCompleted ? '#000' : '#888'))}
-          />
-          <Text
-            style={[
-              styles.bumpButtonText,
-              isServed ? { color: '#bbb' } : (isReady ? styles.bumpTextWhite : (allItemsCompleted ? styles.bumpTextReady : null)),
-            ]}
+        {isPending ? (
+          <TouchableOpacity
+            style={[styles.bumpButton, { backgroundColor: '#F59E0B' }]}
+            onPress={() => handleTicketAction(item)}
+            activeOpacity={0.8}
           >
-            {isServed ? 'DISPATCHED (TAP TO RECALL)' : (isReady ? 'MARK DISPATCHED' : (allItemsCompleted ? 'NOTIFY SERVER (READY)' : 'MARK READY'))}
-          </Text>
-        </TouchableOpacity>
+            <Ionicons name="flame" size={20} color="#000" />
+            <Text style={[styles.bumpButtonText, { color: '#000', fontWeight: '900' }]}>
+              🔥 START COOKING (NOTIFY WAITER)
+            </Text>
+          </TouchableOpacity>
+        ) : isCooking ? (
+          <TouchableOpacity
+            style={[
+              styles.bumpButton,
+              allItemsCompleted ? styles.bumpButtonReady : null,
+            ]}
+            onPress={() => handleTicketAction(item)}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={allItemsCompleted ? 'notifications' : 'chevron-forward-circle'}
+              size={18}
+              color={allItemsCompleted ? '#000' : '#888'}
+            />
+            <Text
+              style={[
+                styles.bumpButtonText,
+                allItemsCompleted ? styles.bumpTextReady : null,
+              ]}
+            >
+              {allItemsCompleted ? 'NOTIFY SERVER (READY)' : 'MARK ALL READY'}
+            </Text>
+          </TouchableOpacity>
+        ) : isReady ? (
+          <TouchableOpacity
+            style={[styles.bumpButton, styles.bumpButtonDispatched]}
+            onPress={() => handleTicketAction(item)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-done-circle" size={18} color="#fff" />
+            <Text style={[styles.bumpButtonText, styles.bumpTextWhite]}>
+              MARK ALL DISPATCHED
+            </Text>
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            style={[styles.bumpButton, { backgroundColor: '#2C2C2E', borderColor: '#48484A' }]}
+            onPress={() => handleTicketAction(item)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-undo" size={18} color="#bbb" />
+            <Text style={[styles.bumpButtonText, { color: '#bbb' }]}>
+              DISPATCHED (TAP TO RECALL)
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   };
@@ -450,82 +695,112 @@ export default function KitchenDisplayScreen() {
       {/* Top KDS Navbar */}
       <View style={styles.navbar}>
         <View style={styles.navLeft}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-          >
-            <Ionicons name="arrow-back" size={22} color="#fff" />
-          </TouchableOpacity>
+          <View style={styles.stationBadge}>
+            <Ionicons name="restaurant" size={20} color="#D5A943" />
+          </View>
           <View>
-            <Text style={styles.navTitle}>Sultan Kitchen Display</Text>
-            <Text style={styles.navSubtitle}>Live KOT & Order Expediting</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.navTitle}>SULTAN KITCHEN KDS</Text>
+              <View style={styles.liveIndicator}>
+                <View style={styles.livePulseDot} />
+                <Text style={styles.liveIndicatorText}>LIVE</Text>
+              </View>
+            </View>
+            <Text style={styles.navSubtitle}>Main Station • KOT Expediting & Dispatch</Text>
           </View>
         </View>
 
-        {/* Status Filter Badges, Audio Test & Sync Hub Badge */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          
-          <View style={styles.filterPills}>
-            <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
-              onPress={() => setActiveFilter('all')}
-            >
-              <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
-                Active ({activeTickets.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'cooking' && styles.filterPillActiveCooking]}
-              onPress={() => setActiveFilter('cooking')}
-            >
-              <View style={[styles.dot, { backgroundColor: '#FF9500' }]} />
-              <Text style={[styles.filterPillText, activeFilter === 'cooking' && styles.filterPillTextActive]}>
-                Cooking ({cookingCount})
-              </Text>
-            </TouchableOpacity>
-
-            {addOnsCount > 0 && (
-              <TouchableOpacity
-                style={[styles.filterPill, activeFilter === 'addons' && styles.filterPillActiveAddons]}
-                onPress={() => setActiveFilter('addons')}
-              >
-                <Ionicons name="flash" size={12} color={activeFilter === 'addons' ? '#000' : '#D5A943'} />
-                <Text style={[styles.filterPillText, activeFilter === 'addons' && styles.filterPillTextActiveAddons]}>
-                  Add-ons ({addOnsCount})
-                </Text>
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'ready' && styles.filterPillActiveReady]}
-              onPress={() => setActiveFilter('ready')}
-            >
-              <View style={[styles.dot, { backgroundColor: '#007AFF' }]} />
-              <Text style={[styles.filterPillText, activeFilter === 'ready' && styles.filterPillTextActive]}>
-                Ready ({readyCount})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.filterPill, activeFilter === 'served' && { backgroundColor: '#48484A', borderColor: '#636366' }]}
-              onPress={() => setActiveFilter('served')}
-            >
-              <Ionicons name="checkmark-done" size={12} color={activeFilter === 'served' ? '#fff' : '#8E8E93'} />
-              <Text style={[styles.filterPillText, activeFilter === 'served' && { color: '#fff' }]}>
-                Served ({servedCount})
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Sound Alert Test Button */}
+        {/* Status Filter Badges */}
+        <View style={styles.filterPills}>
           <TouchableOpacity
-            style={styles.soundButton}
-            onPress={() => playKitchenChime(true)}
-            activeOpacity={0.7}
+            style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
+            onPress={() => setActiveFilter('all')}
           >
-            <Ionicons name="volume-high" size={15} color="#D5A943" />
-            <Text style={styles.soundButtonText}>Chime</Text>
+            <Text style={[styles.filterPillText, activeFilter === 'all' && styles.filterPillTextActive]}>
+              Active ({activeTickets.length})
+            </Text>
+          </TouchableOpacity>
+
+          {pendingCount > 0 && (
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'pending' && { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}
+              onPress={() => setActiveFilter('pending')}
+            >
+              <View style={[styles.dot, { backgroundColor: '#F59E0B' }]} />
+              <Text style={[styles.filterPillText, activeFilter === 'pending' && { color: '#000', fontWeight: '800' }]}>
+                Pending ({pendingCount})
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.filterPill, activeFilter === 'cooking' && styles.filterPillActiveCooking]}
+            onPress={() => setActiveFilter('cooking')}
+          >
+            <View style={[styles.dot, { backgroundColor: '#FF9500' }]} />
+            <Text style={[styles.filterPillText, activeFilter === 'cooking' && styles.filterPillTextActive]}>
+              Cooking ({cookingCount})
+            </Text>
+          </TouchableOpacity>
+
+          {addOnsCount > 0 && (
+            <TouchableOpacity
+              style={[styles.filterPill, activeFilter === 'addons' && styles.filterPillActiveAddons]}
+              onPress={() => setActiveFilter('addons')}
+            >
+              <Ionicons name="flash" size={12} color={activeFilter === 'addons' ? '#000' : '#D5A943'} />
+              <Text style={[styles.filterPillText, activeFilter === 'addons' && styles.filterPillTextActiveAddons]}>
+                Add-ons ({addOnsCount})
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.filterPill, activeFilter === 'ready' && styles.filterPillActiveReady]}
+            onPress={() => setActiveFilter('ready')}
+          >
+            <View style={[styles.dot, { backgroundColor: '#007AFF' }]} />
+            <Text style={[styles.filterPillText, activeFilter === 'ready' && styles.filterPillTextActive]}>
+              Ready ({readyCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, activeFilter === 'served' && { backgroundColor: '#48484A', borderColor: '#636366' }]}
+            onPress={() => setActiveFilter('served')}
+          >
+            <Ionicons name="checkmark-done" size={12} color={activeFilter === 'served' ? '#fff' : '#8E8E93'} />
+            <Text style={[styles.filterPillText, activeFilter === 'served' && { color: '#fff' }]}>
+              Served ({servedCount})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Right Action Buttons: Inventory & Logout */}
+        <View style={styles.navRightActions}>
+          {/* Inventory Button */}
+          <TouchableOpacity
+            style={styles.inventoryNavBtn}
+            onPress={() => setShowInventoryModal(true)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="cube" size={16} color="#D5A943" />
+            <Text style={styles.inventoryNavBtnText}>Kitchen Inventory</Text>
+            {lowStockCount > 0 && (
+              <View style={styles.inventoryBadge}>
+                <Text style={styles.inventoryBadgeText}>{lowStockCount} Low</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          {/* Logout Button */}
+          <TouchableOpacity
+            style={styles.logoutNavBtn}
+            onPress={handleLogout}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="log-out-outline" size={16} color="#FF453A" />
+            <Text style={styles.logoutNavBtnText}>Logout</Text>
           </TouchableOpacity>
 
           <SyncStatusBadge />
@@ -567,9 +842,9 @@ export default function KitchenDisplayScreen() {
         </View>
       )}
 
-      {/* Main Ticket Area */}
+      {/* Main Ticket Area - Multi-Column Responsive Grid */}
       <View style={styles.body}>
-        {filteredTickets.length === 0 ? (
+        {sortedTickets.length === 0 ? (
           <View style={styles.emptyState}>
             <View style={styles.emptyIconBox}>
               <Ionicons name="restaurant-outline" size={48} color="#444" />
@@ -586,14 +861,17 @@ export default function KitchenDisplayScreen() {
             </Text>
           </View>
         ) : (
-          <FlatList
-            data={filteredTickets}
-            keyExtractor={(t) => t.id}
-            renderItem={renderTicket}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-          />
+          <ScrollView
+            style={{ flex: 1 }}
+            contentContainerStyle={styles.columnsContainer}
+            showsVerticalScrollIndicator={true}
+          >
+            {sortedTickets.map((ticket) => (
+              <View key={ticket.id} style={styles.ticketColumnWrap}>
+                {renderTicket(ticket)}
+              </View>
+            ))}
+          </ScrollView>
         )}
       </View>
 
@@ -620,6 +898,187 @@ export default function KitchenDisplayScreen() {
         </View>
       </Modal>
 
+      {/* Kitchen Inventory & Stock Quick Modal */}
+      <Modal
+        visible={showInventoryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInventoryModal(false)}
+      >
+        <View style={styles.inventoryModalOverlay}>
+          <View style={styles.inventoryModalContainer}>
+            {/* Modal Header */}
+            <View style={styles.inventoryModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={styles.inventoryIconBadge}>
+                  <Ionicons name="cube" size={22} color="#D5A943" />
+                </View>
+                <View>
+                  <Text style={styles.inventoryModalTitle}>Kitchen Raw Materials & Stock</Text>
+                  <Text style={styles.inventoryModalSubtitle}>
+                    Live pantry inventory, low stock thresholds & reorder levels
+                  </Text>
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                {/* Handover Module Shortcut Button */}
+                <TouchableOpacity
+                  style={styles.handoverNavBtn}
+                  onPress={() => {
+                    setShowInventoryModal(false);
+                    router.push('/kitchen/day');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="clipboard-outline" size={16} color="#D5A943" />
+                  <Text style={styles.handoverNavBtnText}>Day Console / Handover</Text>
+                </TouchableOpacity>
+
+                {/* Close Button */}
+                <TouchableOpacity
+                  style={styles.invModalCloseBtn}
+                  onPress={() => setShowInventoryModal(false)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name="close" size={20} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Quick Stats Strip */}
+            <View style={styles.invStatsStrip}>
+              <View style={styles.invStatBox}>
+                <Text style={styles.invStatLabel}>Total Kitchen Items</Text>
+                <Text style={styles.invStatValue}>{filteredKitchenInventory.length}</Text>
+              </View>
+              <View style={[styles.invStatBox, lowStockCount > 0 && { borderColor: '#E65100' }]}>
+                <Text style={styles.invStatLabel}>Low / Reorder Alert</Text>
+                <Text style={[styles.invStatValue, lowStockCount > 0 && { color: '#FF9500' }]}>
+                  {lowStockCount} items
+                </Text>
+              </View>
+              <View style={styles.invStatBox}>
+                <Text style={styles.invStatLabel}>Filter Category</Text>
+                <Text style={[styles.invStatValue, { color: '#D5A943' }]}>{inventoryCategory}</Text>
+              </View>
+            </View>
+
+            {/* Search and Category Filters */}
+            <View style={styles.invFilterSection}>
+              <View style={styles.invSearchBar}>
+                <Ionicons name="search" size={16} color="#8E8E93" />
+                <TextInput
+                  style={styles.invSearchInput}
+                  placeholder="Search ingredient by English or Urdu name..."
+                  placeholderTextColor="#666"
+                  value={inventorySearch}
+                  onChangeText={setInventorySearch}
+                />
+                {inventorySearch.length > 0 && (
+                  <TouchableOpacity onPress={() => setInventorySearch('')}>
+                    <Ionicons name="close-circle" size={16} color="#8E8E93" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.invCategoryScroll}
+              >
+                {kitchenCategories.map((cat) => {
+                  const isSel = inventoryCategory === cat;
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.invCatPill, isSel && styles.invCatPillActive]}
+                      onPress={() => setInventoryCategory(cat)}
+                    >
+                      <Text style={[styles.invCatPillText, isSel && styles.invCatPillTextActive]}>
+                        {cat}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Items List */}
+            <FlatList
+              data={filteredKitchenInventory}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.invListContainer}
+              ListEmptyComponent={
+                <View style={styles.invEmptyContainer}>
+                  <Ionicons name="cube-outline" size={40} color="#48484A" />
+                  <Text style={styles.invEmptyTitle}>No ingredients matched</Text>
+                  <Text style={styles.invEmptySub}>Try searching for a different item name or clear filter.</Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const isOut = item.stock <= 0;
+                const isCritical = !isOut && item.stock <= item.threshold * 0.5;
+                const isLow = !isOut && !isCritical && item.stock <= item.threshold;
+                const isOk = !isOut && !isCritical && !isLow;
+
+                return (
+                  <View style={[styles.invRowCard, isOut && styles.invRowOut, (isLow || isCritical) && styles.invRowLow]}>
+                    <View style={styles.invRowLeft}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <Text style={styles.invItemName}>{item.name}</Text>
+                        {item.urduName ? <Text style={styles.invItemUrdu}>{item.urduName}</Text> : null}
+                      </View>
+                      <View style={styles.invRowMeta}>
+                        <View style={styles.invCategoryTag}>
+                          <Text style={styles.invCategoryTagText}>{item.category}</Text>
+                        </View>
+                        {item.location ? (
+                          <Text style={styles.invLocationText}>📍 {item.location}</Text>
+                        ) : null}
+                        <Text style={styles.invThresholdText}>Min threshold: {item.threshold} {item.unit}</Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.invRowRight}>
+                      <View
+                        style={[
+                          styles.invBadge,
+                          isOut && styles.invBadgeOut,
+                          isCritical && styles.invBadgeCritical,
+                          isLow && styles.invBadgeLow,
+                          isOk && styles.invBadgeOk,
+                        ]}
+                      >
+                        <Ionicons
+                          name={isOut ? 'close-circle' : (isLow || isCritical ? 'alert-circle' : 'checkmark-circle')}
+                          size={14}
+                          color={isOut ? '#FF453A' : (isCritical ? '#FF3B30' : (isLow ? '#FF9F0A' : '#30D158'))}
+                        />
+                        <Text
+                          style={[
+                            styles.invStockValueText,
+                            isOut && { color: '#FF453A' },
+                            isCritical && { color: '#FF3B30' },
+                            isLow && { color: '#FF9F0A' },
+                            isOk && { color: '#30D158' },
+                          ]}
+                        >
+                          {item.stock} {item.unit}
+                        </Text>
+                      </View>
+                      <Text style={styles.invStatusLabel}>
+                        {isOut ? 'OUT OF STOCK' : (isCritical ? 'CRITICAL LEVEL' : (isLow ? 'LOW STOCK' : 'IN STOCK'))}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              }}
+            />
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 }
@@ -638,24 +1097,52 @@ const styles = StyleSheet.create({
     backgroundColor: '#18181D',
     borderBottomWidth: 1,
     borderBottomColor: '#282830',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   navLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
   },
-  backButton: {
-    width: 38,
-    height: 38,
-    borderRadius: 10,
-    backgroundColor: '#26262E',
+  stationBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  liveIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#193322',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#34C759',
+  },
+  livePulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#34C759',
+  },
+  liveIndicatorText: {
+    color: '#34C759',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   navTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
     color: '#fff',
+    letterSpacing: 0.5,
   },
   navSubtitle: {
     fontSize: 12,
@@ -664,6 +1151,7 @@ const styles = StyleSheet.create({
   filterPills: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   filterPill: {
     flexDirection: 'row',
@@ -683,6 +1171,9 @@ const styles = StyleSheet.create({
   filterPillActiveReady: {
     backgroundColor: '#19334D',
   },
+  filterPillActiveAddons: {
+    backgroundColor: '#4A3C19',
+  },
   filterPillText: {
     color: '#999',
     fontSize: 13,
@@ -691,6 +1182,59 @@ const styles = StyleSheet.create({
   filterPillTextActive: {
     color: '#fff',
   },
+  filterPillTextActiveAddons: {
+    color: '#D5A943',
+    fontWeight: '700',
+  },
+  navRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  inventoryNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#26262E',
+    borderWidth: 1,
+    borderColor: '#3A3A48',
+  },
+  inventoryNavBtnText: {
+    color: '#D5A943',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  inventoryBadge: {
+    backgroundColor: '#E65100',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginLeft: 2,
+  },
+  inventoryBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  logoutNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 69, 58, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 69, 58, 0.3)',
+  },
+  logoutNavBtnText: {
+    color: '#FF453A',
+    fontSize: 13,
+    fontWeight: '700',
+  },
   dot: {
     width: 8,
     height: 8,
@@ -698,20 +1242,28 @@ const styles = StyleSheet.create({
   },
   body: {
     flex: 1,
-    paddingVertical: 16,
   },
-  listContent: {
-    paddingHorizontal: 16,
+  columnsContainer: {
+    padding: 16,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 16,
+    alignItems: 'stretch',
+  },
+  ticketColumnWrap: {
+    width: 330,
+    minHeight: 380,
+    maxHeight: 520,
+    flexGrow: 1,
+    maxWidth: 420,
   },
   ticketCard: {
-    width: 330,
+    flex: 1,
     backgroundColor: '#1C1C22',
     borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#2C2C36',
-    marginRight: 16,
     display: 'flex',
     flexDirection: 'column',
   },
@@ -815,6 +1367,81 @@ const styles = StyleSheet.create({
     textDecorationLine: 'line-through',
     color: '#777',
   },
+  itemPrepPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#1E1E26',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#343442',
+  },
+  itemPrepText: {
+    color: '#D5A943',
+    fontSize: 10,
+    fontWeight: '700',
+  },
+  itemFastReadyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#D5A943',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  itemFastReadyBtnText: {
+    color: '#000',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  itemReadyBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(96, 165, 250, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(96, 165, 250, 0.35)',
+  },
+  itemReadyBadgeText: {
+    color: '#60A5FA',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  itemMarkServedBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  itemMarkServedBtnText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  itemServedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(52, 199, 89, 0.15)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  itemServedBadgeText: {
+    color: '#34C759',
+    fontSize: 10,
+    fontWeight: '800',
+  },
   bumpButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -902,13 +1529,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#D5A943',
     letterSpacing: 0.5,
-  },
-  filterPillActiveAddons: {
-    backgroundColor: '#D5A943',
-  },
-  filterPillTextActiveAddons: {
-    color: '#000',
-    fontWeight: '800',
   },
   soundButton: {
     flexDirection: 'row',
@@ -1026,5 +1646,271 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '800',
+  },
+  // Kitchen Inventory Modal Styles
+  inventoryModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  inventoryModalContainer: {
+    width: '100%',
+    maxWidth: 820,
+    maxHeight: '90%',
+    backgroundColor: '#18181D',
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#2E2E38',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  inventoryModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#202028',
+    borderBottomWidth: 1,
+    borderBottomColor: '#2C2C36',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  inventoryIconBadge: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inventoryModalTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#fff',
+  },
+  inventoryModalSubtitle: {
+    fontSize: 12,
+    color: '#8E8E93',
+  },
+  handoverNavBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#2A2415',
+    borderWidth: 1,
+    borderColor: '#4A3D1E',
+  },
+  handoverNavBtnText: {
+    color: '#D5A943',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  invModalCloseBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#2A2A34',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  invStatsStrip: {
+    flexDirection: 'row',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: '#15151A',
+    borderBottomWidth: 1,
+    borderBottomColor: '#24242C',
+    gap: 12,
+  },
+  invStatBox: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    backgroundColor: '#1E1E26',
+    borderWidth: 1,
+    borderColor: '#2A2A36',
+  },
+  invStatLabel: {
+    fontSize: 11,
+    color: '#8E8E93',
+    fontWeight: '600',
+  },
+  invStatValue: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#fff',
+    marginTop: 2,
+  },
+  invFilterSection: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#24242C',
+    gap: 10,
+  },
+  invSearchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#24242C',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#343440',
+  },
+  invSearchInput: {
+    flex: 1,
+    color: '#fff',
+    fontSize: 14,
+  },
+  invCategoryScroll: {
+    gap: 8,
+    paddingVertical: 2,
+  },
+  invCatPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: '#22222A',
+    borderWidth: 1,
+    borderColor: '#2E2E3A',
+  },
+  invCatPillActive: {
+    backgroundColor: '#D5A943',
+    borderColor: '#D5A943',
+  },
+  invCatPillText: {
+    color: '#8E8E93',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  invCatPillTextActive: {
+    color: '#000',
+    fontWeight: '800',
+  },
+  invListContainer: {
+    padding: 20,
+    gap: 10,
+  },
+  invRowCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#202028',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#2C2C38',
+  },
+  invRowLow: {
+    borderColor: 'rgba(255, 159, 10, 0.4)',
+    backgroundColor: 'rgba(255, 159, 10, 0.05)',
+  },
+  invRowOut: {
+    borderColor: 'rgba(255, 69, 58, 0.4)',
+    backgroundColor: 'rgba(255, 69, 58, 0.06)',
+  },
+  invRowLeft: {
+    flex: 1,
+    marginRight: 16,
+  },
+  invItemName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#fff',
+  },
+  invItemUrdu: {
+    fontSize: 13,
+    color: '#D5A943',
+    fontWeight: '600',
+  },
+  invRowMeta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  invCategoryTag: {
+    backgroundColor: '#2A2A36',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  invCategoryTagText: {
+    fontSize: 11,
+    color: '#C7C7CC',
+    fontWeight: '600',
+  },
+  invLocationText: {
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  invThresholdText: {
+    fontSize: 11,
+    color: '#8E8E93',
+  },
+  invRowRight: {
+    alignItems: 'flex-end',
+  },
+  invBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  invBadgeOk: {
+    backgroundColor: 'rgba(48, 209, 88, 0.12)',
+  },
+  invBadgeLow: {
+    backgroundColor: 'rgba(255, 159, 10, 0.15)',
+  },
+  invBadgeCritical: {
+    backgroundColor: 'rgba(255, 59, 48, 0.18)',
+  },
+  invBadgeOut: {
+    backgroundColor: 'rgba(255, 69, 58, 0.2)',
+  },
+  invStockValueText: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  invStatusLabel: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#8E8E93',
+    marginTop: 4,
+    letterSpacing: 0.3,
+  },
+  invEmptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+  },
+  invEmptyTitle: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '700',
+    marginTop: 10,
+  },
+  invEmptySub: {
+    color: '#8E8E93',
+    fontSize: 12,
+    marginTop: 4,
   },
 });

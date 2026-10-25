@@ -13,14 +13,16 @@ type OrderSlipProps = {
  */
 export function printOrderSlip(ticket: Ticket) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  if (!ticket) return;
 
-  const date = new Date(ticket.timePlaced).toLocaleString();
-  const itemsHtml = ticket.items.map(item => `
+  const date = new Date(ticket.timePlaced || Date.now()).toLocaleString();
+  const items = Array.isArray(ticket.items) ? ticket.items : [];
+  const itemsHtml = items.map(item => `
     <tr>
-      <td style="width: 16%; font-size: 13px; font-weight: bold; vertical-align: top; padding: 4px 0;">${item.qty}x</td>
+      <td style="width: 16%; font-size: 13px; font-weight: bold; vertical-align: top; padding: 4px 0;">${item?.qty || 1}x</td>
       <td style="width: 84%; font-size: 13px; vertical-align: top; padding: 4px 0;">
-        <div style="font-weight: bold;">${item.name}</div>
-        ${item.notes ? `<div style="font-size: 10px; font-style: italic; color: #666; margin-top: 1px;">Note: ${item.notes}</div>` : ''}
+        <div style="font-weight: bold;">${item?.name || ''}</div>
+        ${item?.notes ? `<div style="font-size: 10px; font-style: italic; color: #666; margin-top: 1px;">Note: ${item.notes}</div>` : ''}
       </td>
     </tr>
   `).join('');
@@ -173,7 +175,9 @@ export function printOrderSlip(ticket: Ticket) {
 }
 
 export default function OrderSlip({ ticket }: OrderSlipProps) {
-  const date = new Date(ticket.timePlaced).toLocaleString();
+  if (!ticket) return null;
+  const items = Array.isArray(ticket.items) ? ticket.items : [];
+  const date = ticket.timePlaced ? new Date(ticket.timePlaced).toLocaleString() : '';
 
   return (
     <View style={styles.container} nativeID="order-slip-container">
@@ -217,12 +221,12 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
         <Text style={styles.metaText}>{date}</Text>
       </View>
       <View style={styles.metaRow}>
-        <Text style={styles.metaTextBold}>Table: {ticket.tableName}</Text>
-        <Text style={styles.metaText}>Server: {ticket.server}</Text>
+        <Text style={styles.metaTextBold}>Table: {ticket.tableName || 'N/A'}</Text>
+        <Text style={styles.metaText}>Server: {ticket.server || 'Staff'}</Text>
       </View>
       {ticket.isAddOn && (
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>Round #: {ticket.roundNumber}</Text>
+          <Text style={styles.metaText}>Round #: {ticket.roundNumber || 2}</Text>
         </View>
       )}
 
@@ -234,12 +238,12 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
         <Text style={[styles.tableText, styles.itemCol]}>Item</Text>
       </View>
 
-      {ticket.items.map((item, idx) => (
+      {items.map((item, idx) => (
         <View key={idx} style={styles.tableRow}>
-          <Text style={[styles.itemText, styles.qtyCol, { fontWeight: 'bold' }]}>{item.qty}</Text>
+          <Text style={[styles.itemText, styles.qtyCol, { fontWeight: 'bold' }]}>{item?.qty ?? 1}</Text>
           <View style={styles.itemCol}>
-            <Text style={styles.itemText}>{item.name}</Text>
-            {item.notes ? (
+            <Text style={styles.itemText}>{item?.name ?? ''}</Text>
+            {item?.notes ? (
               <Text style={styles.notesText}>Note: {item.notes}</Text>
             ) : null}
           </View>

@@ -271,6 +271,15 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
   seedItem('inv13', 'SKU-FL-002', 'Charcoal BBQ (Hardwood)', 'کوئلہ باربی کیو', 'Fuel', 'kg', 80, 50, 90, 'Al-Rehman LPG & Charcoal Agency', '+92 322 1199887', 'Dry Ration Store - Shelf B', 'B-26-CHR-055', undefined, 'ARL-7712'),
   seedItem('inv14', 'SKU-SP-001', 'Tissue & Cutlery Packs', 'ٹشو اور کٹلری', 'Supplies', 'packs', 20, 15, 180, 'Modern Pack & Eco Disposables', '+92 301 7766554', 'Packaging Store', 'B-26-TIS-022', undefined, 'MPE-1230'),
   seedItem('inv15', 'SKU-PK-001', 'Sultan Takeaway Boxes (Embossed)', 'سلطان باکسز', 'Packaging', 'pcs', 150, 200, 25, 'Modern Pack & Eco Disposables', '+92 301 7766554', 'Packaging Store', 'B-26-BOX-101', undefined, 'MPE-1230'),
+  // Juice Corner & Beverage Items
+  seedItem('inv16', 'SKU-JC-001', 'Fresh Oranges (Mosambi)', 'تازہ مالٹا و مسمی', 'Juice & Fruits', 'kg', 45, 20, 220, 'Punjab Fresh Orchards', '+92 305 1234888', 'Juice Corner Chiller', 'B-26-ORG-01', 5, 'PFO-2026'),
+  seedItem('inv17', 'SKU-JC-002', 'Fresh Bananas (Kela)', 'تازہ کیلے', 'Juice & Fruits', 'dozens', 18, 10, 180, 'Punjab Fresh Orchards', '+92 305 1234888', 'Juice Corner Basket', 'B-26-BAN-02', 3, 'PFO-2027'),
+  seedItem('inv18', 'SKU-JC-003', 'Fresh Lemons (Kaghzi Leemo)', 'کاغذی لیموں', 'Juice & Fruits', 'kg', 8, 4, 320, 'Sindh Green Fresh Produce Wholesale', '+92 333 5551234', 'Juice Corner Chiller', 'B-26-LEM-03', 7, 'SGP-9022'),
+  seedItem('inv19', 'SKU-JC-004', 'Whole Milk (Chilled Pack 1L)', 'تازہ دودھ 1 لیٹر', 'Dairy', 'liters', 30, 15, 260, 'Punjab Pure Dairy & Khoya Farm', '+92 302 9876543', 'Juice Bar Refrigerator', 'B-26-MLK-04', 4, 'PPD-1035'),
+  seedItem('inv20', 'SKU-JC-005', 'Rooh Afza / Rose Syrup 800ml', 'روح افزا بوتل', 'Beverages', 'bottles', 10, 5, 480, 'National Spices & Grains Mart', '+92 345 9988776', 'Juice Corner Shelf', 'B-26-ROH-05', 300, 'NSG-4450'),
+  seedItem('inv21', 'SKU-JC-006', 'Disposable Juice Glasses (500ml)', 'جوس گلاس ڈسپوزایبل', 'Packaging', 'pcs', 300, 100, 12, 'Modern Pack & Eco Disposables', '+92 301 7766554', 'Juice Corner Under-counter', 'B-26-GLS-06', undefined, 'MPE-1244'),
+  seedItem('inv22', 'SKU-JC-007', 'Paper Straws (Boba & Juice)', 'پائپ اسٹرا', 'Supplies', 'packs', 15, 5, 120, 'Modern Pack & Eco Disposables', '+92 301 7766554', 'Juice Corner Under-counter', 'B-26-STR-07', undefined, 'MPE-1245'),
+  seedItem('inv23', 'SKU-JC-008', 'Food Grade Crushed Ice', 'برف آئس بلاک', 'Juice & Fruits', 'kg', 50, 20, 25, 'Capital Ice Factory', '+92 321 4455667', 'Juice Bar Ice Chest', 'B-26-ICE-08', 1, 'CIF-3011'),
 ];
 
 export const INITIAL_STOCK_MOVEMENTS: StockMovement[] = [

@@ -15,6 +15,11 @@ import { useShiftStore } from '../../store/shiftStore';
 import { useOpsStore } from '../../store/opsStore';
 import { useRolePermissions } from '../../store/roleStore';
 import SultanLogo from '../../components/SultanLogo';
+import { 
+  SvgDonutChart, 
+  SvgVerticalBarChart, 
+  HorizontalRankedBars 
+} from '../../components/reports/FinancialCharts';
 
 const BRAND = {
   bg: '#F8FAFC',
@@ -59,6 +64,9 @@ export default function AdminDashboard() {
   const tickets = useRestaurantStore(state => state.tickets);
   const tables = useRestaurantStore(state => state.tables);
   const customers = useRestaurantStore(state => state.customers);
+  const menuItems = useRestaurantStore(state => state.menuItems);
+  const regions = useRestaurantStore(state => state.regions) || [];
+  const categories = useRestaurantStore(state => state.categories) || [];
 
   // Shift & Ops Store Integration (from Baithak home.php)
   const shifts = useShiftStore(state => state.shifts);
@@ -344,6 +352,250 @@ export default function AdminDashboard() {
       },
     ] as unknown as Invoice[];
   }, [todaysInvoices, todayTimestamp]);
+
+  // -------------------------------------------------------------
+  // CULINARY ANALYTICS (REGION, CATEGORY & ITEM-WISE PERFORMANCE)
+  // -------------------------------------------------------------
+  const [salesAnalyticsTab, setSalesAnalyticsTab] = useState<'all' | 'region' | 'category' | 'item'>('all');
+  const [regionGraphMode, setRegionGraphMode] = useState<'donut' | 'bar'>('donut');
+  const [categoryGraphMode, setCategoryGraphMode] = useState<'bar' | 'donut'>('bar');
+  const [itemGraphMode, setItemGraphMode] = useState<'bar' | 'ranked'>('bar');
+
+  const menuItemLookup = useMemo(() => {
+    const map = new Map<string, any>();
+    (menuItems || []).forEach(m => {
+      if (m.id) map.set(m.id.toLowerCase(), m);
+      if (m.name) map.set(m.name.trim().toLowerCase(), m);
+    });
+    return map;
+  }, [menuItems]);
+
+  const { regionSales, categorySales, itemSales, totalCulinaryRevenue, totalCulinaryUnits } = useMemo(() => {
+    const regionMap: { [key: string]: { name: string; revenue: number; qty: number; topDishName: string; topDishQty: number } } = {};
+    const categoryMap: { [key: string]: { name: string; revenue: number; qty: number; topDishName: string; topDishQty: number } } = {};
+    const itemMap: { [key: string]: { name: string; revenue: number; qty: number; category: string; region: string } } = {};
+
+    let totalRev = 0;
+    let totalUnits = 0;
+
+    todaysInvoices.forEach(inv => {
+      (inv.items || []).forEach(it => {
+        const qty = it.qty || 1;
+        const lineTotal = (it.price || 0) * qty;
+        totalRev += lineTotal;
+        totalUnits += qty;
+
+        const matched = menuItemLookup.get(it.id?.toLowerCase()) || menuItemLookup.get(it.name?.trim().toLowerCase());
+        const catName = (matched?.category || (it.station === 'juice' ? 'Beverages' : 'Mains')).trim();
+        
+        let regName = (matched?.region || '').trim();
+        if (!regName) {
+          const lowerCat = catName.toLowerCase();
+          const lowerName = (it.name || '').toLowerCase();
+          if (lowerCat.includes('chinese') || lowerName.includes('manchurian') || lowerName.includes('chowmein') || lowerName.includes('soup')) {
+            regName = 'Chinese';
+          } else if (lowerCat.includes('continental') || lowerCat.includes('pasta') || lowerCat.includes('burger') || lowerName.includes('alfredo') || lowerName.includes('fish')) {
+            regName = 'Continental';
+          } else if (lowerCat.includes('arabic') || lowerCat.includes('mandi') || lowerName.includes('hummus')) {
+            regName = 'Arabic';
+          } else if (lowerCat.includes('turkish')) {
+            regName = 'Turkish';
+          } else if (lowerCat.includes('fast food') || lowerCat.includes('pizza') || lowerCat.includes('snack')) {
+            regName = 'Fast Food';
+          } else {
+            regName = 'Pakistani';
+          }
+        }
+
+        // Region
+        if (!regionMap[regName]) {
+          regionMap[regName] = { name: regName, revenue: 0, qty: 0, topDishName: it.name, topDishQty: 0 };
+        }
+        regionMap[regName].revenue += lineTotal;
+        regionMap[regName].qty += qty;
+        if (qty > regionMap[regName].topDishQty) {
+          regionMap[regName].topDishName = it.name;
+          regionMap[regName].topDishQty = qty;
+        }
+
+        // Category
+        if (!categoryMap[catName]) {
+          categoryMap[catName] = { name: catName, revenue: 0, qty: 0, topDishName: it.name, topDishQty: 0 };
+        }
+        categoryMap[catName].revenue += lineTotal;
+        categoryMap[catName].qty += qty;
+        if (qty > categoryMap[catName].topDishQty) {
+          categoryMap[catName].topDishName = it.name;
+          categoryMap[catName].topDishQty = qty;
+        }
+
+        // Item
+        const itemKey = (it.name || 'Dish').trim();
+        if (!itemMap[itemKey]) {
+          itemMap[itemKey] = { name: itemKey, revenue: 0, qty: 0, category: catName, region: regName };
+        }
+        itemMap[itemKey].revenue += lineTotal;
+        itemMap[itemKey].qty += qty;
+      });
+    });
+
+    const regionColors: { [key: string]: { bar: string; badgeBg: string; text: string; icon: keyof typeof Ionicons.glyphMap } } = {
+      'Pakistani': { bar: '#52141C', badgeBg: '#FDF2F4', text: '#52141C', icon: 'flame' },
+      'Chinese': { bar: '#DC2626', badgeBg: '#FEF2F2', text: '#DC2626', icon: 'restaurant' },
+      'Continental': { bar: '#0284C7', badgeBg: '#F0F9FF', text: '#0284C7', icon: 'pizza' },
+      'Arabic': { bar: '#059669', badgeBg: '#ECFDF5', text: '#059669', icon: 'earth' },
+      'Turkish': { bar: '#D97706', badgeBg: '#FFFBEB', text: '#D97706', icon: 'cafe' },
+      'Fast Food': { bar: '#7C3AED', badgeBg: '#F5F3FF', text: '#7C3AED', icon: 'fast-food' },
+      'Italian': { bar: '#2563EB', badgeBg: '#EFF6FF', text: '#2563EB', icon: 'nutrition' },
+    };
+
+    const fallbackRegionColors = ['#52141C', '#DC2626', '#0284C7', '#059669', '#D97706', '#7C3AED', '#2563EB', '#E11D48'];
+    const fallbackCategoryColors = ['#52141C', '#B45309', '#047857', '#4338CA', '#0369A1', '#7E22CE', '#BE185D', '#64748B'];
+
+    let formattedRegions = Object.values(regionMap).sort((a, b) => b.revenue - a.revenue);
+    let formattedCategories = Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
+    let formattedItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty || b.revenue - a.revenue);
+
+    // If no settled orders yet, provide realistic preview data
+    if (formattedRegions.length === 0) {
+      formattedRegions = [
+        { name: 'Pakistani', revenue: 76500, qty: 58, topDishName: 'Mutton Shinwari Karahi (1 KG)', topDishQty: 18 },
+        { name: 'Chinese', revenue: 28400, qty: 32, topDishName: 'Chicken Manchurian & Egg Fried Rice', topDishQty: 14 },
+        { name: 'Continental', revenue: 21600, qty: 22, topDishName: 'Grilled Chicken Alfredo Pasta', topDishQty: 11 },
+        { name: 'Arabic', revenue: 16800, qty: 15, topDishName: 'Arabic Chicken Mandi Platter', topDishQty: 8 },
+        { name: 'Fast Food', revenue: 9800, qty: 18, topDishName: 'Crispy Zinger Club Burger', topDishQty: 9 },
+      ];
+      totalRev = 153100;
+      totalUnits = 145;
+    }
+
+    if (formattedCategories.length === 0) {
+      formattedCategories = [
+        { name: 'Special Karahi & Handi', revenue: 58200, qty: 24, topDishName: 'Mutton Shinwari Karahi', topDishQty: 18 },
+        { name: 'Rice & Dum Biryani', revenue: 32400, qty: 38, topDishName: 'Chicken Dum Biryani Special', topDishQty: 26 },
+        { name: 'Chinese & Wok Specials', revenue: 28400, qty: 32, topDishName: 'Chicken Manchurian', topDishQty: 14 },
+        { name: 'BBQ & Kabab Platters', revenue: 24800, qty: 18, topDishName: 'Reshmi Kabab Platter', topDishQty: 12 },
+        { name: 'Continental & Pasta', revenue: 21600, qty: 22, topDishName: 'Alfredo Pasta', topDishQty: 11 },
+        { name: 'Beverages & Coolers', revenue: 14200, qty: 45, topDishName: 'Mint Margarita Cooler', topDishQty: 32 },
+      ];
+    }
+
+    if (formattedItems.length === 0) {
+      formattedItems = [
+        { name: 'Mutton Shinwari Karahi (1 KG)', category: 'Special Karahi', region: 'Pakistani', qty: 18, revenue: 48600 },
+        { name: 'Chicken Dum Biryani Special', category: 'Rice & Biryani', region: 'Pakistani', qty: 26, revenue: 20800 },
+        { name: 'Chicken Manchurian & Egg Fried Rice', category: 'Chinese', region: 'Chinese', qty: 14, revenue: 15400 },
+        { name: 'Grilled Chicken Alfredo Pasta', category: 'Continental', region: 'Continental', qty: 11, revenue: 14850 },
+        { name: 'Reshmi Kabab Platter (8 Pcs)', category: 'BBQ Specials', region: 'Pakistani', qty: 12, revenue: 16800 },
+        { name: 'Fresh Mint Margarita Cooler', category: 'Beverages', region: 'Pakistani', qty: 32, revenue: 11200 },
+        { name: 'Sultan Special Roghni Naan', category: 'Tandoor', region: 'Pakistani', qty: 54, revenue: 8100 },
+      ];
+    }
+
+    const maxItemQty = Math.max(...formattedItems.map(i => i.qty), 1);
+    const effectiveTotalRev = totalRev || 1;
+
+    const mappedRegions = formattedRegions.map((r, idx) => {
+      const cfg = regionColors[r.name] || {
+        bar: fallbackRegionColors[idx % fallbackRegionColors.length],
+        badgeBg: '#F8FAFC',
+        text: '#475569',
+        icon: 'globe-outline' as keyof typeof Ionicons.glyphMap,
+      };
+      const pct = Math.round((r.revenue / effectiveTotalRev) * 100);
+      return {
+        ...r,
+        pct: Math.max(1, pct),
+        color: cfg.bar,
+        badgeBg: cfg.badgeBg,
+        textColor: cfg.text,
+        icon: cfg.icon,
+      };
+    });
+
+    const mappedCategories = formattedCategories.map((c, idx) => {
+      const pct = Math.round((c.revenue / effectiveTotalRev) * 100);
+      return {
+        ...c,
+        pct: Math.max(1, pct),
+        color: fallbackCategoryColors[idx % fallbackCategoryColors.length],
+      };
+    });
+
+    const mappedItems = formattedItems.slice(0, 7).map((item, idx) => {
+      const pctOfMax = Math.min(100, Math.max(14, Math.round((item.qty / maxItemQty) * 100)));
+      return {
+        ...item,
+        rank: idx + 1,
+        pctOfMax,
+      };
+    });
+
+    return {
+      regionSales: mappedRegions,
+      categorySales: mappedCategories,
+      itemSales: mappedItems,
+      totalCulinaryRevenue: totalRev,
+      totalCulinaryUnits: totalUnits,
+    };
+  }, [todaysInvoices, menuItemLookup]);
+
+  // SVG Chart Data Mappings
+  const regionDonutData = useMemo(() => {
+    return regionSales.map(r => ({
+      label: r.name,
+      value: r.revenue,
+      color: r.color,
+      count: r.qty,
+    }));
+  }, [regionSales]);
+
+  const regionBarData = useMemo(() => {
+    return regionSales.map(r => ({
+      label: r.name,
+      value: r.revenue,
+      color: r.color,
+      sublabel: `${r.qty} sold`,
+    }));
+  }, [regionSales]);
+
+  const categoryBarData = useMemo(() => {
+    return categorySales.slice(0, 6).map(c => ({
+      label: c.name.length > 13 ? c.name.slice(0, 11) + '..' : c.name,
+      value: c.revenue,
+      color: c.color,
+      sublabel: `${c.qty} sold`,
+    }));
+  }, [categorySales]);
+
+  const categoryDonutData = useMemo(() => {
+    return categorySales.slice(0, 6).map(c => ({
+      label: c.name,
+      value: c.revenue,
+      color: c.color,
+      count: c.qty,
+    }));
+  }, [categorySales]);
+
+  const itemBarData = useMemo(() => {
+    return itemSales.slice(0, 6).map(it => ({
+      label: it.name.length > 13 ? it.name.slice(0, 11) + '..' : it.name,
+      value: it.revenue,
+      color: it.rank === 1 ? '#D4AF37' : it.rank === 2 ? '#94A3B8' : it.rank === 3 ? '#B45309' : '#52141C',
+      sublabel: `${it.qty} sold`,
+      badge: it.region,
+    }));
+  }, [itemSales]);
+
+  const itemRankedData = useMemo(() => {
+    return itemSales.slice(0, 6).map(it => ({
+      label: it.name,
+      value: it.revenue,
+      color: it.rank === 1 ? '#D4AF37' : it.rank === 2 ? '#64748B' : it.rank === 3 ? '#B45309' : '#52141C',
+      count: it.qty,
+      secondary: `${it.region} • ${it.category}`,
+    }));
+  }, [itemSales]);
 
   return (
     <ScrollView 
@@ -1040,6 +1292,332 @@ export default function AdminDashboard() {
               <Text style={styles.paymentPillAmt}>Rs. {paymentMetrics.online.amount.toLocaleString()}</Text>
             </View>
           </View>
+        </View>
+      </View>
+
+      {/* ================= 3.5 CULINARY PERFORMANCE (REGION, CATEGORY & TOP ITEMS CHARTS) ================= */}
+      <View style={styles.culinarySectionContainer}>
+        {/* Section Header with Segmented Switcher */}
+        <View style={styles.culinarySectionHeader}>
+          <View>
+            <View style={styles.culinaryHeaderBadgeRow}>
+              <Text style={styles.sectionTitle}>Culinary Sales Analytics & Top Sellers</Text>
+              <View style={styles.liveSalesMixBadge}>
+                <View style={styles.pulseDotGold} />
+                <Text style={styles.liveSalesMixBadgeText}>LIVE SALES MIX</Text>
+              </View>
+            </View>
+            <Text style={styles.sectionSubtitle}>
+              Real-time sales volume & revenue breakdown by Region (Cuisine), Category, and Top Dishes
+            </Text>
+          </View>
+
+          {/* Segmented Filter Pills */}
+          <View style={styles.culinaryTabPillContainer}>
+            <TouchableOpacity 
+              style={[styles.culinaryTabPill, salesAnalyticsTab === 'all' && styles.culinaryTabPillActive]}
+              onPress={() => setSalesAnalyticsTab('all')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="grid" size={13} color={salesAnalyticsTab === 'all' ? '#FFFFFF' : '#64748B'} />
+              <Text style={[styles.culinaryTabPillText, salesAnalyticsTab === 'all' && styles.culinaryTabPillTextActive]}>
+                All 3 Views
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.culinaryTabPill, salesAnalyticsTab === 'region' && styles.culinaryTabPillActive]}
+              onPress={() => setSalesAnalyticsTab('region')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="globe-outline" size={13} color={salesAnalyticsTab === 'region' ? '#FFFFFF' : '#64748B'} />
+              <Text style={[styles.culinaryTabPillText, salesAnalyticsTab === 'region' && styles.culinaryTabPillTextActive]}>
+                Region-wise
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.culinaryTabPill, salesAnalyticsTab === 'category' && styles.culinaryTabPillActive]}
+              onPress={() => setSalesAnalyticsTab('category')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="albums-outline" size={13} color={salesAnalyticsTab === 'category' ? '#FFFFFF' : '#64748B'} />
+              <Text style={[styles.culinaryTabPillText, salesAnalyticsTab === 'category' && styles.culinaryTabPillTextActive]}>
+                Category-wise
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity 
+              style={[styles.culinaryTabPill, salesAnalyticsTab === 'item' && styles.culinaryTabPillActive]}
+              onPress={() => setSalesAnalyticsTab('item')}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="trophy-outline" size={13} color={salesAnalyticsTab === 'item' ? '#FFFFFF' : '#64748B'} />
+              <Text style={[styles.culinaryTabPillText, salesAnalyticsTab === 'item' && styles.culinaryTabPillTextActive]}>
+                Top Items
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* 3 Visual Data Boxes Grid */}
+        <View style={styles.culinaryBoxesGrid}>
+          {/* BOX 1: REGION-WISE SALES CHART */}
+          {(salesAnalyticsTab === 'all' || salesAnalyticsTab === 'region') && (
+            <View 
+              style={[
+                styles.culinaryBoxCard,
+                salesAnalyticsTab === 'region' ? styles.culinaryBoxCardFull : (isMobile ? styles.culinaryBoxCardFull : isTablet ? styles.culinaryBoxCardHalf : styles.culinaryBoxCardOneThird)
+              ]}
+              {...({ dataSet: { card: 'interactive' } } as any)}
+            >
+              {/* Card Header */}
+              <View style={styles.culinaryBoxHeader}>
+                <View style={styles.culinaryBoxTitleGroup}>
+                  <View style={[styles.culinaryBoxIconWrap, { backgroundColor: '#FDF2F4' }]}>
+                    <Ionicons name="globe-outline" size={18} color="#52141C" />
+                  </View>
+                  <View>
+                    <Text style={styles.culinaryBoxTitle}>Region / Cuisine Share</Text>
+                    <Text style={styles.culinaryBoxSubtitle}>Pakistani, Chinese, Continental</Text>
+                  </View>
+                </View>
+
+                {/* Graph Type Switcher */}
+                <View style={styles.chartToggleRow}>
+                  <TouchableOpacity 
+                    style={[styles.chartToggleBtn, regionGraphMode === 'donut' && styles.chartToggleBtnActive]}
+                    onPress={() => setRegionGraphMode('donut')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chartToggleText, regionGraphMode === 'donut' && styles.chartToggleTextActive]}>🍩 Donut</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.chartToggleBtn, regionGraphMode === 'bar' && styles.chartToggleBtnActive]}
+                    onPress={() => setRegionGraphMode('bar')}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.chartToggleText, regionGraphMode === 'bar' && styles.chartToggleTextActive]}>📊 Bars</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Graphical Visualization Body */}
+              <View style={styles.culinaryCardBody}>
+                {regionGraphMode === 'donut' ? (
+                  <View style={styles.donutCenteringWrap}>
+                    <SvgDonutChart
+                      data={regionDonutData}
+                      size={isMobile ? 150 : 160}
+                      thickness={22}
+                      plain={true}
+                      compactLegend={true}
+                      centerTitle={canViewRevenue ? `Rs. ${(totalCulinaryRevenue / 1000).toFixed(0)}k` : `${totalCulinaryUnits}`}
+                      centerSubtitle="CUISINES"
+                    />
+                  </View>
+                ) : (
+                  <View style={styles.regionBarsContainer}>
+                    {/* Multi-color Segmented Stacked Bar */}
+                    <View style={styles.stackedBarContainer}>
+                      <View style={styles.stackedBarTrack}>
+                        {regionSales.map((r, i) => (
+                          <View key={i} style={[styles.stackedBarSegment, { width: `${r.pct}%`, backgroundColor: r.color }]} />
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Region Detail Rows */}
+                    <View style={styles.culinaryItemsList}>
+                      {regionSales.map((r, i) => (
+                        <View key={i} style={styles.culinaryDataRow}>
+                          <View style={styles.culinaryRowTop}>
+                            <View style={styles.categoryBulletRow}>
+                              <View style={[styles.categoryColorDot, { backgroundColor: r.color }]} />
+                              <Text style={styles.categoryNameHeading}>{r.name}</Text>
+                              <View style={[styles.regionPillSmall, { backgroundColor: r.badgeBg }]}>
+                                <Text style={[styles.regionPillSmallText, { color: r.textColor }]}>{r.pct}%</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.culinaryRowRevenue}>
+                              {canViewRevenue ? `Rs. ${r.revenue.toLocaleString()}` : `${r.qty} orders`}
+                            </Text>
+                          </View>
+                          <View style={styles.culinaryMeterTrack}>
+                            <View style={[styles.culinaryMeterFill, { width: `${r.pct}%`, backgroundColor: r.color }]} />
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.culinaryBoxFooter}>
+                <Ionicons name="sparkles" size={13} color={BRAND.gold} />
+                <Text style={styles.culinaryFooterNote} numberOfLines={1}>
+                  Leading: <Text style={{ fontWeight: '800', color: BRAND.burgundy }}>{regionSales[0]?.name || 'Pakistani'}</Text> ({regionSales[0]?.pct || 0}% volume)
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* BOX 2: CATEGORY-WISE SALES SHARE */}
+          {(salesAnalyticsTab === 'all' || salesAnalyticsTab === 'category') && (
+            <View 
+              style={[
+                styles.culinaryBoxCard,
+                salesAnalyticsTab === 'category' ? styles.culinaryBoxCardFull : (isMobile ? styles.culinaryBoxCardFull : isTablet ? styles.culinaryBoxCardHalf : styles.culinaryBoxCardOneThird)
+              ]}
+              {...({ dataSet: { card: 'interactive' } } as any)}
+            >
+              {/* Card Header */}
+              <View style={styles.culinaryBoxHeader}>
+                <View style={styles.culinaryBoxTitleGroup}>
+                  <View style={[styles.culinaryBoxIconWrap, { backgroundColor: '#FFFBEB' }]}>
+                    <Ionicons name="albums-outline" size={18} color="#D97706" />
+                  </View>
+                  <View>
+                    <Text style={styles.culinaryBoxTitle}>Category Sales Mix</Text>
+                    <Text style={styles.culinaryBoxSubtitle}>Revenue & order distribution</Text>
+                  </View>
+                </View>
+
+                <View style={styles.culinaryHeaderTag}>
+                  <Text style={styles.culinaryHeaderTagText}>TOP CATEGORIES</Text>
+                </View>
+              </View>
+
+              {/* Category Meter Deck */}
+              <View style={styles.culinaryCardBody}>
+                <View style={styles.catMetersListContainer}>
+                  {categorySales.slice(0, 5).map((cat, idx) => (
+                    <View key={idx} style={styles.catMeterCardRow}>
+                      <View style={styles.catMeterHeader}>
+                        <View style={styles.catMeterTitleCol}>
+                          <View style={[styles.categoryColorDot, { backgroundColor: cat.color }]} />
+                          <Text style={styles.catMeterName} numberOfLines={1}>{cat.name}</Text>
+                        </View>
+                        <View style={styles.catMeterValuesCol}>
+                          <Text style={styles.catMeterRevenue}>
+                            {canViewRevenue ? `Rs. ${cat.revenue.toLocaleString()}` : `${cat.qty} sold`}
+                          </Text>
+                          <View style={[styles.catMeterPctBadge, { backgroundColor: `${cat.color}15` }]}>
+                            <Text style={[styles.catMeterPctText, { color: cat.color }]}>{cat.pct}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                      <View style={styles.catMeterTrack}>
+                        <View style={[styles.catMeterFill, { width: `${cat.pct}%`, backgroundColor: cat.color }]} />
+                      </View>
+                      <View style={styles.catMeterFooter}>
+                        <Text style={styles.catTopDishHint} numberOfLines={1}>
+                          Top: <Text style={{ fontWeight: '700', color: BRAND.textPrimary }}>{cat.topDishName || 'Special'}</Text> ({cat.topDishQty || 0} sold)
+                        </Text>
+                        <Text style={styles.catOrderCountText}>{cat.qty} orders</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              <View style={styles.culinaryBoxFooter}>
+                <Ionicons name="pie-chart-outline" size={13} color="#D97706" />
+                <Text style={styles.culinaryFooterNote} numberOfLines={1}>
+                  Top Category: <Text style={{ fontWeight: '800', color: BRAND.textPrimary }}>{categorySales[0]?.name || 'Special Karahi'}</Text> ({canViewRevenue ? `Rs. ${categorySales[0]?.revenue.toLocaleString()}` : `${categorySales[0]?.qty} sold`})
+                </Text>
+              </View>
+            </View>
+          )}
+
+          {/* BOX 3: ITEM-WISE TOP SALES LEADERBOARD */}
+          {(salesAnalyticsTab === 'all' || salesAnalyticsTab === 'item') && (
+            <View 
+              style={[
+                styles.culinaryBoxCard,
+                salesAnalyticsTab === 'item' ? styles.culinaryBoxCardFull : (isMobile ? styles.culinaryBoxCardFull : isTablet ? styles.culinaryBoxCardHalf : styles.culinaryBoxCardOneThird)
+              ]}
+              {...({ dataSet: { card: 'interactive' } } as any)}
+            >
+              {/* Card Header */}
+              <View style={styles.culinaryBoxHeader}>
+                <View style={styles.culinaryBoxTitleGroup}>
+                  <View style={[styles.culinaryBoxIconWrap, { backgroundColor: '#FEF3C7' }]}>
+                    <Ionicons name="trophy" size={18} color="#B45309" />
+                  </View>
+                  <View>
+                    <Text style={styles.culinaryBoxTitle}>Star Dishes Leaderboard</Text>
+                    <Text style={styles.culinaryBoxSubtitle}>Ranked by units sold & revenue</Text>
+                  </View>
+                </View>
+
+                <View style={[styles.culinaryHeaderTag, { backgroundColor: '#FEF3C7' }]}>
+                  <Text style={[styles.culinaryHeaderTagText, { color: '#B45309' }]}>BESTSELLERS</Text>
+                </View>
+              </View>
+
+              {/* Star Dishes Leaderboard List */}
+              <View style={styles.culinaryCardBody}>
+                <View style={styles.leaderboardListContainer}>
+                  {itemSales.slice(0, 5).map((dish, idx) => {
+                    const isGold = dish.rank === 1;
+                    const isSilver = dish.rank === 2;
+                    const isBronze = dish.rank === 3;
+                    const medalBg = isGold ? '#FEF3C7' : isSilver ? '#F1F5F9' : isBronze ? '#FFF7ED' : '#F8FAFC';
+                    const medalBorder = isGold ? '#FDE68A' : isSilver ? '#CBD5E1' : isBronze ? '#FFEDD5' : '#E2E8F0';
+                    const medalColor = isGold ? '#B45309' : isSilver ? '#475569' : isBronze ? '#C2410C' : '#64748B';
+
+                    return (
+                      <View key={idx} style={styles.leaderboardCardItem}>
+                        <View style={styles.leaderboardMainRow}>
+                          <View style={[styles.leaderboardMedalBadge, { backgroundColor: medalBg, borderColor: medalBorder }]}>
+                            <Text style={[styles.leaderboardMedalText, { color: medalColor }]}>
+                              {isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : `#${dish.rank}`}
+                            </Text>
+                          </View>
+                          <View style={styles.leaderboardInfoCol}>
+                            <View style={styles.leaderboardTitleRow}>
+                              <Text style={styles.leaderboardDishName} numberOfLines={1}>{dish.name}</Text>
+                              <View style={styles.dishRegionPill}>
+                                <Text style={styles.dishRegionPillText}>{dish.region}</Text>
+                              </View>
+                            </View>
+                            <Text style={styles.leaderboardDishCategory}>{dish.category}</Text>
+                          </View>
+                          <View style={styles.leaderboardStatsCol}>
+                            <Text style={styles.leaderboardRevenueText}>
+                              {canViewRevenue ? `Rs. ${dish.revenue.toLocaleString()}` : `${dish.qty} units`}
+                            </Text>
+                            <View style={styles.leaderboardUnitsPill}>
+                              <Text style={styles.leaderboardUnitsPillText}>{dish.qty} sold</Text>
+                            </View>
+                          </View>
+                        </View>
+                        <View style={styles.leaderboardVolumeTrack}>
+                          <View 
+                            style={[
+                              styles.leaderboardVolumeFill, 
+                              { 
+                                width: `${dish.pctOfMax}%`, 
+                                backgroundColor: isGold ? BRAND.gold : isSilver ? '#64748B' : isBronze ? '#EA580C' : BRAND.burgundy 
+                              }
+                            ]} 
+                          />
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={styles.culinaryBoxFooter}>
+                <Ionicons name="ribbon-outline" size={13} color="#B45309" />
+                <Text style={styles.culinaryFooterNote} numberOfLines={1}>
+                  #1 Star Dish: <Text style={{ fontWeight: '800', color: '#B45309' }}>{itemSales[0]?.name || 'Shinwari Karahi'}</Text> ({itemSales[0]?.qty || 0} units)
+                </Text>
+              </View>
+            </View>
+          )}
         </View>
       </View>
 
@@ -2382,5 +2960,644 @@ const styles = StyleSheet.create({
     width: 1,
     height: 24,
     backgroundColor: '#E2E8F0',
+  },
+
+  // -------------------------------------------------------------
+  // CULINARY PERFORMANCE (REGION, CATEGORY & ITEM CHARTS) STYLES
+  // -------------------------------------------------------------
+  culinarySectionContainer: {
+    marginBottom: 20,
+  },
+  culinarySectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  culinaryHeaderBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  liveSalesMixBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 12,
+  },
+  pulseDotGold: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D4AF37',
+  },
+  liveSalesMixBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#92400E',
+    letterSpacing: 0.5,
+  },
+  culinaryTabPillContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EDF2F7',
+    borderRadius: 12,
+    padding: 3,
+    gap: 2,
+    flexWrap: 'wrap',
+  },
+  culinaryTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 9,
+    ...Platform.select({
+      web: { cursor: 'pointer', transition: 'all 0.15s ease' } as any,
+    }),
+  },
+  culinaryTabPillActive: {
+    backgroundColor: BRAND.burgundy,
+    ...Platform.select({
+      web: { boxShadow: '0 2px 6px rgba(82, 20, 28, 0.25)' } as any,
+    }),
+  },
+  culinaryTabPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  culinaryTabPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  culinaryBoxesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 16,
+  },
+  culinaryBoxCard: {
+    backgroundColor: BRAND.cardBg,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: BRAND.cardBorder,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'space-between',
+    minHeight: 460,
+  },
+  culinaryBoxCardFull: {
+    width: '100%',
+  },
+  culinaryBoxCardHalf: {
+    width: '48.5%',
+  },
+  culinaryBoxCardOneThird: {
+    flex: 1,
+    minWidth: 320,
+  },
+  culinaryBoxHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    marginBottom: 12,
+  },
+  culinaryBoxTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  chartToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 2.5,
+    gap: 2,
+  },
+  chartToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 6,
+    ...Platform.select({
+      web: { cursor: 'pointer', transition: 'all 0.15s ease' } as any,
+    }),
+  },
+  chartToggleBtnActive: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    ...Platform.select({
+      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } as any,
+    }),
+  },
+  chartToggleText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  chartToggleTextActive: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
+  svgChartWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 6,
+    overflow: 'hidden',
+  },
+  culinaryBoxIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  culinaryBoxTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  culinaryBoxSubtitle: {
+    fontSize: 10.5,
+    color: BRAND.textMuted,
+    marginTop: 1,
+  },
+  culinaryMetricBadgeMaroon: {
+    backgroundColor: '#FDF2F4',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+  },
+  culinaryMetricBadgeTextMaroon: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+  culinaryMetricBadgeAmber: {
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  culinaryMetricBadgeTextAmber: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  culinaryMetricBadgeGold: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+  },
+  culinaryMetricBadgeTextGold: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#92400E',
+  },
+  stackedBarContainer: {
+    marginBottom: 14,
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  stackedBarTrack: {
+    height: 10,
+    borderRadius: 6,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    backgroundColor: '#E2E8F0',
+    marginBottom: 8,
+  },
+  stackedBarSegment: {
+    height: '100%',
+  },
+  stackedBarLegendRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  stackedLegendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  stackedLegendDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  stackedLegendText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  culinaryItemsList: {
+    gap: 12,
+    marginVertical: 4,
+  },
+  culinaryDataRow: {
+    gap: 4,
+  },
+  culinaryRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  culinaryRowLeftGroup: {
+    flex: 1,
+    marginRight: 10,
+  },
+  regionPillSmall: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginBottom: 2,
+  },
+  regionPillSmallText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+  },
+  culinaryTopDishSubtitle: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  culinaryRowRightGroup: {
+    alignItems: 'flex-end',
+  },
+  culinaryRowRevenue: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  culinaryRowUnits: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  culinaryMeterTrack: {
+    height: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  culinaryMeterFill: {
+    height: '100%',
+    borderRadius: 4,
+  },
+  culinaryBoxFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 10,
+    marginTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  culinaryFooterNote: {
+    fontSize: 11,
+    color: BRAND.textMuted,
+    flex: 1,
+  },
+  categoryBulletRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  categoryColorDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  categoryNameHeading: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  itemLeaderboardRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F8FAFC',
+  },
+  rankMedalBadge: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  rankMedalGold: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  rankMedalSilver: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  rankMedalBronze: {
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FFEDD5',
+  },
+  rankMedalText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  rankMedalTextSpecial: {
+    fontSize: 13,
+  },
+  itemLeaderboardBody: {
+    flex: 1,
+    gap: 4,
+  },
+  itemLeaderboardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  itemLeaderboardName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  itemTagsBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 2,
+  },
+  itemRegionTagPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  itemRegionTagText: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  itemCategoryDotText: {
+    fontSize: 9.5,
+    color: '#94A3B8',
+  },
+  itemLeaderboardRevenue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  itemUnitsSoldTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 1,
+  },
+  itemUnitsSoldText: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: '700',
+  },
+  itemVolumeTrack: {
+    height: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  itemVolumeFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  culinaryCardBody: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingVertical: 6,
+  },
+  donutCenteringWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  regionBarsContainer: {
+    width: '100%',
+    gap: 8,
+  },
+  culinaryHeaderTag: {
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  culinaryHeaderTagText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#B45309',
+    letterSpacing: 0.5,
+  },
+  catMetersListContainer: {
+    width: '100%',
+    gap: 9,
+  },
+  catMeterCardRow: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    gap: 5,
+  },
+  catMeterHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  catMeterTitleCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+    marginRight: 6,
+  },
+  catMeterName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+    flex: 1,
+  },
+  catMeterValuesCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  catMeterRevenue: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  catMeterPctBadge: {
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 6,
+  },
+  catMeterPctText: {
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  catMeterTrack: {
+    height: 5,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+  },
+  catMeterFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  catMeterFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  catTopDishHint: {
+    fontSize: 10,
+    color: '#64748B',
+    flex: 1,
+    marginRight: 6,
+  },
+  catOrderCountText: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  leaderboardListContainer: {
+    width: '100%',
+    gap: 7,
+  },
+  leaderboardCardItem: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    gap: 5,
+  },
+  leaderboardMainRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  leaderboardMedalBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  leaderboardMedalText: {
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  leaderboardInfoCol: {
+    flex: 1,
+    gap: 1,
+  },
+  leaderboardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  leaderboardDishName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+    flex: 1,
+  },
+  dishRegionPill: {
+    backgroundColor: '#EDE9FE',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  dishRegionPillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#6D28D9',
+  },
+  leaderboardDishCategory: {
+    fontSize: 10,
+    color: '#64748B',
+  },
+  leaderboardStatsCol: {
+    alignItems: 'flex-end',
+    gap: 1,
+  },
+  leaderboardRevenueText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.textPrimary,
+  },
+  leaderboardUnitsPill: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  leaderboardUnitsPillText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  leaderboardVolumeTrack: {
+    height: 4,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 2,
+    overflow: 'hidden',
+  },
+  leaderboardVolumeFill: {
+    height: '100%',
+    borderRadius: 2,
   },
 });

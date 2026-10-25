@@ -3,7 +3,6 @@ import { View, StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
-import UniversalPortalNav from '../../components/UniversalPortalNav';
 
 export default function JuiceBarLayout() {
   const { ready } = useRoleGuard(['juicebar', 'manager', 'admin']);
@@ -12,14 +11,7 @@ export default function JuiceBarLayout() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
-
-      {/* Universal Top Navigation Bar */}
-      <UniversalPortalNav
-        portalName="Sultan Juice Bar"
-        portalRole="juicebar"
-        showTabs={false}
-      />
+      <StatusBar barStyle="light-content" backgroundColor="#1A0507" />
 
       <View style={styles.content}>
         <Stack

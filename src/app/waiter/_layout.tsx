@@ -4,6 +4,7 @@ import { Stack } from 'expo-router';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import UniversalPortalNav from '../../components/UniversalPortalNav';
 import BottomNav from '../../components/BottomNav';
+import WaiterNotificationHost from '../../components/WaiterNotificationHost';
 
 export default function WaiterLayout() {
   const { ready, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
@@ -30,6 +31,9 @@ export default function WaiterLayout() {
         />
       </View>
       <BottomNav role="waiter" onLogout={logout} />
+
+      {/* Live Order Taker Food & Bill Audio/Visual Notification Host */}
+      <WaiterNotificationHost />
     </SafeAreaView>
   );
 }

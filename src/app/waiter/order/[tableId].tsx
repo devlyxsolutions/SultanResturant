@@ -87,6 +87,7 @@ export default function TableOrderScreen() {
   const placeOrder = useRestaurantStore(state => state.placeOrder);
   const serveTableTickets = useRestaurantStore(state => state.serveTableTickets);
   const updateTicketStatus = useRestaurantStore(state => state.updateTicketStatus);
+  const markItemServed = useRestaurantStore(state => state.markItemServed);
   const transferTable = useRestaurantStore(state => state.transferTable);
   const markTableBilled = useRestaurantStore(state => state.markTableBilled);
   const updateTable = useRestaurantStore(state => state.updateTable);
@@ -119,25 +120,42 @@ export default function TableOrderScreen() {
     price: number; 
     qty: number; 
     notes?: string;
-    status: 'cooking' | 'ready' | 'served';
+    status: 'pending' | 'cooking' | 'ready' | 'served';
     ticketId: string;
     timePlaced: number;
     roundNumber?: number;
+    station?: 'main' | 'juice';
+    prepTimeMin?: number;
   }[] = [];
 
   if (activeTickets.length > 0) {
     activeTickets.forEach(ticket => {
-      ticket.items.forEach(it => {
+      (ticket.items || []).forEach(it => {
+        const itemStation = (it.station || 'main') as 'main' | 'juice';
+        const stationStatus = ticket.stationStatuses?.[itemStation];
+        const itemEffectiveStatus: 'pending' | 'cooking' | 'ready' | 'served' =
+          it.itemStatus
+            ? it.itemStatus
+            : ticket.status === 'served' || (it.completed && stationStatus === 'served')
+            ? 'served'
+            : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
+            ? 'ready'
+            : (stationStatus === 'cooking' || ticket.status === 'cooking')
+            ? 'cooking'
+            : 'pending';
+
         alreadyOrderedItems.push({
           id: it.id,
           name: it.name,
           price: it.price,
           qty: it.qty,
           notes: it.notes,
-          status: ticket.status,
+          status: itemEffectiveStatus,
+          station: itemStation,
           ticketId: ticket.id,
           timePlaced: ticket.timePlaced,
           roundNumber: ticket.roundNumber,
+          prepTimeMin: it.prepTimeMin,
         });
       });
     });
@@ -906,13 +924,13 @@ export default function TableOrderScreen() {
                   </View>
 
                   {/* Ready to Serve Alert Banner */}
-                  {activeTickets.some(t => t.status === 'ready') && (
+                  {(alreadyOrderedItems.some(i => i.status === 'ready') || activeTickets.some(t => t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')) && (
                     <View style={styles.readyAlertBanner}>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Ionicons name="notifications" size={20} color="#007AFF" />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.readyAlertTitle}>Food is Ready for Table!</Text>
-                          <Text style={styles.readyAlertSubtitle}>Kitchen KDS has dispatched dishes</Text>
+                          <Text style={styles.readyAlertTitle}>Food / Drinks Ready for Table!</Text>
+                          <Text style={styles.readyAlertSubtitle}>Kitchen or Bar KDS has dispatched items</Text>
                         </View>
                       </View>
                       <TouchableOpacity
@@ -954,11 +972,13 @@ export default function TableOrderScreen() {
                               ? styles.statusServed 
                               : item.status === 'ready' 
                                 ? styles.statusReady 
-                                : styles.statusCooking
+                                : item.status === 'pending'
+                                  ? styles.statusPending
+                                  : styles.statusCooking
                           ]}
                           onPress={() => {
                             if (item.status === 'ready') {
-                              updateTicketStatus(item.ticketId, 'served');
+                              markItemServed(item.ticketId, item.id, item.station || 'main');
                               broadcastImmediately();
                               if (Platform.OS !== 'web') {
                                 Alert.alert('Served', `${item.name} served!`);
@@ -974,7 +994,9 @@ export default function TableOrderScreen() {
                                 ? 'checkmark-done-circle' 
                                 : item.status === 'ready' 
                                   ? 'checkmark-circle' 
-                                  : 'time-outline'
+                                  : item.status === 'pending'
+                                    ? 'hourglass-outline'
+                                    : 'flame-outline'
                             } 
                             size={12} 
                             color={
@@ -982,15 +1004,31 @@ export default function TableOrderScreen() {
                                 ? '#34C759' 
                                 : item.status === 'ready' 
                                   ? '#007AFF' 
-                                  : '#FF9500'
+                                  : item.status === 'pending'
+                                    ? '#D97706'
+                                    : '#EA580C'
                             } 
                             style={{ marginRight: 3 }} 
                           />
                           <Text style={[
                             styles.foodStatusText,
-                            { color: item.status === 'served' ? '#34C759' : item.status === 'ready' ? '#007AFF' : '#FF9500' }
+                            { 
+                              color: item.status === 'served' 
+                                ? '#34C759' 
+                                : item.status === 'ready' 
+                                  ? '#007AFF' 
+                                  : item.status === 'pending'
+                                    ? '#D97706'
+                                    : '#EA580C' 
+                            }
                           ]}>
-                            {item.status === 'served' ? 'SERVED' : item.status === 'ready' ? 'READY (SERVE)' : 'COOKING'}
+                            {item.status === 'served' 
+                              ? 'SERVED' 
+                              : item.status === 'ready' 
+                                ? 'READY (SERVE)' 
+                                : item.status === 'pending'
+                                  ? 'QUEUED'
+                                  : 'COOKING'}
                           </Text>
                         </TouchableOpacity>
                         <Text style={styles.existingItemPrice}>Rs. {(item.price * item.qty).toLocaleString()}</Text>
@@ -2250,6 +2288,9 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 10,
     marginBottom: 3,
+  },
+  statusPending: {
+    backgroundColor: '#FEF3C7',
   },
   statusCooking: {
     backgroundColor: '#FFF3E0',

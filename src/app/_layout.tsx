@@ -175,11 +175,57 @@ export default function RootLayout() {
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(212, 175, 55, 0.4) !important;
           }
 
-          /* Input subtle glow on focus */
+          /* Clean Inputs: No default browser outlines or inner box-shadows */
+          *:focus,
+          input, textarea, select,
           input:focus, textarea:focus, select:focus {
             outline: none !important;
-            border-color: rgba(212, 175, 55, 0.8) !important;
-            box-shadow: 0 0 0 3px rgba(212, 175, 55, 0.25) !important;
+            box-shadow: none !important;
+            -webkit-tap-highlight-color: transparent !important;
+          }
+
+          /* Search Bars Pop-Out Engine */
+          .search-bar-pop,
+          [data-search-box="true"],
+          .search-pill-box,
+          .modal-search-bar,
+          .quick-find-box {
+            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                        box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+                        border-color 0.22s ease,
+                        background-color 0.22s ease !important;
+          }
+
+          /* When any input inside is focused: whole search bar pops out with luxury gold halo */
+          .search-bar-pop:focus-within,
+          [data-search-box="true"]:focus-within,
+          .search-pill-box:focus-within,
+          .modal-search-bar:focus-within,
+          .quick-find-box:focus-within {
+            transform: scale(1.025) translateY(-2px) !important;
+            border-color: #D4AF37 !important;
+            background-color: #FFFFFF !important;
+            box-shadow: 0 10px 28px rgba(212, 175, 55, 0.32), 0 0 0 2.5px rgba(212, 175, 55, 0.55) !important;
+            z-index: 20 !important;
+          }
+
+          /* Ensure all search inputs have dark, crystal-clear readable font and high-contrast placeholder */
+          .search-bar-pop input,
+          [data-search-box="true"] input,
+          .search-pill-box input,
+          .modal-search-bar input,
+          .quick-find-box input {
+            color: #1E293B !important;
+            font-size: 12.5px !important;
+            font-weight: 600 !important;
+          }
+          .search-bar-pop input::placeholder,
+          [data-search-box="true"] input::placeholder,
+          .search-pill-box input::placeholder,
+          .modal-search-bar input::placeholder,
+          .quick-find-box input::placeholder {
+            color: #64748B !important;
+            opacity: 1 !important;
           }
 
           /* Beacons and shields */

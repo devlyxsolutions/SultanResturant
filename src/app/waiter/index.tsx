@@ -15,6 +15,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, useAuthStore } from '../../store';
+import { Ticket } from '../../store/restaurantStore';
 import {
   sortFloors,
   getFloorMeta,
@@ -88,7 +89,7 @@ export default function OrderTakerScreen() {
   // Search query
   const [search, setSearch] = useState<string>('');
 
-  // Persisted set of dismissed bill paid alert keys so tapping X permanently hides the alert
+  // Persisted set of dismissed bill paid alert keys so tapping X permanently hides only that specific alert occurrence
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
 
   useEffect(() => {
@@ -97,7 +98,15 @@ export default function OrderTakerScreen() {
         if (val) {
           try {
             const parsed = JSON.parse(val);
-            if (Array.isArray(parsed)) setDismissedAlerts(parsed);
+            if (Array.isArray(parsed)) {
+              // Sanitize: filter out legacy raw table names/ids (e.g. 'table 1', 'tbl-1') which permanently muted tables
+              // Clean alert keys contain timestamp underscores (e.g. 'bill_1_1729800000000' or '1729800000000')
+              const clean = parsed.filter(
+                (k) => typeof k === 'string' && (k.includes('_') || /^\d{10,}$/.test(k))
+              );
+              setDismissedAlerts(clean);
+              AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(clean.slice(-60))).catch(() => {});
+            }
           } catch (e) {}
         }
       })
@@ -111,19 +120,15 @@ export default function OrderTakerScreen() {
       return;
     }
 
-    const tName = (lastBillPaidAlert.tableName || '').trim().toLowerCase();
-    const tId = (lastBillPaidAlert.tableId || '').trim().toLowerCase();
-    const tTime = lastBillPaidAlert.time ? `${tName}_${lastBillPaidAlert.time}`.toLowerCase() : '';
-
-    const newDismissed = Array.from(new Set([...dismissedAlerts, tName, tId, tTime].filter(Boolean)));
+    const alertKey = lastBillPaidAlert.id || (lastBillPaidAlert.time ? `bill_${lastBillPaidAlert.tableId}_${lastBillPaidAlert.time}` : '');
+    const newDismissed = Array.from(new Set([...dismissedAlerts, alertKey].filter(Boolean)));
     setDismissedAlerts(newDismissed);
 
     try {
       await AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(newDismissed.slice(-60)));
     } catch (e) {}
 
-    clearBillPaidAlert(lastBillPaidAlert.tableId);
-    clearBillPaidAlert(lastBillPaidAlert.tableName);
+    clearBillPaidAlert(lastBillPaidAlert.id || lastBillPaidAlert.tableId);
     clearBillPaidAlert();
     broadcastImmediately();
   };
@@ -134,14 +139,21 @@ export default function OrderTakerScreen() {
     clearBillPaidAlert(tableName);
     clearBillPaidAlert();
 
-    const tName = tableName.trim().toLowerCase();
-    const tId = tableId.trim().toLowerCase();
-    const newDismissed = Array.from(new Set([...dismissedAlerts, tName, tId].filter(Boolean)));
-    setDismissedAlerts(newDismissed);
-
-    try {
-      await AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(newDismissed.slice(-60)));
-    } catch (e) {}
+    // Only dismiss the specific active alert occurrence if it matches this table, NEVER the raw table ID or name!
+    if (
+      lastBillPaidAlert &&
+      (lastBillPaidAlert.tableId === tableId ||
+        lastBillPaidAlert.tableName.trim().toLowerCase() === tableName.trim().toLowerCase())
+    ) {
+      const alertKey = lastBillPaidAlert.id || (lastBillPaidAlert.time ? `bill_${tableId}_${lastBillPaidAlert.time}` : '');
+      if (alertKey) {
+        const newDismissed = Array.from(new Set([...dismissedAlerts, alertKey].filter(Boolean)));
+        setDismissedAlerts(newDismissed);
+        try {
+          await AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(newDismissed.slice(-60)));
+        } catch (e) {}
+      }
+    }
 
     broadcastImmediately();
   };
@@ -150,32 +162,30 @@ export default function OrderTakerScreen() {
   const shouldShowBillPaidAlert = useMemo(() => {
     if (!lastBillPaidAlert) return false;
 
-    const tName = (lastBillPaidAlert.tableName || '').trim().toLowerCase();
-    const tId = (lastBillPaidAlert.tableId || '').trim().toLowerCase();
-    const tTime = lastBillPaidAlert.time ? `${tName}_${lastBillPaidAlert.time}`.toLowerCase() : '';
+    const alertKey = lastBillPaidAlert.id || (lastBillPaidAlert.time ? `bill_${lastBillPaidAlert.tableId}_${lastBillPaidAlert.time}` : '');
+    const timeKey = lastBillPaidAlert.time ? String(lastBillPaidAlert.time) : '';
 
-    // If dismissed by user, do not show
+    // If this specific alert instance was dismissed by user, do not show
     if (
-      (tName && dismissedAlerts.includes(tName)) ||
-      (tId && dismissedAlerts.includes(tId)) ||
-      (tTime && dismissedAlerts.includes(tTime))
+      (alertKey && dismissedAlerts.includes(alertKey)) ||
+      (timeKey && dismissedAlerts.includes(timeKey))
     ) {
       return false;
     }
 
     // If alert is older than 30 minutes, do not show
-    if (lastBillPaidAlert.time && Date.now() - lastBillPaidAlert.time > 30 * 60 * 1000) {
+    if (lastBillPaidAlert.time && Math.abs(Date.now() - lastBillPaidAlert.time) > 30 * 60 * 1000) {
       return false;
     }
 
-    // Critical check: table MUST still exist and its current status MUST be 'billed'!
+    // Critical check: table MUST still exist and its current status MUST be 'billed' or 'isPaid'!
     const matchingTable = tables.find(
       (t) =>
         t.id === lastBillPaidAlert.tableId ||
-        t.name.trim().toLowerCase() === tName
+        t.name.trim().toLowerCase() === (lastBillPaidAlert.tableName || '').trim().toLowerCase()
     );
 
-    if (!matchingTable || matchingTable.status !== 'billed') {
+    if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid)) {
       return false;
     }
 
@@ -251,9 +261,15 @@ export default function OrderTakerScreen() {
     });
   }, [scopedByFloorTables, seatingTypeFilter, search]);
 
+  const isTicketReadyForPickup = (t: Ticket) => {
+    if (t.status === 'ready') return true;
+    if (t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready') return true;
+    return false;
+  };
+
   // 6. Filter ready tickets to only tables belonging to authorized floors
   const readyTickets = tickets.filter((t) => {
-    if (t.status !== 'ready') return false;
+    if (!isTicketReadyForPickup(t)) return false;
     const targetTable = tables.find((tab) => tab.id === t.tableId);
     if (!targetTable) return true;
     const tableFloor = getTableFloor(targetTable);
@@ -270,8 +286,8 @@ export default function OrderTakerScreen() {
     const isBilled = item.status === 'billed' || item.isPaid;
 
     const tableTickets = tickets.filter((t) => t.tableId === item.id);
-    const isFoodReady = tableTickets.some((t) => t.status === 'ready');
-    const isCooking = tableTickets.some((t) => t.status === 'cooking');
+    const isFoodReady = tableTickets.some(isTicketReadyForPickup);
+    const isCooking = tableTickets.some((t) => t.status === 'cooking' && !isFoodReady);
     const roundCount = tableTickets.length;
 
     const assignedServer =
@@ -818,15 +834,36 @@ export default function OrderTakerScreen() {
         {/* Notification banner if food is ready for this Order Taker's tables */}
         {readyTickets.length > 0 && (
           <View style={styles.readyAlertBanner}>
-            <Ionicons name="notifications" size={20} color="#007AFF" />
-            <View style={{ flex: 1 }}>
+            <Ionicons name="notifications" size={22} color="#007AFF" />
+            <View style={{ flex: 1, marginLeft: 6 }}>
               <Text style={styles.readyAlertTitle}>
                 {readyTickets.length} Order{readyTickets.length > 1 ? 's' : ''} Ready for Pickup!
               </Text>
               <Text style={styles.readyAlertDesc}>
-                {readyTickets.map((t) => t.tableName).join(', ')} ready at the pass.
+                {Array.from(new Set(readyTickets.map((t) => t.tableName))).join(', ')} ready at the pass.
               </Text>
             </View>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#007AFF',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 8,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 4,
+              }}
+              onPress={() => {
+                readyTickets.forEach((t) => serveTableTickets(t.tableId));
+                broadcastImmediately();
+                const msg = 'All ready orders marked served!';
+                if (Platform.OS !== 'web') Alert.alert('Served', msg);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="checkmark-done" size={14} color="#fff" />
+              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Serve All</Text>
+            </TouchableOpacity>
           </View>
         )}
 
