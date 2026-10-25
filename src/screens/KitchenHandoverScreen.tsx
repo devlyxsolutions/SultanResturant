@@ -49,20 +49,18 @@ const BRAND = {
 export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
 
-  const { inventory } = useOpsStore();
-  const { staff } = useRestaurantStore();
-  const {
-    kitchenSessions,
-    kitchenConsumption,
-    recipes,
-    kitchenSettings,
-    saveDraft,
-    issueSession,
-    issueTopUp,
-    cancelSession,
-    submitClosing,
-    approveSession,
-  } = useKitchenStore();
+  const inventory = useOpsStore((s) => s.inventory);
+  const staff = useRestaurantStore((s) => s.staff);
+  const kitchenSessions = useKitchenStore((s) => s.kitchenSessions);
+  const kitchenConsumption = useKitchenStore((s) => s.kitchenConsumption);
+  const recipes = useKitchenStore((s) => s.recipes);
+  const kitchenSettings = useKitchenStore((s) => s.kitchenSettings);
+  const saveDraft = useKitchenStore((s) => s.saveDraft);
+  const issueSession = useKitchenStore((s) => s.issueSession);
+  const issueTopUp = useKitchenStore((s) => s.issueTopUp);
+  const cancelSession = useKitchenStore((s) => s.cancelSession);
+  const submitClosing = useKitchenStore((s) => s.submitClosing);
+  const approveSession = useKitchenStore((s) => s.approveSession);
 
   // Admin AND manager can both hand over; record who actually did it.
   const authUser = useAuthStore((s) => s.user);

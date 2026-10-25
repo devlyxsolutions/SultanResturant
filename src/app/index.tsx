@@ -18,6 +18,9 @@ import IslamicBackground from '../components/IslamicBackground';
 import SultanLogo from '../components/SultanLogo';
 import { Ionicons } from '@expo/vector-icons';
 
+// Session-wide splash skip flag for instant navigation
+let hasSeenSplashSession = false;
+
 export default function WelcomeScreen() {
   const router = useRouter();
   const user = useAuthStore((state) => state.user);
@@ -30,10 +33,10 @@ export default function WelcomeScreen() {
   const isShortScreen = height < 720;
 
   // -------------------------------------------------------------
-  // Splash & Transition States
+  // Splash & Transition States (Instant if already visited in session)
   // -------------------------------------------------------------
-  const [showSplash, setShowSplash] = useState(true);
-  const [splashStatusIndex, setSplashStatusIndex] = useState(0);
+  const [showSplash, setShowSplash] = useState(() => !hasSeenSplashSession);
+  const [splashStatusIndex, setSplashStatusIndex] = useState(3);
 
   const splashMessages = [
     'Initializing Royal Dining Suite...',
@@ -43,74 +46,51 @@ export default function WelcomeScreen() {
   ];
 
   // Animation values
-  const splashFadeAnim = useRef(new Animated.Value(1)).current;
-  const splashScaleAnim = useRef(new Animated.Value(0.9)).current;
+  const splashFadeAnim = useRef(new Animated.Value(hasSeenSplashSession ? 0 : 1)).current;
+  const splashScaleAnim = useRef(new Animated.Value(1)).current;
   const splashPulseAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(0)).current;
-  const welcomeFadeAnim = useRef(new Animated.Value(0)).current;
-  const welcomeSlideAnim = useRef(new Animated.Value(20)).current;
+  const progressAnim = useRef(new Animated.Value(hasSeenSplashSession ? 1 : 0)).current;
+  const welcomeFadeAnim = useRef(new Animated.Value(hasSeenSplashSession ? 1 : 0)).current;
+  const welcomeSlideAnim = useRef(new Animated.Value(hasSeenSplashSession ? 0 : 12)).current;
 
   // -------------------------------------------------------------
-  // Splash Lifecycle & Animation Sequence
+  // Splash Lifecycle & Lightning Fast Animation Sequence
   // -------------------------------------------------------------
   useEffect(() => {
-    // 1. Entrance spring & logo pulse loop
-    Animated.spring(splashScaleAnim, {
-      toValue: 1,
-      friction: 5,
-      tension: 40,
-      useNativeDriver: true,
-    }).start();
+    if (hasSeenSplashSession) {
+      setShowSplash(false);
+      return;
+    }
 
-    const pulseLoop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(splashPulseAnim, {
-          toValue: 1.05,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-        Animated.timing(splashPulseAnim, {
-          toValue: 0.98,
-          duration: 900,
-          easing: Easing.inOut(Easing.ease),
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    pulseLoop.start();
-
-    // 2. Linear smooth progress bar (950ms)
+    // Fast linear progress bar (350ms)
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 950,
+      duration: 350,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start();
 
-    // 3. Status text stepper
-    const t1 = setTimeout(() => setSplashStatusIndex(1), 250);
-    const t2 = setTimeout(() => setSplashStatusIndex(2), 500);
-    const t3 = setTimeout(() => setSplashStatusIndex(3), 750);
+    // Fast status stepper
+    const t1 = setTimeout(() => setSplashStatusIndex(2), 120);
+    const t2 = setTimeout(() => setSplashStatusIndex(3), 240);
 
-    // 4. Smooth Transition from Splash to Welcome Screen
+    // Fast transition from Splash to Welcome Screen
     const tFinish = setTimeout(() => {
       finishSplash();
-    }, 1000);
+    }, 400);
 
     return () => {
-      pulseLoop.stop();
       clearTimeout(t1);
       clearTimeout(t2);
-      clearTimeout(t3);
       clearTimeout(tFinish);
     };
   }, []);
 
   const finishSplash = () => {
+    hasSeenSplashSession = true;
     Animated.timing(splashFadeAnim, {
       toValue: 0,
-      duration: 450,
+      duration: 180,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
@@ -118,13 +98,13 @@ export default function WelcomeScreen() {
       Animated.parallel([
         Animated.timing(welcomeFadeAnim, {
           toValue: 1,
-          duration: 500,
+          duration: 220,
           useNativeDriver: true,
         }),
         Animated.spring(welcomeSlideAnim, {
           toValue: 0,
-          friction: 7,
-          tension: 40,
+          friction: 8,
+          tension: 50,
           useNativeDriver: true,
         }),
       ]).start();

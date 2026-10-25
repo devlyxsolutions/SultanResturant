@@ -49,6 +49,17 @@ interface POSTerminalScreenProps {
   shiftRoute?: string;
 }
 
+const LivePOSClock = React.memo(() => {
+  const [time, setTime] = useState(() => new Date().toLocaleTimeString('en-GB'));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setTime(new Date().toLocaleTimeString('en-GB'));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+  return <Text style={styles.clockText}>{time}</Text>;
+});
+
 export default function POSTerminalScreen({
   role = 'admin',
   backRoute = '/admin/dashboard',
@@ -65,15 +76,6 @@ export default function POSTerminalScreen({
   } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 850;
-
-  // Live Digital Clock (as in Baithak Header)
-  const [currentTime, setCurrentTime] = useState(() => new Date().toLocaleTimeString('en-GB'));
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date().toLocaleTimeString('en-GB'));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
@@ -687,7 +689,7 @@ export default function POSTerminalScreen({
             <Text style={styles.brandTitle}>SULTAN RESTAURANT</Text>
           </View>
 
-          <Text style={styles.clockText}>{currentTime}</Text>
+          <LivePOSClock />
         </View>
 
         {/* Right Side: Shift Status + Fullscreen + Admin Avatar */}

@@ -164,7 +164,7 @@ function CornerGeometricMotif({
   );
 }
 
-export default function IslamicBackground({
+function IslamicBackgroundComponent({
   theme = 'burgundy',
   children,
   showCorners = true,
@@ -246,6 +246,9 @@ export default function IslamicBackground({
     </View>
   );
 }
+
+const IslamicBackground = React.memo(IslamicBackgroundComponent);
+export default IslamicBackground;
 
 const styles = StyleSheet.create({
   container: {

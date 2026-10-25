@@ -36,77 +36,11 @@ export default function RootLayout() {
     // Initialize native Android incoming call detection listener
     const cleanupCallListener = initCallListener();
 
-    // Hide splash screen after a short delay to ensure fonts/assets are loaded
-    setTimeout(() => {
-      SplashScreen.hideAsync();
-    }, 500);
-
-    let cleanupHover: (() => void) | undefined;
-    // Universal Web Auto-Interactive Engine:
-    // Ensures EVERY card, box, tile, table row, pill, button, and widget animates on hover
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const scanAndMarkElements = () => {
-        try {
-          const elements = document.querySelectorAll<HTMLElement>(
-            '.css-view-175oi2r, [role="button"], button, a, [tabindex="0"]'
-          );
-          elements.forEach((el) => {
-            // Already marked or explicitly opt-out
-            if (el.dataset.hover || el.dataset.noHover === 'true') return;
-
-            // Exclude huge containers, root wrappers, modals backdrop
-            if (
-              el.id === 'root' ||
-              el.id === 'sultan-screen-wrapper' ||
-              el.offsetHeight > window.innerHeight * 0.88 ||
-              el.offsetWidth > window.innerWidth * 0.88
-            ) {
-              return;
-            }
-
-            const style = window.getComputedStyle(el);
-            const br = parseFloat(style.borderRadius || '0');
-            const hasBg =
-              style.backgroundColor &&
-              style.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
-              style.backgroundColor !== 'transparent';
-            const hasBorder =
-              parseFloat(style.borderWidth || '0') > 0 &&
-              style.borderColor !== 'transparent' &&
-              style.borderColor !== 'rgba(0, 0, 0, 0)';
-            const hasShadow = style.boxShadow && style.boxShadow !== 'none';
-            const isPointer = style.cursor === 'pointer';
-            const isClickable =
-              el.getAttribute('role') === 'button' ||
-              el.getAttribute('tabindex') === '0' ||
-              el.tagName === 'BUTTON' ||
-              el.tagName === 'A';
-
-            // Mark any card, box, button, tile, pill, chip, or interactive row
-            if (isClickable || isPointer || (br >= 6 && (hasBg || hasBorder || hasShadow))) {
-              el.setAttribute('data-hover', 'true');
-            }
-          });
-        } catch (_) {}
-      };
-
-      scanAndMarkElements();
-      const interval = setInterval(scanAndMarkElements, 600);
-
-      const observer = new MutationObserver(() => {
-        scanAndMarkElements();
-      });
-      observer.observe(document.body, { childList: true, subtree: true });
-
-      cleanupHover = () => {
-        clearInterval(interval);
-        observer.disconnect();
-      };
-    }
+    // Hide splash screen immediately once layout mounts
+    SplashScreen.hideAsync().catch(() => {});
 
     return () => {
       cleanupCallListener();
-      cleanupHover?.();
     };
   }, []);
 
