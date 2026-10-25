@@ -80,23 +80,23 @@ export default function WelcomeScreen() {
     );
     pulseLoop.start();
 
-    // 2. Linear smooth progress bar (2100ms)
+    // 2. Linear smooth progress bar (950ms)
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 2100,
+      duration: 950,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start();
 
     // 3. Status text stepper
-    const t1 = setTimeout(() => setSplashStatusIndex(1), 600);
-    const t2 = setTimeout(() => setSplashStatusIndex(2), 1250);
-    const t3 = setTimeout(() => setSplashStatusIndex(3), 1800);
+    const t1 = setTimeout(() => setSplashStatusIndex(1), 250);
+    const t2 = setTimeout(() => setSplashStatusIndex(2), 500);
+    const t3 = setTimeout(() => setSplashStatusIndex(3), 750);
 
     // 4. Smooth Transition from Splash to Welcome Screen
     const tFinish = setTimeout(() => {
       finishSplash();
-    }, 2300);
+    }, 1000);
 
     return () => {
       pulseLoop.stop();
@@ -282,173 +282,157 @@ export default function WelcomeScreen() {
                     />
                   </View>
 
-                  {/* Urdu Calligraphy & Royal Crest Subtitle */}
+                  {/* Urdu Calligraphy */}
                   <Text style={styles.leftUrduCalligraphy}>سلطان ریسٹورنٹ</Text>
 
                   <View style={styles.leftRoyalDivider}>
                     <View style={styles.leftDividerLine} />
-                    <Ionicons name="sparkles" size={12} color="#D5A943" style={{ marginHorizontal: 6 }} />
+                    <Ionicons name="sparkles" size={13} color="#D5A943" style={{ marginHorizontal: 8 }} />
                     <View style={styles.leftDividerLine} />
                   </View>
 
                   <Text style={styles.leftSubBadgeText}>
-                    ROYAL HOSPITALITY & AUTOMATION
-                  </Text>
-                  <Text style={styles.leftEstText}>
-                    5-Star Dining • Multi-Floor Experience
+                    FINE DINING & SMART HOSPITALITY
                   </Text>
                 </View>
               </View>
 
               {/* ----------------------------------------------------
-                  RIGHT SIDE: WELCOME TITLE, FEATURES & LOGIN GATEWAY
+                  RIGHT SIDE: STREAMLINED ROYAL GATEWAY
                   ---------------------------------------------------- */}
               <View style={[styles.rightColumnContent, isMobile && styles.rightColumnContentMobile]}>
                 
                 {/* Header Welcome Badges */}
                 <View style={[styles.welcomeHeaderBox, isMobile && { alignItems: 'center' }]}>
                   <View style={styles.welcomeUrduBadge}>
-                    <Ionicons name="sparkles" size={13} color="#B45309" style={{ marginRight: 5 }} />
-                    <Text style={styles.welcomeUrduText}>خوش آمدید</Text>
+                    <Ionicons name="sparkles" size={13} color="#D5A943" style={{ marginRight: 6 }} />
+                    <Text style={styles.welcomeUrduText}>خوش آمدید  •  WELCOME</Text>
                   </View>
 
-                  <Text style={[styles.welcomeTitle, { fontSize: dynamicMetrics.titleFontSize }, isMobile && { textAlign: 'center' }]}>
+                  <Text style={[styles.welcomeTitle, { fontSize: dynamicMetrics.titleFontSize + 2 }, isMobile && { textAlign: 'center' }]}>
                     SULTAN RESTAURANT
                   </Text>
                   
                   <Text style={[styles.welcomeSubtitle, { fontSize: dynamicMetrics.subtitleFontSize }, isMobile && { textAlign: 'center' }]}>
-                    Welcome to the finest royal dining ecosystem. Experience authentic flavors, 5-star hospitality, and automated multi-floor management.
+                    Smart Multi-Floor POS, Kitchen KDS & Dining Suite
                   </Text>
                 </View>
 
-                {/* 4 Feature Cards Grid */}
-                <View style={styles.featuresGrid}>
-                  <View style={styles.featureCard}>
-                    <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(212, 175, 55, 0.16)' }]}>
-                      <Ionicons name="restaurant" size={17} color="#D5A943" />
+                {/* Intelligent Active Session OR Main Login Gateway */}
+                {hasHydrated && user?.role ? (
+                  <View style={styles.sessionCard}>
+                    <View style={styles.sessionUserRow}>
+                      <View style={styles.sessionAvatar}>
+                        <Ionicons name="person" size={20} color="#D5A943" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.sessionGreeting}>ACTIVE SESSION DETECTED</Text>
+                        <Text style={styles.sessionUserName}>{user.name || 'Staff'}</Text>
+                      </View>
+                      <View style={styles.sessionRolePill}>
+                        <Text style={styles.sessionRoleText}>{user.role.toUpperCase()}</Text>
+                      </View>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.featureTitle}>Royal Dine-In</Text>
-                      <Text style={styles.featureDesc}>5-Floor Tables & VIP Cabins</Text>
-                    </View>
-                  </View>
 
-                  <View style={styles.featureCard}>
-                    <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(56, 189, 248, 0.16)' }]}>
-                      <Ionicons name="flash" size={17} color="#38BDF8" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.featureTitle}>Express POS</Text>
-                      <Text style={styles.featureDesc}>Touch Billing & Thermal Receipts</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.featureCard}>
-                    <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(244, 63, 94, 0.16)' }]}>
-                      <Ionicons name="flame" size={17} color="#FB7185" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.featureTitle}>Kitchen & Bar KDS</Text>
-                      <Text style={styles.featureDesc}>Multi-Station Live LAN Routing</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.featureCard}>
-                    <View style={[styles.featureIconWrap, { backgroundColor: 'rgba(52, 211, 153, 0.16)' }]}>
-                      <Ionicons name="diamond" size={17} color="#34D399" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.featureTitle}>VIP Guest CRM</Text>
-                      <Text style={styles.featureDesc}>Points & WhatsApp Invoicing</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Active Session Alert (If signed in) */}
-                {hasHydrated && user?.role && (
-                  <View style={styles.activeSessionBanner}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                      <Ionicons name="shield-checkmark" size={16} color="#10B981" />
-                      <Text style={styles.activeSessionText}>
-                        Signed in as <Text style={{ fontWeight: '900', color: '#FFFFFF' }}>{user.name}</Text> ({user.role.toUpperCase()})
-                      </Text>
-                    </View>
                     <TouchableOpacity
-                      style={styles.resumeDashboardBtn}
+                      style={styles.primaryLoginBtn}
                       onPress={() => {
                         const target = getRoleHome(user.role, user.customRoleId);
                         router.replace(target as any);
                       }}
+                      activeOpacity={0.88}
                     >
-                      <Text style={styles.resumeDashboardText}>Dashboard ➔</Text>
+                      <Text style={styles.primaryLoginBtnText}>CONTINUE TO DASHBOARD</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#451014" />
+                    </TouchableOpacity>
+
+                    <View style={styles.sessionActionsRow}>
+                      <TouchableOpacity
+                        style={styles.textActionBtn}
+                        onPress={() => router.push('/login?all=true' as any)}
+                      >
+                        <Ionicons name="swap-horizontal-outline" size={15} color="#D5A943" />
+                        <Text style={styles.textActionLabel}>Switch Account / Login</Text>
+                      </TouchableOpacity>
+
+                      <Text style={styles.sessionActionDivider}>•</Text>
+
+                      <TouchableOpacity
+                        style={styles.textActionBtn}
+                        onPress={() => router.push('/menu' as any)}
+                      >
+                        <Ionicons name="book-outline" size={15} color="#D5A943" />
+                        <Text style={styles.textActionLabel}>Digital Menu</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  /* Not Logged In Gateway */
+                  <View style={styles.buttonContainer}>
+                    <TouchableOpacity
+                      style={styles.primaryLoginBtn}
+                      onPress={() => router.push('/login?all=true' as any)}
+                      activeOpacity={0.88}
+                    >
+                      <View style={styles.btnIconPod}>
+                        <Ionicons name="log-in" size={18} color="#451014" />
+                      </View>
+                      <Text style={styles.primaryLoginBtnText}>STAFF LOGIN  •  لاگ ان</Text>
+                      <Ionicons name="arrow-forward" size={18} color="#451014" />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.secondaryMenuBtn}
+                      onPress={() => router.push('/menu' as any)}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="book-outline" size={17} color="#D5A943" style={{ marginRight: 8 }} />
+                      <Text style={styles.secondaryMenuBtnText}>EXPLORE GUEST DIGITAL MENU</Text>
                     </TouchableOpacity>
                   </View>
                 )}
 
-                {/* Action Buttons Section */}
-                <View style={styles.buttonContainer}>
-                  {/* 1. PRIMARY: Proceed to Staff Login */}
-                  <TouchableOpacity
-                    style={styles.primaryLoginBtn}
-                    onPress={() => router.push('/login?all=true' as any)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={styles.btnIconPod}>
-                      <Ionicons name="log-in" size={18} color="#451014" />
-                    </View>
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <Text style={styles.primaryLoginBtnText}>PROCEED TO LOGIN</Text>
-                      <Text style={styles.primaryLoginBtnSub}>لاگ ان کرنے کے لیے یہاں کلک کریں</Text>
-                    </View>
-                    <Ionicons name="arrow-forward" size={18} color="#451014" />
-                  </TouchableOpacity>
-
-                  {/* 2. SECONDARY: Digital Menu */}
-                  <TouchableOpacity
-                    style={styles.secondaryMenuBtn}
-                    onPress={() => router.push('/menu' as any)}
-                    activeOpacity={0.85}
-                  >
-                    <Ionicons name="book-outline" size={17} color="#D5A943" style={{ marginRight: 8 }} />
-                    <Text style={styles.secondaryMenuBtnText}>EXPLORE GUEST DIGITAL MENU</Text>
-                  </TouchableOpacity>
-
-                  {/* 3. Direct Department Shortcuts */}
-                  <Text style={styles.quickPortalsHeading}>Direct Role Terminals:</Text>
-                  <View style={styles.quickPortalsRow}>
+                {/* Clean Direct Role Terminals */}
+                <View style={styles.quickTerminalsSection}>
+                  <Text style={styles.quickPortalsHeading}>QUICK ACCESS TERMINALS</Text>
+                  
+                  <View style={styles.quickTerminalsGrid}>
                     <Link href="/login?role=admin&all=true" asChild>
-                      <TouchableOpacity style={styles.quickPortalChip}>
-                        <Ionicons name="shield-checkmark-outline" size={12} color="#D5A943" />
-                        <Text style={styles.quickPortalChipText}>Cashier / Admin</Text>
+                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(213, 169, 67, 0.18)' }]}>
+                          <Ionicons name="shield-checkmark" size={16} color="#D5A943" />
+                        </View>
+                        <Text style={styles.terminalTitle}>Cashier / Admin</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/login?role=waiter" asChild>
-                      <TouchableOpacity style={styles.quickPortalChip}>
-                        <Ionicons name="walk-outline" size={12} color="#D5A943" />
-                        <Text style={styles.quickPortalChipText}>Order Taker</Text>
+                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.18)' }]}>
+                          <Ionicons name="phone-portrait-outline" size={16} color="#38BDF8" />
+                        </View>
+                        <Text style={styles.terminalTitle}>Order Taker</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/kitchen/kds" asChild>
-                      <TouchableOpacity style={styles.quickPortalChip}>
-                        <Ionicons name="flame-outline" size={12} color="#FB7185" />
-                        <Text style={styles.quickPortalChipText}>Kitchen KDS</Text>
+                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 113, 133, 0.18)' }]}>
+                          <Ionicons name="flame" size={16} color="#FB7185" />
+                        </View>
+                        <Text style={styles.terminalTitle}>Kitchen KDS</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/juicebar/kds" asChild>
-                      <TouchableOpacity style={styles.quickPortalChip}>
-                        <Ionicons name="cafe-outline" size={12} color="#FFA94D" />
-                        <Text style={styles.quickPortalChipText}>Juice Bar</Text>
+                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 191, 36, 0.18)' }]}>
+                          <Ionicons name="cafe" size={16} color="#FBBF24" />
+                        </View>
+                        <Text style={styles.terminalTitle}>Juice Bar</Text>
                       </TouchableOpacity>
                     </Link>
                   </View>
-                </View>
-
-                {/* Footer Note */}
-                <View style={styles.footerNote}>
-                  <Text style={styles.footerText}>⚡ Sultan Automated Hospitality & Multi-Screen Suite</Text>
                 </View>
 
               </View>
@@ -579,34 +563,34 @@ const styles = StyleSheet.create({
   },
   splitMainCard: {
     width: '100%',
-    maxWidth: 1140,
+    maxWidth: 960,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(38, 8, 13, 0.82)',
+    backgroundColor: 'rgba(32, 6, 10, 0.88)',
     borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    borderRadius: 28,
-    padding: 28,
-    gap: 32,
+    borderColor: 'rgba(213, 169, 67, 0.38)',
+    borderRadius: 24,
+    padding: 32,
+    gap: 36,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        boxShadow: '0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
       } as any,
     }),
   },
   splitMainCardMobile: {
     flexDirection: 'column',
-    padding: 16,
-    gap: 18,
+    padding: 20,
+    gap: 20,
     borderRadius: 20,
   },
 
   /* LEFT COLUMN: LOGO & BRANDING */
   leftColumnLogoBox: {
-    width: '42%',
+    width: '40%',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -617,18 +601,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
   logoAuraRing: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   logoDropShadow: {
     ...Platform.select({
       web: {
-        filter: 'drop-shadow(0px 8px 24px rgba(213, 169, 67, 0.42))',
+        filter: 'drop-shadow(0px 10px 28px rgba(213, 169, 67, 0.45))',
       } as any,
     }),
   },
@@ -638,7 +621,7 @@ const styles = StyleSheet.create({
     color: '#D5A943',
     textAlign: 'center',
     letterSpacing: 1,
-    marginTop: 6,
+    marginTop: 4,
     textShadowColor: 'rgba(0,0,0,0.6)',
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 6,
@@ -646,30 +629,23 @@ const styles = StyleSheet.create({
   leftRoyalDivider: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 180,
+    width: 160,
     marginVertical: 10,
   },
   leftDividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: 'rgba(212, 175, 55, 0.4)',
+    backgroundColor: 'rgba(213, 169, 67, 0.4)',
   },
   leftSubBadgeText: {
-    color: '#FFFFFF',
+    color: 'rgba(255, 255, 255, 0.85)',
     fontSize: 10.5,
     fontWeight: '800',
-    letterSpacing: 1.2,
+    letterSpacing: 1.5,
     textAlign: 'center',
-  },
-  leftEstText: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 10,
-    marginTop: 4,
-    textAlign: 'center',
-    fontWeight: '600',
   },
 
-  /* RIGHT COLUMN: WELCOME, FEATURES & ACTIONS */
+  /* RIGHT COLUMN: WELCOME, SESSION & ACTIONS */
   rightColumnContent: {
     flex: 1,
     width: '100%',
@@ -678,23 +654,23 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   welcomeHeaderBox: {
-    marginBottom: 16,
+    marginBottom: 20,
   },
   welcomeUrduBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    backgroundColor: 'rgba(254, 243, 199, 0.88)',
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
     borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.45)',
+    borderColor: 'rgba(213, 169, 67, 0.45)',
     paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 16,
+    paddingVertical: 5,
+    borderRadius: 14,
     marginBottom: 10,
   },
   welcomeUrduText: {
-    color: '#92400E',
-    fontSize: 13.5,
+    color: '#F6E095',
+    fontSize: 12.5,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
@@ -708,105 +684,113 @@ const styles = StyleSheet.create({
     textShadowRadius: 6,
   },
   welcomeSubtitle: {
-    color: 'rgba(255, 255, 255, 0.86)',
+    color: 'rgba(255, 255, 255, 0.78)',
     lineHeight: 20,
     fontWeight: '500',
   },
 
-  /* Feature Showcase Grid */
-  featuresGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    marginBottom: 16,
-  },
-  featureCard: {
-    width: '48%',
-    minWidth: 150,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.25)',
-    borderRadius: 14,
-    padding: 10,
-    gap: 9,
+  /* ACTIVE SESSION CARD */
+  sessionCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 14,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 3px 10px rgba(0,0,0,0.2)',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
       } as any,
     }),
   },
-  featureIconWrap: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
+  sessionUserRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 14,
+  },
+  sessionAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  featureTitle: {
-    fontSize: 12,
+  sessionGreeting: {
+    fontSize: 10.5,
+    color: 'rgba(255, 255, 255, 0.6)',
     fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+  sessionUserName: {
+    fontSize: 16,
+    fontWeight: '900',
     color: '#FFFFFF',
+    marginTop: 1,
   },
-  featureDesc: {
-    fontSize: 9.5,
-    color: 'rgba(255, 255, 255, 0.7)',
-    marginTop: 2,
+  sessionRolePill: {
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.45)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
   },
-
-  /* Active Session Banner */
-  activeSessionBanner: {
+  sessionRoleText: {
+    color: '#34D399',
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  sessionActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.4)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    marginBottom: 14,
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 12,
   },
-  activeSessionText: {
-    fontSize: 11.5,
-    color: '#D1FAE5',
+  textActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingVertical: 3,
   },
-  resumeDashboardBtn: {
-    backgroundColor: '#059669',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
+  textActionLabel: {
+    fontSize: 12.5,
+    color: '#F6E095',
+    fontWeight: '700',
   },
-  resumeDashboardText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '800',
+  sessionActionDivider: {
+    color: 'rgba(255, 255, 255, 0.3)',
+    fontSize: 12,
   },
 
-  /* Action Buttons Container */
+  /* ACTION BUTTONS CONTAINER (When not logged in) */
   buttonContainer: {
     width: '100%',
-    gap: 10,
+    gap: 12,
     marginBottom: 6,
   },
   primaryLoginBtn: {
     flexDirection: 'row',
     backgroundColor: '#D5A943',
-    paddingHorizontal: 18,
-    paddingVertical: 13,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     borderRadius: 16,
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
+    gap: 10,
     borderWidth: 1.5,
     borderColor: '#F6E095',
     ...Platform.select({
       web: {
-        boxShadow: '0 6px 24px rgba(213, 169, 67, 0.35)',
+        boxShadow: '0 6px 24px rgba(213, 169, 67, 0.38)',
         cursor: 'pointer',
-        transition: 'transform 0.18s ease',
+        transition: 'transform 0.15s ease',
       } as any,
       ios: {
         shadowColor: '#D5A943',
@@ -820,33 +804,27 @@ const styles = StyleSheet.create({
     }),
   },
   btnIconPod: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(69, 16, 20, 0.12)',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: 'rgba(69, 16, 20, 0.14)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   primaryLoginBtnText: {
     color: '#451014',
-    fontSize: 15.5,
+    fontSize: 15,
     fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  primaryLoginBtnSub: {
-    color: '#5C1A20',
-    fontSize: 10,
-    fontWeight: '700',
-    marginTop: 2,
+    letterSpacing: 0.6,
   },
   secondaryMenuBtn: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(69, 16, 20, 0.75)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.85)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 14,
+    borderColor: 'rgba(213, 169, 67, 0.65)',
+    paddingHorizontal: 18,
+    paddingVertical: 13,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     ...Platform.select({
@@ -857,59 +835,61 @@ const styles = StyleSheet.create({
     }),
   },
   secondaryMenuBtnText: {
-    color: '#D5A943',
+    color: '#F6E095',
     fontSize: 13.5,
     fontWeight: '800',
-    letterSpacing: 0.6,
+    letterSpacing: 0.5,
   },
 
-  /* Quick Portals Chips */
-  quickPortalsHeading: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 10.5,
-    fontWeight: '700',
-    textAlign: 'center',
-    marginTop: 4,
-    letterSpacing: 0.4,
+  /* QUICK TERMINALS SECTION */
+  quickTerminalsSection: {
+    marginTop: 18,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(213, 169, 67, 0.18)',
+    paddingTop: 16,
   },
-  quickPortalsRow: {
+  quickPortalsHeading: {
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 10.5,
+    fontWeight: '800',
+    textAlign: 'center',
+    letterSpacing: 1,
+    marginBottom: 10,
+  },
+  quickTerminalsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-    justifyContent: 'center',
+    gap: 10,
+    justifyContent: 'space-between',
   },
-  quickPortalChip: {
+  terminalCard: {
+    width: '48.5%',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.32)',
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    borderColor: 'rgba(213, 169, 67, 0.25)',
     borderRadius: 12,
-    gap: 4,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
   },
-  quickPortalChipText: {
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontSize: 11,
+  terminalIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  terminalTitle: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '700',
-  },
-
-  /* Footer Note */
-  footerNote: {
-    marginTop: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    borderRadius: 20,
-    backgroundColor: 'rgba(213, 169, 67, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.22)',
-    alignSelf: 'center',
-  },
-  footerText: {
-    fontSize: 10.5,
-    color: '#D5A943',
-    fontWeight: '700',
-    textAlign: 'center',
   },
 });
