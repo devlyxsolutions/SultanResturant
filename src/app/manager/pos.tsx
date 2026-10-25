@@ -1,9 +1,10 @@
 import React from 'react';
-import AdminPOS from '../admin/pos';
+import POSTerminalScreen from '../../screens/POSTerminalScreen';
 
 export default function ManagerPOS() {
   return (
-    <AdminPOS
+    <POSTerminalScreen
+      role="manager"
       backRoute="/manager/dashboard"
       shiftRoute="/manager/shift"
     />

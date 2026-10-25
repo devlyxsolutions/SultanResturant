@@ -650,6 +650,7 @@ const INITIAL_STAFF: StaffMember[] = [
   { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
   { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
   { id: 'st6', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
+  { id: 'st7', name: 'Tariq Juice Master', phone: '+92 306 1122334', role: 'JuiceBar', pin: '1234', status: 'Active', shift: 'Morning', joinedDate: '2025-06-15' },
 ];
 
 /**
@@ -706,6 +707,15 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
 
     return table;
   });
+}
+
+function notifySync() {
+  try {
+    const { broadcastImmediately } = require('../services/syncService');
+    if (typeof broadcastImmediately === 'function') {
+      broadcastImmediately();
+    }
+  } catch (e) {}
 }
 
 export const useRestaurantStore = create<RestaurantState>()(
@@ -1362,34 +1372,64 @@ export const useRestaurantStore = create<RestaurantState>()(
         onlineFeedbackUrl: url.trim().replace(/\/+$/, '')
       }),
 
-      addMenuItem: (item) => set((state) => ({
-        menuItems: [...state.menuItems, { ...item, id: `m${Date.now()}` }]
-      })),
+      addMenuItem: (item) => {
+        set((state) => {
+          const newCategories = (item.category && !state.categories.includes(item.category))
+            ? [...state.categories, item.category]
+            : state.categories;
+          return {
+            menuItems: [...state.menuItems, { ...item, id: `m${Date.now()}` }],
+            categories: newCategories,
+          };
+        });
+        notifySync();
+      },
       
-      updateMenuItem: (id, item) => set((state) => ({
-        menuItems: state.menuItems.map(m => m.id === id ? { ...m, ...item } : m)
-      })),
+      updateMenuItem: (id, item) => {
+        set((state) => {
+          const newCategories = (item.category && !state.categories.includes(item.category))
+            ? [...state.categories, item.category]
+            : state.categories;
+          return {
+            menuItems: state.menuItems.map(m => m.id === id ? { ...m, ...item } : m),
+            categories: newCategories,
+          };
+        });
+        notifySync();
+      },
 
-      deleteMenuItem: (id) => set((state) => ({
-        menuItems: state.menuItems.filter(m => m.id !== id)
-      })),
+      deleteMenuItem: (id) => {
+        set((state) => ({
+          menuItems: state.menuItems.filter(m => m.id !== id)
+        }));
+        notifySync();
+      },
 
-      adjustMenuItemStock: (id, deltaOrQuantity, mode = 'add') => set((state) => ({
-        menuItems: state.menuItems.map(m => {
-          if (m.id !== id) return m;
-          const current = typeof m.stockQty === 'number' ? m.stockQty : 0;
-          const newQty = mode === 'set' ? Math.max(0, deltaOrQuantity) : Math.max(0, current + deltaOrQuantity);
-          return { ...m, trackStock: true, stockQty: newQty };
-        })
-      })),
+      adjustMenuItemStock: (id, deltaOrQuantity, mode = 'add') => {
+        set((state) => ({
+          menuItems: state.menuItems.map(m => {
+            if (m.id !== id) return m;
+            const current = typeof m.stockQty === 'number' ? m.stockQty : 0;
+            const newQty = mode === 'set' ? Math.max(0, deltaOrQuantity) : Math.max(0, current + deltaOrQuantity);
+            return { ...m, trackStock: true, stockQty: newQty };
+          })
+        }));
+        notifySync();
+      },
 
-      addCategory: (categoryName) => set((state) => ({
-        categories: [...state.categories, categoryName]
-      })),
+      addCategory: (categoryName) => {
+        set((state) => ({
+          categories: state.categories.includes(categoryName) ? state.categories : [...state.categories, categoryName]
+        }));
+        notifySync();
+      },
 
-      deleteCategory: (categoryName) => set((state) => ({
-        categories: state.categories.filter(c => c !== categoryName)
-      })),
+      deleteCategory: (categoryName) => {
+        set((state) => ({
+          categories: state.categories.filter(c => c !== categoryName)
+        }));
+        notifySync();
+      },
 
       addTable: (table) => set((state) => ({
         tables: [...state.tables, { ...table, status: table.status || 'available', id: `t${Date.now()}` }]
