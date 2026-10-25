@@ -34,6 +34,7 @@ export const MANAGER_ROUTE_RULES: Record<string, ManagerRouteRule> = {
   '/manager/kitchen-returns': { requires: ['canAccessKitchenHandover'], moduleName: 'Kitchen Returns', urduModuleName: 'کچن ریٹرنز' },
   '/manager/recipes': { requires: ['canAccessRecipes'], moduleName: 'Recipe BOM', urduModuleName: 'ریسپی' },
   '/manager/costing': { requires: ['canAccessRecipes', 'canViewCostPrice'], moduleName: 'Dish Costing', urduModuleName: 'ڈش کاسٹنگ' },
+  '/manager/staff': { requires: ['canAccessStaff'], moduleName: 'Staff & HR / پیرول', urduModuleName: 'ملازمین اور پیرول' },
 };
 
 /** Finds the rule for a pathname (also matches nested paths like `/manager/inventory/123`). */

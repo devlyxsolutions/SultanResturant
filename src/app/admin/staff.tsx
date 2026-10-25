@@ -27,9 +27,13 @@ import {
   BaseRoleType,
   ADMIN_PERMISSIONS,
   DEFAULT_ROLES,
+  useRolePermissions,
 } from '../../store/roleStore';
 import { sortFloors } from '../../constants/floors';
 import { broadcastImmediately } from '../../services/syncService';
+import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
+import AttendanceTab from '../../components/staff/AttendanceTab';
+import PayrollTab from '../../components/staff/PayrollTab';
 
 const SHIFTS: StaffShift[] = ['Morning', 'Evening', 'Night'];
 const STATUSES: StaffStatus[] = ['Active', 'On Leave', 'Inactive'];
@@ -68,10 +72,30 @@ const ROLE_COLORS = [
   '#475569', // Slate
 ];
 
-export default function StaffManagementScreen() {
+export default function StaffManagementScreen({
+  backRoute = '/admin/dashboard',
+  role = 'admin',
+}: {
+  backRoute?: string;
+  role?: 'admin' | 'manager';
+} = {}) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  const { can } = useRolePermissions();
+  if (role !== 'admin' && !can('canAccessStaff')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Staff & HR / پیرول"
+        urduModuleName="ملازمین اور پیرول"
+        requiredPermission="canAccessStaff"
+        backRoute={backRoute}
+      />
+    );
+  }
+
+  const canViewSensitiveSalaries = role === 'admin' || can('canViewRevenue');
 
   const staff = useRestaurantStore((state) => state.staff) || [];
   const tables = useRestaurantStore((state) => state.tables) || [];
@@ -89,7 +113,7 @@ export default function StaffManagementScreen() {
     setPermission,
   } = useRoleStore();
 
-  const [activeTab, setActiveTab] = useState<'staff' | 'roles'>('staff');
+  const [activeTab, setActiveTab] = useState<'staff' | 'attendance' | 'payroll' | 'roles'>('staff');
 
   const availableFloors = sortFloors(
     Array.from(
@@ -113,7 +137,7 @@ export default function StaffManagementScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
-  // Staff Form Fields
+  // Staff Form Fields (Detailed Employee Profile)
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<string>('Order Taker');
@@ -122,6 +146,14 @@ export default function StaffManagementScreen() {
   const [formStatus, setFormStatus] = useState<StaffStatus>('Active');
   const [formPin, setFormPin] = useState('');
   const [formAssignedZones, setFormAssignedZones] = useState<string[]>(['Ground Floor']);
+  const [formCnic, setFormCnic] = useState('');
+  const [formDesignation, setFormDesignation] = useState('');
+  const [formJoinedDate, setFormJoinedDate] = useState('');
+  const [formMonthlySalary, setFormMonthlySalary] = useState('');
+  const [formHourlyRate, setFormHourlyRate] = useState('');
+  const [formEmergencyContact, setFormEmergencyContact] = useState('');
+  const [formAddress, setFormAddress] = useState('');
+  const [formBankDetails, setFormBankDetails] = useState('');
   const [formError, setFormError] = useState('');
 
   // Role Modal & Form State
@@ -241,6 +273,14 @@ export default function StaffManagementScreen() {
     setFormStatus('Active');
     setFormPin(Math.floor(1000 + Math.random() * 9000).toString());
     setFormAssignedZones(['Ground Floor']);
+    setFormCnic('');
+    setFormDesignation('Order Taker');
+    setFormJoinedDate(new Date().toISOString().split('T')[0]);
+    setFormMonthlySalary('30000');
+    setFormHourlyRate('150');
+    setFormEmergencyContact('');
+    setFormAddress('');
+    setFormBankDetails('');
     setFormError('');
     setModalVisible(true);
   };
@@ -267,6 +307,14 @@ export default function StaffManagementScreen() {
         ? [member.assignedZone]
         : ['All Floors'];
     setFormAssignedZones(initialZones);
+    setFormCnic(member.cnic || '');
+    setFormDesignation(member.designation || '');
+    setFormJoinedDate(member.joinedDate || '');
+    setFormMonthlySalary(member.monthlySalary ? member.monthlySalary.toString() : '');
+    setFormHourlyRate(member.hourlyRate ? member.hourlyRate.toString() : '');
+    setFormEmergencyContact(member.emergencyContact || '');
+    setFormAddress(member.address || '');
+    setFormBankDetails(member.bankAccountDetails || '');
     setFormError('');
     setModalVisible(true);
   };
@@ -295,6 +343,14 @@ export default function StaffManagementScreen() {
       pin: formPin.trim(),
       assignedZone: formRole === 'Waiter' || formRole === 'Order Taker' ? primaryZone : undefined,
       assignedZones: formRole === 'Waiter' || formRole === 'Order Taker' ? formAssignedZones : undefined,
+      cnic: formCnic.trim() || undefined,
+      designation: formDesignation.trim() || undefined,
+      joinedDate: formJoinedDate.trim() || new Date().toISOString().split('T')[0],
+      monthlySalary: parseFloat(formMonthlySalary) || undefined,
+      hourlyRate: parseFloat(formHourlyRate) || undefined,
+      emergencyContact: formEmergencyContact.trim() || undefined,
+      address: formAddress.trim() || undefined,
+      bankAccountDetails: formBankDetails.trim() || undefined,
     };
 
     if (editingStaff) {
@@ -302,10 +358,11 @@ export default function StaffManagementScreen() {
     } else {
       addStaff({
         ...staffPayload,
-        joinedDate: new Date().toISOString().split('T')[0],
+        joinedDate: formJoinedDate.trim() || new Date().toISOString().split('T')[0],
       });
     }
 
+    broadcastImmediately();
     setModalVisible(false);
   };
 
@@ -505,6 +562,36 @@ export default function StaffManagementScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
+          style={[styles.viewTabBtn, activeTab === 'attendance' && styles.viewTabBtnActive]}
+          onPress={() => setActiveTab('attendance')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="calendar"
+            size={16}
+            color={activeTab === 'attendance' ? BRAND.burgundy : BRAND.muted}
+          />
+          <Text style={[styles.viewTabText, activeTab === 'attendance' && styles.viewTabTextActive]}>
+            Daily Attendance (حاضری)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.viewTabBtn, activeTab === 'payroll' && styles.viewTabBtnActive]}
+          onPress={() => setActiveTab('payroll')}
+          activeOpacity={0.7}
+        >
+          <Ionicons
+            name="cash"
+            size={16}
+            color={activeTab === 'payroll' ? BRAND.burgundy : BRAND.muted}
+          />
+          <Text style={[styles.viewTabText, activeTab === 'payroll' && styles.viewTabTextActive]}>
+            Salary & Payroll (تنخواہیں)
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
           style={[styles.viewTabBtn, activeTab === 'roles' && styles.viewTabBtnActive]}
           onPress={() => setActiveTab('roles')}
           activeOpacity={0.7}
@@ -515,11 +602,8 @@ export default function StaffManagementScreen() {
             color={activeTab === 'roles' ? BRAND.burgundy : BRAND.muted}
           />
           <Text style={[styles.viewTabText, activeTab === 'roles' && styles.viewTabTextActive]}>
-            Roles & Permissions Matrix ({roles.length})
+            Roles & Permissions ({roles.length})
           </Text>
-          <View style={styles.newBadge}>
-            <Text style={styles.newBadgeText}>ACCESS</Text>
-          </View>
         </TouchableOpacity>
       </View>
 
@@ -637,7 +721,9 @@ export default function StaffManagementScreen() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.staffName}>{member.name || 'Staff'}</Text>
-                            <Text style={styles.staffPhone}>{member.phone || 'No phone'}</Text>
+                            <Text style={styles.staffPhone}>
+                              {member.designation ? `${member.designation} • ` : ''}{member.phone || 'No phone'}
+                            </Text>
                           </View>
                         </View>
                         <View style={[styles.roleBadge, { backgroundColor: color + '15' }]}>
@@ -648,6 +734,20 @@ export default function StaffManagementScreen() {
                       </View>
 
                       <View style={styles.mobileCardDetails}>
+                        {Boolean(member.cnic) && (
+                          <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>CNIC ID:</Text>
+                            <Text style={styles.detailValue}>{member.cnic}</Text>
+                          </View>
+                        )}
+                        <View style={styles.detailRow}>
+                          <Text style={styles.detailLabel}>Monthly Salary:</Text>
+                          <Text style={[styles.detailValue, { fontWeight: '700', color: BRAND.burgundy }]}>
+                            {canViewSensitiveSalaries
+                              ? (typeof member.monthlySalary === 'number' ? `Rs. ${member.monthlySalary.toLocaleString()}` : 'Rs. 0')
+                              : '••••••'}
+                          </Text>
+                        </View>
                         <View style={styles.detailRow}>
                           <Text style={styles.detailLabel}>Assigned Floor:</Text>
                           <Text style={styles.detailValue}>
@@ -693,6 +793,13 @@ export default function StaffManagementScreen() {
 
                       <View style={styles.mobileCardActions}>
                         <TouchableOpacity
+                          style={[styles.mobileActionBtn, { backgroundColor: '#F3E8FF' }]}
+                          onPress={() => setActiveTab('payroll')}
+                        >
+                          <Ionicons name="card-outline" size={17} color="#7C3AED" />
+                          <Text style={[styles.mobileActionText, { color: '#7C3AED' }]}>Payroll</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
                           style={styles.mobileActionBtn}
                           onPress={() => openEditModal(member)}
                         >
@@ -715,13 +822,13 @@ export default function StaffManagementScreen() {
               /* Desktop Table View */
               <View style={styles.tableContainer}>
                 <View style={styles.tableHeader}>
-                  <Text style={[styles.thText, { flex: 2.2 }]}>EMPLOYEE</Text>
-                  <Text style={[styles.thText, { flex: 1.6 }]}>ROLE</Text>
-                  <Text style={[styles.thText, { flex: 2.2 }]}>ASSIGNED FLOOR / ZONE</Text>
-                  <Text style={[styles.thText, { flex: 1.1 }]}>SHIFT</Text>
-                  <Text style={[styles.thText, { flex: 1.2 }]}>STATUS</Text>
-                  <Text style={[styles.thText, { flex: 1.4 }]}>4-DIGIT PIN</Text>
-                  <Text style={[styles.thText, { flex: 1, textAlign: 'right' }]}>ACTIONS</Text>
+                  <Text style={[styles.thText, { flex: 2.2 }]}>EMPLOYEE & DESIGNATION</Text>
+                  <Text style={[styles.thText, { flex: 1.4 }]}>ROLE</Text>
+                  <Text style={[styles.thText, { flex: 1.8 }]}>FLOOR / SHIFT</Text>
+                  <Text style={[styles.thText, { flex: 1.5 }]}>BASE SALARY</Text>
+                  <Text style={[styles.thText, { flex: 1.1 }]}>STATUS</Text>
+                  <Text style={[styles.thText, { flex: 1.2 }]}>4-DIGIT PIN</Text>
+                  <Text style={[styles.thText, { flex: 1.4, textAlign: 'right' }]}>ACTIONS</Text>
                 </View>
 
                 {filteredStaff.map((member) => {
@@ -735,13 +842,20 @@ export default function StaffManagementScreen() {
                             {member.name ? member.name.charAt(0).toUpperCase() : '?'}
                           </Text>
                         </View>
-                        <View>
+                        <View style={{ flex: 1 }}>
                           <Text style={styles.staffName}>{member.name || 'Staff'}</Text>
-                          <Text style={styles.staffPhone}>{member.phone || 'No phone'}</Text>
+                          <Text style={styles.staffPhone}>
+                            {member.designation ? `${member.designation} • ` : ''}{member.phone || 'No phone'}
+                          </Text>
+                          {Boolean(member.cnic) && (
+                            <Text style={{ fontSize: 11, color: '#8E8E93', marginTop: 1 }}>
+                              CNIC: {member.cnic}
+                            </Text>
+                          )}
                         </View>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1.6 }]}>
+                      <View style={[styles.tableCell, { flex: 1.4 }]}>
                         <View style={[styles.roleBadge, { backgroundColor: color + '15' }]}>
                           <Text style={[styles.roleBadgeText, { color: color }]}>
                             {formatRoleName(member.role)}
@@ -749,20 +863,32 @@ export default function StaffManagementScreen() {
                         </View>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 2.2 }]}>
-                        <Text style={styles.zoneText}>
+                      <View style={[styles.tableCell, { flex: 1.8 }]}>
+                        <Text style={styles.zoneText} numberOfLines={1}>
                           {member.assignedZones && member.assignedZones.length > 0
                             ? member.assignedZones.join(', ')
                             : member.assignedZone || 'All Floors'}
                         </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                          <Ionicons name={getShiftIcon(member.shift)} size={13} color="#666" />
+                          <Text style={{ fontSize: 12, color: '#666' }}>{member.shift}</Text>
+                        </View>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1.1, flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                        <Ionicons name={getShiftIcon(member.shift)} size={16} color="#666" />
-                        <Text style={styles.shiftText}>{member.shift}</Text>
+                      <View style={[styles.tableCell, { flex: 1.5 }]}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: BRAND.burgundy }}>
+                          {canViewSensitiveSalaries
+                            ? (typeof member.monthlySalary === 'number' ? `Rs. ${member.monthlySalary.toLocaleString()}` : 'Rs. 0')
+                            : '••••••'}
+                        </Text>
+                        {canViewSensitiveSalaries && Boolean(member.hourlyRate) && (
+                          <Text style={{ fontSize: 11, color: '#666', marginTop: 2 }}>
+                            OT: Rs. {member.hourlyRate}/hr
+                          </Text>
+                        )}
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', alignItems: 'center' }]}>
+                      <View style={[styles.tableCell, { flex: 1.1, flexDirection: 'row', alignItems: 'center' }]}>
                         <View
                           style={[
                             styles.statusDot,
@@ -772,7 +898,7 @@ export default function StaffManagementScreen() {
                         <Text style={styles.statusText}>{member.status}</Text>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+                      <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
                         <Text style={styles.pinCodeText}>{isPinRevealed ? member.pin : '••••'}</Text>
                         <TouchableOpacity onPress={() => togglePinReveal(member.id)}>
                           <Ionicons
@@ -783,7 +909,13 @@ export default function StaffManagementScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 12 }]}>
+                      <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }]}>
+                        <TouchableOpacity
+                          style={[styles.actionBtn, { backgroundColor: '#F3E8FF' }]}
+                          onPress={() => setActiveTab('payroll')}
+                        >
+                          <Ionicons name="card-outline" size={17} color="#7C3AED" />
+                        </TouchableOpacity>
                         <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(member)}>
                           <Ionicons name="create-outline" size={19} color="#007AFF" />
                         </TouchableOpacity>
@@ -808,7 +940,21 @@ export default function StaffManagementScreen() {
         )}
 
         {/* ========================================================================= */}
-        {/* TAB 2: ROLES & PERMISSIONS MATRIX */}
+        {/* TAB 2: DAILY ATTENDANCE REGISTER */}
+        {/* ========================================================================= */}
+        {activeTab === 'attendance' && (
+          <AttendanceTab />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 3: SALARY & PAYROLL REGISTER */}
+        {/* ========================================================================= */}
+        {activeTab === 'payroll' && (
+          <PayrollTab canViewSalaries={canViewSensitiveSalaries} />
+        )}
+
+        {/* ========================================================================= */}
+        {/* TAB 4: ROLES & PERMISSIONS MATRIX */}
         {/* ========================================================================= */}
         {activeTab === 'roles' && (
           <View style={styles.rolesTabWrapper}>
@@ -1364,6 +1510,104 @@ export default function StaffManagementScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
+              </View>
+
+              {/* Designation & CNIC */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Job Title / Designation</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. Senior Waiter / Head Chef"
+                    placeholderTextColor="#A0A0A5"
+                    value={formDesignation}
+                    onChangeText={setFormDesignation}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>CNIC / National ID</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. 35201-1234567-1"
+                    placeholderTextColor="#A0A0A5"
+                    value={formCnic}
+                    onChangeText={setFormCnic}
+                  />
+                </View>
+              </View>
+
+              {/* Salary & Overtime Rate */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Monthly Base Salary (PKR) *</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: '#059669', fontWeight: '800' }]}
+                    placeholder="e.g. 35000"
+                    placeholderTextColor="#A0A0A5"
+                    keyboardType="numeric"
+                    value={formMonthlySalary}
+                    onChangeText={setFormMonthlySalary}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Overtime Hourly Rate (PKR)</Text>
+                  <TextInput
+                    style={[styles.formInput, { color: '#B48214', fontWeight: '800' }]}
+                    placeholder="e.g. 200"
+                    placeholderTextColor="#A0A0A5"
+                    keyboardType="numeric"
+                    value={formHourlyRate}
+                    onChangeText={setFormHourlyRate}
+                  />
+                </View>
+              </View>
+
+              {/* Joining Date & Emergency Contact */}
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Joining Date</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#A0A0A5"
+                    value={formJoinedDate}
+                    onChangeText={setFormJoinedDate}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1 }]}>
+                  <Text style={styles.formLabel}>Emergency Contact</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="+92 300 0000000"
+                    placeholderTextColor="#A0A0A5"
+                    value={formEmergencyContact}
+                    onChangeText={setFormEmergencyContact}
+                  />
+                </View>
+              </View>
+
+              {/* Bank & Payment Details */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Bank Account / JazzCash / EasyPaisa Details</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g. Meezan Bank PK36MEZN... or JazzCash 0300..."
+                  placeholderTextColor="#A0A0A5"
+                  value={formBankDetails}
+                  onChangeText={setFormBankDetails}
+                />
+              </View>
+
+              {/* Address */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Home Address</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g. House 12, Street 4, Gulberg, Lahore"
+                  placeholderTextColor="#A0A0A5"
+                  value={formAddress}
+                  onChangeText={setFormAddress}
+                />
               </View>
 
               {/* 4-Digit Secret PIN */}

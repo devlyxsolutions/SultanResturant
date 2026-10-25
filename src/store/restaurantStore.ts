@@ -173,6 +173,41 @@ export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' 
 export type StaffShift = 'Morning' | 'Evening' | 'Night';
 export type StaffStatus = 'Active' | 'On Leave' | 'Inactive';
 
+export type StaffAttendanceStatus = 'Present' | 'Absent' | 'Late' | 'Half Day' | 'On Leave';
+
+export type AttendanceRecord = {
+  id: string;
+  staffId: string;
+  staffName: string;
+  date: string; // YYYY-MM-DD
+  checkIn?: string; // e.g. "09:00 AM"
+  checkOut?: string; // e.g. "06:00 PM"
+  status: StaffAttendanceStatus;
+  overtimeHours?: number; // e.g. 2
+  lateMinutes?: number; // e.g. 15
+  notes?: string;
+  recordedAt: number;
+};
+
+export type SalaryPayment = {
+  id: string;
+  staffId: string;
+  staffName: string;
+  month: string; // e.g. "2026-10"
+  paymentDate: string; // YYYY-MM-DD
+  baseSalary: number;
+  bonusAmount: number;
+  deductionAmount: number;
+  advanceDeduction: number;
+  overtimeAmount: number;
+  netPaid: number;
+  paymentMethod: 'cash' | 'bank' | 'online';
+  status: 'Paid' | 'Pending';
+  notes?: string;
+  voucherNumber?: string;
+  paidAt: number;
+};
+
 export type StaffMember = {
   id: string;
   name: string;
@@ -185,6 +220,14 @@ export type StaffMember = {
   assignedZone?: string;
   assignedZones?: string[];
   customRoleId?: string;
+  // Detailed Employee & Payroll Profiles
+  cnic?: string;
+  designation?: string;
+  monthlySalary?: number;
+  hourlyRate?: number;
+  emergencyContact?: string;
+  address?: string;
+  bankAccountDetails?: string;
 };
 
 export type Reservation = {
@@ -272,6 +315,13 @@ type RestaurantState = {
   addStaff: (staff: Omit<StaffMember, 'id'>) => void;
   updateStaff: (id: string, staff: Partial<Omit<StaffMember, 'id'>>) => void;
   deleteStaff: (id: string) => void;
+  // Attendance & Payroll
+  attendance: AttendanceRecord[];
+  salaryPayments: SalaryPayment[];
+  markAttendance: (recordOrList: Omit<AttendanceRecord, 'id' | 'recordedAt'> | Omit<AttendanceRecord, 'id' | 'recordedAt'>[]) => void;
+  deleteAttendanceRecord: (id: string) => void;
+  recordSalaryPayment: (payment: Omit<SalaryPayment, 'id' | 'paidAt' | 'voucherNumber'>) => SalaryPayment;
+  deleteSalaryPayment: (id: string) => void;
   onlineFeedbackUrl?: string;
   setOnlineFeedbackUrl: (url: string) => void;
   syncFromServer: (remoteState: Partial<RestaurantState>) => void;
@@ -644,13 +694,315 @@ const INITIAL_MENU: MenuItem[] = [
 ];
 
 const INITIAL_STAFF: StaffMember[] = [
-  { id: 'st1', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
-  { id: 'st2', name: 'Ali Khan', phone: '+92 301 7654321', role: 'Manager', pin: '2233', status: 'Active', shift: 'Morning', joinedDate: '2025-02-01' },
-  { id: 'st3', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
-  { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
-  { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
-  { id: 'st6', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
-  { id: 'st7', name: 'Tariq Juice Master', phone: '+92 306 1122334', role: 'JuiceBar', pin: '1234', status: 'Active', shift: 'Morning', joinedDate: '2025-06-15' },
+  {
+    id: 'st1',
+    name: 'Junaid Ahsan',
+    phone: '+92 300 1234567',
+    role: 'Admin',
+    pin: '1122',
+    status: 'Active',
+    shift: 'Morning',
+    joinedDate: '2025-01-15',
+    cnic: '35201-8472910-1',
+    designation: 'General Director / Admin',
+    monthlySalary: 120000,
+    hourlyRate: 600,
+    emergencyContact: '+92 321 4455667',
+    address: 'Gulberg III, Lahore',
+    bankAccountDetails: 'Meezan Bank - PK36MEZN00012345678901'
+  },
+  {
+    id: 'st2',
+    name: 'Ali Khan',
+    phone: '+92 301 7654321',
+    role: 'Manager',
+    pin: '2233',
+    status: 'Active',
+    shift: 'Morning',
+    joinedDate: '2025-02-01',
+    cnic: '35202-1928374-3',
+    designation: 'Restaurant Operations Manager',
+    monthlySalary: 75000,
+    hourlyRate: 350,
+    emergencyContact: '+92 333 7891234',
+    address: 'DHA Phase 5, Lahore',
+    bankAccountDetails: 'Bank Alfalah - PK45ALFH009876543210'
+  },
+  {
+    id: 'st3',
+    name: 'Chef Omar',
+    phone: '+92 302 9876543',
+    role: 'Kitchen',
+    pin: '3344',
+    status: 'Active',
+    shift: 'Evening',
+    joinedDate: '2025-03-10',
+    cnic: '35201-9281734-5',
+    designation: 'Executive Head Chef',
+    monthlySalary: 65000,
+    hourlyRate: 320,
+    emergencyContact: '+92 345 1122334',
+    address: 'Johar Town, Lahore',
+    bankAccountDetails: 'Faysal Bank - PK12FAYS001122334455'
+  },
+  {
+    id: 'st4',
+    name: 'Sara Ahmed',
+    phone: '+92 303 5556677',
+    role: 'Waiter',
+    pin: '4455',
+    status: 'Active',
+    shift: 'Evening',
+    joinedDate: '2025-04-05',
+    assignedZone: 'Ground Floor',
+    assignedZones: ['Ground Floor'],
+    cnic: '35202-5463728-2',
+    designation: 'Senior Order Taker / Hostess',
+    monthlySalary: 32000,
+    hourlyRate: 180,
+    emergencyContact: '+92 300 9988776',
+    address: 'Model Town, Lahore',
+    bankAccountDetails: 'JazzCash - 03035556677'
+  },
+  {
+    id: 'st5',
+    name: 'Hamza Malik',
+    phone: '+92 304 4443322',
+    role: 'Waiter',
+    pin: '5566',
+    status: 'On Leave',
+    shift: 'Night',
+    joinedDate: '2025-05-12',
+    assignedZone: '1st Floor',
+    assignedZones: ['1st Floor'],
+    cnic: '35201-3829104-9',
+    designation: 'Floor Waiter',
+    monthlySalary: 30000,
+    hourlyRate: 170,
+    emergencyContact: '+92 301 5566778',
+    address: 'Faisal Town, Lahore',
+    bankAccountDetails: 'Easypaisa - 03044443322'
+  },
+  {
+    id: 'st6',
+    name: 'Ali Raza',
+    phone: '+92 305 9988776',
+    role: 'Playland',
+    pin: '1234',
+    status: 'Active',
+    shift: 'Evening',
+    joinedDate: '2025-06-01',
+    cnic: '35202-9988771-7',
+    designation: 'Playland Attendant & Supervisor',
+    monthlySalary: 28000,
+    hourlyRate: 150,
+    emergencyContact: '+92 312 3344556',
+    address: 'Township, Lahore',
+    bankAccountDetails: 'HBL - PK09HABB002233445566'
+  },
+  {
+    id: 'st7',
+    name: 'Tariq Juice Master',
+    phone: '+92 306 1122334',
+    role: 'JuiceBar',
+    pin: '1234',
+    status: 'Active',
+    shift: 'Morning',
+    joinedDate: '2025-06-15',
+    cnic: '35201-1122334-5',
+    designation: 'Juice & Mocktail Barista',
+    monthlySalary: 35000,
+    hourlyRate: 200,
+    emergencyContact: '+92 334 7788990',
+    address: 'Ichhra, Lahore',
+    bankAccountDetails: 'UBL - PK88UNIL000998877665'
+  },
+];
+
+const INITIAL_ATTENDANCE: AttendanceRecord[] = [
+  {
+    id: 'att-1',
+    staffId: 'st1',
+    staffName: 'Junaid Ahsan',
+    date: '2026-10-25',
+    checkIn: '08:50 AM',
+    checkOut: '05:30 PM',
+    status: 'Present',
+    overtimeHours: 0,
+    lateMinutes: 0,
+    notes: 'On duty on time',
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-2',
+    staffId: 'st2',
+    staffName: 'Ali Khan',
+    date: '2026-10-25',
+    checkIn: '09:05 AM',
+    checkOut: '06:00 PM',
+    status: 'Present',
+    overtimeHours: 1,
+    lateMinutes: 5,
+    notes: 'Morning shift opening manager',
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-3',
+    staffId: 'st3',
+    staffName: 'Chef Omar',
+    date: '2026-10-25',
+    checkIn: '11:45 AM',
+    checkOut: '10:30 PM',
+    status: 'Present',
+    overtimeHours: 2,
+    lateMinutes: 0,
+    notes: 'Weekend prep and evening grill station',
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-4',
+    staffId: 'st4',
+    staffName: 'Sara Ahmed',
+    date: '2026-10-25',
+    checkIn: '12:15 PM',
+    checkOut: '09:30 PM',
+    status: 'Late',
+    overtimeHours: 0,
+    lateMinutes: 15,
+    notes: 'Traffic delay on Ferozepur road',
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-5',
+    staffId: 'st5',
+    staffName: 'Hamza Malik',
+    date: '2026-10-25',
+    status: 'On Leave',
+    notes: 'Medical leave approved by manager',
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-6',
+    staffId: 'st6',
+    staffName: 'Ali Raza',
+    date: '2026-10-25',
+    checkIn: '02:00 PM',
+    checkOut: '10:00 PM',
+    status: 'Present',
+    overtimeHours: 0.5,
+    lateMinutes: 0,
+    recordedAt: Date.now() - 3600000,
+  },
+  {
+    id: 'att-7',
+    staffId: 'st7',
+    staffName: 'Tariq Juice Master',
+    date: '2026-10-25',
+    checkIn: '09:00 AM',
+    checkOut: '05:00 PM',
+    status: 'Present',
+    overtimeHours: 0,
+    lateMinutes: 0,
+    recordedAt: Date.now() - 3600000,
+  },
+  // Yesterday's records
+  {
+    id: 'att-8',
+    staffId: 'st2',
+    staffName: 'Ali Khan',
+    date: '2026-10-24',
+    checkIn: '09:00 AM',
+    checkOut: '06:00 PM',
+    status: 'Present',
+    recordedAt: Date.now() - 86400000,
+  },
+  {
+    id: 'att-9',
+    staffId: 'st3',
+    staffName: 'Chef Omar',
+    date: '2026-10-24',
+    checkIn: '12:00 PM',
+    checkOut: '11:00 PM',
+    status: 'Present',
+    overtimeHours: 2,
+    recordedAt: Date.now() - 86400000,
+  },
+  {
+    id: 'att-10',
+    staffId: 'st4',
+    staffName: 'Sara Ahmed',
+    date: '2026-10-24',
+    checkIn: '12:00 PM',
+    checkOut: '09:00 PM',
+    status: 'Present',
+    recordedAt: Date.now() - 86400000,
+  },
+  {
+    id: 'att-11',
+    staffId: 'st5',
+    staffName: 'Hamza Malik',
+    date: '2026-10-24',
+    status: 'Absent',
+    notes: 'Uninformed absence',
+    recordedAt: Date.now() - 86400000,
+  },
+];
+
+const INITIAL_SALARY_PAYMENTS: SalaryPayment[] = [
+  {
+    id: 'sal-101',
+    staffId: 'st2',
+    staffName: 'Ali Khan',
+    month: '2026-09',
+    paymentDate: '2026-10-02',
+    baseSalary: 75000,
+    bonusAmount: 5000,
+    deductionAmount: 0,
+    advanceDeduction: 0,
+    overtimeAmount: 3500,
+    netPaid: 83500,
+    paymentMethod: 'bank',
+    status: 'Paid',
+    voucherNumber: 'VCH-2026-8812',
+    notes: 'September salary with quarterly performance reward',
+    paidAt: Date.now() - 20 * 86400000,
+  },
+  {
+    id: 'sal-102',
+    staffId: 'st3',
+    staffName: 'Chef Omar',
+    month: '2026-09',
+    paymentDate: '2026-10-02',
+    baseSalary: 65000,
+    bonusAmount: 3000,
+    deductionAmount: 0,
+    advanceDeduction: 5000,
+    overtimeAmount: 4800,
+    netPaid: 67800,
+    paymentMethod: 'cash',
+    status: 'Paid',
+    voucherNumber: 'VCH-2026-8813',
+    notes: 'September salary - Rs. 5000 kitchen advance deducted',
+    paidAt: Date.now() - 20 * 86400000,
+  },
+  {
+    id: 'sal-103',
+    staffId: 'st4',
+    staffName: 'Sara Ahmed',
+    month: '2026-09',
+    paymentDate: '2026-10-03',
+    baseSalary: 32000,
+    bonusAmount: 2000,
+    deductionAmount: 1000,
+    advanceDeduction: 0,
+    overtimeAmount: 1800,
+    netPaid: 34800,
+    paymentMethod: 'online',
+    status: 'Paid',
+    voucherNumber: 'VCH-2026-8814',
+    notes: 'Sent via JazzCash',
+    paidAt: Date.now() - 19 * 86400000,
+  },
 ];
 
 /**
@@ -727,6 +1079,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       customers: INITIAL_CUSTOMERS,
       feedbacks: INITIAL_FEEDBACKS,
       staff: INITIAL_STAFF,
+      attendance: INITIAL_ATTENDANCE,
+      salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
       tickets: [
         {
@@ -1562,6 +1916,65 @@ export const useRestaurantStore = create<RestaurantState>()(
         staff: (state.staff || []).filter(s => s.id !== id)
       })),
 
+      markAttendance: (recordOrList) => set((state) => {
+        const recordsToSave = Array.isArray(recordOrList) ? recordOrList : [recordOrList];
+        const existingAttendance = [...(state.attendance || [])];
+        
+        recordsToSave.forEach((rec) => {
+          const existingIdx = existingAttendance.findIndex(
+            (a) => a.staffId === rec.staffId && a.date === rec.date
+          );
+          if (existingIdx >= 0) {
+            existingAttendance[existingIdx] = {
+              ...existingAttendance[existingIdx],
+              ...rec,
+              recordedAt: Date.now(),
+            };
+          } else {
+            existingAttendance.unshift({
+              ...rec,
+              id: `att_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+              recordedAt: Date.now(),
+            });
+          }
+        });
+
+        notifySync();
+        return { attendance: existingAttendance };
+      }),
+
+      deleteAttendanceRecord: (id) => set((state) => {
+        notifySync();
+        return {
+          attendance: (state.attendance || []).filter((a) => a.id !== id),
+        };
+      }),
+
+      recordSalaryPayment: (payment) => {
+        let createdPayment: SalaryPayment;
+        set((state) => {
+          const voucherNumber = `VCH-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+          createdPayment = {
+            ...payment,
+            id: `sal_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+            voucherNumber,
+            paidAt: Date.now(),
+          };
+          notifySync();
+          return {
+            salaryPayments: [createdPayment, ...(state.salaryPayments || [])],
+          };
+        });
+        return createdPayment!;
+      },
+
+      deleteSalaryPayment: (id) => set((state) => {
+        notifySync();
+        return {
+          salaryPayments: (state.salaryPayments || []).filter((p) => p.id !== id),
+        };
+      }),
+
       syncFromServer: (remoteState) => set((state) => {
         let mergedTickets = remoteState.tickets;
         if (remoteState.tickets && state.tickets) {
@@ -1596,6 +2009,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
           ...(remoteState.floors ? { floors: remoteState.floors } : {}),
           ...(remoteState.staff ? { staff: remoteState.staff } : {}),
+          ...(remoteState.attendance ? { attendance: remoteState.attendance } : {}),
+          ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
           ...(remoteState.customers ? { customers: remoteState.customers } : {}),
           ...(remoteState.reservations ? { reservations: remoteState.reservations } : {}),
           ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
@@ -1642,6 +2057,12 @@ export const useRestaurantStore = create<RestaurantState>()(
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
             state.floors = INITIAL_FLOORS;
+          }
+          if (!state.attendance || !Array.isArray(state.attendance) || state.attendance.length === 0) {
+            state.attendance = INITIAL_ATTENDANCE;
+          }
+          if (!state.salaryPayments || !Array.isArray(state.salaryPayments) || state.salaryPayments.length === 0) {
+            state.salaryPayments = INITIAL_SALARY_PAYMENTS;
           }
           // Clean out legacy ghost zones (e.g. 'Main Hall', 'VIP', 'Majlis Floor 1') that have no tables
           const validFloorNames = (state.floors || []).map((f) => f.name.toLowerCase());

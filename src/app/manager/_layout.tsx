@@ -40,6 +40,7 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Kitchen Returns', route: '/manager/kitchen-returns', icon: 'checkmark-done-circle-outline' },
   { label: 'Recipe BOM', route: '/manager/recipes', icon: 'restaurant-outline' },
   { label: 'Dish Costing', route: '/manager/costing', icon: 'pricetag-outline' },
+  { label: 'Staff & HR / پیرول', route: '/manager/staff', icon: 'people-outline' },
 ];
 
 export default function ManagerLayout() {
