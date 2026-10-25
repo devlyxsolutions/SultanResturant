@@ -6,7 +6,8 @@ import {
   StyleSheet, 
   StatusBar, 
   useWindowDimensions, 
-  Platform 
+  Platform,
+  ActivityIndicator
 } from 'react-native';
 import { useState, useMemo } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -82,7 +83,18 @@ export default function AdminLayout() {
     });
   }, [can]);
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#140306', alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#140306" />
+        <SultanLogo size="md" width={68} height={68} />
+        <ActivityIndicator size="small" color="#D4AF37" style={{ marginTop: 18 }} />
+        <Text style={{ color: '#D4AF37', marginTop: 12, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>
+          LOADING SULTAN ADMIN...
+        </Text>
+      </View>
+    );
+  }
 
   // POS Terminal is Fullscreen (No Sidebar, No Outer Layout Header, No Mobile BottomNav)
   const isPos = pathname === '/admin/pos' || pathname.endsWith('/pos');

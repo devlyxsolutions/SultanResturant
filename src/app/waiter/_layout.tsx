@@ -1,15 +1,27 @@
-import { View, StyleSheet, StatusBar, Platform } from 'react-native';
+import { View, Text, StyleSheet, StatusBar, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import UniversalPortalNav from '../../components/UniversalPortalNav';
 import BottomNav from '../../components/BottomNav';
 import WaiterNotificationHost from '../../components/WaiterNotificationHost';
+import SultanLogo from '../../components/SultanLogo';
 
 export default function WaiterLayout() {
   const { ready, logout } = useRoleGuard(['waiter', 'manager', 'admin']);
 
-  if (!ready) return null;
+  if (!ready) {
+    return (
+      <View style={{ flex: 1, backgroundColor: '#4a121a', alignItems: 'center', justifyContent: 'center' }}>
+        <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
+        <SultanLogo size="md" width={68} height={68} />
+        <ActivityIndicator size="small" color="#D4AF37" style={{ marginTop: 18 }} />
+        <Text style={{ color: '#D4AF37', marginTop: 12, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>
+          LOADING ORDER TAKER...
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>

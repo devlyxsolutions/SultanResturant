@@ -41,6 +41,16 @@ export function useRoleGuard(allowed: Exclude<Role, null>[]) {
   }, [isAuthenticated, user?.role, user?.customRoleId, allowed, allRoles]);
 
   useEffect(() => {
+    // Safety guard: ensure store is never stuck in unhydrated state on web
+    const timer = setTimeout(() => {
+      if (!useAuthStore.getState().hasHydrated) {
+        useAuthStore.getState().setHasHydrated(true);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
     if (hasHydrated && !isAllowed) {
       router.replace('/login');
     }
