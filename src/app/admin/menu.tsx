@@ -563,12 +563,8 @@ export default function MenuManagement() {
       name: itemName.trim(),
       price: priceNum,
       costPrice: parsedCost,
-<<<<<<< HEAD
-      category: finalCategory,
-=======
-      category: itemCategory,
+      category: finalCategory || itemCategory,
       region: itemRegion.trim() ? itemRegion.trim() : undefined,
->>>>>>> 9210cb0 (feat: regional cuisines module, executive culinary analytics dashboard, juicebar updates and UI improvements)
       station: itemStation,
       prepTimeMin: parsedPrepTime,
       description: itemDescription.trim() || undefined,
@@ -1097,29 +1093,6 @@ export default function MenuManagement() {
         </View>
 
         {activeTab === 'items' && (
-<<<<<<< HEAD
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.categoryPillsScroll}
-          >
-            {Array.from(new Set(['All', ...categories])).map((cat, idx) => {
-              const isSelected = selectedCategoryFilter === cat;
-              return (
-                <TouchableOpacity
-                  key={`${cat}-${idx}`}
-                  style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                  onPress={() => setSelectedCategoryFilter(cat)}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-=======
           <View style={{ gap: 8 }}>
             {/* Category Filter Pills */}
             <ScrollView 
@@ -1127,11 +1100,11 @@ export default function MenuManagement() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.categoryPillsScroll}
             >
-              {['All', ...categories].map(cat => {
+              {Array.from(new Set(['All', ...categories])).map((cat, idx) => {
                 const isSelected = selectedCategoryFilter === cat;
                 return (
                   <TouchableOpacity
-                    key={cat}
+                    key={`${cat}-${idx}`}
                     style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
                     onPress={() => setSelectedCategoryFilter(cat)}
                     activeOpacity={0.7}
@@ -1171,7 +1144,6 @@ export default function MenuManagement() {
               })}
             </ScrollView>
           </View>
->>>>>>> 9210cb0 (feat: regional cuisines module, executive culinary analytics dashboard, juicebar updates and UI improvements)
         )}
       </View>
 

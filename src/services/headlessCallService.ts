@@ -50,10 +50,10 @@ export function initCallListener(): () => void {
   // If enabled, ensure the native service is running
   if (store.isDetectionEnabled && Platform.OS === 'android') {
     isServiceRunning()
-      .then((running) => {
+      .then((running: boolean) => {
         store.setServiceRunning(running);
         if (!running) {
-          return startService().then((ok) => {
+          return startService().then((ok: boolean) => {
             if (ok) store.setServiceRunning(true);
           });
         }
@@ -62,19 +62,19 @@ export function initCallListener(): () => void {
   }
 
   // Subscribe to foreground events emitted by CallDetectorModule
-  const subIncoming = addCallListener('INCOMING_CALL', (event) => {
+  const subIncoming = addCallListener('INCOMING_CALL', (event: any) => {
     useCallStore.getState().handleIncomingCall(event.phoneNumber, event.timestamp);
   });
 
-  const subAnswered = addCallListener('CALL_ANSWERED', (event) => {
+  const subAnswered = addCallListener('CALL_ANSWERED', (event: any) => {
     useCallStore.getState().handleCallAnswered(event.phoneNumber, event.timestamp);
   });
 
-  const subEnded = addCallListener('CALL_ENDED', (event) => {
+  const subEnded = addCallListener('CALL_ENDED', (event: any) => {
     useCallStore.getState().handleCallEnded(event.phoneNumber, event.duration, event.timestamp);
   });
 
-  const subMissed = addCallListener('MISSED_CALL', (event) => {
+  const subMissed = addCallListener('MISSED_CALL', (event: any) => {
     useCallStore.getState().handleMissedCall(event.phoneNumber, event.timestamp);
   });
 

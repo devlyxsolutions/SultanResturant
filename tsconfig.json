@@ -8,6 +8,9 @@
       ],
       "@/assets/*": [
         "./assets/*"
+      ],
+      "call-detector": [
+        "./modules/call-detector/src/index.ts"
       ]
     }
   },

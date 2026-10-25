@@ -382,11 +382,6 @@ export default function KitchenDisplayScreen() {
     }
     broadcastImmediately();
   };
-    } else {
-      updateTicketStatus(ticket.id, 'ready', stationFilter);
-    }
-    broadcastImmediately();
-  };
 
   const renderTicket = (item: typeof stationTickets[0]) => {
     const items = Array.isArray(item.items) ? item.items : [];
