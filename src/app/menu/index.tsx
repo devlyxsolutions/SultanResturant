@@ -470,11 +470,27 @@ export default function CustomerMenuScreen() {
     return { icon: 'earth', emoji: '🍽️', color: '#B45309' };
   };
 
-  // Unique list of active Cuisines / Regions
+  // Guaranteed unique category list starting with 'All'
+  const categoryTabs = useMemo(() => {
+    const set = new Set<string>();
+    (categories || []).forEach(c => {
+      const clean = (c || '').trim();
+      if (clean && clean.toLowerCase() !== 'all') set.add(clean);
+    });
+    return ['All', ...Array.from(set)];
+  }, [categories]);
+
+  // Unique list of active Cuisines / Regions (excluding 'ALL')
   const regions = useMemo(() => {
     const set = new Set<string>();
-    (storeRegions || []).forEach(r => { if (r && r.trim()) set.add(r.trim()); });
-    (menuItems || []).forEach(m => { if (m.region && m.region.trim()) set.add(m.region.trim()); });
+    (storeRegions || []).forEach(r => {
+      const clean = (r || '').trim();
+      if (clean && clean.toLowerCase() !== 'all') set.add(clean);
+    });
+    (menuItems || []).forEach(m => {
+      const clean = (m.region || '').trim();
+      if (clean && clean.toLowerCase() !== 'all') set.add(clean);
+    });
     return Array.from(set);
   }, [storeRegions, menuItems]);
 
@@ -1407,7 +1423,7 @@ export default function CustomerMenuScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.mobileCategoryScroll}
             >
-              {['All', ...categories].map(cat => {
+              {categoryTabs.map(cat => {
                 const isActive = activeCat.toLowerCase() === cat.toLowerCase();
                 const count = categoryCounts[cat] || (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
                 return (
@@ -1444,7 +1460,7 @@ export default function CustomerMenuScreen() {
                   <Text style={styles.sidebarSubtitle}>Select a section</Text>
                 </View>
 
-                {['All', ...categories].map(cat => {
+                {categoryTabs.map(cat => {
                   const isActive = activeCat.toLowerCase() === cat.toLowerCase();
                   const count = categoryCounts[cat] || (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
 
