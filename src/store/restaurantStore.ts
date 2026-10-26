@@ -2481,9 +2481,80 @@ export const useRestaurantStore = create<RestaurantState>()(
               return [...localUnsynced, ...remoteList];
             })()
           } : {}),
-          ...(remoteState.menuItems ? { menuItems: remoteState.menuItems } : {}),
-          ...(remoteState.categories ? { categories: remoteState.categories } : {}),
-          ...(remoteState.regions ? { regions: remoteState.regions } : {}),
+          ...(remoteState.menuItems ? {
+            menuItems: (() => {
+              const incoming = Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [];
+
+              // Canonical alias map to eliminate name duplicates (e.g., 'Sultan Kebab' -> 'Sultan Seekh Kebab')
+              const ALIAS_MAP: Record<string, string> = {
+                'sultan kebab': 'sultan seekh kebab',
+                'chicken karahi': 'desi murgh karahi',
+                'hummus & pita': 'hummus with warm pita',
+                'kunafa': 'royal turkish kunafa',
+                'mint margarita': 'fresh mint margarita',
+                'mangoo shake': 'mango kulfa shake',
+                'chicken fajita': 'fajita supreme pizza',
+              };
+
+              const normKey = (name?: string) => {
+                const clean = (name || '').trim().toLowerCase();
+                return ALIAS_MAP[clean] || clean;
+              };
+
+              const resultMap = new Map<string, MenuItem>();
+
+              // 1. Foundation: Always guarantee all 21 default dishes exist
+              for (const def of SULTAN_DEFAULT_MENU) {
+                resultMap.set(normKey(def.name), { ...def });
+              }
+
+              // 2. Local store items (preserve any custom dishes or local edits)
+              for (const loc of (state.menuItems || [])) {
+                if (!loc || !loc.name) continue;
+                const k = normKey(loc.name);
+                const existing = resultMap.get(k);
+                if (existing) {
+                  resultMap.set(k, {
+                    ...existing,
+                    ...loc,
+                    imageUri: loc.imageUri || (loc as any).imageUrl || existing.imageUri,
+                    region: loc.region || existing.region,
+                    category: loc.category || existing.category,
+                    badge: loc.badge || existing.badge,
+                  });
+                } else {
+                  resultMap.set(k, loc);
+                }
+              }
+
+              // 3. Remote incoming items (apply remote overrides or append remote custom dishes)
+              for (const inc of incoming) {
+                if (!inc || !inc.name) continue;
+                const k = normKey(inc.name);
+                const existing = resultMap.get(k);
+                if (existing) {
+                  resultMap.set(k, {
+                    ...existing,
+                    ...inc,
+                    imageUri: inc.imageUri || (inc as any).imageUrl || existing.imageUri,
+                    region: inc.region || existing.region,
+                    category: inc.category || existing.category,
+                    badge: inc.badge || existing.badge,
+                  });
+                } else {
+                  resultMap.set(k, inc);
+                }
+              }
+
+              return Array.from(resultMap.values());
+            })()
+          } : {}),
+          ...(remoteState.categories ? {
+            categories: Array.from(new Set([...(state.categories || SULTAN_DEFAULT_CATEGORIES), ...remoteState.categories]))
+          } : {}),
+          ...(remoteState.regions ? {
+            regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
+          } : {}),
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
           ...(remoteState.floors ? { floors: remoteState.floors } : {}),
           ...(remoteState.staff ? { staff: remoteState.staff } : {}),
@@ -2599,6 +2670,45 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!state.regions || !Array.isArray(state.regions) || state.regions.length === 0) {
             state.regions = INITIAL_REGIONS;
           }
+
+          // Reconcile and guarantee menu items on storage rehydration
+          const ALIAS_MAP: Record<string, string> = {
+            'sultan kebab': 'sultan seekh kebab',
+            'chicken karahi': 'desi murgh karahi',
+            'hummus & pita': 'hummus with warm pita',
+            'kunafa': 'royal turkish kunafa',
+            'mint margarita': 'fresh mint margarita',
+            'mangoo shake': 'mango kulfa shake',
+            'chicken fajita': 'fajita supreme pizza',
+          };
+          const normKey = (name?: string) => {
+            const clean = (name || '').trim().toLowerCase();
+            return ALIAS_MAP[clean] || clean;
+          };
+          const menuMap = new Map<string, MenuItem>();
+          for (const def of SULTAN_DEFAULT_MENU) {
+            menuMap.set(normKey(def.name), { ...def });
+          }
+          for (const loc of (state.menuItems || [])) {
+            if (!loc || !loc.name) continue;
+            const k = normKey(loc.name);
+            const existing = menuMap.get(k);
+            if (existing) {
+              menuMap.set(k, {
+                ...existing,
+                ...loc,
+                imageUri: loc.imageUri || (loc as any).imageUrl || existing.imageUri,
+                region: loc.region || existing.region,
+                category: loc.category || existing.category,
+                badge: loc.badge || existing.badge,
+              });
+            } else {
+              menuMap.set(k, loc);
+            }
+          }
+          state.menuItems = Array.from(menuMap.values());
+          state.categories = Array.from(new Set([...(state.categories || SULTAN_DEFAULT_CATEGORIES), ...SULTAN_DEFAULT_CATEGORIES]));
+          state.regions = Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...SULTAN_DEFAULT_REGIONS]));
           // Normalize and assign true floor and seatingType to any table that has legacy or missing attributes
           state.tables = (state.tables || []).map(t => {
             const inferredFloor = getTableFloor(t);
