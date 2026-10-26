@@ -27,8 +27,9 @@ import {
 } from '../../constants/floors';
 import SeatingTypeIcon from '../../components/SeatingTypeIcon';
 import { broadcastImmediately } from '../../services/syncService';
+import { BRAND as BRAND_PALETTE } from '../../constants/brand';
 
-const BRAND = '#4a121a';
+const BRAND = BRAND_PALETTE.burgundy;
 
 export default function OrderTakerScreen() {
   const router = useRouter();
@@ -86,8 +87,12 @@ export default function OrderTakerScreen() {
   const [selectedFloor, setSelectedFloor] = useState<string>('All');
   // Active Seating Zone Filter (All, Tables, Couches, Majlis Cabins)
   const [seatingTypeFilter, setSeatingTypeFilter] = useState<'all' | SeatingZoneType>('all');
+  // Active Status Filter Tab (All, Free, Occupied, Food Ready, Billed)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied' | 'ready' | 'billed'>('all');
   // Search query
   const [search, setSearch] = useState<string>('');
+  // Manual sync feedback state
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Persisted set of dismissed bill paid alert keys so tapping X permanently hides only that specific alert occurrence
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
@@ -247,7 +252,33 @@ export default function OrderTakerScreen() {
     };
   }, [scopedByFloorTables]);
 
-  // 5. Final Visible Tables filtered by Seating Type & Search
+  const isTicketReadyForPickup = (t: Ticket) => {
+    if (t.status === 'ready') return true;
+    if (t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready') return true;
+    return false;
+  };
+
+  // Status breakdown counts on this scoped floor
+  const statusCounts = useMemo(() => {
+    let free = 0;
+    let occupied = 0;
+    let ready = 0;
+    let billed = 0;
+
+    scopedByFloorTables.forEach((table) => {
+      const tableTickets = tickets.filter((t) => t.tableId === table.id);
+      const isFoodReady = tableTickets.some(isTicketReadyForPickup);
+      const isTableBilled = table.status === 'billed' || table.isPaid;
+      if (isFoodReady) ready++;
+      else if (isTableBilled) billed++;
+      else if (table.status === 'occupied') occupied++;
+      else if (table.status === 'available') free++;
+    });
+
+    return { free, occupied, ready, billed };
+  }, [scopedByFloorTables, tickets]);
+
+  // 5. Final Visible Tables filtered by Seating Type, Status Tab & Search
   const visibleTables = useMemo(() => {
     return scopedByFloorTables.filter((t) => {
       const tType = getTableSeatingType(t);
@@ -257,15 +288,20 @@ export default function OrderTakerScreen() {
       if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) {
         return false;
       }
+      if (statusFilter !== 'all') {
+        const tableTickets = tickets.filter((tk) => tk.tableId === t.id);
+        const isFoodReady = tableTickets.some(isTicketReadyForPickup);
+        const isTableBilled = t.status === 'billed' || t.isPaid;
+        const isOccupied = t.status === 'occupied';
+
+        if (statusFilter === 'ready' && !isFoodReady) return false;
+        if (statusFilter === 'billed' && !isTableBilled) return false;
+        if (statusFilter === 'occupied' && (!isOccupied || isFoodReady || isTableBilled)) return false;
+        if (statusFilter === 'available' && t.status !== 'available') return false;
+      }
       return true;
     });
-  }, [scopedByFloorTables, seatingTypeFilter, search]);
-
-  const isTicketReadyForPickup = (t: Ticket) => {
-    if (t.status === 'ready') return true;
-    if (t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready') return true;
-    return false;
-  };
+  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, tickets]);
 
   // 6. Filter ready tickets to only tables belonging to authorized floors
   const readyTickets = tickets.filter((t) => {
@@ -398,15 +434,26 @@ export default function OrderTakerScreen() {
         {/* Card Body */}
         <View style={styles.cardBody}>
           {/* Capacity and Guest Tag */}
-          <View style={[styles.capacityRow, isMajlis && styles.majlisCapacityRow]}>
-            <Ionicons name="people" size={13} color={isMajlis ? '#4a121a' : '#555'} />
-            <Text style={[styles.capacityText, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
-              {isMajlis
-                ? `🕌 Capacity: ${item.seats} Guests (Family Cabin)`
-                : isCouch
-                ? `🛋️ Seating: ${item.seats} Guests (Lounge)`
-                : `🍽️ Seating: ${item.seats} Guests`}
-            </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+            <View style={[styles.capacityRow, isMajlis && styles.majlisCapacityRow]}>
+              <Ionicons name="people" size={13} color={isMajlis ? '#4a121a' : '#555'} />
+              <Text style={[styles.capacityText, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
+                {isMajlis
+                  ? `🕌 Capacity: ${item.seats} Guests (Family Cabin)`
+                  : isCouch
+                  ? `🛋️ Seating: ${item.seats} Guests (Lounge)`
+                  : `🍽️ Seating: ${item.seats} Guests`}
+              </Text>
+            </View>
+
+            {(isOccupied || isBilled) && item.occupiedSince ? (
+              <View style={styles.seatedTimerPill}>
+                <Ionicons name="time-outline" size={11} color="#C0392B" style={{ marginRight: 3 }} />
+                <Text style={styles.seatedTimerText}>
+                  {Math.max(1, Math.floor((Date.now() - item.occupiedSince) / 60000))}m seated
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {/* Running Bill and Server Assigned */}
@@ -522,294 +569,460 @@ export default function OrderTakerScreen() {
 
   return (
     <View style={[styles.container, isMobile && { paddingHorizontal: 12 }]}>
-      {/* Staff & Floor Assignment Banner */}
-        <View style={styles.assignmentBanner}>
-          <View style={styles.assignmentBannerLeft}>
-            <View
-              style={[
-                styles.assignmentIconCircle,
-                { backgroundColor: !isAllFloors ? '#E8F5E9' : '#EBF3FF' },
-              ]}
-            >
-              <Ionicons
-                name={!isAllFloors ? 'business' : 'grid'}
-                size={18}
-                color={!isAllFloors ? '#2E7D32' : '#007AFF'}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <Text style={styles.staffNameTitle}>{displayName}</Text>
-                <View
-                  style={[
-                    styles.floorLockBadge,
-                    !isAllFloors ? styles.floorLockBadgeActive : styles.floorLockBadgeAll,
-                  ]}
-                >
-                  <Ionicons
-                    name={!isAllFloors ? 'lock-closed' : 'earth'}
-                    size={11}
-                    color={!isAllFloors ? '#2E7D32' : '#007AFF'}
-                  />
-                  <Text
-                    style={[
-                      styles.floorLockBadgeText,
-                      !isAllFloors ? styles.floorLockBadgeTextActive : styles.floorLockBadgeTextAll,
-                    ]}
-                  >
-                    {!isAllFloors
-                      ? `Assigned: ${authorizedFloors.join(', ')}`
-                      : 'All Floors (Unrestricted)'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={styles.assignmentSubText}>
-                Showing {visibleTables.length} unit{visibleTables.length === 1 ? '' : 's'}{' '}
-                {activeFloor === 'All' ? 'across authorized floors' : `on ${activeFloor}`}
-              </Text>
-            </View>
+      {/* Compact High-Efficiency Order Taker Header */}
+      <View style={styles.compactHeader}>
+        <View style={styles.compactHeaderLeft}>
+          <View style={styles.waiterAvatar}>
+            <Ionicons name="person" size={13} color="#4a121a" />
           </View>
-
-          <TouchableOpacity 
-            style={styles.takeawayQuickBtn}
-            onPress={() => router.push('/waiter/order/takeaway')}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="bag-handle" size={15} color="#D5A943" style={{ marginRight: 5 }} />
-            <Text style={styles.takeawayQuickBtnText}>Takeaway Order</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Search Input */}
-        <View style={styles.searchBar}>
-          <Ionicons name="search" size={16} color="#8E8E93" />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search tables, couches, cabins by name..."
-            placeholderTextColor="#AEAEB2"
-            value={search}
-            onChangeText={setSearch}
-          />
-          {search.length > 0 && (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <Ionicons name="close-circle" size={16} color="#8E8E93" />
-            </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Floor Filter Tabs */}
-        {(isAllFloors || authorizedFloors.length > 1) && (
-          <View style={{ marginBottom: 8 }}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.floorTabsContent}
-            >
-              <TouchableOpacity
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={styles.waiterNameText}>{displayName}</Text>
+              <View
                 style={[
-                  styles.floorTab,
-                  activeFloor === 'All' && styles.floorTabActive,
+                  styles.compactFloorBadge,
+                  !isAllFloors ? styles.floorBadgeActive : styles.floorBadgeAll,
                 ]}
-                onPress={() => setSelectedFloor('All')}
               >
                 <Ionicons
-                  name="grid-outline"
-                  size={13}
-                  color={activeFloor === 'All' ? '#fff' : BRAND}
+                  name={!isAllFloors ? 'location' : 'earth'}
+                  size={10}
+                  color={!isAllFloors ? '#2E7D32' : '#007AFF'}
                 />
                 <Text
                   style={[
-                    styles.floorTabText,
-                    activeFloor === 'All' && styles.floorTabTextActive,
+                    styles.compactFloorBadgeText,
+                    !isAllFloors ? styles.floorBadgeTextActive : styles.floorBadgeTextAll,
                   ]}
                 >
-                  All Floors ({tables.filter((t) => isAllFloors || authorizedFloors.includes(getTableFloor(t))).length})
+                  {!isAllFloors ? authorizedFloors.join(', ') : 'All Floors'}
                 </Text>
-              </TouchableOpacity>
-
-              {authorizedFloors.map((floor) => {
-                const count = tables.filter((t) => getTableFloor(t).toLowerCase() === floor.toLowerCase()).length;
-                const meta = getFloorMeta(floor, dynamicFloors);
-                const isActive = activeFloor.toLowerCase() === floor.toLowerCase();
-                return (
-                  <TouchableOpacity
-                    key={floor}
-                    style={[
-                      styles.floorTab,
-                      isActive && {
-                        backgroundColor: meta.color || BRAND,
-                        borderColor: meta.color || BRAND,
-                      },
-                    ]}
-                    onPress={() => setSelectedFloor(floor)}
-                  >
-                    <Ionicons
-                      name={meta.icon || 'business-outline'}
-                      size={13}
-                      color={isActive ? '#fff' : meta.color || BRAND}
-                    />
-                    <Text
-                      style={[
-                        styles.floorTabText,
-                        isActive && styles.floorTabTextActive,
-                      ]}
-                    >
-                      {floor} ({count})
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+              </View>
+            </View>
+            <Text style={styles.compactFloorCountText}>
+              {visibleTables.length} unit{visibleTables.length === 1 ? '' : 's'}{' '}
+              {activeFloor === 'All' ? 'authorized' : `on ${activeFloor}`}
+            </Text>
           </View>
-        )}
+        </View>
 
-        {/* Seating Zone Type Filter Pills (Tier 2: Tables, Couches, Majlis Cabins) */}
-        <View style={{ marginBottom: 10 }}>
+        <View style={styles.compactHeaderRight}>
+          <TouchableOpacity 
+            style={[styles.compactSyncBtn, isSyncing && styles.compactSyncBtnActive]}
+            onPress={() => {
+              setIsSyncing(true);
+              broadcastImmediately();
+              setTimeout(() => setIsSyncing(false), 600);
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons 
+              name="sync-outline" 
+              size={13} 
+              color={isSyncing ? '#D4AF37' : '#636366'} 
+            />
+            <Text style={[styles.compactSyncText, isSyncing && { color: '#D4AF37' }]}>
+              {isSyncing ? 'Synced' : 'Sync'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.compactTakeawayBtn}
+            onPress={() => router.push('/waiter/order/takeaway')}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="bag-handle" size={13} color="#D4AF37" style={{ marginRight: 4 }} />
+            <Text style={styles.compactTakeawayText}>Takeaway</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Compact Search Bar */}
+      <View style={styles.compactSearchBar}>
+        <Ionicons name="search" size={15} color="#8E8E93" />
+        <TextInput
+          style={styles.compactSearchInput}
+          placeholder="Search tables, couches, cabins by name..."
+          placeholderTextColor="#AEAEB2"
+          value={search}
+          onChangeText={setSearch}
+        />
+        {search.length > 0 && (
+          <TouchableOpacity onPress={() => setSearch('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name="close-circle" size={15} color="#8E8E93" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Floor Filter Tabs */}
+      {(isAllFloors || authorizedFloors.length > 1) && (
+        <View style={{ marginBottom: 8 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}
+            contentContainerStyle={styles.floorTabsContent}
           >
             <TouchableOpacity
               style={[
-                styles.zoneTypePill,
-                seatingTypeFilter === 'all' && styles.zoneTypePillActive,
+                styles.floorTab,
+                activeFloor === 'All' && styles.floorTabActive,
               ]}
-              onPress={() => setSeatingTypeFilter('all')}
+              onPress={() => setSelectedFloor('All')}
             >
+              <Ionicons
+                name="grid-outline"
+                size={13}
+                color={activeFloor === 'All' ? '#fff' : BRAND}
+              />
               <Text
                 style={[
-                  styles.zoneTypePillText,
-                  seatingTypeFilter === 'all' && { color: '#fff', fontWeight: '800' },
+                  styles.floorTabText,
+                  activeFloor === 'All' && styles.floorTabTextActive,
                 ]}
               >
-                All Types ({scopedByFloorTables.length})
+                All Floors ({tables.filter((t) => isAllFloors || authorizedFloors.includes(getTableFloor(t))).length})
               </Text>
             </TouchableOpacity>
 
-            {SEATING_ZONE_TYPES.map((type) => {
-              const meta = SEATING_ZONES[type];
-              const isActive = seatingTypeFilter === type;
-              const count = scopedByFloorTables.filter((t) => getTableSeatingType(t) === type).length;
+            {authorizedFloors.map((floor) => {
+              const count = tables.filter((t) => getTableFloor(t).toLowerCase() === floor.toLowerCase()).length;
+              const meta = getFloorMeta(floor, dynamicFloors);
+              const isActive = activeFloor.toLowerCase() === floor.toLowerCase();
               return (
                 <TouchableOpacity
-                  key={type}
+                  key={floor}
                   style={[
-                    styles.zoneTypePill,
-                    isActive && { backgroundColor: meta.color, borderColor: meta.color },
+                    styles.floorTab,
+                    isActive && {
+                      backgroundColor: meta.color || BRAND,
+                      borderColor: meta.color || BRAND,
+                    },
                   ]}
-                  onPress={() => setSeatingTypeFilter(type)}
+                  onPress={() => setSelectedFloor(floor)}
                 >
-                  <SeatingTypeIcon type={type} size={15} color={isActive ? '#fff' : meta.color} />
+                  <Ionicons
+                    name={meta.icon || 'business-outline'}
+                    size={13}
+                    color={isActive ? '#fff' : meta.color || BRAND}
+                  />
                   <Text
                     style={[
-                      styles.zoneTypePillText,
-                      isActive && { color: '#fff', fontWeight: '800' },
+                      styles.floorTabText,
+                      isActive && styles.floorTabTextActive,
                     ]}
                   >
-                    {meta.label} ({count})
+                    {floor} ({count})
                   </Text>
                 </TouchableOpacity>
               );
             })}
           </ScrollView>
         </View>
+      )}
 
-        {/* Zone Capacity & Cabins Overview Banner (Horizontal scroll on phones, distributed on tablets) */}
-        <View style={{ marginBottom: 10 }}>
-          <ScrollView
-            horizontal={isMobile}
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[
-              styles.zoneSummaryContent,
-              !isMobile && { width: '100%', justifyContent: 'space-between' },
+      {/* Unified Single-Row Filter Toolbar (Status & Seating Types in One Line) */}
+      <View style={styles.singleFilterToolbar}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.singleFilterContent}
+        >
+          {/* --- Status Filters Segment --- */}
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillAll,
+              statusFilter === 'all' && styles.filterPillActivePrimary,
             ]}
+            onPress={() => setStatusFilter('all')}
+            activeOpacity={0.75}
           >
-            <TouchableOpacity
+            <Text
               style={[
-                styles.zoneSummaryItem,
-                styles.zoneSummaryItemTables,
-                seatingTypeFilter === 'tables' && styles.zoneSummaryItemActiveTables,
-                isMobile && styles.zoneSummaryItemMobile,
+                styles.filterPillText,
+                statusFilter === 'all' && styles.filterPillTextActive,
               ]}
-              onPress={() => setSeatingTypeFilter(seatingTypeFilter === 'tables' ? 'all' : 'tables')}
-              activeOpacity={0.82}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.zoneMiniIconCircle, { backgroundColor: '#E3F2FD' }]}>
-                    <SeatingTypeIcon type="tables" size={14} color="#1976D2" />
-                  </View>
-                  <Text style={[styles.zoneSummaryItemTitle, { color: '#1976D2' }]}>Dining Tables</Text>
-                </View>
-                {seatingTypeFilter === 'tables' && (
-                  <Ionicons name="checkmark-circle" size={15} color="#1976D2" />
-                )}
-              </View>
-              <Text style={styles.zoneSummaryCount}>{zoneSummary.tables.count} Tables</Text>
-              <View style={styles.zoneSummaryPillRow}>
-                <View style={[styles.freeGreenDot, { backgroundColor: '#1976D2' }]} />
-                <Text style={styles.zoneSummarySub}>{zoneSummary.tables.available} Free • {zoneSummary.tables.seats} Seats</Text>
-              </View>
-            </TouchableOpacity>
+              All Status
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'all' ? styles.pillCountBadgeActive : styles.pillCountBadgeNeutral,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  statusFilter === 'all' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {scopedByFloorTables.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-            <TouchableOpacity
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillAvailable,
+              statusFilter === 'available' && styles.filterPillActiveAvailable,
+            ]}
+            onPress={() => setStatusFilter('available')}
+            activeOpacity={0.75}
+          >
+            <View
               style={[
-                styles.zoneSummaryItem,
-                styles.zoneSummaryItemCouches,
-                seatingTypeFilter === 'couches' && styles.zoneSummaryItemActiveCouches,
-                isMobile && styles.zoneSummaryItemMobile,
+                styles.filterDot,
+                { backgroundColor: statusFilter === 'available' ? '#fff' : '#16A34A' },
               ]}
-              onPress={() => setSeatingTypeFilter(seatingTypeFilter === 'couches' ? 'all' : 'couches')}
-              activeOpacity={0.82}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                styles.filterPillTextAvailable,
+                statusFilter === 'available' && styles.filterPillTextActive,
+              ]}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.zoneMiniIconCircle, { backgroundColor: '#FFF3E0' }]}>
-                    <SeatingTypeIcon type="couches" size={14} color="#E65100" />
-                  </View>
-                  <Text style={[styles.zoneSummaryItemTitle, { color: '#E65100' }]}>Luxury Couches</Text>
-                </View>
-                {seatingTypeFilter === 'couches' && (
-                  <Ionicons name="checkmark-circle" size={15} color="#E65100" />
-                )}
-              </View>
-              <Text style={styles.zoneSummaryCount}>{zoneSummary.couches.count} Couches</Text>
-              <View style={styles.zoneSummaryPillRow}>
-                <View style={[styles.freeGreenDot, { backgroundColor: '#E65100' }]} />
-                <Text style={styles.zoneSummarySub}>{zoneSummary.couches.available} Free • {zoneSummary.couches.seats} Seats</Text>
-              </View>
-            </TouchableOpacity>
+              Available
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'available'
+                  ? styles.pillCountBadgeActive
+                  : styles.pillCountBadgeAvailable,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  styles.pillCountBadgeTextAvailable,
+                  statusFilter === 'available' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {statusCounts.free}
+              </Text>
+            </View>
+          </TouchableOpacity>
 
-            <TouchableOpacity
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillOccupied,
+              statusFilter === 'occupied' && styles.filterPillActiveOccupied,
+            ]}
+            onPress={() => setStatusFilter('occupied')}
+            activeOpacity={0.75}
+          >
+            <View
               style={[
-                styles.zoneSummaryItem,
-                styles.zoneSummaryItemMajlis,
-                seatingTypeFilter === 'majlis' && styles.zoneSummaryItemActiveMajlis,
-                isMobile && styles.zoneSummaryItemMobile,
+                styles.filterDot,
+                { backgroundColor: statusFilter === 'occupied' ? '#fff' : '#DC2626' },
               ]}
-              onPress={() => setSeatingTypeFilter(seatingTypeFilter === 'majlis' ? 'all' : 'majlis')}
-              activeOpacity={0.82}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                styles.filterPillTextOccupied,
+                statusFilter === 'occupied' && styles.filterPillTextActive,
+              ]}
             >
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={[styles.zoneMiniIconCircle, { backgroundColor: '#FDF3E1' }]}>
-                    <SeatingTypeIcon type="majlis" size={14} color="#8A5D00" />
-                  </View>
-                  <Text style={[styles.zoneSummaryItemTitle, { color: '#8A5D00' }]}>Majlis Cabins</Text>
+              Occupied
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'occupied'
+                  ? styles.pillCountBadgeActive
+                  : styles.pillCountBadgeOccupied,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  styles.pillCountBadgeTextOccupied,
+                  statusFilter === 'occupied' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {statusCounts.occupied}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillReady,
+              statusFilter === 'ready' && styles.filterPillActiveReady,
+            ]}
+            onPress={() => setStatusFilter('ready')}
+            activeOpacity={0.75}
+          >
+            <Ionicons
+              name="notifications"
+              size={12}
+              color={statusFilter === 'ready' ? '#fff' : '#2563EB'}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                styles.filterPillTextReady,
+                statusFilter === 'ready' && styles.filterPillTextActive,
+              ]}
+            >
+              Food Ready
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'ready'
+                  ? styles.pillCountBadgeActive
+                  : styles.pillCountBadgeReady,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  styles.pillCountBadgeTextReady,
+                  statusFilter === 'ready' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {statusCounts.ready}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillBilled,
+              statusFilter === 'billed' && styles.filterPillActiveBilled,
+            ]}
+            onPress={() => setStatusFilter('billed')}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[
+                styles.filterDot,
+                { backgroundColor: statusFilter === 'billed' ? '#fff' : '#D97706' },
+              ]}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                styles.filterPillTextBilled,
+                statusFilter === 'billed' && styles.filterPillTextActive,
+              ]}
+            >
+              Billed
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'billed'
+                  ? styles.pillCountBadgeActive
+                  : styles.pillCountBadgeBilled,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  styles.pillCountBadgeTextBilled,
+                  statusFilter === 'billed' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {statusCounts.billed}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {/* Clean Vertical Divider */}
+          <View style={styles.filterVerticalDivider} />
+
+          {/* --- Seating Zone Type Segment --- */}
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              styles.filterPillAll,
+              seatingTypeFilter === 'all' && styles.filterPillActivePrimary,
+            ]}
+            onPress={() => setSeatingTypeFilter('all')}
+            activeOpacity={0.75}
+          >
+            <Text
+              style={[
+                styles.filterPillText,
+                seatingTypeFilter === 'all' && styles.filterPillTextActive,
+              ]}
+            >
+              All Types
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                seatingTypeFilter === 'all' ? styles.pillCountBadgeActive : styles.pillCountBadgeNeutral,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  seatingTypeFilter === 'all' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {scopedByFloorTables.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          {SEATING_ZONE_TYPES.map((type) => {
+            const meta = SEATING_ZONES[type];
+            const isActive = seatingTypeFilter === type;
+            const count = scopedByFloorTables.filter((t) => getTableSeatingType(t) === type).length;
+            const tintBg = type === 'tables' ? '#EFF6FF' : type === 'couches' ? '#FFF7ED' : '#FEFCE8';
+            const tintBorder = type === 'tables' ? '#BFDBFE' : type === 'couches' ? '#FED7AA' : '#FEF08A';
+            const tintText = type === 'tables' ? '#1D4ED8' : type === 'couches' ? '#C2410C' : '#A16207';
+            return (
+              <TouchableOpacity
+                key={type}
+                style={[
+                  styles.filterPill,
+                  { backgroundColor: tintBg, borderColor: tintBorder },
+                  isActive && { backgroundColor: meta.color, borderColor: meta.color },
+                ]}
+                onPress={() => setSeatingTypeFilter(type)}
+                activeOpacity={0.75}
+              >
+                <SeatingTypeIcon type={type} size={13} color={isActive ? '#fff' : tintText} />
+                <Text
+                  style={[
+                    styles.filterPillText,
+                    { color: tintText },
+                    isActive && styles.filterPillTextActive,
+                  ]}
+                >
+                  {meta.label}
+                </Text>
+                <View
+                  style={[
+                    styles.pillCountBadge,
+                    { backgroundColor: isActive ? 'rgba(255,255,255,0.28)' : 'rgba(0,0,0,0.06)' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.pillCountBadgeText,
+                      { color: isActive ? '#fff' : tintText },
+                    ]}
+                  >
+                    {count}
+                  </Text>
                 </View>
-                {seatingTypeFilter === 'majlis' && (
-                  <Ionicons name="checkmark-circle" size={15} color="#8A5D00" />
-                )}
-              </View>
-              <Text style={[styles.zoneSummaryCount, { color: '#4a121a' }]}>{zoneSummary.majlis.cabinsCount} Royal Cabins</Text>
-              <View style={styles.zoneSummaryPillRow}>
-                <View style={[styles.freeGreenDot, { backgroundColor: '#34C759' }]} />
-                <Text style={styles.zoneSummarySub}>{zoneSummary.majlis.availableCabins} Free • {zoneSummary.majlis.sittingCapacity} Guests</Text>
-              </View>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </View>
 
         {/* Real-time Bill Paid Alert Banner */}
         {shouldShowBillPaidAlert && lastBillPaidAlert && (
@@ -902,18 +1115,18 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    paddingHorizontal: 16,
-    paddingTop: 10,
+    paddingHorizontal: 14,
+    paddingTop: 8,
     backgroundColor: '#F8F9FA',
   },
   header: {
-    marginBottom: 12,
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
   screenTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '900',
     color: '#1C1C1E',
   },
@@ -936,115 +1149,157 @@ const styles = StyleSheet.create({
     color: '#8E8E93',
     marginTop: 2,
   },
-  assignmentBanner: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  assignmentBannerLeft: {
+
+  // Compact Header
+  compactHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  assignmentIconCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  compactHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  waiterAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#4a121a',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
   },
-  staffNameTitle: {
-    fontSize: 15,
+  waiterNameText: {
+    fontSize: 13,
     fontWeight: '800',
     color: '#1C1C1E',
   },
-  floorLockBadge: {
+  compactFloorBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
+    gap: 3,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
   },
-  floorLockBadgeActive: {
+  floorBadgeActive: {
     backgroundColor: '#E8F5E9',
     borderWidth: 1,
     borderColor: '#C8E6C9',
   },
-  floorLockBadgeAll: {
+  floorBadgeAll: {
     backgroundColor: '#EBF3FF',
     borderWidth: 1,
     borderColor: '#D4E2F6',
   },
-  floorLockBadgeText: {
-    fontSize: 11,
+  compactFloorBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
   },
-  floorLockBadgeTextActive: {
+  floorBadgeTextActive: {
     color: '#2E7D32',
   },
-  floorLockBadgeTextAll: {
+  floorBadgeTextAll: {
     color: '#007AFF',
   },
-  assignmentSubText: {
+  compactFloorCountText: {
     fontSize: 11,
     color: '#8E8E93',
-    marginTop: 2,
+    fontWeight: '500',
   },
-  takeawayQuickBtn: {
+  compactHeaderRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  compactSyncBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
+  compactSyncBtnActive: {
+    backgroundColor: '#FFF9E6',
+    borderColor: '#D4AF37',
+  },
+  compactSyncText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#636366',
+  },
+  compactTakeawayBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#4a121a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#D5A943',
-    alignSelf: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
+    borderColor: '#D4AF37',
   },
-  takeawayQuickBtnText: {
-    color: '#D5A943',
-    fontSize: 12,
+  compactTakeawayText: {
+    color: '#D4AF37',
+    fontSize: 11,
     fontWeight: '800',
   },
 
-  searchBar: {
+  // Compact Search Bar
+  compactSearchBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#fff',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
-    gap: 8,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    marginBottom: 7,
+    gap: 6,
+    height: 36,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.02,
+    shadowRadius: 2,
+    elevation: 1,
   },
-  searchInput: {
+  compactSearchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     color: '#1C1C1E',
+    padding: 0,
   },
 
   floorTabsContent: {
-    gap: 8,
+    gap: 6,
     paddingHorizontal: 2,
   },
   floorTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#E5E5EA',
@@ -1054,7 +1309,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND,
   },
   floorTabText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: BRAND,
   },
@@ -1062,111 +1317,156 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  // Zone Type Pills
-  zoneTypePill: {
+  // Unified Filter Toolbar
+  singleFilterToolbar: {
+    marginBottom: 8,
+  },
+  singleFilterContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+    paddingHorizontal: 2,
+    paddingVertical: 2,
   },
-  zoneTypePillActive: {
-    backgroundColor: BRAND,
-    borderColor: BRAND,
-  },
-  zoneTypePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#636366',
-  },
-
-  // Zone Summary Banner
-  zoneSummaryContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  zoneSummaryItem: {
-    flex: 1,
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
-    borderWidth: 1.5,
-    borderColor: '#ECEAE4',
-    gap: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 2,
-  },
-  zoneSummaryItemMobile: {
-    flex: 0,
-    minWidth: 165,
-  },
-  zoneSummaryItemTables: {
-    backgroundColor: '#FFFFFF',
-    borderColor: '#D0E3F5',
-  },
-  zoneSummaryItemCouches: {
-    backgroundColor: '#FFFDF9',
-    borderColor: '#F8DCBA',
-  },
-  zoneSummaryItemMajlis: {
-    backgroundColor: '#FCFAF6',
-    borderColor: '#E8D2A4',
-  },
-  zoneSummaryItemActiveTables: {
-    borderColor: '#1976D2',
-    backgroundColor: '#F0F7FF',
-    borderWidth: 2,
-  },
-  zoneSummaryItemActiveCouches: {
-    borderColor: '#E65100',
-    backgroundColor: '#FFF7EE',
-    borderWidth: 2,
-  },
-  zoneSummaryItemActiveMajlis: {
-    borderColor: '#D5A943',
-    backgroundColor: '#FFFBF2',
-    borderWidth: 2,
-  },
-  zoneMiniIconCircle: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoneSummaryItemTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  zoneSummaryCount: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#1C1C1E',
-    marginTop: 2,
-  },
-  zoneSummaryPillRow: {
+  filterPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    marginTop: 2,
+    paddingLeft: 9,
+    paddingRight: 6,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 1,
+    elevation: 1,
   },
-  freeGreenDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
+  filterPillAll: {
+    backgroundColor: '#F7F7F9',
+    borderColor: '#E5E5EA',
   },
-  zoneSummarySub: {
-    fontSize: 11,
-    color: '#636366',
-    fontWeight: '600',
+  filterPillAvailable: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#DCFCE7',
+  },
+  filterPillOccupied: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FEE2E2',
+  },
+  filterPillReady: {
+    backgroundColor: '#EFF6FF',
+    borderColor: '#DBEAFE',
+  },
+  filterPillBilled: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FEF3C7',
+  },
+
+  filterPillActivePrimary: {
+    backgroundColor: '#4a121a',
+    borderColor: '#4a121a',
+  },
+  filterPillActiveAvailable: {
+    backgroundColor: '#16A34A',
+    borderColor: '#16A34A',
+  },
+  filterPillActiveOccupied: {
+    backgroundColor: '#DC2626',
+    borderColor: '#DC2626',
+  },
+  filterPillActiveReady: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  filterPillActiveBilled: {
+    backgroundColor: '#D97706',
+    borderColor: '#D97706',
+  },
+
+  filterPillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#374151',
+  },
+  filterPillTextAvailable: {
+    color: '#15803D',
+  },
+  filterPillTextOccupied: {
+    color: '#B91C1C',
+  },
+  filterPillTextReady: {
+    color: '#1D4ED8',
+  },
+  filterPillTextBilled: {
+    color: '#B45309',
+  },
+  filterPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  // Count Badges inside Pills
+  pillCountBadge: {
+    paddingHorizontal: 5.5,
+    paddingVertical: 1.5,
+    borderRadius: 8,
+    marginLeft: 2,
+  },
+  pillCountBadgeNeutral: {
+    backgroundColor: '#E5E7EB',
+  },
+  pillCountBadgeAvailable: {
+    backgroundColor: '#DCFCE7',
+  },
+  pillCountBadgeOccupied: {
+    backgroundColor: '#FEE2E2',
+  },
+  pillCountBadgeReady: {
+    backgroundColor: '#DBEAFE',
+  },
+  pillCountBadgeBilled: {
+    backgroundColor: '#FEF3C7',
+  },
+  pillCountBadgeActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+
+  pillCountBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#4B5563',
+  },
+  pillCountBadgeTextAvailable: {
+    color: '#15803D',
+  },
+  pillCountBadgeTextOccupied: {
+    color: '#B91C1C',
+  },
+  pillCountBadgeTextReady: {
+    color: '#1D4ED8',
+  },
+  pillCountBadgeTextBilled: {
+    color: '#B45309',
+  },
+  pillCountBadgeTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+
+  filterDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  filterVerticalDivider: {
+    width: 1.5,
+    height: 18,
+    backgroundColor: '#D1D5DB',
+    marginHorizontal: 3,
   },
 
   readyAlertBanner: {
@@ -1225,7 +1525,7 @@ const styles = StyleSheet.create({
   },
 
   listContent: {
-    paddingBottom: 90,
+    paddingBottom: 110,
   },
   rowWrapper: {
     justifyContent: 'space-between',
@@ -1370,6 +1670,22 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#636366',
     fontWeight: '700',
+  },
+  seatedTimerPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    alignSelf: 'flex-start',
+  },
+  seatedTimerText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#C0392B',
   },
 
   billServerRow: {

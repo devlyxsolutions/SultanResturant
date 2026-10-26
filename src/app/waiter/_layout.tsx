@@ -2,7 +2,6 @@ import { View, Text, StyleSheet, StatusBar, Platform, ActivityIndicator } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
-import UniversalPortalNav from '../../components/UniversalPortalNav';
 import BottomNav from '../../components/BottomNav';
 import WaiterNotificationHost from '../../components/WaiterNotificationHost';
 import SultanLogo from '../../components/SultanLogo';
@@ -25,14 +24,7 @@ export default function WaiterLayout() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
-
-      {/* Universal Top Navigation Bar */}
-      <UniversalPortalNav
-        portalName="Sultan Order Taker"
-        portalRole="waiter"
-        showTabs={false}
-      />
+      <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
 
       <View style={styles.content}>
         <Stack
@@ -53,7 +45,7 @@ export default function WaiterLayout() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4a121a', // Sultan Burgundy for status bar area
+    backgroundColor: '#F8F9FA',
     ...Platform.select({
       web: {
         height: '100vh' as any,

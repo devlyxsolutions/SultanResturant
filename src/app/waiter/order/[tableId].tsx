@@ -14,7 +14,7 @@ import {
   Modal,
   Image 
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { 
@@ -31,6 +31,7 @@ import SeatingTypeIcon from '../../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../../services/syncService';
 import { printInvoiceReceipt } from '../../../components/Invoice';
+import { BRAND as BRAND_PALETTE } from '../../../constants/brand';
 
 const PALETTE = ['#FFF3E0', '#E8F5E9', '#E3F2FD', '#FCE4EC', '#F3E5F5', '#E0F7FA'];
 
@@ -52,6 +53,7 @@ const NOTE_PRESETS = [
 export default function TableOrderScreen() {
   const { tableId } = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const menuColumns = isMobile ? (width < 380 ? 1 : 2) : (width < 1100 ? 2 : 3);
@@ -514,6 +516,14 @@ export default function TableOrderScreen() {
                   {isBilled ? 'BILL REQUESTED' : isExistingOrderActive ? 'ACTIVE ORDER' : 'AVAILABLE'}
                 </Text>
               </View>
+
+              {/* Real-time Running Bill Badge right in header */}
+              {totalBillSoFar > 0 && (
+                <View style={styles.headerBillPill}>
+                  <Text style={styles.headerBillLabel}>Bill:</Text>
+                  <Text style={styles.headerBillAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+                </View>
+              )}
             </View>
 
             {/* Sub-header with Seating details & Guest Pax */}
@@ -711,7 +721,7 @@ export default function TableOrderScreen() {
               keyExtractor={item => item.id}
               numColumns={menuColumns}
               key={`order-menu-cols-${menuColumns}`}
-              contentContainerStyle={styles.menuGrid}
+              contentContainerStyle={[styles.menuGrid, isMobile && { paddingBottom: Math.max(120, insets.bottom + 90) }]}
               columnWrapperStyle={menuColumns > 1 ? styles.menuGridRow : undefined}
               showsVerticalScrollIndicator={false}
               renderItem={({ item }) => {
@@ -866,7 +876,10 @@ export default function TableOrderScreen() {
             {/* Mobile Floating Review Bar */}
             {isMobile && newCart.length > 0 && (
               <TouchableOpacity 
-                style={styles.floatingCartBar}
+                style={[
+                  styles.floatingCartBar,
+                  { bottom: Math.max(16, insets.bottom + 8) }
+                ]}
                 onPress={() => setActiveTab('order')}
                 activeOpacity={0.9}
               >
@@ -874,13 +887,20 @@ export default function TableOrderScreen() {
                   <View style={styles.floatingBadge}>
                     <Text style={styles.floatingBadgeText}>{newCart.reduce((s, c) => s + c.qty, 0)}</Text>
                   </View>
-                  <Text style={styles.floatingCartText}>
-                    {isExistingOrderActive ? 'New Add-on Round' : 'Table Order Punch'}
-                  </Text>
+                  <View>
+                    <Text style={styles.floatingCartText}>
+                      {isExistingOrderActive ? 'Review Add-on Round' : 'Review & Punch KOT'}
+                    </Text>
+                    <Text style={styles.floatingCartSubText}>
+                      {newCart.length} item{newCart.length > 1 ? 's' : ''} ready to send
+                    </Text>
+                  </View>
                 </View>
                 <View style={styles.floatingCartRight}>
                   <Text style={styles.floatingCartPrice}>+Rs. {newCartTotal.toLocaleString()}</Text>
-                  <Ionicons name="chevron-forward" size={18} color="#FFFFFF" style={{ marginLeft: 4 }} />
+                  <View style={styles.floatingCartArrow}>
+                    <Ionicons name="arrow-forward" size={14} color="#4a121a" />
+                  </View>
                 </View>
               </TouchableOpacity>
             )}
@@ -1174,7 +1194,7 @@ export default function TableOrderScreen() {
             </ScrollView>
 
             {/* Cart Footer */}
-            <View style={styles.cartFooter}>
+            <View style={[styles.cartFooter, isMobile && { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
               <View style={styles.billBreakdown}>
                 {isExistingOrderActive && (
                   <View style={styles.breakdownRow}>
@@ -1210,7 +1230,7 @@ export default function TableOrderScreen() {
                   </Text>
                 </TouchableOpacity>
               ) : isExistingOrderActive && !isTakeaway ? (
-                <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={styles.floatingCapsuleActionBar}>
                   <TouchableOpacity 
                     style={[styles.requestBillBtn, isBilled && styles.requestBillBtnDone]}
                     onPress={handleRequestBill}
@@ -1232,7 +1252,7 @@ export default function TableOrderScreen() {
                     onPress={goBack}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="arrow-back" size={16} color="#4a121a" style={{ marginRight: 4 }} />
+                    <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 5 }} />
                     <Text style={styles.backToTablesBtnText}>Back</Text>
                   </TouchableOpacity>
                 </View>
@@ -1662,6 +1682,28 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
+  },
+  headerBillPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(213, 169, 67, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.45)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  headerBillLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#F3D179',
+    textTransform: 'uppercase',
+  },
+  headerBillAmount: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   mobileTabs: {
     flexDirection: 'row',
@@ -2133,6 +2175,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '900',
   },
+  floatingCartSubText: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.75)',
+    marginTop: 1,
+  },
+  floatingCartArrow: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 6,
+  },
   cartSection: {
     flex: 2,
     backgroundColor: '#FFFFFF',
@@ -2506,7 +2562,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 13,
-    borderRadius: 12,
+    borderRadius: 26,
     shadowColor: '#D5A943',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
@@ -2519,6 +2575,16 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0.4,
   },
+  floatingCapsuleActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+  },
   requestBillBtn: {
     flex: 1,
     backgroundColor: '#FFF3E0',
@@ -2527,8 +2593,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
   requestBillBtnDone: {
     backgroundColor: '#E8F5E9',
@@ -2544,19 +2610,19 @@ const styles = StyleSheet.create({
   },
   backToTablesBtn: {
     flex: 1,
-    backgroundColor: '#F6F3EC',
+    backgroundColor: '#24050A',
     borderWidth: 1,
-    borderColor: '#E8DFC9',
+    borderColor: 'rgba(212, 175, 55, 0.45)',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 11,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
   backToTablesBtnText: {
-    color: '#4a121a',
+    color: '#F3D179',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   modalBg: {
     flex: 1,
