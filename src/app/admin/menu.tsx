@@ -22,6 +22,8 @@ import { BRAND } from '../../constants/brand';
 import { FOOD_PRESETS, POPULAR_BADGES } from '../../constants/foodPresets';
 import { money } from '../../utils/format';
 import { broadcastImmediately } from '../../services/syncService';
+import PaginationControl from '../../components/PaginationControl';
+import { usePagination } from '../../hooks/usePagination';
 
 export default function MenuManagement() {
   const router = useRouter();
@@ -48,6 +50,21 @@ export default function MenuManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState('All');
   const [selectedRegionFilter, setSelectedRegionFilter] = useState('All');
+  
+  // Main Catalog Filter Dropdown States
+  const [isFilterCatOpen, setIsFilterCatOpen] = useState(false);
+  const [isFilterRegionOpen, setIsFilterRegionOpen] = useState(false);
+  const [isFilterSortOpen, setIsFilterSortOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<'default' | 'price-asc' | 'price-desc' | 'name-asc' | 'margin-desc' | 'stock-asc'>('default');
+
+  const sortOptions = [
+    { id: 'default', label: 'Default Order', icon: 'reorder-four-outline' },
+    { id: 'price-asc', label: 'Price: Low to High', icon: 'trending-up-outline' },
+    { id: 'price-desc', label: 'Price: High to Low', icon: 'trending-down-outline' },
+    { id: 'name-asc', label: 'Dish Name: A to Z', icon: 'text-outline' },
+    { id: 'margin-desc', label: 'Margin: High to Low', icon: 'cash-outline' },
+    { id: 'stock-asc', label: 'Stock: Low to High', icon: 'cube-outline' },
+  ];
   
   // Success Feedback Message
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
@@ -165,10 +182,29 @@ export default function MenuManagement() {
   }, [menuItems]);
 
   // -------------------------------------------------------------
-  // Filtered Items based on Active Tab & Search
+  // Category & Region Item Counts
+  // -------------------------------------------------------------
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: menuItems.length };
+    for (const cat of categories) {
+      counts[cat] = menuItems.filter(i => i.category === cat).length;
+    }
+    return counts;
+  }, [categories, menuItems]);
+
+  const regionCounts = useMemo(() => {
+    const counts: Record<string, number> = { All: menuItems.length };
+    for (const reg of regions) {
+      counts[reg] = menuItems.filter(i => i.region === reg).length;
+    }
+    return counts;
+  }, [regions, menuItems]);
+
+  // -------------------------------------------------------------
+  // Filtered Items based on Active Tab, Search, Filters & Sorting
   // -------------------------------------------------------------
   const filteredItems = useMemo(() => {
-    return menuItems.filter(item => {
+    let result = menuItems.filter(item => {
       const q = searchQuery.toLowerCase().trim();
       const matchesSearch = !q || 
         item.name.toLowerCase().includes(q) || 
@@ -180,11 +216,15 @@ export default function MenuManagement() {
       if (!matchesSearch) return false;
 
       if (activeTab === 'deals') {
-        return item.isDeal || item.category === 'Deals';
+        const matchesCat = selectedCategoryFilter === 'All' || item.category === selectedCategoryFilter;
+        const matchesRegion = selectedRegionFilter === 'All' || item.region === selectedRegionFilter;
+        return (item.isDeal || item.category === 'Deals') && matchesCat && matchesRegion;
       }
 
       if (activeTab === 'stock') {
-        return item.trackStock;
+        const matchesCat = selectedCategoryFilter === 'All' || item.category === selectedCategoryFilter;
+        const matchesRegion = selectedRegionFilter === 'All' || item.region === selectedRegionFilter;
+        return item.trackStock && matchesCat && matchesRegion;
       }
 
       if (activeTab === 'items') {
@@ -195,7 +235,33 @@ export default function MenuManagement() {
 
       return true;
     });
-  }, [menuItems, activeTab, searchQuery, selectedCategoryFilter, selectedRegionFilter]);
+
+    if (sortBy === 'price-asc') {
+      result = [...result].sort((a, b) => a.price - b.price);
+    } else if (sortBy === 'price-desc') {
+      result = [...result].sort((a, b) => b.price - a.price);
+    } else if (sortBy === 'name-asc') {
+      result = [...result].sort((a, b) => a.name.localeCompare(b.name));
+    } else if (sortBy === 'margin-desc') {
+      result = [...result].sort((a, b) => {
+        const mA = a.price && a.costPrice ? (a.price - a.costPrice) / a.price : 0;
+        const mB = b.price && b.costPrice ? (b.price - b.costPrice) / b.price : 0;
+        return mB - mA;
+      });
+    } else if (sortBy === 'stock-asc') {
+      result = [...result].sort((a, b) => (a.stockQty ?? 999) - (b.stockQty ?? 999));
+    }
+
+    return result;
+  }, [menuItems, activeTab, searchQuery, selectedCategoryFilter, selectedRegionFilter, sortBy]);
+
+  // -------------------------------------------------------------
+  // Pagination for Dishes, Deals & Stock Items
+  // -------------------------------------------------------------
+  const itemsPagination = usePagination({
+    data: filteredItems,
+    initialPageSize: 10,
+  });
 
   // Derived Categories Data
   const categoriesData = useMemo(() => {
@@ -1067,84 +1133,381 @@ export default function MenuManagement() {
         </TouchableOpacity>
       </View>
 
-      {/* Search & Category Filter Pills */}
-      <View style={styles.filterSection}>
-        <View style={styles.searchBox}>
-          <View style={styles.searchIconOrb}>
-            <Ionicons name="search" size={16} color={BRAND.burgundy} />
-          </View>
-          <TextInput 
-            style={styles.searchInput}
-            placeholder={`Search dishes, combos, cuisines, badges, prices...`}
-            placeholderTextColor="#8A7A70"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+      {/* Search & Executive Filter Toolbar with Dropdowns */}
+      <View style={[styles.filterSection, { zIndex: 1000 }]}>
+        {/* Backdrop for closing dropdowns when clicking outside */}
+        {(isFilterCatOpen || isFilterRegionOpen || isFilterSortOpen) && (
+          <TouchableOpacity
+            style={styles.dropdownBackdrop}
+            activeOpacity={1}
+            onPress={() => {
+              setIsFilterCatOpen(false);
+              setIsFilterRegionOpen(false);
+              setIsFilterSortOpen(false);
+            }}
           />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={styles.searchClearBtn}>
-              <Ionicons name="close-circle" size={18} color={BRAND.gold} />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.searchShortcutBadge}>
-              <Ionicons name="sparkles" size={11} color="#B45309" style={{ marginRight: 3 }} />
-              <Text style={styles.searchShortcutText}>MENU</Text>
+        )}
+
+        <View style={[styles.filterBarRow, isMobile && styles.filterBarRowMobile]}>
+          {/* Search Box */}
+          <View style={[styles.searchBox, { flex: isMobile ? undefined : 1.3, minWidth: isMobile ? '100%' : 260 }]}>
+            <View style={styles.searchIconOrb}>
+              <Ionicons name="search" size={16} color={BRAND.burgundy} />
+            </View>
+            <TextInput 
+              style={styles.searchInput}
+              placeholder="Search dishes, combos, cuisines, badges..."
+              placeholderTextColor="#8A7A70"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery ? (
+              <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }} style={styles.searchClearBtn}>
+                <Ionicons name="close-circle" size={18} color={BRAND.gold} />
+              </TouchableOpacity>
+            ) : (
+              <View style={styles.searchShortcutBadge}>
+                <Ionicons name="sparkles" size={11} color="#B45309" style={{ marginRight: 3 }} />
+                <Text style={styles.searchShortcutText}>MENU</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Filter Dropdowns (for items, stock, and deals tabs) */}
+          {(activeTab === 'items' || activeTab === 'stock' || activeTab === 'deals') && (
+            <View style={[styles.dropdownsRow, isMobile && styles.dropdownsRowMobile]}>
+              {/* Category Dropdown */}
+              <View style={styles.dropdownAnchor}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterDropdownTrigger,
+                    selectedCategoryFilter !== 'All' && styles.filterDropdownTriggerActive,
+                    isFilterCatOpen && styles.filterDropdownTriggerOpen,
+                    isMobile && { flex: 1, minWidth: 140 },
+                  ]}
+                  onPress={() => {
+                    setIsFilterRegionOpen(false);
+                    setIsFilterSortOpen(false);
+                    setIsFilterCatOpen(prev => !prev);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.filterTriggerLeft}>
+                    <View style={[
+                      styles.filterIconCircle, 
+                      selectedCategoryFilter !== 'All' ? { backgroundColor: BRAND.burgundy } : { backgroundColor: '#F3F4F6' }
+                    ]}>
+                      <Ionicons 
+                        name="grid" 
+                        size={13} 
+                        color={selectedCategoryFilter !== 'All' ? BRAND.gold : '#4B5563'} 
+                      />
+                    </View>
+                    <View style={{ gap: 1 }}>
+                      <Text style={styles.filterDropdownLabel}>Category</Text>
+                      <Text style={[styles.filterDropdownValue, selectedCategoryFilter !== 'All' && styles.filterDropdownValueActive]} numberOfLines={1}>
+                        {selectedCategoryFilter === 'All' ? 'All Categories' : selectedCategoryFilter}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.filterTriggerRight}>
+                    <View style={[styles.filterCountBadge, selectedCategoryFilter !== 'All' && styles.filterCountBadgeActive]}>
+                      <Text style={[styles.filterCountText, selectedCategoryFilter !== 'All' && styles.filterCountTextActive]}>
+                        {categoryCounts[selectedCategoryFilter] ?? menuItems.length}
+                      </Text>
+                    </View>
+                    <Ionicons 
+                      name={isFilterCatOpen ? "chevron-up" : "chevron-down"} 
+                      size={15} 
+                      color={selectedCategoryFilter !== 'All' ? BRAND.burgundy : '#6B7280'} 
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Category Menu Popover */}
+                {isFilterCatOpen && (
+                  <View style={styles.dropdownMenuCard}>
+                    <View style={styles.dropdownMenuHeader}>
+                      <Text style={styles.dropdownMenuTitle}>Filter Category</Text>
+                      <Text style={styles.dropdownMenuSubtitle}>{categories.length + 1} options</Text>
+                    </View>
+                    <ScrollView style={{ maxHeight: 280 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                      {['All', ...categories].map((cat, idx) => {
+                        const isSelected = selectedCategoryFilter === cat;
+                        const count = categoryCounts[cat] ?? 0;
+                        return (
+                          <TouchableOpacity
+                            key={`${cat}-${idx}`}
+                            style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                            onPress={() => {
+                              setSelectedCategoryFilter(cat);
+                              setIsFilterCatOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                              <View style={[
+                                styles.dropdownItemIndicator,
+                                isSelected && { backgroundColor: BRAND.burgundy, borderColor: BRAND.gold }
+                              ]}>
+                                {isSelected && <Ionicons name="checkmark" size={12} color={BRAND.gold} />}
+                              </View>
+                              <Text style={[styles.dropdownMenuItemText, isSelected && styles.dropdownMenuItemTextActive]}>
+                                {cat === 'All' ? 'All Categories' : cat}
+                              </Text>
+                            </View>
+                            <View style={[styles.menuItemCountPill, isSelected && styles.menuItemCountPillActive]}>
+                              <Text style={[styles.menuItemCountText, isSelected && styles.menuItemCountTextActive]}>
+                                {count}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* Cuisine / Region Dropdown */}
+              <View style={styles.dropdownAnchor}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterDropdownTrigger,
+                    selectedRegionFilter !== 'All' && styles.filterDropdownTriggerActive,
+                    isFilterRegionOpen && styles.filterDropdownTriggerOpen,
+                    isMobile && { flex: 1, minWidth: 140 },
+                  ]}
+                  onPress={() => {
+                    setIsFilterCatOpen(false);
+                    setIsFilterSortOpen(false);
+                    setIsFilterRegionOpen(prev => !prev);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.filterTriggerLeft}>
+                    <View style={[
+                      styles.filterIconCircle, 
+                      selectedRegionFilter !== 'All' ? { backgroundColor: '#1E3A8A' } : { backgroundColor: '#F3F4F6' }
+                    ]}>
+                      <Ionicons 
+                        name="earth" 
+                        size={13} 
+                        color={selectedRegionFilter !== 'All' ? '#93C5FD' : '#4B5563'} 
+                      />
+                    </View>
+                    <View style={{ gap: 1 }}>
+                      <Text style={styles.filterDropdownLabel}>Cuisine</Text>
+                      <Text style={[styles.filterDropdownValue, selectedRegionFilter !== 'All' && styles.filterDropdownValueActive]} numberOfLines={1}>
+                        {selectedRegionFilter === 'All' ? 'All Cuisines' : selectedRegionFilter}
+                      </Text>
+                    </View>
+                  </View>
+                  <View style={styles.filterTriggerRight}>
+                    <View style={[styles.filterCountBadge, selectedRegionFilter !== 'All' && styles.filterCountBadgeActive]}>
+                      <Text style={[styles.filterCountText, selectedRegionFilter !== 'All' && styles.filterCountTextActive]}>
+                        {regionCounts[selectedRegionFilter] ?? menuItems.length}
+                      </Text>
+                    </View>
+                    <Ionicons 
+                      name={isFilterRegionOpen ? "chevron-up" : "chevron-down"} 
+                      size={15} 
+                      color={selectedRegionFilter !== 'All' ? '#1E3A8A' : '#6B7280'} 
+                    />
+                  </View>
+                </TouchableOpacity>
+
+                {/* Cuisine Menu Popover */}
+                {isFilterRegionOpen && (
+                  <View style={[styles.dropdownMenuCard, isMobile && { right: 0, left: undefined }]}>
+                    <View style={styles.dropdownMenuHeader}>
+                      <Text style={styles.dropdownMenuTitle}>Filter Cuisine</Text>
+                      <Text style={styles.dropdownMenuSubtitle}>{regions.length + 1} cuisines</Text>
+                    </View>
+                    <ScrollView style={{ maxHeight: 280 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                      {['All', ...regions].map((reg, idx) => {
+                        const isSelected = selectedRegionFilter === reg;
+                        const count = regionCounts[reg] ?? 0;
+                        return (
+                          <TouchableOpacity
+                            key={`${reg}-${idx}`}
+                            style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                            onPress={() => {
+                              setSelectedRegionFilter(reg);
+                              setIsFilterRegionOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                              <View style={[
+                                styles.dropdownItemIndicator,
+                                isSelected && { backgroundColor: '#1E3A8A', borderColor: '#93C5FD' }
+                              ]}>
+                                {isSelected && <Ionicons name="checkmark" size={12} color="#FFFFFF" />}
+                              </View>
+                              <Text style={[styles.dropdownMenuItemText, isSelected && styles.dropdownMenuItemTextActive]}>
+                                {reg === 'All' ? 'All Cuisines' : reg}
+                              </Text>
+                            </View>
+                            <View style={[styles.menuItemCountPill, isSelected && styles.menuItemCountPillActive]}>
+                              <Text style={[styles.menuItemCountText, isSelected && styles.menuItemCountTextActive]}>
+                                {count}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* Sort By Dropdown */}
+              <View style={styles.dropdownAnchor}>
+                <TouchableOpacity
+                  style={[
+                    styles.filterDropdownTrigger,
+                    sortBy !== 'default' && styles.filterDropdownTriggerActive,
+                    isFilterSortOpen && styles.filterDropdownTriggerOpen,
+                    isMobile && { flex: 1, minWidth: 140 },
+                  ]}
+                  onPress={() => {
+                    setIsFilterCatOpen(false);
+                    setIsFilterRegionOpen(false);
+                    setIsFilterSortOpen(prev => !prev);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.filterTriggerLeft}>
+                    <View style={[
+                      styles.filterIconCircle, 
+                      sortBy !== 'default' ? { backgroundColor: '#92400E' } : { backgroundColor: '#F3F4F6' }
+                    ]}>
+                      <Ionicons 
+                        name="swap-vertical" 
+                        size={13} 
+                        color={sortBy !== 'default' ? '#FDE68A' : '#4B5563'} 
+                      />
+                    </View>
+                    <View style={{ gap: 1 }}>
+                      <Text style={styles.filterDropdownLabel}>Sort By</Text>
+                      <Text style={[styles.filterDropdownValue, sortBy !== 'default' && styles.filterDropdownValueActive]} numberOfLines={1}>
+                        {sortOptions.find(o => o.id === sortBy)?.label || 'Default'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Ionicons 
+                    name={isFilterSortOpen ? "chevron-up" : "chevron-down"} 
+                    size={15} 
+                    color={sortBy !== 'default' ? '#92400E' : '#6B7280'} 
+                  />
+                </TouchableOpacity>
+
+                {/* Sort Menu Popover */}
+                {isFilterSortOpen && (
+                  <View style={[styles.dropdownMenuCard, { minWidth: 210, right: 0, left: undefined }]}>
+                    <View style={styles.dropdownMenuHeader}>
+                      <Text style={styles.dropdownMenuTitle}>Sort Items</Text>
+                    </View>
+                    <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                      {sortOptions.map(opt => {
+                        const isSelected = sortBy === opt.id;
+                        return (
+                          <TouchableOpacity
+                            key={opt.id}
+                            style={[styles.dropdownMenuItem, isSelected && styles.dropdownMenuItemActive]}
+                            onPress={() => {
+                              setSortBy(opt.id as any);
+                              setIsFilterSortOpen(false);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                              <Ionicons name={opt.icon as any} size={15} color={isSelected ? BRAND.burgundy : '#6B7280'} />
+                              <Text style={[styles.dropdownMenuItemText, isSelected && styles.dropdownMenuItemTextActive]}>
+                                {opt.label}
+                              </Text>
+                            </View>
+                            {isSelected && <Ionicons name="checkmark" size={14} color={BRAND.burgundy} />}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                )}
+              </View>
+
+              {/* Clear Filters Button (When filters active) */}
+              {(selectedCategoryFilter !== 'All' || selectedRegionFilter !== 'All' || sortBy !== 'default' || searchQuery.trim() !== '') && (
+                <TouchableOpacity
+                  style={styles.clearFiltersBtn}
+                  onPress={() => {
+                    setSelectedCategoryFilter('All');
+                    setSelectedRegionFilter('All');
+                    setSortBy('default');
+                    setSearchQuery('');
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="refresh-outline" size={15} color="#B91C1C" />
+                  <Text style={styles.clearFiltersText}>Reset</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
 
-        {activeTab === 'items' && (
-          <View style={{ gap: 8 }}>
-            {/* Category Filter Pills */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.categoryPillsScroll}
-            >
-              {Array.from(new Set(['All', ...categories])).map((cat, idx) => {
-                const isSelected = selectedCategoryFilter === cat;
-                return (
-                  <TouchableOpacity
-                    key={`${cat}-${idx}`}
-                    style={[styles.categoryPill, isSelected && styles.categoryPillActive]}
-                    onPress={() => setSelectedCategoryFilter(cat)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
-                      {cat}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {/* Region / Cuisine Sub-Filter Bar */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.categoryPillsScroll, { paddingTop: 2 }]}
-            >
-              <View style={styles.regionFilterLeadBadge}>
-                <Ionicons name="earth" size={12} color="#1E40AF" style={{ marginRight: 4 }} />
-                <Text style={styles.regionFilterLeadText}>Cuisine:</Text>
-              </View>
-              {['All', ...regions].map(reg => {
-                const isSelected = selectedRegionFilter === reg;
-                return (
-                  <TouchableOpacity
-                    key={reg}
-                    style={[styles.regionPill, isSelected && styles.regionPillActive]}
-                    onPress={() => setSelectedRegionFilter(reg)}
-                    activeOpacity={0.7}
-                  >
-                    <Text style={[styles.regionPillText, isSelected && styles.regionPillTextActive]}>
-                      {reg === 'All' ? 'All Cuisines' : reg}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
+        {/* Active Filter Chips & Counter Strip */}
+        <View style={styles.activeFiltersStrip}>
+          <View style={styles.resultCountWrap}>
+            <Ionicons name="restaurant-outline" size={13} color={BRAND.gold} />
+            <Text style={styles.resultCountText}>
+              Showing <Text style={{ fontWeight: '800', color: BRAND.ink }}>{filteredItems.length}</Text> of {menuItems.length} dishes
+            </Text>
           </View>
-        )}
+
+          <View style={styles.activeChipsList}>
+            {selectedCategoryFilter !== 'All' && (
+              <View style={styles.activeFilterChip}>
+                <Ionicons name="grid" size={11} color={BRAND.burgundy} />
+                <Text style={styles.activeFilterChipText}>{selectedCategoryFilter}</Text>
+                <TouchableOpacity onPress={() => setSelectedCategoryFilter('All')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={13} color={BRAND.burgundy} />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {selectedRegionFilter !== 'All' && (
+              <View style={[styles.activeFilterChip, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                <Ionicons name="earth" size={11} color="#1E40AF" />
+                <Text style={[styles.activeFilterChipText, { color: '#1E40AF' }]}>{selectedRegionFilter}</Text>
+                <TouchableOpacity onPress={() => setSelectedRegionFilter('All')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={13} color="#1E40AF" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {searchQuery.trim() !== '' && (
+              <View style={[styles.activeFilterChip, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                <Ionicons name="search" size={11} color="#92400E" />
+                <Text style={[styles.activeFilterChipText, { color: '#92400E' }]}>"{searchQuery.trim()}"</Text>
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={13} color="#92400E" />
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {sortBy !== 'default' && (
+              <View style={[styles.activeFilterChip, { backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' }]}>
+                <Ionicons name="swap-vertical" size={11} color="#374151" />
+                <Text style={[styles.activeFilterChipText, { color: '#374151' }]}>{sortOptions.find(o => o.id === sortBy)?.label}</Text>
+                <TouchableOpacity onPress={() => setSortBy('default')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close" size={13} color="#374151" />
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
+        </View>
       </View>
 
       {/* Main Content Area */}
@@ -1158,10 +1521,12 @@ export default function MenuManagement() {
                 <Text style={styles.emptyTitle}>No items or deals found</Text>
                 <Text style={styles.emptySubtitle}>Try changing your search query or category filter</Text>
               </View>
-            ) : isMobile ? (
-              // MOBILE VIEW: RICH CARDS
-              <View style={styles.mobileCardsList}>
-                {filteredItems.map(item => {
+            ) : (
+              <>
+                {isMobile ? (
+                  // MOBILE VIEW: RICH CARDS
+                  <View style={styles.mobileCardsList}>
+                    {itemsPagination.paginatedData.map(item => {
                   const marginInfo = calculateMargin(item.price, item.costPrice);
                   const isLow = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= (item.lowStockThreshold || 5);
                   const isOut = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0;
@@ -1323,7 +1688,7 @@ export default function MenuManagement() {
                   <Text style={[styles.tableCell, styles.tableHeaderCell, { flex: 1, textAlign: 'right' }]}>Actions</Text>
                 </View>
                 
-                {filteredItems.map(item => {
+                {itemsPagination.paginatedData.map(item => {
                   const marginInfo = calculateMargin(item.price, item.costPrice);
                   const isLow = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= (item.lowStockThreshold || 5);
                   const isOut = item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0;
@@ -1470,8 +1835,20 @@ export default function MenuManagement() {
                   );
                 })}
               </View>
-            )
-          ) : activeTab === 'categories' ? (
+            )}
+
+            <PaginationControl
+              currentPage={itemsPagination.currentPage}
+              totalPages={itemsPagination.totalPages}
+              totalItems={itemsPagination.totalItems}
+              pageSize={itemsPagination.pageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onPageChange={itemsPagination.goToPage}
+              onPageSizeChange={itemsPagination.setPageSize}
+              itemName={activeTab === 'deals' ? 'deals' : 'dishes'}
+            />
+          </>
+        )) : activeTab === 'categories' ? (
             // ================= CATEGORIES LIST =================
             filteredCategories.length === 0 ? (
               <View style={styles.emptyWrap}>
@@ -2813,7 +3190,315 @@ const styles = StyleSheet.create({
   },
   filterSection: {
     marginBottom: 16,
-    gap: 12,
+    gap: 10,
+    zIndex: 1000,
+    position: 'relative',
+  },
+  dropdownBackdrop: {
+    position: 'absolute',
+    top: -1000,
+    left: -1000,
+    right: -1000,
+    bottom: -5000,
+    zIndex: 990,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 990,
+      } as any,
+    }),
+  },
+  filterBarRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+    zIndex: 995,
+  },
+  filterBarRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    gap: 10,
+  },
+  dropdownsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    zIndex: 995,
+  },
+  dropdownsRowMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    width: '100%',
+    flexWrap: 'wrap',
+  },
+  dropdownAnchor: {
+    position: 'relative',
+    zIndex: 998,
+  },
+  filterDropdownTrigger: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    minHeight: 46,
+    minWidth: 165,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    gap: 10,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.04)',
+        transition: 'all 0.18s ease',
+      } as any,
+      ios: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.04,
+        shadowRadius: 4,
+      },
+      android: {
+        elevation: 2,
+      },
+    }),
+  },
+  filterDropdownTriggerActive: {
+    borderColor: 'rgba(212, 175, 55, 0.7)',
+    backgroundColor: '#FFFDF7',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 14px rgba(212, 175, 55, 0.18)',
+      } as any,
+    }),
+  },
+  filterDropdownTriggerOpen: {
+    borderColor: BRAND.burgundy,
+  },
+  filterTriggerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexShrink: 1,
+  },
+  filterIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterDropdownLabel: {
+    fontSize: 9.5,
+    fontWeight: '700',
+    color: '#9CA3AF',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  filterDropdownValue: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: BRAND.ink,
+    maxWidth: 110,
+  },
+  filterDropdownValueActive: {
+    color: BRAND.burgundy,
+  },
+  filterTriggerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  filterCountBadge: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  filterCountBadgeActive: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+  },
+  filterCountText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6B7280',
+  },
+  filterCountTextActive: {
+    color: BRAND.burgundy,
+  },
+  dropdownMenuCard: {
+    position: 'absolute',
+    top: 52,
+    left: 0,
+    minWidth: 230,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    paddingVertical: 6,
+    zIndex: 9999,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 12px 32px rgba(82, 20, 28, 0.14), 0 4px 12px rgba(0, 0, 0, 0.08)',
+      } as any,
+      ios: {
+        shadowColor: '#52141C',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.16,
+        shadowRadius: 16,
+      },
+      android: {
+        elevation: 16,
+      },
+    }),
+  },
+  dropdownMenuHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    marginBottom: 4,
+  },
+  dropdownMenuTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#6B7280',
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  dropdownMenuSubtitle: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  dropdownMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'background-color 0.12s ease',
+      } as any,
+    }),
+  },
+  dropdownMenuItemActive: {
+    backgroundColor: 'rgba(82, 20, 28, 0.06)',
+  },
+  dropdownItemIndicator: {
+    width: 18,
+    height: 18,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: '#D1D5DB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  dropdownMenuItemText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#374151',
+  },
+  dropdownMenuItemTextActive: {
+    color: BRAND.burgundy,
+    fontWeight: '800',
+  },
+  menuItemCountPill: {
+    backgroundColor: '#F3F4F6',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  menuItemCountPillActive: {
+    backgroundColor: 'rgba(82, 20, 28, 0.12)',
+  },
+  menuItemCountText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#6B7280',
+  },
+  menuItemCountTextActive: {
+    color: BRAND.burgundy,
+  },
+  clearFiltersBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 5,
+    height: 46,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      } as any,
+    }),
+  },
+  clearFiltersText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#B91C1C',
+  },
+  activeFiltersStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    paddingTop: 4,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  resultCountWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  resultCountText: {
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#6B7280',
+  },
+  activeChipsList: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  activeFilterChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FDF2F4',
+    borderWidth: 1,
+    borderColor: 'rgba(82, 20, 28, 0.2)',
+    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 3.5,
+    gap: 5,
+  },
+  activeFilterChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: BRAND.burgundy,
   },
   searchBox: {
     flexDirection: 'row',

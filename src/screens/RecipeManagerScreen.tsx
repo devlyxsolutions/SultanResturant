@@ -13,6 +13,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import KitchenOpsNav from '../components/KitchenOpsNav';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
 import { useKitchenStore } from '../store/kitchenStore';
@@ -110,6 +112,11 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
       return true;
     });
   }, [menuItems, selectedCategory, search]);
+
+  const recipesPagination = usePagination({
+    data: filteredMenuItems,
+    initialPageSize: 10,
+  });
 
   // Active dish
   const activeDish = useMemo(() => {
@@ -444,7 +451,7 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
 
           {/* Dish list */}
           <ScrollView style={styles.dishList} showsVerticalScrollIndicator={false}>
-            {filteredMenuItems.map((item) => {
+            {recipesPagination.paginatedData.map((item) => {
               const itemRecipes = recipes.filter((r) => r.menuItemId === item.id);
               const hasRecipe = itemRecipes.length > 0;
               const isSelected = activeDish?.id === item.id;
@@ -501,6 +508,20 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
               );
             })}
           </ScrollView>
+
+          {filteredMenuItems.length > 0 && (
+            <PaginationControl
+              currentPage={recipesPagination.currentPage}
+              totalPages={recipesPagination.totalPages}
+              pageSize={recipesPagination.pageSize}
+              totalItems={recipesPagination.totalItems}
+              pageSizeOptions={[10, 20, 50]}
+              onPageChange={recipesPagination.goToPage}
+              onPageSizeChange={recipesPagination.setPageSize}
+              itemName="recipes"
+              isCompact={true}
+            />
+          )}
         </View>
 
         {/* Right Column: Recipe Details & Grams Editor */}

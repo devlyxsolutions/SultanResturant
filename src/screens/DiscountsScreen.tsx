@@ -18,6 +18,8 @@ import { useRouter } from 'expo-router';
 import { useDiscountStore } from '../store/discountStore';
 import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 import { 
   EventDiscount, 
   CampaignFormData, 
@@ -182,6 +184,11 @@ export default function DiscountsScreen() {
       return true;
     });
   }, [campaigns, statusTab, scopeFilter, search]);
+
+  const campaignsPagination = usePagination({
+    data: filteredCampaigns,
+    initialPageSize: 8,
+  });
 
   // Handle Edit Action
   const handleOpenEditor = (campaign?: EventDiscount) => {
@@ -573,8 +580,9 @@ export default function DiscountsScreen() {
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={styles.campaignsGrid}>
-            {filteredCampaigns.map((camp) => {
+          <>
+            <View style={styles.campaignsGrid}>
+            {campaignsPagination.paginatedData.map((camp) => {
               const theme = THEME_COLORS[camp.bannerTheme || 'burgundy'];
               const validity = checkCampaignValidity(camp);
               const isLive = validity.isValid;
@@ -808,6 +816,20 @@ export default function DiscountsScreen() {
               );
             })}
           </View>
+
+            {filteredCampaigns.length > 0 && (
+              <PaginationControl
+                currentPage={campaignsPagination.currentPage}
+                totalPages={campaignsPagination.totalPages}
+                pageSize={campaignsPagination.pageSize}
+                totalItems={campaignsPagination.totalItems}
+                pageSizeOptions={[8, 16, 32]}
+                onPageChange={campaignsPagination.goToPage}
+                onPageSizeChange={campaignsPagination.setPageSize}
+                itemName="campaigns"
+              />
+            )}
+          </>
         )}
 
         <View style={{ height: 60 }} />

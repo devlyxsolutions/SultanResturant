@@ -34,6 +34,8 @@ import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 const UNITS = ['kg', 'Liters', 'bottles', 'packs', 'grams', 'cylinders', 'pcs', 'cartons', 'crates', 'bags', 'Tins'];
 
@@ -294,6 +296,27 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       return !q || m.name.toLowerCase().includes(q) || m.category.toLowerCase().includes(q);
     });
   }, [menuItems, searchQuery]);
+
+  // Paginations
+  const rawPagination = usePagination({
+    data: filteredInventory,
+    initialPageSize: 12,
+  });
+
+  const receivingPagination = usePagination({
+    data: receivingLogs,
+    initialPageSize: 10,
+  });
+
+  const expiriesPagination = usePagination({
+    data: filteredExpiries,
+    initialPageSize: 10,
+  });
+
+  const movementsPagination = usePagination({
+    data: filteredMovements,
+    initialPageSize: 15,
+  });
 
   // ---------------- Handlers ----------------
 
@@ -950,8 +973,9 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.itemsGrid}>
-              {filteredInventory.map((item) => {
+            <>
+              <View style={styles.itemsGrid}>
+              {rawPagination.paginatedData.map((item) => {
                 const badge = getStatusBadge(item);
                 const expiry = getExpiryStatus(item);
                 const isLow = item.stock <= item.threshold;
@@ -1119,7 +1143,18 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 );
               })}
             </View>
-          )}
+            <PaginationControl
+              currentPage={rawPagination.currentPage}
+              totalPages={rawPagination.totalPages}
+              pageSize={rawPagination.pageSize}
+              totalItems={rawPagination.totalItems}
+              pageSizeOptions={[12, 24, 48, 96]}
+              onPageChange={rawPagination.goToPage}
+              onPageSizeChange={rawPagination.setPageSize}
+              itemName="inventory items"
+            />
+          </>
+        )}
         </View>
       )}
 
@@ -1151,8 +1186,9 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               <Text style={styles.emptyDesc}>Receive inventory shipments with invoice numbers and batch numbers.</Text>
             </View>
           ) : (
-            <View style={{ gap: 12 }}>
-              {receivingLogs.map((m) => {
+            <>
+              <View style={{ gap: 12 }}>
+              {receivingPagination.paginatedData.map((m) => {
                 const totalVal = (m.qty || 0) * (m.unitCost || 0);
 
                 return (
@@ -1245,7 +1281,17 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 );
               })}
             </View>
-          )}
+            <PaginationControl
+              currentPage={receivingPagination.currentPage}
+              totalPages={receivingPagination.totalPages}
+              pageSize={receivingPagination.pageSize}
+              totalItems={receivingPagination.totalItems}
+              onPageChange={receivingPagination.goToPage}
+              onPageSizeChange={receivingPagination.setPageSize}
+              itemName="inward shipments"
+            />
+          </>
+        )}
         </View>
       )}
 
@@ -1323,8 +1369,9 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               <Text style={styles.emptyDesc}>All tracked raw ingredients and batches are fresh and within shelf-life.</Text>
             </View>
           ) : (
-            <View style={styles.itemsGrid}>
-              {filteredExpiries.map(({ item, expiry }) => {
+            <>
+              <View style={styles.itemsGrid}>
+              {expiriesPagination.paginatedData.map(({ item, expiry }) => {
                 const isExpired = expiry.status === 'expired';
                 const isCritical = expiry.status === 'critical';
 
@@ -1413,7 +1460,18 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 );
               })}
             </View>
-          )}
+            <PaginationControl
+              currentPage={expiriesPagination.currentPage}
+              totalPages={expiriesPagination.totalPages}
+              pageSize={expiriesPagination.pageSize}
+              totalItems={expiriesPagination.totalItems}
+              pageSizeOptions={[12, 24, 48]}
+              onPageChange={expiriesPagination.goToPage}
+              onPageSizeChange={expiriesPagination.setPageSize}
+              itemName="dated batches"
+            />
+          </>
+        )}
         </View>
       )}
 
@@ -1585,8 +1643,9 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </Text>
             </View>
           ) : (
-            <View style={styles.movementsList}>
-              {filteredMovements.map((m) => {
+            <>
+              <View style={styles.movementsList}>
+              {movementsPagination.paginatedData.map((m) => {
                 const isPositive = (m.delta ?? 0) > 0;
                 const typeConfig = getMovementConfig(m.type);
 
@@ -1648,7 +1707,18 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 );
               })}
             </View>
-          )}
+            <PaginationControl
+              currentPage={movementsPagination.currentPage}
+              totalPages={movementsPagination.totalPages}
+              pageSize={movementsPagination.pageSize}
+              totalItems={movementsPagination.totalItems}
+              pageSizeOptions={[15, 30, 50, 100]}
+              onPageChange={movementsPagination.goToPage}
+              onPageSizeChange={movementsPagination.setPageSize}
+              itemName="movement logs"
+            />
+          </>
+        )}
         </View>
       )}
 

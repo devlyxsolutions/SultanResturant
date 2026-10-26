@@ -32,6 +32,8 @@ import { money, formatDay, formatTime, startOfDay } from '../utils/format';
 import { useRolePermissions } from '../store/roleStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 const LIGHT = {
   bg: '#F8F9FA',
@@ -273,6 +275,12 @@ export default function DamageControlScreen({
       );
     });
   }, [damageRecords, selectedCategory, selectedStatus, periodFilter, search]);
+
+  // Pagination for Damage Records List
+  const damagePagination = usePagination({
+    data: filteredRecords,
+    initialPageSize: 10,
+  });
 
   const openReportModal = (preset?: typeof QUICK_PRESETS[0]) => {
     setSelectedAssetId(null);
@@ -633,7 +641,8 @@ export default function DamageControlScreen({
               </Text>
             </View>
           ) : (
-            filteredRecords.map((rec) => {
+            <>
+              {damagePagination.paginatedData.map((rec) => {
               const statusPill = STATUS_PILLS[rec.status] || STATUS_PILLS.logged;
               const resp = RESPONSIBILITIES.find((r) => r.key === rec.responsibleParty) || RESPONSIBILITIES[0];
 
@@ -763,8 +772,20 @@ export default function DamageControlScreen({
                   </View>
                 </View>
               );
-            })
-          )}
+            })}
+
+            <PaginationControl
+              currentPage={damagePagination.currentPage}
+              totalPages={damagePagination.totalPages}
+              totalItems={damagePagination.totalItems}
+              pageSize={damagePagination.pageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onPageChange={damagePagination.goToPage}
+              onPageSizeChange={damagePagination.setPageSize}
+              itemName="incidents"
+            />
+          </>
+        )}
         </View>
       </ScrollView>
 

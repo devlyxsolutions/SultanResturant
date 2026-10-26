@@ -20,6 +20,8 @@ import { useKitchenStore } from '../store/kitchenStore';
 import { broadcastImmediately } from '../services/syncService';
 import SultanLogo from '../components/SultanLogo';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 import {
   SalesReturn,
   ReturnedItem,
@@ -151,6 +153,12 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
     list.sort((a, b) => b.returnedAt - a.returnedAt);
     return list;
   }, [salesReturns, dateFilter, reasonFilter, typeFilter, searchQuery, dateRanges]);
+
+  // Pagination for Returns List
+  const returnsPagination = usePagination({
+    data: filteredReturns,
+    initialPageSize: 10,
+  });
 
   // Overall KPI Metrics
   const metrics = useMemo(() => {
@@ -607,8 +615,9 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
             </TouchableOpacity>
           </View>
         ) : (
-          <View style={{ gap: 12 }}>
-            {filteredReturns.map((ret) => {
+          <>
+            <View style={{ gap: 12 }}>
+              {returnsPagination.paginatedData.map((ret) => {
               const reasonMeta = RETURN_REASONS.find((r) => r.id === ret.reasonCategory) || RETURN_REASONS[0];
               return (
                 <View key={ret.id} style={styles.returnCard}>
@@ -767,7 +776,19 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
                 </View>
               );
             })}
-          </View>
+            </View>
+
+            <PaginationControl
+              currentPage={returnsPagination.currentPage}
+              totalPages={returnsPagination.totalPages}
+              totalItems={returnsPagination.totalItems}
+              pageSize={returnsPagination.pageSize}
+              pageSizeOptions={[10, 20, 50, 100]}
+              onPageChange={returnsPagination.goToPage}
+              onPageSizeChange={returnsPagination.setPageSize}
+              itemName="returns"
+            />
+          </>
         )}
       </ScrollView>
 

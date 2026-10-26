@@ -23,6 +23,8 @@ import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 interface InvoicesScreenProps {
   userRole: 'admin' | 'manager';
@@ -184,6 +186,12 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
     return result;
   }, [invoices, dateFilter, orderTypeFilter, paymentFilter, statusFilter, searchQuery, sortBy, dateRanges]);
+
+  // Pagination for Invoices List
+  const invoicePagination = usePagination({
+    data: filteredInvoices,
+    initialPageSize: 10,
+  });
 
   // Financial KPI Metrics
   const metrics = useMemo(() => {
@@ -634,8 +642,9 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
             </Text>
           </View>
         ) : (
-          <View style={styles.invoicesList}>
-            {filteredInvoices.map((inv) => {
+          <>
+            <View style={styles.invoicesList}>
+              {invoicePagination.paginatedData.map((inv) => {
               const isVoided = inv.status === 'voided';
               const isRefunded = inv.status === 'refunded' || inv.returnStatus === 'full';
               const isPartialReturn = inv.returnStatus === 'partial';
@@ -849,7 +858,19 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 </View>
               );
             })}
-          </View>
+            </View>
+
+            <PaginationControl
+              currentPage={invoicePagination.currentPage}
+              totalPages={invoicePagination.totalPages}
+              totalItems={invoicePagination.totalItems}
+              pageSize={invoicePagination.pageSize}
+              pageSizeOptions={[10, 25, 50, 100]}
+              onPageChange={invoicePagination.goToPage}
+              onPageSizeChange={invoicePagination.setPageSize}
+              itemName="invoices"
+            />
+          </>
         )}
 
         <View style={{ height: 60 }} />

@@ -24,6 +24,8 @@ import {
   SupplierPayment,
 } from '../store/opsStore';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 const BRAND = {
   burgundy: '#52171B',
@@ -240,6 +242,24 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       return true;
     });
   }, [suppliers, selectedCategory, filterBalance, searchQuery]);
+
+  // Pagination for Suppliers Directory
+  const suppliersPagination = usePagination({
+    data: filteredSuppliers,
+    initialPageSize: 10,
+  });
+
+  // Pagination for Payments Ledger
+  const paymentsPagination = usePagination({
+    data: filteredPayments,
+    initialPageSize: 10,
+  });
+
+  // Pagination for Purchase Orders
+  const poPagination = usePagination({
+    data: purchaseOrders,
+    initialPageSize: 10,
+  });
 
   // ----------------------------------------------------
   // Handlers
@@ -1024,7 +1044,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
             {/* Supplier Cards Grid */}
             <View style={styles.suppliersGrid}>
-              {filteredSuppliers.map((s) => {
+              {suppliersPagination.paginatedData.map((s) => {
                 const meta = CATEGORY_COLORS[s.category] || CATEGORY_COLORS.Other;
                 const hasDue = (s.currentBalance || 0) > 0;
 
@@ -1206,6 +1226,18 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 </View>
               )}
             </View>
+
+            {filteredSuppliers.length > 0 && (
+              <PaginationControl
+                currentPage={suppliersPagination.currentPage}
+                totalPages={suppliersPagination.totalPages}
+                pageSize={suppliersPagination.pageSize}
+                totalItems={suppliersPagination.totalItems}
+                onPageChange={suppliersPagination.goToPage}
+                onPageSizeChange={suppliersPagination.setPageSize}
+                itemName="suppliers"
+              />
+            )}
           </View>
         )}
 
@@ -1232,7 +1264,8 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 <Text style={styles.emptyStateSub}>Create your first purchase order to track ingredient supplies.</Text>
               </View>
             ) : (
-              purchaseOrders.map((po) => {
+              <>
+                {poPagination.paginatedData.map((po) => {
                 const isPending = po.status === 'ordered';
                 const hasDue = (po.balanceDue || 0) > 0;
 
@@ -1370,8 +1403,19 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     </View>
                   </View>
                 );
-              })
-            )}
+              })}
+
+              <PaginationControl
+                currentPage={poPagination.currentPage}
+                totalPages={poPagination.totalPages}
+                pageSize={poPagination.pageSize}
+                totalItems={poPagination.totalItems}
+                onPageChange={poPagination.goToPage}
+                onPageSizeChange={poPagination.setPageSize}
+                itemName="purchase orders"
+              />
+            </>
+          )}
           </View>
         )}
 
@@ -1514,7 +1558,8 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 </Text>
               </View>
             ) : (
-              filteredPayments.map((pay) => {
+              <>
+                {paymentsPagination.paginatedData.map((pay) => {
                 const sup = suppliers.find((s) => s.id === pay.supplierId);
                 const isCash = pay.method === 'cash';
                 const isOnline = pay.method === 'online';
@@ -1696,8 +1741,19 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     </View>
                   </View>
                 );
-              })
-            )}
+              })}
+
+              <PaginationControl
+                currentPage={paymentsPagination.currentPage}
+                totalPages={paymentsPagination.totalPages}
+                pageSize={paymentsPagination.pageSize}
+                totalItems={paymentsPagination.totalItems}
+                onPageChange={paymentsPagination.goToPage}
+                onPageSizeChange={paymentsPagination.setPageSize}
+                itemName="payments"
+              />
+            </>
+          )}
           </View>
         )}
 

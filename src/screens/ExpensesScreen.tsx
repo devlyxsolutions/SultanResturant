@@ -23,6 +23,8 @@ import { money, formatTime, startOfDay } from '../utils/format';
 import { useRolePermissions } from '../store/roleStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
@@ -70,6 +72,12 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       netProfitToday: profit,
     };
   }, [filterPeriod, expenses, invoices, todayStart]);
+
+  // Pagination for Expenses List
+  const expensePagination = usePagination({
+    data: filteredExpenses,
+    initialPageSize: 10,
+  });
 
   const handleAdd = () => {
     const num = parseFloat(amount);
@@ -320,34 +328,47 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
           <Text style={styles.emptyDesc}>Expenses recorded here deduct from shift net cash automatically.</Text>
         </View>
       ) : (
-        filteredExpenses.map((exp) => (
-          <View
-            key={exp.id}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-            style={styles.expenseItem}
-          >
-            <View style={styles.expenseIcon}>
-              <Ionicons
-                name={exp.method === 'cash' ? 'cash-outline' : 'card-outline'}
-                size={22}
-                color={BRAND.burgundy}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.itemTopRow}>
-                <Text style={styles.itemCategory}>{exp.category}</Text>
-                <Text style={styles.itemAmount}>- {money(exp.amount)}</Text>
+        <>
+          {expensePagination.paginatedData.map((exp) => (
+            <View
+              key={exp.id}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+              style={styles.expenseItem}
+            >
+              <View style={styles.expenseIcon}>
+                <Ionicons
+                  name={exp.method === 'cash' ? 'cash-outline' : 'card-outline'}
+                  size={22}
+                  color={BRAND.burgundy}
+                />
               </View>
-              {exp.note && <Text style={styles.itemNote}>{`"${exp.note}"`}</Text>}
-              <Text style={styles.itemMeta}>
-                Paid via {exp.method.toUpperCase()} • Recorded by {exp.paidBy || 'Staff'} at {formatTime(exp.at)}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <View style={styles.itemTopRow}>
+                  <Text style={styles.itemCategory}>{exp.category}</Text>
+                  <Text style={styles.itemAmount}>- {money(exp.amount)}</Text>
+                </View>
+                {exp.note && <Text style={styles.itemNote}>{`"${exp.note}"`}</Text>}
+                <Text style={styles.itemMeta}>
+                  Paid via {exp.method.toUpperCase()} • Recorded by {exp.paidBy || 'Staff'} at {formatTime(exp.at)}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(exp.id)}>
+                <Ionicons name="trash-outline" size={16} color="#D32F2F" />
+              </TouchableOpacity>
             </View>
-            <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(exp.id)}>
-              <Ionicons name="trash-outline" size={16} color="#D32F2F" />
-            </TouchableOpacity>
-          </View>
-        ))
+          ))}
+
+          <PaginationControl
+            currentPage={expensePagination.currentPage}
+            totalPages={expensePagination.totalPages}
+            totalItems={expensePagination.totalItems}
+            pageSize={expensePagination.pageSize}
+            pageSizeOptions={[10, 20, 50, 100]}
+            onPageChange={expensePagination.goToPage}
+            onPageSizeChange={expensePagination.setPageSize}
+            itemName="expenses"
+          />
+        </>
       )}
     </ScrollView>
   );

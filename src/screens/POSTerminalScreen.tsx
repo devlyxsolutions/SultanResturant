@@ -71,6 +71,32 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   return 'restaurant';
 }
 
+const getCuisineMeta = (name: string) => {
+  const lower = name.toLowerCase();
+  if (lower.includes('pakistan') || lower.includes('desi') || lower.includes('karahi') || lower.includes('bbq')) {
+    return { icon: 'flame', emoji: '🇵🇰', color: '#16A34A' };
+  }
+  if (lower.includes('chinese') || lower.includes('asian')) {
+    return { icon: 'restaurant', emoji: '🥢', color: '#DC2626' };
+  }
+  if (lower.includes('continental') || lower.includes('steak')) {
+    return { icon: 'wine', emoji: '🥩', color: '#9333EA' };
+  }
+  if (lower.includes('arabic') || lower.includes('middle') || lower.includes('mandi')) {
+    return { icon: 'moon', emoji: '🧆', color: '#D97706' };
+  }
+  if (lower.includes('turkish') || lower.includes('kebab')) {
+    return { icon: 'sparkles', emoji: '🥙', color: '#E11D48' };
+  }
+  if (lower.includes('fast') || lower.includes('burger')) {
+    return { icon: 'fast-food', emoji: '🍔', color: '#EA580C' };
+  }
+  if (lower.includes('italian') || lower.includes('pizza') || lower.includes('pasta')) {
+    return { icon: 'pizza', emoji: '🍕', color: '#059669' };
+  }
+  return { icon: 'earth', emoji: '🍽️', color: '#B45309' };
+};
+
 interface POSTerminalScreenProps {
   role?: 'admin' | 'manager';
   backRoute?: string;
@@ -439,6 +465,27 @@ export default function POSTerminalScreen({
       return (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
     });
   }, [menuItems, searchQuery, activeCategory, activeRegion]);
+
+  // Real-time cuisine item counts for badges
+  const regionCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: 0 };
+    (menuItems || []).forEach(item => {
+      const matchesCategory = 
+        activeCategory === 'ALL' || activeCategory === 'All' ? true :
+        (activeCategory === '🎁 Deals & Combos' || activeCategory === 'Deals') ? Boolean(item.isDeal || (item.category && item.category.toLowerCase() === 'deals')) :
+        (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
+
+      if (!matchesCategory) return;
+
+      counts.ALL = (counts.ALL || 0) + 1;
+      const reg = (item.region || '').trim();
+      if (reg) {
+        const matched = regions.find(r => r.toLowerCase() === reg.toLowerCase()) || reg;
+        counts[matched] = (counts[matched] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [menuItems, activeCategory, regions]);
 
   // Financial Calculations
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
@@ -1468,8 +1515,10 @@ export default function POSTerminalScreen({
             {regions.length > 0 && (
               <View style={styles.posRegionFilterRow}>
                 <View style={styles.posRegionFilterLead}>
-                  <Ionicons name="globe-outline" size={13} color="#D4AF37" />
-                  <Text style={styles.posRegionFilterLeadText}>Cuisine:</Text>
+                  <View style={styles.posRegionLeadIconWrap}>
+                    <Ionicons name="restaurant" size={11} color="#D4AF37" />
+                  </View>
+                  <Text style={styles.posRegionFilterLeadText}>CUISINE</Text>
                 </View>
                 <ScrollView 
                   horizontal 
@@ -1482,18 +1531,38 @@ export default function POSTerminalScreen({
                       activeRegion === 'ALL' && styles.posRegionChipActive,
                     ]}
                     onPress={() => setActiveRegion('ALL')}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
                   >
+                    <Ionicons 
+                      name="globe-outline" 
+                      size={13} 
+                      color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'} 
+                      style={{ marginRight: 2 }} 
+                    />
                     <Text style={[
                       styles.posRegionChipText,
                       activeRegion === 'ALL' && styles.posRegionChipTextActive,
                     ]}>
                       All Cuisines
                     </Text>
+                    <View style={[
+                      styles.posRegionChipBadge,
+                      activeRegion === 'ALL' && styles.posRegionChipBadgeActive
+                    ]}>
+                      <Text style={[
+                        styles.posRegionChipBadgeText,
+                        activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive
+                      ]}>
+                        {regionCounts['ALL'] ?? 0}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
 
                   {regions.map(r => {
                     const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
+                    const meta = getCuisineMeta(r);
+                    const count = regionCounts[r] || 0;
+
                     return (
                       <TouchableOpacity
                         key={r}
@@ -1502,14 +1571,28 @@ export default function POSTerminalScreen({
                           isSelected && styles.posRegionChipActive,
                         ]}
                         onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
-                        activeOpacity={0.7}
+                        activeOpacity={0.75}
                       >
+                        <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
                         <Text style={[
                           styles.posRegionChipText,
                           isSelected && styles.posRegionChipTextActive,
                         ]}>
                           {r}
                         </Text>
+                        {count > 0 && (
+                          <View style={[
+                            styles.posRegionChipBadge,
+                            isSelected && styles.posRegionChipBadgeActive
+                          ]}>
+                            <Text style={[
+                              styles.posRegionChipBadgeText,
+                              isSelected && styles.posRegionChipBadgeTextActive
+                            ]}>
+                              {count}
+                            </Text>
+                          </View>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
@@ -5529,61 +5612,118 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingBottom: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.65)',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.6)',
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.22)',
+    gap: 10,
+    zIndex: 9,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(82, 20, 28, 0.03)',
+      } as any,
+    }),
   },
   posRegionFilterLead: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginRight: 8,
-    paddingRight: 8,
-    borderRightWidth: 1,
-    borderRightColor: 'rgba(203, 213, 225, 0.6)',
+    backgroundColor: '#FAF5ED',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 20,
+    gap: 6,
+    flexShrink: 0,
+  },
+  posRegionLeadIconWrap: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#52141C',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   posRegionFilterLeadText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#8A7A70',
-    letterSpacing: 0.3,
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#52141C',
+    letterSpacing: 0.6,
   },
   posRegionScroll: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
+    paddingRight: 16,
   },
   posRegionChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 16,
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    borderRadius: 20,
+    backgroundColor: '#FFFDF9',
+    borderWidth: 1.2,
+    borderColor: '#E7DEC8',
+    gap: 6,
     ...Platform.select({
       web: {
         cursor: 'pointer',
-        transition: 'all 0.15s ease',
+        transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
       } as any,
+      default: {
+        elevation: 1,
+      },
     }),
   },
   posRegionChipActive: {
     backgroundColor: '#52141C',
     borderColor: '#D4AF37',
+    borderWidth: 1.5,
     ...Platform.select({
       web: {
-        boxShadow: '0 2px 6px rgba(82, 20, 28, 0.25)',
+        boxShadow: '0 3px 12px rgba(82, 20, 28, 0.28), 0 0 0 1px rgba(212, 175, 55, 0.4)',
+        transform: 'translateY(-1px)',
       } as any,
+      default: {
+        elevation: 3,
+      },
     }),
   },
+  posRegionEmoji: {
+    fontSize: 13,
+    lineHeight: 16,
+  },
   posRegionChipText: {
-    fontSize: 10.5,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#3D2E24',
+    letterSpacing: 0.2,
   },
   posRegionChipTextActive: {
     color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  posRegionChipBadge: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posRegionChipBadgeActive: {
+    backgroundColor: '#D4AF37',
+  },
+  posRegionChipBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#6B4F3B',
+  },
+  posRegionChipBadgeTextActive: {
+    color: '#32070D',
     fontWeight: '900',
   },
 });

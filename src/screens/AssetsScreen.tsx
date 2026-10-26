@@ -25,6 +25,8 @@ import {
 } from '../store';
 import { money, formatDay } from '../utils/format';
 import RoyalDropdown from '../components/RoyalDropdown';
+import PaginationControl from '../components/PaginationControl';
+import { usePagination } from '../hooks/usePagination';
 
 const LIGHT = {
   bg: '#F8F9FA',
@@ -176,6 +178,11 @@ export default function AssetsScreen({
       );
     });
   }, [assets, selectedCategory, selectedStatus, search]);
+
+  const assetsPagination = usePagination({
+    data: filteredAssets,
+    initialPageSize: 10,
+  });
 
   const openAddModal = () => {
     setEditingAsset(null);
@@ -489,7 +496,7 @@ export default function AssetsScreen({
               </Text>
             </View>
           ) : (
-            filteredAssets.map((ast) => {
+            assetsPagination.paginatedData.map((ast) => {
               const cond = CONDITIONS.find((c) => c.key === ast.condition) || CONDITIONS[1];
               const stat = STATUSES.find((s) => s.key === ast.status) || STATUSES[0];
               const maintTotal = (ast.maintenanceLogs || []).reduce((acc, l) => acc + (l.cost || 0), 0);
@@ -646,6 +653,18 @@ export default function AssetsScreen({
                 </View>
               );
             })
+          )}
+
+          {filteredAssets.length > 0 && (
+            <PaginationControl
+              currentPage={assetsPagination.currentPage}
+              totalPages={assetsPagination.totalPages}
+              pageSize={assetsPagination.pageSize}
+              totalItems={assetsPagination.totalItems}
+              onPageChange={assetsPagination.goToPage}
+              onPageSizeChange={assetsPagination.setPageSize}
+              itemName="assets"
+            />
           )}
         </View>
       </ScrollView>
