@@ -76,7 +76,7 @@ export default function AdminAppUsers() {
   const fetchAppData = async () => {
     try {
       setLoading(true);
-      const baseUrl = Platform.OS === 'web' ? 'http://localhost:5050' : 'http://192.168.1.11:5050';
+      const baseUrl = Platform.OS === 'web' ? 'http://localhost:5050' : 'http://192.168.1.4:5050';
 
       const [usersRes, logsRes, ordersRes] = await Promise.all([
         fetch(`${baseUrl}/api/admin/app-users`).then(r => r.json()).catch(() => ({ users: [] })),

@@ -8,7 +8,7 @@
       "name": "T-01",
       "seats": 4,
       "status": "occupied",
-      "billTotal": 10200,
+      "billTotal": 21741,
       "orders": [
         {
           "id": "m1791112898285-Small",
@@ -37,10 +37,73 @@
           "price": 150,
           "qty": 3,
           "completed": false
+        },
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m2",
+          "name": "Chicken Karahi",
+          "price": 1850,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Small (7\"))",
+          "price": 850,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m5",
+          "name": "Mint Margarita",
+          "price": 450,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m4",
+          "name": "Kunafa",
+          "price": 850,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m18",
+          "name": "Grilled Chicken Alfredo Pasta",
+          "price": 1490,
+          "qty": 1,
+          "completed": false
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false
         }
       ],
       "isPaid": false,
-      "server": "Sara Ahmed"
+      "server": "Test Customer"
     },
     {
       "id": "2",
@@ -409,6 +472,159 @@
   ],
   "tickets": [
     {
+      "id": "KOT-1026",
+      "orderId": "ORD-881821",
+      "orderNumber": "SLT-2965",
+      "tableId": "1",
+      "tableName": "T-01",
+      "server": "App Customer (Round 1)",
+      "timePlaced": 1793041881821,
+      "status": "ready",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "price": 1450,
+          "qty": 1,
+          "station": "main",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "KOT-5225",
+      "orderId": "ORD-752025",
+      "orderNumber": "SLT-8434",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "server": "App Customer (Round 1)",
+      "timePlaced": 1793038752025,
+      "status": "served",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "items": [
+        {
+          "id": "m18",
+          "name": "Grilled Chicken Alfredo Pasta",
+          "price": 1490,
+          "qty": 1,
+          "station": "main",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "KOT-6620",
+      "orderId": "ORD-755954",
+      "orderNumber": "SLT-7872",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "server": "App Customer (Round 1)",
+      "timePlaced": 1793034755954,
+      "status": "served",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "items": [
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "notes": "Spice: Medium",
+          "station": "main",
+          "completed": false
+        },
+        {
+          "id": "m5",
+          "name": "Mint Margarita",
+          "price": 450,
+          "qty": 1,
+          "station": "juice",
+          "completed": false
+        },
+        {
+          "id": "m4",
+          "name": "Kunafa",
+          "price": 850,
+          "qty": 1,
+          "station": "juice",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "KOT-2496",
+      "orderId": "ORD-490181",
+      "orderNumber": "SLT-9752",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "server": "App Customer (Round 1)",
+      "timePlaced": 1793034490181,
+      "status": "served",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "price": 650,
+          "qty": 1,
+          "station": "main",
+          "completed": false
+        },
+        {
+          "id": "m2",
+          "name": "Chicken Karahi",
+          "price": 1850,
+          "qty": 1,
+          "notes": "Spice: Medium",
+          "station": "main",
+          "completed": false
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "price": 1450,
+          "qty": 1,
+          "station": "main",
+          "completed": false
+        },
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Small (7\"))",
+          "price": 850,
+          "qty": 1,
+          "notes": "Spice: Medium",
+          "station": "main",
+          "completed": false
+        }
+      ]
+    },
+    {
+      "id": "KOT-1420",
+      "orderId": "ORD-088991",
+      "orderNumber": "SLT-3047",
+      "tableId": "t1",
+      "tableName": "Table 1",
+      "server": "App Customer (Round 1)",
+      "timePlaced": 1793034088991,
+      "status": "served",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "items": [
+        {
+          "id": "item-1",
+          "name": "Mutton Karahi",
+          "price": 2800,
+          "qty": 1,
+          "station": "main",
+          "completed": false
+        }
+      ]
+    },
+    {
       "id": "KOT-9293",
       "orderId": "ORD-692573",
       "orderNumber": "SLT-2742",
@@ -476,7 +692,7 @@
       "tableName": "2nd Floor • Cabin 1",
       "server": "App Customer (Dine-In)",
       "timePlaced": 1792158536731,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "1",
@@ -503,7 +719,7 @@
       "tableName": "Ground Floor • Cabin 1",
       "server": "App Customer (Dine-In)",
       "timePlaced": 1792157939942,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "1",
@@ -523,7 +739,7 @@
       "tableName": "Delivery: Junaid",
       "server": "Mobile App Delivery",
       "timePlaced": 1792157314268,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "4",
@@ -569,7 +785,7 @@
       "tableName": "Delivery: Junaid",
       "server": "Mobile App Delivery",
       "timePlaced": 1792156241594,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "m-1792148815743",
@@ -602,7 +818,7 @@
       "tableName": "Delivery: Junaid",
       "server": "Mobile App Delivery",
       "timePlaced": 1792155912265,
-      "status": "ready",
+      "status": "served",
       "items": [
         {
           "id": "m-1792148815743",
@@ -628,7 +844,7 @@
       "tableName": "Delivery: zain ul abideen",
       "server": "Mobile App",
       "timePlaced": 1792128798222,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "m-1792114378762",
@@ -661,7 +877,7 @@
       "tableName": "Delivery: Hamza Test",
       "server": "Mobile App Online",
       "timePlaced": 1792094584176,
-      "status": "cooking",
+      "status": "served",
       "items": [
         {
           "id": "m1",
@@ -741,6 +957,346 @@
     }
   ],
   "onlineOrders": [
+    {
+      "id": "ORD-881821",
+      "orderNumber": "SLT-2965",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "tableId": "1",
+      "tableName": "T-01",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "Test Customer",
+        "phone": "03001234567",
+        "address": "In-Restaurant: T-01"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "unitPrice": 1450,
+          "price": 1450,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 1450,
+          "station": "main",
+          "menuItem": {
+            "id": "m1",
+            "name": "Sultan Kebab",
+            "price": 1450,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 1450,
+      "deliveryFee": 0,
+      "tax": 73,
+      "total": 1523,
+      "paymentMethod": "pay_at_counter",
+      "isPaid": false,
+      "status": "READY",
+      "createdAt": 1793041881821,
+      "estimatedDeliveryMinutes": 20,
+      "updatedAt": 1793041897024
+    },
+    {
+      "id": "ORD-752025",
+      "orderNumber": "SLT-8434",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "Junaid Ahsan",
+        "phone": "03335924673",
+        "address": "In-Restaurant: Ground Floor • T-01"
+      },
+      "items": [
+        {
+          "id": "m18",
+          "name": "Grilled Chicken Alfredo Pasta",
+          "unitPrice": 1490,
+          "price": 1490,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 1490,
+          "station": "main",
+          "menuItem": {
+            "id": "m18",
+            "name": "Grilled Chicken Alfredo Pasta",
+            "price": 1490,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 1490,
+      "deliveryFee": 0,
+      "tax": 75,
+      "total": 1565,
+      "paymentMethod": "cash_on_delivery",
+      "isPaid": false,
+      "status": "SERVED",
+      "createdAt": 1793038752025,
+      "estimatedDeliveryMinutes": 20,
+      "updatedAt": 1793038861426
+    },
+    {
+      "id": "ORD-755954",
+      "orderNumber": "SLT-7872",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "junaid",
+        "phone": "0333522515525",
+        "address": "In-Restaurant: Ground Floor • T-01"
+      },
+      "items": [
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "unitPrice": 1950,
+          "price": 1950,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 1950,
+          "selectedVariant": "Large (13\")",
+          "station": "main",
+          "notes": "Spice: Medium",
+          "menuItem": {
+            "id": "m6",
+            "name": "Fajita Supreme Pizza (Large (13\"))",
+            "price": 1950,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        },
+        {
+          "id": "m5",
+          "name": "Mint Margarita",
+          "unitPrice": 450,
+          "price": 450,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 450,
+          "station": "juice",
+          "menuItem": {
+            "id": "m5",
+            "name": "Mint Margarita",
+            "price": 450,
+            "description": "",
+            "category": "Drinks",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "juice"
+          }
+        },
+        {
+          "id": "m4",
+          "name": "Kunafa",
+          "unitPrice": 850,
+          "price": 850,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 850,
+          "station": "juice",
+          "menuItem": {
+            "id": "m4",
+            "name": "Kunafa",
+            "price": 850,
+            "description": "",
+            "category": "Desserts",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "juice"
+          }
+        }
+      ],
+      "subtotal": 3250,
+      "deliveryFee": 0,
+      "tax": 163,
+      "total": 3413,
+      "paymentMethod": "cash_on_delivery",
+      "isPaid": false,
+      "status": "SERVED",
+      "createdAt": 1793034755954,
+      "estimatedDeliveryMinutes": 20,
+      "updatedAt": 1793034869125
+    },
+    {
+      "id": "ORD-490181",
+      "orderNumber": "SLT-9752",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "tableId": "1",
+      "tableName": "Ground Floor • T-01",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "junaid",
+        "phone": "0333522515525",
+        "address": "In-Restaurant: Ground Floor • T-01"
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus & Pita",
+          "unitPrice": 650,
+          "price": 650,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 650,
+          "station": "main",
+          "menuItem": {
+            "id": "m3",
+            "name": "Hummus & Pita",
+            "price": 650,
+            "description": "",
+            "category": "Appetizers",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        },
+        {
+          "id": "m2",
+          "name": "Chicken Karahi",
+          "unitPrice": 1850,
+          "price": 1850,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 1850,
+          "station": "main",
+          "notes": "Spice: Medium",
+          "menuItem": {
+            "id": "m2",
+            "name": "Chicken Karahi",
+            "price": 1850,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Kebab",
+          "unitPrice": 1450,
+          "price": 1450,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 1450,
+          "station": "main",
+          "menuItem": {
+            "id": "m1",
+            "name": "Sultan Kebab",
+            "price": 1450,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        },
+        {
+          "id": "m6",
+          "name": "Fajita Supreme Pizza (Small (7\"))",
+          "unitPrice": 850,
+          "price": 850,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 850,
+          "selectedVariant": "Small (7\")",
+          "station": "main",
+          "notes": "Spice: Medium",
+          "menuItem": {
+            "id": "m6",
+            "name": "Fajita Supreme Pizza (Small (7\"))",
+            "price": 850,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 4800,
+      "deliveryFee": 0,
+      "tax": 240,
+      "total": 5040,
+      "paymentMethod": "cash_on_delivery",
+      "isPaid": false,
+      "status": "SERVED",
+      "createdAt": 1793034490181,
+      "estimatedDeliveryMinutes": 20,
+      "updatedAt": 1793034736425
+    },
+    {
+      "id": "ORD-088991",
+      "orderNumber": "SLT-3047",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "tableId": "t1",
+      "tableName": "Table 1",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "Ahmad Khan",
+        "phone": "03001234567",
+        "address": "In-Restaurant: Table 1"
+      },
+      "items": [
+        {
+          "id": "item-1",
+          "name": "Mutton Karahi",
+          "unitPrice": 2800,
+          "price": 2800,
+          "qty": 1,
+          "quantity": 1,
+          "totalPrice": 2800,
+          "station": "main",
+          "menuItem": {
+            "id": "item-1",
+            "name": "Mutton Karahi",
+            "price": 2800,
+            "description": "",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 2800,
+      "deliveryFee": 0,
+      "tax": 140,
+      "total": 2940,
+      "paymentMethod": "pay_at_counter",
+      "isPaid": false,
+      "status": "SERVED",
+      "createdAt": 1793034088991,
+      "estimatedDeliveryMinutes": 20,
+      "updatedAt": 1793034738553
+    },
     {
       "id": "ORD-692573",
       "orderNumber": "SLT-2742",
@@ -940,11 +1496,11 @@
       "total": 3675,
       "paymentMethod": "pay_at_counter",
       "isPaid": false,
-      "status": "CONFIRMED",
+      "status": "SERVED",
       "createdAt": 1792158536731,
       "estimatedDeliveryMinutes": 20,
       "assignedWaiter": "Junaid Ahsan",
-      "updatedAt": 1792158536757
+      "updatedAt": 1793034739897
     },
     {
       "id": "ORD-939942",
@@ -989,10 +1545,10 @@
       "total": 2310,
       "paymentMethod": "pay_at_counter",
       "isPaid": false,
-      "status": "CONFIRMED",
+      "status": "SERVED",
       "createdAt": 1792157939942,
       "estimatedDeliveryMinutes": 20,
-      "updatedAt": 1792157994726
+      "updatedAt": 1793034740764
     },
     {
       "id": "ORD-314268",
@@ -1033,9 +1589,10 @@
       "total": 1043,
       "paymentMethod": "cash_on_delivery",
       "isPaid": false,
-      "status": "PENDING",
+      "status": "SERVED",
       "createdAt": 1792157314268,
-      "estimatedDeliveryMinutes": 35
+      "estimatedDeliveryMinutes": 35,
+      "updatedAt": 1793034741729
     },
     {
       "id": "ORD-314203",
@@ -1145,10 +1702,10 @@
       "total": 132648,
       "paymentMethod": "cash_on_delivery",
       "isPaid": false,
-      "status": "CONFIRMED",
+      "status": "SERVED",
       "createdAt": 1792156241594,
       "estimatedDeliveryMinutes": 35,
-      "updatedAt": 1792156306187
+      "updatedAt": 1793034742269
     },
     {
       "id": "ORD-912265",
@@ -1184,10 +1741,10 @@
       "total": 131125,
       "paymentMethod": "cash_on_delivery",
       "isPaid": false,
-      "status": "OUT_FOR_DELIVERY",
+      "status": "SERVED",
       "createdAt": 1792155912265,
       "estimatedDeliveryMinutes": 35,
-      "updatedAt": 1792155990329,
+      "updatedAt": 1793034717365,
       "riderName": "Rider Ali",
       "riderPhone": "03001234567"
     },
@@ -1229,9 +1786,10 @@
       "total": 5460,
       "paymentMethod": "jazzcash",
       "isPaid": true,
-      "status": "PENDING",
+      "status": "SERVED",
       "createdAt": 1792128798222,
-      "estimatedDeliveryMinutes": 35
+      "estimatedDeliveryMinutes": 35,
+      "updatedAt": 1793034714203
     },
     {
       "id": "ORD-584176",
@@ -1264,9 +1822,10 @@
       "total": 4988,
       "paymentMethod": "cash_on_delivery",
       "isPaid": false,
-      "status": "PENDING",
+      "status": "SERVED",
       "createdAt": 1792094584176,
-      "estimatedDeliveryMinutes": 35
+      "estimatedDeliveryMinutes": 35,
+      "updatedAt": 1793034715331
     }
   ],
   "invoices": [
@@ -1948,6 +2507,51 @@
   ],
   "appUserLogs": [
     {
+      "id": "log-1793041881821",
+      "name": "Test Customer",
+      "phone": "03001234567",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793041881821,
+      "details": "Placed order #SLT-2965 (Rs. 1,523)"
+    },
+    {
+      "id": "log-1793038752025",
+      "name": "Junaid Ahsan",
+      "phone": "03335924673",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793038752025,
+      "details": "Placed order #SLT-8434 (Rs. 1,565)"
+    },
+    {
+      "id": "log-1793034755954",
+      "name": "junaid",
+      "phone": "0333522515525",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793034755954,
+      "details": "Placed order #SLT-7872 (Rs. 3,413)"
+    },
+    {
+      "id": "log-1793034490182",
+      "name": "junaid",
+      "phone": "0333522515525",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793034490182,
+      "details": "Placed order #SLT-9752 (Rs. 5,040)"
+    },
+    {
+      "id": "log-1793034088991",
+      "name": "Ahmad Khan",
+      "phone": "03001234567",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793034088991,
+      "details": "Placed order #SLT-3047 (Rs. 2,940)"
+    },
+    {
       "id": "log-1792239692574",
       "name": "Junaid",
       "phone": "03345182049",
@@ -2229,6 +2833,12 @@
     "2nd Floor",
     "3rd Floor",
     "Rooftop"
+  ],
+  "regions": [
+    "Pakistani",
+    "Chinese",
+    "Continental",
+    "Fast Food"
   ],
   "staff": [
     {

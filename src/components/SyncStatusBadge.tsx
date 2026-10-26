@@ -159,7 +159,7 @@ export default function SyncStatusBadge({ compact = false }: Props) {
                 style={styles.ipInput}
                 value={ipInput}
                 onChangeText={setIpInput}
-                placeholder="e.g. sultan-hub.onrender.com or 192.168.1.16"
+                placeholder="e.g. sultan-hub.onrender.com or 192.168.1.4"
                 placeholderTextColor="#8E8E93"
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -170,8 +170,8 @@ export default function SyncStatusBadge({ compact = false }: Props) {
             </View>
 
             <View style={styles.quickPresetsRow}>
-              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.1.16')}>
-                <Text style={styles.presetChipText}>Local LAN (192.168.1.16)</Text>
+              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.1.4')}>
+                <Text style={styles.presetChipText}>Local LAN (192.168.1.4)</Text>
               </TouchableOpacity>
               {Platform.OS === 'web' && (
                 <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('localhost')}>

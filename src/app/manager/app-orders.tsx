@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND } from '../../constants/brand';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
+import { broadcastImmediately } from '../../services/syncService';
 
 export interface AppOrder {
   id: string;
@@ -80,10 +81,10 @@ export default function AppManagerOrdersScreen() {
 
   const getBaseUrl = () => {
     if (Platform.OS === 'web') {
-      const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location.hostname || '192.168.1.11');
-      return `http://${host}:5000`;
+      const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location.hostname || '192.168.1.4');
+      return `http://${host}:5050`;
     }
-    return 'http://192.168.1.11:5000';
+    return 'http://192.168.1.4:5050';
   };
 
   const fetchOrders = async (silent: boolean = false) => {
@@ -92,8 +93,9 @@ export default function AppManagerOrdersScreen() {
       const url = `${getBaseUrl()}/api/admin/online-orders`;
       const res = await fetch(url);
       const data = await res.json();
-      if (data.success && Array.isArray(data.orders)) {
-        setOrders(data.orders);
+      const list = Array.isArray(data.orders) ? data.orders : (Array.isArray(data.data) ? data.data : []);
+      if (data.success && list) {
+        setOrders(list);
       }
     } catch (e) {
       console.warn('[AppManager] Failed to fetch orders:', e);
@@ -107,8 +109,8 @@ export default function AppManagerOrdersScreen() {
   useEffect(() => {
     fetchOrders();
 
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
-    const wsUrl = `ws://${host}:5000`;
+    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
+    const wsUrl = `ws://${host}:5050`;
     let ws: WebSocket | null = null;
 
     try {
@@ -203,6 +205,7 @@ export default function AppManagerOrdersScreen() {
               store.updateTicketStatus(existing.id, 'served');
             }
           }
+          broadcastImmediately();
         } catch (e) {
           console.warn('[AppOrders] Failed to sync ticket locally:', e);
         }

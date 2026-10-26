@@ -10,6 +10,8 @@ import {
   Alert,
   Platform,
   useWindowDimensions,
+  Image,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -28,6 +30,12 @@ import {
 } from '../constants/floors';
 import { useRolePermissions } from '../store/roleStore';
 import RoyalDropdown from '../components/RoyalDropdown';
+import {
+  generateTableQrCode,
+  getTableMenuUrl,
+  printTableStandeeHtml,
+  printAllTablesStandeesHtml,
+} from '../utils/qrCode';
 
 type IconName = keyof typeof Ionicons.glyphMap;
 type TabKey = 'tables' | 'reservations' | 'zones';
@@ -152,6 +160,62 @@ export default function TablesBlueprintScreen({
   const [resGuestsCount, setResGuestsCount] = useState('4');
   const [resNotes, setResNotes] = useState('');
   const [now, setNow] = useState(() => Date.now());
+
+  // Table QR Code Generation & Acrylic Standee Printing
+  const [qrModalVisible, setQrModalVisible] = useState(false);
+  const [qrTable, setQrTable] = useState<Table | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string>('');
+  const [isGeneratingQr, setIsGeneratingQr] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+
+  // Batch Floor Standees Printing
+  const [batchQrModalVisible, setBatchQrModalVisible] = useState(false);
+  const [batchQrMap, setBatchQrMap] = useState<Record<string, string>>({});
+  const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+
+  const openTableQrModal = async (table: Table) => {
+    setActionTableId(null);
+    setQrTable(table);
+    setQrDataUrl('');
+    setIsGeneratingQr(true);
+    setCopiedLink(false);
+    setQrModalVisible(true);
+    try {
+      const url = await generateTableQrCode(table.id, table.floor, table.name);
+      setQrDataUrl(url);
+    } catch {
+      notify('QR Generation', 'Could not generate QR code for this table.');
+    } finally {
+      setIsGeneratingQr(false);
+    }
+  };
+
+  const openBatchQrModal = async () => {
+    setBatchQrModalVisible(true);
+    setIsBatchGenerating(true);
+    const targetTables = floorFilter === 'all' ? tables : filteredTables;
+    const newMap: Record<string, string> = { ...batchQrMap };
+    for (const t of targetTables) {
+      if (!newMap[t.id]) {
+        try {
+          newMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name);
+        } catch {}
+      }
+    }
+    setBatchQrMap(newMap);
+    setIsBatchGenerating(false);
+  };
+
+  const handleCopyTableLink = (table: Table) => {
+    const link = getTableMenuUrl(table.id, table.floor, table.name);
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    } else {
+      notify('Table Link', link);
+    }
+  };
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -624,9 +688,33 @@ export default function TablesBlueprintScreen({
                   </View>
                 </View>
               </View>
-              <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
-                <Ionicons name={meta.icon} size={11} color={meta.color} />
-                <Text style={[styles.statusPillText, { color: meta.color }]}>{meta.label}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 6,
+                    paddingVertical: 3,
+                    borderRadius: 6,
+                    backgroundColor: '#FAF5EA',
+                    borderWidth: 1,
+                    borderColor: 'rgba(213, 169, 67, 0.4)',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 3,
+                  }}
+                  onPress={(e) => {
+                    e.stopPropagation?.();
+                    openTableQrModal(table);
+                  }}
+                  hitSlop={6}
+                >
+                  <Ionicons name="qr-code-outline" size={13} color="#895B1E" />
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#895B1E' }}>QR</Text>
+                </TouchableOpacity>
+
+                <View style={[styles.statusPill, { backgroundColor: meta.bg }]}>
+                  <Ionicons name={meta.icon} size={11} color={meta.color} />
+                  <Text style={[styles.statusPillText, { color: meta.color }]}>{meta.label}</Text>
+                </View>
               </View>
             </View>
 
@@ -783,6 +871,13 @@ export default function TablesBlueprintScreen({
         )}
 
         <ScrollView style={{ maxHeight: 380 }} contentContainerStyle={{ gap: 8 }}>
+          <ActionRow
+            icon="qr-code-outline"
+            label="Generate & Print Table QR Code"
+            color="#B8860B"
+            solid
+            onPress={() => openTableQrModal(t)}
+          />
           {primary ? (
             <>
               <ActionRow icon="open-outline" label={`Open ${primary.name}`} color={BRAND} solid onPress={() => setActionTableId(primary.id)} />
@@ -925,6 +1020,13 @@ export default function TablesBlueprintScreen({
           </View>
         </View>
         <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={[styles.headerBtn, { backgroundColor: '#895B1E', borderColor: '#D5A943', borderWidth: 1 }]}
+            onPress={openBatchQrModal}
+          >
+            <Ionicons name="qr-code-outline" size={16} color="#FFE082" />
+            <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs & Standees</Text>
+          </TouchableOpacity>
           <TouchableOpacity
             style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
             onPress={handlePopulateDefault5Floors}
@@ -1854,6 +1956,284 @@ export default function TablesBlueprintScreen({
               <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: STATUS_META.reserved.color }]} onPress={handleSaveReservation}>
                 <Ionicons name="calendar" size={15} color="#fff" />
                 <Text style={styles.primaryBtnText}>{editingReservation ? 'Update booking' : 'Confirm booking'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------- Table QR Standee Generator Modal ---------- */}
+      <Modal visible={qrModalVisible} transparent animationType="fade" onRequestClose={() => setQrModalVisible(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { maxWidth: 440, padding: 20 }]}>
+            {qrTable && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#FAF5EA', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#D5A943' }}>
+                      <Ionicons name="qr-code" size={18} color="#895B1E" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 17, fontWeight: '900', color: '#1C1C1E' }}>
+                        Table QR • {qrTable.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, color: '#666' }}>
+                        {getTableFloor(qrTable)} • {getTableSeatingType(qrTable).toUpperCase()} ({qrTable.seats} Seats)
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity onPress={() => setQrModalVisible(false)}>
+                    <Ionicons name="close-circle" size={24} color="#8E8E93" />
+                  </TouchableOpacity>
+                </View>
+
+                {/* Printable Standee Preview Frame */}
+                <View style={{
+                  backgroundColor: '#FAF8F5',
+                  borderRadius: 14,
+                  borderWidth: 2,
+                  borderColor: '#D5A943',
+                  padding: 16,
+                  alignItems: 'center',
+                  marginBottom: 14,
+                }}>
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: '#3A0F12', letterSpacing: 1 }}>SULTAN RESTAURANT</Text>
+                  <Text style={{ fontSize: 11, color: '#895B1E', fontWeight: 'bold' }}>سلطان ریستوراں • ٹیبل آرڈر</Text>
+                  
+                  <View style={{
+                    backgroundColor: '#3A0F12',
+                    paddingHorizontal: 14,
+                    paddingVertical: 5,
+                    borderRadius: 20,
+                    marginVertical: 10,
+                    borderWidth: 1,
+                    borderColor: '#D5A943',
+                  }}>
+                    <Text style={{ color: '#D5A943', fontSize: 15, fontWeight: '900' }}>
+                      {qrTable.name}
+                    </Text>
+                  </View>
+
+                  {/* QR Image */}
+                  <View style={{
+                    width: 190,
+                    height: 190,
+                    backgroundColor: '#FFF',
+                    borderRadius: 10,
+                    padding: 8,
+                    borderWidth: 1.5,
+                    borderColor: '#E6D5B8',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}>
+                    {isGeneratingQr ? (
+                      <ActivityIndicator size="large" color="#895B1E" />
+                    ) : qrDataUrl ? (
+                      <Image source={{ uri: qrDataUrl }} style={{ width: 170, height: 170 }} resizeMode="contain" />
+                    ) : (
+                      <Text style={{ color: '#888', fontSize: 12 }}>Generating QR...</Text>
+                    )}
+                  </View>
+
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#3A0F12', marginTop: 10 }}>
+                    Scan with Phone Camera to View Menu & Order
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
+                    📶 Guest Wi-Fi: Sultan-Guest | Key: sultan123
+                  </Text>
+                </View>
+
+                {/* URL Box */}
+                <View style={{
+                  backgroundColor: '#F1F1F5',
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: 14,
+                }}>
+                  <Text style={{ fontSize: 11, color: '#555', flex: 1, marginRight: 8 }} numberOfLines={1}>
+                    {getTableMenuUrl(qrTable.id, qrTable.floor, qrTable.name)}
+                  </Text>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: copiedLink ? '#10B981' : '#3A0F12',
+                      paddingHorizontal: 10,
+                      paddingVertical: 4,
+                      borderRadius: 6,
+                    }}
+                    onPress={() => handleCopyTableLink(qrTable)}
+                  >
+                    <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>
+                      {copiedLink ? '✓ Copied' : 'Copy URL'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* Action Buttons */}
+                <View style={{ gap: 8 }}>
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#B8860B',
+                      paddingVertical: 12,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                    onPress={() => {
+                      if (qrDataUrl) printTableStandeeHtml(qrTable, qrDataUrl);
+                    }}
+                    disabled={!qrDataUrl}
+                  >
+                    <Ionicons name="print" size={17} color="#FFF" />
+                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 13 }}>
+                      Print Luxury Acrylic Table Standee
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={{
+                      backgroundColor: '#FAF5EA',
+                      borderWidth: 1,
+                      borderColor: '#D5A943',
+                      paddingVertical: 9,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 6,
+                    }}
+                    onPress={() => {
+                      const link = getTableMenuUrl(qrTable.id, qrTable.floor, qrTable.name);
+                      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                        window.open(link, '_blank');
+                      } else {
+                        router.push(`/menu?tableId=${qrTable.id}&floor=${qrTable.floor || ''}` as any);
+                      }
+                      setQrModalVisible(false);
+                    }}
+                  >
+                    <Ionicons name="eye-outline" size={16} color="#895B1E" />
+                    <Text style={{ color: '#895B1E', fontWeight: '800', fontSize: 12 }}>
+                      Test Guest View for {qrTable.name}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------- Batch Floor QRs Modal ---------- */}
+      <Modal visible={batchQrModalVisible} transparent animationType="fade" onRequestClose={() => setBatchQrModalVisible(false)}>
+        <View style={styles.overlay}>
+          <View style={[styles.dialog, { maxWidth: 650, maxHeight: '90%', padding: 20 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#1C1C1E' }}>
+                  🏛️ Batch Table QR Standees
+                </Text>
+                <Text style={{ fontSize: 12, color: '#666' }}>
+                  Print acrylic tent cards for all tables on {floorFilter === 'all' ? 'All Floors' : floorFilter}
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setBatchQrModalVisible(false)}>
+                <Ionicons name="close-circle" size={26} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+
+            {isBatchGenerating ? (
+              <View style={{ padding: 40, alignItems: 'center', gap: 10 }}>
+                <ActivityIndicator size="large" color="#895B1E" />
+                <Text style={{ fontSize: 13, color: '#666', fontWeight: '700' }}>
+                  Generating QR codes for {(floorFilter === 'all' ? tables : filteredTables).length} tables...
+                </Text>
+              </View>
+            ) : (
+              <ScrollView style={{ maxHeight: 380, marginBottom: 14 }} showsVerticalScrollIndicator={false}>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  {(floorFilter === 'all' ? tables : filteredTables).map((tbl) => {
+                    const qr = batchQrMap[tbl.id];
+                    return (
+                      <View key={tbl.id} style={{
+                        width: '31%',
+                        minWidth: 170,
+                        backgroundColor: '#FAF8F5',
+                        borderRadius: 10,
+                        borderWidth: 1.5,
+                        borderColor: '#D5A94380',
+                        padding: 10,
+                        alignItems: 'center',
+                      }}>
+                        <Text style={{ fontSize: 13, fontWeight: '900', color: '#3A0F12' }}>{tbl.name}</Text>
+                        <Text style={{ fontSize: 10, color: '#666' }}>{getTableFloor(tbl)} • {tbl.seats}s</Text>
+                        <View style={{
+                          width: 90,
+                          height: 90,
+                          backgroundColor: '#FFF',
+                          borderRadius: 6,
+                          marginVertical: 6,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: 1,
+                          borderColor: '#E0E0E0',
+                        }}>
+                          {qr ? (
+                            <Image source={{ uri: qr }} style={{ width: 80, height: 80 }} resizeMode="contain" />
+                          ) : (
+                            <ActivityIndicator size="small" color="#895B1E" />
+                          )}
+                        </View>
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#3A0F12',
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 4,
+                          }}
+                          onPress={() => printTableStandeeHtml(tbl, qr || '')}
+                        >
+                          <Text style={{ color: '#D5A943', fontSize: 10, fontWeight: '800' }}>Print 1</Text>
+                        </TouchableOpacity>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
+            )}
+
+            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 12 }}>
+              <TouchableOpacity
+                style={styles.ghostBtn}
+                onPress={() => setBatchQrModalVisible(false)}
+              >
+                <Text style={styles.ghostBtnText}>Close</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#B8860B',
+                  paddingHorizontal: 18,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+                onPress={() => {
+                  const targetList = floorFilter === 'all' ? tables : filteredTables;
+                  printAllTablesStandeesHtml(targetList, batchQrMap);
+                }}
+                disabled={isBatchGenerating}
+              >
+                <Ionicons name="print" size={17} color="#FFF" />
+                <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 13 }}>
+                  Print All {(floorFilter === 'all' ? tables : filteredTables).length} Standees
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

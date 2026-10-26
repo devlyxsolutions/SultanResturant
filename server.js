@@ -1283,6 +1283,8 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({
         success: true,
         data: newOrder,
+        order: newOrder,
+        ticket: kotTicket,
         message: 'Order created and dispatched to Sultan Kitchen successfully!'
       }));
     } catch (err) {
@@ -1292,8 +1294,8 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 6a. Safe Public Orders List: GET /api/public/orders
-  if (url.pathname === '/api/public/orders' && req.method === 'GET') {
+  // 6a. Safe Public & Admin Orders List: GET /api/public/orders or /api/admin/online-orders
+  if ((url.pathname === '/api/public/orders' || url.pathname === '/api/admin/online-orders' || url.pathname === '/api/orders') && req.method === 'GET') {
     const customerId = url.searchParams.get('customerId');
     const phone = url.searchParams.get('phone');
     let orders = serverState.onlineOrders || [];
@@ -1309,15 +1311,17 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify({
       success: true,
       data: orders,
+      orders: orders,
       count: orders.length,
       timestamp: Date.now()
     }));
     return;
   }
 
-  // 6b. Track Single Order: GET /api/public/orders/:id
-  if (url.pathname.startsWith('/api/public/orders/') && req.method === 'GET') {
-    const orderId = url.pathname.split('/').pop();
+  // 6b. Track Single Order: GET /api/public/orders/:id or /api/orders/:id
+  if ((url.pathname.startsWith('/api/public/orders/') || url.pathname.startsWith('/api/orders/')) && req.method === 'GET') {
+    const parts = url.pathname.split('/');
+    const orderId = parts[parts.length - 1];
     const order = (serverState.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
 
     if (!order) {
@@ -1327,7 +1331,7 @@ async function handleRequest(req, res) {
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: true, data: order }));
+    res.end(JSON.stringify({ success: true, data: order, order: order }));
     return;
   }
 

@@ -28,7 +28,7 @@ export const DEVICE_ID = `dev_${Platform.OS}_${Math.random().toString(36).substr
 const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_state.json`;
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
 
-let currentServerAddress = '192.168.1.16';
+let currentServerAddress = '192.168.1.4';
 let syncStatus: SyncStatus = 'offline';
 let lastSyncedAt: number | null = null;
 let totalSyncedEvents = 0;
@@ -166,6 +166,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return host;
     }
+    return 'localhost';
   }
 
   // 4. If running on Mobile (Expo Go), extract host computer IP
@@ -182,7 +183,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
   }
 
   // 5. Default fallback to host computer's known LAN IP
-  return '192.168.1.16';
+  return '192.168.1.4';
 }
 
 export async function setCustomServerIp(newAddress: string) {

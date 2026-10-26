@@ -23,6 +23,7 @@ import { getManagerRouteRule, isManagerRouteAllowed } from '../../constants/mana
 
 const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Dashboard', route: '/manager/dashboard', icon: 'grid-outline' },
+  { label: 'Customer Digital Menu', route: '/menu', icon: 'qr-code-outline', badge: 'QR Menu' },
   { label: 'App Orders Command', route: '/manager/app-orders', icon: 'phone-portrait-outline', badge: 'Live App' },
   { label: 'POS Terminal', route: '/manager/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Floor Plan', route: '/manager/floor-plan', icon: 'business-outline' },
@@ -236,7 +237,6 @@ export default function ManagerLayout() {
 
           {/* Screen Content */}
           <View 
-            key={pathname}
             style={styles.desktopContent}
             {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
           >
@@ -300,7 +300,6 @@ export default function ManagerLayout() {
       
       {/* Mobile Screen Stack */}
       <View 
-        key={pathname}
         style={styles.mobileContent}
         {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
       >

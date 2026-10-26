@@ -73,7 +73,7 @@ export default function MenuManagement() {
   useEffect(() => {
     const fetchLiveCatalog = async () => {
       const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
       
       for (const p of ports) {
         try {
@@ -81,7 +81,10 @@ export default function MenuManagement() {
           const res = await fetch(url);
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            useRestaurantStore.setState({ menuItems: json.data });
+            const current = useRestaurantStore.getState().menuItems || [];
+            const remoteMap = new Map(json.data.map((m: any) => [m.id, m]));
+            const localOnly = current.filter(m => !remoteMap.has(m.id));
+            useRestaurantStore.setState({ menuItems: [...localOnly, ...json.data] });
             break;
           }
         } catch (e) {}
@@ -93,7 +96,18 @@ export default function MenuManagement() {
           const res = await fetch(url);
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
-            useRestaurantStore.setState({ categories: json.data.filter((c: string) => c.toLowerCase() !== 'all') });
+            const fetched = json.data.filter((c: string) => typeof c === 'string' && c.toLowerCase() !== 'all');
+            const current = useRestaurantStore.getState().categories || [];
+            const seen = new Set<string>();
+            const merged: string[] = [];
+            for (const c of [...current, ...fetched]) {
+              const norm = typeof c === 'string' ? c.trim() : '';
+              if (norm && !seen.has(norm.toLowerCase())) {
+                seen.add(norm.toLowerCase());
+                merged.push(norm);
+              }
+            }
+            useRestaurantStore.setState({ categories: merged });
             break;
           }
         } catch (e) {}
@@ -145,6 +159,8 @@ export default function MenuManagement() {
   // Category Modal state
   const [isCatModalVisible, setCatModalVisible] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [showInlineAddCategory, setShowInlineAddCategory] = useState(false);
+  const [inlineCatInput, setInlineCatInput] = useState('');
 
   // Region Modal state
   const [isRegionModalVisible, setRegionModalVisible] = useState(false);
@@ -656,7 +672,7 @@ export default function MenuManagement() {
     // Sync directly to Sultan Backend Hub (instantly reflected on Mobile App)
     try {
       const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
       for (const p of ports) {
         try {
           const url = p === 80 ? `http://${host}/api/admin/menu-items` : `http://${host}:${p}/api/admin/menu-items`;
@@ -694,7 +710,7 @@ export default function MenuManagement() {
       // Sync deletion to Backend
       try {
         const ports = [5000, 5050, 80];
-        const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+        const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
         for (const p of ports) {
           try {
             const url = p === 80 ? `http://${host}/api/admin/menu-items/${item.id}` : `http://${host}:${p}/api/admin/menu-items/${item.id}`;
@@ -745,6 +761,42 @@ export default function MenuManagement() {
   // -------------------------------------------------------------
   // Category Management Handlers
   // -------------------------------------------------------------
+  const handleSaveInlineCategory = async () => {
+    const cat = inlineCatInput.trim();
+    if (!cat) {
+      if (Platform.OS === 'web') window.alert('Please enter a category name');
+      else Alert.alert('Missing Name', 'Please enter a category name');
+      return;
+    }
+
+    addCategory(cat);
+    setItemCategory(cat);
+    setShowInlineAddCategory(false);
+    setInlineCatInput('');
+    setCategoryDropdownOpen(false);
+    broadcastImmediately();
+
+    // Sync category to backend
+    try {
+      const ports = [5000, 5050, 80];
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+      for (const p of ports) {
+        try {
+          const url = p === 80 ? `http://${host}/api/admin/categories` : `http://${host}:${p}/api/admin/categories`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ category: cat }),
+          });
+          if (res.ok) break;
+        } catch (e) {}
+      }
+    } catch (e) {}
+
+    setSaveSuccessMsg(`Category "${cat}" created & selected!`);
+    setTimeout(() => setSaveSuccessMsg(null), 3500);
+  };
+
   const handleAddCategory = async () => {
     const catName = newCatName.trim();
     if (!catName) {
@@ -754,7 +806,7 @@ export default function MenuManagement() {
       return;
     }
     
-    if (categories.some(c => c.toLowerCase() === catName.toLowerCase())) {
+    if (categories.some(c => c.trim().toLowerCase() === catName.toLowerCase())) {
       const msg = 'This category already exists.';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Duplicate', msg);
@@ -762,6 +814,7 @@ export default function MenuManagement() {
     }
 
     addCategory(catName);
+    setItemCategory(catName);
     broadcastImmediately();
     setCatModalVisible(false);
     setNewCatName('');
@@ -769,7 +822,7 @@ export default function MenuManagement() {
     // Sync category to backend
     try {
       const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.11';
+      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
       for (const p of ports) {
         try {
           const url = p === 80 ? `http://${host}/api/admin/categories` : `http://${host}:${p}/api/admin/categories`;
@@ -934,6 +987,17 @@ export default function MenuManagement() {
         </View>
 
         <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={[styles.addButton, { backgroundColor: '#065F46' }]} 
+            onPress={() => router.push('/menu' as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="qr-code-outline" size={17} color="#34D399" style={{ marginRight: 6 }} />
+            <Text style={[styles.addButtonText, { color: '#FFFFFF' }]}>
+              Digital Menu (Guest)
+            </Text>
+          </TouchableOpacity>
+
           <TouchableOpacity 
             style={[styles.addButton, { backgroundColor: '#1E3A8A' }]} 
             onPress={handleFetchRestaurantMenu}
@@ -2136,8 +2200,49 @@ export default function MenuManagement() {
                     onChangeText={setItemName} 
                   />
 
-                  {/* Category Dropdown */}
-                  <Text style={styles.inputLabel}>Category *</Text>
+                  {/* Category Selection with Instant Add */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 6 }}>
+                    <Text style={[styles.inputLabel, { marginTop: 0, marginBottom: 0 }]}>Category *</Text>
+                    <TouchableOpacity 
+                      style={styles.quickAddCatBtn}
+                      onPress={() => setShowInlineAddCategory(!showInlineAddCategory)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons name={showInlineAddCategory ? "close-circle" : "add-circle"} size={15} color={BRAND.burgundy} />
+                      <Text style={styles.quickAddCatBtnText}>
+                        {showInlineAddCategory ? 'Cancel' : '+ New Category'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Inline Category Creation Input */}
+                  {showInlineAddCategory && (
+                    <View style={styles.inlineAddCatBox}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TextInput 
+                          style={styles.inlineAddCatInput} 
+                          placeholder="e.g. Beverages, Cold Drinks, Soups..." 
+                          placeholderTextColor="#8E8E93"
+                          value={inlineCatInput} 
+                          onChangeText={setInlineCatInput} 
+                          autoFocus
+                          onSubmitEditing={handleSaveInlineCategory}
+                        />
+                        <TouchableOpacity 
+                          style={styles.inlineAddCatSaveBtn}
+                          onPress={handleSaveInlineCategory}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="checkmark" size={16} color="#FFFFFF" />
+                          <Text style={styles.inlineAddCatSaveBtnText}>Add</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={styles.inlineAddCatHint}>
+                        ✨ Adds category instantly and auto-selects it for this dish without page reload!
+                      </Text>
+                    </View>
+                  )}
+
                   <TouchableOpacity 
                     style={styles.dropdownBtn}
                     activeOpacity={0.8}
@@ -2149,7 +2254,7 @@ export default function MenuManagement() {
                   
                   {isCategoryDropdownOpen && (
                     <View style={styles.dropdownList}>
-                      <ScrollView style={{ maxHeight: 160 }} nestedScrollEnabled>
+                      <ScrollView style={{ maxHeight: 180 }} nestedScrollEnabled>
                         {categories.map(cat => (
                           <TouchableOpacity 
                             key={cat}
@@ -2165,6 +2270,17 @@ export default function MenuManagement() {
                           </TouchableOpacity>
                         ))}
                       </ScrollView>
+                      <TouchableOpacity 
+                        style={styles.dropdownAddNewCatBtn}
+                        onPress={() => {
+                          setCategoryDropdownOpen(false);
+                          setShowInlineAddCategory(true);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="add-circle-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
+                        <Text style={styles.dropdownAddNewCatBtnText}>+ Create New Category</Text>
+                      </TouchableOpacity>
                     </View>
                   )}
 
@@ -4187,6 +4303,75 @@ const styles = StyleSheet.create({
   dropdownItemTextActive: {
     fontWeight: '700',
     color: '#8c6b1b',
+  },
+  quickAddCatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  quickAddCatBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
+  dropdownAddNewCatBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    backgroundColor: '#FAF5EA',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5EA',
+  },
+  dropdownAddNewCatBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
+  inlineAddCatBox: {
+    backgroundColor: '#FFFBF2',
+    borderWidth: 1.5,
+    borderColor: BRAND.gold,
+    borderRadius: 10,
+    padding: 10,
+    marginBottom: 10,
+  },
+  inlineAddCatInput: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: BRAND.ink,
+  },
+  inlineAddCatSaveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  inlineAddCatSaveBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  inlineAddCatHint: {
+    fontSize: 11,
+    color: '#854D0E',
+    marginTop: 6,
+    fontWeight: '600',
   },
   stationSelectBtn: {
     flex: 1,

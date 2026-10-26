@@ -1,8 +1,9 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { appStorage } from './storage';
-import { SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
+import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
 import { getTableFloor, getTableSeatingType } from '../constants/floors';
+import type { SalesReturn } from '../types/returns';
+import { appStorage } from './storage';
 
 export type Table = {
   id: string;
@@ -94,12 +95,15 @@ export type ComboItem = {
 export type MenuItem = {
   id: string;
   name: string;
+  urduName?: string;
   price: number;
   category: string;
   region?: string;
   variants?: MenuVariant[];
   station?: 'main' | 'juice';
   prepTimeMin?: number; // Cooking / preparation time in minutes
+  available?: boolean;
+  stock?: number;
   // Option 3: Image & Visuals
   imageUri?: string;
   description?: string;
@@ -167,7 +171,6 @@ export type Payment = {
 };
 
 export * from '../types/returns';
-import type { SalesReturn } from '../types/returns';
 
 export type Invoice = {
   id: string;
@@ -306,8 +309,8 @@ type RestaurantState = {
   reservations: Reservation[];
   lastBillPaidAlert?: { id?: string; tableId: string; tableName: string; billTotal: number; time: number } | null;
   lastFoodReadyAlert?: FoodReadyAlert | null;
-  
-  placeOrder: (tableId: string, serverName: string, items: {item: MenuItem, qty: number, notes?: string}[], isAddOn?: boolean) => void;
+
+  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   markItemReady: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
   markItemServed: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
@@ -478,79 +481,79 @@ const INITIAL_RESERVATIONS: Reservation[] = [
 ];
 
 const INITIAL_CUSTOMERS: Customer[] = [
-  { 
-    id: 'c1', 
-    name: 'Zubair Tariq', 
-    phone: '03009876543', 
+  {
+    id: 'c1',
+    name: 'Zubair Tariq',
+    phone: '03009876543',
     email: 'zubair.tariq@gmail.com',
-    address: 'DHA Phase 5, Lahore', 
+    address: 'DHA Phase 5, Lahore',
     tier: 'VIP',
     notes: 'Prefers Family Majlis Cabin. Likes low spice in Karahi.',
     tags: ['VIP', 'Family Majlis', 'High Spender'],
-    totalOrders: 14, 
+    totalOrders: 14,
     totalSpent: 38400,
     loyaltyPoints: 380,
     firstVisit: Date.now() - 45 * 86400000,
     lastVisit: Date.now() - 2 * 86400000,
     favoriteDishes: ['Chicken Karahi', 'Sultan Kebab']
   },
-  { 
-    id: 'c2', 
-    name: 'Fatima Noor', 
-    phone: '03214567890', 
+  {
+    id: 'c2',
+    name: 'Fatima Noor',
+    phone: '03214567890',
     email: 'fatima.noor@outlook.com',
-    address: 'Gulberg III, Lahore', 
+    address: 'Gulberg III, Lahore',
     tier: 'Gold',
     notes: 'Regular weekend diner. Enjoys fresh mint margaritas.',
     tags: ['Gold', 'Weekend Regular'],
-    totalOrders: 6, 
+    totalOrders: 6,
     totalSpent: 16200,
     loyaltyPoints: 160,
     firstVisit: Date.now() - 30 * 86400000,
     lastVisit: Date.now() - 5 * 86400000,
     favoriteDishes: ['Mint Margarita', 'Kunafa']
   },
-  { 
-    id: 'c3', 
-    name: 'Bilal Siddiqui', 
-    phone: '03331122334', 
+  {
+    id: 'c3',
+    name: 'Bilal Siddiqui',
+    phone: '03331122334',
     email: 'bilal.s@yahoo.com',
-    address: 'Model Town, Block C', 
+    address: 'Model Town, Block C',
     tier: 'Silver',
     notes: 'Corporate lunches on weekdays.',
     tags: ['Silver', 'Corporate'],
-    totalOrders: 3, 
+    totalOrders: 3,
     totalSpent: 7500,
     loyaltyPoints: 75,
     firstVisit: Date.now() - 20 * 86400000,
     lastVisit: Date.now() - 10 * 86400000,
     favoriteDishes: ['Fajita Pizza (Medium)']
   },
-  { 
-    id: 'c4', 
-    name: 'Dr. Ayesha Imran', 
-    phone: '03028889900', 
+  {
+    id: 'c4',
+    name: 'Dr. Ayesha Imran',
+    phone: '03028889900',
     email: 'ayesha.imran@health.pk',
-    address: 'Bahria Town, Sector C', 
+    address: 'Bahria Town, Sector C',
     tier: 'VIP',
     notes: 'Requests extra garlic naan with Mutton Karahi.',
     tags: ['VIP', 'Doctor'],
-    totalOrders: 19, 
+    totalOrders: 19,
     totalSpent: 52600,
     loyaltyPoints: 520,
     firstVisit: Date.now() - 60 * 86400000,
     lastVisit: Date.now() - 1 * 86400000,
     favoriteDishes: ['Mutton Shinwari Karahi', 'Sultan Special Roghni Naan']
   },
-  { 
-    id: 'c5', 
-    name: 'Usman Ghani', 
-    phone: '03456781234', 
-    address: 'Johar Town, Phase 1', 
+  {
+    id: 'c5',
+    name: 'Usman Ghani',
+    phone: '03456781234',
+    address: 'Johar Town, Phase 1',
     tier: 'Regular',
     notes: 'Takeaway orders mostly.',
     tags: ['Takeaway Frequent'],
-    totalOrders: 4, 
+    totalOrders: 4,
     totalSpent: 5400,
     loyaltyPoints: 50,
     firstVisit: Date.now() - 15 * 86400000,
@@ -974,7 +977,7 @@ function notifySync() {
     if (typeof broadcastImmediately === 'function') {
       broadcastImmediately();
     }
-  } catch (e) {}
+  } catch (e) { }
 }
 
 export const useRestaurantStore = create<RestaurantState>()(
@@ -1013,7 +1016,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         const existingTickets = state.tickets.filter(t => t.tableId === tableId);
         const isActuallyAddOn = isAddOn !== undefined ? isAddOn : existingTickets.length > 0;
         const roundNumber = existingTickets.length + 1;
-        
+
         const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
         const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
@@ -1069,36 +1072,36 @@ export const useRestaurantStore = create<RestaurantState>()(
         return {
           tickets: [newTicket, ...state.tickets],
           menuItems: updatedMenuItems,
-          tables: table 
+          tables: table
             ? state.tables.map(t => {
-                if (t.id !== tableId) return t;
-                const existingOrders = t.orders || [];
-                const mergedOrders = existingOrders.map(o => ({ ...o }));
-                orderItems.forEach(oi => {
-                  const found = mergedOrders.find(m => m.id === oi.item.id);
-                  if (found) {
-                    found.qty += oi.qty;
-                  } else {
-                    mergedOrders.push({
-                      id: oi.item.id,
-                      name: oi.item.name,
-                      price: oi.item.price,
-                      qty: oi.qty,
-                      notes: oi.notes,
-                      completed: false,
-                      prepTimeMin: oi.item.prepTimeMin || 15,
-                      itemStatus: 'pending'
-                    });
-                  }
-                });
-                return {
-                  ...t,
-                  status: 'occupied',
-                  server: serverName,
-                  billTotal: (t.billTotal || 0) + itemsTotal,
-                  orders: mergedOrders
-                };
-              })
+              if (t.id !== tableId) return t;
+              const existingOrders = t.orders || [];
+              const mergedOrders = existingOrders.map(o => ({ ...o }));
+              orderItems.forEach(oi => {
+                const found = mergedOrders.find(m => m.id === oi.item.id);
+                if (found) {
+                  found.qty += oi.qty;
+                } else {
+                  mergedOrders.push({
+                    id: oi.item.id,
+                    name: oi.item.name,
+                    price: oi.item.price,
+                    qty: oi.qty,
+                    notes: oi.notes,
+                    completed: false,
+                    prepTimeMin: oi.item.prepTimeMin || 15,
+                    itemStatus: 'pending'
+                  });
+                }
+              });
+              return {
+                ...t,
+                status: 'occupied',
+                server: serverName,
+                billTotal: (t.billTotal || 0) + itemsTotal,
+                orders: mergedOrders
+              };
+            })
             : state.tables
         };
       }),
@@ -1109,11 +1112,11 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         const now = Date.now();
         const currentStationStatuses: StationStatusMap = {
-          main: ticket.items.some(i => (i.station || 'main') === 'main') 
-            ? (ticket.stationStatuses?.main || ticket.status) 
+          main: ticket.items.some(i => (i.station || 'main') === 'main')
+            ? (ticket.stationStatuses?.main || ticket.status)
             : undefined,
-          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
-            ? (ticket.stationStatuses?.juice || ticket.status) 
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice')
+            ? (ticket.stationStatuses?.juice || ticket.status)
             : undefined,
         };
 
@@ -1199,11 +1202,11 @@ export const useRestaurantStore = create<RestaurantState>()(
         const allStationItemsReadyOrServed = stationItems.length > 0 && stationItems.every(i => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed);
 
         const currentStationStatuses: StationStatusMap = {
-          main: ticket.items.some(i => (i.station || 'main') === 'main') 
-            ? (ticket.stationStatuses?.main || ticket.status) 
+          main: ticket.items.some(i => (i.station || 'main') === 'main')
+            ? (ticket.stationStatuses?.main || ticket.status)
             : undefined,
-          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
-            ? (ticket.stationStatuses?.juice || ticket.status) 
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice')
+            ? (ticket.stationStatuses?.juice || ticket.status)
             : undefined,
         };
 
@@ -1268,11 +1271,11 @@ export const useRestaurantStore = create<RestaurantState>()(
         const allStationItemsServed = stationItems.length > 0 && stationItems.every(i => i.itemStatus === 'served');
 
         const currentStationStatuses: StationStatusMap = {
-          main: ticket.items.some(i => (i.station || 'main') === 'main') 
-            ? (ticket.stationStatuses?.main || ticket.status) 
+          main: ticket.items.some(i => (i.station || 'main') === 'main')
+            ? (ticket.stationStatuses?.main || ticket.status)
             : undefined,
-          juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
-            ? (ticket.stationStatuses?.juice || ticket.status) 
+          juice: ticket.items.some(i => (i.station || 'main') === 'juice')
+            ? (ticket.stationStatuses?.juice || ticket.status)
             : undefined,
         };
 
@@ -1307,13 +1310,13 @@ export const useRestaurantStore = create<RestaurantState>()(
             const itemStation = (targetItem?.station || 'main') as 'main' | 'juice';
 
             const updatedItems = t.items.map(i => i.id === itemId ? { ...i, completed: !i.completed } : i);
-            
+
             const currentStationStatuses: StationStatusMap = {
-              main: t.items.some(i => (i.station || 'main') === 'main') 
-                ? (t.stationStatuses?.main || t.status) 
+              main: t.items.some(i => (i.station || 'main') === 'main')
+                ? (t.stationStatuses?.main || t.status)
                 : undefined,
-              juice: t.items.some(i => (i.station || 'main') === 'juice') 
-                ? (t.stationStatuses?.juice || t.status) 
+              juice: t.items.some(i => (i.station || 'main') === 'juice')
+                ? (t.stationStatuses?.juice || t.status)
                 : undefined,
             };
 
@@ -1378,11 +1381,11 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         if (station) {
           const currentStationStatuses: StationStatusMap = {
-            main: ticket.items.some(i => (i.station || 'main') === 'main') 
-              ? (ticket.stationStatuses?.main || ticket.status) 
+            main: ticket.items.some(i => (i.station || 'main') === 'main')
+              ? (ticket.stationStatuses?.main || ticket.status)
               : undefined,
-            juice: ticket.items.some(i => (i.station || 'main') === 'juice') 
-              ? (ticket.stationStatuses?.juice || ticket.status) 
+            juice: ticket.items.some(i => (i.station || 'main') === 'juice')
+              ? (ticket.stationStatuses?.juice || ticket.status)
               : undefined,
           };
           currentStationStatuses[station] = 'served';
@@ -1436,11 +1439,11 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           if (station) {
             const currentStationStatuses: StationStatusMap = {
-              main: t.items.some(i => (i.station || 'main') === 'main') 
-                ? (t.stationStatuses?.main || t.status) 
+              main: t.items.some(i => (i.station || 'main') === 'main')
+                ? (t.stationStatuses?.main || t.status)
                 : undefined,
-              juice: t.items.some(i => (i.station || 'main') === 'juice') 
-                ? (t.stationStatuses?.juice || t.status) 
+              juice: t.items.some(i => (i.station || 'main') === 'juice')
+                ? (t.stationStatuses?.juice || t.status)
                 : undefined,
             };
             currentStationStatuses[station] = status;
@@ -1568,7 +1571,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         notifySync();
         return {
           tickets: updatedTickets,
-          tables: state.tables.map(t => 
+          tables: state.tables.map(t =>
             t.id === tableId && t.status !== 'billed' ? { ...t, status: 'occupied' } : t
           ),
           lastFoodReadyAlert: updatedAlert
@@ -1583,12 +1586,12 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         notifySync();
         return {
-          tables: state.tables.map(t => 
-            t.id === tableId ? { 
-              ...t, 
-              status: 'billed', 
-              isPaid: true, 
-              lastInvoiceId: invoiceId 
+          tables: state.tables.map(t =>
+            t.id === tableId ? {
+              ...t,
+              status: 'billed',
+              isPaid: true,
+              lastInvoiceId: invoiceId
             } : t
           ),
           tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
@@ -1651,14 +1654,14 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         notifySync();
         return {
-          tables: state.tables.map(t => 
-            (t.id === tableId || t.mergedInto === tableId) ? { 
-              ...t, 
-              status: 'available', 
-              billTotal: 0, 
-              server: undefined, 
-              orders: [], 
-              isPaid: false, 
+          tables: state.tables.map(t =>
+            (t.id === tableId || t.mergedInto === tableId) ? {
+              ...t,
+              status: 'available',
+              billTotal: 0,
+              server: undefined,
+              orders: [],
+              isPaid: false,
               lastInvoiceId: undefined,
               occupiedSince: undefined,
               mergedInto: undefined,
@@ -1917,7 +1920,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           tables: updatedTables
         };
       }),
-      
+
       saveInvoice: (invoice) => set((state) => {
         let updatedCustomers = state.customers;
         if (invoice.customer && (invoice.customer.id || invoice.customer.phone)) {
@@ -1957,12 +1960,12 @@ export const useRestaurantStore = create<RestaurantState>()(
         invoices: state.invoices.map(inv =>
           inv.id === invoiceId
             ? {
-                ...inv,
-                status: 'voided' as const,
-                voidReason: reason || 'Voided by authorized manager',
-                voidedAt: Date.now(),
-                voidedBy: voidedBy || 'Staff',
-              }
+              ...inv,
+              status: 'voided' as const,
+              voidReason: reason || 'Voided by authorized manager',
+              voidedAt: Date.now(),
+              voidedBy: voidedBy || 'Staff',
+            }
             : inv
         )
       })),
@@ -2052,7 +2055,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       cancelSalesReturn: (returnId, by) => set((state) => ({
-        salesReturns: (state.salesReturns || []).map(r => 
+        salesReturns: (state.salesReturns || []).map(r =>
           r.id === returnId ? { ...r, status: 'cancelled' as const, notes: `${r.notes ? r.notes + ' | ' : ''}Cancelled by ${by}` } : r
         )
       })),
@@ -2107,7 +2110,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             const custPhone = (cust.phone || '').replace(/\D/g, '');
             const isMatch = (feedbackData.customerId && cust.id === feedbackData.customerId) ||
               (targetPhone && custPhone && (custPhone.endsWith(targetPhone) || targetPhone.endsWith(custPhone)));
-            
+
             if (isMatch) {
               const currentPoints = cust.loyaltyPoints || 0;
               return {
@@ -2130,7 +2133,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         feedbacks: (state.feedbacks || []).filter(f => f.id !== id)
       })),
 
-      onlineFeedbackUrl: 'http://192.168.1.17:8081',
+      onlineFeedbackUrl: 'http://192.168.1.4:8081',
 
       setOnlineFeedbackUrl: (url) => set({
         onlineFeedbackUrl: url.trim().replace(/\/+$/, '')
@@ -2152,7 +2155,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
         notifySync();
       },
-      
+
       updateMenuItem: (id, item) => {
         set((state) => {
           const newCategories = (item.category && !state.categories.includes(item.category))
@@ -2259,7 +2262,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       addTable: (table) => set((state) => ({
         tables: [...state.tables, { ...table, status: table.status || 'available', id: `t${Date.now()}` }]
       })),
-      
+
       updateTable: (id, updatedTable) => set((state) => {
         let alert = state.lastBillPaidAlert;
         if (updatedTable.status === 'available' && alert) {
@@ -2311,17 +2314,17 @@ export const useRestaurantStore = create<RestaurantState>()(
         // Cascade floor name rename to tables, zones, and staff assignedZones
         const updatedTables = nameChanged
           ? state.tables.map((t) => {
-              const matchesFloor = (t.floor && t.floor.toLowerCase() === oldName.toLowerCase()) ||
-                (t.zone && t.zone.toLowerCase() === oldName.toLowerCase());
-              if (matchesFloor) {
-                return {
-                  ...t,
-                  floor: newName,
-                  zone: newName,
-                };
-              }
-              return t;
-            })
+            const matchesFloor = (t.floor && t.floor.toLowerCase() === oldName.toLowerCase()) ||
+              (t.zone && t.zone.toLowerCase() === oldName.toLowerCase());
+            if (matchesFloor) {
+              return {
+                ...t,
+                floor: newName,
+                zone: newName,
+              };
+            }
+            return t;
+          })
           : state.tables;
 
         const updatedZones = nameChanged
@@ -2330,10 +2333,10 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         const updatedStaff = nameChanged
           ? (state.staff || []).map((s) => ({
-              ...s,
-              assignedZone: s.assignedZone && s.assignedZone.toLowerCase() === oldName.toLowerCase() ? newName : s.assignedZone,
-              assignedZones: (s.assignedZones || []).map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z)),
-            }))
+            ...s,
+            assignedZone: s.assignedZone && s.assignedZone.toLowerCase() === oldName.toLowerCase() ? newName : s.assignedZone,
+            assignedZones: (s.assignedZones || []).map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z)),
+          }))
           : state.staff;
 
         return {
@@ -2355,9 +2358,9 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         const updatedTables = cascadeDeleteTables
           ? state.tables.filter((t) => {
-              const tFloor = (t.floor || t.zone || '').toLowerCase();
-              return tFloor !== floorName;
-            })
+            const tFloor = (t.floor || t.zone || '').toLowerCase();
+            return tFloor !== floorName;
+          })
           : state.tables;
 
         return {
@@ -2370,7 +2373,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       addZone: (zoneName) => set((state) => ({
         zones: [...state.zones, zoneName]
       })),
-      
+
       deleteZone: (zoneName) => set((state) => ({
         zones: state.zones.filter(z => z !== zoneName)
       })),
@@ -2390,7 +2393,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       markAttendance: (recordOrList) => set((state) => {
         const recordsToSave = Array.isArray(recordOrList) ? recordOrList : [recordOrList];
         const existingAttendance = [...(state.attendance || [])];
-        
+
         recordsToSave.forEach((rec) => {
           const existingIdx = existingAttendance.findIndex(
             (a) => a.staffId === rec.staffId && a.date === rec.date
@@ -2585,7 +2588,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
-            state.floors = INITIAL_FLOORS;
+            state.floors = INITIAL_FLOORS
           }
           if (!state.attendance || !Array.isArray(state.attendance) || state.attendance.length === 0) {
             state.attendance = INITIAL_ATTENDANCE;

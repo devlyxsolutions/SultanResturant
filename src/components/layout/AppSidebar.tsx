@@ -52,6 +52,8 @@ function getCategoryGroups(role: 'admin' | 'manager'): NavCategoryGroup[] {
         icon: 'flash-outline',
         routes: [
           '/admin/dashboard',
+          '/menu',
+          '/admin/app-orders',
           '/admin/pos',
           '/admin/shift',
           '/admin/tables',
@@ -122,6 +124,8 @@ function getCategoryGroups(role: 'admin' | 'manager'): NavCategoryGroup[] {
       icon: 'flash-outline',
       routes: [
         '/manager/dashboard',
+        '/menu',
+        '/manager/app-orders',
         '/manager/pos',
         '/manager/floor-plan',
         '/manager/floors',

@@ -12,7 +12,8 @@ import {
   TextInput, 
   useWindowDimensions, 
   Modal,
-  Image 
+  Image,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -31,9 +32,7 @@ import SeatingTypeIcon from '../../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../../services/syncService';
 import { printInvoiceReceipt } from '../../../components/Invoice';
-import { BRAND as BRAND_PALETTE } from '../../../constants/brand';
-
-const PALETTE = ['#FFF3E0', '#E8F5E9', '#E3F2FD', '#FCE4EC', '#F3E5F5', '#E0F7FA'];
+import { BRAND } from '../../../constants/brand';
 
 const NOTE_PRESETS = [
   '🌶️ Less Spicy',
@@ -50,20 +49,58 @@ const NOTE_PRESETS = [
   '🥣 Extra Raita',
 ];
 
+function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
+  const c = (catName || '').toLowerCase().trim();
+  if (c === 'all') return 'grid';
+  if (c.includes('appetizer') || c.includes('starter') || c.includes('snack') || c.includes('fries') || c.includes('pita') || c.includes('hummus')) return 'pizza';
+  if (c.includes('main') || c.includes('karahi') || c.includes('handi') || c.includes('curry') || c.includes('gravy')) return 'flame';
+  if (c.includes('bbq') || c.includes('grill') || c.includes('kebab') || c.includes('tikka') || c.includes('ribs') || c.includes('shinwari')) return 'bonfire';
+  if (c.includes('dessert') || c.includes('sweet') || c.includes('cake') || c.includes('kunafa') || c.includes('ice') || c.includes('lava') || c.includes('halwa')) return 'ice-cream';
+  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('margarita') || c.includes('tea') || c.includes('coffee') || c.includes('soda')) return 'wine';
+  if (c.includes('deal') || c.includes('combo') || c.includes('special') || c.includes('feast') || c.includes('offer')) return 'pricetags';
+  if (c.includes('rice') || c.includes('biryani') || c.includes('pulao')) return 'restaurant';
+  if (c.includes('bread') || c.includes('naan') || c.includes('roti') || c.includes('kulcha')) return 'nutrition';
+  if (c.includes('burger') || c.includes('sandwich') || c.includes('wrap')) return 'fast-food';
+  if (c.includes('pizza')) return 'pizza';
+  if (c.includes('fish') || c.includes('seafood') || c.includes('prawn')) return 'fish';
+  if (c.includes('salad') || c.includes('diet') || c.includes('green')) return 'leaf';
+  return 'restaurant';
+}
+
+function getCuisineMeta(cuisineName: string) {
+  const c = (cuisineName || '').toLowerCase();
+  if (c.includes('pakistan') || c.includes('desi')) return { emoji: '🍛', icon: 'flame' as const };
+  if (c.includes('chine') || c.includes('asian')) return { emoji: '🥢', icon: 'restaurant' as const };
+  if (c.includes('continen') || c.includes('steak')) return { emoji: '🥩', icon: 'nutrition' as const };
+  if (c.includes('arab') || c.includes('mandi') || c.includes('kabsa')) return { emoji: '🍢', icon: 'bonfire' as const };
+  if (c.includes('turk')) return { emoji: '🥙', icon: 'flame' as const };
+  if (c.includes('fast') || c.includes('burger')) return { emoji: '🍔', icon: 'fast-food' as const };
+  if (c.includes('ital') || c.includes('pizza') || c.includes('pasta')) return { emoji: '🍕', icon: 'pizza' as const };
+  if (c.includes('bbq') || c.includes('grill')) return { emoji: '🔥', icon: 'flame' as const };
+  if (c.includes('bever') || c.includes('drink') || c.includes('juice')) return { emoji: '🍹', icon: 'wine' as const };
+  if (c.includes('sweet') || c.includes('dessert')) return { emoji: '🍨', icon: 'ice-cream' as const };
+  return { emoji: '🍽️', icon: 'restaurant' as const };
+}
+
 export default function TableOrderScreen() {
   const { tableId } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const menuColumns = isMobile ? (width < 380 ? 1 : 2) : (width < 1100 ? 2 : 3);
+  const isMobile = width < 850;
 
-  // Core navigation & filter states
-  const [activeTab, setActiveTab] = useState<'menu' | 'order'>('menu');
-  const [activeCat, setActiveCat] = useState('All');
+  // Tabs & Filters
+  const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
+  const [activeCategory, setActiveCategory] = useState<string>('ALL');
+  const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [activeStation, setActiveStation] = useState<'all' | 'main' | 'juice' | 'deals'>('all');
   const [searchQuery, setSearchQuery] = useState('');
-  
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
+  const [categoryViewMode, setCategoryViewMode] = useState<'grid' | 'list'>('grid');
+  const [isCatSearchFocused, setIsCatSearchFocused] = useState(false);
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isSearchFocused, setIsSearchFocused] = useState(false);
+
   // Cart & Item customisations
   const [newCart, setNewCart] = useState<{ item: MenuItem; qty: number; notes?: string }[]>([]);
   const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
@@ -85,10 +122,10 @@ export default function TableOrderScreen() {
   const tickets = useRestaurantStore(state => state.tickets) || [];
   const menuItems = useRestaurantStore(state => state.menuItems) || [];
   const storeCategories = useRestaurantStore(state => state.categories) || [];
+  const regions = useRestaurantStore(state => state.regions) || [];
   const dynamicFloors = useRestaurantStore(state => state.floors) || [];
   const placeOrder = useRestaurantStore(state => state.placeOrder);
   const serveTableTickets = useRestaurantStore(state => state.serveTableTickets);
-  const updateTicketStatus = useRestaurantStore(state => state.updateTicketStatus);
   const markItemServed = useRestaurantStore(state => state.markItemServed);
   const transferTable = useRestaurantStore(state => state.transferTable);
   const markTableBilled = useRestaurantStore(state => state.markTableBilled);
@@ -176,17 +213,53 @@ export default function TableOrderScreen() {
     });
   }
 
-  // Categories list
-  const categories = useMemo(() => {
-    return ['All', ...storeCategories];
-  }, [storeCategories]);
+  // Categories list for 2-column sidebar (Auto-syncs dynamic categories from catalog)
+  const categoryTiles = useMemo(() => {
+    const set = new Set<string>();
+    (storeCategories || []).forEach(c => {
+      if (c && c !== 'All' && c !== 'ALL') set.add(c);
+    });
+    // Ensure all unique categories assigned to menu items are visible in POS tiles
+    (menuItems || []).forEach(m => {
+      if (m.category && m.category !== 'All' && m.category !== 'ALL') {
+        set.add(m.category);
+      }
+    });
+    const list = Array.from(set);
+    if (!categorySearchQuery) return list;
+    const q = categorySearchQuery.toLowerCase().trim();
+    return list.filter(c => c.toLowerCase().includes(q));
+  }, [storeCategories, menuItems, categorySearchQuery]);
+
+  // Category counts
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: (menuItems || []).length };
+    (menuItems || []).forEach(m => {
+      if (m.category) {
+        counts[m.category] = (counts[m.category] || 0) + 1;
+        counts[m.category.toUpperCase()] = (counts[m.category.toUpperCase()] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [menuItems]);
+
+  // Region counts
+  const regionCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: (menuItems || []).length };
+    (menuItems || []).forEach(m => {
+      if (m.region) {
+        counts[m.region] = (counts[m.region] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [menuItems]);
 
   // Available tables for transfer
   const availableTransferTables = useMemo(() => {
     return tables.filter(t => t.id !== tableId && t.status === 'available');
   }, [tables, tableId]);
 
-  // Check item availability status
+  // Check item stock status
   const getItemStockStatus = (item: MenuItem) => {
     if (unavailableSet.has(item.id)) {
       return { isSoldOut: true, label: 'Sold Out (86\'d)', isLowStock: false };
@@ -289,7 +362,20 @@ export default function TableOrderScreen() {
     setNewCart(prev => prev.filter(i => i.item.id !== itemId));
   };
 
-  // Cooking Instructions Notes Modal
+  const clearCart = () => {
+    if (newCart.length === 0) return;
+    const confirm = () => setNewCart([]);
+    if (Platform.OS === 'web') {
+      if (window.confirm('Clear all pending items from cart?')) confirm();
+    } else {
+      Alert.alert('Clear Cart', 'Remove all unsaved items from cart?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Clear', style: 'destructive', onPress: confirm }
+      ]);
+    }
+  };
+
+  // Open note modal for item
   const openNoteModal = (cartItem: { item: MenuItem; notes?: string }) => {
     setEditingNoteItem(cartItem);
     setNoteDraft(cartItem.notes || '');
@@ -297,65 +383,137 @@ export default function TableOrderScreen() {
 
   const saveItemNote = () => {
     if (!editingNoteItem) return;
-    setNewCart(prev => prev.map(c => {
-      if (c.item.id === editingNoteItem.item.id) {
-        return { ...c, notes: noteDraft.trim() || undefined };
-      }
-      return c;
-    }));
+    setNewCart(prev =>
+      prev.map(i =>
+        i.item.id === editingNoteItem.item.id ? { ...i, notes: noteDraft.trim() || undefined } : i
+      )
+    );
     setEditingNoteItem(null);
     setNoteDraft('');
   };
 
   const appendNotePreset = (preset: string) => {
-    setNoteDraft(prev => {
-      if (!prev.trim()) return preset;
-      if (prev.includes(preset)) return prev;
-      return `${prev}, ${preset}`;
-    });
+    if (noteDraft.includes(preset)) {
+      setNoteDraft(prev => prev.replace(preset, '').replace(/,\s*,/g, ',').trim());
+    } else {
+      setNoteDraft(prev => (prev ? `${prev}, ${preset}` : preset));
+    }
   };
 
-  const goBack = () => (router.canGoBack() ? router.back() : router.replace('/waiter'));
+  // Filtered Menu Items
+  const filteredItems = useMemo(() => {
+    return menuItems.filter((i) => {
+      // Category filter
+      if (activeCategory !== 'ALL' && activeCategory !== 'All') {
+        if ((i.category || '').toLowerCase() !== activeCategory.toLowerCase()) return false;
+      }
 
-  // Place Order / Send to Kitchen KOT
+      // Region / Cuisine filter
+      if (activeRegion !== 'ALL' && activeRegion !== 'All') {
+        if ((i.region || '').toLowerCase() !== activeRegion.toLowerCase()) return false;
+      }
+
+      // Station filter
+      if (activeStation === 'main' && i.station !== 'main') return false;
+      if (activeStation === 'juice' && i.station !== 'juice') return false;
+      if (activeStation === 'deals' && !i.isDeal && i.category !== 'Deals') return false;
+
+      // Search query
+      if (searchQuery.trim()) {
+        const query = searchQuery.trim().toLowerCase();
+        const matchName = i.name.toLowerCase().includes(query);
+        const matchCat = i.category ? i.category.toLowerCase().includes(query) : false;
+        const matchDesc = i.description ? i.description.toLowerCase().includes(query) : false;
+        const matchRegion = i.region ? i.region.toLowerCase().includes(query) : false;
+        if (!matchName && !matchCat && !matchDesc && !matchRegion) return false;
+      }
+      return true;
+    });
+  }, [menuItems, activeCategory, activeRegion, activeStation, searchQuery]);
+
+  // Totals
+  const alreadyOrderedTotal = alreadyOrderedItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
+  const newCartTotal = newCart.reduce((sum, c) => sum + (c.item.price * c.qty), 0);
+  const totalBillSoFar = (table?.billTotal || alreadyOrderedTotal) + newCartTotal;
+
+  // Send order / punch to kitchen
   const handleSendToKitchen = () => {
     if (newCart.length === 0) return;
 
-    const isAddOn = isExistingOrderActive;
-    const orderTakerName = user?.name 
-      ? (user.name.includes('(Order Taker)') ? user.name : `${user.name} (Order Taker)`) 
-      : 'Sara Ahmed (Order Taker)';
-
-    // Prepend Rush Order tag if toggled
-    const finalCart = newCart.map(c => {
-      if (isRushOrder) {
-        const rushPrefix = '⚡ [RUSH / JALDI]';
-        const updatedNotes = c.notes ? `${rushPrefix} ${c.notes}` : rushPrefix;
-        return { ...c, notes: updatedNotes };
-      }
-      return c;
-    });
-
-    placeOrder(tableId as string, orderTakerName, finalCart, isAddOn);
-    broadcastImmediately();
-
     const roundNum = activeTickets.length + 1;
-    const message = isAddOn 
-      ? `Add-on items sent to Kitchen! (KOT Round #${roundNum} Generated & KDS Notified)`
-      : `New order sent to Kitchen! (KOT Generated & KDS Live)`;
+    const isAddOn = isExistingOrderActive || activeTickets.length > 0;
+    const kotItems = newCart.map(c => ({
+      item: c.item,
+      qty: c.qty,
+      notes: [c.notes, isRushOrder ? '⚡ RUSH / JALDI' : ''].filter(Boolean).join(' • ') || undefined,
+    }));
 
-    if (Platform.OS === 'web') {
-      window.alert(message);
-    } else {
-      Alert.alert('Kitchen Notified', message);
+    // Place order via store
+    placeOrder(
+      tableId as string,
+      table?.server || user?.name || 'Staff (Order Taker)',
+      kotItems,
+      isAddOn
+    );
+
+    // Mark table occupied & live bill
+    if (table && table.status !== 'occupied') {
+      updateTable(table.id, {
+        status: 'occupied',
+        occupiedSince: table.occupiedSince || Date.now(),
+        server: table.server || user?.name || 'Order Taker',
+        billTotal: totalBillSoFar,
+      });
+    } else if (table) {
+      updateTable(table.id, {
+        billTotal: totalBillSoFar,
+      });
     }
+
+    // Broadcast immediately over WebSocket/Firebase
+    broadcastImmediately();
 
     setNewCart([]);
     setIsRushOrder(false);
-    goBack();
+
+    const successMsg = `Round #${roundNum} sent to Kitchen KDS and Juice Bar!`;
+    if (Platform.OS === 'web') {
+      window.alert(successMsg);
+    } else {
+      Alert.alert('KOT Dispatched', successMsg);
+    }
   };
 
-  // Table Transfer
+  // Manual Sync trigger
+  const handleManualSync = () => {
+    setIsManualSyncing(true);
+    broadcastImmediately();
+    setTimeout(() => {
+      setIsManualSyncing(false);
+      const msg = 'Real-time state synchronized with central POS & KDS.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Synced', msg);
+    }, 450);
+  };
+
+  // Go Back
+  const goBack = () => {
+    if (newCart.length > 0) {
+      const confirmMsg = 'You have unsaved dishes in your cart. Leave without sending to kitchen?';
+      if (Platform.OS === 'web') {
+        if (!window.confirm(confirmMsg)) return;
+      } else {
+        Alert.alert('Unsaved Order', confirmMsg, [
+          { text: 'Stay Here', style: 'cancel' },
+          { text: 'Leave', style: 'destructive', onPress: () => router.push('/waiter') },
+        ]);
+        return;
+      }
+    }
+    router.push('/waiter');
+  };
+
+  // Transfer Table
   const handleTransferTable = (targetTable: Table) => {
     if (!table) return;
     const confirmMsg = `Transfer running order from "${table.name}" to "${targetTable.name}"?`;
@@ -413,34 +571,6 @@ export default function TableOrderScreen() {
     setGuestCountModalVisible(false);
   };
 
-  // Filtered Menu Items
-  const filteredItems = useMemo(() => {
-    return menuItems.filter((i) => {
-      // Station filter
-      if (activeStation === 'main' && i.station !== 'main') return false;
-      if (activeStation === 'juice' && i.station !== 'juice') return false;
-      if (activeStation === 'deals' && !i.isDeal && i.category !== 'Deals') return false;
-
-      // Category filter
-      if (activeCat !== 'All' && i.category !== activeCat) return false;
-
-      // Search query
-      if (searchQuery.trim()) {
-        const query = searchQuery.trim().toLowerCase();
-        const matchName = i.name.toLowerCase().includes(query);
-        const matchCat = i.category.toLowerCase().includes(query);
-        const matchDesc = i.description ? i.description.toLowerCase().includes(query) : false;
-        if (!matchName && !matchCat && !matchDesc) return false;
-      }
-      return true;
-    });
-  }, [menuItems, activeCat, activeStation, searchQuery]);
-
-  // Totals
-  const alreadyOrderedTotal = alreadyOrderedItems.reduce((sum, i) => sum + (i.price * i.qty), 0);
-  const newCartTotal = newCart.reduce((sum, c) => sum + (c.item.price * c.qty), 0);
-  const totalBillSoFar = (table?.billTotal || alreadyOrderedTotal) + newCartTotal;
-
   // Running Bill Slip Invoice Payload
   const runningInvoicePreview: Invoice = useMemo(() => {
     const allItems: OrderItem[] = [
@@ -480,101 +610,126 @@ export default function TableOrderScreen() {
     };
   }, [alreadyOrderedItems, newCart, isTakeaway, tableName, tableId, table, user, now, totalBillSoFar]);
 
+  const totalCartCount = newCart.reduce((s, c) => s + c.qty, 0);
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
+      <StatusBar barStyle="light-content" backgroundColor="#32070D" />
       
-      {/* ================= TOP HEADER ================= */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={goBack} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="chevron-back" size={24} color="#D5A943" />
-          <View style={{ marginLeft: 6, flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <View
-                style={[
-                  styles.headerIconBubble,
-                  { backgroundColor: isMajlis ? '#D5A94325' : isCouch ? '#E6510025' : '#1976D225' },
-                ]}
-              >
-                <SeatingTypeIcon type={seatingType} size={18} color="#D5A943" />
-              </View>
-              <Text style={styles.headerTitle}>{tableName}</Text>
-              
-              {/* Status Badge */}
-              <View style={[
-                styles.statusBadge, 
-                isBilled ? styles.statusBadgeBilled : isExistingOrderActive ? styles.statusBadgeOccupied : styles.statusBadgeAvailable
-              ]}>
-                <View style={[
-                  styles.statusDot, 
-                  { backgroundColor: isBilled ? '#FF9500' : isExistingOrderActive ? '#FF3B30' : '#34C759' }
-                ]} />
-                <Text style={[
-                  styles.statusBadgeText,
-                  { color: isBilled ? '#D84315' : isExistingOrderActive ? '#FF3B30' : '#2E7D32' }
-                ]}>
-                  {isBilled ? 'BILL REQUESTED' : isExistingOrderActive ? 'ACTIVE ORDER' : 'AVAILABLE'}
-                </Text>
-              </View>
-
-              {/* Real-time Running Bill Badge right in header */}
-              {totalBillSoFar > 0 && (
-                <View style={styles.headerBillPill}>
-                  <Text style={styles.headerBillLabel}>Bill:</Text>
-                  <Text style={styles.headerBillAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
-                </View>
-              )}
-            </View>
-
-            {/* Sub-header with Seating details & Guest Pax */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4, flexWrap: 'wrap' }}>
-              <Text style={styles.headerSubtitleType}>
-                {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch Lounge' : isTakeaway ? '🛍️ Parcel Counter' : '🍽️ Dining Table'}
-              </Text>
-              <Text style={styles.headerDot}>•</Text>
-              
-              {!isTakeaway && (
-                <TouchableOpacity 
-                  style={styles.paxChip} 
-                  onPress={() => setGuestCountModalVisible(true)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="people" size={11} color="#D5A943" style={{ marginRight: 3 }} />
-                  <Text style={styles.paxChipText}>{table?.seats || 4} Guests</Text>
-                  <Ionicons name="chevron-down" size={10} color="#D5A943" style={{ marginLeft: 2 }} />
-                </TouchableOpacity>
-              )}
-              
-              <Text style={styles.headerDot}>•</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                <Ionicons name={floorMeta.icon || 'business-outline'} size={11} color="rgba(255,255,255,0.85)" />
-                <Text style={styles.headerSubtitleFloor}>{floorName}</Text>
-              </View>
-            </View>
-          </View>
+      {/* ================= ROYAL SULTAN TOP BAR ================= */}
+      <View style={styles.topBar}>
+        {/* Standalone Back Button */}
+        <TouchableOpacity 
+          style={styles.topBarBackBtn} 
+          onPress={goBack} 
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          activeOpacity={0.75}
+        >
+          <Ionicons name="chevron-back" size={16} color="#D4AF37" />
+          <Text style={styles.topBarBackText}>Tables</Text>
         </TouchableOpacity>
 
-        {/* Header Quick Action Buttons */}
-        <View style={styles.headerActions}>
+        {/* Table & Order Info Block */}
+        <View style={styles.topBarTableBlock}>
+          <View style={styles.topBarTitleRow}>
+            <View
+              style={[
+                styles.topBarIconOrb,
+                { backgroundColor: isMajlis ? 'rgba(212, 175, 55, 0.22)' : isCouch ? 'rgba(230, 81, 0, 0.22)' : 'rgba(2, 132, 199, 0.22)' },
+              ]}
+            >
+              <SeatingTypeIcon type={seatingType} size={14} color="#D4AF37" />
+            </View>
+            <Text style={styles.topBarTableTitle}>{tableName}</Text>
+            
+            {/* Status Badge */}
+            <View style={[
+              styles.statusBadge, 
+              isBilled ? styles.statusBadgeBilled : isExistingOrderActive ? styles.statusBadgeOccupied : styles.statusBadgeAvailable
+            ]}>
+              <View style={[
+                styles.statusDot, 
+                { backgroundColor: isBilled ? '#F59E0B' : isExistingOrderActive ? '#EF4444' : '#10B981' }
+              ]} />
+              <Text style={[
+                styles.statusBadgeText,
+                { color: isBilled ? '#F59E0B' : isExistingOrderActive ? '#EF4444' : '#10B981' }
+              ]}>
+                {isBilled ? 'BILL REQUESTED' : isExistingOrderActive ? 'ACTIVE ORDER' : 'AVAILABLE'}
+              </Text>
+            </View>
+
+            {/* Real-time Running Bill Badge */}
+            {totalBillSoFar > 0 && (
+              <View style={styles.topBarBillPill}>
+                <Text style={styles.topBarBillLabel}>Live Bill:</Text>
+                <Text style={styles.topBarBillAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+              </View>
+            )}
+          </View>
+
+          {/* Subtitle Row with Seating type, Guest Pax, Floor */}
+          <View style={styles.topBarSubtitleRow}>
+            <Text style={styles.topBarSubtitleType}>
+              {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch Lounge' : isTakeaway ? '🛍️ Parcel Counter' : '🍽️ Dining Table'}
+            </Text>
+            <Text style={styles.topBarDot}>•</Text>
+            
+            {!isTakeaway && (
+              <TouchableOpacity 
+                style={styles.paxChip} 
+                onPress={() => setGuestCountModalVisible(true)}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="people" size={11} color="#F3D179" style={{ marginRight: 3 }} />
+                <Text style={styles.paxChipText}>{table?.seats || 4} Guests</Text>
+                <Ionicons name="chevron-down" size={10} color="#F3D179" style={{ marginLeft: 2 }} />
+              </TouchableOpacity>
+            )}
+            
+            <Text style={styles.topBarDot}>•</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Ionicons name={floorMeta.icon || 'business-outline'} size={11} color="rgba(255,255,255,0.75)" />
+              <Text style={styles.topBarSubtitleFloor}>{floorName}</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Right Action Icons */}
+        <View style={styles.topBarActions}>
+          <TouchableOpacity 
+            style={[styles.topBarActionBtn, isManualSyncing && { backgroundColor: 'rgba(212, 175, 55, 0.25)' }]} 
+            onPress={handleManualSync}
+            disabled={isManualSyncing}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            {isManualSyncing ? (
+              <ActivityIndicator size="small" color="#D4AF37" />
+            ) : (
+              <Ionicons name="refresh" size={15} color="#D4AF37" />
+            )}
+            <Text style={styles.topBarActionBtnText}>Sync</Text>
+          </TouchableOpacity>
+
           {isExistingOrderActive && !isTakeaway && (
             <TouchableOpacity 
-              style={styles.headerIconBtn} 
+              style={styles.topBarActionBtn} 
               onPress={() => setTransferModalVisible(true)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="swap-horizontal" size={18} color="#D5A943" />
-              <Text style={styles.headerIconBtnText}>Move</Text>
+              <Ionicons name="swap-horizontal" size={15} color="#D4AF37" />
+              <Text style={styles.topBarActionBtnText}>Move</Text>
             </TouchableOpacity>
           )}
 
           {isExistingOrderActive && (
             <TouchableOpacity 
-              style={styles.headerIconBtn} 
+              style={styles.topBarActionBtn} 
               onPress={() => setBillSlipModalVisible(true)}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="receipt-outline" size={18} color="#D5A943" />
-              <Text style={styles.headerIconBtnText}>Bill Slip</Text>
+              <Ionicons name="receipt-outline" size={15} color="#D4AF37" />
+              <Text style={styles.topBarActionBtnText}>Slip</Text>
             </TouchableOpacity>
           )}
 
@@ -582,324 +737,608 @@ export default function TableOrderScreen() {
         </View>
       </View>
 
-      {/* ================= MOBILE TAB SWITCHER ================= */}
+      {/* ================= MOBILE SWITCHER (< 850px) ================= */}
       {isMobile && (
-        <View style={styles.mobileTabs}>
+        <View style={styles.mobileSwitcher}>
           <TouchableOpacity 
-            style={[styles.mobileTab, activeTab === 'menu' && styles.mobileTabActive]}
-            onPress={() => setActiveTab('menu')}
+            style={[styles.mobileSwitchBtn, mobileTab === 'menu' && styles.mobileSwitchBtnActive]}
+            onPress={() => setMobileTab('menu')}
             activeOpacity={0.7}
           >
             <Ionicons 
               name="restaurant-outline" 
-              size={16} 
-              color={activeTab === 'menu' ? '#4a121a' : '#8E8E93'} 
+              size={15} 
+              color={mobileTab === 'menu' ? '#E5B83B' : 'rgba(255,255,255,0.6)'} 
               style={{ marginRight: 6 }} 
             />
-            <Text style={[styles.mobileTabText, activeTab === 'menu' && styles.mobileTabTextActive]}>
+            <Text style={[styles.mobileSwitchText, mobileTab === 'menu' && styles.mobileSwitchTextActive]}>
               Menu Catalog
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.mobileTab, activeTab === 'order' && styles.mobileTabActive]}
-            onPress={() => setActiveTab('order')}
+            style={[styles.mobileSwitchBtn, mobileTab === 'cart' && styles.mobileSwitchBtnActive]}
+            onPress={() => setMobileTab('cart')}
             activeOpacity={0.7}
           >
             <Ionicons 
-              name="receipt-outline" 
-              size={16} 
-              color={activeTab === 'order' ? '#4a121a' : '#8E8E93'} 
+              name="bag-handle-outline" 
+              size={15} 
+              color={mobileTab === 'cart' ? '#E5B83B' : 'rgba(255,255,255,0.6)'} 
               style={{ marginRight: 6 }} 
             />
-            <Text style={[styles.mobileTabText, activeTab === 'order' && styles.mobileTabTextActive]}>
+            <Text style={[styles.mobileSwitchText, mobileTab === 'cart' && styles.mobileSwitchTextActive]}>
               Table Order ({alreadyOrderedItems.length + newCart.length})
             </Text>
-            {newCart.length > 0 && (
-              <View style={styles.tabBadge}>
-                <Text style={styles.tabBadgeText}>+{newCart.length}</Text>
+            {totalCartCount > 0 && (
+              <View style={styles.mobileTabBadge}>
+                <Text style={styles.mobileTabBadgeText}>{totalCartCount}</Text>
               </View>
             )}
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ================= MAIN LAYOUT ================= */}
-      <View style={styles.mainLayout}>
-        {/* ================= LEFT: MENU SECTION ================= */}
-        {(!isMobile || activeTab === 'menu') && (
-          <View style={styles.menuSection}>
-            {/* Search Bar & Station Toggle */}
-            <View style={styles.searchAndStationBar}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={16} color="#8E8E93" />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search dishes, drinks, deals, karahi..."
-                  placeholderTextColor="#AEAEB2"
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={16} color="#8E8E93" />
-                  </TouchableOpacity>
-                )}
+      {/* ================= MAIN WORKSPACE (MATCHING MAIN POS ARCHITECTURE) ================= */}
+      <View style={styles.mainWorkspace}>
+
+        {/* --------------------------------------------------------
+            LEFT: CATEGORIES SIDEBAR (AUTHENTIC POS VELVET THEME)
+            -------------------------------------------------------- */}
+        {(!isMobile || mobileTab === 'menu') && (
+          <View style={[styles.categorySidebar, isMobile && styles.categorySidebarMobile]}>
+            {/* Header: CATEGORIES + Count + Grid/List Toggle */}
+            <View style={styles.categoryHeaderRow}>
+              <View style={styles.categoryTitleGroup}>
+                <View style={styles.categoryTitleIconOrb}>
+                  <Ionicons name="apps" size={12} color="#E5B83B" />
+                </View>
+                <Text style={styles.categoryHeading}>CATEGORIES</Text>
+                <View style={styles.categoryCountPill}>
+                  <Text style={styles.categoryCountPillText}>
+                    {categoryTiles.length + 1}
+                  </Text>
+                </View>
               </View>
 
-              {/* Station Quick Filter Chips */}
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.stationFilterContainer}
-              >
-                <TouchableOpacity 
-                  style={[styles.stationChip, activeStation === 'all' && styles.stationChipActive]}
-                  onPress={() => setActiveStation('all')}
-                >
-                  <Text style={[styles.stationChipText, activeStation === 'all' && styles.stationChipTextActive]}>
-                    All ({menuItems.length})
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.stationChip, activeStation === 'deals' && styles.stationChipActive]}
-                  onPress={() => setActiveStation('deals')}
-                >
-                  <Text style={[styles.stationChipText, activeStation === 'deals' && styles.stationChipTextActive]}>
-                    ⭐ Deals & Combos
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.stationChip, activeStation === 'main' && styles.stationChipActive]}
-                  onPress={() => setActiveStation('main')}
-                >
-                  <Text style={[styles.stationChipText, activeStation === 'main' && styles.stationChipTextActive]}>
-                    🍳 Kitchen
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity 
-                  style={[styles.stationChip, activeStation === 'juice' && styles.stationChipActive]}
-                  onPress={() => setActiveStation('juice')}
-                >
-                  <Text style={[styles.stationChipText, activeStation === 'juice' && styles.stationChipTextActive]}>
-                    🍹 Juice Bar
-                  </Text>
-                </TouchableOpacity>
-              </ScrollView>
+              {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
+              {!isMobile && (
+                <View style={styles.categoryViewSwitcher}>
+                  <TouchableOpacity 
+                    style={[styles.viewSwitchBtn, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
+                    onPress={() => setCategoryViewMode('grid')}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Ionicons 
+                      name="grid" 
+                      size={11} 
+                      color={categoryViewMode === 'grid' ? '#1E293B' : '#A38B7C'} 
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={[styles.viewSwitchBtn, categoryViewMode === 'list' && styles.viewSwitchBtnActive]}
+                    onPress={() => setCategoryViewMode('list')}
+                    activeOpacity={0.8}
+                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
+                  >
+                    <Ionicons 
+                      name="list" 
+                      size={13} 
+                      color={categoryViewMode === 'list' ? '#1E293B' : '#A38B7C'} 
+                    />
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
 
-            {/* Category Pills Bar */}
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false} 
-              style={styles.categoriesBar}
-              contentContainerStyle={{ paddingHorizontal: 14, gap: 8 }}
+            {/* Quick Find Category Filter */}
+            <View 
+              style={[styles.quickFindBox, isCatSearchFocused && styles.quickFindBoxFocused]}
+              {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
             >
-              {categories.map(cat => {
-                const isActive = activeCat === cat;
+              <View style={[styles.quickFindIconOrb, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
+                <Ionicons name="search" size={12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
+              </View>
+              <TextInput
+                style={styles.quickFindInput}
+                placeholder="Find category..."
+                placeholderTextColor="#64748B"
+                value={categorySearchQuery}
+                onFocus={() => setIsCatSearchFocused(true)}
+                onBlur={() => setIsCatSearchFocused(false)}
+                onChangeText={setCategorySearchQuery}
+              />
+              {categorySearchQuery ? (
+                <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                  <Ionicons name="close-circle" size={15} color="#D4AF37" />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+
+            {/* Categories Scrollable Container */}
+            <ScrollView 
+              style={styles.categoriesScroll}
+              contentContainerStyle={[
+                styles.categoriesContainer,
+                isMobile 
+                  ? styles.categoriesScrollMobile 
+                  : (categoryViewMode === 'grid' ? styles.categoriesGrid : styles.categoriesList)
+              ]}
+              showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
+              horizontal={isMobile}
+            >
+              {/* ALL Category Item */}
+              {(() => {
+                const isAllActive = activeCategory === 'ALL' || activeCategory === 'All';
+                const allCount = (menuItems || []).length;
                 return (
-                  <TouchableOpacity 
-                    key={cat} 
-                    style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}
-                    onPress={() => setActiveCat(cat)}
-                    activeOpacity={0.7}
+                  <TouchableOpacity
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+                    style={[
+                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
+                      isMobile && styles.categoryTileMobile,
+                      isAllActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
+                    ]}
+                    onPress={() => setActiveCategory('ALL')}
+                    activeOpacity={0.8}
                   >
-                    <Text style={[styles.categoryText, isActive && styles.categoryTextActive]}>
-                      {cat}
-                    </Text>
+                    {categoryViewMode === 'grid' ? (
+                      <>
+                        <View style={styles.tileTopRow}>
+                          <View style={[styles.tileIconOrb, isAllActive && styles.tileIconOrbActive]}>
+                            <Ionicons 
+                              name="grid" 
+                              size={13} 
+                              color={isAllActive ? '#1E293B' : '#E5B83B'} 
+                            />
+                          </View>
+                          <View style={[styles.tileCountBadge, isAllActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isAllActive && styles.tileCountTextActive]}>
+                              {allCount}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={[styles.categoryTileText, isAllActive && styles.categoryTileTextActive]}>
+                          ALL
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={[styles.listIconOrb, isAllActive && styles.listIconOrbActive]}>
+                          <Ionicons 
+                            name="grid" 
+                            size={14} 
+                            color={isAllActive ? '#1E293B' : '#E5B83B'} 
+                          />
+                        </View>
+                        <Text style={[styles.categoryListText, isAllActive && styles.categoryListTextActive]} numberOfLines={1}>
+                          ALL ITEMS
+                        </Text>
+                        <View style={[styles.listCountBadge, isAllActive && styles.listCountBadgeActive]}>
+                          <Text style={[styles.listCountText, isAllActive && styles.listCountTextActive]}>
+                            {allCount}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                );
+              })()}
+
+              {/* Dynamic Categories */}
+              {categoryTiles.map(cat => {
+                const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
+                const count = categoryCounts[cat] || categoryCounts[cat.toUpperCase()] || 0;
+                const iconName = getCategoryIcon(cat);
+
+                return (
+                  <TouchableOpacity
+                    key={cat}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+                    style={[
+                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
+                      isMobile && styles.categoryTileMobile,
+                      isActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
+                    ]}
+                    onPress={() => setActiveCategory(cat)}
+                    activeOpacity={0.8}
+                  >
+                    {categoryViewMode === 'grid' ? (
+                      <>
+                        <View style={styles.tileTopRow}>
+                          <View style={[styles.tileIconOrb, isActive && styles.tileIconOrbActive]}>
+                            <Ionicons 
+                              name={iconName} 
+                              size={13} 
+                              color={isActive ? '#1E293B' : '#E5B83B'} 
+                            />
+                          </View>
+                          <View style={[styles.tileCountBadge, isActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isActive && styles.tileCountTextActive]}>
+                              {count}
+                            </Text>
+                          </View>
+                        </View>
+                        <Text 
+                          style={[styles.categoryTileText, isActive && styles.categoryTileTextActive]}
+                          numberOfLines={2}
+                        >
+                          {cat.toUpperCase()}
+                        </Text>
+                      </>
+                    ) : (
+                      <>
+                        <View style={[styles.listIconOrb, isActive && styles.listIconOrbActive]}>
+                          <Ionicons 
+                            name={iconName} 
+                            size={14} 
+                            color={isActive ? '#1E293B' : '#E5B83B'} 
+                          />
+                        </View>
+                        <Text 
+                          style={[styles.categoryListText, isActive && styles.categoryListTextActive]}
+                          numberOfLines={1}
+                        >
+                          {cat.toUpperCase()}
+                        </Text>
+                        <View style={[styles.listCountBadge, isActive && styles.listCountBadgeActive]}>
+                          <Text style={[styles.listCountText, isActive && styles.listCountTextActive]}>
+                            {count}
+                          </Text>
+                        </View>
+                      </>
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
 
-            {/* Menu Items Grid */}
-            <FlatList
-              data={filteredItems}
-              keyExtractor={item => item.id}
-              numColumns={menuColumns}
-              key={`order-menu-cols-${menuColumns}`}
-              contentContainerStyle={[styles.menuGrid, isMobile && { paddingBottom: Math.max(120, insets.bottom + 90) }]}
-              columnWrapperStyle={menuColumns > 1 ? styles.menuGridRow : undefined}
-              showsVerticalScrollIndicator={false}
-              renderItem={({ item }) => {
-                const inCartItem = newCart.find(c => c.item.id === item.id);
-                const stockStatus = getItemStockStatus(item);
-                const isDeal = item.isDeal || item.category === 'Deals';
+            {/* Bottom Status & Quick Filter Panel */}
+            {!isMobile && (
+              <View style={styles.categoryBottomPanel}>
+                <View style={styles.bottomStatusHeader}>
+                  <Text style={styles.bottomStatusTitle}>FILTER</Text>
+                  <Text style={styles.bottomStatusCount}>
+                    {(activeCategory === 'ALL' || activeCategory === 'All') 
+                      ? `${(menuItems || []).length} items` 
+                      : `${categoryCounts[activeCategory] || categoryCounts[activeCategory.toUpperCase()] || 0} items`}
+                  </Text>
+                </View>
 
-                return (
-                  <View 
-                    style={[
-                      styles.menuItemCard, 
-                      inCartItem && styles.menuItemCardInCart,
-                      stockStatus.isSoldOut && styles.cardSoldOut
-                    ]}
-                  >
+                <View style={styles.bottomActiveCard}>
+                  <View style={styles.bottomActiveIconOrb}>
+                    <Ionicons name={getCategoryIcon(activeCategory)} size={12} color="#D4AF37" />
+                  </View>
+                  <Text style={styles.bottomActiveName} numberOfLines={1}>
+                    {activeCategory.toUpperCase()}
+                  </Text>
+                  {(activeCategory !== 'ALL' && activeCategory !== 'All') && (
                     <TouchableOpacity 
-                      style={styles.menuItemCardTouch}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={stockStatus.isSoldOut ? 0.9 : 0.8}
+                      style={styles.bottomResetPill}
+                      onPress={() => setActiveCategory('ALL')}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
-                      {/* Visual Thumbnail & Badges */}
-                      <View style={styles.cardHeaderArea}>
+                      <Ionicons name="close" size={10} color="#FFFFFF" />
+                      <Text style={styles.bottomResetText}>Reset</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* --------------------------------------------------------
+            CENTER: MENU DISHES GRID (AUTHENTIC POS THEME)
+            -------------------------------------------------------- */}
+        {(!isMobile || mobileTab === 'menu') && (
+          <View style={styles.centerCatalog}>
+            {/* Catalog Subheader: Search + Station chips */}
+            <View style={styles.catalogSubheader}>
+              {/* Luxury Search Pill Box */}
+              <View style={[styles.searchPillBox, isSearchFocused && styles.searchPillBoxFocused]}>
+                <View style={[styles.searchIconOrb, isSearchFocused && styles.searchIconOrbFocused]}>
+                  <Ionicons name="search" size={14} color="#D4AF37" />
+                </View>
+                <TextInput
+                  style={styles.searchPillInput}
+                  placeholder="Search dishes, karahi, bbq, drinks, deals..."
+                  placeholderTextColor="#94A3B8"
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onBlur={() => setIsSearchFocused(false)}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity 
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    style={styles.searchClearBtn}
+                  >
+                    <Ionicons name="close-circle" size={16} color="#D4AF37" />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Station Quick Filter Chips */}
+              <View style={styles.stationChipsRow}>
+                <TouchableOpacity 
+                  style={[styles.stationPill, activeStation === 'all' && styles.stationPillActive]}
+                  onPress={() => setActiveStation('all')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.stationPillText, activeStation === 'all' && styles.stationPillTextActive]}>
+                    All
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.stationPill, activeStation === 'deals' && styles.stationPillActive]}
+                  onPress={() => setActiveStation('deals')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.stationPillText, activeStation === 'deals' && styles.stationPillTextActive]}>
+                    ⭐ Deals
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.stationPill, activeStation === 'main' && styles.stationPillActive]}
+                  onPress={() => setActiveStation('main')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.stationPillText, activeStation === 'main' && styles.stationPillTextActive]}>
+                    🍳 Kitchen KDS
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.stationPill, activeStation === 'juice' && styles.stationPillActive]}
+                  onPress={() => setActiveStation('juice')}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.stationPillText, activeStation === 'juice' && styles.stationPillTextActive]}>
+                    🍹 Juice Bar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Region / Cuisine Quick Filter Pills (POS Standard) */}
+            {regions.length > 0 && (
+              <View style={styles.posRegionFilterRow}>
+                <View style={styles.posRegionFilterLead}>
+                  <View style={styles.posRegionLeadIconWrap}>
+                    <Ionicons name="restaurant" size={11} color="#D4AF37" />
+                  </View>
+                  <Text style={styles.posRegionFilterLeadText}>CUISINE</Text>
+                </View>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.posRegionScroll}
+                >
+                  <TouchableOpacity
+                    style={[
+                      styles.posRegionChip,
+                      activeRegion === 'ALL' && styles.posRegionChipActive,
+                    ]}
+                    onPress={() => setActiveRegion('ALL')}
+                    activeOpacity={0.75}
+                  >
+                    <Ionicons 
+                      name="globe-outline" 
+                      size={12} 
+                      color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'} 
+                      style={{ marginRight: 2 }} 
+                    />
+                    <Text style={[
+                      styles.posRegionChipText,
+                      activeRegion === 'ALL' && styles.posRegionChipTextActive,
+                    ]}>
+                      All Cuisines
+                    </Text>
+                    <View style={[
+                      styles.posRegionChipBadge,
+                      activeRegion === 'ALL' && styles.posRegionChipBadgeActive
+                    ]}>
+                      <Text style={[
+                        styles.posRegionChipBadgeText,
+                        activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive
+                      ]}>
+                        {regionCounts['ALL'] ?? 0}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {regions.map(r => {
+                    const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
+                    const meta = getCuisineMeta(r);
+                    const count = regionCounts[r] || 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        style={[
+                          styles.posRegionChip,
+                          isSelected && styles.posRegionChipActive,
+                        ]}
+                        onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
+                        <Text style={[
+                          styles.posRegionChipText,
+                          isSelected && styles.posRegionChipTextActive,
+                        ]}>
+                          {r}
+                        </Text>
+                        {count > 0 && (
+                          <View style={[
+                            styles.posRegionChipBadge,
+                            isSelected && styles.posRegionChipBadgeActive
+                          ]}>
+                            <Text style={[
+                              styles.posRegionChipBadgeText,
+                              isSelected && styles.posRegionChipBadgeTextActive
+                            ]}>
+                              {count}
+                            </Text>
+                          </View>
+                        )}
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            )}
+
+            {/* Dishes Grid (Authentic POS dishCard) */}
+            <ScrollView 
+              style={styles.dishesScrollView}
+              contentContainerStyle={[
+                styles.dishesGridContainer,
+                isMobile && { paddingBottom: Math.max(120, insets.bottom + 90) }
+              ]}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.dishesGrid}>
+                {filteredItems.map(item => {
+                  const inCartQty = newCart
+                    .filter(c => c.item.id === item.id || c.item.id.startsWith(`${item.id}-`))
+                    .reduce((sum, c) => sum + c.qty, 0);
+                  const isItemInCart = inCartQty > 0;
+                  const stockStatus = getItemStockStatus(item);
+                  const isOutOfStock = stockStatus.isSoldOut;
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+                      style={[
+                        styles.dishCard,
+                        isItemInCart && styles.dishCardInCart,
+                        isOutOfStock && { opacity: 0.65 },
+                        isMobile && { width: '47.5%', minWidth: 140 }
+                      ]}
+                      onPress={() => addToCart(item)}
+                      activeOpacity={0.75}
+                      disabled={isOutOfStock}
+                    >
+                      {/* Floating In-Cart Badge */}
+                      {isItemInCart && (
+                        <View style={styles.inCartBadge}>
+                          <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+                          <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
+                        </View>
+                      )}
+
+                      {/* Top: Dish Photo or Fallback Icon */}
+                      <View style={styles.dishCardImageWrapper}>
                         {item.imageUri ? (
-                          <Image source={{ uri: item.imageUri }} style={styles.dishThumbnail} resizeMode="cover" />
+                          <Image 
+                            source={{ uri: item.imageUri }} 
+                            style={styles.dishCardImage} 
+                            resizeMode="cover"
+                          />
                         ) : (
-                          <View style={styles.dishPlaceholderIcon}>
+                          <View style={styles.dishCardPlaceholderBox}>
                             <Ionicons 
-                              name={item.station === 'juice' ? 'cafe-outline' : 'restaurant-outline'} 
-                              size={18} 
-                              color="#8E8E93" 
+                              name={item.isDeal ? "gift" : item.station === 'juice' ? "wine-outline" : "restaurant-outline"} 
+                              size={26} 
+                              color="#D4AF37" 
                             />
                           </View>
                         )}
 
-                        <View style={styles.cardHeaderRight}>
-                          <View style={styles.cardTopRow}>
-                            <View style={styles.categoryPill}>
-                              <Text style={styles.menuItemCat} numberOfLines={1}>{item.category}</Text>
+                        {/* Category & Region Chips */}
+                        <View style={styles.dishCardChipsRow}>
+                          <View style={styles.dishCardCategoryChip}>
+                            <Text style={styles.dishCardCategory} numberOfLines={1}>
+                              {(item.category || 'Mains').toUpperCase()}
+                            </Text>
+                          </View>
+                          {item.region ? (
+                            <View style={styles.dishCardRegionChip}>
+                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+                              <Text style={styles.dishCardRegionText} numberOfLines={1}>
+                                {item.region}
+                              </Text>
                             </View>
-                            {inCartItem && (
-                              <View style={styles.cartCountPill}>
-                                <Text style={styles.cartCountPillText}>{inCartItem.qty} in cart</Text>
-                              </View>
-                            )}
-                          </View>
-
-                          {/* Badges / Deal Pill / Station */}
-                          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
-                            {item.station === 'juice' && (
-                              <View style={styles.stationBadge}>
-                                <Text style={styles.stationBadgeText}>JUICE</Text>
-                              </View>
-                            )}
-                            {item.badge && (
-                              <View style={styles.specialBadge}>
-                                <Text style={styles.specialBadgeText}>{item.badge}</Text>
-                              </View>
-                            )}
-                            {isDeal && (
-                              <View style={styles.dealTag}>
-                                <Text style={styles.dealTagText}>COMBO DEAL</Text>
-                              </View>
-                            )}
-                          </View>
+                          ) : null}
                         </View>
+
+                        {/* Special Badge tag */}
+                        {item.badge ? (
+                          <View style={styles.dishCardBadgeTag}>
+                            <Text style={styles.dishCardBadgeText} numberOfLines={1}>
+                              {item.badge}
+                            </Text>
+                          </View>
+                        ) : null}
+
+                        {/* Out of Stock Overlay */}
+                        {isOutOfStock && (
+                          <View style={styles.dishSoldOutOverlay}>
+                            <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
+                          </View>
+                        )}
                       </View>
 
-                      {/* Dish Title */}
-                      <Text style={[styles.menuItemName, stockStatus.isSoldOut && styles.textSoldOut]} numberOfLines={2}>
+                      {/* Middle: Dish Name */}
+                      <Text style={styles.dishCardTitle} numberOfLines={2}>
                         {item.name}
                       </Text>
 
-                      {/* Stock Status Notification */}
-                      {stockStatus.isSoldOut ? (
-                        <View style={styles.soldOutPill}>
-                          <Ionicons name="close-circle" size={11} color="#C62828" />
-                          <Text style={styles.soldOutText}>Sold Out in Kitchen</Text>
-                        </View>
-                      ) : stockStatus.isLowStock ? (
-                        <View style={styles.lowStockPill}>
-                          <Ionicons name="alert-circle" size={11} color="#E65100" />
-                          <Text style={styles.lowStockText}>{stockStatus.label}</Text>
-                        </View>
-                      ) : null}
-
-                      {/* Deal Combo Content Preview */}
-                      {isDeal && item.dealItems && item.dealItems.length > 0 && (
-                        <TouchableOpacity 
-                          style={styles.dealItemsPreview} 
-                          onPress={() => setDealDetailItem(item)}
-                          hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                        >
-                          <Text style={styles.dealItemsCount} numberOfLines={1}>
-                            Includes: {item.dealItems.map(d => `${d.qty}x ${d.name}`).join(', ')}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {/* Price Row */}
-                      <View style={styles.cardBottomRow}>
-                        <View>
-                          <Text style={styles.menuItemPrice}>Rs. {item.price.toLocaleString()}</Text>
-                          {item.dealOriginalPrice && (
-                            <Text style={styles.dealOriginalPrice}>Rs. {item.dealOriginalPrice.toLocaleString()}</Text>
-                          )}
-                        </View>
+                      {/* Bottom: Warm Cream Price Capsule */}
+                      <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
+                        <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
+                          Rs. {item.price.toLocaleString()}
+                        </Text>
                       </View>
                     </TouchableOpacity>
+                  );
+                })}
 
-                    {/* Quick Add or Quantity Stepper */}
-                    <View style={styles.cardActionRow}>
-                      {stockStatus.isSoldOut ? (
-                        <View style={styles.disabledAddCircle}>
-                          <Ionicons name="ban" size={14} color="#8E8E93" />
-                        </View>
-                      ) : inCartItem ? (
-                        <View style={styles.cardInlineStepper}>
-                          <TouchableOpacity
-                            style={styles.stepperSubBtn}
-                            onPress={() => updateCartQty(item.id, -1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Ionicons name="remove" size={14} color="#C0392B" />
-                          </TouchableOpacity>
-                          <Text style={styles.cardStepperQty}>{inCartItem.qty}</Text>
-                          <TouchableOpacity
-                            style={styles.stepperAddBtn}
-                            onPress={() => updateCartQty(item.id, 1)}
-                            activeOpacity={0.7}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Ionicons name="add" size={14} color="#27AE60" />
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <TouchableOpacity
-                          style={styles.quickAddButton}
-                          onPress={() => addToCart(item)}
-                          activeOpacity={0.75}
-                        >
-                          <Ionicons name="add" size={15} color="#4a121a" style={{ marginRight: 2 }} />
-                          <Text style={styles.quickAddText}>Add</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                {filteredItems.length === 0 && (
+                  <View style={styles.noItemsBox}>
+                    <Ionicons name="search" size={40} color="#CBD5E1" />
+                    <Text style={styles.noItemsText}>No items found matching your filter</Text>
                   </View>
-                );
-              }}
-            />
+                )}
+              </View>
+            </ScrollView>
 
-            {/* Mobile Floating Review Bar */}
-            {isMobile && newCart.length > 0 && (
+            {/* Mobile Floating Review Bar if Cart has items */}
+            {isMobile && totalCartCount > 0 && (
               <TouchableOpacity 
                 style={[
                   styles.floatingCartBar,
                   { bottom: Math.max(16, insets.bottom + 8) }
                 ]}
-                onPress={() => setActiveTab('order')}
+                onPress={() => setMobileTab('cart')}
                 activeOpacity={0.9}
               >
                 <View style={styles.floatingCartLeft}>
                   <View style={styles.floatingBadge}>
-                    <Text style={styles.floatingBadgeText}>{newCart.reduce((s, c) => s + c.qty, 0)}</Text>
+                    <Text style={styles.floatingBadgeText}>{totalCartCount}</Text>
                   </View>
                   <View>
                     <Text style={styles.floatingCartText}>
                       {isExistingOrderActive ? 'Review Add-on Round' : 'Review & Punch KOT'}
                     </Text>
                     <Text style={styles.floatingCartSubText}>
-                      {newCart.length} item{newCart.length > 1 ? 's' : ''} ready to send
+                      {newCart.length} item{newCart.length > 1 ? 's' : ''} ready to punch
                     </Text>
                   </View>
                 </View>
                 <View style={styles.floatingCartRight}>
                   <Text style={styles.floatingCartPrice}>+Rs. {newCartTotal.toLocaleString()}</Text>
                   <View style={styles.floatingCartArrow}>
-                    <Ionicons name="arrow-forward" size={14} color="#4a121a" />
+                    <Ionicons name="arrow-forward" size={14} color="#35080E" />
                   </View>
                 </View>
               </TouchableOpacity>
@@ -907,50 +1346,96 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* ================= RIGHT: ORDER & ADD-ON SECTION ================= */}
-        {(!isMobile || activeTab === 'order') && (
-          <View style={[styles.cartSection, isMobile && styles.cartSectionMobile]}>
-            {/* Cart Header */}
-            <View style={styles.cartHeader}>
-              <View>
-                <Text style={styles.cartTitle}>
-                  {isExistingOrderActive ? 'Running Table Order' : 'Current Order Punch'}
+        {/* --------------------------------------------------------
+            RIGHT: CART & ORDER PANE (AUTHENTIC POS THEME)
+            -------------------------------------------------------- */}
+        {(!isMobile || mobileTab === 'cart') && (
+          <View style={[styles.cartSidebar, isMobile && styles.cartSidebarMobile]}>
+            {/* Header: Title + Reset Button */}
+            <View style={styles.cartHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="bag-handle" size={18} color="#52141C" />
+                <Text style={styles.cartHeaderTitle}>
+                  {isExistingOrderActive ? 'Table Order Cart' : 'New Table Order'}
                 </Text>
-                <Text style={styles.cartSubtitle}>
-                  {isExistingOrderActive 
-                    ? `Live Bill: Rs. ${totalBillSoFar.toLocaleString()}` 
-                    : `${tableName} • Guest Order`}
-                </Text>
+                {totalCartCount > 0 && (
+                  <View style={styles.cartCountPill}>
+                    <Text style={styles.cartCountText}>{totalCartCount}</Text>
+                  </View>
+                )}
               </View>
-              
-              {isExistingOrderActive && (
-                <View style={styles.activePill}>
-                  <Ionicons name="flame" size={13} color="#FF9500" style={{ marginRight: 4 }} />
-                  <Text style={styles.activePillText}>{activeTickets.length} Round(s)</Text>
+
+              <TouchableOpacity 
+                style={styles.cartResetBtn}
+                onPress={clearCart}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="refresh" size={15} color="#DC2626" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Table / Cabin Info Bar */}
+            <View style={styles.tableCabinBar}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
+                <Ionicons name="restaurant" size={14} color="#D97706" />
+                <Text style={styles.tableCabinLabel}>Table:</Text>
+                <View style={styles.tableCabinPill}>
+                  <Text style={styles.tableCabinPillText} numberOfLines={1}>
+                    {tableName}
+                  </Text>
+                  <Text style={styles.tableCabinPillSub}>
+                    ({floorName} • {table?.seats || 4} Guests)
+                  </Text>
                 </View>
+              </View>
+
+              {!isTakeaway && (
+                <TouchableOpacity 
+                  style={styles.changeTablePill}
+                  onPress={() => setTransferModalVisible(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="swap-horizontal" size={12} color="#475569" style={{ marginRight: 3 }} />
+                  <Text style={styles.changeTablePillText}>Change Table</Text>
+                </TouchableOpacity>
               )}
             </View>
-            
-            <ScrollView style={styles.cartItemsScroll} showsVerticalScrollIndicator={false}>
-              {/* SECTION 1: EXISTING ORDER (ALREADY IN KITCHEN) */}
-              {isExistingOrderActive && (
-                <View style={styles.existingSection}>
-                  <View style={styles.sectionHeaderRow}>
+
+            {/* Columns Subheader */}
+            <View style={styles.cartColumnSubheader}>
+              <Text style={[styles.cartColLabel, { flex: 1.8 }]}>PRODUCT</Text>
+              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'center' }]}>QTY</Text>
+              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'right' }]}>PRICE</Text>
+            </View>
+
+            {/* Scrollable Cart & Ticket Content */}
+            <ScrollView 
+              style={styles.cartItemsScroll}
+              showsVerticalScrollIndicator={false}
+            >
+              {/* SECTION A: ALREADY IN KITCHEN (TICKETS) */}
+              {alreadyOrderedItems.length > 0 && (
+                <View style={styles.existingTicketSection}>
+                  <View style={styles.ticketSectionHeader}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Ionicons name="restaurant" size={15} color="#4a121a" />
-                      <Text style={styles.sectionTitle}>Already in Kitchen ({alreadyOrderedItems.length})</Text>
+                      <Ionicons name="flame" size={14} color="#D97706" />
+                      <Text style={styles.ticketSectionTitle}>
+                        In Kitchen ({alreadyOrderedItems.length})
+                      </Text>
                     </View>
-                    <Text style={styles.sectionSubtotal}>Rs. {alreadyOrderedTotal.toLocaleString()}</Text>
+                    <Text style={styles.ticketSectionAmount}>
+                      Rs. {alreadyOrderedTotal.toLocaleString()}
+                    </Text>
                   </View>
 
                   {/* Ready to Serve Alert Banner */}
                   {(alreadyOrderedItems.some(i => i.status === 'ready') || activeTickets.some(t => t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')) && (
                     <View style={styles.readyAlertBanner}>
                       <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Ionicons name="notifications" size={20} color="#007AFF" />
+                        <Ionicons name="notifications" size={18} color="#0284C7" />
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.readyAlertTitle}>Food / Drinks Ready for Table!</Text>
-                          <Text style={styles.readyAlertSubtitle}>Kitchen or Bar KDS has dispatched items</Text>
+                          <Text style={styles.readyAlertTitle}>Food / Drinks Ready!</Text>
+                          <Text style={styles.readyAlertSubtitle}>Kitchen KDS has dispatched items</Text>
                         </View>
                       </View>
                       <TouchableOpacity
@@ -964,37 +1449,36 @@ export default function TableOrderScreen() {
                         }}
                         activeOpacity={0.8}
                       >
-                        <Ionicons name="checkmark-done" size={15} color="#fff" style={{ marginRight: 4 }} />
+                        <Ionicons name="checkmark-done" size={13} color="#fff" style={{ marginRight: 3 }} />
                         <Text style={styles.readyServeBtnText}>Serve All</Text>
                       </TouchableOpacity>
                     </View>
                   )}
 
+                  {/* List of kitchen items */}
                   {alreadyOrderedItems.map((item, idx) => (
-                    <View key={`${item.ticketId}-${idx}`} style={styles.existingItemRow}>
-                      <View style={styles.existingQtyBadge}>
-                        <Text style={styles.existingQtyText}>{item.qty}x</Text>
-                      </View>
-                      <View style={styles.existingItemInfo}>
-                        <Text style={styles.existingItemName}>{item.name}</Text>
-                        {item.notes && (
-                          <Text style={styles.existingItemNote}>📝 {item.notes}</Text>
-                        )}
-                        <Text style={styles.existingItemTicket}>
-                          {item.ticketId} • {Math.max(0, Math.floor((now - item.timePlaced) / 60000))}m ago
+                    <View key={`${item.ticketId}-${idx}`} style={styles.ticketItemRow}>
+                      <View style={{ flex: 1.8 }}>
+                        <Text style={styles.ticketItemName} numberOfLines={1}>{item.name}</Text>
+                        {item.notes ? (
+                          <Text style={styles.ticketItemNote} numberOfLines={1}>📝 {item.notes}</Text>
+                        ) : null}
+                        <Text style={styles.ticketItemMeta}>
+                          {item.station === 'juice' ? '🍹 Bar' : '🍳 Main'} • {Math.max(0, Math.floor((now - item.timePlaced) / 60000))}m ago
                         </Text>
                       </View>
-                      <View style={styles.existingStatusWrap}>
+
+                      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
                         <TouchableOpacity 
                           style={[
-                            styles.foodStatusPill, 
+                            styles.statusPillBadge,
                             item.status === 'served' 
-                              ? styles.statusServed 
+                              ? styles.statusServedPill 
                               : item.status === 'ready' 
-                                ? styles.statusReady 
+                                ? styles.statusReadyPill 
                                 : item.status === 'pending'
-                                  ? styles.statusPending
-                                  : styles.statusCooking
+                                  ? styles.statusPendingPill
+                                  : styles.statusCookingPill
                           ]}
                           onPress={() => {
                             if (item.status === 'ready') {
@@ -1008,270 +1492,212 @@ export default function TableOrderScreen() {
                           disabled={item.status !== 'ready'}
                           activeOpacity={0.7}
                         >
-                          <Ionicons 
-                            name={
-                              item.status === 'served' 
-                                ? 'checkmark-done-circle' 
-                                : item.status === 'ready' 
-                                  ? 'checkmark-circle' 
-                                  : item.status === 'pending'
-                                    ? 'hourglass-outline'
-                                    : 'flame-outline'
-                            } 
-                            size={12} 
-                            color={
-                              item.status === 'served' 
-                                ? '#34C759' 
-                                : item.status === 'ready' 
-                                  ? '#007AFF' 
-                                  : item.status === 'pending'
-                                    ? '#D97706'
-                                    : '#EA580C'
-                            } 
-                            style={{ marginRight: 3 }} 
-                          />
                           <Text style={[
-                            styles.foodStatusText,
+                            styles.statusPillBadgeText,
                             { 
                               color: item.status === 'served' 
-                                ? '#34C759' 
+                                ? '#10B981' 
                                 : item.status === 'ready' 
-                                  ? '#007AFF' 
+                                  ? '#0284C7' 
                                   : item.status === 'pending'
                                     ? '#D97706'
                                     : '#EA580C' 
                             }
                           ]}>
-                            {item.status === 'served' 
-                              ? 'SERVED' 
-                              : item.status === 'ready' 
-                                ? 'READY (SERVE)' 
-                                : item.status === 'pending'
-                                  ? 'QUEUED'
-                                  : 'COOKING'}
+                            {item.qty}x {item.status === 'served' ? 'SERVED' : item.status === 'ready' ? 'SERVE' : item.status === 'pending' ? 'QUEUED' : 'COOKING'}
                           </Text>
                         </TouchableOpacity>
-                        <Text style={styles.existingItemPrice}>Rs. {(item.price * item.qty).toLocaleString()}</Text>
                       </View>
+
+                      <Text style={[styles.ticketItemPrice, { flex: 1, textAlign: 'right' }]}>
+                        Rs. {(item.price * item.qty).toLocaleString()}
+                      </Text>
                     </View>
                   ))}
                 </View>
               )}
 
-              {/* SECTION 2: NEW ITEMS TO SEND (ROUND 2 / ADD-ON) */}
-              <View style={styles.newCartSection}>
-                <View style={styles.sectionHeaderRow}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons 
-                      name={isExistingOrderActive ? "add-circle" : "cart"} 
-                      size={16} 
-                      color={isExistingOrderActive ? "#FF9500" : "#2E7D32"} 
-                    />
-                    <Text style={[styles.sectionTitle, { color: isExistingOrderActive ? '#D84315' : '#1C1C1E' }]}>
-                      {isExistingOrderActive ? 'New Items to Add (Next Round)' : 'Selected Items'}
-                    </Text>
-                  </View>
-                  {newCart.length > 0 && (
-                    <Text style={[styles.sectionSubtotal, { color: '#27ae60' }]}>
+              {/* SECTION B: NEW ROUND / CART ITEMS */}
+              <View style={styles.newCartItemsContainer}>
+                {newCart.length > 0 && (
+                  <View style={styles.newAddonHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="add-circle" size={15} color="#10B981" />
+                      <Text style={styles.newAddonHeaderTitle}>
+                        {alreadyOrderedItems.length > 0 ? `New Round Add-on (#${activeTickets.length + 1})` : 'New Items'}
+                      </Text>
+                    </View>
+                    <Text style={styles.newAddonHeaderTotal}>
                       +Rs. {newCartTotal.toLocaleString()}
                     </Text>
-                  )}
-                </View>
+                  </View>
+                )}
 
-                {newCart.length === 0 ? (
-                  <View style={styles.emptyAddonBox}>
-                    <Ionicons name="fast-food-outline" size={36} color="#C7C7CC" />
-                    <Text style={styles.emptyAddonTitle}>
-                      {isExistingOrderActive 
-                        ? 'No new items selected for next round' 
-                        : 'Your order punch is currently empty'}
-                    </Text>
-                    <Text style={styles.emptyAddonDesc}>
-                      {isExistingOrderActive 
-                        ? 'Tap "Menu Catalog" above to add more drinks, food or desserts for this table.' 
-                        : 'Select dishes from the menu catalog to begin taking the guest order.'}
-                    </Text>
+                {newCart.length === 0 && alreadyOrderedItems.length === 0 ? (
+                  <View style={styles.emptyCartBox}>
+                    <Ionicons name="fast-food-outline" size={40} color="#CBD5E1" />
+                    <Text style={styles.emptyCartText}>No items in order</Text>
+                    <Text style={styles.emptyCartSub}>Tap dishes on the menu to start order</Text>
                     {isMobile && (
                       <TouchableOpacity 
-                        style={styles.openMenuBtn}
-                        onPress={() => setActiveTab('menu')}
+                        style={styles.openMenuCatalogBtn}
+                        onPress={() => setMobileTab('menu')}
                       >
-                        <Ionicons name="add" size={16} color="#4a121a" style={{ marginRight: 4 }} />
-                        <Text style={styles.openMenuBtnText}>Browse Menu</Text>
+                        <Ionicons name="restaurant" size={14} color="#52141C" style={{ marginRight: 4 }} />
+                        <Text style={styles.openMenuCatalogBtnText}>Browse Menu</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 ) : (
-                  <>
-                    {/* Rush Order Priority Flag Toggle */}
-                    <TouchableOpacity 
-                      style={[styles.rushBanner, isRushOrder && styles.rushBannerActive]}
-                      onPress={() => setIsRushOrder(!isRushOrder)}
-                      activeOpacity={0.8}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Ionicons name="flash" size={18} color={isRushOrder ? '#D5A943' : '#8E8E93'} />
-                        <View>
-                          <Text style={[styles.rushBannerTitle, isRushOrder && styles.rushBannerTitleActive]}>
-                            {isRushOrder ? '⚡ RUSH / VIP PRIORITY ACTIVE' : 'Mark as Rush Order (Jaldi)'}
-                          </Text>
-                          <Text style={styles.rushBannerSub}>
-                            {isRushOrder ? 'Kitchen KDS will highlight this ticket at the top' : 'Tap to alert chef for urgent delivery'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Ionicons 
-                        name={isRushOrder ? 'checkbox' : 'square-outline'} 
-                        size={20} 
-                        color={isRushOrder ? '#D5A943' : '#8E8E93'} 
-                      />
-                    </TouchableOpacity>
+                  newCart.map(c => (
+                    <View key={c.item.id} style={styles.cartItemRow}>
+                      <View style={{ flex: 1.8 }}>
+                        <Text style={styles.cartItemName} numberOfLines={1}>{c.item.name}</Text>
+                        <Text style={styles.cartItemUnit}>Rs. {c.item.price.toLocaleString()}</Text>
 
-                    {newCart.map((c) => (
-                      <View key={c.item.id} style={styles.newCartItemRow}>
-                        <View style={styles.newCartItemMain}>
-                          <Text style={styles.newCartItemName}>{c.item.name}</Text>
-                          <Text style={styles.newCartItemUnit}>Rs. {c.item.price.toLocaleString()} each</Text>
-
-                          {/* Notes / Special Instructions Chip */}
-                          <TouchableOpacity 
-                            style={[styles.itemNoteChip, c.notes && styles.itemNoteChipActive]}
-                            onPress={() => openNoteModal(c)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons 
-                              name="create-outline" 
-                              size={12} 
-                              color={c.notes ? '#B8860B' : '#8E8E93'} 
-                              style={{ marginRight: 4 }} 
-                            />
-                            <Text 
-                              style={[styles.itemNoteText, c.notes && styles.itemNoteTextActive]} 
-                              numberOfLines={1}
-                            >
-                              {c.notes ? c.notes : '+ Add Cooking Note (e.g. Less Spicy)'}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-
-                        {/* Quantity Stepper */}
-                        <View style={styles.stepperContainer}>
-                          <TouchableOpacity 
-                            style={styles.stepBtn}
-                            onPress={() => updateCartQty(c.item.id, -1)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="remove" size={16} color="#1C1C1E" />
-                          </TouchableOpacity>
-
-                          <Text style={styles.stepQty}>{c.qty}</Text>
-
-                          <TouchableOpacity 
-                            style={styles.stepBtn}
-                            onPress={() => updateCartQty(c.item.id, 1)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="add" size={16} color="#1C1C1E" />
-                          </TouchableOpacity>
-                        </View>
-
-                        <Text style={styles.newCartItemTotal}>
-                          Rs. {(c.item.price * c.qty).toLocaleString()}
-                        </Text>
-
+                        {/* Cooking note chip */}
                         <TouchableOpacity 
-                          style={styles.removeBtn}
-                          onPress={() => removeFromCart(c.item.id)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          style={[styles.cartItemNoteChip, c.notes && styles.cartItemNoteChipActive]}
+                          onPress={() => openNoteModal(c)}
+                          activeOpacity={0.7}
                         >
-                          <Ionicons name="close-circle" size={18} color="#FF3B30" />
+                          <Ionicons 
+                            name="create-outline" 
+                            size={11} 
+                            color={c.notes ? '#B45309' : '#64748B'} 
+                            style={{ marginRight: 3 }} 
+                          />
+                          <Text style={[styles.cartItemNoteText, c.notes && styles.cartItemNoteTextActive]} numberOfLines={1}>
+                            {c.notes || '+ Note'}
+                          </Text>
                         </TouchableOpacity>
                       </View>
-                    ))}
-                  </>
+
+                      {/* Stepper */}
+                      <View style={styles.cartStepperBox}>
+                        <TouchableOpacity 
+                          style={styles.cartStepBtn}
+                          onPress={() => updateCartQty(c.item.id, -1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={13} color="#1E293B" />
+                        </TouchableOpacity>
+                        <Text style={styles.cartStepQty}>{c.qty}</Text>
+                        <TouchableOpacity 
+                          style={styles.cartStepBtn}
+                          onPress={() => updateCartQty(c.item.id, 1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={13} color="#1E293B" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Price & Remove */}
+                      <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
+                        <Text style={styles.cartItemTotal}>
+                          Rs. {(c.item.price * c.qty).toLocaleString()}
+                        </Text>
+                        <TouchableOpacity 
+                          onPress={() => removeFromCart(c.item.id)}
+                          hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          style={{ marginTop: 2 }}
+                        >
+                          <Ionicons name="close-circle" size={15} color="#EF4444" />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
                 )}
               </View>
             </ScrollView>
 
-            {/* Cart Footer */}
-            <View style={[styles.cartFooter, isMobile && { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
-              <View style={styles.billBreakdown}>
-                {isExistingOrderActive && (
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>Already In Kitchen:</Text>
-                    <Text style={styles.breakdownVal}>Rs. {alreadyOrderedTotal.toLocaleString()}</Text>
+            {/* --------------------------------------------------------
+                BOTTOM SETTLEMENT CARD (AUTHENTIC POS CRYSTAL CARD)
+                -------------------------------------------------------- */}
+            <View style={[styles.cartBottomSettlement, isMobile && { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
+              {/* Math Summary Lines */}
+              <View style={styles.mathSummaryLines}>
+                {alreadyOrderedItems.length > 0 && (
+                  <View style={styles.mathLine}>
+                    <Text style={styles.mathLabel}>In Kitchen (Rounds):</Text>
+                    <Text style={styles.mathValue}>Rs. {alreadyOrderedTotal.toLocaleString()}</Text>
                   </View>
                 )}
                 {newCart.length > 0 && (
-                  <View style={styles.breakdownRow}>
-                    <Text style={styles.breakdownLabel}>New Round Add-on:</Text>
-                    <Text style={[styles.breakdownVal, { color: '#27ae60' }]}>
+                  <View style={styles.mathLine}>
+                    <Text style={styles.mathLabel}>New Additions:</Text>
+                    <Text style={[styles.mathValue, { color: '#10B981' }]}>
                       +Rs. {newCartTotal.toLocaleString()}
                     </Text>
                   </View>
                 )}
-                <View style={styles.totalRow}>
-                  <Text style={styles.totalLabel}>Total Running Bill</Text>
-                  <Text style={styles.totalAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+                <View style={styles.payableRow}>
+                  <Text style={styles.payableLabel}>TOTAL BILL</Text>
+                  <Text style={styles.payableAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
                 </View>
               </View>
-              
+
+              {/* Rush Order Priority Flag Toggle */}
+              {newCart.length > 0 && (
+                <TouchableOpacity 
+                  style={[styles.rushOrderToggle, isRushOrder && styles.rushOrderToggleActive]}
+                  onPress={() => setIsRushOrder(!isRushOrder)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="flash" size={15} color={isRushOrder ? '#D4AF37' : '#94A3B8'} />
+                  <Text style={[styles.rushOrderToggleText, isRushOrder && styles.rushOrderToggleTextActive]}>
+                    {isRushOrder ? '⚡ VIP RUSH PRIORITY' : 'Mark as Rush Order (Jaldi)'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              {/* Action Buttons */}
               {newCart.length > 0 ? (
                 <TouchableOpacity 
-                  style={styles.sendButton}
+                  style={styles.proceedPayBtn}
                   onPress={handleSendToKitchen}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="paper-plane" size={18} color="#4a121a" style={{ marginRight: 8 }} />
-                  <Text style={styles.sendButtonText}>
-                    {isExistingOrderActive 
-                      ? `Send Add-on to Kitchen (Round #${activeTickets.length + 1})` 
+                  <Ionicons name="paper-plane" size={16} color="#FFFFFF" />
+                  <Text style={styles.proceedPayBtnText}>
+                    {alreadyOrderedItems.length > 0 
+                      ? `Punch Add-on (Round #${activeTickets.length + 1})` 
                       : 'Send Order to Kitchen (KOT)'}
                   </Text>
                 </TouchableOpacity>
               ) : isExistingOrderActive && !isTakeaway ? (
-                <View style={styles.floatingCapsuleActionBar}>
-                  <TouchableOpacity 
-                    style={[styles.requestBillBtn, isBilled && styles.requestBillBtnDone]}
-                    onPress={handleRequestBill}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons 
-                      name={isBilled ? "checkmark-circle" : "receipt"} 
-                      size={16} 
-                      color={isBilled ? "#2E7D32" : "#D84315"} 
-                      style={{ marginRight: 6 }} 
-                    />
-                    <Text style={[styles.requestBillBtnText, isBilled && styles.requestBillBtnTextDone]}>
-                      {isBilled ? 'Bill Requested' : 'Request Final Bill'}
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity 
-                    style={styles.backToTablesBtn}
-                    onPress={goBack}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="arrow-back" size={16} color="#D5A943" style={{ marginRight: 5 }} />
-                    <Text style={styles.backToTablesBtnText}>Back</Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity 
+                  style={[styles.holdOrderBtn, isBilled && styles.holdOrderBtnDone]}
+                  onPress={handleRequestBill}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons 
+                    name={isBilled ? "checkmark-circle" : "receipt"} 
+                    size={16} 
+                    color={isBilled ? "#047857" : "#B45309"} 
+                    style={{ marginRight: 6 }} 
+                  />
+                  <Text style={[styles.holdOrderBtnText, isBilled && styles.holdOrderBtnTextDone]}>
+                    {isBilled ? 'Bill Requested from Cashier' : 'Request Final Bill from Cashier'}
+                  </Text>
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity 
-                  style={styles.backToTablesBtn}
+                  style={styles.holdOrderBtn}
                   onPress={goBack}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="arrow-back" size={16} color="#4a121a" style={{ marginRight: 6 }} />
-                  <Text style={styles.backToTablesBtnText}>Back to Tables Floor</Text>
+                  <Ionicons name="arrow-back" size={16} color="#52141C" style={{ marginRight: 6 }} />
+                  <Text style={styles.holdOrderBtnText}>Back to Tables Floor</Text>
                 </TouchableOpacity>
               )}
             </View>
           </View>
         )}
+
       </View>
 
-      {/* ================= MODAL 1: COOKING INSTRUCTIONS / ITEM NOTES ================= */}
+      {/* ================= MODAL 1: COOKING INSTRUCTIONS / NOTES ================= */}
       <Modal visible={!!editingNoteItem} transparent animationType="slide">
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, { maxWidth: 440 }]}>
@@ -1281,7 +1707,7 @@ export default function TableOrderScreen() {
                 <Text style={styles.modalSubtitle}>{editingNoteItem?.item.name}</Text>
               </View>
               <TouchableOpacity onPress={() => setEditingNoteItem(null)}>
-                <Ionicons name="close-circle" size={24} color="#8E8E93" />
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
@@ -1301,12 +1727,12 @@ export default function TableOrderScreen() {
               ))}
             </View>
 
-            {/* Freeform Note Input */}
+            {/* Custom Cooking Note Input */}
             <Text style={[styles.notePresetTitle, { marginTop: 14 }]}>Custom Cooking Note:</Text>
             <TextInput
               style={styles.noteInput}
               placeholder="e.g. Serve extra hot, separate sauces, no garnish..."
-              placeholderTextColor="#AEAEB2"
+              placeholderTextColor="#94A3B8"
               value={noteDraft}
               onChangeText={setNoteDraft}
               multiline
@@ -1341,7 +1767,7 @@ export default function TableOrderScreen() {
             </TouchableOpacity>
             
             <Text style={styles.modalTitle}>Select Size / Portion</Text>
-            <Text style={{ textAlign: 'center', marginBottom: 16, color: '#666', fontSize: 15 }}>
+            <Text style={{ textAlign: 'center', marginBottom: 16, color: '#64748B', fontSize: 14 }}>
               {variantModalItem?.name}
             </Text>
 
@@ -1361,66 +1787,7 @@ export default function TableOrderScreen() {
         </View>
       </Modal>
 
-      {/* ================= MODAL 3: COMBO DEAL DETAILS ================= */}
-      <Modal visible={!!dealDetailItem} transparent animationType="fade">
-        <View style={styles.modalBg}>
-          <View style={[styles.modalCard, { maxWidth: 420 }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>⭐ Combo Deal Details</Text>
-                <Text style={styles.modalSubtitle}>{dealDetailItem?.name}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setDealDetailItem(null)}>
-                <Ionicons name="close-circle" size={24} color="#8E8E93" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={{ color: '#444', fontSize: 13, marginBottom: 12, lineHeight: 18 }}>
-              {dealDetailItem?.description}
-            </Text>
-
-            <View style={styles.dealItemsBox}>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: '#52171B', marginBottom: 8, textTransform: 'uppercase' }}>
-                Included in this Deal:
-              </Text>
-              {dealDetailItem?.dealItems?.map((di, idx) => (
-                <View key={idx} style={styles.dealItemRow}>
-                  <Text style={styles.dealItemQty}>{di.qty}x</Text>
-                  <Text style={styles.dealItemName}>{di.name}</Text>
-                </View>
-              ))}
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 14 }}>
-              <View>
-                <Text style={{ fontSize: 11, color: '#888' }}>Deal Price</Text>
-                <Text style={{ fontSize: 20, fontWeight: '900', color: '#4a121a' }}>
-                  Rs. {dealDetailItem?.price.toLocaleString()}
-                </Text>
-              </View>
-              {dealDetailItem?.dealOriginalPrice && (
-                <View style={styles.savingsPill}>
-                  <Text style={styles.savingsPillText}>
-                    Save Rs. {(dealDetailItem.dealOriginalPrice - dealDetailItem.price).toLocaleString()}
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            <TouchableOpacity 
-              style={styles.modalSaveBtn}
-              onPress={() => {
-                if (dealDetailItem) addToCart(dealDetailItem);
-                setDealDetailItem(null);
-              }}
-            >
-              <Text style={styles.modalSaveBtnText}>Add Deal to Order</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ================= MODAL 4: MOVE / TRANSFER TABLE ================= */}
+      {/* ================= MODAL 3: MOVE / TRANSFER TABLE ================= */}
       <Modal visible={transferModalVisible} transparent animationType="slide">
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, { maxWidth: 460, maxHeight: '80%' }]}>
@@ -1430,19 +1797,19 @@ export default function TableOrderScreen() {
                 <Text style={styles.modalSubtitle}>From: {tableName}</Text>
               </View>
               <TouchableOpacity onPress={() => setTransferModalVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#8E8E93" />
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
-            <Text style={{ color: '#666', fontSize: 13, marginBottom: 12 }}>
+            <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 12 }}>
               Select an available table or Majlis cabin to move all active tickets and running orders:
             </Text>
 
             <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
               {availableTransferTables.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                  <Ionicons name="business-outline" size={36} color="#CCC" />
-                  <Text style={{ color: '#888', marginTop: 8, fontSize: 13 }}>No other tables currently available.</Text>
+                  <Ionicons name="business-outline" size={36} color="#CBD5E1" />
+                  <Text style={{ color: '#94A3B8', marginTop: 8, fontSize: 13 }}>No other tables currently available.</Text>
                 </View>
               ) : (
                 availableTransferTables.map((t) => {
@@ -1455,7 +1822,7 @@ export default function TableOrderScreen() {
                       onPress={() => handleTransferTable(t)}
                     >
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <SeatingTypeIcon type={sType} size={18} color="#D5A943" />
+                        <SeatingTypeIcon type={sType} size={18} color="#D4AF37" />
                         <View>
                           <Text style={styles.transferTableName}>{t.name}</Text>
                           <Text style={styles.transferTableFloor}>{fName} • {t.seats} Seats</Text>
@@ -1473,17 +1840,17 @@ export default function TableOrderScreen() {
         </View>
       </Modal>
 
-      {/* ================= MODAL 5: GUEST COUNT (PAX) ================= */}
+      {/* ================= MODAL 4: GUEST COUNT (PAX) ================= */}
       <Modal visible={guestCountModalVisible} transparent animationType="fade">
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, { maxWidth: 360 }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Set Guest Count (Pax)</Text>
               <TouchableOpacity onPress={() => setGuestCountModalVisible(false)}>
-                <Ionicons name="close-circle" size={22} color="#8E8E93" />
+                <Ionicons name="close-circle" size={22} color="#94A3B8" />
               </TouchableOpacity>
             </View>
-            <Text style={{ color: '#666', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
+            <Text style={{ color: '#64748B', fontSize: 13, marginBottom: 16, textAlign: 'center' }}>
               How many guests are seated at {tableName}?
             </Text>
 
@@ -1504,7 +1871,7 @@ export default function TableOrderScreen() {
         </View>
       </Modal>
 
-      {/* ================= MODAL 6: RUNNING BILL SLIP PREVIEW ================= */}
+      {/* ================= MODAL 5: RUNNING BILL SLIP PREVIEW ================= */}
       <Modal visible={billSlipModalVisible} transparent animationType="slide">
         <View style={styles.modalBg}>
           <View style={[styles.modalCard, { maxWidth: 440, maxHeight: '85%' }]}>
@@ -1514,7 +1881,7 @@ export default function TableOrderScreen() {
                 <Text style={styles.modalSubtitle}>{tableName}</Text>
               </View>
               <TouchableOpacity onPress={() => setBillSlipModalVisible(false)}>
-                <Ionicons name="close-circle" size={24} color="#8E8E93" />
+                <Ionicons name="close-circle" size={24} color="#94A3B8" />
               </TouchableOpacity>
             </View>
 
@@ -1551,7 +1918,7 @@ export default function TableOrderScreen() {
                 style={styles.modalPrintBtn}
                 onPress={() => printInvoiceReceipt(runningInvoicePreview)}
               >
-                <Ionicons name="print" size={16} color="#4a121a" style={{ marginRight: 6 }} />
+                <Ionicons name="print" size={16} color="#52141C" style={{ marginRight: 6 }} />
                 <Text style={styles.modalPrintBtnText}>Print Bill Slip</Text>
               </TouchableOpacity>
 
@@ -1573,80 +1940,143 @@ export default function TableOrderScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#4a121a', // Sultan Burgundy safe area
+    backgroundColor: '#32070D', // Royal Sultan Burgundy safe area
   },
-  header: {
-    backgroundColor: '#4a121a',
+
+  /* --------------------------------------------------------
+     1. TOP BAR (AUTHENTIC ROYAL SULTAN BURGUNDY THEME)
+     -------------------------------------------------------- */
+  topBar: {
+    backgroundColor: '#35080E',
     paddingHorizontal: 14,
     paddingVertical: 10,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(213, 169, 67, 0.25)',
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.35)',
+    gap: 12,
   },
-  backButton: {
+  topBarBackBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.38)',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+      } as any,
+    }),
+  },
+  topBarBackText: {
+    color: '#F3D179',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  topBarTableBlock: {
     flex: 1,
   },
-  headerIconBubble: {
-    width: 28,
-    height: 28,
-    borderRadius: 8,
+  topBarTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  topBarIconOrb: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  headerTitle: {
-    fontSize: 17,
+  topBarTableTitle: {
+    fontSize: 16,
     fontWeight: '900',
-    color: '#D5A943', // Sultan Gold
+    color: '#F3D179',
+    letterSpacing: 0.3,
   },
-  headerSubtitleType: {
+  topBarSubtitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+    flexWrap: 'wrap',
+  },
+  topBarSubtitleType: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#D5A943',
+    color: '#F3D179',
   },
-  headerSubtitleFloor: {
+  topBarSubtitleFloor: {
     fontSize: 11,
     fontWeight: '700',
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255, 255, 255, 0.85)',
   },
-  headerDot: {
+  topBarDot: {
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(255, 255, 255, 0.35)',
   },
   paxChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(213, 169, 67, 0.2)',
-    paddingHorizontal: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 6,
   },
   paxChipText: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#D5A943',
+    color: '#F3D179',
   },
-  headerActions: {
+  topBarBillPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 4,
+    backgroundColor: 'rgba(212, 175, 55, 0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
-  headerIconBtn: {
+  topBarBillLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#F3D179',
+    textTransform: 'uppercase',
+  },
+  topBarBillAmount: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+  topBarActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  topBarActionBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
+    borderColor: 'rgba(212, 175, 55, 0.28)',
   },
-  headerIconBtnText: {
-    color: '#D5A943',
-    fontSize: 9,
+  topBarActionBtnText: {
+    color: '#F3D179',
+    fontSize: 9.5,
     fontWeight: '800',
     marginTop: 1,
   },
@@ -1658,19 +2088,19 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   statusBadgeOccupied: {
-    backgroundColor: 'rgba(255, 59, 48, 0.18)',
+    backgroundColor: 'rgba(239, 68, 68, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 59, 48, 0.4)',
+    borderColor: 'rgba(239, 68, 68, 0.45)',
   },
   statusBadgeBilled: {
-    backgroundColor: 'rgba(255, 149, 0, 0.18)',
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(255, 149, 0, 0.4)',
+    borderColor: 'rgba(245, 158, 11, 0.45)',
   },
   statusBadgeAvailable: {
-    backgroundColor: 'rgba(52, 199, 89, 0.18)',
+    backgroundColor: 'rgba(16, 185, 129, 0.18)',
     borderWidth: 1,
-    borderColor: 'rgba(52, 199, 89, 0.4)',
+    borderColor: 'rgba(16, 185, 129, 0.45)',
   },
   statusDot: {
     width: 6,
@@ -1679,459 +2109,854 @@ const styles = StyleSheet.create({
     marginRight: 5,
   },
   statusBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
-  headerBillPill: {
+
+  /* --------------------------------------------------------
+     2. MOBILE SWITCHER (< 850px)
+     -------------------------------------------------------- */
+  mobileSwitcher: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(213, 169, 67, 0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.45)',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    backgroundColor: 'rgba(38, 5, 9, 0.98)',
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.35)',
   },
-  headerBillLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#F3D179',
-    textTransform: 'uppercase',
-  },
-  headerBillAmount: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-  mobileTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-  },
-  mobileTab: {
+  mobileSwitchBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 3,
     borderBottomColor: 'transparent',
   },
-  mobileTabActive: {
-    borderBottomColor: '#4a121a',
+  mobileSwitchBtnActive: {
+    borderBottomColor: '#E5B83B',
+    backgroundColor: 'rgba(212, 175, 55, 0.08)',
   },
-  mobileTabText: {
-    fontSize: 14,
-    color: '#8E8E93',
-    fontWeight: '600',
+  mobileSwitchText: {
+    color: 'rgba(255,255,255,0.65)',
+    fontSize: 12,
+    fontWeight: '700',
   },
-  mobileTabTextActive: {
-    color: '#4a121a',
-    fontWeight: '800',
+  mobileSwitchTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
   },
-  tabBadge: {
-    backgroundColor: '#27ae60',
+  mobileTabBadge: {
+    backgroundColor: '#10B981',
     paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingVertical: 1.5,
     borderRadius: 10,
     marginLeft: 6,
   },
-  tabBadgeText: {
+  mobileTabBadgeText: {
     color: '#FFFFFF',
     fontSize: 10,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  mainLayout: {
+
+  /* --------------------------------------------------------
+     3. MAIN WORKSPACE
+     -------------------------------------------------------- */
+  mainWorkspace: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#FAF8F5',
   },
-  menuSection: {
-    flex: 3,
-    backgroundColor: '#F8F9FA',
+
+  /* --------------------------------------------------------
+     LEFT: CATEGORIES SIDEBAR (AUTHENTIC POS THEME)
+     -------------------------------------------------------- */
+  categorySidebar: {
+    width: 220,
+    backgroundColor: '#190306',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(24px)',
+        WebkitBackdropFilter: 'blur(24px)',
+        backgroundImage: 'radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.08) 0%, transparent 70%), linear-gradient(180deg, rgba(32, 5, 10, 0.98) 0%, rgba(18, 2, 5, 0.98) 100%)',
+        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.25)',
+      } as any
+    }),
+    padding: 10,
+    borderRightWidth: 1.5,
+    borderRightColor: 'rgba(212, 175, 55, 0.28)',
   },
-  searchAndStationBar: {
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAEAEA',
-    paddingBottom: 8,
+  categorySidebarMobile: {
+    width: '100%',
+    maxHeight: 110,
+    padding: 6,
+    borderRightWidth: 0,
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.25)',
   },
-  searchBar: {
+  categoryHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F4F4F6',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginHorizontal: 14,
-    marginTop: 8,
-    marginBottom: 6,
-    gap: 8,
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    paddingHorizontal: 2,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 13,
-    color: '#1C1C1E',
-  },
-  stationFilterContainer: {
-    paddingHorizontal: 14,
+  categoryTitleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
   },
-  stationChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    backgroundColor: '#F2F2F7',
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  stationChipActive: {
-    backgroundColor: '#4a121a',
-    borderColor: '#4a121a',
-  },
-  stationChipText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#636366',
-  },
-  stationChipTextActive: {
-    color: '#FFFFFF',
-  },
-  categoriesBar: {
-    flexGrow: 0,
-    paddingVertical: 10,
-  },
-  categoryBadge: {
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
-  },
-  categoryBadgeActive: {
-    backgroundColor: '#D5A943',
-    borderColor: '#D5A943',
-  },
-  categoryText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#636366',
-  },
-  categoryTextActive: {
-    color: '#4a121a',
-    fontWeight: '800',
-  },
-  menuGrid: {
-    paddingHorizontal: 14,
-    paddingBottom: 90,
-  },
-  menuGridRow: {
-    gap: 10,
-    marginBottom: 12,
-  },
-  menuItemCard: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 12,
-    minHeight: 125,
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 5,
-    elevation: 2,
-    borderWidth: 1.2,
-    borderColor: '#ECE8DF',
-  },
-  menuItemCardInCart: {
-    borderColor: '#D5A943',
-    backgroundColor: '#FFFEFA',
-  },
-  menuItemCardTouch: {
-    flex: 1,
-  },
-  categoryPill: {
-    backgroundColor: '#F5F5F7',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
+  categoryTitleIconOrb: {
+    width: 20,
+    height: 20,
     borderRadius: 6,
-    alignSelf: 'flex-start',
-  },
-  cardSoldOut: {
-    opacity: 0.55,
-    backgroundColor: '#F5F5F5',
-  },
-  cardHeaderArea: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 6,
-  },
-  dishThumbnail: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-  },
-  dishPlaceholderIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cardHeaderRight: {
+  categoryHeading: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#E5B83B',
+    letterSpacing: 1.1,
+  },
+  categoryCountPill: {
+    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  categoryCountPillText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  categoryViewSwitcher: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderRadius: 7,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.12)',
+    gap: 2,
+  },
+  viewSwitchBtn: {
+    width: 22,
+    height: 20,
+    borderRadius: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewSwitchBtnActive: {
+    backgroundColor: '#E5B83B',
+  },
+  quickFindBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.55)',
+    borderRadius: 22,
+    paddingHorizontal: 7,
+    paddingRight: 9,
+    height: 38,
+    marginBottom: 10,
+    gap: 7,
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 3px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  quickFindBoxFocused: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFFFF',
+    transform: [{ scale: 1.02 }, { translateY: -1 }],
+    ...Platform.select({
+      web: {
+        boxShadow: '0 6px 20px rgba(212, 175, 55, 0.35), 0 0 0 2px rgba(212, 175, 55, 0.5)',
+      } as any
+    }),
+  },
+  quickFindIconOrb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickFindInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#1E293B',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 0,
+    paddingHorizontal: 2,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+      } as any
+    }),
+  },
+  categoriesScroll: {
     flex: 1,
   },
-  cardTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
+  categoriesContainer: {
+    paddingBottom: 10,
   },
-  menuItemCat: {
+  categoriesScrollMobile: {
+    flexDirection: 'row',
+    gap: 7,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+  },
+  categoriesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 7,
+    justifyContent: 'space-between',
+  },
+  categoriesList: {
+    flexDirection: 'column',
+    gap: 6,
+  },
+  categoryTile: {
+    width: Platform.OS === 'web' ? ('calc(50% - 4px)' as any) : '48%',
+    height: 72,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.18)',
+    borderRadius: 12,
+    padding: 7,
+    justifyContent: 'space-between',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        boxShadow: '0 3px 10px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)',
+        cursor: 'pointer',
+        boxSizing: 'border-box',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  categoryTileMobile: {
+    width: 105,
+    height: 64,
+  },
+  categoryTileActive: {
+    backgroundColor: '#E5B83B',
+    borderColor: '#FFE082',
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
+        boxShadow: '0 8px 22px rgba(229, 184, 59, 0.45), inset 0 1px 0 rgba(255,255,255,0.8)',
+        transform: 'translateY(-1.5px)',
+      } as any
+    }),
+  },
+  tileTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  tileIconOrb: {
+    width: 25,
+    height: 25,
+    borderRadius: 7,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tileIconOrbActive: {
+    backgroundColor: 'rgba(30, 41, 59, 0.15)',
+    borderColor: 'rgba(30, 41, 59, 0.3)',
+  },
+  tileCountBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  tileCountBadgeActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  tileCountText: {
+    fontSize: 9,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  tileCountTextActive: {
+    color: '#F8FAFC',
+  },
+  categoryTileText: {
     fontSize: 10,
-    color: '#8A6D3B',
-    textTransform: 'uppercase',
     fontWeight: '800',
+    color: '#F1F5F9',
+    textAlign: 'left',
     letterSpacing: 0.3,
   },
-  cartCountPill: {
-    backgroundColor: '#D5A943',
+  categoryTileTextActive: {
+    color: '#1E293B',
+    fontWeight: '900',
+  },
+  categoryListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    height: 44,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.18)',
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)',
+        cursor: 'pointer',
+        boxSizing: 'border-box',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  categoryListRowActive: {
+    backgroundColor: '#E5B83B',
+    borderColor: '#FFE082',
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
+        boxShadow: '0 6px 18px rgba(229, 184, 59, 0.4), inset 0 1px 0 rgba(255,255,255,0.8)',
+        transform: 'translateX(3px)',
+      } as any
+    }),
+  },
+  listIconOrb: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  listIconOrbActive: {
+    backgroundColor: 'rgba(30, 41, 59, 0.15)',
+    borderColor: 'rgba(30, 41, 59, 0.3)',
+  },
+  categoryListText: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#F1F5F9',
+    letterSpacing: 0.3,
+  },
+  categoryListTextActive: {
+    color: '#1E293B',
+    fontWeight: '900',
+  },
+  listCountBadge: {
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 10,
+  },
+  listCountBadgeActive: {
+    backgroundColor: '#1E293B',
+    borderColor: '#1E293B',
+  },
+  listCountText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#FDE68A',
+  },
+  listCountTextActive: {
+    color: '#F8FAFC',
+  },
+  categoryBottomPanel: {
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(212, 175, 55, 0.22)',
+    gap: 6,
+  },
+  bottomStatusHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 2,
+  },
+  bottomStatusTitle: {
+    fontSize: 8.5,
+    fontWeight: '900',
+    color: '#A38B7C',
+    letterSpacing: 0.9,
+  },
+  bottomStatusCount: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#E5B83B',
+  },
+  bottomActiveCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    borderRadius: 9,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 7,
+  },
+  bottomActiveIconOrb: {
+    width: 20,
+    height: 20,
+    borderRadius: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bottomActiveName: {
+    flex: 1,
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#F8FAFC',
+    letterSpacing: 0.4,
+  },
+  bottomResetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(220, 38, 38, 0.85)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    gap: 2,
+  },
+  bottomResetText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+
+  /* --------------------------------------------------------
+     CENTER: MENU DISHES GRID (AUTHENTIC POS THEME)
+     -------------------------------------------------------- */
+  centerCatalog: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  catalogSubheader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.22)',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  searchPillBox: {
+    flex: 1,
+    minWidth: 240,
+    backgroundColor: 'rgba(255, 255, 255, 0.96)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.48)',
+    borderRadius: 24,
+    height: 40,
+    paddingHorizontal: 8,
+    paddingRight: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  searchPillBoxFocused: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFFFF',
+  },
+  searchIconOrb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  searchIconOrbFocused: {
+    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    borderColor: '#D4AF37',
+  },
+  searchPillInput: {
+    flex: 1,
+    height: '100%',
+    fontSize: 12.5,
+    fontWeight: '600',
+    color: '#1E293B',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingHorizontal: 2,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+      } as any
+    }),
+  },
+  searchClearBtn: {
+    padding: 3,
+  },
+  stationChipsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexWrap: 'wrap',
+  },
+  stationPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  stationPillActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
+  },
+  stationPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  stationPillTextActive: {
+    color: '#F3D179',
+    fontWeight: '800',
+  },
+
+  /* Region / Cuisine Quick Filter Pills */
+  posRegionFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.72)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    gap: 8,
+  },
+  posRegionFilterLead: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 6,
+    borderRightWidth: 1,
+    borderRightColor: 'rgba(226, 232, 240, 0.9)',
+  },
+  posRegionLeadIconWrap: {
+    width: 20,
+    height: 20,
+    borderRadius: 5,
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  posRegionFilterLeadText: {
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#8A7A70',
+    letterSpacing: 0.8,
+  },
+  posRegionScroll: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingRight: 10,
+  },
+  posRegionChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.95)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 14,
+    gap: 4,
+  },
+  posRegionChipActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
+  },
+  posRegionEmoji: {
+    fontSize: 11,
+  },
+  posRegionChipText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  posRegionChipTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  posRegionChipBadge: {
+    backgroundColor: 'rgba(241, 245, 249, 0.9)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+  },
+  posRegionChipBadgeActive: {
+    backgroundColor: 'rgba(212, 175, 55, 0.3)',
+  },
+  posRegionChipBadgeText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  posRegionChipBadgeTextActive: {
+    color: '#FDE68A',
+  },
+
+  /* Dishes Grid & Cards */
+  dishesScrollView: {
+    flex: 1,
+  },
+  dishesGridContainer: {
+    padding: 12,
+  },
+  dishesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  dishCard: {
+    width: '18.8%',
+    minWidth: 148,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 9,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 146,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.95)',
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+        cursor: 'pointer',
+        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
+      } as any
+    }),
+  },
+  dishCardInCart: {
+    borderColor: 'rgba(82, 20, 28, 0.55)',
+    backgroundColor: 'rgba(255, 248, 248, 0.95)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(82, 20, 28, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+        transform: 'translateY(-2px)',
+      } as any
+    }),
+  },
+  inCartBadge: {
+    position: 'absolute',
+    top: -6,
+    right: -6,
+    backgroundColor: '#52141C',
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#FFFFFF',
+    zIndex: 5,
   },
-  cartCountPillText: {
-    color: '#4a121a',
-    fontSize: 10,
-    fontWeight: '800',
+  inCartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 9.5,
+    fontWeight: '900',
   },
-  stationBadge: {
-    backgroundColor: '#E0F2FE',
+  dishCardImageWrapper: {
+    width: '100%',
+    height: 90,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 7,
+    backgroundColor: 'rgba(248, 250, 252, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.7)',
+  },
+  dishCardImage: {
+    width: '100%',
+    height: '100%',
+  },
+  dishCardPlaceholderBox: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(254, 243, 199, 0.35)',
+  },
+  dishCardChipsRow: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    right: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    zIndex: 4,
+    flexWrap: 'wrap',
+  },
+  dishCardCategoryChip: {
+    backgroundColor: 'rgba(241, 245, 249, 0.88)',
+    borderRadius: 6,
     paddingHorizontal: 5,
     paddingVertical: 1.5,
-    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
   },
-  stationBadgeText: {
+  dishCardCategory: {
     fontSize: 8.5,
     fontWeight: '800',
-    color: '#0284C7',
+    color: '#64748B',
+    letterSpacing: 0.4,
   },
-  specialBadge: {
-    backgroundColor: '#FFF8E1',
-    borderWidth: 1,
-    borderColor: '#FFE082',
+  dishCardRegionChip: {
+    backgroundColor: 'rgba(82, 20, 28, 0.88)',
+    borderRadius: 6,
     paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  specialBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#B78103',
-  },
-  dealTag: {
-    backgroundColor: '#E8F5E9',
+    paddingVertical: 1.5,
     borderWidth: 1,
-    borderColor: '#C8E6C9',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 4,
-  },
-  dealTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#2E7D32',
-  },
-  menuItemName: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    marginBottom: 4,
-    lineHeight: 18,
-  },
-  textSoldOut: {
-    textDecorationLine: 'line-through',
-    color: '#8E8E93',
-  },
-  soldOutPill: {
+    borderColor: 'rgba(212, 175, 55, 0.45)',
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFEBEE',
+  },
+  dishCardRegionText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FDE68A',
+  },
+  dishCardBadgeTag: {
+    position: 'absolute',
+    top: 5,
+    right: 5,
+    backgroundColor: 'rgba(82, 20, 28, 0.92)',
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
+    zIndex: 4,
   },
-  soldOutText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#C62828',
+  dishCardBadgeText: {
+    color: '#D4AF37',
+    fontSize: 8.5,
+    fontWeight: '900',
+    letterSpacing: 0.3,
   },
-  lowStockPill: {
-    flexDirection: 'row',
+  dishSoldOutOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(15, 23, 42, 0.75)',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
-    marginBottom: 6,
+    justifyContent: 'center',
+    zIndex: 6,
   },
-  lowStockText: {
+  dishSoldOutText: {
+    color: '#FFFFFF',
+    fontWeight: '900',
     fontSize: 10,
+    letterSpacing: 0.8,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 4,
+  },
+  dishCardTitle: {
+    fontSize: 12.5,
     fontWeight: '800',
-    color: '#E65100',
+    color: '#1E293B',
+    textAlign: 'center',
+    lineHeight: 16,
+    marginVertical: 4,
   },
-  dealItemsPreview: {
-    backgroundColor: 'rgba(255,255,255,0.7)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    marginBottom: 6,
-  },
-  dealItemsCount: {
-    fontSize: 10,
-    color: '#555',
-    fontStyle: 'italic',
-  },
-  cardBottomRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  dishCardPricePill: {
+    backgroundColor: 'rgba(254, 243, 199, 0.75)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.4)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
     marginTop: 4,
   },
-  menuItemPrice: {
-    fontSize: 15,
+  dishCardPricePillActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  dishCardPriceText: {
+    fontSize: 12,
     fontWeight: '900',
-    color: '#4a121a',
-    marginTop: 2,
+    color: '#92400E',
   },
-  dealOriginalPrice: {
-    fontSize: 10,
-    color: '#8E8E93',
-    textDecorationLine: 'line-through',
+  dishCardPriceTextActive: {
+    color: '#FFFFFF',
   },
-  cardActionRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+  noItemsBox: {
+    width: '100%',
+    padding: 40,
     alignItems: 'center',
+  },
+  noItemsText: {
+    color: '#94A3B8',
     marginTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: '#F5F2EB',
-    paddingTop: 6,
-  },
-  quickAddButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(213, 169, 67, 0.18)',
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  quickAddText: {
-    color: '#4a121a',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  cardInlineStepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 2,
-    gap: 8,
-  },
-  stepperSubBtn: {
-    padding: 3,
-  },
-  cardStepperQty: {
     fontSize: 13,
-    fontWeight: '900',
-    color: '#1C1C1E',
-    minWidth: 16,
-    textAlign: 'center',
+    fontWeight: '700',
   },
-  stepperAddBtn: {
-    padding: 3,
-  },
-  addBtn: {
-    backgroundColor: '#D5A943',
-    borderRadius: 8,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  addIconCircle: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  disabledAddCircle: {
-    backgroundColor: '#E5E5EA',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardStepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 15,
-    paddingHorizontal: 4,
-    height: 30,
-    borderWidth: 1,
-    borderColor: '#4a121a',
-  },
-  cardStepBtn: {
-    width: 22,
-    height: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardStepQty: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#4a121a',
-    minWidth: 16,
-    textAlign: 'center',
-  },
+
+  /* Floating mobile review bar */
   floatingCartBar: {
     position: 'absolute',
     bottom: 16,
     left: 14,
     right: 14,
-    backgroundColor: '#4a121a',
+    backgroundColor: '#35080E',
     borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
     paddingHorizontal: 16,
     paddingVertical: 12,
     flexDirection: 'row',
@@ -2149,7 +2974,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   floatingBadge: {
-    backgroundColor: '#D5A943',
+    backgroundColor: '#D4AF37',
     width: 24,
     height: 24,
     borderRadius: 12,
@@ -2157,22 +2982,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   floatingBadgeText: {
-    color: '#4a121a',
+    color: '#35080E',
     fontSize: 12,
     fontWeight: '900',
   },
   floatingCartText: {
     color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
   },
   floatingCartRight: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   floatingCartPrice: {
-    color: '#D5A943',
-    fontSize: 15,
+    color: '#F3D179',
+    fontSize: 14.5,
     fontWeight: '900',
   },
   floatingCartSubText: {
@@ -2184,449 +3009,500 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: '#D5A943',
+    backgroundColor: '#D4AF37',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 6,
+    marginLeft: 8,
   },
-  cartSection: {
-    flex: 2,
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 1,
-    borderLeftColor: '#E5E5EA',
+
+  /* --------------------------------------------------------
+     RIGHT: CART SIDEBAR (AUTHENTIC POS CRYSTAL THEME)
+     -------------------------------------------------------- */
+  cartSidebar: {
+    width: 340,
+    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderLeftWidth: 1.5,
+    borderLeftColor: 'rgba(212, 175, 55, 0.25)',
+    display: 'flex',
+    flexDirection: 'column',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '-4px 0 28px rgba(0, 0, 0, 0.05), inset 1px 0 0 rgba(255, 255, 255, 0.8)',
+      } as any
+    }),
   },
-  cartSectionMobile: {
-    flex: 1,
+  cartSidebarMobile: {
+    width: '100%',
     borderLeftWidth: 0,
   },
-  cartHeader: {
+  cartHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    backgroundColor: '#FAFAFC',
+    borderBottomColor: 'rgba(226, 232, 240, 0.8)',
   },
-  cartTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1C1C1E',
+  cartHeaderTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#1E293B',
   },
-  cartSubtitle: {
-    fontSize: 12,
-    color: '#8E8E93',
-    fontWeight: '600',
-    marginTop: 2,
+  cartCountPill: {
+    backgroundColor: '#52141C',
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+    borderRadius: 10,
   },
-  activePill: {
+  cartCountText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  cartResetBtn: {
+    padding: 4,
+    borderRadius: 8,
+    backgroundColor: 'rgba(254, 242, 242, 0.8)',
+  },
+  tableCabinBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(248, 250, 252, 0.85)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.8)',
   },
-  activePillText: {
-    color: '#D84315',
+  tableCabinLabel: {
     fontSize: 11,
     fontWeight: '800',
+    color: '#D97706',
+  },
+  tableCabinPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(30, 41, 59, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 8,
+    maxWidth: 200,
+  },
+  tableCabinPillText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
+  tableCabinPillSub: {
+    color: '#F59E0B',
+    fontSize: 9.5,
+    fontWeight: '700',
+    marginLeft: 3,
+  },
+  changeTablePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.9)',
+    paddingHorizontal: 8,
+    paddingVertical: 3.5,
+    borderRadius: 14,
+  },
+  changeTablePillText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  cartColumnSubheader: {
+    flexDirection: 'row',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(226, 232, 240, 0.8)',
+    backgroundColor: 'rgba(250, 250, 250, 0.6)',
+  },
+  cartColLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.3,
   },
   cartItemsScroll: {
     flex: 1,
   },
-  existingSection: {
-    padding: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E5EA',
-    backgroundColor: '#FBFBFD',
+
+  /* Tickets Section (Already in Kitchen) */
+  existingTicketSection: {
+    backgroundColor: 'rgba(254, 252, 248, 0.95)',
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(229, 184, 59, 0.3)',
+    padding: 10,
   },
-  sectionHeaderRow: {
+  ticketSectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
+    marginBottom: 6,
+    paddingHorizontal: 2,
   },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1C1C1E',
+  ticketSectionTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#92400E',
+    letterSpacing: 0.4,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
   },
-  sectionSubtotal: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#4a121a',
+  ticketSectionAmount: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#52141C',
   },
   readyAlertBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#EBF5FF',
+    backgroundColor: '#E0F2FE',
     borderWidth: 1.5,
-    borderColor: '#007AFF',
-    borderRadius: 12,
-    padding: 10,
-    marginBottom: 12,
-    gap: 10,
+    borderColor: '#0284C7',
+    borderRadius: 10,
+    padding: 8,
+    marginBottom: 8,
+    gap: 8,
   },
   readyAlertTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#0055B3',
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#0369A1',
   },
   readyAlertSubtitle: {
-    fontSize: 11,
-    color: '#4A6984',
-    marginTop: 1,
+    fontSize: 10,
+    color: '#075985',
   },
   readyServeBtn: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#0284C7',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
   },
   readyServeBtnText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10.5,
     fontWeight: '800',
   },
-  existingItemRow: {
+  ticketItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: 'rgba(241, 245, 249, 0.9)',
   },
-  existingQtyBadge: {
-    backgroundColor: '#EAEAEF',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 6,
-    marginRight: 10,
-  },
-  existingQtyText: {
-    fontSize: 12,
+  ticketItemName: {
+    fontSize: 11.5,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
-  existingItemInfo: {
-    flex: 1,
-  },
-  existingItemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  existingItemNote: {
-    fontSize: 11,
-    color: '#B8860B',
+  ticketItemNote: {
+    fontSize: 10,
+    color: '#B45309',
     marginTop: 1,
     fontStyle: 'italic',
   },
-  existingItemTicket: {
-    fontSize: 10,
-    color: '#8E8E93',
+  ticketItemMeta: {
+    fontSize: 9.5,
+    color: '#64748B',
     marginTop: 1,
   },
-  existingStatusWrap: {
-    alignItems: 'flex-end',
+  ticketItemPrice: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
   },
-  foodStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  statusPillBadge: {
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 10,
-    marginBottom: 3,
+    borderRadius: 8,
   },
-  statusPending: {
+  statusPendingPill: {
     backgroundColor: '#FEF3C7',
   },
-  statusCooking: {
-    backgroundColor: '#FFF3E0',
+  statusCookingPill: {
+    backgroundColor: '#FFEDD5',
   },
-  statusReady: {
-    backgroundColor: '#E3F2FD',
+  statusReadyPill: {
+    backgroundColor: '#E0F2FE',
   },
-  statusServed: {
-    backgroundColor: '#E8F5E9',
+  statusServedPill: {
+    backgroundColor: '#ECFDF5',
   },
-  foodStatusText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-  },
-  existingItemPrice: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#636366',
-  },
-  newCartSection: {
-    padding: 14,
-  },
-  emptyAddonBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 28,
-    paddingHorizontal: 16,
-  },
-  emptyAddonTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#3A3A3C',
-    marginTop: 10,
-    textAlign: 'center',
-  },
-  emptyAddonDesc: {
-    fontSize: 12,
-    color: '#8E8E93',
-    textAlign: 'center',
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  openMenuBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F6F3EC',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#E8DFC9',
-  },
-  openMenuBtnText: {
-    color: '#4a121a',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  rushBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FAFAFA',
-    borderWidth: 1,
-    borderColor: '#E0E0E0',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginBottom: 10,
-  },
-  rushBannerActive: {
-    backgroundColor: '#FFF8E1',
-    borderColor: '#D5A943',
-  },
-  rushBannerTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#555',
-  },
-  rushBannerTitleActive: {
-    color: '#7B5200',
-  },
-  rushBannerSub: {
-    fontSize: 10,
-    color: '#888',
-  },
-  newCartItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
-  },
-  newCartItemMain: {
-    flex: 1,
-  },
-  newCartItemName: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  newCartItemUnit: {
-    fontSize: 11,
-    color: '#8E8E93',
-    marginTop: 1,
-  },
-  itemNoteChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5F5F7',
-    paddingHorizontal: 6,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-    marginTop: 4,
-    alignSelf: 'flex-start',
-    maxWidth: 200,
-  },
-  itemNoteChipActive: {
-    backgroundColor: '#FFF8E1',
-    borderWidth: 1,
-    borderColor: '#FFE082',
-  },
-  itemNoteText: {
-    fontSize: 10,
-    color: '#8E8E93',
-    fontWeight: '600',
-  },
-  itemNoteTextActive: {
-    color: '#8A6200',
-    fontWeight: '700',
-  },
-  stepperContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    borderRadius: 8,
-    marginHorizontal: 8,
-  },
-  stepBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    minWidth: 28,
-    minHeight: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  stepQty: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    minWidth: 20,
-    textAlign: 'center',
-  },
-  newCartItemTotal: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#27ae60',
-    minWidth: 60,
-    textAlign: 'right',
-    marginRight: 6,
-  },
-  removeBtn: {
-    padding: 4,
-  },
-  cartFooter: {
-    padding: 14,
-    borderTopWidth: 1,
-    borderTopColor: '#E5E5EA',
-    backgroundColor: '#FFFFFF',
-  },
-  billBreakdown: {
-    marginBottom: 12,
-  },
-  breakdownRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 2,
-  },
-  breakdownLabel: {
-    fontSize: 11,
-    color: '#8E8E93',
-    fontWeight: '500',
-  },
-  breakdownVal: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  totalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: '#F2F2F7',
-  },
-  totalLabel: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#1C1C1E',
-  },
-  totalAmount: {
-    fontSize: 20,
+  statusPillBadgeText: {
+    fontSize: 9,
     fontWeight: '900',
-    color: '#4a121a', // Sultan Burgundy
   },
-  sendButton: {
-    backgroundColor: '#D5A943',
-    borderWidth: 1.5,
-    borderColor: '#E8C76D',
+
+  /* New Cart Additions */
+  newCartItemsContainer: {
+    padding: 10,
+  },
+  newAddonHeaderRow: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 13,
-    borderRadius: 26,
-    shadowColor: '#D5A943',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 4,
+    marginBottom: 6,
+    paddingHorizontal: 2,
   },
-  sendButtonText: {
-    color: '#4a121a',
-    fontSize: 15,
+  newAddonHeaderTitle: {
+    fontSize: 11,
     fontWeight: '900',
+    color: '#10B981',
+    textTransform: 'uppercase',
     letterSpacing: 0.4,
   },
-  floatingCapsuleActionBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 30,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: '#E5E5EA',
+  newAddonHeaderTotal: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#10B981',
   },
-  requestBillBtn: {
-    flex: 1,
-    backgroundColor: '#FFF3E0',
-    borderWidth: 1,
-    borderColor: '#FFCC80',
-    flexDirection: 'row',
+  emptyCartBox: {
+    minHeight: 160,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 24,
+    padding: 20,
   },
-  requestBillBtnDone: {
-    backgroundColor: '#E8F5E9',
-    borderColor: '#A5D6A7',
+  emptyCartText: {
+    color: '#94A3B8',
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginTop: 6,
   },
-  requestBillBtnText: {
-    color: '#D84315',
+  emptyCartSub: {
+    color: '#CBD5E1',
+    fontSize: 11,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  openMenuCatalogBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(254, 243, 199, 0.85)',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  openMenuCatalogBtnText: {
+    color: '#52141C',
     fontSize: 12,
     fontWeight: '800',
   },
-  requestBillBtnTextDone: {
-    color: '#2E7D32',
+  cartItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(241, 245, 249, 0.8)',
   },
-  backToTablesBtn: {
-    flex: 1,
-    backgroundColor: '#24050A',
+  cartItemName: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  cartItemUnit: {
+    fontSize: 10,
+    color: '#94A3B8',
+  },
+  cartItemNoteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    marginTop: 3,
+    alignSelf: 'flex-start',
+    maxWidth: 160,
+  },
+  cartItemNoteChipActive: {
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderColor: '#F59E0B',
+  },
+  cartItemNoteText: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  cartItemNoteTextActive: {
+    color: '#92400E',
+    fontWeight: '700',
+  },
+  cartStepperBox: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 4,
+  },
+  cartStepBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(241, 245, 249, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.8)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cartStepQty: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#1E293B',
+    minWidth: 18,
+    textAlign: 'center',
+  },
+  cartItemTotal: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#1E293B',
+  },
+
+  /* Settlement Bottom (Frosted Glass) */
+  cartBottomSettlement: {
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(229, 184, 59, 0.55)',
+    padding: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.94)',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.04)',
+      } as any
+    }),
+  },
+  mathSummaryLines: {
+    gap: 3,
+    marginBottom: 8,
+  },
+  mathLine: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mathLabel: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  mathValue: {
+    fontSize: 11,
+    color: '#1E293B',
+    fontWeight: '700',
+  },
+  payableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 4,
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(226, 232, 240, 0.8)',
+  },
+  payableLabel: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  payableAmount: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+  rushOrderToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(248, 250, 252, 0.85)',
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.85)',
+    paddingVertical: 5,
+    borderRadius: 10,
+    marginBottom: 8,
+  },
+  rushOrderToggleActive: {
+    backgroundColor: 'rgba(254, 243, 199, 0.85)',
+    borderColor: '#D4AF37',
+  },
+  rushOrderToggleText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  rushOrderToggleTextActive: {
+    color: '#92400E',
+    fontWeight: '900',
+  },
+  proceedPayBtn: {
+    backgroundColor: '#35080E',
     paddingVertical: 12,
-    borderRadius: 24,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(229, 184, 59, 0.45)',
+    ...Platform.select({
+      web: {
+        backgroundImage: 'linear-gradient(135deg, #3D070E 0%, #5E121C 50%, #440810 100%)',
+        boxShadow: '0 6px 20px rgba(53, 8, 14, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25)',
+        cursor: 'pointer',
+      } as any
+    }),
   },
-  backToTablesBtnText: {
-    color: '#F3D179',
+  proceedPayBtnText: {
+    color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
+    letterSpacing: 0.5,
   },
+  holdOrderBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(203, 213, 225, 0.9)',
+    paddingVertical: 10,
+    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  holdOrderBtnDone: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  holdOrderBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  holdOrderBtnTextDone: {
+    color: '#047857',
+  },
+
+  /* --------------------------------------------------------
+     MODALS
+     -------------------------------------------------------- */
   modalBg: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -2649,13 +3525,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   modalTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
-    color: '#4a121a',
+    color: '#52141C',
   },
   modalSubtitle: {
     fontSize: 12,
-    color: '#8E8E93',
+    color: '#64748B',
     fontWeight: '600',
     marginTop: 2,
   },
@@ -2664,7 +3540,7 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   closeBtnText: {
-    color: '#e74c3c',
+    color: '#EF4444',
     fontWeight: 'bold',
   },
   variantBtn: {
@@ -2672,25 +3548,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     padding: 14,
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E2E8F0',
     borderRadius: 10,
   },
   variantName: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   variantPrice: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#D5A943',
+    color: '#52141C',
   },
   notePresetTitle: {
     fontSize: 11,
     fontWeight: '800',
-    color: '#666',
+    color: '#64748B',
     textTransform: 'uppercase',
     marginBottom: 6,
   },
@@ -2700,34 +3576,34 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   notePresetChip: {
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E2E8F0',
   },
   notePresetChipActive: {
-    backgroundColor: '#FFF8E1',
-    borderColor: '#D5A943',
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D4AF37',
   },
   notePresetText: {
     fontSize: 11,
-    color: '#444',
+    color: '#475569',
     fontWeight: '600',
   },
   notePresetTextActive: {
-    color: '#7B5200',
+    color: '#92400E',
     fontWeight: '800',
   },
   noteInput: {
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#CBD5E1',
     borderRadius: 10,
     padding: 10,
     fontSize: 13,
-    color: '#1C1C1E',
-    backgroundColor: '#FAFAFC',
+    color: '#1E293B',
+    backgroundColor: '#F8FAFC',
     textAlignVertical: 'top',
     minHeight: 65,
   },
@@ -2738,19 +3614,19 @@ const styles = StyleSheet.create({
   },
   modalCancelBtn: {
     flex: 1,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F1F5F9',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
   modalCancelBtnText: {
-    color: '#636366',
+    color: '#64748B',
     fontWeight: '700',
     fontSize: 13,
   },
   modalSaveBtn: {
     flex: 2,
-    backgroundColor: '#4a121a',
+    backgroundColor: '#52141C',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
@@ -2763,51 +3639,18 @@ const styles = StyleSheet.create({
   modalPrintBtn: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#F6F3EC',
+    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: '#D5A943',
+    borderColor: '#D4AF37',
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalPrintBtnText: {
-    color: '#4a121a',
+    color: '#52141C',
     fontWeight: '800',
     fontSize: 13,
-  },
-  dealItemsBox: {
-    backgroundColor: '#FFFBF2',
-    borderWidth: 1,
-    borderColor: '#FFE8B6',
-    borderRadius: 10,
-    padding: 12,
-  },
-  dealItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingVertical: 3,
-  },
-  dealItemQty: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#52171B',
-  },
-  dealItemName: {
-    fontSize: 12,
-    color: '#333',
-  },
-  savingsPill: {
-    backgroundColor: '#E8F5E9',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  savingsPillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#2E7D32',
   },
   transferTableRow: {
     flexDirection: 'row',
@@ -2815,27 +3658,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F2F2F7',
+    borderBottomColor: '#F1F5F9',
   },
   transferTableName: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   transferTableFloor: {
     fontSize: 11,
-    color: '#8E8E93',
+    color: '#64748B',
   },
   transferPickBtn: {
-    backgroundColor: '#F6F3EC',
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
-    borderColor: '#D5A943',
+    borderColor: '#D4AF37',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 8,
   },
   transferPickBtnText: {
-    color: '#4a121a',
+    color: '#52141C',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -2849,47 +3692,47 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#F2F2F7',
+    backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#CBD5E1',
   },
   paxBtnActive: {
-    backgroundColor: '#4a121a',
-    borderColor: '#4a121a',
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
   },
   paxBtnText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   paxBtnTextActive: {
-    color: '#D5A943',
+    color: '#F3D179',
   },
   slipHeader: {
     alignItems: 'center',
     marginBottom: 6,
   },
   slipBrand: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#4a121a',
+    color: '#52141C',
     letterSpacing: 1.5,
   },
   slipSub: {
     fontSize: 11,
-    color: '#666',
+    color: '#64748B',
     marginTop: 2,
   },
   slipTime: {
     fontSize: 10,
-    color: '#888',
+    color: '#94A3B8',
     marginTop: 1,
   },
   slipDivider: {
     borderTopWidth: 1,
-    borderTopColor: '#DDD',
+    borderTopColor: '#CBD5E1',
     borderStyle: 'dashed',
     marginVertical: 8,
   },
@@ -2901,17 +3744,17 @@ const styles = StyleSheet.create({
     width: 24,
     fontSize: 12,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   slipItemName: {
     flex: 1,
     fontSize: 12,
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   slipItemPrice: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   slipTotalRow: {
     flexDirection: 'row',
@@ -2920,13 +3763,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   slipTotalLabel: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '900',
-    color: '#1C1C1E',
+    color: '#1E293B',
   },
   slipTotalVal: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '900',
-    color: '#4a121a',
+    color: '#52141C',
   },
 });

@@ -36,6 +36,8 @@ import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
+import { useSyncStatus } from '../hooks/useSyncStatus';
+import { broadcastImmediately } from '../services/syncService';
 
 const UNITS = ['kg', 'Liters', 'bottles', 'packs', 'grams', 'cylinders', 'pcs', 'cartons', 'crates', 'bags', 'Tins'];
 
@@ -76,6 +78,23 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   // Menu items from restaurant store for dishes stock tab
   const menuItems = useRestaurantStore((s) => s.menuItems);
   const updateMenuItem = useRestaurantStore((s) => s.updateMenuItem);
+
+  // Live Cloud & Network Sync
+  const { isConnected, isConnecting, isOffline, lastSyncedAt, forceSyncNow } = useSyncStatus();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    try {
+      setIsManualSyncing(true);
+      await forceSyncNow();
+      broadcastImmediately();
+      alertMsg('Live Sync Complete', 'Inventory and stock records are fully synchronised with the cloud hub.');
+    } catch (e) {
+      alertMsg('Sync Status', 'Synchronisation completed locally.');
+    } finally {
+      setTimeout(() => setIsManualSyncing(false), 500);
+    }
+  };
 
   // UI Navigation Tabs
   const [activeTab, setActiveTab] = useState<TabType>('raw');
@@ -414,6 +433,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       invoiceNo: formInvoiceNo.trim() || undefined,
       expiryDate: Number.isFinite(expiryDaysNum) && expiryDaysNum > 0 ? Date.now() + expiryDaysNum * 86400000 : undefined,
     });
+    broadcastImmediately();
 
     setShowAddModal(false);
     alertMsg('Success', `"${formName.trim()}" added to inventory.`);
@@ -447,6 +467,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       invoiceNo: formInvoiceNo.trim() || undefined,
       expiryDate: Number.isFinite(expiryDaysNum) && expiryDaysNum > 0 ? Date.now() + expiryDaysNum * 86400000 : undefined,
     });
+    broadcastImmediately();
 
     setShowEditModal(false);
     alertMsg('Updated', `"${formName.trim()}" updated successfully.`);
@@ -467,6 +488,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       movementNote.trim() || undefined,
       'Staff'
     );
+    broadcastImmediately();
 
     setShowMovementModal(false);
     const actionLabel =
@@ -515,6 +537,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
         location: recLocation,
       }
     );
+    broadcastImmediately();
 
     // Save GRN for voucher modal
     const grnData = {
@@ -549,6 +572,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
         `Disposed expired / spoiled batch ${item.batchNumber || ''}`,
         'Kitchen Supervisor'
       );
+      broadcastImmediately();
       alertMsg('Disposed', `${item.stock} ${item.unit} marked as wastage.`);
     };
 
@@ -593,14 +617,18 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
   const handleDelete = (item: InventoryItem) => {
     const confirmText = `Are you sure you want to delete "${item.name}" from inventory?`;
+    const executeDelete = () => {
+      deleteInventoryItem(item.id);
+      broadcastImmediately();
+    };
     if (Platform.OS === 'web') {
       if (window.confirm(confirmText)) {
-        deleteInventoryItem(item.id);
+        executeDelete();
       }
     } else {
       Alert.alert('Delete Inventory Item', confirmText, [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteInventoryItem(item.id) },
+        { text: 'Delete', style: 'destructive', onPress: executeDelete },
       ]);
     }
   };
@@ -612,6 +640,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       trackStock: true,
       stockQty: next,
     });
+    broadcastImmediately();
   };
 
   const alertMsg = (title: string, msg: string) => {
@@ -671,14 +700,77 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <Ionicons name="arrow-back" size={20} color={BRAND.ink} />
           </TouchableOpacity>
           <View>
-            <Text style={styles.headerTitle}>Inventory & Stock Control</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.headerTitle}>Inventory & Stock Control</Text>
+              <View style={styles.headerUrduBadge}>
+                <Text style={styles.headerUrduText}>اسٹاک اور انوینٹری کنٹرول</Text>
+              </View>
+            </View>
             <Text style={styles.headerSubtitle}>
-              SKU Codes, Goods Receiving, Invoicing, Expiry & Automated Reorders
+              SKU Codes, Goods Receiving (GRN), Expiry Watch, WhatsApp Reorders & Live Sync
             </Text>
           </View>
         </View>
 
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          {/* Live Cloud / LAN Sync Indicator */}
+          <View style={styles.syncStatusGroup}>
+            <View
+              style={[
+                styles.syncStatusPill,
+                isConnected
+                  ? styles.syncStatusPillConnected
+                  : isOffline
+                  ? styles.syncStatusPillOffline
+                  : styles.syncStatusPillConnecting,
+              ]}
+            >
+              <View
+                style={[
+                  styles.syncStatusDot,
+                  isConnected
+                    ? styles.syncStatusDotConnected
+                    : isOffline
+                    ? styles.syncStatusDotOffline
+                    : styles.syncStatusDotConnecting,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.syncStatusText,
+                  isConnected
+                    ? styles.syncStatusTextConnected
+                    : isOffline
+                    ? styles.syncStatusTextOffline
+                    : styles.syncStatusTextConnecting,
+                ]}
+              >
+                {isConnected
+                  ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
+                  : isOffline
+                  ? 'Offline (Local)'
+                  : 'Syncing Hub...'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.syncManualBtn}
+              onPress={handleManualSync}
+              disabled={isManualSyncing}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name="sync"
+                size={13}
+                color={BRAND.burgundy}
+                style={isManualSyncing ? ({ transform: [{ rotate: '45deg' }] } as any) : undefined}
+              />
+              <Text style={styles.syncManualBtnText}>
+                {isManualSyncing ? 'Syncing...' : 'Sync Now'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={[styles.addBtn, { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: BRAND.border }]}
             onPress={() => router.push(`${portalBase}/suppliers` as any)}
@@ -694,12 +786,12 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             activeOpacity={0.85}
           >
             <Ionicons name="receipt-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.addBtnText}>+ Receive & Invoice</Text>
+            <Text style={styles.addBtnText}>+ Receive & Invoice (GRN)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
             <Ionicons name="add" size={20} color="#FFFFFF" />
-            <Text style={styles.addBtnText}>Add SKU</Text>
+            <Text style={styles.addBtnText}>+ Add SKU</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2498,11 +2590,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8F9FA',
   },
   content: {
-    maxWidth: 1240,
     width: '100%',
-    alignSelf: 'center',
-    padding: 16,
-    paddingBottom: 60,
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    paddingBottom: 80,
   },
   header: {
     flexDirection: 'row',
@@ -2531,6 +2622,95 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: BRAND.muted,
     marginTop: 2,
+  },
+  headerUrduBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  headerUrduText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
+  syncStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    padding: 3,
+    paddingLeft: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  syncStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  syncStatusPillConnected: {
+    backgroundColor: '#F0FDF4',
+  },
+  syncStatusPillConnecting: {
+    backgroundColor: '#FFFBEB',
+  },
+  syncStatusPillOffline: {
+    backgroundColor: '#FEF2F2',
+  },
+  syncStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  syncStatusDotConnected: {
+    backgroundColor: '#16A34A',
+  },
+  syncStatusDotConnecting: {
+    backgroundColor: '#D97706',
+  },
+  syncStatusDotOffline: {
+    backgroundColor: '#DC2626',
+  },
+  syncStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  syncStatusTextConnected: {
+    color: '#15803D',
+  },
+  syncStatusTextConnecting: {
+    color: '#B45309',
+  },
+  syncStatusTextOffline: {
+    color: '#B91C1C',
+  },
+  syncManualBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  syncManualBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.burgundy,
   },
   addBtn: {
     flexDirection: 'row',

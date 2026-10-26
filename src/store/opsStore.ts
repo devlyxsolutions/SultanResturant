@@ -1382,6 +1382,15 @@ type OpsState = OpsData & {
   syncFromServer: (remote: Partial<OpsData>) => void;
 };
 
+function notifySync() {
+  try {
+    const { broadcastImmediately } = require('../services/syncService');
+    if (typeof broadcastImmediately === 'function') {
+      broadcastImmediately();
+    }
+  } catch (e) {}
+}
+
 export const useOpsStore = create<OpsState>()(
   persist(
     (set, get) => ({
@@ -1433,22 +1442,28 @@ export const useOpsStore = create<OpsState>()(
       clearResolvedRequests: () =>
         set((state) => ({ serviceRequests: state.serviceRequests.filter(isActiveRequest) })),
 
-      addInventoryItem: (item) =>
+      addInventoryItem: (item) => {
         set((state) => ({
           inventory: [...state.inventory, { ...item, id: uid('inv'), updatedAt: Date.now() }],
-        })),
+        }));
+        notifySync();
+      },
 
-      updateInventoryItem: (id, patch) =>
+      updateInventoryItem: (id, patch) => {
         set((state) => ({
           inventory: state.inventory.map((i) =>
             i.id === id ? { ...i, ...patch, updatedAt: Date.now() } : i
           ),
-        })),
+        }));
+        notifySync();
+      },
 
-      deleteInventoryItem: (id) =>
-        set((state) => ({ inventory: state.inventory.filter((i) => i.id !== id) })),
+      deleteInventoryItem: (id) => {
+        set((state) => ({ inventory: state.inventory.filter((i) => i.id !== id) }));
+        notifySync();
+      },
 
-      recordStockMovement: (itemId, type, qty, note, by, meta) =>
+      recordStockMovement: (itemId, type, qty, note, by, meta) => {
         set((state) => {
           const item = state.inventory.find((i) => i.id === itemId);
           if (!item || !Number.isFinite(qty) || qty < 0) return state;
@@ -1494,17 +1509,23 @@ export const useOpsStore = create<OpsState>()(
             ),
             stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
           };
-        }),
+        });
+        notifySync();
+      },
 
-      addExpense: (expense) =>
+      addExpense: (expense) => {
         set((state) => ({
           expenses: [{ ...expense, id: uid('ex'), at: expense.at ?? Date.now() }, ...state.expenses],
-        })),
+        }));
+        notifySync();
+      },
 
-      deleteExpense: (id) =>
-        set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) })),
+      deleteExpense: (id) => {
+        set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) }));
+        notifySync();
+      },
 
-      setItemAvailability: (menuItemId, available) =>
+      setItemAvailability: (menuItemId, available) => {
         set((state) => {
           const has = state.unavailableItemIds.includes(menuItemId);
           if (available && has) {
@@ -1514,9 +1535,14 @@ export const useOpsStore = create<OpsState>()(
             return { unavailableItemIds: [...state.unavailableItemIds, menuItemId] };
           }
           return state;
-        }),
+        });
+        notifySync();
+      },
 
-      resetAvailability: () => set({ unavailableItemIds: [] }),
+      resetAvailability: () => {
+        set({ unavailableItemIds: [] });
+        notifySync();
+      },
 
       addFeedback: (fb) =>
         set((state) => ({
@@ -1524,7 +1550,7 @@ export const useOpsStore = create<OpsState>()(
         })),
 
       // Supplier & Vendor Actions
-      addSupplier: (supplier) =>
+      addSupplier: (supplier) => {
         set((state) => ({
           suppliers: [
             {
@@ -1535,26 +1561,34 @@ export const useOpsStore = create<OpsState>()(
             },
             ...state.suppliers,
           ],
-        })),
+        }));
+        notifySync();
+      },
 
-      updateSupplier: (id, patch) =>
+      updateSupplier: (id, patch) => {
         set((state) => ({
           suppliers: state.suppliers.map((s) =>
             s.id === id ? { ...s, ...patch, updatedAt: Date.now() } : s
           ),
-        })),
+        }));
+        notifySync();
+      },
 
-      deleteSupplier: (id) =>
+      deleteSupplier: (id) => {
         set((state) => ({
           suppliers: state.suppliers.filter((s) => s.id !== id),
-        })),
+        }));
+        notifySync();
+      },
 
-      populateDefaultSuppliers: () =>
+      populateDefaultSuppliers: () => {
         set({
           suppliers: INITIAL_SUPPLIERS,
           purchaseOrders: INITIAL_PURCHASE_ORDERS,
           supplierPayments: INITIAL_SUPPLIER_PAYMENTS,
-        }),
+        });
+        notifySync();
+      },
 
       addPurchaseOrder: (poData, options = {}) => {
         const { autoReceiveToInventory = true, autoRecordExpense = true, receivedBy } = options;
@@ -1668,6 +1702,7 @@ export const useOpsStore = create<OpsState>()(
             supplierPayments: nextPayments,
           };
         });
+        notifySync();
       },
 
       receivePurchaseOrder: (poId, receivedItems, receivedBy) => {
@@ -1732,9 +1767,10 @@ export const useOpsStore = create<OpsState>()(
             stockMovements: nextMovements.slice(0, MAX_MOVEMENTS),
           };
         });
+        notifySync();
       },
 
-      deletePurchaseOrder: (id) =>
+      deletePurchaseOrder: (id) => {
         set((state) => {
           const po = state.purchaseOrders.find((p) => p.id === id);
           if (!po) return state;
@@ -1753,7 +1789,9 @@ export const useOpsStore = create<OpsState>()(
             purchaseOrders: state.purchaseOrders.filter((p) => p.id !== id),
             suppliers: updatedSuppliers,
           };
-        }),
+        });
+        notifySync();
+      },
 
       recordSupplierPayment: (paymentData, options = {}) => {
         const { autoRecordExpense = true } = options;
@@ -1819,9 +1857,10 @@ export const useOpsStore = create<OpsState>()(
             expenses: nextExpenses,
           };
         });
+        notifySync();
       },
 
-      deleteSupplierPayment: (id) =>
+      deleteSupplierPayment: (id) => {
         set((state) => {
           const payment = state.supplierPayments.find((p) => p.id === id);
           if (!payment) return state;
@@ -1858,7 +1897,9 @@ export const useOpsStore = create<OpsState>()(
             suppliers: updatedSuppliers,
             purchaseOrders: updatedPOs,
           };
-        }),
+        });
+        notifySync();
+      },
 
       // Assets & Capital Purchases
       addAsset: (asset) =>
@@ -2004,16 +2045,124 @@ export const useOpsStore = create<OpsState>()(
         set((state) => {
           const next: Partial<OpsData> = {};
           if (Array.isArray(remote.serviceRequests)) next.serviceRequests = remote.serviceRequests;
-          if (Array.isArray(remote.inventory)) next.inventory = remote.inventory;
-          if (Array.isArray(remote.stockMovements)) next.stockMovements = remote.stockMovements;
-          if (Array.isArray(remote.expenses)) next.expenses = remote.expenses;
+
+          // Stable Inventory Reconciliation (merge by id, pick higher updatedAt)
+          if (Array.isArray(remote.inventory)) {
+            const localMap = new Map((state.inventory || []).map((i) => [i.id, i]));
+            const remoteMap = new Map((remote.inventory || []).map((i) => [i.id, i]));
+            const mergedInv: InventoryItem[] = [];
+
+            remote.inventory.forEach((remItem) => {
+              const locItem = localMap.get(remItem.id);
+              if (!locItem) {
+                mergedInv.push(remItem);
+              } else {
+                const locTime = locItem.updatedAt || 0;
+                const remTime = remItem.updatedAt || 0;
+                mergedInv.push(locTime > remTime ? locItem : remItem);
+              }
+            });
+
+            // Retain any newly added local items that haven't reached remote yet
+            (state.inventory || []).forEach((locItem) => {
+              if (!remoteMap.has(locItem.id)) {
+                mergedInv.push(locItem);
+              }
+            });
+            next.inventory = mergedInv;
+          }
+
+          // Stable Stock Movements Reconciliation (union by id, sorted by time, max capped)
+          if (Array.isArray(remote.stockMovements)) {
+            const seen = new Set<string>();
+            const mergedMovements: StockMovement[] = [];
+            [...(remote.stockMovements || []), ...(state.stockMovements || [])].forEach((m) => {
+              if (m && m.id && !seen.has(m.id)) {
+                seen.add(m.id);
+                mergedMovements.push(m);
+              }
+            });
+            mergedMovements.sort((a, b) => (b.at || 0) - (a.at || 0));
+            next.stockMovements = mergedMovements.slice(0, MAX_MOVEMENTS);
+          }
+
+          // Stable Expenses Reconciliation (union by id, sorted by at desc)
+          if (Array.isArray(remote.expenses)) {
+            const seen = new Set<string>();
+            const mergedExpenses: Expense[] = [];
+            [...(remote.expenses || []), ...(state.expenses || [])].forEach((e) => {
+              if (e && e.id && !seen.has(e.id)) {
+                seen.add(e.id);
+                mergedExpenses.push(e);
+              }
+            });
+            mergedExpenses.sort((a, b) => (b.at || 0) - (a.at || 0));
+            next.expenses = mergedExpenses;
+          }
+
           if (Array.isArray(remote.feedback)) next.feedback = remote.feedback;
           if (Array.isArray(remote.unavailableItemIds)) next.unavailableItemIds = remote.unavailableItemIds;
-          if (Array.isArray(remote.suppliers)) next.suppliers = remote.suppliers;
-          if (Array.isArray(remote.purchaseOrders)) next.purchaseOrders = remote.purchaseOrders;
-          if (Array.isArray(remote.supplierPayments)) next.supplierPayments = remote.supplierPayments;
+
+          // Stable Suppliers Reconciliation
+          if (Array.isArray(remote.suppliers)) {
+            const localMap = new Map((state.suppliers || []).map((s) => [s.id, s]));
+            const remoteMap = new Map((remote.suppliers || []).map((s) => [s.id, s]));
+            const mergedSuppliers: Supplier[] = [];
+            remote.suppliers.forEach((rem) => {
+              const loc = localMap.get(rem.id);
+              if (!loc) {
+                mergedSuppliers.push(rem);
+              } else {
+                mergedSuppliers.push((loc.updatedAt || 0) > (rem.updatedAt || 0) ? loc : rem);
+              }
+            });
+            (state.suppliers || []).forEach((loc) => {
+              if (!remoteMap.has(loc.id)) mergedSuppliers.push(loc);
+            });
+            next.suppliers = mergedSuppliers;
+          }
+
+          // Stable Purchase Orders Reconciliation
+          if (Array.isArray(remote.purchaseOrders)) {
+            const seen = new Set<string>();
+            const mergedPO: PurchaseOrder[] = [];
+            [...(remote.purchaseOrders || []), ...(state.purchaseOrders || [])].forEach((p) => {
+              if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                mergedPO.push(p);
+              }
+            });
+            next.purchaseOrders = mergedPO;
+          }
+
+          // Stable Supplier Payments Reconciliation
+          if (Array.isArray(remote.supplierPayments)) {
+            const seen = new Set<string>();
+            const mergedPayments: SupplierPayment[] = [];
+            [...(remote.supplierPayments || []), ...(state.supplierPayments || [])].forEach((p) => {
+              if (p && p.id && !seen.has(p.id)) {
+                seen.add(p.id);
+                mergedPayments.push(p);
+              }
+            });
+            next.supplierPayments = mergedPayments;
+          }
+
           if (Array.isArray(remote.assets)) next.assets = remote.assets;
-          if (Array.isArray(remote.damageRecords)) next.damageRecords = remote.damageRecords;
+
+          // Stable Damage Records Reconciliation
+          if (Array.isArray(remote.damageRecords)) {
+            const seen = new Set<string>();
+            const mergedDamage: DamageRecord[] = [];
+            [...(remote.damageRecords || []), ...(state.damageRecords || [])].forEach((d) => {
+              if (d && d.id && !seen.has(d.id)) {
+                seen.add(d.id);
+                mergedDamage.push(d);
+              }
+            });
+            next.damageRecords = mergedDamage;
+          }
+
           return { ...state, ...next };
         }),
     }),

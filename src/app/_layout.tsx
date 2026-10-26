@@ -11,11 +11,35 @@ import IncomingCallHost from '../components/IncomingCallHost';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Global Web Error Guard against fontfaceobserver 12000ms timeouts
+// Global Web Error Guard against external browser extension crashes & fontfaceobserver timeouts
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  window.addEventListener(
+    'error',
+    (event) => {
+      const filename = String(event?.filename || '');
+      const message = String(event?.message || '');
+      const stack = String(event?.error?.stack || '');
+      if (
+        filename.includes('chrome-extension://') ||
+        stack.includes('chrome-extension://') ||
+        message.includes('M_ID')
+      ) {
+        event.preventDefault();
+        event.stopImmediatePropagation?.();
+        return true;
+      }
+    },
+    true
+  );
+
   window.addEventListener('unhandledrejection', (event) => {
-    const reasonStr = String(event?.reason || '');
-    if (reasonStr.includes('timeout exceeded') || reasonStr.includes('fontfaceobserver')) {
+    const reasonStr = String(event?.reason?.stack || event?.reason || '');
+    if (
+      reasonStr.includes('timeout exceeded') ||
+      reasonStr.includes('fontfaceobserver') ||
+      reasonStr.includes('chrome-extension://') ||
+      reasonStr.includes('M_ID')
+    ) {
       event.preventDefault();
     }
   });
@@ -241,10 +265,9 @@ export default function RootLayout() {
         `}</style>
       )}
 
-      {/* Screen container with key={pathname} to trigger page landing animation on every route change */}
+      {/* Screen container */}
       <View
         id="sultan-screen-wrapper"
-        key={pathname}
         style={{ flex: 1 }}
         {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true', pageEnter: 'true' } } as any) : {})}
       >

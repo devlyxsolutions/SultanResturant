@@ -21,6 +21,7 @@ import AppSidebar, { NavItem } from '../../components/layout/AppSidebar';
 
 const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Dashboard', route: '/admin/dashboard', icon: 'grid-outline' },
+  { label: 'Customer Digital Menu', route: '/menu', icon: 'qr-code-outline', badge: 'QR Menu' },
   { label: 'App Orders Command', route: '/admin/app-orders', icon: 'phone-portrait-outline', badge: 'Live App' },
   { label: 'POS Terminal', route: '/admin/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Live Shift & Cash', route: '/admin/shift', icon: 'time-outline' },
@@ -256,7 +257,6 @@ export default function AdminLayout() {
 
           {/* Screen Content */}
           <View 
-            key={pathname}
             style={styles.desktopContent}
             {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
           >
@@ -307,7 +307,6 @@ export default function AdminLayout() {
       
       {/* Mobile Screen Stack */}
       <View 
-        key={pathname}
         style={styles.mobileContent}
         {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
       >

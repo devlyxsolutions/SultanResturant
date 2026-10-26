@@ -26,6 +26,9 @@ import {
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
+import { useSyncStatus } from '../hooks/useSyncStatus';
+import { broadcastImmediately } from '../services/syncService';
+import { formatTime } from '../utils/format';
 
 const BRAND = {
   burgundy: '#52171B',
@@ -62,6 +65,20 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  // Cloud & LAN Live Sync Status
+  const { isConnected, isConnecting, isOffline, lastSyncedAt, forceSyncNow } = useSyncStatus();
+  const [isManualSyncing, setIsManualSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setIsManualSyncing(true);
+    try {
+      await broadcastImmediately();
+      await forceSyncNow();
+    } finally {
+      setTimeout(() => setIsManualSyncing(false), 500);
+    }
+  };
 
   // Store data
   const {
@@ -350,6 +367,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         currentBalance: parseFloat(supplierForm.currentBalance) || 0,
         notes: supplierForm.notes.trim(),
       });
+      broadcastImmediately();
       showAlert('Success', 'Supplier details updated successfully.');
     } else {
       addSupplier({
@@ -370,6 +388,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         status: 'active',
         notes: supplierForm.notes.trim(),
       });
+      broadcastImmediately();
       showAlert('Success', 'New supplier profile created.');
     }
 
@@ -380,7 +399,10 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     confirmAction(
       'Delete Supplier',
       `Are you sure you want to remove "${s.name}" from your suppliers directory?`,
-      () => deleteSupplier(s.id)
+      () => {
+        deleteSupplier(s.id);
+        broadcastImmediately();
+      }
     );
   };
 
@@ -390,6 +412,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       'This will restore standard pre-configured Sultan Restaurant suppliers (Poultry, Meat, Fresh Produce, Spices, Dairy, LPG, Packaging). Continue?',
       () => {
         populateDefaultSuppliers();
+        broadcastImmediately();
         showAlert('Restored', 'Default Sultan Restaurant vendors restored.');
       }
     );
@@ -518,6 +541,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       }
     );
 
+    broadcastImmediately();
     setIsPOModalOpen(false);
     showAlert('Success', `Purchase Order #${poNumber} recorded successfully.`);
   };
@@ -584,6 +608,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     recordSupplierPayment(newPaymentData, {
       autoRecordExpense: paymentForm.autoExpense,
     });
+    broadcastImmediately();
 
     setIsPaymentModalOpen(false);
 
@@ -605,6 +630,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       `Are you sure you want to reverse payment of Rs. ${payment.amount.toLocaleString()} for ${payment.supplierName}?\n\nThis will restore the outstanding balance back to the supplier account.`,
       () => {
         deleteSupplierPayment(payment.id);
+        broadcastImmediately();
         showAlert('Reversed', `Payment voucher deleted and Rs. ${payment.amount.toLocaleString()} restored to supplier balance.`);
       }
     );
@@ -840,8 +866,11 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             <Ionicons name="arrow-back" size={20} color={BRAND.burgundy} />
           </TouchableOpacity>
           <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <Text style={styles.headerTitle}>Sultan Supplier & Vendor Hub</Text>
+              <View style={styles.headerUrduBadge}>
+                <Text style={styles.headerUrduText}>سپلائرز اور وینڈرز ہب</Text>
+              </View>
               <View style={styles.badgePill}>
                 <Text style={styles.badgePillText}>RAW MATERIALS</Text>
               </View>
@@ -851,24 +880,82 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         </View>
 
         <View style={styles.headerRight}>
+          {/* Live Cloud / LAN Sync Indicator */}
+          <View style={styles.syncStatusGroup}>
+            <View
+              style={[
+                styles.syncStatusPill,
+                isConnected
+                  ? styles.syncStatusPillConnected
+                  : isOffline
+                  ? styles.syncStatusPillOffline
+                  : styles.syncStatusPillConnecting,
+              ]}
+            >
+              <View
+                style={[
+                  styles.syncStatusDot,
+                  isConnected
+                    ? styles.syncStatusDotConnected
+                    : isOffline
+                    ? styles.syncStatusDotOffline
+                    : styles.syncStatusDotConnecting,
+                ]}
+              />
+              <Text
+                style={[
+                  styles.syncStatusText,
+                  isConnected
+                    ? styles.syncStatusTextConnected
+                    : isOffline
+                    ? styles.syncStatusTextOffline
+                    : styles.syncStatusTextConnecting,
+                ]}
+              >
+                {isConnected
+                  ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
+                  : isOffline
+                  ? 'Offline (Local)'
+                  : 'Syncing Hub...'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.syncManualBtn}
+              onPress={handleManualSync}
+              disabled={isManualSyncing}
+              activeOpacity={0.75}
+            >
+              <Ionicons
+                name="sync"
+                size={14}
+                color={BRAND.burgundy}
+                style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
+              />
+              <Text style={styles.syncManualBtnText}>
+                {isManualSyncing ? 'Syncing...' : 'Sync Now'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
             <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
             <Text style={styles.secondaryBtnText}>{isMobile ? 'Reset' : 'Reset Vendors'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
-            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.primaryBtnText}>Add Supplier</Text>
-          </TouchableOpacity>
-
           <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
             <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.primaryBtnText}>{isMobile ? 'New PO' : 'Create PO'}</Text>
+            <Text style={styles.primaryBtnText}>{isMobile ? '+ PO' : '+ New PO (Bill)'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
+            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+            <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
         {/* Top Mega-KPI Bar */}
         <View style={styles.kpiRow}>
           <View style={[styles.kpiCard, { borderLeftColor: BRAND.gold }]}>
@@ -1163,53 +1250,58 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     {/* Card Actions Footer */}
                     <View style={styles.cardFooter}>
                       <TouchableOpacity
-                        style={styles.cardActionBtn}
+                        style={[styles.cardActionBtn, { flex: 1.1 }]}
                         onPress={() => handleOpenNewPO(s)}
                       >
-                        <Ionicons name="cart-outline" size={14} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                        <Text style={styles.cardActionBtnText}>Create PO</Text>
+                        <Ionicons name="cart-outline" size={13} color={BRAND.burgundy} style={{ marginRight: 3 }} />
+                        <Text style={styles.cardActionBtnText} numberOfLines={1}>+ PO</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.cardActionBtn, hasDue && { backgroundColor: '#FFEBEE' }]}
+                        style={[
+                          styles.cardActionBtn,
+                          { flex: 1.3 },
+                          hasDue && { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' },
+                        ]}
                         onPress={() => handleOpenPaymentModal(s)}
                       >
                         <Ionicons
                           name="cash-outline"
-                          size={14}
+                          size={13}
                           color={hasDue ? BRAND.danger : BRAND.burgundy}
-                          style={{ marginRight: 4 }}
+                          style={{ marginRight: 3 }}
                         />
                         <Text
                           style={[
                             styles.cardActionBtnText,
                             hasDue && { color: BRAND.danger, fontWeight: '800' },
                           ]}
+                          numberOfLines={1}
                         >
-                          Pay Dues
+                          {hasDue ? 'Pay Due' : 'Payment'}
                         </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={styles.cardActionBtn}
+                        style={[styles.cardActionBtn, { flex: 1.1 }]}
                         onPress={() => handleOpenLedger(s)}
                       >
-                        <Ionicons name="newspaper-outline" size={14} color={BRAND.muted} style={{ marginRight: 4 }} />
-                        <Text style={[styles.cardActionBtnText, { color: BRAND.muted }]}>Ledger</Text>
+                        <Ionicons name="newspaper-outline" size={13} color={BRAND.muted} style={{ marginRight: 3 }} />
+                        <Text style={[styles.cardActionBtnText, { color: BRAND.muted }]} numberOfLines={1}>Ledger</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.cardActionBtn, { paddingHorizontal: 8 }]}
+                        style={styles.cardActionBtnIcon}
                         onPress={() => handleOpenEditSupplier(s)}
                       >
-                        <Ionicons name="pencil" size={14} color={BRAND.muted} />
+                        <Ionicons name="pencil" size={13} color={BRAND.muted} />
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.cardActionBtn, { paddingHorizontal: 8 }]}
+                        style={[styles.cardActionBtnIcon, { borderColor: '#FFCDD2', backgroundColor: '#FFF5F5' }]}
                         onPress={() => handleDeleteSupplier(s)}
                       >
-                        <Ionicons name="trash-outline" size={14} color={BRAND.danger} />
+                        <Ionicons name="trash-outline" size={13} color={BRAND.danger} />
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -1374,7 +1466,10 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                       {isPending && (
                         <TouchableOpacity
                           style={[styles.secondaryBtn, { backgroundColor: '#E8F5E9', borderColor: '#2E7D32' }]}
-                          onPress={() => receivePurchaseOrder(po.id, undefined, 'Admin')}
+                          onPress={() => {
+                            receivePurchaseOrder(po.id, undefined, 'Admin');
+                            broadcastImmediately();
+                          }}
                         >
                           <Ionicons name="checkmark-done" size={14} color="#2E7D32" style={{ marginRight: 4 }} />
                           <Text style={[styles.secondaryBtnText, { color: '#2E7D32' }]}>Receive into Kitchen Stock</Text>
@@ -1396,7 +1491,16 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
                       <TouchableOpacity
                         style={[styles.secondaryBtn, { borderColor: BRAND.border }]}
-                        onPress={() => deletePurchaseOrder(po.id)}
+                        onPress={() => {
+                          confirmAction(
+                            'Delete Purchase Order',
+                            `Are you sure you want to delete PO #${po.poNumber}?`,
+                            () => {
+                              deletePurchaseOrder(po.id);
+                              broadcastImmediately();
+                            }
+                          );
+                        }}
                       >
                         <Ionicons name="trash-outline" size={14} color={BRAND.danger} />
                       </TouchableOpacity>
@@ -3288,6 +3392,19 @@ const styles = StyleSheet.create({
     color: BRAND.burgundy,
     letterSpacing: 0.3,
   },
+  headerUrduBadge: {
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  headerUrduText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
   badgePill: {
     backgroundColor: BRAND.burgundy,
     paddingHorizontal: 8,
@@ -3308,7 +3425,84 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
+  },
+  syncStatusGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    padding: 3,
+    paddingLeft: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  syncStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  syncStatusPillConnected: {
+    backgroundColor: '#F0FDF4',
+  },
+  syncStatusPillConnecting: {
+    backgroundColor: '#FFFBEB',
+  },
+  syncStatusPillOffline: {
+    backgroundColor: '#FEF2F2',
+  },
+  syncStatusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  syncStatusDotConnected: {
+    backgroundColor: '#16A34A',
+  },
+  syncStatusDotConnecting: {
+    backgroundColor: '#D97706',
+  },
+  syncStatusDotOffline: {
+    backgroundColor: '#DC2626',
+  },
+  syncStatusText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  syncStatusTextConnected: {
+    color: '#15803D',
+  },
+  syncStatusTextConnecting: {
+    color: '#B45309',
+  },
+  syncStatusTextOffline: {
+    color: '#B91C1C',
+  },
+  syncManualBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+  },
+  syncManualBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.burgundy,
   },
   primaryBtn: {
     flexDirection: 'row',
@@ -3340,8 +3534,12 @@ const styles = StyleSheet.create({
   },
   contentScroll: {
     flex: 1,
-    paddingHorizontal: 20,
-    paddingTop: 16,
+  },
+  contentContainer: {
+    width: '100%',
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    paddingBottom: 80,
   },
   kpiRow: {
     flexDirection: 'row',
@@ -3507,10 +3705,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
+    width: '100%',
   },
   supplierCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 340,
+    maxWidth: 620,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 16,
@@ -3649,15 +3849,28 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F0F0F0',
     paddingTop: 10,
-    gap: 6,
+    gap: 5,
+    flexWrap: 'nowrap',
+    width: '100%',
   },
   cardActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#F8F9FA',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  cardActionBtnIcon: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F8F9FA',
+    borderRadius: 7,
     borderWidth: 1,
     borderColor: BRAND.border,
   },

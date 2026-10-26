@@ -155,13 +155,13 @@ export default function KitchenDisplayScreen() {
 
   // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
   useEffect(() => {
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
+    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
     
     // Fetch active kitchen tickets and reconcile confirmed app orders
     const fetchLiveTickets = async () => {
       try {
         // 1. Fetch tickets from sync endpoint
-        const res = await fetch(`http://${host}:5000/api/sync`);
+        const res = await fetch(`http://${host}:5050/api/sync`);
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
@@ -170,7 +170,7 @@ export default function KitchenDisplayScreen() {
         }
 
         // 2. Also reconcile online orders that are CONFIRMED / PREPARING / READY
-        const ordersRes = await fetch(`http://${host}:5000/api/admin/online-orders`);
+        const ordersRes = await fetch(`http://${host}:5050/api/admin/online-orders`);
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           if (ordersData.success && Array.isArray(ordersData.orders)) {
@@ -228,7 +228,7 @@ export default function KitchenDisplayScreen() {
     const pollInterval = setInterval(fetchLiveTickets, 3500);
 
     // 2. Direct real-time WebSocket stream for instant KOT Chime & Alert Banner
-    const wsUrl = `ws://${host}:5000`;
+    const wsUrl = `ws://${host}:5050`;
     let socket: WebSocket | null = null;
     try {
       socket = new WebSocket(wsUrl);
@@ -354,7 +354,7 @@ export default function KitchenDisplayScreen() {
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.11');
+    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
     const orderId = (ticket as any).orderId;
 
     if (ticket.stationStatus === 'pending') {
@@ -362,7 +362,7 @@ export default function KitchenDisplayScreen() {
     } else if (ticket.stationStatus === 'cooking') {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
       if (orderId) {
-        fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
+        fetch(`http://${host}:5050/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'READY' })
@@ -371,7 +371,7 @@ export default function KitchenDisplayScreen() {
     } else if (ticket.stationStatus === 'ready') {
       bumpTicket(ticket.id, stationFilter);
       if (orderId) {
-        fetch(`http://${host}:5000/api/public/orders/${orderId}/status`, {
+        fetch(`http://${host}:5050/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'SERVED' })
