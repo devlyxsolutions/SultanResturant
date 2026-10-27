@@ -614,7 +614,7 @@ export default function TableOrderScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#32070D" />
+      <StatusBar barStyle="light-content" />
       
       {/* ================= ROYAL SULTAN TOP BAR ================= */}
       <View style={styles.topBar}>
@@ -780,7 +780,7 @@ export default function TableOrderScreen() {
       )}
 
       {/* ================= MAIN WORKSPACE (MATCHING MAIN POS ARCHITECTURE) ================= */}
-      <View style={styles.mainWorkspace}>
+      <View style={[styles.mainWorkspace, isMobile && { flexDirection: 'column' }]}>
 
         {/* --------------------------------------------------------
             LEFT: CATEGORIES SIDEBAR (AUTHENTIC POS VELVET THEME)

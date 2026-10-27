@@ -473,7 +473,6 @@ export default function WaiterNotificationHost() {
 
 const styles = StyleSheet.create({
   toastWrapper: {
-    position: 'absolute',
     top: 14,
     alignSelf: 'center',
     zIndex: 99999,
@@ -483,6 +482,9 @@ const styles = StyleSheet.create({
         position: 'fixed' as any,
         left: '50%',
         transform: [{ translateX: -270 } as any],
+      },
+      default: {
+        position: 'absolute',
       },
     }),
   },

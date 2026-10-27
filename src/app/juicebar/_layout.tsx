@@ -11,7 +11,7 @@ export default function JuiceBarLayout() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#1A0507" />
+      <StatusBar barStyle="light-content" />
 
       <View style={styles.content}>
         <Stack

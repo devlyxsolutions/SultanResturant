@@ -8,6 +8,7 @@ import {
   TextInput,
   Platform,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -28,6 +29,8 @@ import { usePagination } from '../hooks/usePagination';
 
 export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
   const { can, canViewRevenue } = useRolePermissions();
@@ -116,7 +119,11 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={[styles.content, isMobile && { padding: 12 }]}
+      showsVerticalScrollIndicator={false}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -443,7 +450,7 @@ const styles = StyleSheet.create({
   },
   pnlBox: {
     flex: 1,
-    minWidth: 220,
+    minWidth: 140,
     padding: 16,
     borderRadius: 14,
     borderWidth: 1.5,
@@ -536,6 +543,7 @@ const styles = StyleSheet.create({
   },
   amountRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
   },
   amountInput: {

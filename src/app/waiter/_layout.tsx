@@ -12,7 +12,7 @@ export default function WaiterLayout() {
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: '#4a121a', alignItems: 'center', justifyContent: 'center' }}>
-        <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
+        <StatusBar barStyle="light-content" />
         <SultanLogo size="md" width={68} height={68} />
         <ActivityIndicator size="small" color="#D4AF37" style={{ marginTop: 18 }} />
         <Text style={{ color: '#D4AF37', marginTop: 12, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>
@@ -24,7 +24,7 @@ export default function WaiterLayout() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" backgroundColor="#F8F9FA" />
+      <StatusBar barStyle="dark-content" />
 
       <View style={styles.content}>
         <Stack

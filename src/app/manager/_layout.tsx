@@ -72,7 +72,7 @@ export default function ManagerLayout() {
   if (!ready) {
     return (
       <View style={{ flex: 1, backgroundColor: '#140306', alignItems: 'center', justifyContent: 'center' }}>
-        <StatusBar barStyle="light-content" backgroundColor="#140306" />
+        <StatusBar barStyle="light-content" />
         <SultanLogo size="md" width={68} height={68} />
         <ActivityIndicator size="small" color="#D4AF37" style={{ marginTop: 18 }} />
         <Text style={{ color: '#D4AF37', marginTop: 12, fontSize: 12, fontWeight: '700', letterSpacing: 0.8 }}>
@@ -87,7 +87,7 @@ export default function ManagerLayout() {
   if (isPos) {
     return (
       <View style={{ flex: 1, backgroundColor: '#140306' }}>
-        <StatusBar barStyle="light-content" backgroundColor="#140306" />
+        <StatusBar barStyle="light-content" />
         <Stack 
           screenOptions={{ 
             headerShown: false,
@@ -105,7 +105,7 @@ export default function ManagerLayout() {
   if (!isMobile) {
     return (
       <View style={styles.desktopShell}>
-        <StatusBar barStyle="light-content" backgroundColor="#140306" />
+        <StatusBar barStyle="light-content" />
 
         {/* Global Web Animations & Micro-Interactions */}
         {Platform.OS === 'web' && (
@@ -265,7 +265,7 @@ export default function ManagerLayout() {
   // Mobile Layout
   return (
     <SafeAreaView style={styles.mobileShell} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#24050A" />
+      <StatusBar barStyle="light-content" />
 
       {/* Mobile Top Header */}
       <View style={styles.mobileHeader}>

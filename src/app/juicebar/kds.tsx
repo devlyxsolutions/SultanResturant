@@ -10,6 +10,7 @@ import {
   Modal,
   TextInput,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -65,6 +66,8 @@ function playKitchenChime(isAddOn: boolean = false) {
 
 export default function KitchenDisplayScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const tickets = useRestaurantStore((state) => state.tickets);
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
@@ -560,25 +563,56 @@ export default function KitchenDisplayScreen() {
   return (
     <View style={styles.container}>
       {/* Top KDS Navbar */}
-      <View style={styles.navbar}>
-        <View style={styles.navLeft}>
-          <View style={styles.stationBadge}>
-            <Ionicons name="wine" size={20} color="#FF9500" />
-          </View>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.navTitle}>SULTAN JUICE BAR</Text>
-              <View style={styles.liveIndicator}>
-                <View style={styles.livePulseDot} />
-                <Text style={styles.liveIndicatorText}>LIVE</Text>
-              </View>
+      <View style={[styles.navbar, isMobile && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 12, paddingVertical: 10, gap: 10 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+          <View style={styles.navLeft}>
+            <View style={styles.stationBadge}>
+              <Ionicons name="wine" size={20} color="#FF9500" />
             </View>
-            <Text style={styles.navSubtitle}>Juice Station • Shakes, Mocktails & Beverages</Text>
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.navTitle, isMobile && { fontSize: 16 }]}>SULTAN JUICE BAR</Text>
+                <View style={styles.liveIndicator}>
+                  <View style={styles.livePulseDot} />
+                  <Text style={styles.liveIndicatorText}>LIVE</Text>
+                </View>
+              </View>
+              <Text style={styles.navSubtitle}>Juice Station • Shakes & Beverages</Text>
+            </View>
           </View>
+
+          {isMobile && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                style={styles.inventoryNavBtn}
+                onPress={() => setShowInventoryModal(true)}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="nutrition" size={15} color="#FF9500" />
+                {lowStockCount > 0 && (
+                  <View style={styles.inventoryBadge}>
+                    <Text style={styles.inventoryBadgeText}>{lowStockCount}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.logoutNavBtn}
+                onPress={handleLogout}
+                activeOpacity={0.75}
+              >
+                <Ionicons name="log-out-outline" size={15} color="#FF453A" />
+              </TouchableOpacity>
+              <SyncStatusBadge compact />
+            </View>
+          )}
         </View>
 
-        {/* Status Filter Badges */}
-        <View style={styles.filterPills}>
+        {/* Status Filter Badges - Horizontal Scrollable on Mobile */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, paddingVertical: 2, alignItems: 'center' }}
+        >
           <TouchableOpacity
             style={[styles.filterPill, activeFilter === 'all' && styles.filterPillActive]}
             onPress={() => setActiveFilter('all')}
@@ -616,7 +650,7 @@ export default function KitchenDisplayScreen() {
               onPress={() => setActiveFilter('addons')}
             >
               <Ionicons name="flash" size={12} color={activeFilter === 'addons' ? '#000' : '#D5A943'} />
-              <Text style={[styles.filterPillText, activeFilter === 'addons' && styles.filterPillTextActiveAddons]}>
+              <Text style={[styles.filterPillText, activeFilter === 'addons' && styles.filterPillActiveAddons]}>
                 Add-ons ({addOnsCount})
               </Text>
             </TouchableOpacity>
@@ -641,37 +675,37 @@ export default function KitchenDisplayScreen() {
               Served ({servedCount})
             </Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
 
-        {/* Right Action Buttons: Handover & Stock + Logout */}
-        <View style={styles.navRightActions}>
-          {/* Handover & Inventory Button */}
-          <TouchableOpacity
-            style={styles.inventoryNavBtn}
-            onPress={() => setShowInventoryModal(true)}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="nutrition" size={16} color="#FF9500" />
-            <Text style={styles.inventoryNavBtnText}>Juice Handover & Stock</Text>
-            {lowStockCount > 0 && (
-              <View style={styles.inventoryBadge}>
-                <Text style={styles.inventoryBadgeText}>{lowStockCount} Low</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+        {/* Right Action Buttons: Desktop Only */}
+        {!isMobile && (
+          <View style={styles.navRightActions}>
+            <TouchableOpacity
+              style={styles.inventoryNavBtn}
+              onPress={() => setShowInventoryModal(true)}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="nutrition" size={16} color="#FF9500" />
+              <Text style={styles.inventoryNavBtnText}>Juice Handover & Stock</Text>
+              {lowStockCount > 0 && (
+                <View style={styles.inventoryBadge}>
+                  <Text style={styles.inventoryBadgeText}>{lowStockCount} Low</Text>
+                </View>
+              )}
+            </TouchableOpacity>
 
-          {/* Logout Button */}
-          <TouchableOpacity
-            style={styles.logoutNavBtn}
-            onPress={handleLogout}
-            activeOpacity={0.75}
-          >
-            <Ionicons name="log-out-outline" size={16} color="#FF453A" />
-            <Text style={styles.logoutNavBtnText}>Logout</Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.logoutNavBtn}
+              onPress={handleLogout}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="log-out-outline" size={16} color="#FF453A" />
+              <Text style={styles.logoutNavBtnText}>Logout</Text>
+            </TouchableOpacity>
 
-          <SyncStatusBadge />
-        </View>
+            <SyncStatusBadge />
+          </View>
+        )}
       </View>
 
       {/* Real-time Incoming Order Alert Banner */}
@@ -730,11 +764,11 @@ export default function KitchenDisplayScreen() {
         ) : (
           <ScrollView
             style={{ flex: 1 }}
-            contentContainerStyle={styles.columnsContainer}
+            contentContainerStyle={[styles.columnsContainer, isMobile && { padding: 10, gap: 12 }]}
             showsVerticalScrollIndicator={true}
           >
             {sortedTickets.map((ticket) => (
-              <View key={ticket.id} style={styles.ticketColumnWrap}>
+              <View key={ticket.id} style={[styles.ticketColumnWrap, isMobile && { width: '100%', maxWidth: '100%', minHeight: 320 }]}>
                 {renderTicket(ticket)}
               </View>
             ))}

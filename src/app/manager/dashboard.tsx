@@ -360,35 +360,71 @@ export default function ManagerDashboard() {
           </View>
         </View>
 
-        <View style={styles.headerRight}>
-          {/* Refresh / Live Sync Button */}
-          <TouchableOpacity
-            style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
-            onPress={handleRefresh}
-            activeOpacity={0.75}
-            disabled={isRefreshing}
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
           >
-            <Ionicons 
-              name="sync-outline" 
-              size={15} 
-              color={BRAND.goldDark} 
-              {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
-            />
-            <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Live Sync'}</Text>
-          </TouchableOpacity>
-
-          {can('canAccessPOS') && (
+            {/* Refresh / Live Sync Button */}
             <TouchableOpacity
-              style={styles.actionPosBtn}
-              onPress={() => router.push('/manager/pos')}
-              activeOpacity={0.8}
-              {...({ dataSet: { btn: 'hover' } } as any)}
+              style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
+              onPress={handleRefresh}
+              activeOpacity={0.75}
+              disabled={isRefreshing}
             >
-              <Ionicons name="calculator" size={16} color="#24050A" />
-              <Text style={styles.actionPosBtnText}>Launch POS</Text>
+              <Ionicons 
+                name="sync-outline" 
+                size={15} 
+                color={BRAND.goldDark} 
+                {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
+              />
+              <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Sync'}</Text>
             </TouchableOpacity>
-          )}
-        </View>
+
+            {can('canAccessPOS') && (
+              <TouchableOpacity
+                style={styles.actionPosBtn}
+                onPress={() => router.push('/manager/pos')}
+                activeOpacity={0.8}
+                {...({ dataSet: { btn: 'hover' } } as any)}
+              >
+                <Ionicons name="calculator" size={16} color="#24050A" />
+                <Text style={styles.actionPosBtnText}>POS</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.headerRight}>
+            {/* Refresh / Live Sync Button */}
+            <TouchableOpacity
+              style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
+              onPress={handleRefresh}
+              activeOpacity={0.75}
+              disabled={isRefreshing}
+            >
+              <Ionicons 
+                name="sync-outline" 
+                size={15} 
+                color={BRAND.goldDark} 
+                {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
+              />
+              <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Live Sync'}</Text>
+            </TouchableOpacity>
+
+            {can('canAccessPOS') && (
+              <TouchableOpacity
+                style={styles.actionPosBtn}
+                onPress={() => router.push('/manager/pos')}
+                activeOpacity={0.8}
+                {...({ dataSet: { btn: 'hover' } } as any)}
+              >
+                <Ionicons name="calculator" size={16} color="#24050A" />
+                <Text style={styles.actionPosBtnText}>Launch POS</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       {/* 1.1 Active Shift Status Capsule (from Baithak home.php) */}
@@ -1427,7 +1463,8 @@ const styles = StyleSheet.create({
   },
 
   kpiCardHalf: {
-    width: 'calc(50% - 8px)' as any,
+    flex: 1,
+    minWidth: 280,
   },
 
   kpiGrid: {
@@ -1448,7 +1485,7 @@ const styles = StyleSheet.create({
   },
   kpiCardQuarter: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 140,
   },
   kpiTopRow: {
     flexDirection: 'row',

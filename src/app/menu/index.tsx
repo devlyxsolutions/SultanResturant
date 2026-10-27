@@ -1096,7 +1096,7 @@ export default function CustomerMenuScreen() {
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#24050A" />
+      <StatusBar barStyle="light-content" />
 
       <View style={styles.screenWrapper}>
         <ScrollView

@@ -7,7 +7,7 @@ import UniversalPortalNav from '../../components/UniversalPortalNav';
 export default function PlaylandLayout() {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
-      <StatusBar barStyle="light-content" backgroundColor="#4a121a" />
+      <StatusBar barStyle="light-content" />
 
       {/* Universal Top Navigation Bar */}
       <UniversalPortalNav

@@ -90,7 +90,8 @@ export default function TablesBlueprintScreen({
   const params = useLocalSearchParams<{ prefillFloor?: string }>();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const columns = width < 600 ? 2 : width < 1000 ? 3 : width < 1400 ? 4 : 5;
+  const isSmallMobile = width < 420;
+  const columns = width < 380 ? 1 : width < 720 ? 2 : width < 1100 ? 3 : width < 1400 ? 4 : 5;
 
   const { can, canViewRevenue } = useRolePermissions(role === 'manager' ? 'manager' : undefined);
 
@@ -1005,8 +1006,8 @@ export default function TablesBlueprintScreen({
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, isMobile && { paddingHorizontal: 14 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1, minWidth: 200 }}>
+      <View style={[styles.header, isMobile && { paddingHorizontal: 12, paddingVertical: 10 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: isMobile ? 160 : 200 }}>
           <TouchableOpacity
             style={styles.backBtn}
             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -1015,66 +1016,133 @@ export default function TablesBlueprintScreen({
             <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>Table & Cabin Blueprint</Text>
-            <Text style={styles.subtitle}>Dining tables, couches & Arabian majlis cabins floor-wise</Text>
+            <Text style={[styles.title, isMobile && { fontSize: 17 }]}>Table & Cabin Blueprint</Text>
+            {!isSmallMobile && (
+              <Text style={styles.subtitle} numberOfLines={1}>Dining tables, couches & Arabian majlis cabins</Text>
+            )}
           </View>
         </View>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#895B1E', borderColor: '#D5A943', borderWidth: 1 }]}
-            onPress={openBatchQrModal}
+
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ gap: 8, paddingVertical: 4, alignItems: 'center' }}
+            style={{ width: '100%', marginTop: 4 }}
           >
-            <Ionicons name="qr-code-outline" size={16} color="#FFE082" />
-            <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs & Standees</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
-            onPress={handlePopulateDefault5Floors}
-          >
-            <Ionicons name="sparkles" size={16} color="#fff" />
-            <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => router.push(floorsRoute as any)}
-          >
-            <Ionicons name="layers-outline" size={16} color="#fff" />
-            <Text style={styles.headerBtnText}>🏛️ Manage Floors</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, styles.headerBtnGhost]}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => openAddReservationModal()}
-          >
-            <Ionicons name="calendar-outline" size={16} color={STATUS_META.reserved.color} />
-            {!isMobile && <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Reservation</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => openAddTableModal(undefined, 'majlis')}
-          >
-            <SeatingTypeIcon type="majlis" size={16} color="#fff" />
-            <Text style={styles.headerBtnText}>+ Cabin</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => openAddTableModal(undefined, 'couches')}
-          >
-            <SeatingTypeIcon type="couches" size={16} color="#fff" />
-            <Text style={styles.headerBtnText}>+ Couch</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => openAddTableModal(undefined, 'tables')}
-          >
-            <SeatingTypeIcon type="tables" size={16} color="#fff" />
-            <Text style={styles.headerBtnText}>+ Table</Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#895B1E', borderColor: '#D5A943', borderWidth: 1 }]}
+              onPress={openBatchQrModal}
+            >
+              <Ionicons name="qr-code-outline" size={15} color="#FFE082" />
+              <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
+              onPress={handlePopulateDefault5Floors}
+            >
+              <Ionicons name="sparkles" size={15} color="#fff" />
+              <Text style={styles.headerBtnText}>⚡ 5-Floor Auto</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => router.push(floorsRoute as any)}
+            >
+              <Ionicons name="layers-outline" size={15} color="#fff" />
+              <Text style={styles.headerBtnText}>🏛️ Floors</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnGhost]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddReservationModal()}
+            >
+              <Ionicons name="calendar-outline" size={15} color={STATUS_META.reserved.color} />
+              <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Booking</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'majlis')}
+            >
+              <SeatingTypeIcon type="majlis" size={15} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Cabin</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'couches')}
+            >
+              <SeatingTypeIcon type="couches" size={15} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Couch</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'tables')}
+            >
+              <SeatingTypeIcon type="tables" size={15} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Table</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        ) : (
+          <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#895B1E', borderColor: '#D5A943', borderWidth: 1 }]}
+              onPress={openBatchQrModal}
+            >
+              <Ionicons name="qr-code-outline" size={16} color="#FFE082" />
+              <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs & Standees</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
+              onPress={handlePopulateDefault5Floors}
+            >
+              <Ionicons name="sparkles" size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => router.push(floorsRoute as any)}
+            >
+              <Ionicons name="layers-outline" size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>🏛️ Manage Floors</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, styles.headerBtnGhost]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddReservationModal()}
+            >
+              <Ionicons name="calendar-outline" size={16} color={STATUS_META.reserved.color} />
+              <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Reservation</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'majlis')}
+            >
+              <SeatingTypeIcon type="majlis" size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Cabin</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'couches')}
+            >
+              <SeatingTypeIcon type="couches" size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Couch</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              onPress={() => openAddTableModal(undefined, 'tables')}
+            >
+              <SeatingTypeIcon type="tables" size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>+ Table</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 12 }]} showsVerticalScrollIndicator={false}>
@@ -1104,18 +1172,18 @@ export default function TablesBlueprintScreen({
         </ScrollView>
 
         {/* Segmented tabs */}
-        <View style={styles.segment}>
+        <View style={[styles.segment, isMobile && { alignSelf: 'stretch', width: '100%' }]}>
           {TABS.map((tab) => {
             const active = activeTab === tab.key;
             return (
               <TouchableOpacity
                 key={tab.key}
                 {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                style={[styles.segmentItem, active && styles.segmentItemActive]}
+                style={[styles.segmentItem, isMobile && { flex: 1, justifyContent: 'center', paddingHorizontal: 6 }, active && styles.segmentItemActive]}
                 onPress={() => setActiveTab(tab.key)}
               >
                 <Ionicons name={active ? tab.icon : (`${tab.icon}-outline` as IconName)} size={16} color={active ? '#fff' : '#636366'} />
-                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
+                <Text style={[styles.segmentText, active && styles.segmentTextActive, isSmallMobile && { fontSize: 12 }]}>
                   {tab.label}
                 </Text>
                 {!!tab.badge && (

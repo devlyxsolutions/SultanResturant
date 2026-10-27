@@ -690,29 +690,38 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={20} color={BRAND.ink} />
-          </TouchableOpacity>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={styles.headerTitle}>Inventory & Stock Control</Text>
-              <View style={styles.headerUrduBadge}>
-                <Text style={styles.headerUrduText}>اسٹاک اور انوینٹری کنٹرول</Text>
+      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 10 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
+              activeOpacity={0.7}
+            >
+              <Ionicons name="arrow-back" size={20} color={BRAND.ink} />
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <Text style={[styles.headerTitle, isMobile && { fontSize: 18 }]}>Inventory & Stock</Text>
+                {!isMobile && (
+                  <View style={styles.headerUrduBadge}>
+                    <Text style={styles.headerUrduText}>اسٹاک اور انوینٹری کنٹرول</Text>
+                  </View>
+                )}
               </View>
+              <Text style={styles.headerSubtitle} numberOfLines={1}>
+                SKU Codes, GRN, Expiry Watch & WhatsApp Reorders
+              </Text>
             </View>
-            <Text style={styles.headerSubtitle}>
-              SKU Codes, Goods Receiving (GRN), Expiry Watch, WhatsApp Reorders & Live Sync
-            </Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        {/* Action Buttons Strip */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 8, alignItems: 'center', paddingVertical: 2 }}
+        >
           {/* Live Cloud / LAN Sync Indicator */}
           <View style={styles.syncStatusGroup}>
             <View
@@ -748,8 +757,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 {isConnected
                   ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
                   : isOffline
-                  ? 'Offline (Local)'
-                  : 'Syncing Hub...'}
+                  ? 'Offline'
+                  : 'Syncing...'}
               </Text>
             </View>
 
@@ -766,7 +775,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 style={isManualSyncing ? ({ transform: [{ rotate: '45deg' }] } as any) : undefined}
               />
               <Text style={styles.syncManualBtnText}>
-                {isManualSyncing ? 'Syncing...' : 'Sync Now'}
+                {isManualSyncing ? '...' : 'Sync'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -776,8 +785,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             onPress={() => router.push(`${portalBase}/suppliers` as any)}
             activeOpacity={0.85}
           >
-            <Ionicons name="bus-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-            <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>Suppliers Hub</Text>
+            <Ionicons name="bus-outline" size={15} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+            <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>Suppliers</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -785,15 +794,15 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             onPress={() => handleOpenReceiveModal()}
             activeOpacity={0.85}
           >
-            <Ionicons name="receipt-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.addBtnText}>+ Receive & Invoice (GRN)</Text>
+            <Ionicons name="receipt-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+            <Text style={styles.addBtnText}>+ Receive (GRN)</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
-            <Ionicons name="add" size={20} color="#FFFFFF" />
+            <Ionicons name="add" size={18} color="#FFFFFF" />
             <Text style={styles.addBtnText}>+ Add SKU</Text>
           </TouchableOpacity>
-        </View>
+        </ScrollView>
       </View>
 
       {/* KPI Cards Row (Liquid Glass Info Boxes) */}
@@ -860,103 +869,208 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </View>
 
       {/* 6 Main Navigation Tabs */}
-      <View style={styles.tabsRow}>
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'raw' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('raw')}
-          activeOpacity={0.7}
+      {isMobile ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: 6, paddingVertical: 2, paddingHorizontal: 2 }}
+          style={{ marginBottom: 14 }}
         >
-          <Ionicons
-            name="cube"
-            size={16}
-            color={activeTab === 'raw' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'raw' && styles.tabBtnTextActive]}>
-            Items Directory ({inventory.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'raw' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('raw')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="cube"
+              size={15}
+              color={activeTab === 'raw' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'raw' && styles.tabBtnTextActive]}>
+              Directory ({inventory.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'receiving' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('receiving')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="receipt"
-            size={16}
-            color={activeTab === 'receiving' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'receiving' && styles.tabBtnTextActive]}>
-            Receiving & Invoicing ({receivingLogs.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'receiving' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('receiving')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="receipt"
+              size={15}
+              color={activeTab === 'receiving' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'receiving' && styles.tabBtnTextActive]}>
+              Receiving ({receivingLogs.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'expiries' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('expiries')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="timer"
-            size={16}
-            color={activeTab === 'expiries' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'expiries' && styles.tabBtnTextActive]}>
-            Expiries & Shelf-Life ({metrics.expiredCount + metrics.criticalExpiryCount + metrics.warningExpiryCount})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'expiries' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('expiries')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="timer"
+              size={15}
+              color={activeTab === 'expiries' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'expiries' && styles.tabBtnTextActive]}>
+              Expiries ({metrics.expiredCount + metrics.criticalExpiryCount + metrics.warningExpiryCount})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'lowstock' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('lowstock')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="alert-circle"
-            size={16}
-            color={activeTab === 'lowstock' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'lowstock' && styles.tabBtnTextActive]}>
-            Low Stock & Reorders ({lowStockItems.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'lowstock' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('lowstock')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={15}
+              color={activeTab === 'lowstock' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'lowstock' && styles.tabBtnTextActive]}>
+              Low Stock ({lowStockItems.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'movements' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('movements')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="swap-horizontal"
-            size={16}
-            color={activeTab === 'movements' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'movements' && styles.tabBtnTextActive]}>
-            Movement Log ({stockMovements.length})
-          </Text>
-        </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'movements' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('movements')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="swap-horizontal"
+              size={15}
+              color={activeTab === 'movements' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'movements' && styles.tabBtnTextActive]}>
+              Logs ({stockMovements.length})
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={[styles.tabBtn, activeTab === 'dishes' && styles.tabBtnActive]}
-          onPress={() => setActiveTab('dishes')}
-          activeOpacity={0.7}
-        >
-          <Ionicons
-            name="restaurant"
-            size={16}
-            color={activeTab === 'dishes' ? BRAND.burgundy : BRAND.muted}
-            style={{ marginRight: 6 }}
-          />
-          <Text style={[styles.tabBtnText, activeTab === 'dishes' && styles.tabBtnTextActive]}>
-            Ready Dishes ({trackedDishes.filter((d) => d.trackStock).length})
-          </Text>
-        </TouchableOpacity>
-      </View>
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'dishes' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('dishes')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="restaurant"
+              size={15}
+              color={activeTab === 'dishes' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'dishes' && styles.tabBtnTextActive]}>
+              Dishes ({trackedDishes.filter((d) => d.trackStock).length})
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      ) : (
+        <View style={styles.tabsRow}>
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'raw' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('raw')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="cube"
+              size={16}
+              color={activeTab === 'raw' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'raw' && styles.tabBtnTextActive]}>
+              Items Directory ({inventory.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'receiving' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('receiving')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="receipt"
+              size={16}
+              color={activeTab === 'receiving' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'receiving' && styles.tabBtnTextActive]}>
+              Receiving & Invoicing ({receivingLogs.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'expiries' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('expiries')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="timer"
+              size={16}
+              color={activeTab === 'expiries' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'expiries' && styles.tabBtnTextActive]}>
+              Expiries & Shelf-Life ({metrics.expiredCount + metrics.criticalExpiryCount + metrics.warningExpiryCount})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'lowstock' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('lowstock')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="alert-circle"
+              size={16}
+              color={activeTab === 'lowstock' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'lowstock' && styles.tabBtnTextActive]}>
+              Low Stock & Reorders ({lowStockItems.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'movements' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('movements')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="swap-horizontal"
+              size={16}
+              color={activeTab === 'movements' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'movements' && styles.tabBtnTextActive]}>
+              Movement Log ({stockMovements.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'dishes' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('dishes')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="restaurant"
+              size={16}
+              color={activeTab === 'dishes' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'dishes' && styles.tabBtnTextActive]}>
+              Ready Dishes ({trackedDishes.filter((d) => d.trackStock).length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Global Search Bar */}
       <View style={styles.searchSection}>
@@ -2739,7 +2853,7 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 180,
+    minWidth: 140,
     backgroundColor: 'rgba(255, 255, 255, 0.9)',
     padding: 14,
     borderRadius: 14,
@@ -2937,7 +3051,7 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 280,
     maxWidth: 600,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,

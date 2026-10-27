@@ -145,7 +145,7 @@ export default function WelcomeScreen() {
 
   return (
     <IslamicBackground theme="burgundy" showCorners={true} showCenterLattice={true}>
-      <StatusBar barStyle="light-content" backgroundColor="#2A060B" />
+      <StatusBar barStyle="light-content" />
 
       {/* ============================================================
           PHASE 1: SULTAN ROYAL ANIMATED SPLASH SCREEN

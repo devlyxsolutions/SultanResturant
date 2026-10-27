@@ -857,105 +857,192 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   return (
     <View style={styles.container}>
       {/* Top Header */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, isMobile && { paddingHorizontal: 12, paddingVertical: 10, gap: 10 }]}>
+        <View style={[styles.headerLeft, isMobile && { width: '100%' }]}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
           >
             <Ionicons name="arrow-back" size={20} color={BRAND.burgundy} />
           </TouchableOpacity>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <Text style={styles.headerTitle}>Sultan Supplier & Vendor Hub</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={[styles.headerTitle, isMobile && { fontSize: 17 }]}>Sultan Vendor Hub</Text>
               <View style={styles.headerUrduBadge}>
-                <Text style={styles.headerUrduText}>سپلائرز اور وینڈرز ہب</Text>
+                <Text style={styles.headerUrduText}>وینڈرز ہب</Text>
               </View>
               <View style={styles.badgePill}>
                 <Text style={styles.badgePillText}>RAW MATERIALS</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>Procurement, Purchase Invoices, Vendor Ledgers & Dues</Text>
+            <Text style={[styles.headerSubtitle, isMobile && { fontSize: 11 }]} numberOfLines={1}>
+              Procurement, Purchase Invoices, Vendor Ledgers & Dues
+            </Text>
           </View>
         </View>
 
-        <View style={styles.headerRight}>
-          {/* Live Cloud / LAN Sync Indicator */}
-          <View style={styles.syncStatusGroup}>
-            <View
-              style={[
-                styles.syncStatusPill,
-                isConnected
-                  ? styles.syncStatusPillConnected
-                  : isOffline
-                  ? styles.syncStatusPillOffline
-                  : styles.syncStatusPillConnecting,
-              ]}
-            >
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
+          >
+            {/* Live Cloud / LAN Sync Indicator */}
+            <View style={styles.syncStatusGroup}>
               <View
                 style={[
-                  styles.syncStatusDot,
+                  styles.syncStatusPill,
                   isConnected
-                    ? styles.syncStatusDotConnected
+                    ? styles.syncStatusPillConnected
                     : isOffline
-                    ? styles.syncStatusDotOffline
-                    : styles.syncStatusDotConnecting,
-                ]}
-              />
-              <Text
-                style={[
-                  styles.syncStatusText,
-                  isConnected
-                    ? styles.syncStatusTextConnected
-                    : isOffline
-                    ? styles.syncStatusTextOffline
-                    : styles.syncStatusTextConnecting,
+                    ? styles.syncStatusPillOffline
+                    : styles.syncStatusPillConnecting,
                 ]}
               >
-                {isConnected
-                  ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
-                  : isOffline
-                  ? 'Offline (Local)'
-                  : 'Syncing Hub...'}
-              </Text>
+                <View
+                  style={[
+                    styles.syncStatusDot,
+                    isConnected
+                      ? styles.syncStatusDotConnected
+                      : isOffline
+                      ? styles.syncStatusDotOffline
+                      : styles.syncStatusDotConnecting,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.syncStatusText,
+                    isConnected
+                      ? styles.syncStatusTextConnected
+                      : isOffline
+                      ? styles.syncStatusTextOffline
+                      : styles.syncStatusTextConnecting,
+                  ]}
+                >
+                  {isConnected
+                    ? `Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
+                    : isOffline
+                    ? 'Offline'
+                    : 'Syncing...'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.syncManualBtn}
+                onPress={handleManualSync}
+                disabled={isManualSyncing}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="sync"
+                  size={14}
+                  color={BRAND.burgundy}
+                  style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
+                />
+                <Text style={styles.syncManualBtnText}>
+                  {isManualSyncing ? '...' : 'Sync'}
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={styles.syncManualBtn}
-              onPress={handleManualSync}
-              disabled={isManualSyncing}
-              activeOpacity={0.75}
-            >
-              <Ionicons
-                name="sync"
-                size={14}
-                color={BRAND.burgundy}
-                style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
-              />
-              <Text style={styles.syncManualBtnText}>
-                {isManualSyncing ? 'Syncing...' : 'Sync Now'}
-              </Text>
+            <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
+              <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
+              <Text style={styles.secondaryBtnText}>Reset</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
+              <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryBtnText}>+ PO</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
+              <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        ) : (
+          <View style={styles.headerRight}>
+            {/* Live Cloud / LAN Sync Indicator */}
+            <View style={styles.syncStatusGroup}>
+              <View
+                style={[
+                  styles.syncStatusPill,
+                  isConnected
+                    ? styles.syncStatusPillConnected
+                    : isOffline
+                    ? styles.syncStatusPillOffline
+                    : styles.syncStatusPillConnecting,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.syncStatusDot,
+                    isConnected
+                      ? styles.syncStatusDotConnected
+                      : isOffline
+                      ? styles.syncStatusDotOffline
+                      : styles.syncStatusDotConnecting,
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.syncStatusText,
+                    isConnected
+                      ? styles.syncStatusTextConnected
+                      : isOffline
+                      ? styles.syncStatusTextOffline
+                      : styles.syncStatusTextConnecting,
+                  ]}
+                >
+                  {isConnected
+                    ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
+                    : isOffline
+                    ? 'Offline (Local)'
+                    : 'Syncing Hub...'}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={styles.syncManualBtn}
+                onPress={handleManualSync}
+                disabled={isManualSyncing}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="sync"
+                  size={14}
+                  color={BRAND.burgundy}
+                  style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
+                />
+                <Text style={styles.syncManualBtnText}>
+                  {isManualSyncing ? 'Syncing...' : 'Sync Now'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
+              <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
+              <Text style={styles.secondaryBtnText}>Reset Vendors</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
+              <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryBtnText}>+ New PO (Bill)</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
+              <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+              <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
-            <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
-            <Text style={styles.secondaryBtnText}>{isMobile ? 'Reset' : 'Reset Vendors'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
-            <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.primaryBtnText}>{isMobile ? '+ PO' : '+ New PO (Bill)'}</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
-            <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-            <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
-          </TouchableOpacity>
-        </View>
+        )}
       </View>
 
-      <ScrollView style={styles.contentScroll} contentContainerStyle={styles.contentContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        style={styles.contentScroll}
+        contentContainerStyle={[styles.contentContainer, isMobile && { paddingHorizontal: 12, paddingVertical: 12 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Top Mega-KPI Bar */}
         <View style={styles.kpiRow}>
           <View style={[styles.kpiCard, { borderLeftColor: BRAND.gold }]}>
@@ -1008,49 +1095,100 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         </View>
 
         {/* Navigation Tabs */}
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'directory' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('directory')}
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={{ marginBottom: 16 }}
+            contentContainerStyle={[styles.tabBar, { width: 'auto', marginBottom: 0, paddingHorizontal: 4 }]}
           >
-            <Ionicons
-              name="people-outline"
-              size={18}
-              color={activeTab === 'directory' ? BRAND.burgundy : BRAND.muted}
-            />
-            <Text style={[styles.tabBtnText, activeTab === 'directory' && styles.tabBtnTextActive]}>
-              Suppliers Directory ({suppliers.length})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'directory' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('directory')}
+            >
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color={activeTab === 'directory' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'directory' && styles.tabBtnTextActive]}>
+                Suppliers ({suppliers.length})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'orders' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('orders')}
-          >
-            <Ionicons
-              name="document-text-outline"
-              size={18}
-              color={activeTab === 'orders' ? BRAND.burgundy : BRAND.muted}
-            />
-            <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
-              Purchase Orders / Invoices ({purchaseOrders.length})
-            </Text>
-          </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'orders' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('orders')}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={activeTab === 'orders' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
+                Purchase Orders ({purchaseOrders.length})
+              </Text>
+            </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'payments' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('payments')}
-          >
-            <Ionicons
-              name="cash-outline"
-              size={18}
-              color={activeTab === 'payments' ? BRAND.burgundy : BRAND.muted}
-            />
-            <Text style={[styles.tabBtnText, activeTab === 'payments' && styles.tabBtnTextActive]}>
-              Payment History ({supplierPayments.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
+            <TouchableOpacity
+              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'payments' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('payments')}
+            >
+              <Ionicons
+                name="cash-outline"
+                size={18}
+                color={activeTab === 'payments' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'payments' && styles.tabBtnTextActive]}>
+                Payments ({supplierPayments.length})
+              </Text>
+            </TouchableOpacity>
+          </ScrollView>
+        ) : (
+          <View style={styles.tabBar}>
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'directory' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('directory')}
+            >
+              <Ionicons
+                name="people-outline"
+                size={18}
+                color={activeTab === 'directory' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'directory' && styles.tabBtnTextActive]}>
+                Suppliers Directory ({suppliers.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'orders' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('orders')}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={activeTab === 'orders' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
+                Purchase Orders / Invoices ({purchaseOrders.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.tabBtn, activeTab === 'payments' && styles.tabBtnActive]}
+              onPress={() => setActiveTab('payments')}
+            >
+              <Ionicons
+                name="cash-outline"
+                size={18}
+                color={activeTab === 'payments' ? BRAND.burgundy : BRAND.muted}
+              />
+              <Text style={[styles.tabBtnText, activeTab === 'payments' && styles.tabBtnTextActive]}>
+                Payment History ({supplierPayments.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* ---------------------------------------------------- */}
         {/* TAB 1: SUPPLIERS DIRECTORY */}
@@ -3549,7 +3687,7 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 140,
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 14,
@@ -3630,7 +3768,7 @@ const styles = StyleSheet.create({
   },
   searchBar: {
     flex: 1,
-    minWidth: 280,
+    minWidth: 200,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -3709,7 +3847,7 @@ const styles = StyleSheet.create({
   },
   supplierCard: {
     flex: 1,
-    minWidth: 340,
+    minWidth: 280,
     maxWidth: 620,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -4369,7 +4507,7 @@ const styles = StyleSheet.create({
   },
   paymentKpiCard: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 140,
     backgroundColor: '#FFFFFF',
     borderRadius: 10,
     padding: 14,

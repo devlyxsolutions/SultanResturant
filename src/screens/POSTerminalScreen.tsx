@@ -282,7 +282,7 @@ export default function POSTerminalScreen({
   const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
   const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
   const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
-  const searchInputRef = useRef<TextInput>(null);
+  const searchInputRef = useRef<any>(null);
   const prefilledRef = useRef<string | null>(null);
 
   // Toggle Fullscreen (Browser Kiosk)
@@ -1104,14 +1104,14 @@ export default function POSTerminalScreen({
 
   return (
     <View style={styles.fullscreenContainer}>
-      <StatusBar barStyle="light-content" backgroundColor="#32070D" />
+      <StatusBar barStyle="light-content" />
 
       {/* ========================================================
           1. BAITHAK TOP HEADER (Dark Maroon with Gold Accents)
           ======================================================== */}
-      <View style={styles.topHeader}>
+      <View style={[styles.topHeader, isMobile && { paddingHorizontal: 10, height: 48 }]}>
         {/* Left Side: Back Arrow + Brand Calligraphy + Live Clock */}
-        <View style={styles.headerLeft}>
+        <View style={[styles.headerLeft, isMobile && { gap: 8 }]}>
           <TouchableOpacity 
             style={styles.backBtn}
             onPress={() => router.replace(backRoute as any)}
@@ -1122,16 +1122,16 @@ export default function POSTerminalScreen({
 
           <View style={styles.brandBox}>
             <SultanLogo size="xs" width={22} height={22} style={{ marginRight: 6 }} />
-            <Text style={styles.brandTitle}>SULTAN RESTAURANT</Text>
+            <Text style={styles.brandTitle}>{isMobile ? 'SULTAN POS' : 'SULTAN RESTAURANT'}</Text>
           </View>
 
-          <LivePOSClock />
+          {!isMobile && <LivePOSClock />}
         </View>
 
         {/* Right Side: Shift Status + Fullscreen + Admin Avatar */}
-        <View style={styles.headerRight}>
+        <View style={[styles.headerRight, isMobile && { gap: 6 }]}>
           <TouchableOpacity 
-            style={styles.shiftCapsule} 
+            style={[styles.shiftCapsule, isMobile && { paddingHorizontal: 7, paddingVertical: 4 }]} 
             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
             onPress={() => router.push(shiftRoute as any)}
             activeOpacity={0.8}
@@ -1141,25 +1141,27 @@ export default function POSTerminalScreen({
               style={styles.shiftDot}
             />
             <Text style={styles.shiftText}>
-              {activeShift ? `Shift #${activeShift.id.slice(-9)} (${user?.name || 'admin'})` : 'Shift #SH-261019-001 (admin)'}
+              {activeShift ? `Shift #${activeShift.id.slice(-6)}` : 'Shift #Active'}
             </Text>
           </TouchableOpacity>
 
-          {/* Keyboard Shortcuts Capsule Button */}
-          <TouchableOpacity 
-            style={styles.keyboardCapsuleBtn}
-            onPress={() => setShortcutsModalVisible(true)}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Keyboard Shortcuts (Press F11 or ?)' } as any) : {})}
-          >
-            <Ionicons name="keypad-outline" size={14} color="#D4AF37" />
-            <Text style={styles.keyboardCapsuleText}>Shortcuts</Text>
-            <View style={styles.keyInlinePill}>
-              <Text style={styles.keyInlinePillText}>F11</Text>
-            </View>
-          </TouchableOpacity>
+          {/* Keyboard Shortcuts Capsule Button (Desktop only) */}
+          {!isMobile && (
+            <TouchableOpacity 
+              style={styles.keyboardCapsuleBtn}
+              onPress={() => setShortcutsModalVisible(true)}
+              activeOpacity={0.8}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Keyboard Shortcuts (Press F11 or ?)' } as any) : {})}
+            >
+              <Ionicons name="keypad-outline" size={14} color="#D4AF37" />
+              <Text style={styles.keyboardCapsuleText}>Shortcuts</Text>
+              <View style={styles.keyInlinePill}>
+                <Text style={styles.keyInlinePillText}>F11</Text>
+              </View>
+            </TouchableOpacity>
+          )}
 
-          {Platform.OS === 'web' && (
+          {!isMobile && Platform.OS === 'web' && (
             <TouchableOpacity 
               style={styles.iconSquareBtn}
               onPress={toggleFullscreen}
@@ -1170,7 +1172,7 @@ export default function POSTerminalScreen({
           )}
 
           <View style={styles.userSection}>
-            <Text style={styles.roleLabel}>{user?.name || 'admin'}</Text>
+            {!isMobile && <Text style={styles.roleLabel}>{user?.name || 'admin'}</Text>}
             <View style={styles.userAvatarCircle}>
               <Text style={styles.userAvatarText}>
                 {(user?.name || 'A')[0].toUpperCase()}
@@ -1457,9 +1459,9 @@ export default function POSTerminalScreen({
         {(!isMobile || mobileTab === 'menu') && (
           <View style={styles.centerCatalog}>
             {/* Catalog Top Subheader Bar */}
-            <View style={styles.catalogSubheader}>
-              <View style={styles.catalogTitleRow}>
-                <Text style={styles.catalogTitle}>SULTAN RESTAURANT Menu</Text>
+            <View style={[styles.catalogSubheader, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingHorizontal: 12, paddingVertical: 8 }]}>
+              <View style={[styles.catalogTitleRow, isMobile && { justifyContent: 'space-between', width: '100%' }]}>
+                <Text style={[styles.catalogTitle, isMobile && { fontSize: 13.5 }]}>{isMobile ? 'Menu Catalog' : 'SULTAN RESTAURANT Menu'}</Text>
 
                 {/* Running Orders Pill */}
                 <TouchableOpacity 
@@ -1469,8 +1471,8 @@ export default function POSTerminalScreen({
                   activeOpacity={0.8}
                 >
                   <Ionicons name="time" size={13} color="#D97706" />
-                  <Text style={styles.runningOrdersText}>Running Orders</Text>
-                  <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>
+                  <Text style={styles.runningOrdersText}>Running</Text>
+                  {!isMobile && <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>}
                   <View style={styles.runningOrdersBadge}>
                     <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
                   </View>
@@ -1479,7 +1481,11 @@ export default function POSTerminalScreen({
 
               {/* Sultan Royal Luxury Search Bar */}
               <View 
-                style={[styles.searchPillBox, isSearchFocused && styles.searchPillBoxFocused]}
+                style={[
+                  styles.searchPillBox, 
+                  isSearchFocused && styles.searchPillBoxFocused,
+                  isMobile && { minWidth: 0, width: '100%', height: 40 }
+                ]}
                 {...(Platform.OS === 'web' ? ({ className: 'search-pill-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
               >
                 <View style={[styles.searchIconOrb, isSearchFocused && styles.searchIconOrbFocused]}>
@@ -1488,7 +1494,7 @@ export default function POSTerminalScreen({
                 <TextInput
                   ref={searchInputRef}
                   style={styles.searchPillInput}
-                  placeholder="Search dishes, codes, or categories... (Press F1)"
+                  placeholder={isMobile ? "Search dishes or code..." : "Search dishes, codes, or categories... (Press F1)"}
                   placeholderTextColor="#8A7A70"
                   value={searchQuery}
                   onFocus={() => setIsSearchFocused(true)}
@@ -1622,7 +1628,13 @@ export default function POSTerminalScreen({
                         styles.dishCard,
                         isItemInCart && styles.dishCardInCart,
                         isOutOfStock && { opacity: 0.65 },
-                        isMobile && { width: '47%' }
+                        isMobile && { 
+                          width: width < 420 ? '47.5%' : width < 720 ? '31%' : '23.5%', 
+                          minWidth: 0, 
+                          paddingVertical: 10, 
+                          paddingHorizontal: 8,
+                          minHeight: 125,
+                        }
                       ]}
                       onPress={() => addToCart(item)}
                       activeOpacity={0.75}
@@ -1637,7 +1649,7 @@ export default function POSTerminalScreen({
                       )}
 
                       {/* Top: Dish Photo or Fallback Icon */}
-                      <View style={styles.dishCardImageWrapper}>
+                      <View style={[styles.dishCardImageWrapper, isMobile && { height: 76 }]}>
                         {item.imageUri ? (
                           <Image 
                             source={{ uri: item.imageUri }} 
@@ -1976,6 +1988,38 @@ export default function POSTerminalScreen({
           </View>
         )}
       </View>
+
+      {/* Floating Bottom Quick Cart Bar on Mobile */}
+      {isMobile && mobileTab === 'menu' && cart.length > 0 && (
+        <View style={styles.mobileFloatingCartContainer}>
+          <TouchableOpacity
+            style={styles.mobileFloatingCartBtn}
+            onPress={() => setMobileTab('cart')}
+            activeOpacity={0.88}
+          >
+            <View style={styles.mobileFloatingCartLeft}>
+              <View style={styles.mobileFloatingCartBadge}>
+                <Text style={styles.mobileFloatingCartBadgeText}>
+                  {cart.reduce((s, i) => s + i.qty, 0)}
+                </Text>
+              </View>
+              <View>
+                <Text style={styles.mobileFloatingCartTitle}>View Current Cart</Text>
+                <Text style={styles.mobileFloatingCartSub}>
+                  {cart.length} {cart.length === 1 ? 'item' : 'items'} in order
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.mobileFloatingCartRight}>
+              <Text style={styles.mobileFloatingCartTotal}>
+                Rs. {Math.round(total).toLocaleString()}
+              </Text>
+              <Ionicons name="arrow-forward-circle" size={24} color="#D4AF37" />
+            </View>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ========================================================
           MODAL: DINING TABLE & CABIN SELECTION (SULTAN ARCHITECTURE)
@@ -5724,6 +5768,72 @@ const styles = StyleSheet.create({
   },
   posRegionChipBadgeTextActive: {
     color: '#32070D',
+    fontWeight: '900',
+  },
+  mobileFloatingCartContainer: {
+    position: 'absolute',
+    bottom: 16,
+    left: 12,
+    right: 12,
+    zIndex: 99,
+  },
+  mobileFloatingCartBtn: {
+    backgroundColor: '#32070D',
+    borderRadius: 24,
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(50, 7, 13, 0.45), 0 2px 8px rgba(212, 175, 55, 0.25)',
+        cursor: 'pointer',
+      } as any,
+      default: {
+        elevation: 8,
+      },
+    }),
+  },
+  mobileFloatingCartLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  mobileFloatingCartBadge: {
+    backgroundColor: '#D4AF37',
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileFloatingCartBadgeText: {
+    color: '#32070D',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  mobileFloatingCartTitle: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.2,
+  },
+  mobileFloatingCartSub: {
+    color: '#D4AF37',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  mobileFloatingCartRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mobileFloatingCartTotal: {
+    color: '#FFFFFF',
+    fontSize: 14,
     fontWeight: '900',
   },
 });

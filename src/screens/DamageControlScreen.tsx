@@ -408,8 +408,8 @@ export default function DamageControlScreen({
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {/* Light Header Bar */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
+      <View style={[styles.header, isMobile && { paddingHorizontal: 12, paddingVertical: 10, gap: 10 }]}>
+        <View style={[styles.headerLeft, isMobile && { minWidth: '100%' }]}>
           <TouchableOpacity
             style={styles.backBtn}
             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -418,22 +418,22 @@ export default function DamageControlScreen({
           >
             <Ionicons name="arrow-back" size={20} color={LIGHT.rose} />
           </TouchableOpacity>
-          <View>
-            <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <View style={[styles.titleRow, { flexWrap: 'wrap' }]}>
               <Ionicons name="shield-outline" size={20} color={LIGHT.rose} />
-              <Text style={styles.headerTitle}>Damage Control & Breakages</Text>
+              <Text style={[styles.headerTitle, isMobile && { fontSize: 17 }]}>Damage Control</Text>
               <View style={styles.alertBadge}>
                 <Text style={styles.alertBadgeText}>LOSS MITIGATION</Text>
               </View>
             </View>
-            <Text style={styles.headerSub}>
-              Crockery, glassware, utensils, and equipment breakage accountability ledger
+            <Text style={[styles.headerSub, isMobile && { fontSize: 11 }]} numberOfLines={1}>
+              Crockery, glassware, utensils, and equipment breakage ledger
             </Text>
           </View>
         </View>
 
         <TouchableOpacity
-          style={styles.reportBtn}
+          style={[styles.reportBtn, isMobile && { width: '100%', justifyContent: 'center' }]}
           {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
           onPress={() => openReportModal()}
           activeOpacity={0.85}
@@ -1521,7 +1521,7 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 140,
     backgroundColor: LIGHT.cardBg,
     borderRadius: 12,
     padding: 16,
@@ -1647,6 +1647,7 @@ const styles = StyleSheet.create({
   },
   periodRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginBottom: 10,
   },

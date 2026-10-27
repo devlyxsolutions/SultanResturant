@@ -762,69 +762,139 @@ export default function AdminDashboard() {
           </View>
         </View>
 
-        <View style={styles.headerRight}>
-          {/* Live Sync / Refresh Button */}
-          <TouchableOpacity
-            style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
-            onPress={handleRefresh}
-            activeOpacity={0.75}
-            disabled={isRefreshing}
+        {isMobile ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}
           >
-            <Ionicons 
-              name="sync-outline" 
-              size={15} 
-              color={BRAND.goldDark} 
-              {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
-            />
-            <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Live Sync'}</Text>
-          </TouchableOpacity>
-
-          {/* Time Filter Pills (Active Shift, Today, Lifetime) */}
-          <View style={styles.filterPillGroup}>
-            {[
-              { id: 'active', label: 'Active Shift', hasDot: !!activeShift },
-              { id: 'today', label: 'Today (Full Day)', hasDot: false },
-              { id: 'all', label: 'All Records', hasDot: false },
-            ].map(tab => (
-              <TouchableOpacity
-                key={tab.id}
-                style={[styles.filterBtn, filterScope === tab.id && styles.filterBtnActive]}
-                onPress={() => handleFilterChange(tab.id as 'active' | 'today' | 'all')}
-                activeOpacity={0.7}
-              >
-                {tab.hasDot && (
-                  <View style={styles.shiftActivePulseDot} {...({ dataSet: { beacon: 'pulse' } } as any)} />
-                )}
-                <Text style={[styles.filterBtnText, filterScope === tab.id && styles.filterBtnTextActive]}>
-                  {tab.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Quick Action Caller ID Button */}
-          <TouchableOpacity
-            style={styles.actionCallBtn}
-            onPress={() => router.push('/admin/call-log' as any)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="call" size={15} color={BRAND.burgundy} />
-            <Text style={styles.actionCallBtnText}>Caller ID</Text>
-          </TouchableOpacity>
-
-          {/* Quick Action POS Button */}
-          {can('canAccessPOS') && (
+            {/* Live Sync / Refresh Button */}
             <TouchableOpacity
-              style={styles.actionPosBtn}
-              onPress={() => router.push('/admin/pos')}
-              activeOpacity={0.8}
-              {...({ dataSet: { btn: 'hover' } } as any)}
+              style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
+              onPress={handleRefresh}
+              activeOpacity={0.75}
+              disabled={isRefreshing}
             >
-              <Ionicons name="calculator" size={16} color="#24050A" />
-              <Text style={styles.actionPosBtnText}>Launch POS</Text>
+              <Ionicons 
+                name="sync-outline" 
+                size={15} 
+                color={BRAND.goldDark} 
+                {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
+              />
+              <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Sync'}</Text>
             </TouchableOpacity>
-          )}
-        </View>
+
+            {/* Time Filter Pills */}
+            <View style={styles.filterPillGroup}>
+              {[
+                { id: 'active', label: 'Shift', hasDot: !!activeShift },
+                { id: 'today', label: 'Today', hasDot: false },
+                { id: 'all', label: 'All', hasDot: false },
+              ].map(tab => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.filterBtn, filterScope === tab.id && styles.filterBtnActive]}
+                  onPress={() => handleFilterChange(tab.id as 'active' | 'today' | 'all')}
+                  activeOpacity={0.7}
+                >
+                  {tab.hasDot && (
+                    <View style={styles.shiftActivePulseDot} {...({ dataSet: { beacon: 'pulse' } } as any)} />
+                  )}
+                  <Text style={[styles.filterBtnText, filterScope === tab.id && styles.filterBtnTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Quick Action Caller ID Button */}
+            <TouchableOpacity
+              style={styles.actionCallBtn}
+              onPress={() => router.push('/admin/call-log' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="call" size={15} color={BRAND.burgundy} />
+              <Text style={styles.actionCallBtnText}>Caller ID</Text>
+            </TouchableOpacity>
+
+            {/* Quick Action POS Button */}
+            {can('canAccessPOS') && (
+              <TouchableOpacity
+                style={styles.actionPosBtn}
+                onPress={() => router.push('/admin/pos')}
+                activeOpacity={0.8}
+                {...({ dataSet: { btn: 'hover' } } as any)}
+              >
+                <Ionicons name="calculator" size={16} color="#24050A" />
+                <Text style={styles.actionPosBtnText}>POS</Text>
+              </TouchableOpacity>
+            )}
+          </ScrollView>
+        ) : (
+          <View style={styles.headerRight}>
+            {/* Live Sync / Refresh Button */}
+            <TouchableOpacity
+              style={[styles.refreshSyncBtn, isRefreshing && styles.refreshSyncBtnActive]}
+              onPress={handleRefresh}
+              activeOpacity={0.75}
+              disabled={isRefreshing}
+            >
+              <Ionicons 
+                name="sync-outline" 
+                size={15} 
+                color={BRAND.goldDark} 
+                {...(isRefreshing ? ({ dataSet: { spin: 'true' } } as any) : {})}
+              />
+              <Text style={styles.refreshSyncBtnText}>{isRefreshing ? 'Syncing...' : 'Live Sync'}</Text>
+            </TouchableOpacity>
+
+            {/* Time Filter Pills (Active Shift, Today, Lifetime) */}
+            <View style={styles.filterPillGroup}>
+              {[
+                { id: 'active', label: 'Active Shift', hasDot: !!activeShift },
+                { id: 'today', label: 'Today (Full Day)', hasDot: false },
+                { id: 'all', label: 'All Records', hasDot: false },
+              ].map(tab => (
+                <TouchableOpacity
+                  key={tab.id}
+                  style={[styles.filterBtn, filterScope === tab.id && styles.filterBtnActive]}
+                  onPress={() => handleFilterChange(tab.id as 'active' | 'today' | 'all')}
+                  activeOpacity={0.7}
+                >
+                  {tab.hasDot && (
+                    <View style={styles.shiftActivePulseDot} {...({ dataSet: { beacon: 'pulse' } } as any)} />
+                  )}
+                  <Text style={[styles.filterBtnText, filterScope === tab.id && styles.filterBtnTextActive]}>
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Quick Action Caller ID Button */}
+            <TouchableOpacity
+              style={styles.actionCallBtn}
+              onPress={() => router.push('/admin/call-log' as any)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="call" size={15} color={BRAND.burgundy} />
+              <Text style={styles.actionCallBtnText}>Caller ID</Text>
+            </TouchableOpacity>
+
+            {/* Quick Action POS Button */}
+            {can('canAccessPOS') && (
+              <TouchableOpacity
+                style={styles.actionPosBtn}
+                onPress={() => router.push('/admin/pos')}
+                activeOpacity={0.8}
+                {...({ dataSet: { btn: 'hover' } } as any)}
+              >
+                <Ionicons name="calculator" size={16} color="#24050A" />
+                <Text style={styles.actionPosBtnText}>Launch POS</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
 
       {/* ================= 1.1 ACTIVE SHIFT STATUS CAPSULE (BAITHAK) ================= */}
@@ -2434,10 +2504,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   kpiCardHalf: {
-    width: 'calc(50% - 8px)' as any,
+    flex: 1,
+    minWidth: 280,
   },
   kpiCardThird: {
-    width: 'calc(33.333% - 11px)' as any,
+    flex: 1,
+    minWidth: 280,
   },
   kpiTopRow: {
     flexDirection: 'row',
@@ -2543,11 +2615,11 @@ const styles = StyleSheet.create({
   },
   chartCardTwoThirds: {
     flex: 2,
-    minWidth: 500,
+    minWidth: 280,
   },
   chartCardOneThird: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 280,
   },
   chartHeader: {
     flexDirection: 'row',
