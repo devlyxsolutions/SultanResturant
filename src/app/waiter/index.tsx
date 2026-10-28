@@ -456,12 +456,14 @@ export default function OrderTakerScreen() {
             ) : null}
           </View>
 
-          {/* Running Bill and Server Assigned */}
+          {/* Status Pill and Server Assigned (No Prices for Order Taker) */}
           <View style={styles.billServerRow}>
-            {item.billTotal !== undefined && item.billTotal > 0 ? (
-              <View style={styles.billBadge}>
-                <Text style={styles.billCurrency}>Rs.</Text>
-                <Text style={styles.billText}>{item.billTotal.toLocaleString()}</Text>
+            {item.status === 'occupied' || item.status === 'billed' ? (
+              <View style={[styles.freeNoticePill, { backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}>
+                <Ionicons name="restaurant" size={12} color="#D97706" />
+                <Text style={[styles.freeNoticeText, { color: '#D97706', fontWeight: '800' }]}>
+                  {item.status === 'billed' ? 'Bill Requested' : 'Active Order'}
+                </Text>
               </View>
             ) : (
               <View style={[styles.freeNoticePill, { backgroundColor: statusColor + '12' }]}>
@@ -471,7 +473,7 @@ export default function OrderTakerScreen() {
                   color={statusColor}
                 />
                 <Text style={[styles.freeNoticeText, { color: statusColor }]}>
-                  {item.status === 'available' ? 'Ready for Seating' : 'No Order Yet'}
+                  Ready for Seating
                 </Text>
               </View>
             )}
@@ -1035,7 +1037,7 @@ export default function OrderTakerScreen() {
                 🔔 Bill Paid: {lastBillPaidAlert.tableName}!
               </Text>
               <Text style={styles.billPaidAlertDesc}>
-                Rs. {lastBillPaidAlert.billTotal?.toLocaleString()} collected. Guests are still seated — tap Release below when vacated.
+                Bill settled at Cashier counter. Guests are still seated — tap Release below when vacated.
               </Text>
             </View>
             <TouchableOpacity style={styles.billPaidDismissBtn} onPress={handleDismissBillPaidAlert}>

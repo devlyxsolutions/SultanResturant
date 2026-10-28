@@ -659,11 +659,14 @@ export default function TableOrderScreen() {
               </Text>
             </View>
 
-            {/* Real-time Running Bill Badge */}
-            {totalBillSoFar > 0 && (
-              <View style={styles.topBarBillPill}>
-                <Text style={styles.topBarBillLabel}>Live Bill:</Text>
-                <Text style={styles.topBarBillAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+            {/* Active Order Items Badge (No Prices) */}
+            {(alreadyOrderedItems.length > 0 || newCart.length > 0) && (
+              <View style={styles.topBarItemsPill}>
+                <Ionicons name="restaurant" size={12} color="#D4AF37" />
+                <Text style={styles.topBarItemsLabel}>Order:</Text>
+                <Text style={styles.topBarItemsCount}>
+                  {alreadyOrderedItems.length + newCart.length} Items ({alreadyOrderedItems.reduce((s, i) => s + i.qty, 0) + newCart.reduce((s, i) => s + i.qty, 0)} Portions)
+                </Text>
               </View>
             )}
           </View>
@@ -1293,10 +1296,16 @@ export default function TableOrderScreen() {
                         {item.name}
                       </Text>
 
-                      {/* Bottom: Warm Cream Price Capsule */}
-                      <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
-                        <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
-                          Rs. {item.price.toLocaleString()}
+                      {/* Bottom: Order Taker Selection Capsule (No Prices) */}
+                      <View style={[styles.dishCardOrderPill, isItemInCart && styles.dishCardOrderPillActive]}>
+                        <Ionicons 
+                          name={isItemInCart ? "checkmark-circle" : "add-circle-outline"} 
+                          size={12} 
+                          color={isItemInCart ? "#10B981" : "#B45309"} 
+                          style={{ marginRight: 3 }}
+                        />
+                        <Text style={[styles.dishCardOrderText, isItemInCart && styles.dishCardOrderTextActive]}>
+                          {isItemInCart ? `${inCartQty} in Cart` : 'Add Dish'}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1336,7 +1345,7 @@ export default function TableOrderScreen() {
                   </View>
                 </View>
                 <View style={styles.floatingCartRight}>
-                  <Text style={styles.floatingCartPrice}>+Rs. {newCartTotal.toLocaleString()}</Text>
+                  <Text style={styles.floatingCartPrice}>{totalCartCount} portions</Text>
                   <View style={styles.floatingCartArrow}>
                     <Ionicons name="arrow-forward" size={14} color="#35080E" />
                   </View>
@@ -1405,7 +1414,7 @@ export default function TableOrderScreen() {
             <View style={styles.cartColumnSubheader}>
               <Text style={[styles.cartColLabel, { flex: 1.8 }]}>PRODUCT</Text>
               <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'center' }]}>QTY</Text>
-              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'right' }]}>PRICE</Text>
+              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'right' }]}>PORTIONS</Text>
             </View>
 
             {/* Scrollable Cart & Ticket Content */}
@@ -1423,9 +1432,11 @@ export default function TableOrderScreen() {
                         In Kitchen ({alreadyOrderedItems.length})
                       </Text>
                     </View>
-                    <Text style={styles.ticketSectionAmount}>
-                      Rs. {alreadyOrderedTotal.toLocaleString()}
-                    </Text>
+                    <View style={styles.ticketPortionsBadge}>
+                      <Text style={styles.ticketPortionsBadgeText}>
+                        {alreadyOrderedItems.reduce((sum, i) => sum + i.qty, 0)} portions
+                      </Text>
+                    </View>
                   </View>
 
                   {/* Ready to Serve Alert Banner */}
@@ -1509,9 +1520,11 @@ export default function TableOrderScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      <Text style={[styles.ticketItemPrice, { flex: 1, textAlign: 'right' }]}>
-                        Rs. {(item.price * item.qty).toLocaleString()}
-                      </Text>
+                      <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
+                        <Text style={styles.ticketPortionText}>
+                          {item.qty} {item.qty > 1 ? 'portions' : 'portion'}
+                        </Text>
+                      </View>
                     </View>
                   ))}
                 </View>
@@ -1527,9 +1540,11 @@ export default function TableOrderScreen() {
                         {alreadyOrderedItems.length > 0 ? `New Round Add-on (#${activeTickets.length + 1})` : 'New Items'}
                       </Text>
                     </View>
-                    <Text style={styles.newAddonHeaderTotal}>
-                      +Rs. {newCartTotal.toLocaleString()}
-                    </Text>
+                    <View style={styles.newAddonPortionsBadge}>
+                      <Text style={styles.newAddonPortionsBadgeText}>
+                        +{newCart.reduce((sum, c) => sum + c.qty, 0)} portions
+                      </Text>
+                    </View>
                   </View>
                 )}
 
@@ -1553,7 +1568,6 @@ export default function TableOrderScreen() {
                     <View key={c.item.id} style={styles.cartItemRow}>
                       <View style={{ flex: 1.8 }}>
                         <Text style={styles.cartItemName} numberOfLines={1}>{c.item.name}</Text>
-                        <Text style={styles.cartItemUnit}>Rs. {c.item.price.toLocaleString()}</Text>
 
                         {/* Cooking note chip */}
                         <TouchableOpacity 
@@ -1592,17 +1606,19 @@ export default function TableOrderScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      {/* Price & Remove */}
+                      {/* Portions & Remove */}
                       <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
-                        <Text style={styles.cartItemTotal}>
-                          Rs. {(c.item.price * c.qty).toLocaleString()}
-                        </Text>
+                        <View style={styles.portionBadge}>
+                          <Text style={styles.portionBadgeText}>
+                            {c.qty} {c.qty > 1 ? 'portions' : 'portion'}
+                          </Text>
+                        </View>
                         <TouchableOpacity 
                           onPress={() => removeFromCart(c.item.id)}
                           hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          style={{ marginTop: 2 }}
+                          style={{ marginTop: 4 }}
                         >
-                          <Ionicons name="close-circle" size={15} color="#EF4444" />
+                          <Ionicons name="close-circle" size={16} color="#EF4444" />
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1615,25 +1631,29 @@ export default function TableOrderScreen() {
                 BOTTOM SETTLEMENT CARD (AUTHENTIC POS CRYSTAL CARD)
                 -------------------------------------------------------- */}
             <View style={[styles.cartBottomSettlement, isMobile && { paddingBottom: Math.max(14, insets.bottom + 8) }]}>
-              {/* Math Summary Lines */}
-              <View style={styles.mathSummaryLines}>
-                {alreadyOrderedItems.length > 0 && (
-                  <View style={styles.mathLine}>
-                    <Text style={styles.mathLabel}>In Kitchen (Rounds):</Text>
-                    <Text style={styles.mathValue}>Rs. {alreadyOrderedTotal.toLocaleString()}</Text>
-                  </View>
-                )}
-                {newCart.length > 0 && (
-                  <View style={styles.mathLine}>
-                    <Text style={styles.mathLabel}>New Additions:</Text>
-                    <Text style={[styles.mathValue, { color: '#10B981' }]}>
-                      +Rs. {newCartTotal.toLocaleString()}
+              {/* Order Taker Summary Box (No Prices or Totals) */}
+              <View style={styles.orderTakerSummaryBox}>
+                <View style={styles.orderTakerSummaryRow}>
+                  <View style={styles.orderTakerSummaryItem}>
+                    <Text style={styles.orderTakerSummaryLabel}>In Kitchen</Text>
+                    <Text style={styles.orderTakerSummaryValue}>
+                      {alreadyOrderedItems.length} ({alreadyOrderedItems.reduce((s, i) => s + i.qty, 0)} portions)
                     </Text>
                   </View>
-                )}
-                <View style={styles.payableRow}>
-                  <Text style={styles.payableLabel}>TOTAL BILL</Text>
-                  <Text style={styles.payableAmount}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+                  <View style={styles.orderTakerSummaryDivider} />
+                  <View style={styles.orderTakerSummaryItem}>
+                    <Text style={styles.orderTakerSummaryLabel}>New Round</Text>
+                    <Text style={[styles.orderTakerSummaryValue, { color: '#10B981' }]}>
+                      +{newCart.length} ({newCart.reduce((s, c) => s + c.qty, 0)} portions)
+                    </Text>
+                  </View>
+                  <View style={styles.orderTakerSummaryDivider} />
+                  <View style={styles.orderTakerSummaryItem}>
+                    <Text style={styles.orderTakerSummaryLabel}>Round #</Text>
+                    <Text style={[styles.orderTakerSummaryValue, { color: '#52141C' }]}>
+                      #{activeTickets.length + 1}
+                    </Text>
+                  </View>
                 </View>
               </View>
 
@@ -1779,7 +1799,7 @@ export default function TableOrderScreen() {
                   onPress={() => handleVariantSelect(v)}
                 >
                   <Text style={styles.variantName}>{v.name}</Text>
-                  <Text style={styles.variantPrice}>Rs. {v.price.toLocaleString()}</Text>
+                  <Text style={[styles.variantPrice, { color: '#B45309' }]}>Select</Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1900,7 +1920,7 @@ export default function TableOrderScreen() {
                   <View key={idx} style={styles.slipItemRow}>
                     <Text style={styles.slipItemQty}>{it.qty}x</Text>
                     <Text style={styles.slipItemName}>{it.name}</Text>
-                    <Text style={styles.slipItemPrice}>Rs. {(it.price * it.qty).toLocaleString()}</Text>
+                    <Text style={styles.slipItemPrice}>{it.qty} {it.qty > 1 ? 'portions' : 'portion'}</Text>
                   </View>
                 ))}
               </View>
@@ -1908,8 +1928,10 @@ export default function TableOrderScreen() {
               <View style={styles.slipDivider} />
 
               <View style={styles.slipTotalRow}>
-                <Text style={styles.slipTotalLabel}>TOTAL AMOUNT:</Text>
-                <Text style={styles.slipTotalVal}>Rs. {totalBillSoFar.toLocaleString()}</Text>
+                <Text style={styles.slipTotalLabel}>TOTAL PORTIONS:</Text>
+                <Text style={styles.slipTotalVal}>
+                  {runningInvoicePreview.items.reduce((s, i) => s + i.qty, 0)} portions
+                </Text>
               </View>
             </ScrollView>
 
@@ -3019,7 +3041,7 @@ const styles = StyleSheet.create({
      RIGHT: CART SIDEBAR (AUTHENTIC POS CRYSTAL THEME)
      -------------------------------------------------------- */
   cartSidebar: {
-    width: 340,
+    width: 430,
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
     borderLeftWidth: 1.5,
     borderLeftColor: 'rgba(212, 175, 55, 0.25)',
@@ -3771,5 +3793,133 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '900',
     color: '#52141C',
+  },
+  topBarItemsPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 14,
+    gap: 5,
+  },
+  topBarItemsLabel: {
+    fontSize: 11,
+    color: '#F3D179',
+    fontWeight: '700',
+  },
+  topBarItemsCount: {
+    fontSize: 11.5,
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  dishCardOrderPill: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  dishCardOrderPillActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: '#10B981',
+  },
+  dishCardOrderText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  dishCardOrderTextActive: {
+    color: '#059669',
+    fontWeight: '900',
+  },
+  ticketPortionsBadge: {
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.25)',
+  },
+  ticketPortionsBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  ticketPortionText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  newAddonPortionsBadge: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.25)',
+  },
+  newAddonPortionsBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  portionBadge: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(82, 20, 28, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portionBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  orderTakerSummaryBox: {
+    backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+    padding: 10,
+    marginBottom: 10,
+    gap: 8,
+  },
+  orderTakerSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  orderTakerSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  orderTakerSummaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(203, 213, 225, 0.8)',
+  },
+  orderTakerSummaryLabel: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  orderTakerSummaryValue: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
   },
 });

@@ -141,6 +141,22 @@ export default function POSTerminalScreen({
   const user = useAuthStore(state => state.user);
   const { can, canApplyCustomDiscount } = useRolePermissions();
 
+  // Order Taker Mode & Financial Privacy (hide prices & order totals for order takers)
+  const isOrderTakerRole = useMemo(() => {
+    return user?.role === 'waiter' || user?.role === 'order_taker' || (role as string) === 'waiter' || (role !== 'admin' && !can('canViewRevenue'));
+  }, [user?.role, role, can]);
+
+  // Default is TRUE (Prices Hidden) so order takers or whoever takes orders don't see prices or totals
+  const [orderTakerMode, setOrderTakerMode] = useState<boolean>(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+      const saved = window.localStorage.getItem('sultan_pos_hide_prices');
+      if (saved !== null) return saved === 'true';
+    }
+    return true; // Default: ALWAYS TRUE (Prices & Totals Hidden)
+  });
+
+  const hidePrices = isOrderTakerRole ? true : orderTakerMode;
+
   // Permission Guard
   if (role !== 'admin' && !can('canAccessPOS')) {
     return (
@@ -1145,6 +1161,42 @@ export default function POSTerminalScreen({
             </Text>
           </TouchableOpacity>
 
+          {/* Order Taker Mode Toggle (Hides prices & order totals for order takers) */}
+          <TouchableOpacity 
+            style={[
+              styles.orderTakerModeToggle,
+              hidePrices && styles.orderTakerModeToggleActive
+            ]}
+            onPress={() => {
+              if (isOrderTakerRole) {
+                if (Platform.OS === 'web') {
+                  window.alert('Restricted: Role permissions lock prices as hidden for Order Takers.');
+                } else {
+                  Alert.alert('Restricted', 'Role permissions lock prices as hidden for Order Takers.');
+                }
+                return;
+              }
+              setOrderTakerMode(prev => {
+                const next = !prev;
+                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
+                  window.localStorage.setItem('sultan_pos_hide_prices', String(next));
+                }
+                return next;
+              });
+            }}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: hidePrices ? 'Switch to Cashier Mode (Prices Visible)' : 'Switch to Order Taker Mode (Prices Hidden)' } as any) : {})}
+          >
+            <Ionicons 
+              name={hidePrices ? "eye-off" : "eye"} 
+              size={13} 
+              color={hidePrices ? "#F59E0B" : "#10B981"} 
+            />
+            <Text style={[styles.orderTakerModeText, hidePrices && styles.orderTakerModeTextActive]}>
+              {hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier)'}
+            </Text>
+          </TouchableOpacity>
+
           {/* Keyboard Shortcuts Capsule Button (Desktop only) */}
           {!isMobile && (
             <TouchableOpacity 
@@ -1705,12 +1757,26 @@ export default function POSTerminalScreen({
                         {item.name}
                       </Text>
 
-                      {/* Bottom: Warm Cream Price Capsule */}
-                      <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
-                        <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
-                          Rs. {item.price.toLocaleString()}
-                        </Text>
-                      </View>
+                      {/* Bottom: Warm Cream Price Capsule OR Order Taker Selector Capsule */}
+                      {hidePrices ? (
+                        <View style={[styles.dishCardOrderPill, isItemInCart && styles.dishCardOrderPillActive]}>
+                          <Ionicons 
+                            name={isItemInCart ? "checkmark-circle" : "add-circle-outline"} 
+                            size={12} 
+                            color={isItemInCart ? "#10B981" : "#B45309"} 
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text style={[styles.dishCardOrderText, isItemInCart && styles.dishCardOrderTextActive]}>
+                            {isItemInCart ? `${inCartQty} in Cart` : 'Add Dish'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
+                          <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
+                            Rs. {item.price.toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   );
                 })}
@@ -1727,29 +1793,35 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            RIGHT: CURRENT CART (BAITHAK SPEC)
+            RIGHT: CURRENT CART (EXPANDED USER-FRIENDLY SPEC)
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'cart') && (
           <View style={[styles.cartSidebar, isMobile && styles.cartSidebarMobile]}>
-            {/* Header: Title + Reset */}
+            {/* Header: Title + Item Count + Clear */}
             <View style={styles.cartHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="bag-handle" size={18} color="#52141C" />
-                <Text style={styles.cartHeaderTitle}>Current Cart</Text>
-                {cart.length > 0 && (
-                  <View style={styles.cartCountPill}>
-                    <Text style={styles.cartCountText}>{cart.reduce((s, i) => s + i.qty, 0)}</Text>
-                  </View>
-                )}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <View style={styles.cartHeaderIconCircle}>
+                  <Ionicons name="bag-handle" size={17} color="#FFFFFF" />
+                </View>
+                <View>
+                  <Text style={styles.cartHeaderTitle}>Current Order</Text>
+                  <Text style={styles.cartHeaderSub}>
+                    {cart.length === 0 ? 'No items in order' : `${cart.reduce((s, i) => s + i.qty, 0)} ${cart.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'} selected`}
+                  </Text>
+                </View>
               </View>
 
-              <TouchableOpacity 
-                style={styles.cartResetBtn}
-                onPress={clearCart}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="refresh" size={15} color="#DC2626" />
-              </TouchableOpacity>
+              {cart.length > 0 && (
+                <TouchableOpacity 
+                  style={styles.cartResetBtn}
+                  onPress={clearCart}
+                  activeOpacity={0.7}
+                  {...(Platform.OS === 'web' ? ({ title: 'Clear entire cart' } as any) : {})}
+                >
+                  <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                  <Text style={styles.cartResetBtnText}>Clear</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Order Type Segmented Switcher (Takeaway / Dine-in / Delivery) */}
@@ -1757,8 +1829,9 @@ export default function POSTerminalScreen({
               <TouchableOpacity
                 style={[styles.orderTypeTab, orderType === 'takeaway' && styles.orderTypeTabActive]}
                 onPress={() => handleOrderTypeChange('takeaway')}
+                activeOpacity={0.8}
               >
-                <Ionicons name="bag-handle" size={12} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                <Ionicons name="bag-handle" size={13} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
                 <Text style={[styles.orderTypeTabText, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
                   Takeaway
                 </Text>
@@ -1770,8 +1843,9 @@ export default function POSTerminalScreen({
               <TouchableOpacity
                 style={[styles.orderTypeTab, orderType === 'dine-in' && styles.orderTypeTabActive]}
                 onPress={() => handleOrderTypeChange('dine-in')}
+                activeOpacity={0.8}
               >
-                <Ionicons name="restaurant" size={12} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                <Ionicons name="restaurant" size={13} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
                 <Text style={[styles.orderTypeTabText, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
                   Dine-in
                 </Text>
@@ -1783,8 +1857,9 @@ export default function POSTerminalScreen({
               <TouchableOpacity
                 style={[styles.orderTypeTab, orderType === 'delivery' && styles.orderTypeTabActive]}
                 onPress={() => handleOrderTypeChange('delivery')}
+                activeOpacity={0.8}
               >
-                <Ionicons name="bicycle" size={12} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                <Ionicons name="bicycle" size={13} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
                 <Text style={[styles.orderTypeTabText, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
                   Delivery
                 </Text>
@@ -1797,18 +1872,22 @@ export default function POSTerminalScreen({
             {/* Table or Customer Bar depending on Order Type */}
             {orderType === 'dine-in' ? (
               <View style={styles.tableCabinBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 8 }}>
-                  <Ionicons name="restaurant" size={14} color="#D97706" />
-                  <Text style={styles.tableCabinLabel}>Table / Cabin:</Text>
-                  <View style={styles.tableCabinPill}>
-                    <Text style={styles.tableCabinPillText}>
-                      {selectedTableObj ? selectedTableObj.name : 'None'}
-                    </Text>
-                    {selectedTableObj && (
-                      <Text style={styles.tableCabinPillSub}>
-                        ({getTableFloor(selectedTableObj)} • {getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                  <View style={styles.statusIconOrb}>
+                    <Ionicons name="restaurant" size={13} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tableCabinLabel}>Table / Cabin</Text>
+                    <View style={styles.tableCabinPill}>
+                      <Text style={styles.tableCabinPillText} numberOfLines={1}>
+                        {selectedTableObj ? selectedTableObj.name : 'No Table Selected'}
                       </Text>
-                    )}
+                      {selectedTableObj && (
+                        <Text style={styles.tableCabinPillSub}>
+                          • {getTableFloor(selectedTableObj)} ({getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 </View>
 
@@ -1817,19 +1896,28 @@ export default function POSTerminalScreen({
                   onPress={() => setTableModalVisible(true)}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="swap-horizontal" size={12} color="#475569" style={{ marginRight: 3 }} />
-                  <Text style={styles.changeTablePillText}>Change Table</Text>
+                  <Ionicons name="swap-horizontal" size={13} color="#475569" style={{ marginRight: 3 }} />
+                  <Text style={styles.changeTablePillText}>Change</Text>
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.tableCabinBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="person" size={14} color="#D97706" />
-                  <Text style={styles.tableCabinLabel}>Customer:</Text>
-                  <View style={styles.tableCabinPill}>
-                    <Text style={styles.tableCabinPillText} numberOfLines={1}>
-                      {selectedCustomerObj ? selectedCustomerObj.name : 'Walk-in Guest'}
-                    </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                  <View style={styles.statusIconOrb}>
+                    <Ionicons name="person" size={13} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.tableCabinLabel}>Customer Details</Text>
+                    <View style={styles.tableCabinPill}>
+                      <Text style={styles.tableCabinPillText} numberOfLines={1}>
+                        {selectedCustomerObj ? selectedCustomerObj.name : 'Walk-in Guest'}
+                      </Text>
+                      {selectedCustomerObj?.phone && (
+                        <Text style={styles.tableCabinPillSub}>
+                          • {selectedCustomerObj.phone}
+                        </Text>
+                      )}
+                    </View>
                   </View>
                 </View>
 
@@ -1842,7 +1930,7 @@ export default function POSTerminalScreen({
                   }}
                   activeOpacity={0.8}
                 >
-                  <Ionicons name="person-add-outline" size={12} color="#475569" style={{ marginRight: 3 }} />
+                  <Ionicons name="person-add-outline" size={13} color="#475569" style={{ marginRight: 3 }} />
                   <Text style={styles.changeTablePillText}>
                     {selectedCustomerObj ? 'Change' : 'Select'}
                   </Text>
@@ -1852,58 +1940,91 @@ export default function POSTerminalScreen({
 
             {/* Columns Subheader */}
             <View style={styles.cartColumnSubheader}>
-              <Text style={[styles.cartColLabel, { flex: 1.8 }]}>PRODUCT</Text>
-              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'center' }]}>QTY</Text>
-              <Text style={[styles.cartColLabel, { flex: 1, textAlign: 'right' }]}>PRICE</Text>
+              <Text style={styles.cartColLabel}>
+                ITEMS IN ORDER ({cart.length})
+              </Text>
+              <Text style={styles.cartColLabel}>
+                {hidePrices ? 'PORTIONS' : 'QTY & SUBTOTAL'}
+              </Text>
             </View>
 
             {/* Cart Items or Empty Bag View */}
             <ScrollView 
               style={styles.cartItemsScroll}
-              contentContainerStyle={{ flexGrow: 1 }}
+              contentContainerStyle={styles.cartItemsScrollContent}
               showsVerticalScrollIndicator={false}
             >
               {cart.length === 0 ? (
                 <View style={styles.emptyCartBox}>
-                  <Ionicons name="bag" size={54} color="#94A3B8" />
-                  <Text style={styles.emptyCartText}>Cart is empty</Text>
+                  <View style={styles.emptyCartOrb}>
+                    <Ionicons name="basket-outline" size={38} color="#94A3B8" />
+                  </View>
+                  <Text style={styles.emptyCartText}>Cart is currently empty</Text>
+                  <Text style={styles.emptyCartSub}>Tap any dish card on the left to add items</Text>
                 </View>
               ) : (
                 cart.map(item => (
-                  <View key={item.id} style={styles.cartItemRow}>
-                    <View style={{ flex: 1.8, paddingRight: 4 }}>
-                      <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
-                      <Text style={styles.cartItemUnit}>Rs. {item.price.toLocaleString()}</Text>
-                    </View>
+                  <View key={item.id} style={styles.cartItemCard}>
+                    {/* Top Row: Dish Name + Trash Button */}
+                    <View style={styles.cartItemTopRow}>
+                      <View style={{ flex: 1, paddingRight: 8 }}>
+                        <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
+                        {!hidePrices && (
+                          <Text style={styles.cartItemUnit}>
+                            Rs. {item.price.toLocaleString()} per unit
+                          </Text>
+                        )}
+                      </View>
 
-                    {/* Stepper Controls */}
-                    <View style={styles.cartStepperBox}>
                       <TouchableOpacity 
-                        style={styles.cartStepBtn} 
-                        onPress={() => updateQty(item.id, -1)}
-                      >
-                        <Text style={styles.cartStepBtnText}>−</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.cartStepQty}>{item.qty}</Text>
-                      <TouchableOpacity 
-                        style={styles.cartStepBtn} 
-                        onPress={() => updateQty(item.id, 1)}
-                      >
-                        <Text style={styles.cartStepBtnText}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Total & Delete */}
-                    <View style={{ flex: 1, alignItems: 'flex-end', justifyContent: 'center' }}>
-                      <Text style={styles.cartItemTotal}>
-                        Rs. {(item.price * item.qty).toLocaleString()}
-                      </Text>
-                      <TouchableOpacity 
+                        style={styles.cartItemTrashBtn}
                         onPress={() => removeFromCart(item.id)}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        activeOpacity={0.7}
+                        {...(Platform.OS === 'web' ? ({ title: 'Remove item' } as any) : {})}
                       >
-                        <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginTop: 3 }} />
+                        <Ionicons name="trash-outline" size={14} color="#DC2626" />
                       </TouchableOpacity>
+                    </View>
+
+                    {/* Bottom Row: Controls & Line Total */}
+                    <View style={styles.cartItemBottomRow}>
+                      {/* Stepper Controls */}
+                      <View style={styles.cartStepperBox}>
+                        <TouchableOpacity 
+                          style={styles.cartStepBtn} 
+                          onPress={() => updateQty(item.id, -1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="remove" size={14} color="#1E293B" />
+                        </TouchableOpacity>
+                        <View style={styles.cartStepQtyBox}>
+                          <Text style={styles.cartStepQty}>{item.qty}</Text>
+                        </View>
+                        <TouchableOpacity 
+                          style={[styles.cartStepBtn, styles.cartStepBtnAdd]} 
+                          onPress={() => updateQty(item.id, 1)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="add" size={14} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* Line Total OR Portion Badge in Order Taker mode */}
+                      {hidePrices ? (
+                        <View style={styles.portionPill}>
+                          <Text style={styles.portionPillText}>
+                            {item.qty} {item.qty > 1 ? 'portions' : 'portion'}
+                          </Text>
+                        </View>
+                      ) : (
+                        <View style={styles.cartItemTotalBox}>
+                          <Text style={styles.cartItemTotalLabel}>Total</Text>
+                          <Text style={styles.cartItemTotal}>
+                            Rs. {(item.price * item.qty).toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </View>
                 ))
@@ -1912,78 +2033,133 @@ export default function POSTerminalScreen({
 
             {/* Settlement Bottom Section */}
             <View style={styles.cartBottomSettlement}>
-              {/* Financial Lines */}
-              <View style={styles.mathSummaryLines}>
-                <View style={styles.mathLine}>
-                  <Text style={styles.mathLabel}>Subtotal</Text>
-                  <Text style={styles.mathValue}>Rs. {subTotal.toFixed(2)}</Text>
-                </View>
-
-                <View style={styles.mathLine}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={styles.mathLabel}>Discount-</Text>
-                    <TouchableOpacity 
-                      style={styles.discountBadgePill}
-                      onPress={() => {
-                        setCustomDiscountInput(discountAmount);
-                        setDiscountModalVisible(true);
-                      }}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="pricetag" size={10} color="#059669" />
-                      <Text style={styles.discountBadgeText}>
-                        {selectedEventCampaign ? selectedEventCampaign.title : (discountVal > 0 ? `Rs. ${discountVal}` : '+ Promo')}
+              {/* Financial Lines OR Order Summary */}
+              {hidePrices ? (
+                <View style={styles.orderTakerSummaryBox}>
+                  <View style={styles.orderTakerSummaryRow}>
+                    <View style={styles.orderTakerSummaryItem}>
+                      <Text style={styles.orderTakerSummaryLabel}>Dishes</Text>
+                      <Text style={styles.orderTakerSummaryValue}>{cart.length}</Text>
+                    </View>
+                    <View style={styles.orderTakerSummaryDivider} />
+                    <View style={styles.orderTakerSummaryItem}>
+                      <Text style={styles.orderTakerSummaryLabel}>Portions</Text>
+                      <Text style={styles.orderTakerSummaryValue}>
+                        {cart.reduce((s, i) => s + i.qty, 0)}
                       </Text>
-                    </TouchableOpacity>
+                    </View>
+                    <View style={styles.orderTakerSummaryDivider} />
+                    <View style={styles.orderTakerSummaryItem}>
+                      <Text style={styles.orderTakerSummaryLabel}>Dining Type</Text>
+                      <Text style={[styles.orderTakerSummaryValue, { textTransform: 'capitalize', color: '#52141C' }]}>
+                        {orderType}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={[styles.mathValue, { color: '#059669' }]}>Rs. {discountVal.toFixed(2)}</Text>
+                  <View style={styles.orderTakerNoticeBanner}>
+                    <Ionicons name="information-circle-outline" size={14} color="#B45309" />
+                    <Text style={styles.orderTakerNoticeText}>
+                      Order Taker Mode: Dish prices & order totals are hidden.
+                    </Text>
+                  </View>
                 </View>
+              ) : (
+                <>
+                  <View style={styles.mathSummaryLines}>
+                    <View style={styles.mathLine}>
+                      <Text style={styles.mathLabel}>Subtotal</Text>
+                      <Text style={styles.mathValue}>Rs. {subTotal.toFixed(2)}</Text>
+                    </View>
 
-                <View style={styles.mathLine}>
-                  <Text style={[styles.mathLabel, { color: '#0284C7' }]}>Delivery+</Text>
-                  <Text style={[styles.mathValue, { color: '#0284C7' }]}>Rs. {deliveryCharges.toFixed(2)}</Text>
-                </View>
+                    <View style={styles.mathLine}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.mathLabel}>Discount-</Text>
+                        <TouchableOpacity 
+                          style={styles.discountBadgePill}
+                          onPress={() => {
+                            setCustomDiscountInput(discountAmount);
+                            setDiscountModalVisible(true);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="pricetag" size={10} color="#059669" />
+                          <Text style={styles.discountBadgeText}>
+                            {selectedEventCampaign ? selectedEventCampaign.title : (discountVal > 0 ? `Rs. ${discountVal}` : '+ Promo')}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <Text style={[styles.mathValue, { color: '#059669' }]}>Rs. {discountVal.toFixed(2)}</Text>
+                    </View>
 
-                {/* Payable Grand Total */}
-                <View style={styles.payableRow}>
-                  <Text style={styles.payableLabel}>PAYABLE</Text>
-                  <Text style={styles.payableAmount}>Rs. {total.toFixed(2)}</Text>
-                </View>
-              </View>
+                    <View style={styles.mathLine}>
+                      <Text style={[styles.mathLabel, { color: '#0284C7' }]}>Delivery+</Text>
+                      <Text style={[styles.mathValue, { color: '#0284C7' }]}>Rs. {deliveryCharges.toFixed(2)}</Text>
+                    </View>
+                  </View>
 
-              {/* Big Action Button 1: PROCEED TO PAYMENT */}
-              <TouchableOpacity 
-                style={[styles.proceedPayBtn, cart.length === 0 && { opacity: 0.55 }]}
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                onPress={openCheckout}
-                disabled={cart.length === 0}
-                activeOpacity={0.85}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="card-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.proceedPayBtnText}>PROCEED TO PAYMENT</Text>
-                </View>
-                <View style={styles.btnShortcutBadge}>
-                  <Text style={styles.btnShortcutBadgeText}>F9</Text>
-                </View>
-              </TouchableOpacity>
+                  {/* Payable Grand Total Banner */}
+                  <View style={styles.payableCard}>
+                    <View style={styles.payableLabelCol}>
+                      <Text style={styles.payableLabel}>TOTAL PAYABLE</Text>
+                      <Text style={styles.payableSub}>Net Order Total</Text>
+                    </View>
+                    <Text style={styles.payableAmount}>Rs. {total.toFixed(2)}</Text>
+                  </View>
+                </>
+              )}
 
-              {/* Action Button 2: HOLD / PENDING ORDER */}
-              <TouchableOpacity 
-                style={[styles.holdOrderBtn, cart.length === 0 && { opacity: 0.55 }]}
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                onPress={sendToKitchen}
-                disabled={cart.length === 0}
-                activeOpacity={0.85}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="pause-circle-outline" size={15} color="#52141C" style={{ marginRight: 6 }} />
-                  <Text style={styles.holdOrderBtnText}>HOLD / PENDING ORDER</Text>
-                </View>
-                <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.1)', borderColor: 'rgba(82, 20, 28, 0.25)' }]}>
-                  <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
-                </View>
-              </TouchableOpacity>
+              {/* Action Buttons: Order Taker vs Cashier */}
+              {hidePrices ? (
+                <TouchableOpacity 
+                  style={[styles.proceedPayBtn, cart.length === 0 && { opacity: 0.55 }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={sendToKitchen}
+                  disabled={cart.length === 0}
+                  activeOpacity={0.85}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                    <Text style={styles.proceedPayBtnText}>PUNCH ORDER TO KITCHEN (KOT)</Text>
+                  </View>
+                  <View style={styles.btnShortcutBadge}>
+                    <Text style={styles.btnShortcutBadgeText}>F8</Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={[styles.proceedPayBtn, cart.length === 0 && { opacity: 0.55 }]}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                    onPress={openCheckout}
+                    disabled={cart.length === 0}
+                    activeOpacity={0.85}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="card-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+                      <Text style={styles.proceedPayBtnText}>PROCEED TO PAYMENT</Text>
+                    </View>
+                    <View style={styles.btnShortcutBadge}>
+                      <Text style={styles.btnShortcutBadgeText}>F9</Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    style={[styles.holdOrderBtn, cart.length === 0 && { opacity: 0.55 }]}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                    onPress={sendToKitchen}
+                    disabled={cart.length === 0}
+                    activeOpacity={0.85}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Ionicons name="pause-circle-outline" size={16} color="#52141C" style={{ marginRight: 8 }} />
+                      <Text style={styles.holdOrderBtnText}>HOLD / PENDING ORDER</Text>
+                    </View>
+                    <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.08)', borderColor: 'rgba(82, 20, 28, 0.2)' }]}>
+                      <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
+                    </View>
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
           </View>
         )}
@@ -2736,9 +2912,11 @@ export default function POSTerminalScreen({
                           <Text style={styles.ticketMetaText}>
                             Server: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{t.server || 'Staff'}</Text> • {t.items.reduce((s, i) => s + i.qty, 0)} items
                           </Text>
-                          <Text style={styles.ticketSubtotalText}>
-                            Rs. {ticketSubtotal.toLocaleString()}
-                          </Text>
+                          {!hidePrices && (
+                            <Text style={styles.ticketSubtotalText}>
+                              Rs. {ticketSubtotal.toLocaleString()}
+                            </Text>
+                          )}
                         </View>
 
                         {/* Items preview list */}
@@ -2747,7 +2925,9 @@ export default function POSTerminalScreen({
                             <View key={idx} style={styles.ticketItemRow}>
                               <Text style={styles.ticketItemQty}>{it.qty}x</Text>
                               <Text style={styles.ticketItemName} numberOfLines={1}>{it.name}</Text>
-                              <Text style={styles.ticketItemPrice}>Rs. {(it.price * it.qty).toLocaleString()}</Text>
+                              {!hidePrices && (
+                                <Text style={styles.ticketItemPrice}>Rs. {(it.price * it.qty).toLocaleString()}</Text>
+                              )}
                             </View>
                           ))}
                         </View>
@@ -2967,9 +3147,15 @@ export default function POSTerminalScreen({
                         <View style={styles.variantDot} />
                         <Text style={styles.variantOptionName}>{v.name}</Text>
                       </View>
-                      <View style={styles.variantPricePill}>
-                        <Text style={styles.variantPriceText}>Rs. {v.price.toLocaleString()}</Text>
-                      </View>
+                      {hidePrices ? (
+                        <View style={[styles.variantPricePill, { backgroundColor: 'rgba(212, 175, 55, 0.12)' }]}>
+                          <Text style={[styles.variantPriceText, { color: '#B45309' }]}>Select</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.variantPricePill}>
+                          <Text style={styles.variantPriceText}>Rs. {v.price.toLocaleString()}</Text>
+                        </View>
+                      )}
                     </TouchableOpacity>
                   ))}
                 </View>
@@ -3871,36 +4057,33 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   dishCard: {
-    width: '18.7%',
-    minWidth: 155,
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
+    width: '23.4%',
+    minWidth: 160,
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    paddingVertical: 14,
+    paddingVertical: 12,
     paddingHorizontal: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 148,
+    minHeight: 154,
     borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+    borderColor: 'rgba(226, 232, 240, 0.95)',
     position: 'relative',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        boxShadow: '0 8px 24px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
         cursor: 'pointer',
         transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
       } as any
     }),
   },
   dishCardInCart: {
-    borderColor: 'rgba(82, 20, 28, 0.55)',
-    backgroundColor: 'rgba(255, 248, 248, 0.9)',
+    borderColor: '#D4AF37',
+    borderWidth: 2,
+    backgroundColor: 'rgba(255, 251, 235, 0.95)',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 10px 28px rgba(82, 20, 28, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
+        boxShadow: '0 10px 24px rgba(212, 175, 55, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
         transform: 'translateY(-2px)',
       } as any
     }),
@@ -4091,20 +4274,20 @@ const styles = StyleSheet.create({
   },
 
   /* --------------------------------------------------------
-     RIGHT: CURRENT CART (CRYSTAL FROSTED GLASS)
+     RIGHT: CURRENT CART (EXPANDED USER-FRIENDLY SPEC)
      -------------------------------------------------------- */
   cartSidebar: {
-    width: 330,
-    backgroundColor: 'rgba(255, 255, 255, 0.84)',
+    width: 430,
+    backgroundColor: '#FFFFFF',
     borderLeftWidth: 1.5,
-    borderLeftColor: 'rgba(212, 175, 55, 0.25)',
+    borderLeftColor: 'rgba(212, 175, 55, 0.3)',
     display: 'flex',
     flexDirection: 'column',
     ...Platform.select({
       web: {
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '-4px 0 28px rgba(0, 0, 0, 0.05), inset 1px 0 0 rgba(255, 255, 255, 0.8)',
+        boxShadow: '-6px 0 32px rgba(0, 0, 0, 0.06), inset 1px 0 0 rgba(255, 255, 255, 0.9)',
       } as any
     }),
   },
@@ -4116,15 +4299,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.8)',
+    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
+    backgroundColor: '#FFFFFF',
+  },
+  cartHeaderIconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#52141C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.4)',
   },
   cartHeaderTitle: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '900',
-    color: '#1E293B',
+    color: '#0F172A',
+    letterSpacing: 0.2,
+  },
+  cartHeaderSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 1,
   },
   cartCountPill: {
     backgroundColor: '#52141C',
@@ -4138,48 +4339,62 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   cartResetBtn: {
-    padding: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 8,
-    backgroundColor: 'rgba(254, 242, 242, 0.8)',
+    backgroundColor: 'rgba(254, 242, 242, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(254, 202, 202, 0.8)',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      } as any
+    }),
+  },
+  cartResetBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
   },
   orderTypeTabs: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(241, 245, 249, 0.8)',
-    marginHorizontal: 12,
-    marginTop: 8,
-    borderRadius: 14,
-    padding: 3,
+    backgroundColor: '#F1F5F9',
+    marginHorizontal: 14,
+    marginTop: 10,
+    borderRadius: 12,
+    padding: 3.5,
     borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-      } as any
-    }),
+    borderColor: 'rgba(203, 213, 225, 0.8)',
+    gap: 4,
   },
   orderTypeTab: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 7,
-    borderRadius: 11,
-  },
-  orderTypeTabActive: {
-    backgroundColor: 'rgba(53, 8, 14, 0.92)',
+    paddingVertical: 8,
+    borderRadius: 9,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 4px 12px rgba(53, 8, 14, 0.25), inset 0 1px 0 rgba(255,255,255,0.2)',
+        cursor: 'pointer',
+      } as any
+    }),
+  },
+  orderTypeTabActive: {
+    backgroundColor: '#52141C',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 3px 10px rgba(82, 20, 28, 0.28)',
       } as any
     }),
   },
   orderTypeTabText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#64748B',
+    color: '#475569',
   },
   orderTypeTabTextActive: {
     color: '#FFFFFF',
@@ -4190,84 +4405,233 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    marginTop: 4,
+    paddingVertical: 9,
+    marginHorizontal: 14,
+    marginTop: 9,
+    backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+  },
+  statusIconOrb: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: 'rgba(217, 119, 6, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.3)',
   },
   tableCabinLabel: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#D97706',
+    color: '#94A3B8',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   tableCabinPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(30, 41, 59, 0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 8,
-    maxWidth: 260,
+    marginTop: 1,
   },
   tableCabinPillText: {
-    color: '#FFFFFF',
-    fontSize: 10,
+    color: '#0F172A',
+    fontSize: 12,
     fontWeight: '900',
   },
   tableCabinPillSub: {
-    color: '#F59E0B',
-    fontSize: 9.5,
+    color: '#B45309',
+    fontSize: 11,
     fontWeight: '700',
     marginLeft: 3,
   },
   changeTablePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(203, 213, 225, 0.9)',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
     ...Platform.select({
       web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
         cursor: 'pointer',
       } as any
     }),
   },
   changeTablePillText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#475569',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
   },
   cartColumnSubheader: {
     flexDirection: 'row',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    marginTop: 9,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.8)',
-    backgroundColor: 'rgba(250, 250, 250, 0.6)',
+    borderColor: 'rgba(226, 232, 240, 0.85)',
+    backgroundColor: 'rgba(248, 250, 252, 0.75)',
   },
   cartColLabel: {
-    fontSize: 9.5,
+    fontSize: 10,
     fontWeight: '800',
-    color: '#94A3B8',
-    letterSpacing: 0.3,
+    color: '#64748B',
+    letterSpacing: 0.5,
   },
   cartItemsScroll: {
     flex: 1,
   },
+  cartItemsScrollContent: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    flexGrow: 1,
+  },
   emptyCartBox: {
     flex: 1,
-    minHeight: 180,
+    minHeight: 220,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  emptyCartOrb: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(241, 245, 249, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.6)',
+  },
+  emptyCartText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  emptyCartSub: {
+    color: '#94A3B8',
+    fontSize: 11.5,
+    fontWeight: '600',
+    marginTop: 4,
+    textAlign: 'center',
+  },
+  cartItemCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.95)',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
+        transition: 'all 0.15s ease',
+      } as any
+    }),
+  },
+  cartItemTopRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+  cartItemName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 18,
+  },
+  cartItemUnit: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  cartItemTrashBtn: {
+    padding: 5,
+    borderRadius: 7,
+    backgroundColor: 'rgba(254, 242, 242, 0.9)',
+    borderWidth: 1,
+    borderColor: 'rgba(254, 202, 202, 0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      } as any
+    }),
+  },
+  cartItemBottomRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 4,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(241, 245, 249, 0.9)',
+  },
+  cartStepperBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.85)',
+    padding: 2,
+    gap: 2,
+  },
+  cartStepBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: 'rgba(203, 213, 225, 0.9)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      } as any
+    }),
+  },
+  cartStepBtnAdd: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  cartStepQtyBox: {
+    minWidth: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  emptyCartText: {
+  cartStepQty: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  cartItemTotalBox: {
+    alignItems: 'flex-end',
+    minWidth: 90,
+  },
+  cartItemTotalLabel: {
+    fontSize: 9,
     color: '#94A3B8',
-    fontSize: 12,
     fontWeight: '700',
-    marginTop: 6,
+    textTransform: 'uppercase',
+  },
+  cartItemTotal: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#52141C',
   },
   cartItemRow: {
     flexDirection: 'row',
@@ -4277,77 +4641,30 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(241, 245, 249, 0.8)',
   },
-  cartItemName: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  cartItemUnit: {
-    fontSize: 10,
-    color: '#94A3B8',
-  },
-  cartStepperBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 5,
-  },
-  cartStepBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(241, 245, 249, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.8)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  cartStepBtnText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#1E293B',
-  },
-  cartStepQty: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    color: '#1E293B',
-    minWidth: 18,
-    textAlign: 'center',
-  },
-  cartItemTotal: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    color: '#1E293B',
-  },
 
   /* --------------------------------------------------------
-     SETTLEMENT BOTTOM (FROSTED GLASS)
+     SETTLEMENT BOTTOM (CLEAN & SPACIOUS)
      -------------------------------------------------------- */
   cartBottomSettlement: {
     borderTopWidth: 2,
-    borderTopColor: 'rgba(229, 184, 59, 0.55)',
-    padding: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
+    borderTopColor: 'rgba(212, 175, 55, 0.45)',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 -4px 16px rgba(0, 0, 0, 0.04)',
+        boxShadow: '0 -4px 18px rgba(0, 0, 0, 0.05)',
       } as any
     }),
   },
   mathSummaryLines: {
-    gap: 3,
+    gap: 4,
     marginBottom: 8,
+    backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.85)',
   },
   mathLine: {
     flexDirection: 'row',
@@ -4355,24 +4672,24 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   mathLabel: {
-    fontSize: 11,
+    fontSize: 11.5,
     color: '#64748B',
     fontWeight: '600',
   },
   mathValue: {
-    fontSize: 11,
-    color: '#1E293B',
+    fontSize: 12,
+    color: '#0F172A',
     fontWeight: '700',
   },
   discountBadgePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(240, 253, 244, 0.9)',
+    backgroundColor: 'rgba(240, 253, 244, 0.95)',
     borderWidth: 1,
-    borderColor: 'rgba(187, 247, 208, 0.9)',
+    borderColor: 'rgba(187, 247, 208, 0.95)',
     paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
     gap: 3,
     ...Platform.select({
       web: {
@@ -4381,9 +4698,42 @@ const styles = StyleSheet.create({
     }),
   },
   discountBadgeText: {
-    fontSize: 9.5,
+    fontSize: 10,
     color: '#059669',
     fontWeight: '800',
+  },
+  payableCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'rgba(82, 20, 28, 0.05)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  payableLabelCol: {
+    justifyContent: 'center',
+  },
+  payableLabel: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#52141C',
+    letterSpacing: 0.8,
+  },
+  payableSub: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  payableAmount: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#52141C',
+    letterSpacing: -0.5,
   },
   payableRow: {
     flexDirection: 'row',
@@ -4394,34 +4744,21 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: 'rgba(226, 232, 240, 0.8)',
   },
-  payableLabel: {
-    fontSize: 11.5,
-    fontWeight: '900',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  payableAmount: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: '#1E293B',
-  },
   proceedPayBtn: {
     backgroundColor: '#35080E',
-    paddingVertical: 12,
-    borderRadius: 14,
+    paddingVertical: 13,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 7,
-    gap: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: 'rgba(229, 184, 59, 0.45)',
+    borderColor: 'rgba(212, 175, 55, 0.5)',
     ...Platform.select({
       web: {
-        backgroundImage: 'linear-gradient(135deg, #3D070E 0%, #5E121C 50%, #440810 100%)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 6px 20px rgba(53, 8, 14, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25)',
+        backgroundImage: 'linear-gradient(135deg, #35080E 0%, #5E121C 50%, #440810 100%)',
+        boxShadow: '0 6px 18px rgba(53, 8, 14, 0.35)',
         cursor: 'pointer',
         transition: 'all 0.15s ease',
       } as any
@@ -4429,32 +4766,30 @@ const styles = StyleSheet.create({
   },
   proceedPayBtnText: {
     color: '#FFFFFF',
-    fontSize: 13,
+    fontSize: 13.5,
     fontWeight: '900',
     letterSpacing: 0.5,
   },
   holdOrderBtn: {
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1.5,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
+    borderColor: 'rgba(203, 213, 225, 0.95)',
     paddingVertical: 10,
-    borderRadius: 14,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.04), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
         cursor: 'pointer',
       } as any
     }),
   },
   holdOrderBtnText: {
-    color: '#35080E',
-    fontSize: 11.5,
+    color: '#52141C',
+    fontSize: 12,
     fontWeight: '800',
   },
 
@@ -5835,6 +6170,126 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '900',
+  },
+  orderTakerModeToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(212, 175, 55, 0.35)',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  orderTakerModeToggleActive: {
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: '#F59E0B',
+  },
+  orderTakerModeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#E2E8F0',
+  },
+  orderTakerModeTextActive: {
+    color: '#FCD34D',
+    fontWeight: '900',
+  },
+  dishCardOrderPill: {
+    backgroundColor: 'rgba(245, 158, 11, 0.08)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(217, 119, 6, 0.25)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 4,
+  },
+  dishCardOrderPillActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+    borderColor: '#10B981',
+  },
+  dishCardOrderText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  dishCardOrderTextActive: {
+    color: '#059669',
+    fontWeight: '900',
+  },
+  portionPill: {
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(82, 20, 28, 0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  portionPillText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  orderTakerSummaryBox: {
+    backgroundColor: 'rgba(248, 250, 252, 0.95)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.9)',
+    padding: 10,
+    marginBottom: 10,
+    gap: 8,
+  },
+  orderTakerSummaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  orderTakerSummaryItem: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  orderTakerSummaryDivider: {
+    width: 1,
+    height: 24,
+    backgroundColor: 'rgba(203, 213, 225, 0.8)',
+  },
+  orderTakerSummaryLabel: {
+    fontSize: 9.5,
+    color: '#64748B',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  orderTakerSummaryValue: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  orderTakerNoticeBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(254, 243, 199, 0.65)',
+    borderWidth: 1,
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  orderTakerNoticeText: {
+    fontSize: 10,
+    color: '#92400E',
+    fontWeight: '700',
+    flex: 1,
   },
 });
 
