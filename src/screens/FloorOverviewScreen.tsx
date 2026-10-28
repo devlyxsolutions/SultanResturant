@@ -324,9 +324,9 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                 </Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   {stopwatchStr && (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, gap: 2 }}>
-                      <Ionicons name="stopwatch-outline" size={10} color="#B45309" />
-                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#B45309' }}>⏱️ {stopwatchStr}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, gap: 3 }}>
+                      <Ionicons name="stopwatch-outline" size={12} color="#B45309" />
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#B45309' }}>⏱️ {stopwatchStr}</Text>
                     </View>
                   )}
                   {t.billTotal !== undefined && t.billTotal > 0 && (
@@ -429,30 +429,30 @@ const styles = StyleSheet.create({
     borderColor: BRAND.border,
   },
   kpiLabel: {
-    fontSize: 12,
-    color: BRAND.muted,
-    fontWeight: '600',
+    fontSize: 13,
+    color: BRAND.textSecondary,
+    fontWeight: '700',
     marginBottom: 4,
   },
   kpiValue: {
-    fontSize: 20,
-    fontWeight: '800',
+    fontSize: 24,
+    fontWeight: '900',
     color: BRAND.ink,
     marginBottom: 2,
   },
   kpiMeta: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.muted,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 19,
     fontWeight: '800',
     color: BRAND.ink,
     marginBottom: 12,
   },
   sectionSubtitle: {
-    fontSize: 12,
-    color: BRAND.muted,
+    fontSize: 13.5,
+    color: BRAND.textSecondary,
     marginBottom: 12,
   },
   floorGrid: {
@@ -476,25 +476,25 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   floorBadge: {
-    width: 44,
-    height: 44,
+    width: 46,
+    height: 46,
     borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
   floorBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900',
     marginTop: 1,
   },
   floorName: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '800',
     color: BRAND.ink,
   },
   floorBlurb: {
-    fontSize: 12,
-    color: BRAND.muted,
+    fontSize: 13.5,
+    color: BRAND.textSecondary,
   },
   alertPill: {
     flexDirection: 'row',
@@ -507,19 +507,19 @@ const styles = StyleSheet.create({
   },
   alertPillText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '800',
   },
   floorProgressBar: {
-    height: 6,
+    height: 7,
     backgroundColor: '#F0F0F3',
-    borderRadius: 3,
+    borderRadius: 4,
     overflow: 'hidden',
     marginBottom: 12,
   },
   floorProgressFill: {
     height: '100%',
-    borderRadius: 3,
+    borderRadius: 4,
   },
   floorMetricsRow: {
     flexDirection: 'row',
@@ -529,13 +529,13 @@ const styles = StyleSheet.create({
     borderTopColor: '#F0F0F3',
   },
   metricLabel: {
-    fontSize: 10,
-    color: BRAND.muted,
-    fontWeight: '600',
+    fontSize: 12,
+    color: BRAND.textSecondary,
+    fontWeight: '700',
   },
   metricVal: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: BRAND.ink,
     marginTop: 2,
   },
@@ -553,7 +553,7 @@ const styles = StyleSheet.create({
   },
   clearFloorBtnText: {
     color: '#512DA8',
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '700',
   },
   tablesGrid: {
@@ -562,9 +562,10 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   tableTile: {
-    width: 155,
+    minWidth: 165,
+    flex: 1,
     backgroundColor: '#fff',
-    padding: 12,
+    padding: 14,
     borderRadius: 12,
     borderWidth: 1,
     borderColor: BRAND.border,
@@ -573,42 +574,44 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 6,
   },
   tileName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: BRAND.ink,
   },
   tileBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
   tileBadgeText: {
-    fontSize: 9,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   tileZone: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 13,
+    color: BRAND.textSecondary,
     marginBottom: 8,
+    fontWeight: '600',
   },
   tileFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 6,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F5F5F7',
   },
   tileSeats: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 13,
+    color: BRAND.textSecondary,
+    fontWeight: '600',
   },
   tileBill: {
-    fontSize: 12,
-    fontWeight: '800',
+    fontSize: 14.5,
+    fontWeight: '900',
     color: BRAND.burgundy,
   },
   floorZonesRow: {
@@ -625,14 +628,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
     backgroundColor: '#F8F9FA',
-    paddingHorizontal: 7,
-    paddingVertical: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 7,
     borderWidth: 1,
     borderColor: '#E9ECEF',
   },
   floorZoneChipText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.ink,
   },

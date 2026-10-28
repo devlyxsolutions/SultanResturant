@@ -1,5 +1,9 @@
-import { requireNativeModule, EventEmitter, type EventSubscription } from 'expo';
+import { requireNativeModule, EventEmitter } from 'expo';
 import { Platform } from 'react-native';
+
+export type EventSubscription = {
+  remove: () => void;
+};
 
 export type CallEventType = 'INCOMING_CALL' | 'CALL_ANSWERED' | 'CALL_ENDED' | 'MISSED_CALL';
 

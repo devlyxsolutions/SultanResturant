@@ -1375,7 +1375,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     </View>
 
                     {/* Bank Account Info (if present) */}
-                    {s.bankDetails?.accountNumber && (
+                    {s.bankDetails?.accountNumber ? (
                       <View style={styles.bankBox}>
                         <Ionicons name="card-outline" size={14} color={BRAND.muted} style={{ marginRight: 6 }} />
                         <Text style={styles.bankText} numberOfLines={1}>
@@ -1383,7 +1383,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                           {s.bankDetails.accountNumber} ({s.bankDetails.accountTitle})
                         </Text>
                       </View>
-                    )}
+                    ) : null}
 
                     {/* Card Actions Footer */}
                     <View style={styles.cardFooter}>
@@ -1882,34 +1882,34 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
                     {/* Detailed info pills row */}
                     <View style={styles.payDetailsGrid}>
-                      {pay.sourceAccount && (
+                      {Boolean(pay.sourceAccount) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="wallet-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
                             <Text style={{ fontWeight: '700' }}>Paid From:</Text> {pay.sourceAccount}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
 
-                      {pay.bankName && (
+                      {Boolean(pay.bankName) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="business-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
                             <Text style={{ fontWeight: '700' }}>Bank:</Text> {pay.bankName}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
 
-                      {pay.reference && (
+                      {Boolean(pay.reference) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="barcode-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
                             <Text style={{ fontWeight: '700' }}>Trx / Ref:</Text> {pay.reference}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
 
-                      {pay.chequeNumber && (
+                      {Boolean(pay.chequeNumber) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="newspaper-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
@@ -1917,25 +1917,25 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                             {pay.chequeDate ? ` (Due: ${pay.chequeDate})` : ''}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
 
-                      {pay.receivedByContact && (
+                      {Boolean(pay.receivedByContact) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="person-circle-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
                             <Text style={{ fontWeight: '700' }}>Received By:</Text> {pay.receivedByContact}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
 
-                      {pay.purchaseOrderId && (
+                      {Boolean(pay.purchaseOrderId) ? (
                         <View style={styles.payDetailItem}>
                           <Ionicons name="document-attach-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={styles.payDetailText}>
                             <Text style={{ fontWeight: '700' }}>Linked PO:</Text> #{pay.purchaseOrderId}
                           </Text>
                         </View>
-                      )}
+                      ) : null}
                     </View>
 
                     {pay.notes ? (
@@ -1963,7 +1963,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         <Text style={[styles.payActionBtnText, { color: BRAND.ink }]}>Copy Receipt</Text>
                       </TouchableOpacity>
 
-                      {sup && (
+                      {sup ? (
                         <TouchableOpacity
                           style={styles.payActionBtn}
                           onPress={() => handleOpenLedger(sup)}
@@ -1971,7 +1971,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                           <Ionicons name="newspaper-outline" size={14} color={BRAND.muted} style={{ marginRight: 4 }} />
                           <Text style={[styles.payActionBtnText, { color: BRAND.ink }]}>Vendor Ledger</Text>
                         </TouchableOpacity>
-                      )}
+                      ) : null}
 
                       <TouchableOpacity
                         style={[styles.payActionBtn, { borderColor: '#FFCDD2' }]}
@@ -3367,12 +3367,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     <Text style={styles.summaryLabel}>Supplier / Vendor:</Text>
                     <Text style={styles.summaryVal}>{selectedPOForDetails.supplierName}</Text>
                   </View>
-                  {selectedPOForDetails.invoiceNo && (
+                  {Boolean(selectedPOForDetails.invoiceNo) ? (
                     <View style={styles.summaryRow}>
                       <Text style={styles.summaryLabel}>Vendor Bill / Invoice #:</Text>
                       <Text style={styles.summaryVal}>{selectedPOForDetails.invoiceNo}</Text>
                     </View>
-                  )}
+                  ) : null}
                   <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>Order Date:</Text>
                     <Text style={styles.summaryVal}>
@@ -4277,8 +4277,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13,
+    fontWeight: '800',
     color: BRAND.ink,
     marginBottom: 4,
   },
@@ -4288,8 +4288,8 @@ const styles = StyleSheet.create({
     borderColor: BRAND.border,
     borderRadius: 6,
     paddingHorizontal: 10,
-    paddingVertical: 8,
-    fontSize: 13,
+    paddingVertical: 9,
+    fontSize: 14.5,
     color: BRAND.ink,
   },
   smallInput: {
@@ -4299,11 +4299,11 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     paddingHorizontal: 6,
     paddingVertical: 4,
-    fontSize: 12,
+    fontSize: 13,
     textAlign: 'right',
   },
   inputHint: {
-    fontSize: 10,
+    fontSize: 12,
     color: BRAND.muted,
     marginTop: 2,
   },
@@ -4328,7 +4328,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.burgundy,
   },
   catChoicePillText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4344,7 +4344,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   formSectionTitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: BRAND.burgundy,
     marginBottom: 8,
@@ -4361,7 +4361,7 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.burgundy,
   },
   supChoicePillText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4377,7 +4377,7 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   addSmallBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -4402,13 +4402,13 @@ const styles = StyleSheet.create({
     paddingVertical: 3,
   },
   summaryLabel: {
-    fontSize: 12,
+    fontSize: 13,
     color: BRAND.muted,
     fontWeight: '600',
   },
   summaryVal: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: BRAND.ink,
   },
   togglesBox: {
@@ -4421,7 +4421,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   toggleText: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: BRAND.ink,
     fontWeight: '600',
     flex: 1,
@@ -4440,7 +4440,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.burgundy,
   },
   methodPillText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4458,24 +4458,24 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   ledgerMetaLabel: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.muted,
     textTransform: 'uppercase',
   },
   ledgerDueAmount: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     marginTop: 2,
   },
   ledgerLifetimeAmount: {
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     color: BRAND.ink,
     marginTop: 2,
   },
   ledgerSectionTitle: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '800',
     color: BRAND.burgundy,
     marginBottom: 8,
@@ -4548,7 +4548,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   paymentSupplierNameLarge: {
-    fontSize: 15,
+    fontSize: 17,
     fontWeight: '800',
     color: BRAND.ink,
   },
@@ -4558,16 +4558,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   payMethodTagText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   paymentVoucherId: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.muted,
     marginTop: 2,
   },
   paymentAmountLarge: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '900',
     color: BRAND.success,
   },
@@ -4588,7 +4588,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   payDetailText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.ink,
   },
   paymentNoteBox: {
@@ -4600,7 +4600,7 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   paymentNoteText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#F57F17',
     fontStyle: 'italic',
     flex: 1,
@@ -4626,7 +4626,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.border,
   },
   payActionBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -4649,23 +4649,23 @@ const styles = StyleSheet.create({
     color: BRAND.burgundy,
   },
   paymentSupBannerMeta: {
-    fontSize: 11,
+    fontSize: 12,
     color: BRAND.muted,
     marginTop: 2,
   },
   paymentSupBannerDueLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.muted,
     textTransform: 'uppercase',
   },
   paymentSupBannerDueVal: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     marginTop: 2,
   },
   inputHintBold: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4678,7 +4678,7 @@ const styles = StyleSheet.create({
     borderColor: '#EBDAD1',
   },
   quickFillPillText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -4696,7 +4696,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.burgundy,
   },
   poAllocPillText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4719,7 +4719,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   ledgerSupAddress: {
-    fontSize: 12,
+    fontSize: 12.5,
     color: BRAND.ink,
     fontWeight: '600',
   },
@@ -4730,7 +4730,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   ledgerBankCopyText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.goldDark,
     fontWeight: '700',
   },
@@ -4745,7 +4745,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   ledgerActionBtnSmallText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -4766,18 +4766,18 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
   },
   ledgerKpiLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.muted,
     textTransform: 'uppercase',
   },
   ledgerKpiVal: {
-    fontSize: 17,
+    fontSize: 20,
     fontWeight: '900',
     marginTop: 2,
   },
   ledgerKpiSub: {
-    fontSize: 10,
+    fontSize: 12,
     color: BRAND.muted,
     marginTop: 2,
   },
@@ -4808,7 +4808,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.burgundy,
   },
   ledgerTabPillText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -4823,13 +4823,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 6,
     paddingHorizontal: 8,
-    height: 34,
+    height: 36,
     borderWidth: 1,
     borderColor: BRAND.border,
   },
   ledgerSearchInput: {
     flex: 1,
-    fontSize: 12,
+    fontSize: 13.5,
     color: BRAND.ink,
   },
   ledgerSortBtn: {
@@ -4844,7 +4844,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.border,
   },
   ledgerSortBtnText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -4859,7 +4859,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   ledgerTh: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: BRAND.burgundy,
     textTransform: 'uppercase',
@@ -4874,12 +4874,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   ledgerRowDate: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
   ledgerRowTime: {
-    fontSize: 10,
+    fontSize: 12,
     color: BRAND.muted,
   },
   ledgerTypeBadge: {
@@ -4888,38 +4888,38 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   ledgerTypeBadgeText: {
-    fontSize: 9,
+    fontSize: 11.5,
     fontWeight: '900',
   },
   ledgerDocNo: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: BRAND.ink,
   },
   ledgerInvNo: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.muted,
   },
   ledgerRowSubtitle: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.muted,
     marginTop: 2,
   },
   ledgerAmountVal: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
   },
   ledgerAmountDash: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: BRAND.muted,
   },
   ledgerRunBalVal: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '900',
     color: BRAND.ink,
   },
   ledgerRunBalStatus: {
-    fontSize: 9,
+    fontSize: 11.5,
     fontWeight: '800',
   },
   ledgerRowBtn: {
@@ -4931,7 +4931,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FAFAFA',
   },
   ledgerRowBtnText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: BRAND.burgundy,
   },
@@ -4952,13 +4952,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   voucherBrandTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '900',
     color: BRAND.burgundy,
     letterSpacing: 0.5,
   },
   voucherBrandSub: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.muted,
     marginTop: 2,
   },
@@ -4971,7 +4971,7 @@ const styles = StyleSheet.create({
   },
   voucherNoText: {
     color: '#FFFFFF',
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -4985,19 +4985,19 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   voucherAmountLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: BRAND.muted,
     letterSpacing: 0.5,
   },
   voucherAmountNumber: {
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: '900',
     color: BRAND.success,
     marginVertical: 4,
   },
   voucherMethodText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -5016,20 +5016,20 @@ const styles = StyleSheet.create({
     borderBottomColor: '#ECEFF1',
   },
   voucherKey: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: BRAND.muted,
     flex: 1,
   },
   voucherValBold: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: BRAND.ink,
     flex: 2,
     textAlign: 'right',
   },
   voucherVal: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.ink,
     flex: 2,
     textAlign: 'right',
@@ -5051,7 +5051,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   signLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.muted,
   },

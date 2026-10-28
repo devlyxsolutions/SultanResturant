@@ -1718,7 +1718,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFEBEE',
   },
   statusPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     letterSpacing: 0.5,
   },
@@ -1741,8 +1741,8 @@ const styles = StyleSheet.create({
     color: '#D84315',
   },
   invoiceIdText: {
-    fontSize: 15,
-    fontWeight: '800',
+    fontSize: 16.5,
+    fontWeight: '900',
     color: '#1C1C1E',
   },
   typeBadge: {
@@ -1754,13 +1754,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   typeBadgeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   cardDateText: {
-    fontSize: 12,
-    color: '#8E8E93',
-    fontWeight: '500',
+    fontSize: 13.5,
+    color: '#475569',
+    fontWeight: '600',
   },
   metaRow: {
     flexDirection: 'row',
@@ -1776,25 +1776,25 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   metaLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#8E8E93',
+    color: '#64748B',
     textTransform: 'uppercase',
   },
   metaValue: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 13.5,
+    fontWeight: '700',
     color: '#1C1C1E',
   },
   paymentMethodPill: {
     backgroundColor: '#F2F2F7',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 4,
   },
   paymentMethodText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
     color: '#4a121a',
   },
   itemsPreviewBox: {
@@ -1804,16 +1804,16 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   itemsCountLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#636366',
+    color: '#475569',
     textTransform: 'uppercase',
     marginBottom: 2,
   },
   itemsPreviewText: {
-    fontSize: 12,
-    color: '#3A3A3C',
-    lineHeight: 18,
+    fontSize: 13.5,
+    color: '#1E293B',
+    lineHeight: 19,
   },
   voidAlertBox: {
     flexDirection: 'row',
@@ -1824,7 +1824,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   voidAlertText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#C62828',
     flex: 1,
@@ -1854,11 +1854,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   subtotalHint: {
-    fontSize: 11,
-    color: '#8E8E93',
+    fontSize: 12.5,
+    color: '#64748B',
+    fontWeight: '600',
   },
   grandTotalText: {
-    fontSize: 19,
+    fontSize: 22,
     fontWeight: '900',
     color: '#4a121a',
   },
@@ -1889,7 +1890,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   detailBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#4a121a',
   },
@@ -1906,7 +1907,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   printActionBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },
@@ -1932,7 +1933,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardReturnBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#D84315',
   },
@@ -1951,7 +1952,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cardFeedbackBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#B45309',
   },
@@ -1995,13 +1996,14 @@ const styles = StyleSheet.create({
     borderBottomColor: '#E5E5EA',
   },
   modalInvoiceTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: '#1C1C1E',
   },
   modalInvoiceSubtitle: {
-    fontSize: 11,
-    color: '#8E8E93',
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
   },
   modalCloseBtn: {
     padding: 4,
@@ -2026,9 +2028,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   modalTabText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#8E8E93',
+    fontSize: 14.5,
+    fontWeight: '700',
+    color: '#64748B',
   },
   modalTabTextActive: {
     color: '#4a121a',
@@ -2047,12 +2049,12 @@ const styles = StyleSheet.create({
     borderColor: '#FFCDD2',
   },
   voidBannerTitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#C62828',
   },
   voidBannerDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#B71C1C',
     marginTop: 2,
   },
@@ -2066,12 +2068,12 @@ const styles = StyleSheet.create({
     borderColor: '#C8E6C9',
   },
   paidBannerTitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#2E7D32',
   },
   paidBannerDesc: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#1B5E20',
     marginTop: 2,
   },
@@ -2089,14 +2091,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   metaDetailKey: {
-    fontSize: 12,
-    color: '#636366',
-    fontWeight: '500',
+    fontSize: 13.5,
+    color: '#475569',
+    fontWeight: '600',
   },
   metaDetailVal: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: '#1C1C1E',
-    fontWeight: '700',
+    fontWeight: '800',
   },
   itemizedBox: {
     borderWidth: 1,
@@ -2105,7 +2107,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   itemizedBoxTitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#1C1C1E',
     paddingHorizontal: 12,
@@ -2124,9 +2126,9 @@ const styles = StyleSheet.create({
     borderColor: '#E5E5EA',
   },
   itemizedColText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: '#636366',
+    color: '#475569',
   },
   itemizedDataRow: {
     flexDirection: 'row',
@@ -2137,27 +2139,27 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F2F2F7',
   },
   itemizedItemName: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14.5,
+    fontWeight: '700',
     color: '#1C1C1E',
   },
   itemizedItemNotes: {
-    fontSize: 11,
-    color: '#8E8E93',
+    fontSize: 12.5,
+    color: '#64748B',
     fontStyle: 'italic',
     marginTop: 2,
   },
   itemizedItemQty: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#1C1C1E',
   },
   itemizedItemPrice: {
-    fontSize: 12,
-    color: '#636366',
+    fontSize: 13.5,
+    color: '#475569',
   },
   itemizedItemTotal: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#1C1C1E',
   },
@@ -2175,12 +2177,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   calcKey: {
-    fontSize: 13,
-    color: '#636366',
+    fontSize: 14,
+    color: '#475569',
   },
   calcVal: {
-    fontSize: 13,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: '#1C1C1E',
   },
   calcGrandRow: {
@@ -2190,12 +2192,12 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   calcGrandKey: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     color: '#4a121a',
   },
   calcGrandVal: {
-    fontSize: 18,
+    fontSize: 22,
     fontWeight: '900',
     color: '#4a121a',
   },
@@ -2213,13 +2215,13 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   paymentMethodName: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '700',
     color: '#1C1C1E',
   },
   paymentAmountVal: {
-    fontSize: 14,
-    fontWeight: '800',
+    fontSize: 16,
+    fontWeight: '900',
     color: '#27AE60',
   },
 
@@ -2259,15 +2261,15 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   thermalBrandSub: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#8E8E93',
+    color: '#64748B',
     letterSpacing: 1.5,
     marginTop: 2,
   },
   thermalContactText: {
-    fontSize: 10,
-    color: '#636366',
+    fontSize: 12,
+    color: '#475569',
     textAlign: 'center',
     marginTop: 2,
   },
@@ -2284,12 +2286,12 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   thermalMetaText: {
-    fontSize: 11,
-    color: '#333333',
+    fontSize: 12.5,
+    color: '#1E293B',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   thermalVoidNotice: {
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: 'bold',
     color: '#C62828',
     letterSpacing: 1,
@@ -2306,8 +2308,8 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   thermalCol: {
-    fontSize: 11,
-    color: '#222222',
+    fontSize: 12.5,
+    color: '#1E293B',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   thermalSummaryRow: {
@@ -2316,14 +2318,14 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
   thermalSummaryKey: {
-    fontSize: 11,
-    color: '#444444',
+    fontSize: 12.5,
+    color: '#334155',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   thermalSummaryVal: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: 'bold',
-    color: '#222222',
+    color: '#0F172A',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   thermalGrandRow: {
@@ -2332,13 +2334,13 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   thermalGrandKey: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: 'bold',
     color: '#111111',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   thermalGrandVal: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: 'bold',
     color: '#111111',
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
@@ -2351,14 +2353,14 @@ const styles = StyleSheet.create({
     borderTopColor: '#EEE',
   },
   thermalFooterText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
     color: '#333333',
     textAlign: 'center',
   },
   thermalFooterSub: {
-    fontSize: 9,
-    color: '#8E8E93',
+    fontSize: 11,
+    color: '#64748B',
     textAlign: 'center',
     marginTop: 3,
   },

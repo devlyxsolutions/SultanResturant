@@ -9,11 +9,12 @@ import {
   useWindowDimensions,
   ActivityIndicator
 } from 'react-native';
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useRolePermissions } from '../../store/roleStore';
+import { useSidebarStore } from '../../store/sidebarStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import SultanLogo from '../../components/SultanLogo';
 import BottomNav from '../../components/BottomNav';
@@ -56,7 +57,92 @@ export default function ManagerLayout() {
 
   const isMobile = width < 768;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const { isCollapsed, setIsCollapsed, toggleCollapsed } = useSidebarStore();
+
+  // Auto-collapse sidebar ONLY when user clicks or touches anywhere outside the sidebar
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+
+    const isClickInsideSidebar = (e: MouseEvent | TouchEvent): boolean => {
+      // 1. Check composedPath for maximum web accuracy across nested DOM trees
+      if (typeof e.composedPath === 'function') {
+        const path = e.composedPath();
+        for (const item of path) {
+          if (item instanceof HTMLElement) {
+            if (
+              item.getAttribute('data-sidebar') === 'true' ||
+              item.getAttribute('data-toggle-btn') === 'true' ||
+              item.getAttribute('data-testid') === 'sultan-app-sidebar' ||
+              item.getAttribute('data-testid') === 'top-sidebar-toggle-btn' ||
+              item.id === 'sultan-app-sidebar' ||
+              item.id === 'top-sidebar-toggle-btn' ||
+              item.classList.contains('sultan-desktop-sidebar') ||
+              item.classList.contains('apple-dock-item') ||
+              item.classList.contains('sidebar-nav-item')
+            ) {
+              return true;
+            }
+          }
+        }
+      }
+
+      // 2. Check target and closest ancestors
+      const target = e.target as HTMLElement | null;
+      if (target) {
+        if (typeof target.closest === 'function') {
+          if (
+            target.closest('[data-sidebar="true"]') ||
+            target.closest('[data-toggle-btn="true"]') ||
+            target.closest('[data-testid="sultan-app-sidebar"]') ||
+            target.closest('[data-testid="top-sidebar-toggle-btn"]') ||
+            target.closest('#sultan-app-sidebar') ||
+            target.closest('#top-sidebar-toggle-btn') ||
+            target.closest('.sultan-desktop-sidebar') ||
+            target.closest('.apple-dock-item') ||
+            target.closest('.sidebar-nav-item')
+          ) {
+            return true;
+          }
+        }
+
+        // 3. Fallback container check
+        const sidebarEl = 
+          document.getElementById('sultan-app-sidebar') ||
+          document.querySelector('[data-sidebar="true"]') ||
+          document.querySelector('.sultan-desktop-sidebar');
+        if (sidebarEl && sidebarEl.contains(target)) return true;
+
+        const toggleBtnEl = 
+          document.getElementById('top-sidebar-toggle-btn') ||
+          document.querySelector('[data-toggle-btn="true"]') ||
+          document.querySelector('[data-testid="top-sidebar-toggle-btn"]');
+        if (toggleBtnEl && toggleBtnEl.contains(target)) return true;
+      }
+
+      return false;
+    };
+
+    const handleOutsideClick = (e: MouseEvent | TouchEvent) => {
+      // If sidebar is already collapsed, nothing to do
+      if (isCollapsed) return;
+
+      // If user clicked anywhere inside the sidebar or on the top toggle button:
+      // DO NOT collapse! Allow navigation or menu interaction to occur freely.
+      if (isClickInsideSidebar(e)) return;
+
+      // Click was outside the sidebar (on workspace screen, tables, charts, background, etc.)
+      // -> Collapse sidebar smoothly to dock icons
+      setIsCollapsed(true);
+    };
+
+    // Attach to window in capture phase to reliably detect any outside clicks
+    window.addEventListener('click', handleOutsideClick, true);
+    window.addEventListener('touchend', handleOutsideClick, true);
+    return () => {
+      window.removeEventListener('click', handleOutsideClick, true);
+      window.removeEventListener('touchend', handleOutsideClick, true);
+    };
+  }, [isCollapsed, setIsCollapsed]);
 
   // If user is Admin, they see all menu items. If actual manager, filter based on their allowed permissions.
   const filteredMenuItems = useMemo(() => {
@@ -173,7 +259,7 @@ export default function ManagerLayout() {
           user={user}
           onLogout={logout}
           isCollapsed={isCollapsed}
-          onToggleCollapse={() => setIsCollapsed(!isCollapsed)}
+          onToggleCollapse={toggleCollapsed}
         />
 
         {/* 2. Main Workspace (Top Bar + Screen Stack) */}
@@ -181,10 +267,33 @@ export default function ManagerLayout() {
           {/* Top Royal Sultan Header Bar */}
           <View style={styles.desktopTopBar}>
             <View style={styles.topBarLeft}>
-              <View style={styles.topLogoCapsule}>
-                <SultanLogo size="xs" width={24} height={24} style={{ marginRight: 8 }} />
-                <Text style={styles.topBrandName}>SULTAN RESTAURANT</Text>
-              </View>
+              {/* Sidebar Toggle Button at Top Nav */}
+              <TouchableOpacity
+                testID="top-sidebar-toggle-btn"
+                style={styles.topSidebarToggleBtn}
+                onPress={toggleCollapsed}
+                activeOpacity={0.75}
+                {...(Platform.OS === 'web' ? {
+                  id: 'top-sidebar-toggle-btn',
+                  'data-toggle-btn': 'true',
+                } as any : {})}
+              >
+                <Ionicons name={isCollapsed ? 'menu' : 'chevron-back'} size={17} color="#D4AF37" />
+                <Text style={styles.topSidebarToggleText}>{isCollapsed ? 'Menu' : 'Collapse'}</Text>
+              </TouchableOpacity>
+
+              <View style={styles.topBarDivider} />
+
+              {/* Sultan Brand Title (Clean, elegant text without redundant duplicate logo) */}
+              {width >= 1040 && (
+                <>
+                  <View style={styles.topBrandTitleCapsule}>
+                    <Ionicons name="sparkles" size={12} color="#D4AF37" style={{ marginRight: 6 }} />
+                    <Text style={styles.topBrandName}>SULTAN RESTAURANT</Text>
+                  </View>
+                  <View style={styles.topBarDivider} />
+                </>
+              )}
 
               <View style={styles.shiftPill}>
                 <View style={styles.shiftBeacon} />
@@ -196,7 +305,7 @@ export default function ManagerLayout() {
             </View>
 
             <View style={styles.topBarRight}>
-              <SyncStatusBadge compact={false} />
+              <SyncStatusBadge compact={width < 960} />
 
               {can('canAccessPOS') && (
                 <TouchableOpacity
@@ -216,7 +325,7 @@ export default function ManagerLayout() {
                   </Text>
                 </View>
                 <View style={styles.userTextCol}>
-                  <Text style={styles.userGreetingSub}>Welcome,</Text>
+                  {width >= 960 && <Text style={styles.userGreetingSub}>Welcome,</Text>}
                   <Text style={styles.topUserName} numberOfLines={1}>
                     {user?.name || 'Manager'}
                   </Text>
@@ -382,23 +491,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
-  topLogoCapsule: {
+  topSidebarToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(212, 175, 55, 0.12)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 30,
+    gap: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.38)',
-    marginRight: 4,
+    borderColor: 'rgba(212, 175, 55, 0.42)',
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 2,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 2px 10px rgba(212, 175, 55, 0.18)',
+        cursor: 'pointer',
       } as any,
     }),
+  },
+  topSidebarToggleText: {
+    color: '#F3D179',
+    fontSize: 12.5,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  topBarDivider: {
+    width: 1,
+    height: 18,
+    backgroundColor: 'rgba(212, 175, 55, 0.28)',
+    marginHorizontal: 3,
+  },
+  topBrandTitleCapsule: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
   },
   topBrandName: {
     color: '#F3D179',

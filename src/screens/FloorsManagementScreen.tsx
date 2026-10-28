@@ -681,12 +681,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   kpiIconBox: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  kpiValue: { fontSize: 16, fontWeight: '900', color: '#1C1C1E' },
-  kpiLabel: { fontSize: 11, color: '#8E8E93', fontWeight: '700' },
+  kpiValue: { fontSize: 20, fontWeight: '900', color: '#1C1C1E' },
+  kpiLabel: { fontSize: 13, color: '#475569', fontWeight: '700' },
 
   sectionHeader: { marginTop: 4 },
-  sectionTitle: { fontSize: 18, fontWeight: '900', color: '#1C1C1E' },
-  sectionSub: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  sectionTitle: { fontSize: 19, fontWeight: '900', color: '#1C1C1E' },
+  sectionSub: { fontSize: 13.5, color: '#475569', marginTop: 2 },
 
   // Floors Grid
   floorsGrid: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -6 },
@@ -708,9 +708,9 @@ const styles = StyleSheet.create({
   floorCardTopRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 },
   floorIconBadge: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   floorName: { fontSize: 18, fontWeight: '900', color: '#1C1C1E' },
-  shortBadge: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 },
-  shortBadgeText: { fontSize: 11, fontWeight: '900' },
-  floorPrefix: { fontSize: 12, color: '#8E8E93', marginTop: 2 },
+  shortBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  shortBadgeText: { fontSize: 12.5, fontWeight: '900' },
+  floorPrefix: { fontSize: 13.5, color: '#475569', marginTop: 2, fontWeight: '600' },
   cardHeaderButtons: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   iconButton: {
     width: 32,
@@ -719,7 +719,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  floorBlurb: { fontSize: 12, color: '#636366', lineHeight: 17 },
+  floorBlurb: { fontSize: 13.5, color: '#334155', lineHeight: 18 },
 
   // Zone Counters
   zoneCountersContainer: { flexDirection: 'row', gap: 8 },
@@ -732,27 +732,27 @@ const styles = StyleSheet.create({
     padding: 10,
     gap: 3,
   },
-  zoneCounterTitle: { fontSize: 11, fontWeight: '800', color: '#636366' },
-  zoneCounterValue: { fontSize: 15, fontWeight: '900', color: '#1C1C1E' },
-  zoneCounterSub: { fontSize: 10, color: '#8E8E93', fontWeight: '600' },
+  zoneCounterTitle: { fontSize: 12.5, fontWeight: '800', color: '#475569' },
+  zoneCounterValue: { fontSize: 17, fontWeight: '900', color: '#1C1C1E' },
+  zoneCounterSub: { fontSize: 12, color: '#64748B', fontWeight: '700' },
 
   capacityBar: {
     backgroundColor: '#F7F7F8',
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingVertical: 9,
     borderRadius: 10,
   },
-  capacityBarText: { fontSize: 12, color: '#636366' },
+  capacityBarText: { fontSize: 13.5, color: '#334155', fontWeight: '600' },
 
   manageTablesBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 11,
+    paddingVertical: 12,
     borderRadius: 11,
   },
-  manageTablesBtnText: { color: '#fff', fontSize: 13, fontWeight: '800' },
+  manageTablesBtnText: { color: '#fff', fontSize: 14, fontWeight: '800' },
 
   // Empty State
   emptyState: {
@@ -765,7 +765,7 @@ const styles = StyleSheet.create({
     borderColor: '#ECEAE4',
   },
   emptyTitle: { fontSize: 18, fontWeight: '900', color: '#1C1C1E' },
-  emptySub: { fontSize: 13, color: '#8E8E93' },
+  emptySub: { fontSize: 13.5, color: '#475569' },
 
   // Modal / Dialog
   overlay: { flex: 1, backgroundColor: 'rgba(20,10,12,0.5)', justifyContent: 'center', alignItems: 'center', padding: 16 },
@@ -773,19 +773,20 @@ const styles = StyleSheet.create({
   dialogHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   dialogHeaderIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   dialogTitle: { fontSize: 20, fontWeight: '900', color: BRAND_COLOR },
-  dialogSub: { fontSize: 12, color: '#8E8E93' },
+  dialogSub: { fontSize: 13.5, color: '#64748B' },
   closeBtn: { width: 34, height: 34, borderRadius: 17, backgroundColor: '#F2F2F7', alignItems: 'center', justifyContent: 'center' },
 
-  label: { fontSize: 12, fontWeight: '800', color: '#3A3A3C', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
+  label: { fontSize: 13, fontWeight: '800', color: '#1E293B', marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.4 },
   input: {
     borderWidth: 1.5,
-    borderColor: '#E5E1DA',
+    borderColor: '#E2E8F0',
     borderRadius: 10,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    fontSize: 14,
+    fontSize: 14.5,
     marginBottom: 12,
     backgroundColor: '#FCFBF9',
+    color: '#0F172A',
   },
   row: { flexDirection: 'row', gap: 10 },
 
@@ -805,7 +806,7 @@ const styles = StyleSheet.create({
     borderColor: '#E5E1DA',
     backgroundColor: '#FCFBF9',
   },
-  iconChoiceLabel: { fontSize: 12, fontWeight: '700', color: '#636366' },
+  iconChoiceLabel: { fontSize: 13, fontWeight: '700', color: '#334155' },
 
   previewCard: {
     flexDirection: 'row',
@@ -816,8 +817,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     marginBottom: 10,
   },
-  previewTitle: { fontSize: 15, fontWeight: '900' },
-  previewSub: { fontSize: 11, color: '#636366', marginTop: 2 },
+  previewTitle: { fontSize: 16, fontWeight: '900' },
+  previewSub: { fontSize: 13, color: '#475569', marginTop: 2, fontWeight: '600' },
 
   dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
   ghostBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
@@ -825,16 +826,16 @@ const styles = StyleSheet.create({
   primaryBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14 },
 
-  deleteWarningText: { fontSize: 14, color: '#1C1C1E', lineHeight: 20 },
+  deleteWarningText: { fontSize: 14.5, color: '#1C1C1E', lineHeight: 22 },
   attachedWarningBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#FEF5E7',
-    padding: 10,
+    padding: 12,
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#E67E2240',
   },
-  attachedWarningText: { fontSize: 12, color: '#E65100', flex: 1 },
+  attachedWarningText: { fontSize: 13.5, color: '#C2410C', flex: 1, fontWeight: '600' },
 });

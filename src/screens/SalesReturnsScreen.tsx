@@ -1364,19 +1364,19 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   returnIdText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
   },
   orderTypeTag: {
     backgroundColor: BRAND.surface,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 4,
     borderWidth: 1,
     borderColor: BRAND.border,
   },
   orderTypeTagText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -1385,17 +1385,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 3,
     backgroundColor: BRAND.surface,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 4,
   },
   tableTagText: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: BRAND.ink,
+    fontWeight: '600',
   },
   returnTypeBadge: {
     paddingHorizontal: 7,
-    paddingVertical: 2,
+    paddingVertical: 3,
     borderRadius: 4,
   },
   badgeFull: {
@@ -1405,7 +1406,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
   },
   returnTypeBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   textFull: {
@@ -1415,8 +1416,8 @@ const styles = StyleSheet.create({
     color: '#D97706',
   },
   refundAmountText: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 20,
+    fontWeight: '900',
     color: BRAND.danger,
   },
   reasonCardRow: {
@@ -1428,22 +1429,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   reasonIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
   reasonTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
   },
   reasonUrdu: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 12.5,
+    color: '#475569',
   },
   reasonNotesText: {
-    fontSize: 11,
+    fontSize: 13,
     fontStyle: 'italic',
     color: BRAND.ink,
     marginTop: 2,
@@ -1455,19 +1456,20 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: BRAND.border,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
     borderRadius: 4,
   },
   methodPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.ink,
   },
   metaDateText: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#64748B',
     marginTop: 4,
+    fontWeight: '500',
   },
   itemsTable: {
     borderWidth: 1,
@@ -1484,9 +1486,9 @@ const styles = StyleSheet.create({
     borderBottomColor: BRAND.border,
   },
   thText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
-    color: BRAND.muted,
+    color: '#475569',
   },
   itemsTableRow: {
     flexDirection: 'row',
@@ -1497,16 +1499,16 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   itemNameText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700',
     color: BRAND.ink,
   },
   itemPriceSub: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#64748B',
   },
   itemQtyText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -1525,12 +1527,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#E8F5E9',
   },
   conditionTagText: {
-    fontSize: 10,
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
   },
   itemRefundText: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: BRAND.danger,
   },
   cardFooterRow: {
@@ -1540,15 +1542,15 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   footerProcessedText: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 12.5,
+    color: '#64748B',
   },
   footerDot: {
     color: BRAND.border,
   },
   footerInvText: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 12.5,
+    color: '#64748B',
   },
   slipBtn: {
     flexDirection: 'row',
@@ -1557,18 +1559,18 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.surface,
     borderWidth: 1,
     borderColor: BRAND.burgundy,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 6,
   },
   slipBtnText: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
   shareBtn: {
-    width: 28,
-    height: 28,
+    width: 32,
+    height: 32,
     borderRadius: 6,
     backgroundColor: BRAND.surface,
     alignItems: 'center',
@@ -1602,20 +1604,20 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.surface,
   },
   modalTitle: {
-    fontSize: 17,
-    fontWeight: '800',
+    fontSize: 18,
+    fontWeight: '900',
     color: BRAND.burgundy,
   },
   modalSubtitle: {
-    fontSize: 12,
-    color: BRAND.muted,
+    fontSize: 13.5,
+    color: '#64748B',
   },
   wizardSection: {
     gap: 8,
   },
   wizardSectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14.5,
+    fontWeight: '800',
     color: BRAND.ink,
   },
   invoiceSearchBox: {
@@ -1631,7 +1633,7 @@ const styles = StyleSheet.create({
   },
   invoiceSearchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 14.5,
     color: BRAND.ink,
     padding: 0,
   },
@@ -1654,28 +1656,28 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   invoiceChipId: {
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 13.5,
+    fontWeight: '800',
     color: BRAND.ink,
   },
   invoiceChipIdActive: {
     color: BRAND.burgundy,
   },
   invoiceChipTable: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 12.5,
+    color: '#64748B',
   },
   invoiceChipTotal: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15,
+    fontWeight: '900',
     color: BRAND.ink,
   },
   invoiceChipTotalActive: {
     color: BRAND.burgundy,
   },
   invoiceChipMeta: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#64748B',
   },
   scopeToggleRow: {
     flexDirection: 'row',
@@ -1697,7 +1699,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   scopeTitle: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.ink,
   },
@@ -1705,8 +1707,8 @@ const styles = StyleSheet.create({
     color: BRAND.burgundy,
   },
   scopeSub: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#64748B',
   },
   returnItemsBox: {
     borderWidth: 1,
@@ -1727,13 +1729,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFDF9',
   },
   itemSelectName: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: BRAND.ink,
   },
   itemSelectSub: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#64748B',
   },
   stepperWrap: {
     flexDirection: 'row',
@@ -1744,17 +1746,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   stepBtn: {
-    width: 28,
-    height: 28,
+    width: 30,
+    height: 30,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: BRAND.surface,
   },
   stepVal: {
-    width: 28,
+    width: 30,
     textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: BRAND.ink,
   },
   condToggleWrap: {
@@ -1768,7 +1770,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
     paddingVertical: 5,
     backgroundColor: BRAND.surface,
   },
@@ -1779,8 +1781,9 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.success,
   },
   condBtnText: {
-    fontSize: 10,
+    fontSize: 12,
     color: BRAND.ink,
+    fontWeight: '700',
   },
   reasonsGrid: {
     flexDirection: 'row',
@@ -1797,20 +1800,20 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   reasonChoiceLabel: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: BRAND.ink,
   },
   reasonChoiceUrdu: {
-    fontSize: 10,
-    color: BRAND.muted,
+    fontSize: 12,
+    color: '#475569',
   },
   notesInput: {
     borderWidth: 1,
     borderColor: BRAND.border,
     borderRadius: 8,
     padding: 10,
-    fontSize: 12,
+    fontSize: 14,
     color: BRAND.ink,
     minHeight: 50,
     textAlignVertical: 'top',
@@ -1837,13 +1840,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF2F2',
   },
   methodChoiceText: {
-    fontSize: 11,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '700',
     color: BRAND.ink,
   },
   methodChoiceTextActive: {
     color: BRAND.burgundy,
-    fontWeight: '700',
+    fontWeight: '800',
   },
   summaryBar: {
     flexDirection: 'row',
@@ -1856,12 +1859,12 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   summaryLabel: {
-    fontSize: 11,
+    fontSize: 13,
     color: BRAND.burgundy,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   summaryRefundAmount: {
-    fontSize: 20,
+    fontSize: 24,
     fontWeight: '900',
     color: BRAND.danger,
   },
@@ -1875,7 +1878,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   confirmReturnBtnText: {
-    fontSize: 13,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#FFFFFF',
   },
@@ -1896,13 +1899,13 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.surface,
   },
   thermalModalTitle: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     color: BRAND.burgundy,
   },
   thermalModalSub: {
-    fontSize: 11,
-    color: BRAND.muted,
+    fontSize: 12.5,
+    color: '#64748B',
   },
   thermalPaperWrap: {
     maxHeight: 460,
@@ -1910,8 +1913,8 @@ const styles = StyleSheet.create({
   },
   thermalMonoText: {
     fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontSize: 12,
-    lineHeight: 18,
+    fontSize: 13.5,
+    lineHeight: 20,
     color: '#111827',
   },
   thermalModalFooter: {
@@ -1936,7 +1939,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   thermalShareBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
@@ -1949,7 +1952,7 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.burgundy,
   },
   thermalDoneBtnText: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '700',
     color: '#FFFFFF',
   },

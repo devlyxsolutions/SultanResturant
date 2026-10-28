@@ -1390,7 +1390,7 @@ const styles = StyleSheet.create({
   },
 
   filterPillText: {
-    fontSize: 11.5,
+    fontSize: 13,
     fontWeight: '700',
     color: '#374151',
   },
@@ -1413,10 +1413,10 @@ const styles = StyleSheet.create({
 
   // Count Badges inside Pills
   pillCountBadge: {
-    paddingHorizontal: 5.5,
-    paddingVertical: 1.5,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
     borderRadius: 8,
-    marginLeft: 2,
+    marginLeft: 3,
   },
   pillCountBadgeNeutral: {
     backgroundColor: '#E5E7EB',
@@ -1438,9 +1438,9 @@ const styles = StyleSheet.create({
   },
 
   pillCountBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#4B5563',
+    color: '#374151',
   },
   pillCountBadgeTextAvailable: {
     color: '#15803D',
@@ -1460,9 +1460,9 @@ const styles = StyleSheet.create({
   },
 
   filterDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   filterVerticalDivider: {
     width: 1.5,
@@ -1483,12 +1483,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   readyAlertTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#007AFF',
   },
   readyAlertDesc: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: '#0051A8',
     marginTop: 2,
   },
@@ -1512,15 +1512,15 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   billPaidAlertTitle: {
-    fontSize: 14,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#E67E22',
   },
   billPaidAlertDesc: {
-    fontSize: 12,
+    fontSize: 13.5,
     color: '#8D6E63',
     marginTop: 2,
-    lineHeight: 16,
+    lineHeight: 18,
   },
   billPaidDismissBtn: {
     padding: 6,
@@ -1605,7 +1605,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(25, 118, 210, 0.25)',
   },
   tableName: {
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '900',
     color: '#1C1C1E',
   },
@@ -1617,16 +1617,16 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   zoneTypeBadge: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
   },
   dot: {
-    fontSize: 10,
-    color: '#C7C7CC',
+    fontSize: 12,
+    color: '#CBD5E1',
   },
   floorTagText: {
-    fontSize: 10,
-    color: '#8E8E93',
+    fontSize: 12,
+    color: '#475569',
     fontWeight: '700',
   },
 
@@ -1634,8 +1634,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
     borderRadius: 8,
     borderWidth: 1.2,
   },
@@ -1645,7 +1645,7 @@ const styles = StyleSheet.create({
     borderRadius: 3.5,
   },
   statusIndicatorText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.4,
   },
@@ -1669,15 +1669,15 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(213, 169, 67, 0.14)',
   },
   capacityText: {
-    fontSize: 11,
-    color: '#636366',
+    fontSize: 13,
+    color: '#334155',
     fontWeight: '700',
   },
   seatedTimerPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FEF2F2',
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 8,
     borderWidth: 1,
@@ -1685,7 +1685,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   seatedTimerText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#C0392B',
   },
@@ -1702,12 +1702,12 @@ const styles = StyleSheet.create({
     gap: 3,
   },
   billCurrency: {
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#D5A943',
   },
   billText: {
-    fontSize: 17,
+    fontSize: 19,
     fontWeight: '900',
     color: '#1C1C1E',
   },
@@ -1720,7 +1720,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   freeNoticeText: {
-    fontSize: 11,
+    fontSize: 12.5,
     fontWeight: '700',
   },
 
@@ -1731,11 +1731,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D5A943',
     borderRadius: 6,
-    paddingHorizontal: 7,
-    paddingVertical: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   waiterBadgeText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '700',
     color: '#4a121a',
   },
@@ -1753,7 +1753,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   foodReadyPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: '#007AFF',
   },
@@ -1770,7 +1770,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cookingPillText: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '800',
     color: '#FF9500',
   },
@@ -1784,7 +1784,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#F0ECE3',
   },
   tapToOrderPrompt: {
-    fontSize: 11,
+    fontSize: 13,
     fontWeight: '700',
     color: BRAND,
   },
@@ -1799,7 +1799,7 @@ const styles = StyleSheet.create({
   },
   serveNowBtnText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
   },
   releaseTableBtn: {
@@ -1813,7 +1813,7 @@ const styles = StyleSheet.create({
   },
   releaseTableBtnText: {
     color: '#fff',
-    fontSize: 12,
+    fontSize: 13.5,
     fontWeight: '800',
   },
 
@@ -1831,8 +1831,8 @@ const styles = StyleSheet.create({
     marginTop: 14,
   },
   emptySubtitle: {
-    fontSize: 13,
-    color: '#8E8E93',
+    fontSize: 14,
+    color: '#475569',
     textAlign: 'center',
     marginTop: 6,
     lineHeight: 18,
