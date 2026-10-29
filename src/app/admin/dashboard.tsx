@@ -807,16 +807,6 @@ export default function AdminDashboard() {
               ))}
             </View>
 
-            {/* Quick Action Caller ID Button */}
-            <TouchableOpacity
-              style={styles.actionCallBtn}
-              onPress={() => router.push('/admin/call-log' as any)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="call" size={15} color={BRAND.burgundy} />
-              <Text style={styles.actionCallBtnText}>Caller ID</Text>
-            </TouchableOpacity>
-
             {/* Quick Action POS Button */}
             {can('canAccessPOS') && (
               <TouchableOpacity
@@ -870,16 +860,6 @@ export default function AdminDashboard() {
                 </TouchableOpacity>
               ))}
             </View>
-
-            {/* Quick Action Caller ID Button */}
-            <TouchableOpacity
-              style={styles.actionCallBtn}
-              onPress={() => router.push('/admin/call-log' as any)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="call" size={15} color={BRAND.burgundy} />
-              <Text style={styles.actionCallBtnText}>Caller ID</Text>
-            </TouchableOpacity>
 
             {/* Quick Action POS Button */}
             {can('canAccessPOS') && (
