@@ -141,21 +141,55 @@ export default function POSTerminalScreen({
   const user = useAuthStore(state => state.user);
   const { can, canApplyCustomDiscount } = useRolePermissions();
 
-  // Order Taker Mode & Financial Privacy (hide prices & order totals for order takers)
+  // Check if current user is an Order Taker (Waiter or dedicated Order Taker)
   const isOrderTakerRole = useMemo(() => {
-    return user?.role === 'waiter' || user?.role === 'order_taker' || (role as string) === 'waiter' || (role !== 'admin' && !can('canViewRevenue'));
-  }, [user?.role, role, can]);
+    const userRole = (user?.role || '').toLowerCase();
+    const posRole = (role || '').toString().toLowerCase();
+    const customRole = (user?.customRoleId || '').toLowerCase();
+    
+    return (
+      userRole === 'waiter' ||
+      userRole === 'order_taker' ||
+      userRole === 'ordertaker' ||
+      posRole === 'waiter' ||
+      posRole === 'order_taker' ||
+      customRole === 'role-waiter' ||
+      customRole === 'role-order-taker'
+    );
+  }, [user?.role, user?.customRoleId, role]);
 
-  // Default is TRUE (Prices Hidden) so order takers or whoever takes orders don't see prices or totals
-  const [orderTakerMode, setOrderTakerMode] = useState<boolean>(() => {
+  // Check if current user is Cashier, Manager, or Admin (staff who must see product prices & order totals)
+  const isCashierOrManagement = useMemo(() => {
+    if (isOrderTakerRole) return false;
+    const userRole = (user?.role || '').toLowerCase();
+    const posRole = (role || '').toString().toLowerCase();
+    const customRole = (user?.customRoleId || '').toLowerCase();
+
+    if (posRole === 'admin' || posRole === 'manager') return true;
+    if (userRole === 'admin' || userRole === 'manager' || userRole === 'cashier') return true;
+    if (customRole === 'role-admin' || customRole === 'role-manager' || customRole === 'role-cashier') return true;
+
+    return can('canAccessPOS') || can('canAccessInvoices');
+  }, [isOrderTakerRole, user?.role, user?.customRoleId, role, can]);
+
+  // Order Taker Mode:
+  // - Cashier, Manager, and Admin MUST see product prices and bill totals (default = FALSE, i.e. prices visible).
+  // - Order Takers MUST NEVER see prices or totals (strictly locked to TRUE).
+  const [orderTakerMode, setOrderTakerMode] = useState<boolean>(false);
+
+  // Clear any legacy localStorage value that previously forced hide_prices=true for Cashier/Manager/Admin
+  useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      const saved = window.localStorage.getItem('sultan_pos_hide_prices');
-      if (saved !== null) return saved === 'true';
+      if (isCashierOrManagement) {
+        window.localStorage.removeItem('sultan_pos_hide_prices');
+      }
     }
-    return true; // Default: ALWAYS TRUE (Prices & Totals Hidden)
-  });
+  }, [isCashierOrManagement]);
 
-  const hidePrices = isOrderTakerRole ? true : orderTakerMode;
+  // Final price visibility determination:
+  // - Order Takers: ALWAYS TRUE (Prices & Totals hidden)
+  // - Cashier, Manager, Admin: FALSE by default (Prices & Totals visible)
+  const hidePrices = isOrderTakerRole ? true : (isCashierOrManagement ? orderTakerMode : true);
 
   // Permission Guard
   if (role !== 'admin' && !can('canAccessPOS')) {
@@ -999,7 +1033,8 @@ export default function POSTerminalScreen({
     const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
     const wasDineIn = orderType === 'dine-in' && targetTableId;
 
-    const currentUserName = user?.name ? (user.name.includes('(Admin)') ? user.name : `${user.name} (Admin)`) : 'Junaid Ahsan (Admin)';
+    const userRoleLabel = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : (role === 'admin' ? 'Admin' : 'Cashier');
+    const currentUserName = user?.name ? (user.name.includes(`(${userRoleLabel})`) ? user.name : `${user.name} (${userRoleLabel})`) : (role === 'admin' ? 'Junaid Ahsan (Admin)' : 'POS Cashier');
     const orderCreator = selectedServer || (wasDineIn ? 'Sara Ahmed' : currentUserName);
     const cashierName = currentUserName;
 
@@ -1176,10 +1211,24 @@ export default function POSTerminalScreen({
                 }
                 return;
               }
+              const userRole = (user?.role || '').toLowerCase();
+              const customRole = (user?.customRoleId || '').toLowerCase();
+              if (userRole === 'cashier' || customRole === 'role-cashier') {
+                if (Platform.OS === 'web') {
+                  window.alert('Cashier Terminal: Product prices and bill totals are locked as visible for billing operations.');
+                } else {
+                  Alert.alert('Cashier Terminal', 'Product prices and bill totals are locked as visible for billing operations.');
+                }
+                return;
+              }
               setOrderTakerMode(prev => {
                 const next = !prev;
                 if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-                  window.localStorage.setItem('sultan_pos_hide_prices', String(next));
+                  if (next) {
+                    window.localStorage.setItem('sultan_pos_hide_prices', 'true');
+                  } else {
+                    window.localStorage.removeItem('sultan_pos_hide_prices');
+                  }
                 }
                 return next;
               });
@@ -1193,7 +1242,7 @@ export default function POSTerminalScreen({
               color={hidePrices ? "#F59E0B" : "#10B981"} 
             />
             <Text style={[styles.orderTakerModeText, hidePrices && styles.orderTakerModeTextActive]}>
-              {hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier)'}
+              {hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier/Admin)'}
             </Text>
           </TouchableOpacity>
 
@@ -2189,7 +2238,9 @@ export default function POSTerminalScreen({
 
             <View style={styles.mobileFloatingCartRight}>
               <Text style={styles.mobileFloatingCartTotal}>
-                Rs. {Math.round(total).toLocaleString()}
+                {hidePrices
+                  ? `${cart.reduce((s, i) => s + i.qty, 0)} Portions`
+                  : `Rs. ${Math.round(total).toLocaleString()}`}
               </Text>
               <Ionicons name="arrow-forward-circle" size={24} color="#D4AF37" />
             </View>
