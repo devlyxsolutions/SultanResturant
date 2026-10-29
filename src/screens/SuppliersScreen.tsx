@@ -40,25 +40,33 @@ const BRAND = {
   paper: '#FDFBF7',
   cardBg: '#FFFFFF',
   ink: '#1A1A1A',
-  muted: '#7A7A7A',
+  muted: '#6B7280',
   border: '#E8E1D5',
-  success: '#2E7D32',
-  danger: '#C62828',
-  warning: '#E65100',
-  info: '#1565C0',
+  borderLight: '#F0ECE4',
+  success: '#15803D',
+  successBg: '#DCFCE7',
+  danger: '#B91C1C',
+  dangerBg: '#FEE2E2',
+  warning: '#B45309',
+  warningBg: '#FEF3C7',
+  info: '#1D4ED8',
+  infoBg: '#DBEAFE',
 };
 
-const CATEGORY_COLORS: Record<SupplierCategory, { bg: string; text: string; icon: keyof typeof Ionicons.glyphMap }> = {
-  'Meat & Poultry': { bg: '#FFEBEE', text: '#C62828', icon: 'restaurant-outline' },
-  'Fresh Produce': { bg: '#E8F5E9', text: '#2E7D32', icon: 'leaf-outline' },
-  'Dairy & Bakery': { bg: '#FFF8E1', text: '#F57F17', icon: 'nutrition-outline' },
-  'Grains & Dry Ration': { bg: '#EFEBE9', text: '#4E342E', icon: 'basket-outline' },
-  'Beverages & Drinks': { bg: '#E1F5FE', text: '#0277BD', icon: 'wine-outline' },
-  'Fuel & Charcoal': { bg: '#FBE9E7', text: '#D84315', icon: 'flame-outline' },
-  'Packaging & Disposables': { bg: '#F3E5F5', text: '#7B1FA2', icon: 'cube-outline' },
-  'Cleaning & Kitchen Supplies': { bg: '#E0F2F1', text: '#00695C', icon: 'sparkles-outline' },
-  'Equipment & Maintenance': { bg: '#ECEFF1', text: '#37474F', icon: 'construct-outline' },
-  'Other': { bg: '#F5F5F5', text: '#616161', icon: 'ellipsis-horizontal-circle-outline' },
+const CATEGORY_THEMES: Record<
+  SupplierCategory,
+  { accent: string; bg: string; text: string; icon: keyof typeof Ionicons.glyphMap; urdu: string }
+> = {
+  'Meat & Poultry': { accent: '#DC2626', bg: '#FEE2E2', text: '#991B1B', icon: 'restaurant', urdu: 'گوشت و چکن' },
+  'Fresh Produce': { accent: '#16A34A', bg: '#DCFCE7', text: '#166534', icon: 'leaf', urdu: 'سبزی و فروٹ' },
+  'Dairy & Bakery': { accent: '#D97706', bg: '#FEF3C7', text: '#92400E', icon: 'nutrition', urdu: 'دودھ و بیکری' },
+  'Grains & Dry Ration': { accent: '#854D0E', bg: '#FEF08A', text: '#713F12', icon: 'basket', urdu: 'راشن و چاول' },
+  'Beverages & Drinks': { accent: '#0284C7', bg: '#E0F2FE', text: '#075985', icon: 'wine', urdu: 'کولڈ ڈرنکس' },
+  'Fuel & Charcoal': { accent: '#EA580C', bg: '#FFEDD5', text: '#9A3412', icon: 'flame', urdu: 'کوئلہ و گیس' },
+  'Packaging & Disposables': { accent: '#9333EA', bg: '#F3E8FF', text: '#6B21A8', icon: 'cube', urdu: 'ڈبے و پیکنگ' },
+  'Cleaning & Kitchen Supplies': { accent: '#0D9488', bg: '#CCFBF1', text: '#115E59', icon: 'sparkles', urdu: 'صفائی سامان' },
+  'Equipment & Maintenance': { accent: '#475569', bg: '#E2E8F0', text: '#334155', icon: 'construct', urdu: 'مشینیں و مرمت' },
+  'Other': { accent: '#64748B', bg: '#F1F5F9', text: '#1E293B', icon: 'ellipsis-horizontal-circle', urdu: 'متفرق' },
 };
 
 export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
@@ -67,7 +75,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const isMobile = width < 768;
 
   // Cloud & LAN Live Sync Status
-  const { isConnected, isConnecting, isOffline, lastSyncedAt, forceSyncNow } = useSyncStatus();
+  const { isConnected, lastSyncedAt, forceSyncNow } = useSyncStatus();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
 
   const handleManualSync = async () => {
@@ -80,59 +88,51 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     }
   };
 
-  // Store data
+  // Store data & actions
   const {
     suppliers,
     purchaseOrders,
     supplierPayments,
-    inventory,
     addSupplier,
     updateSupplier,
     deleteSupplier,
-    populateDefaultSuppliers,
     addPurchaseOrder,
-    receivePurchaseOrder,
-    deletePurchaseOrder,
     recordSupplierPayment,
-    deleteSupplierPayment,
   } = useOpsStore();
 
-  // Navigation tabs
-  const [activeTab, setActiveTab] = useState<'directory' | 'orders' | 'payments'>('directory');
-  const [selectedCategory, setSelectedCategory] = useState<string>('All');
+  // 🔀 TWO CONNECTED MASTER PAGES
+  // 1: 'suppliers_history' (وینڈرز اور ہسٹری)
+  // 2: 'ledger_payments' (کھاتہ اور ادائیگیاں)
+  const [activePage, setActivePage] = useState<'suppliers_history' | 'ledger_payments'>('suppliers_history');
+
+  // Currently focused supplier (connected across both pages)
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>(() => {
+    return suppliers.length > 0 ? suppliers[0].id : '';
+  });
+
+  // Effective selected supplier
+  const activeSupplier = useMemo(() => {
+    return suppliers.find((s) => s.id === selectedSupplierId) || suppliers[0] || null;
+  }, [suppliers, selectedSupplierId]);
+
+  // Page 1 Filters: Search & Category & Dues
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [filterBalance, setFilterBalance] = useState<'all' | 'due' | 'clear'>('all');
+
+  // Page 2 Filters: Ledger Dr/Cr filter
+  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'bills' | 'payments'>('all');
 
   // Modals state
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [showAdvancedSupplierFields, setShowAdvancedSupplierFields] = useState(false);
 
   const [isPOModalOpen, setIsPOModalOpen] = useState(false);
-  const [selectedSupplierForPO, setSelectedSupplierForPO] = useState<Supplier | null>(null);
+  const [targetSupplierForPO, setTargetSupplierForPO] = useState<Supplier | null>(null);
 
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [selectedSupplierForPayment, setSelectedSupplierForPayment] = useState<Supplier | null>(null);
-  const [selectedPOForPayment, setSelectedPOForPayment] = useState<PurchaseOrder | null>(null);
-
-  const [isLedgerModalOpen, setIsLedgerModalOpen] = useState(false);
-  const [ledgerSupplier, setLedgerSupplier] = useState<Supplier | null>(null);
-
-  // Additional feature modals & states
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [selectedPaymentForVoucher, setSelectedPaymentForVoucher] = useState<SupplierPayment | null>(null);
-
-  const [isPODetailsModalOpen, setIsPODetailsModalOpen] = useState(false);
-  const [selectedPOForDetails, setSelectedPOForDetails] = useState<PurchaseOrder | null>(null);
-
-  // Ledger filters
-  const [ledgerFilter, setLedgerFilter] = useState<'all' | 'bills' | 'payments'>('all');
-  const [ledgerSearch, setLedgerSearch] = useState('');
-  const [ledgerSortAsc, setLedgerSortAsc] = useState(false);
-
-  // Payment tab filters
-  const [paymentSearch, setPaymentSearch] = useState('');
-  const [paymentMethodFilter, setPaymentMethodFilter] = useState<'all' | 'cash' | 'online' | 'cheque'>('all');
-  const [paymentSupplierFilter, setPaymentSupplierFilter] = useState<string>('all');
 
   // Form State: Supplier Modal
   const [supplierForm, setSupplierForm] = useState({
@@ -140,9 +140,6 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     category: 'Meat & Poultry' as SupplierCategory,
     contactPerson: '',
     phone: '',
-    whatsapp: '',
-    email: '',
-    address: '',
     city: 'Lahore',
     paymentTerms: 'Credit 15 Days',
     bankName: '',
@@ -158,95 +155,44 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const [poForm, setPOForm] = useState({
     supplierId: '',
     invoiceNo: '',
-    paymentStatus: 'unpaid' as 'unpaid' | 'partial' | 'paid',
-    paymentMethod: 'cash' as 'cash' | 'online' | 'cheque',
     amountPaid: '0',
-    discount: '0',
-    freight: '0',
-    receivedBy: 'Admin',
     notes: '',
-    autoReceive: true,
-    autoExpense: true,
   });
   const [poItems, setPOItems] = useState<PurchaseOrderItem[]>([
-    { name: '', category: 'Meat', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 0, totalCost: 0 },
+    { name: '', category: 'Meat', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 500, totalCost: 5000 },
   ]);
 
-  // Form State: Payment Modal (Full Details)
-  const [paymentForm, setPaymentForm] = useState({
-    supplierId: '',
-    purchaseOrderId: '',
-    amount: '',
-    method: 'cash' as 'cash' | 'online' | 'cheque',
-    bankName: '',
-    sourceAccount: 'Main Cash Drawer',
-    reference: '',
-    chequeNumber: '',
-    chequeDate: '',
-    paidBy: 'Admin',
-    receivedByContact: '',
-    notes: '',
-    autoExpense: true,
-  });
+  // Inline Payment Form State on Page 2
+  const [payAmount, setPayAmount] = useState('');
+  const [payMethod, setPayMethod] = useState<'cash' | 'online' | 'cheque'>('cash');
+  const [payBankName, setPayBankName] = useState('');
+  const [payReference, setPayReference] = useState('');
+  const [payNotes, setPayNotes] = useState('');
 
   // ----------------------------------------------------
   // Derived KPIs
   // ----------------------------------------------------
-  const totalSuppliers = suppliers.length;
   const totalPayableDue = useMemo(
     () => suppliers.reduce((sum, s) => sum + (s.currentBalance || 0), 0),
+    [suppliers]
+  );
+  const suppliersWithDuesCount = useMemo(
+    () => suppliers.filter((s) => (s.currentBalance || 0) > 0).length,
     [suppliers]
   );
   const totalPurchasesVolume = useMemo(
     () => suppliers.reduce((sum, s) => sum + (s.totalPurchases || 0), 0),
     [suppliers]
   );
-  const pendingDeliveriesCount = useMemo(
-    () => purchaseOrders.filter((po) => po.status === 'ordered').length,
-    [purchaseOrders]
-  );
-
-  const totalPaymentsDisbursed = useMemo(
-    () => supplierPayments.reduce((sum, p) => sum + (p.amount || 0), 0),
-    [supplierPayments]
-  );
-  const cashPaymentsTotal = useMemo(
-    () => supplierPayments.filter((p) => p.method === 'cash').reduce((sum, p) => sum + (p.amount || 0), 0),
-    [supplierPayments]
-  );
-  const onlinePaymentsTotal = useMemo(
-    () => supplierPayments.filter((p) => p.method === 'online').reduce((sum, p) => sum + (p.amount || 0), 0),
-    [supplierPayments]
-  );
-
-  const filteredPayments = useMemo(() => {
-    return supplierPayments.filter((p) => {
-      if (paymentMethodFilter !== 'all' && p.method !== paymentMethodFilter) return false;
-      if (paymentSupplierFilter !== 'all' && p.supplierId !== paymentSupplierFilter) return false;
-      if (paymentSearch.trim()) {
-        const q = paymentSearch.toLowerCase();
-        const mSup = p.supplierName.toLowerCase().includes(q);
-        const mRef = p.reference?.toLowerCase().includes(q);
-        const mNote = p.notes?.toLowerCase().includes(q);
-        const mBank = p.bankName?.toLowerCase().includes(q);
-        const mId = p.id.toLowerCase().includes(q);
-        if (!mSup && !mRef && !mNote && !mBank && !mId) return false;
-      }
-      return true;
-    });
-  }, [supplierPayments, paymentMethodFilter, paymentSupplierFilter, paymentSearch]);
 
   // ----------------------------------------------------
-  // Filtered Suppliers
+  // Filtered Suppliers for Page 1
   // ----------------------------------------------------
   const filteredSuppliers = useMemo(() => {
     return suppliers.filter((s) => {
-      // Category filter
       if (selectedCategory !== 'All' && s.category !== selectedCategory) return false;
-      // Balance filter
       if (filterBalance === 'due' && (s.currentBalance || 0) <= 0) return false;
       if (filterBalance === 'clear' && (s.currentBalance || 0) > 0) return false;
-      // Search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = s.name.toLowerCase().includes(q);
@@ -260,37 +206,117 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     });
   }, [suppliers, selectedCategory, filterBalance, searchQuery]);
 
-  // Pagination for Suppliers Directory
-  const suppliersPagination = usePagination({
-    data: filteredSuppliers,
-    initialPageSize: 10,
-  });
+  // Pagination for Page 1 Supplier Cards
+  const suppliersPagination = usePagination({ data: filteredSuppliers, initialPageSize: 6 });
 
-  // Pagination for Payments Ledger
-  const paymentsPagination = usePagination({
-    data: filteredPayments,
-    initialPageSize: 10,
-  });
+  // History / Invoices belonging to the currently active supplier
+  const activeSupplierPOs = useMemo(() => {
+    if (!activeSupplier) return [];
+    return purchaseOrders.filter((po) => po.supplierId === activeSupplier.id);
+  }, [purchaseOrders, activeSupplier]);
 
-  // Pagination for Purchase Orders
-  const poPagination = usePagination({
-    data: purchaseOrders,
-    initialPageSize: 10,
-  });
+  // Payments belonging to the currently active supplier
+  const activeSupplierPayments = useMemo(() => {
+    if (!activeSupplier) return [];
+    return supplierPayments.filter((p) => p.supplierId === activeSupplier.id);
+  }, [supplierPayments, activeSupplier]);
 
   // ----------------------------------------------------
-  // Handlers
+  // Ledger Statement Computation for Page 2
   // ----------------------------------------------------
+  type LedgerEntry = {
+    id: string;
+    date: number;
+    type: 'bill' | 'payment';
+    docNumber: string;
+    invoiceNo?: string;
+    title: string;
+    subtitle: string;
+    debit: number;
+    credit: number;
+    runningBalance: number;
+  };
+
+  const activeSupplierLedger = useMemo<LedgerEntry[]>(() => {
+    if (!activeSupplier) return [];
+    const sPOs = purchaseOrders.filter((po) => po.supplierId === activeSupplier.id);
+    const sPays = supplierPayments.filter((p) => p.supplierId === activeSupplier.id);
+
+    const rawList: { date: number; type: 'bill' | 'payment'; po?: PurchaseOrder; payment?: SupplierPayment }[] = [];
+
+    sPOs.forEach((po) => {
+      rawList.push({ date: po.orderDate || po.createdAt, type: 'bill', po });
+    });
+
+    sPays.forEach((pay) => {
+      rawList.push({ date: pay.paidAt, type: 'payment', payment: pay });
+    });
+
+    rawList.sort((a, b) => a.date - b.date);
+
+    let currentRunBal = 0;
+    const computed: LedgerEntry[] = [];
+
+    rawList.forEach((item, index) => {
+      if (item.type === 'bill' && item.po) {
+        const po = item.po;
+        currentRunBal += po.totalAmount;
+        const itemsSummary = po.items.map((i) => `${i.name} (${i.qtyReceived || i.qtyOrdered} ${i.unit})`).join(', ');
+
+        computed.push({
+          id: `ledger-po-${po.id}-${index}`,
+          date: item.date,
+          type: 'bill',
+          docNumber: po.poNumber,
+          invoiceNo: po.invoiceNo,
+          title: 'خریداری بل (Procurement Bill)',
+          subtitle: itemsSummary || 'خام مال موصول ہوا',
+          debit: po.totalAmount,
+          credit: 0,
+          runningBalance: currentRunBal,
+        });
+      } else if (item.type === 'payment' && item.payment) {
+        const pay = item.payment;
+        currentRunBal = Math.max(0, currentRunBal - pay.amount);
+        const details = [pay.method.toUpperCase(), pay.bankName, pay.reference ? `Ref: ${pay.reference}` : null]
+          .filter(Boolean)
+          .join(' • ');
+
+        computed.push({
+          id: `ledger-pay-${pay.id}-${index}`,
+          date: item.date,
+          type: 'payment',
+          docNumber: `VCH-${pay.id.slice(-6).toUpperCase()}`,
+          title: 'ادائیگی واؤچر (Payment Settled)',
+          subtitle: `${details}${pay.notes ? ` • Note: ${pay.notes}` : ''}`,
+          debit: 0,
+          credit: pay.amount,
+          runningBalance: currentRunBal,
+        });
+      }
+    });
+
+    return computed;
+  }, [activeSupplier, purchaseOrders, supplierPayments]);
+
+  // ----------------------------------------------------
+  // Action Handlers
+  // ----------------------------------------------------
+  // Jump from Page 1 to Page 2 directly connected with chosen supplier
+  const handleJumpToLedgerAndPay = (supplier: Supplier) => {
+    setSelectedSupplierId(supplier.id);
+    setPayAmount(supplier.currentBalance > 0 ? String(supplier.currentBalance) : '');
+    setActivePage('ledger_payments');
+  };
+
   const handleOpenAddSupplier = () => {
     setEditingSupplier(null);
+    setShowAdvancedSupplierFields(false);
     setSupplierForm({
       name: '',
       category: 'Meat & Poultry',
       contactPerson: '',
       phone: '',
-      whatsapp: '',
-      email: '',
-      address: '',
       city: 'Lahore',
       paymentTerms: 'Credit 15 Days',
       bankName: '',
@@ -306,14 +332,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   const handleOpenEditSupplier = (s: Supplier) => {
     setEditingSupplier(s);
+    setShowAdvancedSupplierFields(Boolean(s.bankDetails?.accountNumber || s.notes));
     setSupplierForm({
       name: s.name,
       category: s.category,
       contactPerson: s.contactPerson || '',
       phone: s.phone || '',
-      whatsapp: s.whatsapp || s.phone || '',
-      email: s.email || '',
-      address: s.address || '',
       city: s.city || 'Lahore',
       paymentTerms: s.paymentTerms || 'Credit 15 Days',
       bankName: s.bankDetails?.bankName || '',
@@ -329,11 +353,11 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   const handleSaveSupplier = () => {
     if (!supplierForm.name.trim()) {
-      showAlert('Required', 'Please enter supplier or company name.');
+      showAlert('وینڈر کا نام درکار ہے', 'براہ کرم سپلائر کا نام درج کریں۔');
       return;
     }
     if (!supplierForm.phone.trim()) {
-      showAlert('Required', 'Please provide a contact phone number.');
+      showAlert('فون نمبر درکار ہے', 'براہ کرم رابطہ فون نمبر درج کریں۔');
       return;
     }
 
@@ -357,9 +381,6 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         category: supplierForm.category,
         contactPerson: supplierForm.contactPerson.trim(),
         phone: supplierForm.phone.trim(),
-        whatsapp: supplierForm.whatsapp.trim() || supplierForm.phone.trim(),
-        email: supplierForm.email.trim(),
-        address: supplierForm.address.trim(),
         city: supplierForm.city.trim(),
         paymentTerms: supplierForm.paymentTerms.trim(),
         bankDetails,
@@ -368,16 +389,13 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         notes: supplierForm.notes.trim(),
       });
       broadcastImmediately();
-      showAlert('Success', 'Supplier details updated successfully.');
+      showAlert('کامیاب', 'وینڈر کی معلومات اپڈیٹ ہو گئیں۔');
     } else {
       addSupplier({
         name: supplierForm.name.trim(),
         category: supplierForm.category,
         contactPerson: supplierForm.contactPerson.trim(),
         phone: supplierForm.phone.trim(),
-        whatsapp: supplierForm.whatsapp.trim() || supplierForm.phone.trim(),
-        email: supplierForm.email.trim(),
-        address: supplierForm.address.trim(),
         city: supplierForm.city.trim(),
         paymentTerms: supplierForm.paymentTerms.trim(),
         bankDetails,
@@ -389,7 +407,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         notes: supplierForm.notes.trim(),
       });
       broadcastImmediately();
-      showAlert('Success', 'New supplier profile created.');
+      showAlert('کامیاب', 'نیا وینڈر شامل ہو گیا۔');
     }
 
     setIsSupplierModalOpen(false);
@@ -397,8 +415,8 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   const handleDeleteSupplier = (s: Supplier) => {
     confirmAction(
-      'Delete Supplier',
-      `Are you sure you want to remove "${s.name}" from your suppliers directory?`,
+      'وینڈر حذف کریں (Delete Supplier)',
+      `کیا آپ واقعی وینڈر "${s.name}" کو حذف کرنا چاہتے ہیں؟`,
       () => {
         deleteSupplier(s.id);
         broadcastImmediately();
@@ -406,107 +424,49 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     );
   };
 
-  const handleResetDefaults = () => {
-    confirmAction(
-      'Reset Sultan Default Vendors',
-      'This will restore standard pre-configured Sultan Restaurant suppliers (Poultry, Meat, Fresh Produce, Spices, Dairy, LPG, Packaging). Continue?',
-      () => {
-        populateDefaultSuppliers();
-        broadcastImmediately();
-        showAlert('Restored', 'Default Sultan Restaurant vendors restored.');
-      }
-    );
-  };
-
-  // ----------------------------------------------------
-  // PO Handlers
-  // ----------------------------------------------------
+  // PO Creation
   const handleOpenNewPO = (supplier?: Supplier) => {
-    const sup = supplier || suppliers[0];
-    setSelectedSupplierForPO(sup || null);
-
-    const initialItems: PurchaseOrderItem[] = sup?.suppliedItems?.length
-      ? sup.suppliedItems.slice(0, 2).map((name) => ({
+    const target = supplier || activeSupplier || suppliers[0];
+    if (!target) {
+      showAlert('کوئی وینڈر نہیں', 'پہلے کم از کم ایک وینڈر شامل کریں۔');
+      return;
+    }
+    setTargetSupplierForPO(target);
+    const initialItems: PurchaseOrderItem[] = target.suppliedItems?.length
+      ? target.suppliedItems.slice(0, 2).map((name) => ({
           name,
-          category: sup.category,
+          category: target.category,
           unit: 'kg',
           qtyOrdered: 10,
           qtyReceived: 10,
           unitCost: 500,
           totalCost: 5000,
         }))
-      : [{ name: '', category: 'Meat', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 0, totalCost: 0 }];
+      : [{ name: '', category: 'Meat', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 500, totalCost: 5000 }];
 
+    // eslint-disable-next-line react-hooks/purity
+    const randomInv = Math.floor(1000 + Math.random() * 9000);
     setPOForm({
-      supplierId: sup ? sup.id : '',
-      invoiceNo: `INV-${Math.floor(1000 + Math.random() * 9000)}`,
-      paymentStatus: 'unpaid',
-      paymentMethod: 'cash',
+      supplierId: target.id,
+      invoiceNo: `INV-${randomInv}`,
       amountPaid: '0',
-      discount: '0',
-      freight: '0',
-      receivedBy: 'Admin',
       notes: '',
-      autoReceive: true,
-      autoExpense: true,
     });
     setPOItems(initialItems);
     setIsPOModalOpen(true);
   };
 
-  const handleAddPOItem = () => {
-    setPOItems([
-      ...poItems,
-      { name: '', category: 'General', unit: 'kg', qtyOrdered: 1, qtyReceived: 1, unitCost: 0, totalCost: 0 },
-    ]);
-  };
-
-  const handleUpdatePOItem = (index: number, field: keyof PurchaseOrderItem, val: any) => {
-    const updated = [...poItems];
-    const item = { ...updated[index], [field]: val };
-
-    if (field === 'qtyOrdered' || field === 'unitCost') {
-      const q = parseFloat(String(item.qtyOrdered)) || 0;
-      const c = parseFloat(String(item.unitCost)) || 0;
-      item.totalCost = q * c;
-      if (item.qtyReceived === undefined || item.qtyReceived === 0) {
-        item.qtyReceived = q;
-      }
-    }
-
-    updated[index] = item;
-    setPOItems(updated);
-  };
-
-  const handleRemovePOItem = (index: number) => {
-    if (poItems.length <= 1) return;
-    setPOItems(poItems.filter((_, i) => i !== index));
-  };
-
-  const calculatePOTotals = () => {
-    const subtotal = poItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
-    const discount = parseFloat(poForm.discount) || 0;
-    const freight = parseFloat(poForm.freight) || 0;
-    const totalAmount = Math.max(0, subtotal - discount + freight);
-    const amountPaid = parseFloat(poForm.amountPaid) || 0;
-    const balanceDue = Math.max(0, totalAmount - amountPaid);
-    return { subtotal, discount, freight, totalAmount, amountPaid, balanceDue };
-  };
-
   const handleSavePO = () => {
-    const targetSupplier = suppliers.find((s) => s.id === poForm.supplierId) || selectedSupplierForPO;
-    if (!targetSupplier) {
-      showAlert('Required', 'Please select a supplier.');
-      return;
-    }
-
+    if (!targetSupplierForPO) return;
     const validItems = poItems.filter((i) => i.name.trim().length > 0);
     if (validItems.length === 0) {
-      showAlert('Required', 'Please add at least one item with name and quantity.');
+      showAlert('آئٹم درکار ہے', 'براہ کرم کم از کم ایک آئٹم درج کریں۔');
       return;
     }
 
-    const totals = calculatePOTotals();
+    const subtotal = validItems.reduce((sum, item) => sum + (item.totalCost || 0), 0);
+    const amountPaid = parseFloat(poForm.amountPaid) || 0;
+    const balanceDue = Math.max(0, subtotal - amountPaid);
     // eslint-disable-next-line react-hooks/purity
     const poNumber = `PO-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
     // eslint-disable-next-line react-hooks/purity
@@ -515,329 +475,118 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     addPurchaseOrder(
       {
         poNumber,
-        supplierId: targetSupplier.id,
-        supplierName: targetSupplier.name,
+        supplierId: targetSupplierForPO.id,
+        supplierName: targetSupplierForPO.name,
         invoiceNo: poForm.invoiceNo.trim(),
         orderDate: nowTs,
-        deliveryDate: poForm.autoReceive ? nowTs : undefined,
-        status: poForm.autoReceive ? 'received' : 'ordered',
-        paymentStatus: totals.balanceDue === 0 ? 'paid' : totals.amountPaid > 0 ? 'partial' : 'unpaid',
+        deliveryDate: nowTs,
+        status: 'received',
+        paymentStatus: balanceDue === 0 ? 'paid' : amountPaid > 0 ? 'partial' : 'unpaid',
         items: validItems,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
+        subtotal,
+        discount: 0,
         tax: 0,
-        freight: totals.freight,
-        totalAmount: totals.totalAmount,
-        amountPaid: totals.amountPaid,
-        balanceDue: totals.balanceDue,
-        paymentMethod: poForm.paymentMethod,
-        receivedBy: poForm.receivedBy.trim(),
+        freight: 0,
+        totalAmount: subtotal,
+        amountPaid,
+        balanceDue,
+        paymentMethod: 'cash',
+        receivedBy: 'Admin',
         notes: poForm.notes.trim(),
       },
       {
-        autoReceiveToInventory: poForm.autoReceive,
-        autoRecordExpense: poForm.autoExpense,
-        receivedBy: poForm.receivedBy.trim(),
+        autoReceiveToInventory: true,
+        autoRecordExpense: amountPaid > 0,
+        receivedBy: 'Admin',
       }
     );
 
     broadcastImmediately();
     setIsPOModalOpen(false);
-    showAlert('Success', `Purchase Order #${poNumber} recorded successfully.`);
+    showAlert('بل محفوظ ہو گیا', `خریداری بل #${poNumber} موصول اور اسٹاک میں شامل ہو گیا۔`);
   };
 
-  // ----------------------------------------------------
-  // Payment Handlers & Full Details Support
-  // ----------------------------------------------------
-  const handleOpenPaymentModal = (supplier: Supplier, po?: PurchaseOrder) => {
-    setSelectedSupplierForPayment(supplier);
-    setSelectedPOForPayment(po || null);
-    const suggestedAmount = po ? po.balanceDue : supplier.currentBalance || 0;
-
-    setPaymentForm({
-      supplierId: supplier.id,
-      purchaseOrderId: po?.id || '',
-      amount: String(suggestedAmount > 0 ? suggestedAmount : ''),
-      method: 'cash',
-      bankName: supplier.bankDetails?.bankName || '',
-      sourceAccount: 'Main Cash Drawer',
-      reference: '',
-      chequeNumber: '',
-      chequeDate: new Date().toISOString().slice(0, 10),
-      paidBy: 'Admin',
-      receivedByContact: supplier.contactPerson || '',
-      notes: po ? `Clearance for PO #${po.poNumber} (Bill #${po.invoiceNo || 'N/A'})` : `Vendor Account Settlement`,
-      autoExpense: true,
-    });
-    setIsPaymentModalOpen(true);
-  };
-
-  const handleQuickFillAmount = (val: number) => {
-    setPaymentForm((prev) => ({ ...prev, amount: String(Math.max(0, Math.round(val))) }));
-  };
-
-  const handleSavePayment = () => {
-    const targetSupplier =
-      suppliers.find((s) => s.id === paymentForm.supplierId) || selectedSupplierForPayment;
-    if (!targetSupplier) {
-      showAlert('Required', 'Please select a supplier.');
-      return;
-    }
-    const amount = parseFloat(paymentForm.amount) || 0;
+  // Direct Inline Payment on Page 2
+  const handleSaveInlinePayment = () => {
+    if (!activeSupplier) return;
+    const amount = parseFloat(payAmount) || 0;
     if (amount <= 0) {
-      showAlert('Invalid Amount', 'Please enter a valid payment amount greater than zero.');
+      showAlert('رقم غلط ہے', 'براہ کرم ادائیگی کی درست رقم درج کریں۔');
       return;
     }
 
     const newPaymentData = {
-      supplierId: targetSupplier.id,
-      supplierName: targetSupplier.name,
-      purchaseOrderId: paymentForm.purchaseOrderId || selectedPOForPayment?.id || undefined,
+      supplierId: activeSupplier.id,
+      supplierName: activeSupplier.name,
       amount,
-      method: paymentForm.method,
-      reference: paymentForm.reference.trim(),
-      notes: paymentForm.notes.trim(),
-      paidBy: paymentForm.paidBy.trim() || 'Admin',
-      bankName: paymentForm.bankName.trim() || undefined,
-      chequeNumber: paymentForm.method === 'cheque' ? paymentForm.chequeNumber.trim() : undefined,
-      chequeDate: paymentForm.method === 'cheque' ? paymentForm.chequeDate.trim() : undefined,
-      receivedByContact: paymentForm.receivedByContact.trim() || undefined,
-      sourceAccount: paymentForm.sourceAccount.trim() || undefined,
+      method: payMethod,
+      reference: payReference.trim(),
+      notes: payNotes.trim(),
+      paidBy: 'Admin',
+      bankName: payMethod === 'online' ? payBankName.trim() : undefined,
     };
 
-    recordSupplierPayment(newPaymentData, {
-      autoRecordExpense: paymentForm.autoExpense,
-    });
+    recordSupplierPayment(newPaymentData, { autoRecordExpense: true });
     broadcastImmediately();
 
-    setIsPaymentModalOpen(false);
-
-    // Create payment object for voucher preview
     const createdPayment: SupplierPayment = {
       ...newPaymentData,
+      // eslint-disable-next-line react-hooks/purity
       id: `spay-${Date.now().toString(36)}`,
+      // eslint-disable-next-line react-hooks/purity
       paidAt: Date.now(),
     };
     setSelectedPaymentForVoucher(createdPayment);
     setIsVoucherModalOpen(true);
 
-    showAlert('Payment Recorded', `Rs. ${amount.toLocaleString()} paid to ${targetSupplier.name}. Official voucher generated.`);
+    setPayAmount('');
+    setPayBankName('');
+    setPayReference('');
+    setPayNotes('');
+    showAlert('ادائیگی محفوظ ہو گئی', `Rs. ${amount.toLocaleString()} کی ادائیگی درج ہو گئی۔`);
   };
 
-  const handleDeletePayment = (payment: SupplierPayment) => {
-    confirmAction(
-      'Delete Payment Voucher',
-      `Are you sure you want to reverse payment of Rs. ${payment.amount.toLocaleString()} for ${payment.supplierName}?\n\nThis will restore the outstanding balance back to the supplier account.`,
-      () => {
-        deleteSupplierPayment(payment.id);
-        broadcastImmediately();
-        showAlert('Reversed', `Payment voucher deleted and Rs. ${payment.amount.toLocaleString()} restored to supplier balance.`);
+  // WhatsApp share of ledger
+  const handleShareLedgerWhatsApp = () => {
+    if (!activeSupplier) return;
+    const phone = (activeSupplier.whatsapp || activeSupplier.phone || '').replace(/[^0-9]/g, '');
+    let msg = `*سلطان ریسٹورنٹ اینڈ بار بی کیو (کھاتہ اسٹیٹمنٹ)*\n`;
+    msg += `--------------------------------------\n`;
+    msg += `وینڈر: *${activeSupplier.name}*\n`;
+    msg += `رابطہ: ${activeSupplier.contactPerson} (${activeSupplier.phone})\n`;
+    msg += `تاریخ: ${new Date().toLocaleDateString('ur-PK')}\n\n`;
+    msg += `📊 *مالی پوزیشن (Balance Status):*\n`;
+    msg += `• کل لائف ٹائم خریداری: Rs. ${(activeSupplier.totalPurchases || 0).toLocaleString()}\n`;
+    msg += `• *کل واجب الادا نیٹ بقایا: Rs. ${(activeSupplier.currentBalance || 0).toLocaleString()}*\n`;
+    msg += `--------------------------------------\n`;
+    msg += `📜 *حالیہ ٹرانزیکشنز:*\n`;
+
+    activeSupplierLedger.slice(-5).forEach((e) => {
+      const d = new Date(e.date).toLocaleDateString();
+      if (e.type === 'bill') {
+        msg += `• [${d}] بل #${e.docNumber}: +Rs. ${e.debit.toLocaleString()}\n`;
+      } else {
+        msg += `• [${d}] ادائیگی #${e.docNumber}: -Rs. ${e.credit.toLocaleString()}\n`;
       }
-    );
+    });
+
+    msg += `\nشکریہ! برائے تصدیق سلطان ریسٹورنٹ مینجمنٹ سے رابطہ کریں۔`;
+
+    if (phone) {
+      Linking.openURL(`https://wa.me/${phone}?text=${encodeURIComponent(msg)}`);
+    } else {
+      copyToClipboard(msg, 'کھاتہ کاپی ہو گیا');
+    }
   };
 
-  const handleOpenVoucherModal = (payment: SupplierPayment) => {
-    setSelectedPaymentForVoucher(payment);
-    setIsVoucherModalOpen(true);
-  };
-
-  const handleOpenPODetails = (po: PurchaseOrder) => {
-    setSelectedPOForDetails(po);
-    setIsPODetailsModalOpen(true);
-  };
-
-  // Clipboard copy helper
-  const copyToClipboard = (text: string, title: string = 'Copied') => {
+  const copyToClipboard = (text: string, title = 'کاپی ہو گیا') => {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(text).then(() => {
-        showAlert(title, 'Text copied to clipboard successfully!');
-      }).catch(() => {
-        showAlert(title, text);
-      });
+      navigator.clipboard.writeText(text).then(() => showAlert(title, 'متن کامیابی سے کاپی ہو گیا۔'));
     } else {
       showAlert(title, text);
     }
   };
 
-  // ----------------------------------------------------
-  // Ledger Statement Computation & Share
-  // ----------------------------------------------------
-  type LedgerEntry = {
-    id: string;
-    date: number;
-    type: 'bill' | 'payment';
-    docNumber: string;
-    invoiceNo?: string;
-    title: string;
-    subtitle: string;
-    debit: number;
-    credit: number;
-    runningBalance: number;
-    po?: PurchaseOrder;
-    payment?: SupplierPayment;
-  };
-
-  const getSupplierLedgerEntries = (supplierId: string): LedgerEntry[] => {
-    const sPOs = purchaseOrders.filter((po) => po.supplierId === supplierId);
-    const sPays = supplierPayments.filter((p) => p.supplierId === supplierId);
-
-    const rawList: { date: number; type: 'bill' | 'payment'; po?: PurchaseOrder; payment?: SupplierPayment }[] = [];
-
-    sPOs.forEach((po) => {
-      rawList.push({ date: po.orderDate || po.createdAt, type: 'bill', po });
-    });
-
-    sPays.forEach((pay) => {
-      rawList.push({ date: pay.paidAt, type: 'payment', payment: pay });
-    });
-
-    rawList.sort((a, b) => a.date - b.date);
-
-    let currentRunBal = 0;
-    const computedEntries: LedgerEntry[] = [];
-
-    rawList.forEach((item, index) => {
-      if (item.type === 'bill' && item.po) {
-        const po = item.po;
-        const debit = po.totalAmount;
-        currentRunBal += debit;
-
-        const itemsSummary = po.items.map((i) => `${i.name} (${i.qtyReceived || i.qtyOrdered} ${i.unit})`).join(', ');
-
-        computedEntries.push({
-          id: `ledger-po-${po.id}-${index}`,
-          date: item.date,
-          type: 'bill',
-          docNumber: po.poNumber,
-          invoiceNo: po.invoiceNo,
-          title: `Purchase Bill / Inward Delivery`,
-          subtitle: itemsSummary || 'Procurement supplies received',
-          debit,
-          credit: 0,
-          runningBalance: currentRunBal,
-          po,
-        });
-      } else if (item.type === 'payment' && item.payment) {
-        const pay = item.payment;
-        const credit = pay.amount;
-        currentRunBal = Math.max(0, currentRunBal - credit);
-
-        const methodDetails = [
-          pay.method.toUpperCase(),
-          pay.bankName || pay.sourceAccount,
-          pay.reference ? `Ref: ${pay.reference}` : null,
-        ].filter(Boolean).join(' • ');
-
-        computedEntries.push({
-          id: `ledger-pay-${pay.id}-${index}`,
-          date: item.date,
-          type: 'payment',
-          docNumber: `VCH-${pay.id.slice(-6).toUpperCase()}`,
-          title: `Payment Cleared / Settlement`,
-          subtitle: `${methodDetails}${pay.notes ? ` • Note: ${pay.notes}` : ''}`,
-          debit: 0,
-          credit,
-          runningBalance: currentRunBal,
-          payment: pay,
-        });
-      }
-    });
-
-    return computedEntries;
-  };
-
-  const handleShareLedger = (supplier: Supplier, entries: LedgerEntry[]) => {
-    const totalBilled = entries.filter((e) => e.type === 'bill').reduce((sum, e) => sum + e.debit, 0);
-    const totalPaid = entries.filter((e) => e.type === 'payment').reduce((sum, e) => sum + e.credit, 0);
-    const curBal = supplier.currentBalance || 0;
-
-    let text = `==============================\n`;
-    text += `🏛️ SULTAN RESTAURANT & BBQ\n`;
-    text += `VENDOR ACCOUNT STATEMENT\n`;
-    text += `==============================\n`;
-    text += `Supplier: ${supplier.name}\n`;
-    text += `Category: ${supplier.category}\n`;
-    text += `Contact: ${supplier.contactPerson} (${supplier.phone})\n`;
-    text += `Date: ${new Date().toLocaleDateString()}\n\n`;
-    text += `📊 FINANCIAL SUMMARY:\n`;
-    text += `• Total Bills (Dr): Rs. ${totalBilled.toLocaleString()}\n`;
-    text += `• Total Payments (Cr): Rs. ${totalPaid.toLocaleString()}\n`;
-    text += `• NET OUTSTANDING DUE: Rs. ${curBal.toLocaleString()}\n`;
-    text += `------------------------------\n`;
-    text += `📜 RECENT TRANSACTIONS:\n`;
-
-    const recent = entries.slice(-10);
-    recent.forEach((e) => {
-      const dStr = new Date(e.date).toLocaleDateString();
-      if (e.type === 'bill') {
-        text += `• [${dStr}] BILL ${e.docNumber}: +Rs. ${e.debit.toLocaleString()} (Bal: Rs. ${e.runningBalance.toLocaleString()})\n`;
-      } else {
-        text += `• [${dStr}] PAID ${e.docNumber}: -Rs. ${e.credit.toLocaleString()} (Bal: Rs. ${e.runningBalance.toLocaleString()})\n`;
-      }
-    });
-
-    if (supplier.bankDetails?.accountNumber) {
-      text += `------------------------------\n`;
-      text += `🏦 BANK DETAILS:\n`;
-      text += `Bank: ${supplier.bankDetails.bankName}\n`;
-      text += `A/C Title: ${supplier.bankDetails.accountTitle}\n`;
-      text += `A/C No: ${supplier.bankDetails.accountNumber}\n`;
-      if (supplier.bankDetails.iban) text += `IBAN: ${supplier.bankDetails.iban}\n`;
-    }
-    text += `==============================\n`;
-
-    copyToClipboard(text, 'Ledger Statement');
-  };
-
-  const handleSharePaymentVoucher = (pay: SupplierPayment) => {
-    let text = `==============================\n`;
-    text += `🏛️ SULTAN RESTAURANT & BBQ\n`;
-    text += `OFFICIAL PAYMENT SETTLEMENT VOUCHER\n`;
-    text += `==============================\n`;
-    text += `Voucher #: VCH-${pay.id.toUpperCase()}\n`;
-    text += `Date: ${new Date(pay.paidAt).toLocaleString()}\n`;
-    text += `Payee: ${pay.supplierName}\n`;
-    text += `AMOUNT PAID: Rs. ${pay.amount.toLocaleString()}\n`;
-    text += `Method: ${pay.method.toUpperCase()}\n`;
-    if (pay.bankName) text += `Bank: ${pay.bankName}\n`;
-    if (pay.sourceAccount) text += `Source: ${pay.sourceAccount}\n`;
-    if (pay.reference) text += `Reference / Trx ID: ${pay.reference}\n`;
-    if (pay.chequeNumber) text += `Cheque #: ${pay.chequeNumber} (Date: ${pay.chequeDate || 'N/A'})\n`;
-    if (pay.purchaseOrderId) text += `Linked PO: #${pay.purchaseOrderId}\n`;
-    text += `Paid By: ${pay.paidBy || 'Admin'}\n`;
-    if (pay.receivedByContact) text += `Received By: ${pay.receivedByContact}\n`;
-    if (pay.notes) text += `Notes: ${pay.notes}\n`;
-    text += `Status: CLEARED & VERIFIED\n`;
-    text += `==============================\n`;
-
-    copyToClipboard(text, 'Payment Voucher Slip');
-  };
-
-  // ----------------------------------------------------
-  // Communication Helpers
-  // ----------------------------------------------------
-  const handleCall = (phone: string) => {
-    const clean = phone.replace(/[^0-9+]/g, '');
-    if (clean) Linking.openURL(`tel:${clean}`);
-  };
-
-  const handleWhatsApp = (supplier: Supplier) => {
-    const phone = (supplier.whatsapp || supplier.phone || '').replace(/[^0-9]/g, '');
-    if (!phone) return;
-
-    const itemsText = supplier.suppliedItems?.slice(0, 4).join(', ') || 'supplies';
-    const message = encodeURIComponent(
-      `Assalam-o-Alaikum ${supplier.contactPerson || supplier.name},\nThis is Sultan Restaurant management. We would like to place an order for: ${itemsText}.\nPlease confirm current stock and dispatch time.`
-    );
-    Linking.openURL(`https://wa.me/${phone}?text=${message}`);
-  };
-
-  const handleOpenLedger = (s: Supplier) => {
-    setLedgerSupplier(s);
-    setIsLedgerModalOpen(true);
-  };
-
-  // Utilities
   const showAlert = (title: string, msg: string) => {
     if (Platform.OS === 'web') window.alert(`${title}: ${msg}`);
     else Alert.alert(title, msg);
@@ -854,188 +603,107 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     }
   };
 
+  // ----------------------------------------------------
+  // RENDER UI
+  // ----------------------------------------------------
   return (
     <View style={styles.container}>
-      {/* Top Header */}
-      <View style={[styles.header, isMobile && { paddingHorizontal: 12, paddingVertical: 10, gap: 10 }]}>
-        <View style={[styles.headerLeft, isMobile && { width: '100%' }]}>
+      {/* 👑 TOP HEADER */}
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
           >
             <Ionicons name="arrow-back" size={20} color={BRAND.burgundy} />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={[styles.headerTitle, isMobile && { fontSize: 17 }]}>Sultan Vendor Hub</Text>
-              <View style={styles.headerUrduBadge}>
-                <Text style={styles.headerUrduText}>وینڈرز ہب</Text>
-              </View>
-              <View style={styles.badgePill}>
-                <Text style={styles.badgePillText}>RAW MATERIALS</Text>
+          <View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.headerTitle}>Sultan Vendor Hub</Text>
+              <View style={styles.urduBadge}>
+                <Text style={styles.urduBadgeText}>وینڈرز پورٹل</Text>
               </View>
             </View>
-            <Text style={[styles.headerSubtitle, isMobile && { fontSize: 11 }]} numberOfLines={1}>
-              Procurement, Purchase Invoices, Vendor Ledgers & Dues
-            </Text>
+            <Text style={styles.headerSubtitle}>خام مال سپلائرز، انوائس ہسٹری، کھاتہ اور ادائیگیاں</Text>
           </View>
         </View>
 
-        {isMobile ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 2 }}
-          >
-            {/* Live Cloud / LAN Sync Indicator */}
-            <View style={styles.syncStatusGroup}>
-              <View
-                style={[
-                  styles.syncStatusPill,
-                  isConnected
-                    ? styles.syncStatusPillConnected
-                    : isOffline
-                    ? styles.syncStatusPillOffline
-                    : styles.syncStatusPillConnecting,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.syncStatusDot,
-                    isConnected
-                      ? styles.syncStatusDotConnected
-                      : isOffline
-                      ? styles.syncStatusDotOffline
-                      : styles.syncStatusDotConnecting,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.syncStatusText,
-                    isConnected
-                      ? styles.syncStatusTextConnected
-                      : isOffline
-                      ? styles.syncStatusTextOffline
-                      : styles.syncStatusTextConnecting,
-                  ]}
-                >
-                  {isConnected
-                    ? `Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
-                    : isOffline
-                    ? 'Offline'
-                    : 'Syncing...'}
-                </Text>
-              </View>
+        {/* Sync & Quick Add Supplier */}
+        <View style={styles.headerRight}>
+          <TouchableOpacity style={styles.syncPill} onPress={handleManualSync} disabled={isManualSyncing}>
+            <View style={[styles.syncDot, isConnected ? styles.syncDotOnline : styles.syncDotOffline]} />
+            <Text style={styles.syncText}>
+              {isConnected ? `آن لائن${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}` : 'آف لائن'}
+            </Text>
+            <Ionicons name="sync" size={13} color={BRAND.burgundy} />
+          </TouchableOpacity>
 
-              <TouchableOpacity
-                style={styles.syncManualBtn}
-                onPress={handleManualSync}
-                disabled={isManualSyncing}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name="sync"
-                  size={14}
-                  color={BRAND.burgundy}
-                  style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
-                />
-                <Text style={styles.syncManualBtnText}>
-                  {isManualSyncing ? '...' : 'Sync'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+          <TouchableOpacity style={styles.actionBtn} onPress={handleOpenAddSupplier}>
+            <Ionicons name="person-add" size={16} color="#FFFFFF" />
+            <Text style={styles.actionBtnText}>+ نیا وینڈر</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
 
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
-              <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
-              <Text style={styles.secondaryBtnText}>Reset</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
-              <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.primaryBtnText}>+ PO</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
-              <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        ) : (
-          <View style={styles.headerRight}>
-            {/* Live Cloud / LAN Sync Indicator */}
-            <View style={styles.syncStatusGroup}>
-              <View
-                style={[
-                  styles.syncStatusPill,
-                  isConnected
-                    ? styles.syncStatusPillConnected
-                    : isOffline
-                    ? styles.syncStatusPillOffline
-                    : styles.syncStatusPillConnecting,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.syncStatusDot,
-                    isConnected
-                      ? styles.syncStatusDotConnected
-                      : isOffline
-                      ? styles.syncStatusDotOffline
-                      : styles.syncStatusDotConnecting,
-                  ]}
-                />
-                <Text
-                  style={[
-                    styles.syncStatusText,
-                    isConnected
-                      ? styles.syncStatusTextConnected
-                      : isOffline
-                      ? styles.syncStatusTextOffline
-                      : styles.syncStatusTextConnecting,
-                  ]}
-                >
-                  {isConnected
-                    ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
-                    : isOffline
-                    ? 'Offline (Local)'
-                    : 'Syncing Hub...'}
-                </Text>
-              </View>
-
-              <TouchableOpacity
-                style={styles.syncManualBtn}
-                onPress={handleManualSync}
-                disabled={isManualSyncing}
-                activeOpacity={0.75}
-              >
-                <Ionicons
-                  name="sync"
-                  size={14}
-                  color={BRAND.burgundy}
-                  style={isManualSyncing ? { transform: [{ rotate: '45deg' }] } : {}}
-                />
-                <Text style={styles.syncManualBtnText}>
-                  {isManualSyncing ? 'Syncing...' : 'Sync Now'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handleResetDefaults}>
-              <Ionicons name="refresh-outline" size={16} color={BRAND.burgundy} style={{ marginRight: 6 }} />
-              <Text style={styles.secondaryBtnText}>Reset Vendors</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark }]} onPress={() => handleOpenNewPO()}>
-              <Ionicons name="cart-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.primaryBtnText}>+ New PO (Bill)</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.primaryBtn} onPress={handleOpenAddSupplier}>
-              <Ionicons name="person-add-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.primaryBtnText}>+ Add Supplier</Text>
-            </TouchableOpacity>
+      {/* 🔀 TWO-PAGE CONNECTED NAVIGATION SWITCHER */}
+      <View style={styles.pageSwitcherBar}>
+        <TouchableOpacity
+          style={[styles.switcherBtn, activePage === 'suppliers_history' && styles.switcherBtnActive]}
+          onPress={() => setActivePage('suppliers_history')}
+        >
+          <Ionicons
+            name="people"
+            size={18}
+            color={activePage === 'suppliers_history' ? '#FFFFFF' : BRAND.burgundy}
+          />
+          <View style={{ alignItems: 'flex-start' }}>
+            <Text
+              style={[
+                styles.switcherBtnTitle,
+                activePage === 'suppliers_history' && styles.switcherBtnTitleActive,
+              ]}
+            >
+              1. وینڈرز لسٹ اور ہسٹری
+            </Text>
+            <Text
+              style={[
+                styles.switcherBtnSub,
+                activePage === 'suppliers_history' && styles.switcherBtnSubActive,
+              ]}
+            >
+              سپلائرز، پروفائلز اور سابقہ خریداری بلز ({suppliers.length})
+            </Text>
           </View>
-        )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.switcherBtn, activePage === 'ledger_payments' && styles.switcherBtnActive]}
+          onPress={() => setActivePage('ledger_payments')}
+        >
+          <Ionicons
+            name="newspaper"
+            size={18}
+            color={activePage === 'ledger_payments' ? '#FFFFFF' : BRAND.burgundy}
+          />
+          <View style={{ alignItems: 'flex-start' }}>
+            <Text
+              style={[
+                styles.switcherBtnTitle,
+                activePage === 'ledger_payments' && styles.switcherBtnTitleActive,
+              ]}
+            >
+              2. کھاتہ اور ادائیگیاں (Ledger & Pay)
+            </Text>
+            <Text
+              style={[
+                styles.switcherBtnSub,
+                activePage === 'ledger_payments' && styles.switcherBtnSubActive,
+              ]}
+            >
+              ڈائریکٹ کیش/بینک ادائیگی اور اسٹیٹمنٹ
+            </Text>
+          </View>
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -1043,168 +711,55 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         contentContainerStyle={[styles.contentContainer, isMobile && { paddingHorizontal: 12, paddingVertical: 12 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Top Mega-KPI Bar */}
-        <View style={styles.kpiRow}>
-          <View style={[styles.kpiCard, { borderLeftColor: BRAND.gold }]}>
-            <View style={styles.kpiIconWrap}>
-              <Ionicons name="business" size={20} color={BRAND.goldDark} />
-            </View>
-            <View>
-              <Text style={styles.kpiLabel}>Active Suppliers</Text>
-              <Text style={styles.kpiValue}>{totalSuppliers} Vendors</Text>
-              <Text style={styles.kpiMeta}>Across 9 Food & Supply Categories</Text>
-            </View>
-          </View>
-
-          <View style={[styles.kpiCard, { borderLeftColor: BRAND.danger }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#FFEBEE' }]}>
-              <Ionicons name="alert-circle" size={20} color={BRAND.danger} />
-            </View>
-            <View>
-              <Text style={styles.kpiLabel}>Total Payable Dues</Text>
-              <Text style={[styles.kpiValue, { color: BRAND.danger }]}>
-                Rs. {totalPayableDue.toLocaleString()}
-              </Text>
-              <Text style={styles.kpiMeta}>Outstanding Vendor Balances</Text>
-            </View>
-          </View>
-
-          <View style={[styles.kpiCard, { borderLeftColor: BRAND.success }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#E8F5E9' }]}>
-              <Ionicons name="receipt" size={20} color={BRAND.success} />
-            </View>
-            <View>
-              <Text style={styles.kpiLabel}>Lifetime Purchases</Text>
-              <Text style={[styles.kpiValue, { color: BRAND.success }]}>
-                Rs. {totalPurchasesVolume.toLocaleString()}
-              </Text>
-              <Text style={styles.kpiMeta}>Procured Raw Materials Value</Text>
-            </View>
-          </View>
-
-          <View style={[styles.kpiCard, { borderLeftColor: BRAND.info }]}>
-            <View style={[styles.kpiIconWrap, { backgroundColor: '#E1F5FE' }]}>
-              <Ionicons name="cube" size={20} color={BRAND.info} />
-            </View>
-            <View>
-              <Text style={styles.kpiLabel}>Pending Deliveries</Text>
-              <Text style={[styles.kpiValue, { color: BRAND.info }]}>{pendingDeliveriesCount} Orders</Text>
-              <Text style={styles.kpiMeta}>Awaiting Kitchen Receipt</Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Navigation Tabs */}
-        {isMobile ? (
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={{ marginBottom: 16 }}
-            contentContainerStyle={[styles.tabBar, { width: 'auto', marginBottom: 0, paddingHorizontal: 4 }]}
-          >
-            <TouchableOpacity
-              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'directory' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('directory')}
-            >
-              <Ionicons
-                name="people-outline"
-                size={18}
-                color={activeTab === 'directory' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'directory' && styles.tabBtnTextActive]}>
-                Suppliers ({suppliers.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'orders' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('orders')}
-            >
-              <Ionicons
-                name="document-text-outline"
-                size={18}
-                color={activeTab === 'orders' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
-                Purchase Orders ({purchaseOrders.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, { paddingHorizontal: 16 }, activeTab === 'payments' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('payments')}
-            >
-              <Ionicons
-                name="cash-outline"
-                size={18}
-                color={activeTab === 'payments' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'payments' && styles.tabBtnTextActive]}>
-                Payments ({supplierPayments.length})
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        ) : (
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'directory' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('directory')}
-            >
-              <Ionicons
-                name="people-outline"
-                size={18}
-                color={activeTab === 'directory' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'directory' && styles.tabBtnTextActive]}>
-                Suppliers Directory ({suppliers.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'orders' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('orders')}
-            >
-              <Ionicons
-                name="document-text-outline"
-                size={18}
-                color={activeTab === 'orders' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'orders' && styles.tabBtnTextActive]}>
-                Purchase Orders / Invoices ({purchaseOrders.length})
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.tabBtn, activeTab === 'payments' && styles.tabBtnActive]}
-              onPress={() => setActiveTab('payments')}
-            >
-              <Ionicons
-                name="cash-outline"
-                size={18}
-                color={activeTab === 'payments' ? BRAND.burgundy : BRAND.muted}
-              />
-              <Text style={[styles.tabBtnText, activeTab === 'payments' && styles.tabBtnTextActive]}>
-                Payment History ({supplierPayments.length})
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* ---------------------------------------------------- */}
-        {/* TAB 1: SUPPLIERS DIRECTORY */}
-        {/* ---------------------------------------------------- */}
-        {activeTab === 'directory' && (
+        {/* ======================================================== */}
+        {/* 🏢 PAGE 1: SUPPLIERS DIRECTORY & INVOICE HISTORY */}
+        {/* ======================================================== */}
+        {activePage === 'suppliers_history' && (
           <View>
-            {/* Filter & Search Bar */}
-            <View style={styles.filterSection}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color={BRAND.muted} style={{ marginRight: 8 }} />
+            {/* KPI Summary Bar */}
+            <View style={styles.kpiRow}>
+              <View style={[styles.kpiCard, { borderLeftColor: BRAND.gold }]}>
+                <Ionicons name="business" size={24} color={BRAND.goldDark} />
+                <View>
+                  <Text style={styles.kpiLabel}>کل وینڈرز</Text>
+                  <Text style={styles.kpiValue}>{suppliers.length}</Text>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.kpiCard, { borderLeftColor: BRAND.danger }]}
+                onPress={() => setFilterBalance(filterBalance === 'due' ? 'all' : 'due')}
+              >
+                <Ionicons name="alert-circle" size={24} color={BRAND.danger} />
+                <View>
+                  <Text style={styles.kpiLabel}>کل واجب الادا رقم ({suppliersWithDuesCount} وینڈرز)</Text>
+                  <Text style={[styles.kpiValue, { color: BRAND.danger }]}>
+                    Rs. {totalPayableDue.toLocaleString()}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              <View style={[styles.kpiCard, { borderLeftColor: BRAND.success }]}>
+                <Ionicons name="receipt" size={24} color={BRAND.success} />
+                <View>
+                  <Text style={styles.kpiLabel}>کل خریداری حجم</Text>
+                  <Text style={[styles.kpiValue, { color: BRAND.success }]}>
+                    Rs. {totalPurchasesVolume.toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Search & Category Filter */}
+            <View style={styles.searchSection}>
+              <View style={styles.searchBox}>
+                <Ionicons name="search" size={20} color={BRAND.burgundy} style={{ marginRight: 8 }} />
                 <TextInput
                   style={styles.searchInput}
-                  placeholder="Search supplier by name, contact, item, phone or city..."
+                  placeholder="وینڈر، فون نمبر، شہر یا خام مال تلاش کریں (چکن، مٹن، ٹماٹر)..."
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholderTextColor="#9E9E9E"
+                  placeholderTextColor="#9CA3AF"
                 />
                 {searchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setSearchQuery('')}>
@@ -1213,432 +768,169 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 )}
               </View>
 
-              <View style={styles.balanceFilterRow}>
-                <Text style={styles.filterLabel}>Balance:</Text>
-                <TouchableOpacity
-                  style={[styles.balancePill, filterBalance === 'all' && styles.balancePillActive]}
-                  onPress={() => setFilterBalance('all')}
-                >
-                  <Text style={[styles.balancePillText, filterBalance === 'all' && styles.balancePillTextActive]}>
-                    All
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.balancePill, filterBalance === 'due' && styles.balancePillActive]}
-                  onPress={() => setFilterBalance('due')}
-                >
-                  <Text style={[styles.balancePillText, filterBalance === 'due' && styles.balancePillTextActive]}>
-                    Has Due Balance
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.balancePill, filterBalance === 'clear' && styles.balancePillActive]}
-                  onPress={() => setFilterBalance('clear')}
-                >
-                  <Text style={[styles.balancePillText, filterBalance === 'clear' && styles.balancePillTextActive]}>
-                    Cleared (Rs. 0)
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity
+                style={[styles.dueToggleBtn, filterBalance === 'due' && styles.dueToggleBtnActive]}
+                onPress={() => setFilterBalance(filterBalance === 'due' ? 'all' : 'due')}
+              >
+                <Ionicons
+                  name={filterBalance === 'due' ? 'checkmark-circle' : 'alert-circle-outline'}
+                  size={16}
+                  color={filterBalance === 'due' ? '#FFFFFF' : BRAND.danger}
+                />
+                <Text style={[styles.dueToggleText, filterBalance === 'due' && { color: '#FFFFFF' }]}>
+                  صرف بقایا والے وینڈرز ({suppliersWithDuesCount})
+                </Text>
+              </TouchableOpacity>
             </View>
 
-            {/* Category Filter Dropdown */}
-            <View style={{ marginBottom: 14 }}>
-              <RoyalDropdown
-                label="Filter by Supplier Category"
-                placeholder="All Categories"
-                options={[
-                  { label: `All Categories (${suppliers.length})`, value: 'All', badge: `${suppliers.length}` },
-                  ...SUPPLIER_CATEGORIES.map((cat) => {
-                    const count = suppliers.filter((s) => s.category === cat).length;
-                    const meta = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Other;
-                    return {
-                      label: cat,
-                      value: cat,
-                      icon: meta.icon,
-                      badge: `${count}`,
-                    };
-                  }),
-                ]}
-                value={selectedCategory}
-                onSelect={(cat) => setSelectedCategory(cat)}
-                icon="grid-outline"
-                searchable
-              />
-            </View>
+            {/* Horizontal Category Pills */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.categoryScroll}>
+              <TouchableOpacity
+                style={[styles.categoryPill, selectedCategory === 'All' && styles.categoryPillActive]}
+                onPress={() => setSelectedCategory('All')}
+              >
+                <Ionicons name="grid" size={14} color={selectedCategory === 'All' ? '#FFFFFF' : BRAND.burgundy} />
+                <Text style={[styles.categoryPillText, selectedCategory === 'All' && styles.categoryPillTextActive]}>
+                  تمام کیٹیگریز ({suppliers.length})
+                </Text>
+              </TouchableOpacity>
 
-            {/* Supplier Cards Grid */}
-            <View style={styles.suppliersGrid}>
-              {suppliersPagination.paginatedData.map((s) => {
-                const meta = CATEGORY_COLORS[s.category] || CATEGORY_COLORS.Other;
-                const hasDue = (s.currentBalance || 0) > 0;
+              {SUPPLIER_CATEGORIES.map((cat) => {
+                const count = suppliers.filter((s) => s.category === cat).length;
+                const theme = CATEGORY_THEMES[cat] || CATEGORY_THEMES.Other;
+                const isSelected = selectedCategory === cat;
 
                 return (
-                  <View key={s.id} style={styles.supplierCard}>
-                    {/* Card Header */}
-                    <View style={styles.cardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <View style={[styles.catBadge, { backgroundColor: meta.bg }]}>
-                            <Ionicons name={meta.icon} size={12} color={meta.text} style={{ marginRight: 4 }} />
-                            <Text style={[styles.catBadgeText, { color: meta.text }]}>{s.category}</Text>
-                          </View>
-                          <View
-                            style={[
-                              styles.statusPill,
-                              { backgroundColor: s.status === 'active' ? '#E8F5E9' : '#FFF3E0' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.statusPillText,
-                                { color: s.status === 'active' ? '#2E7D32' : '#E65100' },
-                              ]}
-                            >
-                              {s.status.toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
+                  <TouchableOpacity
+                    key={cat}
+                    style={[
+                      styles.categoryPill,
+                      isSelected && { backgroundColor: theme.accent, borderColor: theme.accent },
+                    ]}
+                    onPress={() => setSelectedCategory(isSelected ? 'All' : cat)}
+                  >
+                    <Ionicons name={theme.icon} size={14} color={isSelected ? '#FFFFFF' : theme.accent} />
+                    <Text style={[styles.categoryPillText, isSelected && styles.categoryPillTextActive]}>
+                      {cat} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-                        <Text style={styles.supplierName}>{s.name}</Text>
-                        <Text style={styles.contactPerson}>
-                          <Ionicons name="person-outline" size={13} color={BRAND.muted} /> {s.contactPerson} •{' '}
-                          <Text style={{ color: BRAND.muted }}>{s.city || 'Lahore'}</Text>
+            {/* 🏢 SUPPLIER CARDS & CONNECTED HISTORY */}
+            <View style={styles.suppliersGrid}>
+              {suppliersPagination.paginatedData.map((s) => {
+                const theme = CATEGORY_THEMES[s.category] || CATEGORY_THEMES.Other;
+                const hasDue = (s.currentBalance || 0) > 0;
+                const isFocused = activeSupplier?.id === s.id;
+
+                return (
+                  <View key={s.id} style={[styles.supplierCard, isFocused && styles.supplierCardFocused]}>
+                    <View style={[styles.cardTopColorStrip, { backgroundColor: theme.accent }]} />
+
+                    {/* Header */}
+                    <View style={styles.cardHeaderRow}>
+                      <View style={[styles.categoryBadge, { backgroundColor: theme.bg }]}>
+                        <Ionicons name={theme.icon} size={15} color={theme.accent} style={{ marginRight: 5 }} />
+                        <Text style={[styles.categoryBadgeText, { color: theme.text }]}>
+                          {s.category} ({theme.urdu})
                         </Text>
                       </View>
 
-                      {/* Quick Communication Buttons */}
-                      <View style={styles.commBtnRow}>
+                      {/* WhatsApp / Call */}
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
                         <TouchableOpacity
-                          style={[styles.commBtn, { backgroundColor: '#E8F5E9' }]}
-                          onPress={() => handleWhatsApp(s)}
-                          accessibilityLabel="WhatsApp Reorder"
+                          style={styles.whatsAppBtn}
+                          onPress={() => {
+                            const phone = (s.whatsapp || s.phone || '').replace(/[^0-9]/g, '');
+                            if (phone) Linking.openURL(`https://wa.me/${phone}`);
+                          }}
                         >
-                          <Ionicons name="logo-whatsapp" size={18} color="#2E7D32" />
+                          <Ionicons name="logo-whatsapp" size={15} color="#FFFFFF" />
+                          <Text style={styles.whatsAppBtnText}>WhatsApp</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
-                          style={[styles.commBtn, { backgroundColor: '#E1F5FE' }]}
-                          onPress={() => handleCall(s.phone)}
-                          accessibilityLabel="Call Supplier"
+                          style={styles.callBtn}
+                          onPress={() => {
+                            const phone = s.phone.replace(/[^0-9+]/g, '');
+                            if (phone) Linking.openURL(`tel:${phone}`);
+                          }}
                         >
-                          <Ionicons name="call" size={16} color="#0277BD" />
+                          <Ionicons name="call" size={14} color="#FFFFFF" />
                         </TouchableOpacity>
                       </View>
                     </View>
 
-                    {/* Supplied Items Chips */}
-                    <View style={styles.itemsSection}>
-                      <Text style={styles.sectionMiniLabel}>Supplied Raw Materials:</Text>
-                      <View style={styles.chipsWrap}>
-                        {s.suppliedItems && s.suppliedItems.length > 0 ? (
-                          s.suppliedItems.map((item, idx) => (
-                            <View key={idx} style={styles.itemChip}>
-                              <Text style={styles.itemChipText}>{item}</Text>
-                            </View>
-                          ))
-                        ) : (
-                          <Text style={styles.noItemsText}>No items mapped</Text>
-                        )}
+                    {/* Identity */}
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={styles.supplierName}>{s.name}</Text>
+                      <Text style={styles.supplierContact}>
+                        {s.contactPerson} • {s.phone} • {s.city || 'Lahore'}
+                      </Text>
+                    </View>
+
+                    {/* Supplied Items */}
+                    <View style={{ marginBottom: 10 }}>
+                      <Text style={styles.miniLabel}>سپلائی آئٹمز:</Text>
+                      <View style={styles.chipsRow}>
+                        {s.suppliedItems?.map((it, idx) => (
+                          <View key={idx} style={[styles.itemChip, { borderColor: theme.accent }]}>
+                            <Text style={[styles.itemChipText, { color: theme.accent }]}>+ {it}</Text>
+                          </View>
+                        ))}
                       </View>
                     </View>
 
-                    {/* Financial Stats Bar */}
-                    <View style={styles.financialBox}>
-                      <View style={styles.finStat}>
-                        <Text style={styles.finLabel}>Payable Balance</Text>
-                        <Text
-                          style={[
-                            styles.finValue,
-                            { color: hasDue ? BRAND.danger : BRAND.success, fontWeight: '800' },
-                          ]}
-                        >
+                    {/* Balance Box */}
+                    <View style={[styles.balanceBox, hasDue ? styles.balanceBoxDue : styles.balanceBoxClear]}>
+                      <View>
+                        <Text style={[styles.balanceBoxLabel, hasDue && { color: BRAND.danger }]}>
+                          {hasDue ? '⚠️ واجب الادا بقایا رقم' : '✓ کھاتہ صاف ہے'}
+                        </Text>
+                        <Text style={[styles.balanceBoxVal, { color: hasDue ? BRAND.danger : BRAND.success }]}>
                           Rs. {(s.currentBalance || 0).toLocaleString()}
                         </Text>
                       </View>
 
-                      <View style={styles.finDivider} />
-
-                      <View style={styles.finStat}>
-                        <Text style={styles.finLabel}>Total Purchases</Text>
-                        <Text style={styles.finValue}>Rs. {(s.totalPurchases || 0).toLocaleString()}</Text>
-                      </View>
-
-                      <View style={styles.finDivider} />
-
-                      <View style={styles.finStat}>
-                        <Text style={styles.finLabel}>Payment Terms</Text>
-                        <Text style={[styles.finValue, { fontSize: 11, color: BRAND.goldDark }]}>
-                          {s.paymentTerms || 'COD'}
-                        </Text>
-                      </View>
+                      {/* Direct Jump to Page 2 */}
+                      <TouchableOpacity
+                        style={[styles.payNowBtn, { backgroundColor: hasDue ? BRAND.danger : BRAND.success }]}
+                        onPress={() => handleJumpToLedgerAndPay(s)}
+                      >
+                        <Ionicons name="newspaper" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+                        <Text style={styles.payNowBtnText}>کھاتہ اور ادائیگی</Text>
+                      </TouchableOpacity>
                     </View>
 
-                    {/* Bank Account Info (if present) */}
-                    {s.bankDetails?.accountNumber ? (
-                      <View style={styles.bankBox}>
-                        <Ionicons name="card-outline" size={14} color={BRAND.muted} style={{ marginRight: 6 }} />
-                        <Text style={styles.bankText} numberOfLines={1}>
-                          <Text style={{ fontWeight: '700' }}>{s.bankDetails.bankName}:</Text>{' '}
-                          {s.bankDetails.accountNumber} ({s.bankDetails.accountTitle})
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {/* Card Actions Footer */}
-                    <View style={styles.cardFooter}>
+                    {/* Action Bar */}
+                    <View style={styles.cardActionsBar}>
                       <TouchableOpacity
-                        style={[styles.cardActionBtn, { flex: 1.1 }]}
-                        onPress={() => handleOpenNewPO(s)}
+                        style={[styles.cardBtn, isFocused && { backgroundColor: '#FDF7EB', borderColor: BRAND.gold }]}
+                        onPress={() => setSelectedSupplierId(s.id)}
                       >
-                        <Ionicons name="cart-outline" size={13} color={BRAND.burgundy} style={{ marginRight: 3 }} />
-                        <Text style={styles.cardActionBtnText} numberOfLines={1}>+ PO</Text>
+                        <Ionicons name="list" size={14} color={BRAND.burgundy} />
+                        <Text style={styles.cardBtnText}>بل ہسٹری دیکھیں</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.cardBtn} onPress={() => handleOpenNewPO(s)}>
+                        <Ionicons name="cart" size={14} color={BRAND.burgundy} />
+                        <Text style={styles.cardBtnText}>+ نیا خریداری بل</Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[
-                          styles.cardActionBtn,
-                          { flex: 1.3 },
-                          hasDue && { backgroundColor: '#FFEBEE', borderColor: '#FFCDD2' },
-                        ]}
-                        onPress={() => handleOpenPaymentModal(s)}
-                      >
-                        <Ionicons
-                          name="cash-outline"
-                          size={13}
-                          color={hasDue ? BRAND.danger : BRAND.burgundy}
-                          style={{ marginRight: 3 }}
-                        />
-                        <Text
-                          style={[
-                            styles.cardActionBtnText,
-                            hasDue && { color: BRAND.danger, fontWeight: '800' },
-                          ]}
-                          numberOfLines={1}
-                        >
-                          {hasDue ? 'Pay Due' : 'Payment'}
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.cardActionBtn, { flex: 1.1 }]}
-                        onPress={() => handleOpenLedger(s)}
-                      >
-                        <Ionicons name="newspaper-outline" size={13} color={BRAND.muted} style={{ marginRight: 3 }} />
-                        <Text style={[styles.cardActionBtnText, { color: BRAND.muted }]} numberOfLines={1}>Ledger</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.cardActionBtnIcon}
+                        style={styles.cardIconBtn}
                         onPress={() => handleOpenEditSupplier(s)}
+                        accessibilityLabel="ایڈٹ"
                       >
-                        <Ionicons name="pencil" size={13} color={BRAND.muted} />
+                        <Ionicons name="pencil" size={14} color={BRAND.muted} />
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.cardActionBtnIcon, { borderColor: '#FFCDD2', backgroundColor: '#FFF5F5' }]}
+                        style={[styles.cardIconBtn, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}
                         onPress={() => handleDeleteSupplier(s)}
-                      >
-                        <Ionicons name="trash-outline" size={13} color={BRAND.danger} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
-
-              {filteredSuppliers.length === 0 && (
-                <View style={styles.emptyState}>
-                  <Ionicons name="search-outline" size={48} color={BRAND.muted} style={{ marginBottom: 12 }} />
-                  <Text style={styles.emptyStateTitle}>No Suppliers Found</Text>
-                  <Text style={styles.emptyStateSub}>
-                    Try adjusting your search filters or add a new supplier using the button above.
-                  </Text>
-                </View>
-              )}
-            </View>
-
-            {filteredSuppliers.length > 0 && (
-              <PaginationControl
-                currentPage={suppliersPagination.currentPage}
-                totalPages={suppliersPagination.totalPages}
-                pageSize={suppliersPagination.pageSize}
-                totalItems={suppliersPagination.totalItems}
-                onPageChange={suppliersPagination.goToPage}
-                onPageSizeChange={suppliersPagination.setPageSize}
-                itemName="suppliers"
-              />
-            )}
-          </View>
-        )}
-
-        {/* ---------------------------------------------------- */}
-        {/* TAB 2: PURCHASE ORDERS / INVOICES */}
-        {/* ---------------------------------------------------- */}
-        {activeTab === 'orders' && (
-          <View style={styles.ordersSection}>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Procurement & Purchase Invoices</Text>
-                <Text style={styles.sectionSub}>All recorded supply deliveries and purchase order vouchers</Text>
-              </View>
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => handleOpenNewPO()}>
-                <Ionicons name="add-circle" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.primaryBtnText}>New Purchase Order</Text>
-              </TouchableOpacity>
-            </View>
-
-            {purchaseOrders.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="document-text-outline" size={48} color={BRAND.muted} style={{ marginBottom: 12 }} />
-                <Text style={styles.emptyStateTitle}>No Purchase Orders Logged</Text>
-                <Text style={styles.emptyStateSub}>Create your first purchase order to track ingredient supplies.</Text>
-              </View>
-            ) : (
-              <>
-                {poPagination.paginatedData.map((po) => {
-                const isPending = po.status === 'ordered';
-                const hasDue = (po.balanceDue || 0) > 0;
-
-                return (
-                  <View key={po.id} style={styles.poCard}>
-                    <View style={styles.poCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          <Text style={styles.poNumber}>{po.poNumber}</Text>
-                          {po.invoiceNo && <Text style={styles.poInvoiceNo}>(Bill #{po.invoiceNo})</Text>}
-
-                          <View
-                            style={[
-                              styles.poStatusBadge,
-                              { backgroundColor: po.status === 'received' ? '#E8F5E9' : '#FFF3E0' },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.poStatusBadgeText,
-                                { color: po.status === 'received' ? '#2E7D32' : '#E65100' },
-                              ]}
-                            >
-                              {po.status.toUpperCase()}
-                            </Text>
-                          </View>
-
-                          <View
-                            style={[
-                              styles.poStatusBadge,
-                              {
-                                backgroundColor:
-                                  po.paymentStatus === 'paid'
-                                    ? '#E8F5E9'
-                                    : po.paymentStatus === 'partial'
-                                    ? '#FFF8E1'
-                                    : '#FFEBEE',
-                              },
-                            ]}
-                          >
-                            <Text
-                              style={[
-                                styles.poStatusBadgeText,
-                                {
-                                  color:
-                                    po.paymentStatus === 'paid'
-                                      ? '#2E7D32'
-                                      : po.paymentStatus === 'partial'
-                                      ? '#F57F17'
-                                      : '#C62828',
-                                },
-                              ]}
-                            >
-                              {po.paymentStatus.toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-
-                        <Text style={styles.poSupplierName}>
-                          <Ionicons name="business-outline" size={14} color={BRAND.burgundy} /> {po.supplierName}
-                        </Text>
-                        <Text style={styles.poMetaText}>
-                          Date: {new Date(po.orderDate).toLocaleDateString()} • Received by:{' '}
-                          {po.receivedBy || 'Admin'}
-                        </Text>
-                      </View>
-
-                      {/* Total & Due */}
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.poTotalLabel}>Total Amount</Text>
-                        <Text style={styles.poTotalValue}>Rs. {po.totalAmount.toLocaleString()}</Text>
-                        {hasDue ? (
-                          <Text style={styles.poDueWarning}>Due: Rs. {po.balanceDue.toLocaleString()}</Text>
-                        ) : (
-                          <Text style={styles.poPaidStatus}>✓ Paid in Full</Text>
-                        )}
-                      </View>
-                    </View>
-
-                    {/* Items table */}
-                    <View style={styles.poItemsTable}>
-                      <View style={styles.poTableHeader}>
-                        <Text style={[styles.poTh, { flex: 3 }]}>Item Description</Text>
-                        <Text style={[styles.poTh, { flex: 1, textAlign: 'center' }]}>Qty</Text>
-                        <Text style={[styles.poTh, { flex: 1.5, textAlign: 'right' }]}>Rate (Rs)</Text>
-                        <Text style={[styles.poTh, { flex: 1.5, textAlign: 'right' }]}>Total (Rs)</Text>
-                      </View>
-                      {po.items.map((item, i) => (
-                        <View key={i} style={styles.poTableRow}>
-                          <Text style={[styles.poTd, { flex: 3, fontWeight: '600' }]}>{item.name}</Text>
-                          <Text style={[styles.poTd, { flex: 1, textAlign: 'center' }]}>
-                            {item.qtyReceived || item.qtyOrdered} {item.unit}
-                          </Text>
-                          <Text style={[styles.poTd, { flex: 1.5, textAlign: 'right' }]}>
-                            {item.unitCost.toLocaleString()}
-                          </Text>
-                          <Text style={[styles.poTd, { flex: 1.5, textAlign: 'right', fontWeight: '700' }]}>
-                            {item.totalCost.toLocaleString()}
-                          </Text>
-                        </View>
-                      ))}
-                    </View>
-
-                    {/* PO Actions */}
-                    <View style={styles.poActionsRow}>
-                      {isPending && (
-                        <TouchableOpacity
-                          style={[styles.secondaryBtn, { backgroundColor: '#E8F5E9', borderColor: '#2E7D32' }]}
-                          onPress={() => {
-                            receivePurchaseOrder(po.id, undefined, 'Admin');
-                            broadcastImmediately();
-                          }}
-                        >
-                          <Ionicons name="checkmark-done" size={14} color="#2E7D32" style={{ marginRight: 4 }} />
-                          <Text style={[styles.secondaryBtnText, { color: '#2E7D32' }]}>Receive into Kitchen Stock</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {hasDue && (
-                        <TouchableOpacity
-                          style={[styles.secondaryBtn, { backgroundColor: '#FFEBEE', borderColor: BRAND.danger }]}
-                          onPress={() => {
-                            const sup = suppliers.find((s) => s.id === po.supplierId);
-                            if (sup) handleOpenPaymentModal(sup, po);
-                          }}
-                        >
-                          <Ionicons name="cash-outline" size={14} color={BRAND.danger} style={{ marginRight: 4 }} />
-                          <Text style={[styles.secondaryBtnText, { color: BRAND.danger }]}>Pay PO Due (Rs. {po.balanceDue})</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      <TouchableOpacity
-                        style={[styles.secondaryBtn, { borderColor: BRAND.border }]}
-                        onPress={() => {
-                          confirmAction(
-                            'Delete Purchase Order',
-                            `Are you sure you want to delete PO #${po.poNumber}?`,
-                            () => {
-                              deletePurchaseOrder(po.id);
-                              broadcastImmediately();
-                            }
-                          );
-                        }}
+                        accessibilityLabel="حذف"
                       >
                         <Ionicons name="trash-outline" size={14} color={BRAND.danger} />
                       </TouchableOpacity>
@@ -1646,874 +938,256 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                   </View>
                 );
               })}
-
-              <PaginationControl
-                currentPage={poPagination.currentPage}
-                totalPages={poPagination.totalPages}
-                pageSize={poPagination.pageSize}
-                totalItems={poPagination.totalItems}
-                onPageChange={poPagination.goToPage}
-                onPageSizeChange={poPagination.setPageSize}
-                itemName="purchase orders"
-              />
-            </>
-          )}
-          </View>
-        )}
-
-        {/* ---------------------------------------------------- */}
-        {/* TAB 3: PAYMENT HISTORY */}
-        {/* ---------------------------------------------------- */}
-        {activeTab === 'payments' && (
-          <View style={styles.paymentsSection}>
-            <View style={styles.sectionHeader}>
-              <View>
-                <Text style={styles.sectionTitle}>Vendor Settlements & Payment Logs</Text>
-                <Text style={styles.sectionSub}>All cleared payouts made to restaurant suppliers</Text>
-              </View>
-              <TouchableOpacity
-                style={styles.primaryBtn}
-                onPress={() => {
-                  const firstSup = suppliers[0];
-                  if (firstSup) handleOpenPaymentModal(firstSup);
-                }}
-              >
-                <Ionicons name="cash-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.primaryBtnText}>Record Payment</Text>
-              </TouchableOpacity>
             </View>
 
-            {/* Payment KPIs Summary Bar */}
-            <View style={styles.paymentKpiRow}>
-              <View style={[styles.paymentKpiCard, { borderLeftColor: BRAND.success }]}>
-                <View style={[styles.kpiIconWrap, { backgroundColor: '#E8F5E9' }]}>
-                  <Ionicons name="cash" size={20} color={BRAND.success} />
-                </View>
-                <View>
-                  <Text style={styles.kpiLabel}>Total Paid Out</Text>
-                  <Text style={[styles.kpiValue, { color: BRAND.success }]}>
-                    Rs. {totalPaymentsDisbursed.toLocaleString()}
-                  </Text>
-                  <Text style={styles.kpiMeta}>{supplierPayments.length} Total Vouchers</Text>
-                </View>
-              </View>
-
-              <View style={[styles.paymentKpiCard, { borderLeftColor: BRAND.burgundy }]}>
-                <View style={[styles.kpiIconWrap, { backgroundColor: '#F5EBE6' }]}>
-                  <Ionicons name="wallet-outline" size={20} color={BRAND.burgundy} />
-                </View>
-                <View>
-                  <Text style={styles.kpiLabel}>Cash Disbursements</Text>
-                  <Text style={[styles.kpiValue, { color: BRAND.burgundy }]}>
-                    Rs. {cashPaymentsTotal.toLocaleString()}
-                  </Text>
-                  <Text style={styles.kpiMeta}>From Cash Drawers / Counters</Text>
-                </View>
-              </View>
-
-              <View style={[styles.paymentKpiCard, { borderLeftColor: BRAND.info }]}>
-                <View style={[styles.kpiIconWrap, { backgroundColor: '#E1F5FE' }]}>
-                  <Ionicons name="card-outline" size={20} color={BRAND.info} />
-                </View>
-                <View>
-                  <Text style={styles.kpiLabel}>Bank & Online</Text>
-                  <Text style={[styles.kpiValue, { color: BRAND.info }]}>
-                    Rs. {onlinePaymentsTotal.toLocaleString()}
-                  </Text>
-                  <Text style={styles.kpiMeta}>IBFT / Online Transfers</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Payment Search & Filter Section */}
-            <View style={styles.filterSection}>
-              <View style={styles.searchBar}>
-                <Ionicons name="search" size={18} color={BRAND.muted} style={{ marginRight: 8 }} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder="Search payments by vendor, reference, bank, or notes..."
-                  value={paymentSearch}
-                  onChangeText={setPaymentSearch}
-                  placeholderTextColor="#9E9E9E"
+            {/* Bottom Pagination */}
+            {filteredSuppliers.length > 0 && (
+              <View style={{ marginTop: 14 }}>
+                <PaginationControl
+                  currentPage={suppliersPagination.currentPage}
+                  totalPages={suppliersPagination.totalPages}
+                  pageSize={suppliersPagination.pageSize}
+                  totalItems={suppliersPagination.totalItems}
+                  pageSizeOptions={[4, 6, 12, 24]}
+                  onPageChange={suppliersPagination.goToPage}
+                  onPageSizeChange={suppliersPagination.setPageSize}
+                  itemName="وینڈرز"
                 />
-                {paymentSearch.length > 0 && (
-                  <TouchableOpacity onPress={() => setSearchQuery('')}>
-                    <Ionicons name="close-circle" size={18} color={BRAND.muted} />
-                  </TouchableOpacity>
-                )}
               </View>
+            )}
 
-              {/* Method filter pills */}
-              <View style={styles.balanceFilterRow}>
-                <Text style={styles.filterLabel}>Method:</Text>
-                {(['all', 'cash', 'online', 'cheque'] as const).map((m) => (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.balancePill, paymentMethodFilter === m && styles.balancePillActive]}
-                    onPress={() => setPaymentMethodFilter(m)}
-                  >
-                    <Text
-                      style={[
-                        styles.balancePillText,
-                        paymentMethodFilter === m && styles.balancePillTextActive,
-                      ]}
-                    >
-                      {m.toUpperCase()}
+            {/* 📋 SELECTED SUPPLIER ORDER & INVOICE HISTORY */}
+            {activeSupplier && (
+              <View style={styles.historyCard}>
+                <View style={styles.historyHeader}>
+                  <View>
+                    <Text style={styles.historyTitle}>
+                      {activeSupplier.name} - خریداری بلز اور آرڈر ہسٹری
                     </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
+                    <Text style={styles.historySub}>
+                      کل بلز: {activeSupplierPOs.length} • کل ادائیگیاں: {activeSupplierPayments.length}
+                    </Text>
+                  </View>
 
-            {/* Vendor Filter Dropdown */}
-            <View style={{ marginBottom: 14 }}>
-              <RoyalDropdown
-                label="Filter by Vendor"
-                placeholder="All Vendors"
-                options={[
-                  { label: `All Vendors (${supplierPayments.length})`, value: 'all', badge: `${supplierPayments.length}` },
-                  ...suppliers
-                    .filter((s) => supplierPayments.some((p) => p.supplierId === s.id))
-                    .map((s) => ({
-                      label: s.name,
-                      value: s.id,
-                      badge: `${supplierPayments.filter((p) => p.supplierId === s.id).length}`,
-                      sublabel: s.category,
-                    })),
-                ]}
-                value={paymentSupplierFilter}
-                onSelect={(val) => setPaymentSupplierFilter(val)}
-                icon="business-outline"
-                searchable
-              />
-            </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={styles.actionBtnGold}
+                      onPress={() => handleOpenNewPO(activeSupplier)}
+                    >
+                      <Ionicons name="cart" size={15} color="#FFFFFF" />
+                      <Text style={styles.actionBtnText}>+ نیا خریداری بل</Text>
+                    </TouchableOpacity>
 
-            {/* Payments List */}
-            {filteredPayments.length === 0 ? (
-              <View style={styles.emptyState}>
-                <Ionicons name="cash-outline" size={48} color={BRAND.muted} style={{ marginBottom: 12 }} />
-                <Text style={styles.emptyStateTitle}>No Payments Found</Text>
-                <Text style={styles.emptyStateSub}>
-                  {supplierPayments.length === 0
-                    ? 'No payments recorded yet. Click "Record Payment" to log a settlement.'
-                    : 'No payments match the active search or filters.'}
-                </Text>
-              </View>
-            ) : (
-              <>
-                {paymentsPagination.paginatedData.map((pay) => {
-                const sup = suppliers.find((s) => s.id === pay.supplierId);
-                const isCash = pay.method === 'cash';
-                const isOnline = pay.method === 'online';
-                const isCheque = pay.method === 'cheque';
+                    <TouchableOpacity
+                      style={styles.actionBtn}
+                      onPress={() => handleJumpToLedgerAndPay(activeSupplier)}
+                    >
+                      <Ionicons name="newspaper" size={15} color="#FFFFFF" />
+                      <Text style={styles.actionBtnText}>کھاتہ پر جائیں ➡️</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
 
-                return (
-                  <View key={pay.id} style={styles.paymentCardFull}>
-                    <View style={styles.paymentCardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <View
-                          style={[
-                            styles.payIconWrapLarge,
-                            {
-                              backgroundColor: isCash
-                                ? '#E8F5E9'
-                                : isOnline
-                                ? '#E1F5FE'
-                                : '#FFF3E0',
-                            },
-                          ]}
-                        >
-                          <Ionicons
-                            name={
-                              isCash
-                                ? 'cash-outline'
-                                : isOnline
-                                ? 'phone-portrait-outline'
-                                : 'document-text-outline'
-                            }
-                            size={22}
-                            color={isCash ? '#2E7D32' : isOnline ? '#0277BD' : '#E65100'}
-                          />
-                        </View>
+                {activeSupplierPOs.length === 0 ? (
+                  <View style={styles.emptyBox}>
+                    <Ionicons name="receipt-outline" size={40} color={BRAND.muted} style={{ marginBottom: 6 }} />
+                    <Text style={styles.emptyBoxTitle}>کوئی خریداری بل موجود نہیں</Text>
+                    <Text style={styles.emptyBoxSub}>نیا بل بنانے کیلئے اوپر بٹن دبائیں۔</Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 8 }}>
+                    {activeSupplierPOs.map((po) => (
+                      <View key={po.id} style={styles.poRow}>
                         <View style={{ flex: 1 }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.paymentSupplierNameLarge}>{pay.supplierName}</Text>
+                            <Text style={styles.poNumberText}>{po.poNumber}</Text>
+                            {po.invoiceNo && <Text style={styles.poBillText}>(بل #{po.invoiceNo})</Text>}
                             <View
                               style={[
-                                styles.payMethodTag,
+                                styles.statusBadge,
                                 {
-                                  backgroundColor: isCash
-                                    ? '#E8F5E9'
-                                    : isOnline
-                                    ? '#E1F5FE'
-                                    : '#FFF3E0',
+                                  backgroundColor:
+                                    po.paymentStatus === 'paid'
+                                      ? BRAND.successBg
+                                      : po.paymentStatus === 'partial'
+                                      ? BRAND.warningBg
+                                      : BRAND.dangerBg,
                                 },
                               ]}
                             >
                               <Text
                                 style={[
-                                  styles.payMethodTagText,
-                                  { color: isCash ? '#2E7D32' : isOnline ? '#0277BD' : '#E65100' },
+                                  styles.statusBadgeText,
+                                  {
+                                    color:
+                                      po.paymentStatus === 'paid'
+                                        ? BRAND.success
+                                        : po.paymentStatus === 'partial'
+                                        ? BRAND.warning
+                                        : BRAND.danger,
+                                  },
                                 ]}
                               >
-                                {pay.method.toUpperCase()}
+                                {po.paymentStatus.toUpperCase()}
                               </Text>
                             </View>
                           </View>
-
-                          <Text style={styles.paymentVoucherId}>
-                            Voucher: VCH-{pay.id.slice(-6).toUpperCase()} •{' '}
-                            {new Date(pay.paidAt).toLocaleString([], {
-                              dateStyle: 'medium',
-                              timeStyle: 'short',
-                            })}
+                          <Text style={styles.poDateText}>
+                            تاریخ: {new Date(po.orderDate).toLocaleDateString()} • سامان: {po.items.map((i) => `${i.name} (${i.qtyReceived || i.qtyOrdered} ${i.unit})`).join(', ')}
                           </Text>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.poTotalText}>Rs. {po.totalAmount.toLocaleString()}</Text>
+                          {po.balanceDue > 0 ? (
+                            <Text style={styles.poDueText}>بقایا: Rs. {po.balanceDue.toLocaleString()}</Text>
+                          ) : (
+                            <Text style={styles.poPaidText}>✓ مکمل ادا شدہ</Text>
+                          )}
                         </View>
                       </View>
-
-                      {/* Right amount badge */}
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.paymentAmountLarge}>
-                          Rs. {pay.amount.toLocaleString()}
-                        </Text>
-                        <Text style={styles.paidByTag}>Disbursed by: {pay.paidBy || 'Admin'}</Text>
-                      </View>
-                    </View>
-
-                    {/* Detailed info pills row */}
-                    <View style={styles.payDetailsGrid}>
-                      {Boolean(pay.sourceAccount) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="wallet-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Paid From:</Text> {pay.sourceAccount}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {Boolean(pay.bankName) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="business-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Bank:</Text> {pay.bankName}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {Boolean(pay.reference) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="barcode-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Trx / Ref:</Text> {pay.reference}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {Boolean(pay.chequeNumber) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="newspaper-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Cheque #:</Text> {pay.chequeNumber}
-                            {pay.chequeDate ? ` (Due: ${pay.chequeDate})` : ''}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {Boolean(pay.receivedByContact) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="person-circle-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Received By:</Text> {pay.receivedByContact}
-                          </Text>
-                        </View>
-                      ) : null}
-
-                      {Boolean(pay.purchaseOrderId) ? (
-                        <View style={styles.payDetailItem}>
-                          <Ionicons name="document-attach-outline" size={13} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={styles.payDetailText}>
-                            <Text style={{ fontWeight: '700' }}>Linked PO:</Text> #{pay.purchaseOrderId}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
-
-                    {pay.notes ? (
-                      <View style={styles.paymentNoteBox}>
-                        <Ionicons name="information-circle-outline" size={14} color={BRAND.goldDark} style={{ marginRight: 6 }} />
-                        <Text style={styles.paymentNoteText}>{pay.notes}</Text>
-                      </View>
-                    ) : null}
-
-                    {/* Action buttons */}
-                    <View style={styles.paymentCardActions}>
-                      <TouchableOpacity
-                        style={styles.payActionBtn}
-                        onPress={() => handleOpenVoucherModal(pay)}
-                      >
-                        <Ionicons name="receipt-outline" size={14} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                        <Text style={styles.payActionBtnText}>View Voucher Slip</Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={styles.payActionBtn}
-                        onPress={() => handleSharePaymentVoucher(pay)}
-                      >
-                        <Ionicons name="share-social-outline" size={14} color={BRAND.muted} style={{ marginRight: 4 }} />
-                        <Text style={[styles.payActionBtnText, { color: BRAND.ink }]}>Copy Receipt</Text>
-                      </TouchableOpacity>
-
-                      {sup ? (
-                        <TouchableOpacity
-                          style={styles.payActionBtn}
-                          onPress={() => handleOpenLedger(sup)}
-                        >
-                          <Ionicons name="newspaper-outline" size={14} color={BRAND.muted} style={{ marginRight: 4 }} />
-                          <Text style={[styles.payActionBtnText, { color: BRAND.ink }]}>Vendor Ledger</Text>
-                        </TouchableOpacity>
-                      ) : null}
-
-                      <TouchableOpacity
-                        style={[styles.payActionBtn, { borderColor: '#FFCDD2' }]}
-                        onPress={() => handleDeletePayment(pay)}
-                      >
-                        <Ionicons name="trash-outline" size={14} color={BRAND.danger} style={{ marginRight: 4 }} />
-                        <Text style={[styles.payActionBtnText, { color: BRAND.danger }]}>Reverse</Text>
-                      </TouchableOpacity>
-                    </View>
+                    ))}
                   </View>
-                );
-              })}
-
-              <PaginationControl
-                currentPage={paymentsPagination.currentPage}
-                totalPages={paymentsPagination.totalPages}
-                pageSize={paymentsPagination.pageSize}
-                totalItems={paymentsPagination.totalItems}
-                onPageChange={paymentsPagination.goToPage}
-                onPageSizeChange={paymentsPagination.setPageSize}
-                itemName="payments"
-              />
-            </>
-          )}
+                )}
+              </View>
+            )}
           </View>
         )}
 
-        <View style={{ height: 60 }} />
-      </ScrollView>
-
-      {/* ---------------------------------------------------- */}
-      {/* MODAL 1: ADD / EDIT SUPPLIER */}
-      {/* ---------------------------------------------------- */}
-      <Modal visible={isSupplierModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, isMobile && { width: '95%', maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {editingSupplier ? 'Edit Supplier Profile' : 'Add New Food / Raw Material Supplier'}
-              </Text>
-              <TouchableOpacity onPress={() => setIsSupplierModalOpen(false)}>
-                <Ionicons name="close" size={24} color={BRAND.ink} />
-              </TouchableOpacity>
+        {/* ======================================================== */}
+        {/* 📜 PAGE 2: CONNECTED SUPPLIER LEDGER & PAYMENTS */}
+        {/* ======================================================== */}
+        {activePage === 'ledger_payments' && (
+          <View>
+            {/* Top Supplier Picker */}
+            <View style={styles.supplierPickerBar}>
+              <Text style={styles.pickerLabel}>وینڈر منتخب کریں (Select Vendor):</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+                {suppliers.map((s) => {
+                  const isSel = activeSupplier?.id === s.id;
+                  const hasDue = (s.currentBalance || 0) > 0;
+                  return (
+                    <TouchableOpacity
+                      key={s.id}
+                      style={[styles.vendorChip, isSel && styles.vendorChipActive]}
+                      onPress={() => {
+                        setSelectedSupplierId(s.id);
+                        setPayAmount(s.currentBalance > 0 ? String(s.currentBalance) : '');
+                      }}
+                    >
+                      <Text style={[styles.vendorChipName, isSel && styles.vendorChipNameActive]}>{s.name}</Text>
+                      <View style={[styles.vendorChipDueBadge, hasDue ? { backgroundColor: BRAND.dangerBg } : { backgroundColor: BRAND.successBg }]}>
+                        <Text style={[styles.vendorChipDueText, { color: hasDue ? BRAND.danger : BRAND.success }]}>
+                          Rs. {(s.currentBalance || 0).toLocaleString()}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Supplier & Category */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Supplier / Company Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Al-Madina Fresh Poultry Ltd"
-                    value={supplierForm.name}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, name: t })}
-                  />
-                </View>
-
-                <View style={styles.formCol}>
-                  <RoyalDropdown
-                    label="Category *"
-                    placeholder="Select category..."
-                    options={SUPPLIER_CATEGORIES.map((cat) => {
-                      const meta = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Other;
-                      return {
-                        label: cat,
-                        value: cat,
-                        icon: meta.icon,
-                      };
-                    })}
-                    value={supplierForm.category}
-                    onSelect={(cat) => setSupplierForm({ ...supplierForm, category: cat })}
-                    searchable
-                  />
-                </View>
-              </View>
-
-              {/* Contact Person & Phone */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Contact Person / Dealer Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Haji Muhammad Rafiq"
-                    value={supplierForm.contactPerson}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, contactPerson: t })}
-                  />
-                </View>
-
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Phone Number *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. +92 300 4567891"
-                    keyboardType="phone-pad"
-                    value={supplierForm.phone}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, phone: t })}
-                  />
-                </View>
-              </View>
-
-              {/* WhatsApp & Email */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>WhatsApp Number (for 1-tap reordering)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. +92 300 4567891"
-                    keyboardType="phone-pad"
-                    value={supplierForm.whatsapp}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, whatsapp: t })}
-                  />
-                </View>
-
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>City / Location</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Lahore / Badami Bagh"
-                    value={supplierForm.city}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, city: t })}
-                  />
-                </View>
-              </View>
-
-              {/* Address */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Full Shop / Warehouse Address</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Shop #14, Tollinton Poultry Market, Jail Road"
-                  value={supplierForm.address}
-                  onChangeText={(t) => setSupplierForm({ ...supplierForm, address: t })}
-                />
-              </View>
-
-              {/* Supplied Items */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Supplied Raw Materials / Items (Comma separated)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Chicken Boneless, Wings, Mutton Chops, Basmati Rice"
-                  value={supplierForm.suppliedItemsInput}
-                  onChangeText={(t) => setSupplierForm({ ...supplierForm, suppliedItemsInput: t })}
-                />
-                <Text style={styles.inputHint}>Tip: Separate each ingredient with a comma.</Text>
-              </View>
-
-              {/* Payment Terms & Initial Balance */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Payment Terms</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Credit 15 Days / COD / Weekly"
-                    value={supplierForm.paymentTerms}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, paymentTerms: t })}
-                  />
-                </View>
-
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Current Payable Balance (Rs)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="0"
-                    keyboardType="numeric"
-                    value={supplierForm.currentBalance}
-                    onChangeText={(t) => setSupplierForm({ ...supplierForm, currentBalance: t })}
-                  />
-                </View>
-              </View>
-
-              {/* Bank Account Details */}
-              <View style={styles.formSectionBox}>
-                <Text style={styles.formSectionTitle}>Bank / Online Payment Details</Text>
-                <View style={styles.formRow}>
-                  <View style={styles.formCol}>
-                    <Text style={styles.inputLabel}>Bank Name</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. Meezan Bank / HBL / JazzCash"
-                      value={supplierForm.bankName}
-                      onChangeText={(t) => setSupplierForm({ ...supplierForm, bankName: t })}
-                    />
+            {activeSupplier ? (
+              <View>
+                {/* Active Supplier Profile Banner */}
+                <View style={styles.vendorProfileBanner}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.vendorProfileName}>{activeSupplier.name}</Text>
+                    <Text style={styles.vendorProfileSub}>
+                      {activeSupplier.category} • {activeSupplier.contactPerson} ({activeSupplier.phone}) • {activeSupplier.city || 'Lahore'}
+                    </Text>
+                    {activeSupplier.bankDetails?.accountNumber && (
+                      <Text style={styles.vendorBankText}>
+                        بینک: {activeSupplier.bankDetails.bankName} | A/C: {activeSupplier.bankDetails.accountNumber} ({activeSupplier.bankDetails.accountTitle})
+                      </Text>
+                    )}
                   </View>
-                  <View style={styles.formCol}>
-                    <Text style={styles.inputLabel}>Account Title</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. Al-Madina Poultry Traders"
-                      value={supplierForm.accountTitle}
-                      onChangeText={(t) => setSupplierForm({ ...supplierForm, accountTitle: t })}
-                    />
-                  </View>
-                </View>
 
-                <View style={styles.formRow}>
-                  <View style={styles.formCol}>
-                    <Text style={styles.inputLabel}>Account / IBAN Number</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. 0101-0102938475"
-                      value={supplierForm.accountNumber}
-                      onChangeText={(t) => setSupplierForm({ ...supplierForm, accountNumber: t })}
-                    />
-                  </View>
-                </View>
-              </View>
-
-              {/* Notes */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Internal Notes / Delivery Schedule</Text>
-                <TextInput
-                  style={[styles.input, { height: 60 }]}
-                  multiline
-                  placeholder="e.g. Morning 8 AM delivery, Halal certified."
-                  value={supplierForm.notes}
-                  onChangeText={(t) => setSupplierForm({ ...supplierForm, notes: t })}
-                />
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setIsSupplierModalOpen(false)}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveSupplier}>
-                <Text style={styles.primaryBtnText}>
-                  {editingSupplier ? 'Update Supplier' : 'Save Supplier Profile'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ---------------------------------------------------- */}
-      {/* MODAL 2: CREATE PURCHASE ORDER */}
-      {/* ---------------------------------------------------- */}
-      <Modal visible={isPOModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { width: isMobile ? '95%' : 750, maxHeight: '92%' }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                Create Purchase Order / Delivery Log
-              </Text>
-              <TouchableOpacity onPress={() => setIsPOModalOpen(false)}>
-                <Ionicons name="close" size={24} color={BRAND.ink} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Supplier Selection Dropdown */}
-              <View style={[styles.formRow, { marginBottom: 12 }]}>
-                <View style={styles.formCol}>
-                  <RoyalDropdown
-                    label="Select Supplier *"
-                    placeholder="Choose registered supplier..."
-                    options={suppliers.map((s) => ({
-                      label: s.name,
-                      value: s.id,
-                      badge: s.category,
-                      sublabel: `Bal: Rs. ${(s.currentBalance || 0).toLocaleString()} • ${s.phone}`,
-                    }))}
-                    value={poForm.supplierId}
-                    onSelect={(val) => {
-                      setPOForm({ ...poForm, supplierId: val });
-                      const found = suppliers.find((s) => s.id === val);
-                      if (found) setSelectedSupplierForPO(found);
-                    }}
-                    icon="business-outline"
-                    searchable
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Vendor Bill / Invoice #</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. AMP-8821"
-                    value={poForm.invoiceNo}
-                    onChangeText={(t) => setPOForm({ ...poForm, invoiceNo: t })}
-                  />
-                </View>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Received By Staff / Chef</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Chef Omar"
-                    value={poForm.receivedBy}
-                    onChangeText={(t) => setPOForm({ ...poForm, receivedBy: t })}
-                  />
-                </View>
-              </View>
-
-              {/* Multi-Item Repeater */}
-              <View style={{ marginTop: 12 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.inputLabel}>Supplied Ingredients / Items *</Text>
-                  <TouchableOpacity style={styles.addSmallBtn} onPress={handleAddPOItem}>
-                    <Ionicons name="add" size={14} color={BRAND.burgundy} />
-                    <Text style={styles.addSmallBtnText}>Add Item</Text>
+                  <TouchableOpacity style={styles.whatsAppShareBtn} onPress={handleShareLedgerWhatsApp}>
+                    <Ionicons name="logo-whatsapp" size={17} color="#FFFFFF" />
+                    <Text style={styles.whatsAppShareBtnText}>WhatsApp پر کھاتہ بھیجیں</Text>
                   </TouchableOpacity>
                 </View>
 
-                {poItems.map((item, idx) => (
-                  <View key={idx} style={styles.poItemRow}>
-                    <View style={{ flex: 3 }}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Item Name (e.g. Boneless Chicken)"
-                        value={item.name}
-                        onChangeText={(t) => handleUpdatePOItem(idx, 'name', t)}
-                      />
-                    </View>
-                    <View style={{ flex: 1.2 }}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Qty"
-                        keyboardType="numeric"
-                        value={String(item.qtyOrdered || '')}
-                        onChangeText={(t) => handleUpdatePOItem(idx, 'qtyOrdered', parseFloat(t) || 0)}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Unit (kg)"
-                        value={item.unit}
-                        onChangeText={(t) => handleUpdatePOItem(idx, 'unit', t)}
-                      />
-                    </View>
-                    <View style={{ flex: 1.5 }}>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="Rate (Rs)"
-                        keyboardType="numeric"
-                        value={String(item.unitCost || '')}
-                        onChangeText={(t) => handleUpdatePOItem(idx, 'unitCost', parseFloat(t) || 0)}
-                      />
-                    </View>
-                    <View style={{ flex: 1.5, justifyContent: 'center', alignItems: 'flex-end', paddingRight: 4 }}>
-                      <Text style={{ fontWeight: '800', color: BRAND.ink }}>
-                        Rs. {(item.totalCost || 0).toLocaleString()}
+                {/* 3-Column Financial Cards */}
+                <View style={styles.kpiRow}>
+                  <View style={[styles.kpiCard, { borderLeftColor: BRAND.burgundy }]}>
+                    <Ionicons name="cart" size={22} color={BRAND.burgundy} />
+                    <View>
+                      <Text style={styles.kpiLabel}>کل بلنگ (Bills Dr)</Text>
+                      <Text style={[styles.kpiValue, { color: BRAND.burgundy }]}>
+                        Rs. {(activeSupplier.totalPurchases || 0).toLocaleString()}
                       </Text>
                     </View>
-                    {poItems.length > 1 && (
-                      <TouchableOpacity onPress={() => handleRemovePOItem(idx)} style={{ padding: 6 }}>
-                        <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                      </TouchableOpacity>
-                    )}
                   </View>
-                ))}
-              </View>
 
-              {/* Financial Calculation Box */}
-              {(() => {
-                const totals = calculatePOTotals();
-                return (
-                  <View style={styles.poSummaryBox}>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Subtotal:</Text>
-                      <Text style={styles.summaryVal}>Rs. {totals.subtotal.toLocaleString()}</Text>
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Discount:</Text>
-                      <TextInput
-                        style={[styles.smallInput, { width: 90 }]}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        value={poForm.discount}
-                        onChangeText={(t) => setPOForm({ ...poForm, discount: t })}
-                      />
-                    </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Freight / Delivery Charges:</Text>
-                      <TextInput
-                        style={[styles.smallInput, { width: 90 }]}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        value={poForm.freight}
-                        onChangeText={(t) => setPOForm({ ...poForm, freight: t })}
-                      />
-                    </View>
-                    <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: BRAND.border, paddingTop: 6, marginTop: 4 }]}>
-                      <Text style={[styles.summaryLabel, { fontWeight: '800', fontSize: 15 }]}>Net PO Total:</Text>
-                      <Text style={[styles.summaryVal, { fontWeight: '900', fontSize: 16, color: BRAND.burgundy }]}>
-                        Rs. {totals.totalAmount.toLocaleString()}
+                  <View style={[styles.kpiCard, { borderLeftColor: BRAND.success }]}>
+                    <Ionicons name="cash" size={22} color={BRAND.success} />
+                    <View>
+                      <Text style={styles.kpiLabel}>کل ادا شدہ رقم (Paid Cr)</Text>
+                      <Text style={[styles.kpiValue, { color: BRAND.success }]}>
+                        Rs. {activeSupplierPayments.reduce((s, p) => s + p.amount, 0).toLocaleString()}
                       </Text>
                     </View>
+                  </View>
 
-                    {/* Payment settlement row */}
-                    <View style={[styles.summaryRow, { marginTop: 8 }]}>
-                      <Text style={styles.summaryLabel}>Amount Paid Today:</Text>
-                      <TextInput
-                        style={[styles.smallInput, { width: 110, fontWeight: '700' }]}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        value={poForm.amountPaid}
-                        onChangeText={(t) => setPOForm({ ...poForm, amountPaid: t })}
-                      />
-                    </View>
-
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Remaining Balance Due:</Text>
+                  <View style={[styles.kpiCard, { borderLeftColor: activeSupplier.currentBalance > 0 ? BRAND.danger : BRAND.success }]}>
+                    <Ionicons name="alert-circle" size={22} color={activeSupplier.currentBalance > 0 ? BRAND.danger : BRAND.success} />
+                    <View>
+                      <Text style={styles.kpiLabel}>نیٹ واجب الادا بقایا (Net Due)</Text>
                       <Text
                         style={[
-                          styles.summaryVal,
-                          { color: totals.balanceDue > 0 ? BRAND.danger : BRAND.success, fontWeight: '800' },
+                          styles.kpiValue,
+                          { color: activeSupplier.currentBalance > 0 ? BRAND.danger : BRAND.success },
                         ]}
                       >
-                        Rs. {totals.balanceDue.toLocaleString()}
+                        Rs. {(activeSupplier.currentBalance || 0).toLocaleString()}
                       </Text>
                     </View>
                   </View>
-                );
-              })()}
+                </View>
 
-              {/* Auto Toggles */}
-              <View style={styles.togglesBox}>
-                <TouchableOpacity
-                  style={styles.toggleRow}
-                  onPress={() => setPOForm({ ...poForm, autoReceive: !poForm.autoReceive })}
-                >
-                  <Ionicons
-                    name={poForm.autoReceive ? 'checkbox' : 'square-outline'}
-                    size={20}
-                    color={BRAND.burgundy}
-                  />
-                  <Text style={styles.toggleText}>
-                    Instantly update Raw Material Inventory Stock levels
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={styles.toggleRow}
-                  onPress={() => setPOForm({ ...poForm, autoExpense: !poForm.autoExpense })}
-                >
-                  <Ionicons
-                    name={poForm.autoExpense ? 'checkbox' : 'square-outline'}
-                    size={20}
-                    color={BRAND.burgundy}
-                  />
-                  <Text style={styles.toggleText}>
-                    Auto-record Amount Paid in Daily Restaurant Cash Expenses
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setIsPOModalOpen(false)}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleSavePO}>
-                <Text style={styles.primaryBtnText}>Record & Save PO</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ---------------------------------------------------- */}
-      {/* MODAL 3: RECORD VENDOR PAYMENT (FULL DETAILS) */}
-      {/* ---------------------------------------------------- */}
-      <Modal visible={isPaymentModalOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { width: isMobile ? '95%' : 560, maxHeight: '92%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Record Vendor Payment Voucher</Text>
-                <Text style={styles.modalSub}>Disburse settlement & update supplier ledger balance</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsPaymentModalOpen(false)}>
-                <Ionicons name="close" size={24} color={BRAND.ink} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Supplier info banner */}
-              {(() => {
-                const curSup =
-                  suppliers.find((s) => s.id === paymentForm.supplierId) || selectedSupplierForPayment;
-                const outstanding = curSup?.currentBalance || 0;
-                const pendingPOs = purchaseOrders.filter(
-                  (po) => po.supplierId === curSup?.id && (po.balanceDue || 0) > 0
-                );
-
-                return (
-                  <View>
-                    <View style={styles.paymentSupBanner}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.paymentSupBannerName}>{curSup?.name}</Text>
-                        <Text style={styles.paymentSupBannerMeta}>
-                          {curSup?.category} • {curSup?.contactPerson} ({curSup?.phone})
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.paymentSupBannerDueLabel}>Outstanding Payable</Text>
-                        <Text
-                          style={[
-                            styles.paymentSupBannerDueVal,
-                            { color: outstanding > 0 ? BRAND.danger : BRAND.success },
-                          ]}
-                        >
-                          Rs. {outstanding.toLocaleString()}
-                        </Text>
-                      </View>
+                {/* TWO-COLUMN WORKFLOW: PAYMENT (LEFT) + LEDGER (RIGHT) */}
+                <View style={[styles.workflowGrid, isMobile && { flexDirection: 'column' }]}>
+                  {/* LEFT: RECORD PAYMENT FORM */}
+                  <View style={styles.paymentBox}>
+                    <View style={styles.boxHeader}>
+                      <Ionicons name="cash-outline" size={20} color={BRAND.burgundy} />
+                      <Text style={styles.boxTitle}>ادائیگی درج کریں (Record Payment)</Text>
                     </View>
 
-                    {/* Quick Amount Fill Shortcuts */}
-                    {outstanding > 0 && (
+                    {/* Quick Amount Presets */}
+                    {activeSupplier.currentBalance > 0 && (
                       <View style={{ marginBottom: 12 }}>
-                        <Text style={styles.inputHintBold}>Quick Amount Shortcuts:</Text>
+                        <Text style={styles.miniLabel}>فوری رقم شارٹ کٹس:</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                           <TouchableOpacity
-                            style={styles.quickFillPill}
-                            onPress={() => handleQuickFillAmount(outstanding)}
+                            style={[styles.quickChip, { backgroundColor: BRAND.dangerBg, borderColor: BRAND.danger }]}
+                            onPress={() => setPayAmount(String(activeSupplier.currentBalance))}
                           >
-                            <Text style={styles.quickFillPillText}>
-                              Full Due (Rs. {outstanding.toLocaleString()})
+                            <Text style={[styles.quickChipText, { color: BRAND.danger }]}>
+                              مکمل بقایا (Rs. {activeSupplier.currentBalance.toLocaleString()})
                             </Text>
                           </TouchableOpacity>
+
                           <TouchableOpacity
-                            style={styles.quickFillPill}
-                            onPress={() => handleQuickFillAmount(outstanding * 0.5)}
+                            style={styles.quickChip}
+                            onPress={() => setPayAmount(String(Math.round(activeSupplier.currentBalance * 0.5)))}
                           >
-                            <Text style={styles.quickFillPillText}>
-                              50% Due (Rs. {Math.round(outstanding * 0.5).toLocaleString()})
+                            <Text style={styles.quickChipText}>
+                              50% نصف (Rs. {Math.round(activeSupplier.currentBalance * 0.5).toLocaleString()})
                             </Text>
                           </TouchableOpacity>
-                          {[5000, 10000, 25000, 50000].map((preset) => {
-                            if (preset > outstanding * 1.5) return null;
+
+                          {[5000, 10000, 25000].map((amt) => {
+                            if (amt > activeSupplier.currentBalance) return null;
                             return (
                               <TouchableOpacity
-                                key={preset}
-                                style={styles.quickFillPill}
-                                onPress={() => handleQuickFillAmount(preset)}
+                                key={amt}
+                                style={styles.quickChip}
+                                onPress={() => setPayAmount(String(amt))}
                               >
-                                <Text style={styles.quickFillPillText}>Rs. {preset.toLocaleString()}</Text>
+                                <Text style={styles.quickChipText}>Rs. {amt.toLocaleString()}</Text>
                               </TouchableOpacity>
                             );
                           })}
@@ -2521,967 +1195,534 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                       </View>
                     )}
 
-                    {/* PO Specific Allocation (Optional) */}
-                    {pendingPOs.length > 0 && (
-                      <View style={[styles.formGroup, { marginBottom: 12 }]}>
-                        <RoyalDropdown
-                          label="Allocate Against Specific Invoice / PO (Optional)"
-                          placeholder="General Account Settlement"
-                          options={[
-                            {
-                              label: 'General Account Settlement (All Pending)',
-                              value: '',
-                              sublabel: 'Apply directly to vendor ledger balance',
-                            },
-                            ...pendingPOs.map((po) => ({
-                              label: `${po.poNumber}: Due Rs. ${po.balanceDue.toLocaleString()}`,
-                              value: po.id,
-                              badge: `Due: Rs. ${po.balanceDue.toLocaleString()}`,
-                              sublabel: po.invoiceNo ? `Vendor Bill #${po.invoiceNo}` : undefined,
-                            })),
-                          ]}
-                          value={paymentForm.purchaseOrderId || ''}
-                          onSelect={(val) => {
-                            if (!val) {
-                              setPaymentForm((prev) => ({ ...prev, purchaseOrderId: '' }));
-                            } else {
-                              const po = pendingPOs.find((p) => p.id === val);
-                              if (po) {
-                                setPaymentForm((prev) => ({
-                                  ...prev,
-                                  purchaseOrderId: po.id,
-                                  amount: String(po.balanceDue),
-                                  notes: `Settlement for PO #${po.poNumber}${po.invoiceNo ? ` (Bill #${po.invoiceNo})` : ''}`,
-                                }));
-                              }
-                            }
-                          }}
-                          icon="receipt-outline"
-                          searchable
-                        />
+                    {/* Amount Input */}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>ادائیگی کی رقم (Amount in PKR) *</Text>
+                      <TextInput
+                        style={[styles.formInput, { fontSize: 20, fontWeight: '900', color: BRAND.burgundy }]}
+                        placeholder="0"
+                        keyboardType="numeric"
+                        value={payAmount}
+                        onChangeText={setPayAmount}
+                      />
+                    </View>
+
+                    {/* Payment Method */}
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>طریقہ کار (Method)</Text>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {[
+                          { id: 'cash', label: 'نقد (Cash)', icon: 'cash' },
+                          { id: 'online', label: 'آن لائن (IBFT)', icon: 'card' },
+                          { id: 'cheque', label: 'چیک (Cheque)', icon: 'newspaper' },
+                        ].map((m) => {
+                          const isSel = payMethod === m.id;
+                          return (
+                            <TouchableOpacity
+                              key={m.id}
+                              style={[styles.payMethodBtn, isSel && styles.payMethodBtnActive]}
+                              onPress={() => setPayMethod(m.id as any)}
+                            >
+                              <Ionicons name={m.icon as any} size={15} color={isSel ? '#FFFFFF' : BRAND.burgundy} />
+                              <Text style={[styles.payMethodText, isSel && styles.payMethodTextActive]}>
+                                {m.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
                       </View>
-                    )}
-                  </View>
-                );
-              })()}
-
-              {/* Amount input */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Settlement Amount (PKR) *</Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    { fontSize: 20, fontWeight: '900', color: BRAND.burgundy, paddingVertical: 10 },
-                  ]}
-                  placeholder="0"
-                  keyboardType="numeric"
-                  value={paymentForm.amount}
-                  onChangeText={(t) => setPaymentForm({ ...paymentForm, amount: t })}
-                />
-              </View>
-
-              {/* Payment Method Selector */}
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Payment Method *</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  {(['cash', 'online', 'cheque'] as const).map((m) => (
-                    <TouchableOpacity
-                      key={m}
-                      style={[styles.methodPill, paymentForm.method === m && styles.methodPillActive]}
-                      onPress={() => setPaymentForm({ ...paymentForm, method: m })}
-                    >
-                      <Ionicons
-                        name={
-                          m === 'cash'
-                            ? 'cash-outline'
-                            : m === 'online'
-                            ? 'phone-portrait-outline'
-                            : 'document-text-outline'
-                        }
-                        size={16}
-                        color={paymentForm.method === m ? '#FFFFFF' : BRAND.ink}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text
-                        style={[
-                          styles.methodPillText,
-                          paymentForm.method === m && styles.methodPillTextActive,
-                        ]}
-                      >
-                        {m === 'cash' ? 'Cash Counter' : m === 'online' ? 'Online / IBFT' : 'Bank Cheque'}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </View>
-
-              {/* Contextual Fields: Cash Mode */}
-              {paymentForm.method === 'cash' && (
-                <View style={styles.formSectionBox}>
-                  <Text style={styles.formSectionTitle}>Cash Payment Details</Text>
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Cash Drawer / Source</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Main Cash Drawer / Safe Vault"
-                        value={paymentForm.sourceAccount}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, sourceAccount: t })}
-                      />
                     </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Cash Receiver / Vendor Agent</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Driver Rafiq / Sales Rep"
-                        value={paymentForm.receivedByContact}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, receivedByContact: t })}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.inputLabel}>Cash Receipt Voucher / Serial #</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. Cash Voucher #981 / Slip #12"
-                      value={paymentForm.reference}
-                      onChangeText={(t) => setPaymentForm({ ...paymentForm, reference: t })}
-                    />
-                  </View>
-                </View>
-              )}
 
-              {/* Contextual Fields: Online Mode */}
-              {paymentForm.method === 'online' && (
-                <View style={styles.formSectionBox}>
-                  <Text style={styles.formSectionTitle}>Online / IBFT Transfer Details</Text>
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Restaurant Debit Account</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Meezan Bank A/C #0281"
-                        value={paymentForm.sourceAccount}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, sourceAccount: t })}
-                      />
-                    </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Beneficiary Bank</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Meezan Bank / HBL / Bank Alfalah"
-                        value={paymentForm.bankName}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, bankName: t })}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.formGroup}>
-                    <Text style={styles.inputLabel}>Bank Transaction ID / UTR / Reference *</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. IBFT-9821381283 / Trx #882194"
-                      value={paymentForm.reference}
-                      onChangeText={(t) => setPaymentForm({ ...paymentForm, reference: t })}
-                    />
-                  </View>
-                </View>
-              )}
-
-              {/* Contextual Fields: Cheque Mode */}
-              {paymentForm.method === 'cheque' && (
-                <View style={styles.formSectionBox}>
-                  <Text style={styles.formSectionTitle}>Cheque Instrument Details</Text>
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Cheque Number *</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. CHQ-0098231"
-                        value={paymentForm.chequeNumber}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, chequeNumber: t })}
-                      />
-                    </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Bank Name</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Meezan Bank Ltd"
-                        value={paymentForm.bankName}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, bankName: t })}
-                      />
-                    </View>
-                  </View>
-                  <View style={styles.formRow}>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Cheque Clearance Date</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="YYYY-MM-DD"
-                        value={paymentForm.chequeDate}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, chequeDate: t })}
-                      />
-                    </View>
-                    <View style={styles.formCol}>
-                      <Text style={styles.inputLabel}>Cheque Delivered To</Text>
-                      <TextInput
-                        style={styles.input}
-                        placeholder="e.g. Supplier Manager"
-                        value={paymentForm.receivedByContact}
-                        onChangeText={(t) => setPaymentForm({ ...paymentForm, receivedByContact: t })}
-                      />
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              {/* Authorized by & Notes */}
-              <View style={styles.formRow}>
-                <View style={styles.formCol}>
-                  <Text style={styles.inputLabel}>Disbursed / Authorized By</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Admin / Cashier Omar"
-                    value={paymentForm.paidBy}
-                    onChangeText={(t) => setPaymentForm({ ...paymentForm, paidBy: t })}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formGroup}>
-                <Text style={styles.inputLabel}>Payment Remarks / Ledger Narration</Text>
-                <TextInput
-                  style={[styles.input, { height: 60 }]}
-                  multiline
-                  placeholder="e.g. Weekly vendor settlement cleared after quality verification."
-                  value={paymentForm.notes}
-                  onChangeText={(t) => setPaymentForm({ ...paymentForm, notes: t })}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={styles.toggleRow}
-                onPress={() => setPaymentForm({ ...paymentForm, autoExpense: !paymentForm.autoExpense })}
-              >
-                <Ionicons
-                  name={paymentForm.autoExpense ? 'checkbox' : 'square-outline'}
-                  size={20}
-                  color={BRAND.burgundy}
-                />
-                <Text style={styles.toggleText}>
-                  Auto-record as cash expense in Daily Restaurant Shift Ledger
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.secondaryBtn} onPress={() => setIsPaymentModalOpen(false)}>
-                <Text style={styles.secondaryBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.primaryBtn} onPress={handleSavePayment}>
-                <Ionicons name="checkmark-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.primaryBtnText}>Confirm & Generate Voucher</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ---------------------------------------------------- */}
-      {/* MODAL 4: DEDICATED SEPARATE SUPPLIER ACCOUNT LEDGER */}
-      {/* ---------------------------------------------------- */}
-      <Modal visible={isLedgerModalOpen} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { width: isMobile ? '95%' : 840, maxHeight: '92%' }]}>
-            {(() => {
-              const currentSup =
-                suppliers.find((s) => s.id === ledgerSupplier?.id) || ledgerSupplier;
-              if (!currentSup) return null;
-
-              const allLedgerEntries = getSupplierLedgerEntries(currentSup.id);
-              const totalBilled = allLedgerEntries
-                .filter((e) => e.type === 'bill')
-                .reduce((sum, e) => sum + e.debit, 0);
-              const totalPaid = allLedgerEntries
-                .filter((e) => e.type === 'payment')
-                .reduce((sum, e) => sum + e.credit, 0);
-              const currentDue = currentSup.currentBalance || 0;
-
-              // Filtered entries within ledger
-              const displayedEntries = allLedgerEntries
-                .filter((e) => {
-                  if (ledgerFilter === 'bills' && e.type !== 'bill') return false;
-                  if (ledgerFilter === 'payments' && e.type !== 'payment') return false;
-                  if (ledgerSearch.trim()) {
-                    const q = ledgerSearch.toLowerCase();
-                    const mDoc = e.docNumber.toLowerCase().includes(q);
-                    const mInv = e.invoiceNo?.toLowerCase().includes(q);
-                    const mSub = e.subtitle.toLowerCase().includes(q);
-                    if (!mDoc && !mInv && !mSub) return false;
-                  }
-                  return true;
-                })
-                .sort((a, b) => (ledgerSortAsc ? a.date - b.date : b.date - a.date));
-
-              return (
-                <View style={{ flex: 1 }}>
-                  {/* Ledger Header */}
-                  <View style={styles.modalHeader}>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={styles.modalTitle}>Supplier Account Statement & Ledger</Text>
-                        <View style={styles.badgePill}>
-                          <Text style={styles.badgePillText}>{currentSup.category.toUpperCase()}</Text>
+                    {payMethod === 'online' && (
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.fieldLabel}>بینک کا نام (Bank Name)</Text>
+                          <TextInput
+                            style={styles.formInput}
+                            placeholder="مثال: Meezan Bank / HBL"
+                            value={payBankName}
+                            onChangeText={setPayBankName}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.fieldLabel}>ٹرانزیکشن ID / Ref</Text>
+                          <TextInput
+                            style={styles.formInput}
+                            placeholder="مثال: TID-987654"
+                            value={payReference}
+                            onChangeText={setPayReference}
+                          />
                         </View>
                       </View>
-                      <Text style={styles.modalSub}>
-                        {currentSup.name} • Contact: {currentSup.contactPerson} ({currentSup.phone})
-                      </Text>
+                    )}
+
+                    <View style={styles.inputGroup}>
+                      <Text style={styles.fieldLabel}>نوٹ / تفصیل (Optional Note)</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="بل کلیئرنس، ایڈوانس وغیرہ"
+                        value={payNotes}
+                        onChangeText={setPayNotes}
+                      />
                     </View>
 
-                    <TouchableOpacity onPress={() => setIsLedgerModalOpen(false)}>
-                      <Ionicons name="close" size={24} color={BRAND.ink} />
+                    <TouchableOpacity style={styles.submitPaymentBtn} onPress={handleSaveInlinePayment}>
+                      <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                      <Text style={styles.submitPaymentBtnText}>ادائیگی جمع کریں (Save Payment)</Text>
                     </TouchableOpacity>
                   </View>
 
-                  <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                    {/* Supplier Contact & Quick Actions Strip */}
-                    <View style={styles.ledgerSupplierStrip}>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ledgerSupAddress}>
-                          <Ionicons name="location-outline" size={13} color={BRAND.muted} />{' '}
-                          {currentSup.address || currentSup.city || 'Lahore'}
-                          {currentSup.paymentTerms ? ` • Terms: ${currentSup.paymentTerms}` : ''}
-                        </Text>
-                        {currentSup.bankDetails?.accountNumber ? (
+                  {/* RIGHT: COMPLETE LEDGER STATEMENT TIMELINE */}
+                  <View style={styles.ledgerBox}>
+                    <View style={styles.boxHeader}>
+                      <View>
+                        <Text style={styles.boxTitle}>مکمل کھاتہ اسٹیٹمنٹ (Ledger Statement)</Text>
+                        <Text style={styles.boxSub}>تمام بلز (Dr) اور ادائیگیاں (Cr) تاریخ وار</Text>
+                      </View>
+
+                      {/* Filter pills */}
+                      <View style={{ flexDirection: 'row', gap: 4 }}>
+                        {[
+                          { id: 'all', label: 'سب' },
+                          { id: 'bills', label: 'بلز' },
+                          { id: 'payments', label: 'ادائیگیاں' },
+                        ].map((btn) => (
                           <TouchableOpacity
-                            style={styles.ledgerBankCopyRow}
-                            onPress={() =>
-                              copyToClipboard(
-                                `${currentSup.bankDetails?.bankName} - ${currentSup.bankDetails?.accountNumber} (${currentSup.bankDetails?.accountTitle})`,
-                                'Bank Details Copied'
-                              )
-                            }
+                            key={btn.id}
+                            style={[styles.smallFilterPill, ledgerFilter === btn.id && styles.smallFilterPillActive]}
+                            onPress={() => setLedgerFilter(btn.id as any)}
                           >
-                            <Ionicons name="card-outline" size={13} color={BRAND.goldDark} />
-                            <Text style={styles.ledgerBankCopyText}>
-                              {currentSup.bankDetails.bankName}: {currentSup.bankDetails.accountNumber} (
-                              {currentSup.bankDetails.accountTitle}) • Tap to copy
+                            <Text
+                              style={[
+                                styles.smallFilterText,
+                                ledgerFilter === btn.id && styles.smallFilterTextActive,
+                              ]}
+                            >
+                              {btn.label}
                             </Text>
                           </TouchableOpacity>
-                        ) : null}
-                      </View>
-
-                      <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                        <TouchableOpacity
-                          style={[styles.commBtn, { backgroundColor: '#E8F5E9' }]}
-                          onPress={() => handleWhatsApp(currentSup)}
-                          accessibilityLabel="WhatsApp Vendor"
-                        >
-                          <Ionicons name="logo-whatsapp" size={18} color="#2E7D32" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.commBtn, { backgroundColor: '#E1F5FE' }]}
-                          onPress={() => handleCall(currentSup.phone)}
-                          accessibilityLabel="Call Vendor"
-                        >
-                          <Ionicons name="call" size={16} color="#0277BD" />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={styles.ledgerActionBtnSmall}
-                          onPress={() => handleShareLedger(currentSup, allLedgerEntries)}
-                        >
-                          <Ionicons name="share-social-outline" size={14} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                          <Text style={styles.ledgerActionBtnSmallText}>Copy Statement</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.primaryBtn, { paddingVertical: 6, paddingHorizontal: 10 }]}
-                          onPress={() => handleOpenPaymentModal(currentSup)}
-                        >
-                          <Ionicons name="cash-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={[styles.primaryBtnText, { fontSize: 11 }]}>Pay Dues</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.primaryBtn, { backgroundColor: BRAND.goldDark, paddingVertical: 6, paddingHorizontal: 10 }]}
-                          onPress={() => handleOpenNewPO(currentSup)}
-                        >
-                          <Ionicons name="cart-outline" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
-                          <Text style={[styles.primaryBtnText, { fontSize: 11 }]}>New PO</Text>
-                        </TouchableOpacity>
+                        ))}
                       </View>
                     </View>
 
-                    {/* Financial Summary KPI Cards */}
-                    <View style={styles.ledgerKpiRow}>
-                      <View style={[styles.ledgerKpiBox, { borderLeftColor: BRAND.burgundy }]}>
-                        <Text style={styles.ledgerKpiLabel}>Total Procurement (Dr)</Text>
-                        <Text style={[styles.ledgerKpiVal, { color: BRAND.burgundy }]}>
-                          Rs. {totalBilled.toLocaleString()}
+                    {/* Timeline Table */}
+                    <View style={styles.ledgerTable}>
+                      <View style={styles.ledgerTableHeader}>
+                        <Text style={[styles.ledgerTh, { flex: 1.5 }]}>تاریخ و نمبر</Text>
+                        <Text style={[styles.ledgerTh, { flex: 3 }]}>تفصیلات</Text>
+                        <Text style={[styles.ledgerTh, { flex: 1.5, textAlign: 'right', color: BRAND.burgundy }]}>
+                          بل (+Dr)
                         </Text>
-                        <Text style={styles.ledgerKpiSub}>Invoices / Goods Received</Text>
-                      </View>
-
-                      <View style={[styles.ledgerKpiBox, { borderLeftColor: BRAND.success }]}>
-                        <Text style={styles.ledgerKpiLabel}>Total Paid Out (Cr)</Text>
-                        <Text style={[styles.ledgerKpiVal, { color: BRAND.success }]}>
-                          Rs. {totalPaid.toLocaleString()}
+                        <Text style={[styles.ledgerTh, { flex: 1.5, textAlign: 'right', color: BRAND.success }]}>
+                          ادائیگی (-Cr)
                         </Text>
-                        <Text style={styles.ledgerKpiSub}>Payments Cleared</Text>
+                        <Text style={[styles.ledgerTh, { flex: 1.8, textAlign: 'right' }]}>باقی کھاتہ</Text>
                       </View>
 
-                      <View style={[styles.ledgerKpiBox, { borderLeftColor: currentDue > 0 ? BRAND.danger : BRAND.success }]}>
-                        <Text style={styles.ledgerKpiLabel}>Net Outstanding Payable</Text>
-                        <Text
-                          style={[
-                            styles.ledgerKpiVal,
-                            { color: currentDue > 0 ? BRAND.danger : BRAND.success },
-                          ]}
-                        >
-                          Rs. {currentDue.toLocaleString()}
-                        </Text>
-                        <Text style={styles.ledgerKpiSub}>
-                          {currentDue > 0 ? '⚠️ Outstanding Dues Pending' : '✓ Account Fully Settled'}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Ledger Filter & Search Toolbar */}
-                    <View style={styles.ledgerToolbar}>
-                      <View style={styles.ledgerFilterTabs}>
-                        <TouchableOpacity
-                          style={[styles.ledgerTabPill, ledgerFilter === 'all' && styles.ledgerTabPillActive]}
-                          onPress={() => setLedgerFilter('all')}
-                        >
-                          <Text
-                            style={[
-                              styles.ledgerTabPillText,
-                              ledgerFilter === 'all' && styles.ledgerTabPillTextActive,
-                            ]}
-                          >
-                            All ({allLedgerEntries.length})
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.ledgerTabPill, ledgerFilter === 'bills' && styles.ledgerTabPillActive]}
-                          onPress={() => setLedgerFilter('bills')}
-                        >
-                          <Text
-                            style={[
-                              styles.ledgerTabPillText,
-                              ledgerFilter === 'bills' && styles.ledgerTabPillTextActive,
-                            ]}
-                          >
-                            Bills (Dr) ({allLedgerEntries.filter((e) => e.type === 'bill').length})
-                          </Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.ledgerTabPill, ledgerFilter === 'payments' && styles.ledgerTabPillActive]}
-                          onPress={() => setLedgerFilter('payments')}
-                        >
-                          <Text
-                            style={[
-                              styles.ledgerTabPillText,
-                              ledgerFilter === 'payments' && styles.ledgerTabPillTextActive,
-                            ]}
-                          >
-                            Payments (Cr) ({allLedgerEntries.filter((e) => e.type === 'payment').length})
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-
-                      <View style={styles.ledgerSearchBox}>
-                        <Ionicons name="search" size={14} color={BRAND.muted} style={{ marginRight: 6 }} />
-                        <TextInput
-                          style={styles.ledgerSearchInput}
-                          placeholder="Search statement..."
-                          value={ledgerSearch}
-                          onChangeText={setLedgerSearch}
-                          placeholderTextColor="#9E9E9E"
-                        />
-                        {ledgerSearch.length > 0 && (
-                          <TouchableOpacity onPress={() => setLedgerSearch('')}>
-                            <Ionicons name="close-circle" size={14} color={BRAND.muted} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-
-                      <TouchableOpacity
-                        style={styles.ledgerSortBtn}
-                        onPress={() => setLedgerSortAsc(!ledgerSortAsc)}
-                      >
-                        <Ionicons
-                          name={ledgerSortAsc ? 'arrow-up-outline' : 'arrow-down-outline'}
-                          size={14}
-                          color={BRAND.burgundy}
-                        />
-                        <Text style={styles.ledgerSortBtnText}>
-                          {ledgerSortAsc ? 'Oldest First' : 'Newest First'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Chronological Table Header */}
-                    <View style={styles.ledgerTableHeader}>
-                      <Text style={[styles.ledgerTh, { flex: 2 }]}>Date & Time</Text>
-                      <Text style={[styles.ledgerTh, { flex: 4 }]}>Voucher & Transaction Details</Text>
-                      <Text style={[styles.ledgerTh, { flex: 2, textAlign: 'right' }]}>Billed (Dr)</Text>
-                      <Text style={[styles.ledgerTh, { flex: 2, textAlign: 'right' }]}>Paid (Cr)</Text>
-                      <Text style={[styles.ledgerTh, { flex: 2.2, textAlign: 'right' }]}>Running Balance</Text>
-                      <Text style={[styles.ledgerTh, { flex: 1.5, textAlign: 'center' }]}>Action</Text>
-                    </View>
-
-                    {/* Chronological Statement Rows */}
-                    {displayedEntries.length === 0 ? (
-                      <View style={styles.emptyState}>
-                        <Ionicons name="newspaper-outline" size={40} color={BRAND.muted} style={{ marginBottom: 8 }} />
-                        <Text style={styles.emptyStateTitle}>No Ledger Entries</Text>
-                        <Text style={styles.emptyStateSub}>No matching bills or payments found for this vendor.</Text>
-                      </View>
-                    ) : (
-                      displayedEntries.map((entry) => {
-                        const isBill = entry.type === 'bill';
-                        const isPay = entry.type === 'payment';
-
-                        return (
+                      {activeSupplierLedger
+                        .filter((e) => (ledgerFilter === 'all' ? true : ledgerFilter === 'bills' ? e.type === 'bill' : e.type === 'payment'))
+                        .map((entry) => (
                           <View key={entry.id} style={styles.ledgerTableRow}>
-                            {/* Date */}
-                            <View style={{ flex: 2 }}>
-                              <Text style={styles.ledgerRowDate}>
-                                {new Date(entry.date).toLocaleDateString([], {
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric',
-                                })}
-                              </Text>
-                              <Text style={styles.ledgerRowTime}>
-                                {new Date(entry.date).toLocaleTimeString([], {
-                                  hour: '2-digit',
-                                  minute: '2-digit',
-                                })}
-                              </Text>
+                            <View style={{ flex: 1.5 }}>
+                              <Text style={styles.ledgerDateText}>{new Date(entry.date).toLocaleDateString()}</Text>
+                              <Text style={styles.ledgerDocText}>{entry.docNumber}</Text>
                             </View>
 
-                            {/* Voucher & Description */}
-                            <View style={{ flex: 4, paddingRight: 6 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View
-                                  style={[
-                                    styles.ledgerTypeBadge,
-                                    { backgroundColor: isBill ? '#F5EBE6' : '#E8F5E9' },
-                                  ]}
-                                >
-                                  <Text
-                                    style={[
-                                      styles.ledgerTypeBadgeText,
-                                      { color: isBill ? BRAND.burgundy : BRAND.success },
-                                    ]}
-                                  >
-                                    {isBill ? 'BILL' : 'PAID'}
-                                  </Text>
-                                </View>
-                                <Text style={styles.ledgerDocNo}>{entry.docNumber}</Text>
-                                {entry.invoiceNo ? (
-                                  <Text style={styles.ledgerInvNo}>(Inv: {entry.invoiceNo})</Text>
-                                ) : null}
-                              </View>
-                              <Text style={styles.ledgerRowSubtitle} numberOfLines={2}>
+                            <View style={{ flex: 3, paddingHorizontal: 4 }}>
+                              <Text style={styles.ledgerTitleText}>{entry.title}</Text>
+                              <Text style={styles.ledgerSubText} numberOfLines={2}>
                                 {entry.subtitle}
                               </Text>
                             </View>
 
-                            {/* Billed (Debit) */}
-                            <View style={{ flex: 2, alignItems: 'flex-end' }}>
-                              {entry.debit > 0 ? (
-                                <Text style={[styles.ledgerAmountVal, { color: BRAND.burgundy }]}>
-                                  + Rs. {entry.debit.toLocaleString()}
-                                </Text>
-                              ) : (
-                                <Text style={styles.ledgerAmountDash}>-</Text>
-                              )}
-                            </View>
+                            <Text
+                              style={[
+                                styles.ledgerAmountText,
+                                { flex: 1.5, color: entry.debit > 0 ? BRAND.burgundy : BRAND.muted },
+                              ]}
+                            >
+                              {entry.debit > 0 ? `+Rs. ${entry.debit.toLocaleString()}` : '-'}
+                            </Text>
 
-                            {/* Paid (Credit) */}
-                            <View style={{ flex: 2, alignItems: 'flex-end' }}>
-                              {entry.credit > 0 ? (
-                                <Text style={[styles.ledgerAmountVal, { color: BRAND.success }]}>
-                                  - Rs. {entry.credit.toLocaleString()}
-                                </Text>
-                              ) : (
-                                <Text style={styles.ledgerAmountDash}>-</Text>
-                              )}
-                            </View>
+                            <Text
+                              style={[
+                                styles.ledgerAmountText,
+                                { flex: 1.5, color: entry.credit > 0 ? BRAND.success : BRAND.muted },
+                              ]}
+                            >
+                              {entry.credit > 0 ? `-Rs. ${entry.credit.toLocaleString()}` : '-'}
+                            </Text>
 
-                            {/* Running Balance */}
-                            <View style={{ flex: 2.2, alignItems: 'flex-end' }}>
-                              <Text style={styles.ledgerRunBalVal}>
-                                Rs. {entry.runningBalance.toLocaleString()}
-                              </Text>
-                              <Text
-                                style={[
-                                  styles.ledgerRunBalStatus,
-                                  { color: entry.runningBalance > 0 ? BRAND.danger : BRAND.success },
-                                ]}
-                              >
-                                {entry.runningBalance > 0 ? 'Payable Due' : 'Settled'}
-                              </Text>
-                            </View>
-
-                            {/* Action Button */}
-                            <View style={{ flex: 1.5, alignItems: 'center' }}>
-                              {isBill && entry.po && (
-                                <TouchableOpacity
-                                  style={styles.ledgerRowBtn}
-                                  onPress={() => handleOpenPODetails(entry.po!)}
-                                >
-                                  <Text style={styles.ledgerRowBtnText}>Bill Slip</Text>
-                                </TouchableOpacity>
-                              )}
-                              {isPay && entry.payment && (
-                                <TouchableOpacity
-                                  style={[styles.ledgerRowBtn, { borderColor: '#A5D6A7' }]}
-                                  onPress={() => handleOpenVoucherModal(entry.payment!)}
-                                >
-                                  <Text style={[styles.ledgerRowBtnText, { color: BRAND.success }]}>
-                                    Voucher
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
+                            <Text style={[styles.ledgerBalText, { flex: 1.8 }]}>
+                              Rs. {entry.runningBalance.toLocaleString()}
+                            </Text>
                           </View>
-                        );
-                      })
-                    )}
-                  </ScrollView>
+                        ))}
 
-                  <View style={styles.modalFooter}>
-                    <TouchableOpacity
-                      style={styles.secondaryBtn}
-                      onPress={() => handleShareLedger(currentSup, allLedgerEntries)}
-                    >
-                      <Ionicons name="logo-whatsapp" size={15} color="#2E7D32" style={{ marginRight: 6 }} />
-                      <Text style={[styles.secondaryBtnText, { color: '#2E7D32' }]}>Send Statement</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[styles.primaryBtn, { backgroundColor: BRAND.danger }]}
-                      onPress={() => {
-                        setIsLedgerModalOpen(false);
-                        handleOpenPaymentModal(currentSup);
-                      }}
-                    >
-                      <Ionicons name="cash-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                      <Text style={styles.primaryBtnText}>
-                        Pay Dues (Rs. {currentDue.toLocaleString()})
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsLedgerModalOpen(false)}>
-                      <Text style={styles.primaryBtnText}>Close Statement</Text>
-                    </TouchableOpacity>
+                      {activeSupplierLedger.length === 0 && (
+                        <View style={styles.emptyBox}>
+                          <Text style={styles.emptyBoxSub}>اس وینڈر کا ابھی کوئی کھاتہ ریکارڈ موجود نہیں۔</Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
-              );
-            })()}
+              </View>
+            ) : (
+              <View style={styles.emptyBox}>
+                <Ionicons name="person-outline" size={48} color={BRAND.muted} style={{ marginBottom: 10 }} />
+                <Text style={styles.emptyBoxTitle}>کوئی وینڈر منتخب نہیں ہے</Text>
+                <Text style={styles.emptyBoxSub}>پہلے پیج سے وینڈر منتخب کریں یا اوپر لسٹ میں سے ٹیپ کریں۔</Text>
+              </View>
+            )}
+          </View>
+        )}
+
+        <View style={{ height: 60 }} />
+      </ScrollView>
+
+      {/* ---------------------------------------------------- */}
+      {/* 🚀 MODAL: ADD / EDIT SUPPLIER */}
+      {/* ---------------------------------------------------- */}
+      <Modal visible={isSupplierModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, isMobile && { width: '95%', maxHeight: '92%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {editingSupplier ? 'وینڈر کی معلومات میں ترمیم' : 'نیا وینڈر / سپلائر شامل کریں'}
+                </Text>
+                <Text style={styles.modalSub}>بنیادی تفصیلات درج کر کے فوری محفوظ کریں</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsSupplierModalOpen(false)}>
+                <Ionicons name="close" size={24} color={BRAND.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.fieldLabel}>وینڈر / کمپنی کا نام * (Vendor Name)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="مثال: المدینہ پولٹری، حاجی گوشت سینٹر"
+                  value={supplierForm.name}
+                  onChangeText={(t) => setSupplierForm({ ...supplierForm, name: t })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <RoyalDropdown
+                  label="کیٹیگری منتخب کریں * (Category)"
+                  placeholder="کیٹیگری منتخب کریں..."
+                  options={SUPPLIER_CATEGORIES.map((cat) => {
+                    const theme = CATEGORY_THEMES[cat] || CATEGORY_THEMES.Other;
+                    return {
+                      label: `${cat} (${theme.urdu})`,
+                      value: cat,
+                      icon: theme.icon,
+                    };
+                  })}
+                  value={supplierForm.category}
+                  onSelect={(cat) => setSupplierForm({ ...supplierForm, category: cat })}
+                  searchable
+                />
+              </View>
+
+              <View style={styles.formRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>رابطہ کار کا نام (Contact Person)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="حاجی رفیق صاحب"
+                    value={supplierForm.contactPerson}
+                    onChangeText={(t) => setSupplierForm({ ...supplierForm, contactPerson: t })}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.fieldLabel}>موبائل فون نمبر * (Phone)</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="0300-1234567"
+                    value={supplierForm.phone}
+                    keyboardType="phone-pad"
+                    onChangeText={(t) => setSupplierForm({ ...supplierForm, phone: t })}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.fieldLabel}>سپلائی ہونے والے آئٹمز (کوما لگا کر لکھیں)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="چکن، بون لیس، انڈے، مٹن"
+                  value={supplierForm.suppliedItemsInput}
+                  onChangeText={(t) => setSupplierForm({ ...supplierForm, suppliedItemsInput: t })}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.fieldLabel}>سابقہ بقایا رقم (Starting Due Balance)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="0"
+                  keyboardType="numeric"
+                  value={supplierForm.currentBalance}
+                  onChangeText={(t) => setSupplierForm({ ...supplierForm, currentBalance: t })}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={styles.toggleAdvBtn}
+                onPress={() => setShowAdvancedSupplierFields(!showAdvancedSupplierFields)}
+              >
+                <Ionicons name={showAdvancedSupplierFields ? 'chevron-up' : 'chevron-down'} size={16} color={BRAND.burgundy} />
+                <Text style={styles.toggleAdvBtnText}>
+                  {showAdvancedSupplierFields ? 'بینک تفصیلات چھپائیں' : '+ بینک اکاؤنٹ اور شہر درج کریں'}
+                </Text>
+              </TouchableOpacity>
+
+              {showAdvancedSupplierFields && (
+                <View style={styles.advFieldsBox}>
+                  <View style={styles.formRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fieldLabel}>بینک کا نام (Bank)</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="Meezan, HBL"
+                        value={supplierForm.bankName}
+                        onChangeText={(t) => setSupplierForm({ ...supplierForm, bankName: t })}
+                      />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.fieldLabel}>اکاؤنٹ نمبر (A/C No)</Text>
+                      <TextInput
+                        style={styles.formInput}
+                        placeholder="0101010101"
+                        value={supplierForm.accountNumber}
+                        onChangeText={(t) => setSupplierForm({ ...supplierForm, accountNumber: t })}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.fieldLabel}>شہر (City)</Text>
+                    <TextInput
+                      style={styles.formInput}
+                      placeholder="Lahore"
+                      value={supplierForm.city}
+                      onChangeText={(t) => setSupplierForm({ ...supplierForm, city: t })}
+                    />
+                  </View>
+                </View>
+              )}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalSecondaryBtn} onPress={() => setIsSupplierModalOpen(false)}>
+                <Text style={styles.modalSecondaryBtnText}>منسوخ کریں</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalPrimaryBtn} onPress={handleSaveSupplier}>
+                <Ionicons name="checkmark-circle" size={18} color="#FFFFFF" />
+                <Text style={styles.modalPrimaryBtnText}>وینڈر محفوظ کریں</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
       {/* ---------------------------------------------------- */}
-      {/* MODAL 5: OFFICIAL PAYMENT VOUCHER SLIP MODAL */}
+      {/* 🛒 MODAL: NEW PURCHASE ORDER / BILL */}
+      {/* ---------------------------------------------------- */}
+      <Modal visible={isPOModalOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { width: isMobile ? '95%' : 680, maxHeight: '92%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>نیا خریداری بل درج کریں (New Purchase Bill)</Text>
+                <Text style={styles.modalSub}>{targetSupplierForPO?.name} کیلئے مال رسید بنائیں</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsPOModalOpen(false)}>
+                <Ionicons name="close" size={24} color={BRAND.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              <View style={styles.poTableWrap}>
+                <View style={styles.poTableHeaderRow}>
+                  <Text style={[styles.poThCell, { flex: 3 }]}>آئٹم کا نام</Text>
+                  <Text style={[styles.poThCell, { flex: 1.2, textAlign: 'center' }]}>مقدار</Text>
+                  <Text style={[styles.poThCell, { flex: 1.5, textAlign: 'right' }]}>ریٹ (Rs)</Text>
+                  <Text style={[styles.poThCell, { flex: 1.8, textAlign: 'right' }]}>ٹوٹل</Text>
+                </View>
+
+                {poItems.map((item, index) => (
+                  <View key={index} style={styles.poItemInputRow}>
+                    <TextInput
+                      style={[styles.poItemInput, { flex: 3 }]}
+                      placeholder="آئٹم کا نام"
+                      value={item.name}
+                      onChangeText={(t) => {
+                        const copy = [...poItems];
+                        copy[index].name = t;
+                        setPOItems(copy);
+                      }}
+                    />
+                    <TextInput
+                      style={[styles.poItemInput, { flex: 1.2, textAlign: 'center' }]}
+                      placeholder="10"
+                      keyboardType="numeric"
+                      value={String(item.qtyOrdered || '')}
+                      onChangeText={(t) => {
+                        const copy = [...poItems];
+                        copy[index].qtyOrdered = parseFloat(t) || 0;
+                        copy[index].qtyReceived = parseFloat(t) || 0;
+                        copy[index].totalCost = (parseFloat(t) || 0) * (copy[index].unitCost || 0);
+                        setPOItems(copy);
+                      }}
+                    />
+                    <TextInput
+                      style={[styles.poItemInput, { flex: 1.5, textAlign: 'right' }]}
+                      placeholder="500"
+                      keyboardType="numeric"
+                      value={String(item.unitCost || '')}
+                      onChangeText={(t) => {
+                        const copy = [...poItems];
+                        copy[index].unitCost = parseFloat(t) || 0;
+                        copy[index].totalCost = (copy[index].qtyOrdered || 0) * (parseFloat(t) || 0);
+                        setPOItems(copy);
+                      }}
+                    />
+                    <Text style={[styles.poItemTotalText, { flex: 1.8 }]}>
+                      Rs. {(item.totalCost || 0).toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+
+                <TouchableOpacity
+                  style={styles.addPOItemBtn}
+                  onPress={() =>
+                    setPOItems([
+                      ...poItems,
+                      { name: '', category: 'General', unit: 'kg', qtyOrdered: 1, qtyReceived: 1, unitCost: 0, totalCost: 0 },
+                    ])
+                  }
+                >
+                  <Ionicons name="add" size={16} color={BRAND.burgundy} />
+                  <Text style={styles.addPOItemBtnText}>+ مزید آئٹم شامل کریں</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Total Summary */}
+              {(() => {
+                const subtotal = poItems.reduce((s, it) => s + (it.totalCost || 0), 0);
+                const paid = parseFloat(poForm.amountPaid) || 0;
+                const due = Math.max(0, subtotal - paid);
+
+                return (
+                  <View style={styles.poSummaryCard}>
+                    <View style={styles.poSummaryRow}>
+                      <Text style={styles.poSummaryLabel}>کل بل کی رقم:</Text>
+                      <Text style={[styles.poSummaryVal, { fontSize: 18, color: BRAND.burgundy }]}>
+                        Rs. {subtotal.toLocaleString()}
+                      </Text>
+                    </View>
+
+                    <View style={[styles.formRow, { marginTop: 8 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>ابھی ادا کی گئی رقم (Paid Now)</Text>
+                        <TextInput
+                          style={styles.formInput}
+                          placeholder="0"
+                          keyboardType="numeric"
+                          value={poForm.amountPaid}
+                          onChangeText={(t) => setPOForm({ ...poForm, amountPaid: t })}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.fieldLabel}>وینڈر بل نمبر (Bill No)</Text>
+                        <TextInput
+                          style={styles.formInput}
+                          placeholder="INV-1234"
+                          value={poForm.invoiceNo}
+                          onChangeText={(t) => setPOForm({ ...poForm, invoiceNo: t })}
+                        />
+                      </View>
+                    </View>
+
+                    {due > 0 && (
+                      <Text style={styles.dueAlertText}>
+                        بقایا رقم Rs. {due.toLocaleString()} وینڈر کے کھاتے میں خودکار شامل ہو جائے گی۔
+                      </Text>
+                    )}
+                  </View>
+                );
+              })()}
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalSecondaryBtn} onPress={() => setIsPOModalOpen(false)}>
+                <Text style={styles.modalSecondaryBtnText}>منسوخ کریں</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalPrimaryBtn} onPress={handleSavePO}>
+                <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
+                <Text style={styles.modalPrimaryBtnText}>بل محفوظ کریں</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ---------------------------------------------------- */}
+      {/* 🧾 MODAL: PAYMENT VOUCHER SLIP */}
       {/* ---------------------------------------------------- */}
       <Modal visible={isVoucherModalOpen} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { width: isMobile ? '95%' : 540, maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Official Payment Settlement Voucher</Text>
-                <Text style={styles.modalSub}>Sultan Restaurant Accounts Disbursement Record</Text>
+          <View style={[styles.modalCard, { width: isMobile ? '95%' : 460 }]}>
+            <View style={{ padding: 16 }}>
+              <View style={styles.voucherHeader}>
+                <Text style={styles.voucherBrand}>سلطان ریسٹورنٹ اینڈ بار بی کیو</Text>
+                <Text style={styles.voucherSub}>OFFICIAL PAYMENT SETTLEMENT VOUCHER</Text>
+                {selectedPaymentForVoucher && (
+                  <View style={styles.voucherIdTag}>
+                    <Text style={styles.voucherIdTagText}>
+                      واؤچر #: VCH-{selectedPaymentForVoucher.id.slice(-6).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
-              <TouchableOpacity onPress={() => setIsVoucherModalOpen(false)}>
-                <Ionicons name="close" size={24} color={BRAND.ink} />
-              </TouchableOpacity>
-            </View>
 
-            {selectedPaymentForVoucher && (
-              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {/* Official Voucher Card */}
-                <View style={styles.voucherContainer}>
-                  {/* Voucher Header Banner */}
-                  <View style={styles.voucherHeaderBox}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Ionicons name="restaurant" size={20} color={BRAND.burgundy} />
-                      <Text style={styles.voucherBrandTitle}>SULTAN RESTAURANT & BBQ</Text>
-                    </View>
-                    <Text style={styles.voucherBrandSub}>Procurement & Vendor Payment Settlement</Text>
-                    <View style={styles.voucherNoPill}>
-                      <Text style={styles.voucherNoText}>
-                        VOUCHER #{selectedPaymentForVoucher.id.toUpperCase()}
-                      </Text>
-                    </View>
+              {selectedPaymentForVoucher && (
+                <View style={{ gap: 8, marginVertical: 14 }}>
+                  <View style={styles.voucherRow}>
+                    <Text style={styles.voucherRowLabel}>وینڈر کا نام:</Text>
+                    <Text style={styles.voucherRowValBold}>{selectedPaymentForVoucher.supplierName}</Text>
                   </View>
 
-                  {/* Main Amount Callout */}
-                  <View style={styles.voucherAmountBox}>
-                    <Text style={styles.voucherAmountLabel}>AMOUNT PAID / SETTLED</Text>
-                    <Text style={styles.voucherAmountNumber}>
+                  <View style={styles.voucherRow}>
+                    <Text style={styles.voucherRowLabel}>ادا شدہ رقم:</Text>
+                    <Text style={[styles.voucherRowValBold, { fontSize: 20, color: BRAND.success }]}>
                       Rs. {selectedPaymentForVoucher.amount.toLocaleString()}
                     </Text>
-                    <Text style={styles.voucherMethodText}>
-                      via {selectedPaymentForVoucher.method.toUpperCase()}
-                      {selectedPaymentForVoucher.reference ? ` (${selectedPaymentForVoucher.reference})` : ''}
-                    </Text>
                   </View>
 
-                  {/* Voucher Key-Value Details Table */}
-                  <View style={styles.voucherTable}>
-                    <View style={styles.voucherRow}>
-                      <Text style={styles.voucherKey}>Vendor / Payee:</Text>
-                      <Text style={styles.voucherValBold}>{selectedPaymentForVoucher.supplierName}</Text>
-                    </View>
-
-                    <View style={styles.voucherRow}>
-                      <Text style={styles.voucherKey}>Disbursement Date:</Text>
-                      <Text style={styles.voucherVal}>
-                        {new Date(selectedPaymentForVoucher.paidAt).toLocaleString([], {
-                          dateStyle: 'full',
-                          timeStyle: 'short',
-                        })}
-                      </Text>
-                    </View>
-
-                    {selectedPaymentForVoucher.bankName ? (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherKey}>Bank Name:</Text>
-                        <Text style={styles.voucherVal}>{selectedPaymentForVoucher.bankName}</Text>
-                      </View>
-                    ) : null}
-
-                    {selectedPaymentForVoucher.sourceAccount ? (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherKey}>Source Drawer / A/C:</Text>
-                        <Text style={styles.voucherVal}>{selectedPaymentForVoucher.sourceAccount}</Text>
-                      </View>
-                    ) : null}
-
-                    {selectedPaymentForVoucher.chequeNumber ? (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherKey}>Cheque Number:</Text>
-                        <Text style={styles.voucherVal}>
-                          {selectedPaymentForVoucher.chequeNumber}
-                          {selectedPaymentForVoucher.chequeDate
-                            ? ` (Due: ${selectedPaymentForVoucher.chequeDate})`
-                            : ''}
-                        </Text>
-                      </View>
-                    ) : null}
-
-                    {selectedPaymentForVoucher.purchaseOrderId ? (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherKey}>Allocated PO #:</Text>
-                        <Text style={styles.voucherVal}>{selectedPaymentForVoucher.purchaseOrderId}</Text>
-                      </View>
-                    ) : null}
-
-                    <View style={styles.voucherRow}>
-                      <Text style={styles.voucherKey}>Disbursed By:</Text>
-                      <Text style={styles.voucherVal}>{selectedPaymentForVoucher.paidBy || 'Admin'}</Text>
-                    </View>
-
-                    {selectedPaymentForVoucher.receivedByContact ? (
-                      <View style={styles.voucherRow}>
-                        <Text style={styles.voucherKey}>Received By:</Text>
-                        <Text style={styles.voucherVal}>{selectedPaymentForVoucher.receivedByContact}</Text>
-                      </View>
-                    ) : null}
-
-                    {selectedPaymentForVoucher.notes ? (
-                      <View style={[styles.voucherRow, { borderBottomWidth: 0 }]}>
-                        <Text style={styles.voucherKey}>Narration / Notes:</Text>
-                        <Text style={[styles.voucherVal, { fontStyle: 'italic' }]}>
-                          {selectedPaymentForVoucher.notes}
-                        </Text>
-                      </View>
-                    ) : null}
+                  <View style={styles.voucherRow}>
+                    <Text style={styles.voucherRowLabel}>طریقہ کار:</Text>
+                    <Text style={styles.voucherRowValBold}>{selectedPaymentForVoucher.method.toUpperCase()}</Text>
                   </View>
 
-                  {/* Signatures Row */}
-                  <View style={styles.voucherSignaturesRow}>
-                    <View style={styles.signatureBox}>
-                      <View style={styles.signLine} />
-                      <Text style={styles.signLabel}>Accountant / Disbursed By</Text>
-                    </View>
-
-                    <View style={styles.signatureBox}>
-                      <View style={styles.signLine} />
-                      <Text style={styles.signLabel}>Vendor / Received By</Text>
-                    </View>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={() => {
-                  if (selectedPaymentForVoucher) handleSharePaymentVoucher(selectedPaymentForVoucher);
-                }}
-              >
-                <Ionicons name="copy-outline" size={15} color={BRAND.burgundy} style={{ marginRight: 6 }} />
-                <Text style={styles.secondaryBtnText}>Copy Voucher Text</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsVoucherModalOpen(false)}>
-                <Text style={styles.primaryBtnText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ---------------------------------------------------- */}
-      {/* MODAL 6: PURCHASE ORDER / INVOICE ITEM BREAKDOWN */}
-      {/* ---------------------------------------------------- */}
-      <Modal visible={isPODetailsModalOpen} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { width: isMobile ? '95%' : 640, maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Purchase Bill & Goods Delivery</Text>
-                <Text style={styles.modalSub}>{selectedPOForDetails?.poNumber}</Text>
-              </View>
-              <TouchableOpacity onPress={() => setIsPODetailsModalOpen(false)}>
-                <Ionicons name="close" size={24} color={BRAND.ink} />
-              </TouchableOpacity>
-            </View>
-
-            {selectedPOForDetails && (
-              <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-                <View style={styles.poSummaryBox}>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Supplier / Vendor:</Text>
-                    <Text style={styles.summaryVal}>{selectedPOForDetails.supplierName}</Text>
-                  </View>
-                  {Boolean(selectedPOForDetails.invoiceNo) ? (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Vendor Bill / Invoice #:</Text>
-                      <Text style={styles.summaryVal}>{selectedPOForDetails.invoiceNo}</Text>
-                    </View>
-                  ) : null}
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Order Date:</Text>
-                    <Text style={styles.summaryVal}>
-                      {new Date(selectedPOForDetails.orderDate).toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Delivery Status:</Text>
-                    <Text style={[styles.summaryVal, { color: BRAND.success, fontWeight: '800' }]}>
-                      {selectedPOForDetails.status.toUpperCase()} (by {selectedPOForDetails.receivedBy || 'Admin'})
+                  <View style={styles.voucherRow}>
+                    <Text style={styles.voucherRowLabel}>تاریخ:</Text>
+                    <Text style={styles.voucherRowVal}>
+                      {new Date(selectedPaymentForVoucher.paidAt).toLocaleString()}
                     </Text>
                   </View>
                 </View>
-
-                {/* Items table */}
-                <Text style={[styles.formSectionTitle, { marginTop: 12 }]}>Procured Ingredients & Items</Text>
-                <View style={styles.poItemsTable}>
-                  <View style={styles.poTableHeader}>
-                    <Text style={[styles.poTh, { flex: 3 }]}>Item Name</Text>
-                    <Text style={[styles.poTh, { flex: 1.5, textAlign: 'center' }]}>Qty Recv</Text>
-                    <Text style={[styles.poTh, { flex: 1.5, textAlign: 'right' }]}>Unit Rate</Text>
-                    <Text style={[styles.poTh, { flex: 2, textAlign: 'right' }]}>Total Cost</Text>
-                  </View>
-                  {selectedPOForDetails.items.map((it, idx) => (
-                    <View key={idx} style={styles.poTableRow}>
-                      <Text style={[styles.poTd, { flex: 3, fontWeight: '700' }]}>{it.name}</Text>
-                      <Text style={[styles.poTd, { flex: 1.5, textAlign: 'center' }]}>
-                        {it.qtyReceived || it.qtyOrdered} {it.unit}
-                      </Text>
-                      <Text style={[styles.poTd, { flex: 1.5, textAlign: 'right' }]}>
-                        Rs. {it.unitCost.toLocaleString()}
-                      </Text>
-                      <Text style={[styles.poTd, { flex: 2, textAlign: 'right', fontWeight: '800' }]}>
-                        Rs. {it.totalCost.toLocaleString()}
-                      </Text>
-                    </View>
-                  ))}
-                </View>
-
-                {/* Bill Totals breakdown */}
-                <View style={styles.poSummaryBox}>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Subtotal:</Text>
-                    <Text style={styles.summaryVal}>Rs. {selectedPOForDetails.subtotal.toLocaleString()}</Text>
-                  </View>
-                  {selectedPOForDetails.discount > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Discount Received:</Text>
-                      <Text style={[styles.summaryVal, { color: BRAND.success }]}>
-                        - Rs. {selectedPOForDetails.discount.toLocaleString()}
-                      </Text>
-                    </View>
-                  )}
-                  {selectedPOForDetails.freight > 0 && (
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Freight / Cartage:</Text>
-                      <Text style={styles.summaryVal}>+ Rs. {selectedPOForDetails.freight.toLocaleString()}</Text>
-                    </View>
-                  )}
-                  <View style={[styles.summaryRow, { borderTopWidth: 1, borderTopColor: '#EFE8DC', paddingTop: 6 }]}>
-                    <Text style={[styles.summaryLabel, { fontWeight: '800', color: BRAND.ink }]}>
-                      Total Bill Amount:
-                    </Text>
-                    <Text style={[styles.summaryVal, { fontSize: 16, fontWeight: '900', color: BRAND.burgundy }]}>
-                      Rs. {selectedPOForDetails.totalAmount.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Amount Paid (Advance/Receipt):</Text>
-                    <Text style={[styles.summaryVal, { color: BRAND.success, fontWeight: '800' }]}>
-                      Rs. {selectedPOForDetails.amountPaid.toLocaleString()}
-                    </Text>
-                  </View>
-                  <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Remaining Due on this PO:</Text>
-                    <Text
-                      style={[
-                        styles.summaryVal,
-                        {
-                          color: selectedPOForDetails.balanceDue > 0 ? BRAND.danger : BRAND.success,
-                          fontWeight: '800',
-                        },
-                      ]}
-                    >
-                      Rs. {selectedPOForDetails.balanceDue.toLocaleString()}
-                    </Text>
-                  </View>
-                </View>
-              </ScrollView>
-            )}
-
-            <View style={styles.modalFooter}>
-              {selectedPOForDetails && selectedPOForDetails.balanceDue > 0 && (
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: BRAND.danger }]}
-                  onPress={() => {
-                    const sup = suppliers.find((s) => s.id === selectedPOForDetails.supplierId);
-                    setIsPODetailsModalOpen(false);
-                    if (sup) handleOpenPaymentModal(sup, selectedPOForDetails);
-                  }}
-                >
-                  <Ionicons name="cash-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                  <Text style={styles.primaryBtnText}>
-                    Pay PO Due (Rs. {selectedPOForDetails.balanceDue.toLocaleString()})
-                  </Text>
-                </TouchableOpacity>
               )}
-              <TouchableOpacity style={styles.primaryBtn} onPress={() => setIsPODetailsModalOpen(false)}>
-                <Text style={styles.primaryBtnText}>Close Bill Details</Text>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalPrimaryBtn} onPress={() => setIsVoucherModalOpen(false)}>
+                <Text style={styles.modalPrimaryBtnText}>ٹھیک ہے (Done)</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -3492,7 +1733,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 }
 
 // ----------------------------------------------------
-// Styles
+// 🎨 ROYAL & BEAUTIFUL STYLES
 // ----------------------------------------------------
 const styles = StyleSheet.create({
   container: {
@@ -3501,8 +1742,8 @@ const styles = StyleSheet.create({
   },
   header: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -3511,16 +1752,24 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 12,
   },
+  headerMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
   },
   backBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#F5EBE6',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FDFBF7',
+    borderWidth: 1,
+    borderColor: BRAND.border,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -3530,30 +1779,18 @@ const styles = StyleSheet.create({
     color: BRAND.burgundy,
     letterSpacing: 0.3,
   },
-  headerUrduBadge: {
-    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+  urduBadge: {
+    backgroundColor: 'rgba(213, 169, 67, 0.15)',
     paddingHorizontal: 9,
     paddingVertical: 3,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
+    borderColor: 'rgba(213, 169, 67, 0.4)',
   },
-  headerUrduText: {
+  urduBadgeText: {
     fontSize: 12,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-  badgePill: {
-    backgroundColor: BRAND.burgundy,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  badgePillText: {
-    color: '#FFFFFF',
-    fontSize: 9,
     fontWeight: '800',
-    letterSpacing: 0.5,
+    color: BRAND.burgundy,
   },
   headerSubtitle: {
     fontSize: 12,
@@ -3563,122 +1800,110 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    flexWrap: 'wrap',
     gap: 8,
+    flexWrap: 'wrap',
   },
-  syncStatusGroup: {
+  syncPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#FFFFFF',
-    padding: 3,
-    paddingLeft: 6,
-    borderRadius: 10,
+    backgroundColor: '#F9FAFB',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04,
-    shadowRadius: 2,
-    elevation: 1,
+    borderColor: BRAND.borderLight,
   },
-  syncStatusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-  syncStatusPillConnected: {
-    backgroundColor: '#F0FDF4',
-  },
-  syncStatusPillConnecting: {
-    backgroundColor: '#FFFBEB',
-  },
-  syncStatusPillOffline: {
-    backgroundColor: '#FEF2F2',
-  },
-  syncStatusDot: {
-    width: 7,
-    height: 7,
+  syncDot: {
+    width: 8,
+    height: 8,
     borderRadius: 4,
   },
-  syncStatusDotConnected: {
-    backgroundColor: '#16A34A',
-  },
-  syncStatusDotConnecting: {
-    backgroundColor: '#D97706',
-  },
-  syncStatusDotOffline: {
-    backgroundColor: '#DC2626',
-  },
-  syncStatusText: {
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  syncStatusTextConnected: {
-    color: '#15803D',
-  },
-  syncStatusTextConnecting: {
-    color: '#B45309',
-  },
-  syncStatusTextOffline: {
-    color: '#B91C1C',
-  },
-  syncManualBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(212, 175, 55, 0.12)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-  },
-  syncManualBtnText: {
+  syncDotOnline: { backgroundColor: '#16A34A' },
+  syncDotOffline: { backgroundColor: '#DC2626' },
+  syncText: {
     fontSize: 11,
     fontWeight: '700',
     color: BRAND.burgundy,
   },
-  primaryBtn: {
+  actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
     backgroundColor: BRAND.burgundy,
     paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
-  },
-  primaryBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-    fontSize: 13,
-  },
-  secondaryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
   },
-  secondaryBtnText: {
-    color: BRAND.burgundy,
-    fontWeight: '700',
-    fontSize: 12,
+  actionBtnGold: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BRAND.goldDark,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
+  actionBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  // 🔀 TWO-PAGE SWITCHER BAR
+  pageSwitcherBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  switcherBtn: {
+    flex: 1,
+    minWidth: 260,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1.5,
+    borderColor: BRAND.border,
+  },
+  switcherBtnActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  switcherBtnTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  switcherBtnTitleActive: {
+    color: '#FFFFFF',
+  },
+  switcherBtnSub: {
+    fontSize: 11,
+    color: BRAND.muted,
+    marginTop: 1,
+  },
+  switcherBtnSubActive: {
+    color: '#FDE68A',
+  },
+
   contentScroll: {
     flex: 1,
   },
   contentContainer: {
-    width: '100%',
-    paddingHorizontal: 24,
-    paddingVertical: 18,
-    paddingBottom: 80,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
+
+  // KPI ROW
   kpiRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -3687,145 +1912,94 @@ const styles = StyleSheet.create({
   },
   kpiCard: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 180,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 14,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    borderLeftWidth: 4,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    borderWidth: 1,
+    borderColor: BRAND.borderLight,
+    borderLeftWidth: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
     elevation: 1,
-  },
-  kpiIconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    backgroundColor: '#FFF8E1',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   kpiLabel: {
     fontSize: 11,
-    color: BRAND.muted,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-  },
-  kpiValue: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: BRAND.ink,
-    marginTop: 2,
-  },
-  kpiMeta: {
-    fontSize: 10,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  tabBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 4,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    gap: 6,
-  },
-  tabBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 6,
-    gap: 6,
-  },
-  tabBtnActive: {
-    backgroundColor: '#F5EBE6',
-  },
-  tabBtnText: {
-    fontSize: 13,
     fontWeight: '700',
     color: BRAND.muted,
   },
-  tabBtnTextActive: {
+  kpiValue: {
+    fontSize: 19,
+    fontWeight: '900',
     color: BRAND.burgundy,
-    fontWeight: '800',
+    marginTop: 2,
   },
-  filterSection: {
+
+  // SEARCH SECTION
+  searchSection: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+    flexWrap: 'wrap',
     marginBottom: 12,
   },
-  searchBar: {
+  searchBox: {
     flex: 1,
-    minWidth: 200,
+    minWidth: 260,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 42,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: BRAND.border,
+    height: 44,
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
     color: BRAND.ink,
   },
-  balanceFilterRow: {
+  dueToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-  },
-  filterLabel: {
-    fontSize: 12,
-    color: BRAND.muted,
-    fontWeight: '700',
-  },
-  balancePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BRAND.border,
+    borderWidth: 1.5,
+    borderColor: BRAND.danger,
+    paddingHorizontal: 14,
+    height: 44,
+    borderRadius: 10,
   },
-  balancePillActive: {
-    backgroundColor: BRAND.burgundy,
-    borderColor: BRAND.burgundy,
+  dueToggleBtnActive: {
+    backgroundColor: BRAND.danger,
   },
-  balancePillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: BRAND.ink,
+  dueToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.danger,
   },
-  balancePillTextActive: {
-    color: '#FFFFFF',
-  },
+
   categoryScroll: {
-    marginBottom: 16,
+    flexDirection: 'row',
+    gap: 8,
+    paddingBottom: 14,
   },
   categoryPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 20,
+    gap: 6,
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: BRAND.border,
-    marginRight: 8,
   },
   categoryPillActive: {
     backgroundColor: BRAND.burgundy,
@@ -3834,401 +2008,550 @@ const styles = StyleSheet.create({
   categoryPillText: {
     fontSize: 12,
     fontWeight: '700',
-    color: BRAND.ink,
+    color: BRAND.burgundy,
   },
   categoryPillTextActive: {
     color: '#FFFFFF',
   },
+
+  // SUPPLIER CARDS GRID
   suppliersGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 16,
-    width: '100%',
   },
   supplierCard: {
-    flex: 1,
-    minWidth: 280,
-    maxWidth: 620,
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: BRAND.border,
+    borderColor: BRAND.borderLight,
+    borderTopWidth: 4,
     shadowColor: '#000',
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
     elevation: 2,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  cardHeader: {
+  supplierCardFocused: {
+    borderColor: BRAND.gold,
+    borderWidth: 2,
+  },
+  cardTopColorStrip: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
+  },
+  cardHeaderRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  catBadge: {
+  categoryBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
   },
-  catBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-  },
-  statusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  statusPillText: {
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  supplierName: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: BRAND.ink,
-  },
-  contactPerson: {
+  categoryBadgeText: {
     fontSize: 12,
-    color: BRAND.muted,
-    marginTop: 2,
+    fontWeight: '800',
   },
-  commBtnRow: {
+  whatsAppBtn: {
     flexDirection: 'row',
-    gap: 6,
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
   },
-  commBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  whatsAppBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  callBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#2563EB',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  itemsSection: {
-    marginVertical: 8,
+  supplierName: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: BRAND.burgundy,
   },
-  sectionMiniLabel: {
-    fontSize: 10,
+  supplierContact: {
+    fontSize: 12,
+    color: BRAND.muted,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  miniLabel: {
+    fontSize: 11,
     fontWeight: '700',
     color: BRAND.muted,
-    textTransform: 'uppercase',
     marginBottom: 4,
   },
-  chipsWrap: {
+  chipsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 4,
+    gap: 5,
   },
   itemChip: {
-    backgroundColor: '#F0F2F5',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 6,
   },
   itemChipText: {
     fontSize: 11,
-    color: BRAND.ink,
-    fontWeight: '600',
-  },
-  noItemsText: {
-    fontSize: 11,
-    color: BRAND.muted,
-    fontStyle: 'italic',
-  },
-  financialBox: {
-    flexDirection: 'row',
-    backgroundColor: '#FDFBF7',
-    borderRadius: 8,
-    padding: 10,
-    marginVertical: 10,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    alignItems: 'center',
-  },
-  finStat: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  finDivider: {
-    width: 1,
-    height: '70%',
-    backgroundColor: '#EFE8DC',
-  },
-  finLabel: {
-    fontSize: 9,
     fontWeight: '700',
-    color: BRAND.muted,
-    textTransform: 'uppercase',
   },
-  finValue: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: BRAND.ink,
-    marginTop: 2,
-  },
-  bankBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-    padding: 6,
-    borderRadius: 4,
-    marginBottom: 10,
-  },
-  bankText: {
-    fontSize: 11,
-    color: BRAND.muted,
-    flex: 1,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-    paddingTop: 10,
-    gap: 5,
-    flexWrap: 'nowrap',
-    width: '100%',
-  },
-  cardActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 6,
-    paddingVertical: 7,
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  cardActionBtnIcon: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8F9FA',
-    borderRadius: 7,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  cardActionBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-  emptyState: {
-    width: '100%',
-    padding: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: BRAND.ink,
-  },
-  emptyStateSub: {
-    fontSize: 12,
-    color: BRAND.muted,
-    marginTop: 4,
-    textAlign: 'center',
-    maxWidth: 320,
-  },
-  ordersSection: {
-    width: '100%',
-  },
-  sectionHeader: {
+
+  balanceBox: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    padding: 12,
+    borderRadius: 10,
+    marginVertical: 10,
   },
-  sectionTitle: {
-    fontSize: 16,
+  balanceBoxDue: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FCA5A5',
+  },
+  balanceBoxClear: {
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#86EFAC',
+  },
+  balanceBoxLabel: {
+    fontSize: 11,
     fontWeight: '800',
-    color: BRAND.ink,
+    color: BRAND.success,
   },
-  sectionSub: {
-    fontSize: 12,
-    color: BRAND.muted,
+  balanceBoxVal: {
+    fontSize: 20,
+    fontWeight: '900',
     marginTop: 2,
   },
-  poCard: {
+  payNowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 7,
+  },
+  payNowBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  cardActionsBar: {
+    flexDirection: 'row',
+    gap: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F3F4F6',
+    paddingTop: 10,
+    flexWrap: 'wrap',
+  },
+  cardBtn: {
+    flex: 1,
+    minWidth: 120,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: BRAND.border,
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
+  },
+  cardBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  cardIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: BRAND.borderLight,
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // HISTORY PANEL (PAGE 1)
+  historyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     padding: 16,
     borderWidth: 1,
     borderColor: BRAND.border,
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    marginTop: 20,
   },
-  poCardHeader: {
+  historyHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 10,
   },
-  poNumber: {
+  historyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: BRAND.burgundy,
+  },
+  historySub: {
+    fontSize: 11,
+    color: BRAND.muted,
+    marginTop: 2,
+  },
+  poRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FDFBF7',
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BRAND.borderLight,
+  },
+  poNumberText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: BRAND.burgundy,
+  },
+  poBillText: {
+    fontSize: 11,
+    color: BRAND.muted,
+  },
+  statusBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  statusBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
+  poDateText: {
+    fontSize: 11,
+    color: BRAND.muted,
+    marginTop: 2,
+  },
+  poTotalText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: BRAND.ink,
+  },
+  poDueText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.danger,
+  },
+  poPaidText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.success,
+  },
+
+  // ========================================================
+  // PAGE 2 STYLES (LEDGER & PAYMENTS)
+  // ========================================================
+  supplierPickerBar: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    marginBottom: 14,
+  },
+  pickerLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+    marginBottom: 8,
+  },
+  vendorChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  vendorChipActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  vendorChipName: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.ink,
+  },
+  vendorChipNameActive: {
+    color: '#FFFFFF',
+  },
+  vendorChipDueBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  vendorChipDueText: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  vendorProfileBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  vendorProfileName: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: BRAND.burgundy,
+  },
+  vendorProfileSub: {
+    fontSize: 12,
+    color: BRAND.muted,
+    marginTop: 2,
+  },
+  vendorBankText: {
+    fontSize: 11,
+    color: BRAND.ink,
+    marginTop: 4,
+    fontWeight: '600',
+  },
+  whatsAppShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 8,
+  },
+  whatsAppShareBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  workflowGrid: {
+    flexDirection: 'row',
+    gap: 16,
+    alignItems: 'flex-start',
+  },
+  paymentBox: {
+    flex: 1.1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  ledgerBox: {
+    flex: 1.9,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  boxHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  boxTitle: {
     fontSize: 15,
     fontWeight: '900',
     color: BRAND.burgundy,
   },
-  poInvoiceNo: {
-    fontSize: 12,
-    color: BRAND.muted,
-  },
-  poStatusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  poStatusBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-  },
-  poSupplierName: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BRAND.ink,
-    marginTop: 2,
-  },
-  poMetaText: {
+  boxSub: {
     fontSize: 11,
     color: BRAND.muted,
-    marginTop: 2,
   },
-  poTotalLabel: {
-    fontSize: 10,
-    color: BRAND.muted,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  poTotalValue: {
-    fontSize: 17,
-    fontWeight: '900',
-    color: BRAND.ink,
-  },
-  poDueWarning: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: BRAND.danger,
-    marginTop: 2,
-  },
-  poPaidStatus: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: BRAND.success,
-    marginTop: 2,
-  },
-  poItemsTable: {
-    backgroundColor: '#FBFBFC',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#ECEFF1',
-    padding: 8,
-    marginBottom: 10,
-  },
-  poTableHeader: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ECEFF1',
-    paddingBottom: 4,
-    marginBottom: 4,
-  },
-  poTh: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: BRAND.muted,
-    textTransform: 'uppercase',
-  },
-  poTableRow: {
-    flexDirection: 'row',
-    paddingVertical: 3,
-  },
-  poTd: {
-    fontSize: 11,
-    color: BRAND.ink,
-  },
-  poActionsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  paymentsSection: {
-    width: '100%',
-  },
-  paymentCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  quickChip: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 14,
     borderWidth: 1,
     borderColor: BRAND.border,
-    marginBottom: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 6,
   },
-  paymentLeft: {
+  quickChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  payMethodBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    backgroundColor: '#FFFFFF',
   },
-  payIconWrap: {
-    width: 38,
-    height: 38,
-    borderRadius: 8,
-    backgroundColor: '#F5EBE6',
+  payMethodBtnActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  payMethodText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
+  payMethodTextActive: {
+    color: '#FFFFFF',
+  },
+  submitPaymentBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    backgroundColor: BRAND.burgundy,
+    paddingVertical: 11,
+    borderRadius: 8,
+    marginTop: 6,
   },
-  paymentSupplierName: {
-    fontSize: 14,
+  submitPaymentBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // LEDGER TABLE
+  smallFilterPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  smallFilterPillActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  smallFilterText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: BRAND.muted,
+  },
+  smallFilterTextActive: {
+    color: '#FFFFFF',
+  },
+  ledgerTable: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  ledgerTableHeader: {
+    flexDirection: 'row',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
+  ledgerTh: {
+    fontSize: 11,
     fontWeight: '800',
     color: BRAND.ink,
   },
-  paymentMeta: {
+  ledgerTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  ledgerDateText: {
     fontSize: 11,
-    color: BRAND.muted,
-    marginTop: 2,
+    fontWeight: '700',
+    color: BRAND.ink,
   },
-  paymentNote: {
-    fontSize: 11,
-    color: BRAND.goldDark,
-    marginTop: 2,
-    fontStyle: 'italic',
-  },
-  paymentAmount: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: BRAND.success,
-  },
-  paidByTag: {
+  ledgerDocText: {
     fontSize: 10,
     color: BRAND.muted,
-    marginTop: 2,
   },
+  ledgerTitleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.ink,
+  },
+  ledgerSubText: {
+    fontSize: 10,
+    color: BRAND.muted,
+  },
+  ledgerAmountText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    textAlign: 'right',
+  },
+  ledgerBalText: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: BRAND.burgundy,
+    textAlign: 'right',
+  },
+
+  // MODALS
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 16,
   },
-  modalBox: {
-    width: 620,
+  modalCard: {
+    width: 600,
+    maxHeight: '85%',
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 5,
   },
@@ -4238,821 +2561,267 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: BRAND.border,
+    borderBottomColor: BRAND.borderLight,
+    backgroundColor: '#FDFBF7',
   },
   modalTitle: {
-    fontSize: 16,
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '900',
     color: BRAND.burgundy,
   },
   modalSub: {
-    fontSize: 12,
+    fontSize: 11,
     color: BRAND.muted,
+    marginTop: 2,
   },
   modalBody: {
     padding: 20,
-    maxHeight: 520,
   },
   modalFooter: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
+    alignItems: 'center',
     gap: 10,
     paddingHorizontal: 20,
     paddingVertical: 12,
     borderTopWidth: 1,
-    borderTopColor: BRAND.border,
-    backgroundColor: '#FBFBFC',
+    borderTopColor: BRAND.borderLight,
+    backgroundColor: '#FDFBF7',
+  },
+  modalPrimaryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  modalPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  modalSecondaryBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    backgroundColor: '#FFFFFF',
+  },
+  modalSecondaryBtnText: {
+    color: BRAND.muted,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  // FORMS
+  inputGroup: {
+    marginBottom: 12,
+  },
+  fieldLabel: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+    marginBottom: 5,
+  },
+  formInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    fontSize: 13,
+    color: BRAND.ink,
   },
   formRow: {
     flexDirection: 'row',
-    gap: 12,
+    gap: 10,
     marginBottom: 12,
   },
-  formCol: {
-    flex: 1,
+  toggleAdvBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
   },
-  formGroup: {
-    marginBottom: 12,
-  },
-  inputLabel: {
-    fontSize: 13,
+  toggleAdvBtnText: {
+    fontSize: 12,
     fontWeight: '800',
-    color: BRAND.ink,
-    marginBottom: 4,
+    color: BRAND.burgundy,
   },
-  input: {
-    backgroundColor: '#F9FAFB',
+  advFieldsBox: {
+    backgroundColor: '#FDFBF7',
+    padding: 12,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: BRAND.border,
-    borderRadius: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 9,
-    fontSize: 14.5,
-    color: BRAND.ink,
+    borderColor: BRAND.borderLight,
+    marginBottom: 12,
   },
-  smallInput: {
+
+  // PO MODAL TABLE
+  poTableWrap: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: BRAND.border,
-    borderRadius: 4,
-    paddingHorizontal: 6,
-    paddingVertical: 4,
-    fontSize: 13,
+    borderRadius: 8,
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  poTableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
+  poThCell: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  poItemInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  poItemInput: {
+    backgroundColor: '#F9FAFB',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    fontSize: 12,
+  },
+  poItemTotalText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: BRAND.ink,
     textAlign: 'right',
   },
-  inputHint: {
-    fontSize: 12,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  pickerWrapper: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    padding: 4,
-  },
-  catChoicePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    marginRight: 6,
-  },
-  catChoicePillActive: {
-    backgroundColor: BRAND.burgundy,
-    borderColor: BRAND.burgundy,
-  },
-  catChoicePillText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  catChoicePillTextActive: {
-    color: '#FFFFFF',
-  },
-  formSectionBox: {
-    backgroundColor: '#FDFBF7',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginBottom: 12,
-  },
-  formSectionTitle: {
-    fontSize: 13.5,
-    fontWeight: '800',
-    color: BRAND.burgundy,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  supChoicePill: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    backgroundColor: '#F0F0F0',
-    marginRight: 6,
-  },
-  supChoicePillActive: {
-    backgroundColor: BRAND.burgundy,
-  },
-  supChoicePillText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  supChoicePillTextActive: {
-    color: '#FFFFFF',
-  },
-  addSmallBtn: {
+  addPOItemBtn: {
     flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F5EBE6',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  addSmallBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-  poItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  poSummaryBox: {
-    backgroundColor: '#FDFBF7',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginTop: 10,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 3,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    color: BRAND.muted,
-    fontWeight: '600',
-  },
-  summaryVal: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: BRAND.ink,
-  },
-  togglesBox: {
-    marginTop: 12,
-    gap: 8,
-  },
-  toggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  toggleText: {
-    fontSize: 13.5,
-    color: BRAND.ink,
-    fontWeight: '600',
-    flex: 1,
-  },
-  methodPill: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    alignItems: 'center',
-    backgroundColor: '#F9FAFB',
-  },
-  methodPillActive: {
-    backgroundColor: BRAND.burgundy,
-    borderColor: BRAND.burgundy,
-  },
-  methodPillText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  methodPillTextActive: {
-    color: '#FFFFFF',
-  },
-  ledgerHeaderCard: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    backgroundColor: '#FDFBF7',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginBottom: 16,
-  },
-  ledgerMetaLabel: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.muted,
-    textTransform: 'uppercase',
-  },
-  ledgerDueAmount: {
-    fontSize: 20,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  ledgerLifetimeAmount: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: BRAND.ink,
-    marginTop: 2,
-  },
-  ledgerSectionTitle: {
-    fontSize: 14.5,
-    fontWeight: '800',
-    color: BRAND.burgundy,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-  },
-  ledgerPoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-  ledgerPayRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-  },
-
-  // Payment KPIs & cards
-  paymentKpiRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    marginBottom: 14,
-  },
-  paymentKpiCard: {
-    flex: 1,
-    minWidth: 140,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    borderLeftWidth: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  paymentCardFull: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    marginBottom: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
-  },
-  paymentCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  payIconWrapLarge: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  paymentSupplierNameLarge: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: BRAND.ink,
-  },
-  payMethodTag: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 4,
-  },
-  payMethodTagText: {
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  paymentVoucherId: {
-    fontSize: 12.5,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  paymentAmountLarge: {
-    fontSize: 20,
-    fontWeight: '900',
-    color: BRAND.success,
-  },
-  payDetailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    backgroundColor: '#FBFBFC',
-    padding: 10,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ECEFF1',
-    marginVertical: 8,
-  },
-  payDetailItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginRight: 8,
-  },
-  payDetailText: {
-    fontSize: 12.5,
-    color: BRAND.ink,
-  },
-  paymentNoteBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFDE7',
-    padding: 8,
-    borderRadius: 6,
-    marginVertical: 4,
-  },
-  paymentNoteText: {
-    fontSize: 12.5,
-    color: '#F57F17',
-    fontStyle: 'italic',
-    flex: 1,
-  },
-  paymentCardActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-    paddingTop: 10,
-    borderTopWidth: 1,
-    borderTopColor: '#F0F0F0',
-  },
-  payActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F8F9FA',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  payActionBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-
-  // Payment Modal Banner & Quick Fill
-  paymentSupBanner: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
     backgroundColor: '#FDFBF7',
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginBottom: 12,
   },
-  paymentSupBannerName: {
-    fontSize: 15,
+  addPOItemBtnText: {
+    fontSize: 12,
     fontWeight: '800',
     color: BRAND.burgundy,
   },
-  paymentSupBannerMeta: {
-    fontSize: 12,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  paymentSupBannerDueLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: BRAND.muted,
-    textTransform: 'uppercase',
-  },
-  paymentSupBannerDueVal: {
-    fontSize: 18,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  inputHintBold: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  quickFillPill: {
-    backgroundColor: '#F5EBE6',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#EBDAD1',
-  },
-  quickFillPillText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-  poAllocPill: {
-    backgroundColor: '#F0F2F5',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-    marginRight: 6,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  poAllocPillActive: {
-    backgroundColor: BRAND.burgundy,
-    borderColor: BRAND.burgundy,
-  },
-  poAllocPillText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  poAllocPillTextActive: {
-    color: '#FFFFFF',
-  },
-
-  // Ledger Strip & Header
-  ledgerSupplierStrip: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#FDFBF7',
+  poSummaryCard: {
+    backgroundColor: '#FDF8E8',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginBottom: 12,
-    gap: 8,
-  },
-  ledgerSupAddress: {
-    fontSize: 12.5,
-    color: BRAND.ink,
-    fontWeight: '600',
-  },
-  ledgerBankCopyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  ledgerBankCopyText: {
-    fontSize: 12.5,
-    color: BRAND.goldDark,
-    fontWeight: '700',
-  },
-  ledgerActionBtnSmall: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  ledgerActionBtnSmallText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.burgundy,
-  },
-  ledgerKpiRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 14,
-    flexWrap: 'wrap',
-  },
-  ledgerKpiBox: {
-    flex: 1,
-    minWidth: 160,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    borderLeftWidth: 4,
-  },
-  ledgerKpiLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: BRAND.muted,
-    textTransform: 'uppercase',
-  },
-  ledgerKpiVal: {
-    fontSize: 20,
-    fontWeight: '900',
-    marginTop: 2,
-  },
-  ledgerKpiSub: {
-    fontSize: 12,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-
-  // Ledger Toolbar
-  ledgerToolbar: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
+    borderColor: BRAND.gold,
     marginBottom: 10,
   },
-  ledgerFilterTabs: {
+  poSummaryRow: {
     flexDirection: 'row',
-    gap: 6,
+    justifyContent: 'space-between',
+    paddingVertical: 3,
   },
-  ledgerTabPill: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  ledgerTabPillActive: {
-    backgroundColor: BRAND.burgundy,
-    borderColor: BRAND.burgundy,
-  },
-  ledgerTabPillText: {
-    fontSize: 12.5,
+  poSummaryLabel: {
+    fontSize: 12,
     fontWeight: '700',
     color: BRAND.ink,
   },
-  ledgerTabPillTextActive: {
-    color: '#FFFFFF',
-  },
-  ledgerSearchBox: {
-    flex: 1,
-    minWidth: 180,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    height: 36,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  ledgerSearchInput: {
-    flex: 1,
-    fontSize: 13.5,
+  poSummaryVal: {
+    fontSize: 13,
+    fontWeight: '800',
     color: BRAND.ink,
   },
-  ledgerSortBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-  },
-  ledgerSortBtnText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: BRAND.burgundy,
+  dueAlertText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.danger,
+    marginTop: 6,
   },
 
-  // Ledger Table
-  ledgerTableHeader: {
-    flexDirection: 'row',
-    backgroundColor: '#F5EBE6',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginBottom: 4,
-  },
-  ledgerTh: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: BRAND.burgundy,
-    textTransform: 'uppercase',
-  },
-  ledgerTableRow: {
-    flexDirection: 'row',
+  // VOUCHER MODAL
+  voucherHeader: {
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    backgroundColor: '#FFFFFF',
+    borderBottomColor: BRAND.borderLight,
+    paddingBottom: 10,
   },
-  ledgerRowDate: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: BRAND.ink,
+  voucherBrand: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: BRAND.burgundy,
   },
-  ledgerRowTime: {
-    fontSize: 12,
+  voucherSub: {
+    fontSize: 10,
     color: BRAND.muted,
+    marginTop: 2,
   },
-  ledgerTypeBadge: {
-    paddingHorizontal: 6,
+  voucherIdTag: {
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 4,
+    marginTop: 6,
   },
-  ledgerTypeBadgeText: {
-    fontSize: 11.5,
-    fontWeight: '900',
-  },
-  ledgerDocNo: {
-    fontSize: 13.5,
+  voucherIdTagText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: BRAND.ink,
-  },
-  ledgerInvNo: {
-    fontSize: 12.5,
-    color: BRAND.muted,
-  },
-  ledgerRowSubtitle: {
-    fontSize: 12.5,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  ledgerAmountVal: {
-    fontSize: 13.5,
-    fontWeight: '800',
-  },
-  ledgerAmountDash: {
-    fontSize: 13.5,
-    color: BRAND.muted,
-  },
-  ledgerRunBalVal: {
-    fontSize: 13.5,
-    fontWeight: '900',
-    color: BRAND.ink,
-  },
-  ledgerRunBalStatus: {
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  ledgerRowBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    backgroundColor: '#FAFAFA',
-  },
-  ledgerRowBtnText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: BRAND.burgundy,
-  },
-
-  // Voucher Modal Card
-  voucherContainer: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: BRAND.goldDark,
-    borderRadius: 10,
-    padding: 16,
-  },
-  voucherHeaderBox: {
-    alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EFE8DC',
-    paddingBottom: 12,
-    marginBottom: 12,
-  },
-  voucherBrandTitle: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: BRAND.burgundy,
-    letterSpacing: 0.5,
-  },
-  voucherBrandSub: {
-    fontSize: 12.5,
-    color: BRAND.muted,
-    marginTop: 2,
-  },
-  voucherNoPill: {
-    backgroundColor: BRAND.burgundy,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 4,
-    marginTop: 8,
-  },
-  voucherNoText: {
     color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  voucherAmountBox: {
-    alignItems: 'center',
-    backgroundColor: '#FDFBF7',
-    padding: 14,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#EFE8DC',
-    marginBottom: 12,
-  },
-  voucherAmountLabel: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: BRAND.muted,
-    letterSpacing: 0.5,
-  },
-  voucherAmountNumber: {
-    fontSize: 30,
-    fontWeight: '900',
-    color: BRAND.success,
-    marginVertical: 4,
-  },
-  voucherMethodText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: BRAND.ink,
-  },
-  voucherTable: {
-    borderWidth: 1,
-    borderColor: '#ECEFF1',
-    borderRadius: 6,
-    padding: 8,
-    backgroundColor: '#FAFAFA',
   },
   voucherRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 5,
+    paddingVertical: 4,
     borderBottomWidth: 1,
-    borderBottomColor: '#ECEFF1',
+    borderBottomColor: '#F3F4F6',
   },
-  voucherKey: {
-    fontSize: 12.5,
-    fontWeight: '700',
+  voucherRowLabel: {
+    fontSize: 12,
     color: BRAND.muted,
-    flex: 1,
+    fontWeight: '700',
   },
-  voucherValBold: {
-    fontSize: 13.5,
+  voucherRowVal: {
+    fontSize: 12,
+    color: BRAND.ink,
+  },
+  voucherRowValBold: {
+    fontSize: 13,
     fontWeight: '800',
     color: BRAND.ink,
-    flex: 2,
-    textAlign: 'right',
   },
-  voucherVal: {
-    fontSize: 12.5,
-    color: BRAND.ink,
-    flex: 2,
-    textAlign: 'right',
-  },
-  voucherSignaturesRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    paddingTop: 8,
-  },
-  signatureBox: {
-    width: '45%',
+
+  // EMPTY BOX
+  emptyBox: {
     alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BRAND.borderLight,
   },
-  signLine: {
-    width: '100%',
-    height: 1,
-    backgroundColor: BRAND.ink,
-    marginBottom: 4,
+  emptyBoxTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: BRAND.burgundy,
   },
-  signLabel: {
-    fontSize: 12,
-    fontWeight: '700',
+  emptyBoxSub: {
+    fontSize: 11,
     color: BRAND.muted,
+    marginTop: 2,
+    textAlign: 'center',
   },
 });
