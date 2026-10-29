@@ -35,7 +35,7 @@ interface InvoicesScreenProps {
 export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute = '/admin/dashboard' }: InvoicesScreenProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isMobile = width < 850;
   const isSmallMobile = width < 480;
 
   const user = useAuthStore((s) => s.user);
@@ -643,221 +643,369 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
           </View>
         ) : (
           <>
+            {/* Desktop Table Column Header */}
+            {!isMobile && (
+              <View style={styles.tableHeaderRow}>
+                <View style={[styles.thCol, { flex: 2.2, minWidth: 190 }]}>
+                  <Text style={styles.thText}>INVOICE & STATUS</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                  <Text style={styles.thText}>DATE & TIME</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 2.0, minWidth: 160 }]}>
+                  <Text style={styles.thText}>STAFF & CASHIER</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 2.0, minWidth: 150 }]}>
+                  <Text style={styles.thText}>ITEMS</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 1.8, minWidth: 140, alignItems: 'flex-end', paddingRight: 8 }]}>
+                  <Text style={styles.thText}>TOTAL BILL</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 2.4, minWidth: 210, alignItems: 'flex-end' }]}>
+                  <Text style={styles.thText}>ACTIONS</Text>
+                </View>
+              </View>
+            )}
+
             <View style={styles.invoicesList}>
               {invoicePagination.paginatedData.map((inv) => {
-              const isVoided = inv.status === 'voided';
-              const isRefunded = inv.status === 'refunded' || inv.returnStatus === 'full';
-              const isPartialReturn = inv.returnStatus === 'partial';
-              const itemsCount = inv.items?.reduce((sum, it) => sum + (it.qty || 1), 0) || 0;
-              const itemsPreview = (inv.items || [])
-                .slice(0, 3)
-                .map((it) => `${it.qty}x ${it.name}`)
-                .join(', ');
-              const hasMoreItems = (inv.items || []).length > 3;
+                const isVoided = inv.status === 'voided';
+                const isRefunded = inv.status === 'refunded' || inv.returnStatus === 'full';
+                const isPartialReturn = inv.returnStatus === 'partial';
+                const itemsCount = inv.items?.reduce((sum, it) => sum + (it.qty || 1), 0) || 0;
+                const itemsPreview = (inv.items || [])
+                  .slice(0, 3)
+                  .map((it) => `${it.qty}x ${it.name}`)
+                  .join(', ');
+                const hasMoreItems = (inv.items || []).length > 3;
 
-              return (
-                <View
-                  key={inv.id}
-                  style={[
-                    styles.invoiceCard,
-                    isVoided && styles.invoiceCardVoided,
-                    isRefunded && styles.invoiceCardRefunded,
-                  ]}
-                >
-                  {/* Card Header Row */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardHeaderLeft}>
-                      {isVoided ? (
-                        <View style={[styles.statusPill, styles.statusPillVoided]}>
-                          <Ionicons name="close-circle" size={13} color="#C62828" style={{ marginRight: 4 }} />
-                          <Text style={[styles.statusPillText, styles.statusPillTextVoided]}>VOIDED</Text>
-                        </View>
-                      ) : isRefunded ? (
-                        <View style={[styles.statusPill, styles.statusPillRefunded]}>
-                          <Ionicons name="return-down-back" size={13} color="#6A1B9A" style={{ marginRight: 4 }} />
-                          <Text style={[styles.statusPillText, styles.statusPillTextRefunded]}>REFUNDED</Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.statusPill, styles.statusPillSettled]}>
-                          <Ionicons name="checkmark-circle" size={13} color="#2E7D32" style={{ marginRight: 4 }} />
-                          <Text style={[styles.statusPillText, styles.statusPillTextSettled]}>PAID</Text>
-                        </View>
-                      )}
+                if (isMobile) {
+                  return (
+                    <View
+                      key={inv.id}
+                      style={[
+                        styles.mobileInvoiceCard,
+                        isVoided && styles.invoiceRowVoided,
+                        isRefunded && styles.invoiceRowRefunded,
+                        isPartialReturn && styles.invoiceRowPartial,
+                      ]}
+                    >
+                      {/* Top Row: Left ID & Status; Right Total & Pay Mode */}
+                      <View style={styles.mobileCardTopRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                          {isVoided ? (
+                            <View style={[styles.statusBadge, styles.statusBadgeVoided]}>
+                              <Ionicons name="close-circle" size={10} color="#DC2626" />
+                              <Text style={[styles.statusBadgeText, styles.statusBadgeTextVoided]}>VOIDED</Text>
+                            </View>
+                          ) : isRefunded ? (
+                            <View style={[styles.statusBadge, styles.statusBadgeRefunded]}>
+                              <Ionicons name="return-down-back" size={10} color="#7C3AED" />
+                              <Text style={[styles.statusBadgeText, styles.statusBadgeTextRefunded]}>REFUNDED</Text>
+                            </View>
+                          ) : isPartialReturn ? (
+                            <View style={[styles.statusBadge, styles.statusBadgePartial]}>
+                              <Ionicons name="alert-circle" size={10} color="#EA580C" />
+                              <Text style={[styles.statusBadgeText, styles.statusBadgeTextPartial]}>PARTIAL</Text>
+                            </View>
+                          ) : (
+                            <View style={[styles.statusBadge, styles.statusBadgeSettled]}>
+                              <Ionicons name="checkmark-circle" size={10} color="#059669" />
+                              <Text style={[styles.statusBadgeText, styles.statusBadgeTextSettled]}>PAID</Text>
+                            </View>
+                          )}
 
-                      {isPartialReturn && (
-                        <View style={[styles.statusPill, styles.statusPillPartialReturn]}>
-                          <Ionicons name="alert-circle" size={12} color="#D84315" style={{ marginRight: 3 }} />
-                          <Text style={[styles.statusPillText, styles.statusPillTextPartialReturn]}>
-                            PARTIAL RETURN (-Rs. {(inv.refundAmount || 0).toLocaleString()})
-                          </Text>
-                        </View>
-                      )}
+                          <Text style={styles.rowInvoiceIdText}>#{inv.id}</Text>
 
-                      {(inv.feedbackSubmitted || inv.feedback) && (
-                        <View style={[styles.statusPill, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
-                          <Ionicons name="star" size={11} color="#D97706" style={{ marginRight: 3 }} />
-                          <Text style={[styles.statusPillText, { color: '#B45309' }]}>
-                            ⭐ {inv.feedback?.overallRating || 5}/5 REVIEW
-                          </Text>
-                        </View>
-                      )}
-
-                      <Text style={styles.invoiceIdText}>#{inv.id}</Text>
-
-                      <View style={[styles.typeBadge, {
-                        backgroundColor: inv.orderType === 'dine-in' ? '#E3F2FD' : inv.orderType === 'takeaway' ? '#FFF3E0' : '#EDE7F6',
-                        borderColor: inv.orderType === 'dine-in' ? '#BBDEFB' : inv.orderType === 'takeaway' ? '#FFE0B2' : '#D1C4E9',
-                      }]}>
-                        <Ionicons
-                          name={inv.orderType === 'dine-in' ? 'restaurant' : inv.orderType === 'takeaway' ? 'bag-handle' : 'bicycle'}
-                          size={12}
-                          color={inv.orderType === 'dine-in' ? '#1976D2' : inv.orderType === 'takeaway' ? '#F57C00' : '#512DA8'}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={[styles.typeBadgeText, {
-                          color: inv.orderType === 'dine-in' ? '#1976D2' : inv.orderType === 'takeaway' ? '#F57C00' : '#512DA8',
-                        }]}>
-                          {inv.orderType === 'dine-in' ? (inv.tableName || 'DINE-IN') : inv.orderType.toUpperCase()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    <Text style={styles.cardDateText}>
-                      {formatDateTime(inv.timeSettled || inv.timePlaced)}
-                    </Text>
-                  </View>
-
-                  {/* Middle Meta Info */}
-                  <View style={styles.metaRow}>
-                    <View style={[styles.metaCol, metaColResponsiveStyle]}>
-                      <Text style={styles.metaLabel}>Order Taken By:</Text>
-                      <Text style={styles.metaValue}>
-                        <Ionicons name="person-outline" size={13} color="#4a121a" /> {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')}
-                      </Text>
-                    </View>
-
-                    <View style={[styles.metaCol, metaColResponsiveStyle]}>
-                      <Text style={styles.metaLabel}>Billed By (Cashier):</Text>
-                      <Text style={styles.metaValue}>
-                        <Ionicons name="cash-outline" size={13} color="#27AE60" /> {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
-                      </Text>
-                    </View>
-
-                    {inv.customer && (
-                      <View style={[styles.metaCol, metaColResponsiveStyle]}>
-                        <Text style={styles.metaLabel}>Customer:</Text>
-                        <Text style={styles.metaValue} numberOfLines={1}>
-                          <Ionicons name="person-circle-outline" size={13} color="#D5A943" /> {inv.customer.name} ({inv.customer.phone})
-                        </Text>
-                      </View>
-                    )}
-
-                    <View style={[styles.metaCol, metaColResponsiveStyle]}>
-                      <Text style={styles.metaLabel}>Payment Mode:</Text>
-                      <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap' }}>
-                        {inv.payments?.map((p, idx) => (
-                          <View key={idx} style={styles.paymentMethodPill}>
-                            <Text style={styles.paymentMethodText}>
-                              {p.type?.toUpperCase()} {canViewRevenue ? `Rs. ${p.amount?.toLocaleString()}` : '••••'}
+                          <View style={[styles.typeBadgeCompact, {
+                            backgroundColor: inv.orderType === 'dine-in' ? '#EFF6FF' : inv.orderType === 'takeaway' ? '#FFFBEB' : '#F5F3FF',
+                            borderColor: inv.orderType === 'dine-in' ? '#BFDBFE' : inv.orderType === 'takeaway' ? '#FDE68A' : '#DDD6FE',
+                          }]}>
+                            <Text style={[styles.typeBadgeCompactText, {
+                              color: inv.orderType === 'dine-in' ? '#1E40AF' : inv.orderType === 'takeaway' ? '#B45309' : '#6D28D9',
+                            }]}>
+                              {inv.orderType === 'dine-in' ? (inv.tableName || 'Dine-In') : inv.orderType.toUpperCase()}
                             </Text>
                           </View>
-                        ))}
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={[styles.mobileTotalText, isVoided && styles.rowTotalAmountVoided]}>
+                            {canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : '••••••'}
+                          </Text>
+                          <View style={{ flexDirection: 'row', gap: 4, marginTop: 2 }}>
+                            {inv.payments?.map((p, idx) => (
+                              <View key={idx} style={styles.rowPayModeBadge}>
+                                <Text style={styles.rowPayModeText}>{p.type?.toUpperCase()}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Middle Row: Date, Items Count, Staff */}
+                      <View style={styles.mobileCardMidRow}>
+                        <Text style={styles.mobileMetaText}>
+                          🕒 {formatDateTime(inv.timeSettled || inv.timePlaced)} • 🍽️ {itemsCount} items
+                        </Text>
+                        <Text style={styles.mobileMetaSubText} numberOfLines={1}>
+                          Server: {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')} • Cashier: {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
+                          {inv.customer ? ` • 👤 ${inv.customer.name}` : ''}
+                        </Text>
+                      </View>
+
+                      {/* Bottom Row: Actions */}
+                      <View style={styles.mobileCardActionRow}>
+                        <TouchableOpacity
+                          style={styles.mobileActionBtnView}
+                          onPress={() => {
+                            setSelectedInvoice(inv);
+                            setDetailsTab('breakdown');
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="eye" size={13} color="#52141C" />
+                          <Text style={styles.actionBtnViewText}>View Details</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.mobileActionBtnReceipt}
+                          onPress={() => handlePrintOrShare(inv)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="print-outline" size={13} color="#FFFFFF" />
+                          <Text style={styles.actionBtnReceiptText}>Receipt</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnReview}
+                          onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(inv.id)}` as any)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="star" size={12} color="#B45309" />
+                          <Text style={styles.actionBtnReviewText}>
+                            {inv.feedbackSubmitted ? 'Review' : 'QR Review'}
+                          </Text>
+                        </TouchableOpacity>
+
+                        {!isVoided && !isRefunded && canProcessReturns && (
+                          <TouchableOpacity
+                            style={styles.actionBtnReturn}
+                            onPress={() => {
+                              const targetPath = userRole === 'admin' ? '/admin/returns' : '/manager/returns';
+                              router.push(targetPath as any);
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="return-down-back-outline" size={13} color="#D84315" />
+                            <Text style={styles.actionBtnReturnText}>Return</Text>
+                          </TouchableOpacity>
+                        )}
+
+                        {!isVoided && canVoidInvoice && (
+                          <TouchableOpacity
+                            style={styles.actionBtnVoid}
+                            onPress={() => handleOpenVoidModal(inv)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
-                  </View>
+                  );
+                }
 
-                  {/* Items Preview */}
-                  <View style={styles.itemsPreviewBox}>
-                    <Text style={styles.itemsCountLabel}>{itemsCount} Item(s):</Text>
-                    <Text style={styles.itemsPreviewText} numberOfLines={2}>
-                      {itemsPreview}
-                      {hasMoreItems && ` + ${(inv.items || []).length - 3} more...`}
-                    </Text>
-                  </View>
+                // Desktop / Tablet Horizontal Data Strip
+                return (
+                  <View
+                    key={inv.id}
+                    style={[
+                      styles.invoiceRowCard,
+                      isVoided && styles.invoiceRowVoided,
+                      isRefunded && styles.invoiceRowRefunded,
+                      isPartialReturn && styles.invoiceRowPartial,
+                    ]}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                  >
+                    {/* 1. Invoice & Status */}
+                    <View style={[styles.rowCol, { flex: 2.2, minWidth: 190 }]}>
+                      <View style={styles.idAndStatusWrap}>
+                        {isVoided ? (
+                          <View style={[styles.statusBadge, styles.statusBadgeVoided]}>
+                            <Ionicons name="close-circle" size={11} color="#DC2626" />
+                            <Text style={[styles.statusBadgeText, styles.statusBadgeTextVoided]}>VOIDED</Text>
+                          </View>
+                        ) : isRefunded ? (
+                          <View style={[styles.statusBadge, styles.statusBadgeRefunded]}>
+                            <Ionicons name="return-down-back" size={11} color="#7C3AED" />
+                            <Text style={[styles.statusBadgeText, styles.statusBadgeTextRefunded]}>REFUNDED</Text>
+                          </View>
+                        ) : isPartialReturn ? (
+                          <View style={[styles.statusBadge, styles.statusBadgePartial]}>
+                            <Ionicons name="alert-circle" size={11} color="#EA580C" />
+                            <Text style={[styles.statusBadgeText, styles.statusBadgeTextPartial]}>PARTIAL</Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.statusBadge, styles.statusBadgeSettled]}>
+                            <Ionicons name="checkmark-circle" size={11} color="#059669" />
+                            <Text style={[styles.statusBadgeText, styles.statusBadgeTextSettled]}>PAID</Text>
+                          </View>
+                        )}
 
-                  {/* If Voided notice */}
-                  {isVoided && inv.voidReason && (
-                    <View style={styles.voidAlertBox}>
-                      <Ionicons name="alert-circle" size={16} color="#C62828" style={{ marginRight: 6 }} />
-                      <Text style={styles.voidAlertText}>
-                        Void Reason: {inv.voidReason} {inv.voidedBy ? `(by ${inv.voidedBy})` : ''}
+                        <Text style={styles.rowInvoiceIdText}>#{inv.id}</Text>
+                      </View>
+
+                      <View style={styles.tableChipRow}>
+                        <View style={[styles.typeBadgeCompact, {
+                          backgroundColor: inv.orderType === 'dine-in' ? '#EFF6FF' : inv.orderType === 'takeaway' ? '#FFFBEB' : '#F5F3FF',
+                          borderColor: inv.orderType === 'dine-in' ? '#BFDBFE' : inv.orderType === 'takeaway' ? '#FDE68A' : '#DDD6FE',
+                        }]}>
+                          <Ionicons
+                            name={inv.orderType === 'dine-in' ? 'restaurant-outline' : inv.orderType === 'takeaway' ? 'bag-handle-outline' : 'bicycle-outline'}
+                            size={11}
+                            color={inv.orderType === 'dine-in' ? '#2563EB' : inv.orderType === 'takeaway' ? '#D97706' : '#7C3AED'}
+                          />
+                          <Text style={[styles.typeBadgeCompactText, {
+                            color: inv.orderType === 'dine-in' ? '#1E40AF' : inv.orderType === 'takeaway' ? '#B45309' : '#6D28D9',
+                          }]}>
+                            {inv.orderType === 'dine-in' ? (inv.tableName || 'Dine-In') : inv.orderType.toUpperCase()}
+                          </Text>
+                        </View>
+
+                        {(inv.feedbackSubmitted || inv.feedback) && (
+                          <View style={styles.reviewChipCompact}>
+                            <Ionicons name="star" size={10} color="#D97706" />
+                            <Text style={styles.reviewChipText}>{inv.feedback?.overallRating || 5}★</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* 2. Date & Time */}
+                    <View style={[styles.rowCol, { flex: 1.8, minWidth: 140 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                        <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                        <Text style={styles.rowDateText}>
+                          {formatDateTime(inv.timeSettled || inv.timePlaced)}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* 3. Staff & Customer */}
+                    <View style={[styles.rowCol, { flex: 2.0, minWidth: 160 }]}>
+                      <View style={{ gap: 2 }}>
+                        <Text style={styles.rowStaffText} numberOfLines={1}>
+                          <Text style={styles.rowStaffLabel}>Server: </Text>
+                          {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')}
+                        </Text>
+                        <Text style={styles.rowStaffText} numberOfLines={1}>
+                          <Text style={styles.rowStaffLabel}>Cashier: </Text>
+                          {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
+                        </Text>
+                        {inv.customer && (
+                          <Text style={styles.rowCustomerText} numberOfLines={1}>
+                            👤 {inv.customer.name} ({inv.customer.phone})
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* 4. Items */}
+                    <View style={[styles.rowCol, { flex: 2.0, minWidth: 150 }]}>
+                      <View style={styles.itemsSummaryBadge}>
+                        <Ionicons name="fast-food-outline" size={12} color="#52141C" />
+                        <Text style={styles.itemsSummaryCount}>{itemsCount} {itemsCount === 1 ? 'item' : 'items'}</Text>
+                      </View>
+                      <Text style={styles.itemsSummaryPreview} numberOfLines={1}>
+                        {itemsPreview}{hasMoreItems ? '...' : ''}
                       </Text>
                     </View>
-                  )}
 
-                  {/* Total & Action Footer */}
-                  <View style={[styles.cardFooter, isSmallMobile && styles.cardFooterMobile]}>
-                    <View style={[styles.amountBreakdown, isSmallMobile && styles.amountBreakdownMobile]}>
-                      <Text style={styles.subtotalHint}>
-                        Sub: {canViewRevenue ? `Rs. ${(inv.subTotal || 0).toLocaleString()}` : '••••'} • Tax: {canViewRevenue ? `Rs. ${(inv.tax || 0).toLocaleString()}` : '••••'}
-                        {(inv.discount || 0) > 0 ? ` • Disc: -${canViewRevenue ? `Rs. ${(inv.discount || 0).toLocaleString()}` : '••••'}` : ''}
+                    {/* 5. Total & Payment */}
+                    <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, alignItems: 'flex-end', paddingRight: 8 }]}>
+                      <Text style={[styles.rowTotalAmount, isVoided && styles.rowTotalAmountVoided]}>
+                        {canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : '••••••'}
                       </Text>
-                      <Text style={[styles.grandTotalText, isVoided && styles.grandTotalVoided]}>
-                        {canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : 'Rs. ••••••'}
-                      </Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2 }}>
+                        {inv.payments?.map((p, idx) => (
+                          <View key={idx} style={styles.rowPayModeBadge}>
+                            <Text style={styles.rowPayModeText}>{p.type?.toUpperCase()}</Text>
+                          </View>
+                        ))}
+                        <Text style={styles.rowTaxHint}>
+                          {canViewRevenue ? `Tax: Rs. ${(inv.tax || 0).toLocaleString()}` : ''}
+                        </Text>
+                      </View>
                     </View>
 
-                    <View style={[styles.actionButtonsRow, isSmallMobile && styles.actionButtonsRowMobile]}>
+                    {/* 6. Action Buttons */}
+                    <View style={[styles.rowCol, { flex: 2.4, minWidth: 210, flexDirection: 'row', justifyContent: 'flex-end', gap: 6, alignItems: 'center' }]}>
+                      {/* View Details Button */}
                       <TouchableOpacity
-                        style={[styles.detailBtn, isSmallMobile && styles.detailBtnMobile]}
+                        style={styles.actionBtnView}
                         onPress={() => {
                           setSelectedInvoice(inv);
                           setDetailsTab('breakdown');
                         }}
-                        activeOpacity={0.8}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'View Full Order Details & Items' } as any) : {})}
                       >
-                        <Ionicons name="eye-outline" size={16} color="#4a121a" style={{ marginRight: 4 }} />
-                        <Text style={styles.detailBtnText}>Details</Text>
+                        <Ionicons name="eye" size={14} color="#52141C" />
+                        <Text style={styles.actionBtnViewText}>View</Text>
                       </TouchableOpacity>
 
+                      {/* Receipt Button */}
                       <TouchableOpacity
-                        style={[styles.printActionBtn, isSmallMobile && styles.printActionBtnMobile]}
+                        style={styles.actionBtnReceipt}
                         onPress={() => handlePrintOrShare(inv)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Print Receipt Slip' } as any) : {})}
                       >
-                        <Ionicons name="print-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                        <Text style={styles.printActionBtnText}>Receipt</Text>
+                        <Ionicons name="print-outline" size={13} color="#FFFFFF" />
+                        <Text style={styles.actionBtnReceiptText}>Receipt</Text>
                       </TouchableOpacity>
 
+                      {/* QR Review Button */}
                       <TouchableOpacity
-                        style={[styles.cardFeedbackBtn, isSmallMobile && styles.cardFeedbackBtnMobile]}
+                        style={styles.actionBtnReview}
                         onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(inv.id)}` as any)}
-                        activeOpacity={0.8}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Customer Feedback & Review' } as any) : {})}
                       >
-                        <Ionicons name="star" size={14} color="#B45309" style={{ marginRight: 4 }} />
-                        <Text style={styles.cardFeedbackBtnText}>
-                          {inv.feedbackSubmitted ? 'Feedback' : 'QR Review'}
-                        </Text>
+                        <Ionicons name="star" size={12} color="#B45309" />
                       </TouchableOpacity>
 
+                      {/* Return Button */}
                       {!isVoided && !isRefunded && canProcessReturns && (
                         <TouchableOpacity
-                          style={[styles.cardReturnBtn, isSmallMobile && styles.cardReturnBtnMobile]}
+                          style={styles.actionBtnReturn}
                           onPress={() => {
                             const targetPath = userRole === 'admin' ? '/admin/returns' : '/manager/returns';
                             router.push(targetPath as any);
                           }}
-                          activeOpacity={0.8}
+                          activeOpacity={0.75}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Process Sales Return / Refund' } as any) : {})}
                         >
-                          <Ionicons name="return-down-back-outline" size={15} color="#D84315" style={{ marginRight: 4 }} />
-                          <Text style={styles.cardReturnBtnText}>Return</Text>
+                          <Ionicons name="return-down-back-outline" size={13} color="#D84315" />
                         </TouchableOpacity>
                       )}
 
+                      {/* Void Button */}
                       {!isVoided && canVoidInvoice && (
                         <TouchableOpacity
-                          style={styles.voidBtn}
+                          style={styles.actionBtnVoid}
                           onPress={() => handleOpenVoidModal(inv)}
-                          activeOpacity={0.8}
+                          activeOpacity={0.75}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Void Invoice' } as any) : {})}
                         >
-                          <Ionicons name="trash-outline" size={15} color="#E74C3C" />
+                          <Ionicons name="trash-outline" size={13} color="#DC2626" />
                         </TouchableOpacity>
                       )}
                     </View>
                   </View>
-                </View>
-              );
-            })}
+                );
+              })}
             </View>
 
             <PaginationControl
@@ -1665,296 +1813,373 @@ const styles = StyleSheet.create({
     marginTop: 6,
     textAlign: 'center',
   },
-  invoicesList: {
-    gap: 12,
-  },
-  invoiceCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 16,
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
-    borderLeftWidth: 4,
-    borderLeftColor: '#27AE60',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    elevation: 2,
+    borderColor: '#E2E8F0',
   },
-  invoiceCardVoided: {
-    borderLeftColor: '#E74C3C',
-    backgroundColor: '#FFFDFD',
+  thCol: {
+    justifyContent: 'center',
   },
-  invoiceCardRefunded: {
-    borderLeftColor: '#6A1B9A',
-    backgroundColor: '#FAF5FF',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-  },
-  statusPillSettled: {
-    backgroundColor: '#E8F5E9',
-  },
-  statusPillVoided: {
-    backgroundColor: '#FFEBEE',
-  },
-  statusPillText: {
-    fontSize: 12,
+  thText: {
+    fontSize: 11,
     fontWeight: '800',
+    color: '#64748B',
     letterSpacing: 0.5,
   },
-  statusPillTextSettled: {
-    color: '#2E7D32',
-  },
-  statusPillTextVoided: {
-    color: '#C62828',
-  },
-  statusPillRefunded: {
-    backgroundColor: '#F3E5F5',
-  },
-  statusPillTextRefunded: {
-    color: '#6A1B9A',
-  },
-  statusPillPartialReturn: {
-    backgroundColor: '#FFF3E0',
-  },
-  statusPillTextPartialReturn: {
-    color: '#D84315',
-  },
-  invoiceIdText: {
-    fontSize: 16.5,
-    fontWeight: '900',
-    color: '#1C1C1E',
-  },
-  typeBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  typeBadgeText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  cardDateText: {
-    fontSize: 13.5,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  metaRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 16,
-    marginBottom: 10,
-    paddingVertical: 6,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#F2F2F7',
-  },
-  metaCol: {
-    gap: 2,
-  },
-  metaLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    textTransform: 'uppercase',
-  },
-  metaValue: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#1C1C1E',
-  },
-  paymentMethodPill: {
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 4,
-  },
-  paymentMethodText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#4a121a',
-  },
-  itemsPreviewBox: {
-    backgroundColor: '#F9FAFB',
-    padding: 10,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  itemsCountLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#475569',
-    textTransform: 'uppercase',
-    marginBottom: 2,
-  },
-  itemsPreviewText: {
-    fontSize: 13.5,
-    color: '#1E293B',
-    lineHeight: 19,
-  },
-  voidAlertBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFEBEE',
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 10,
-  },
-  voidAlertText: {
-    fontSize: 12.5,
-    fontWeight: '700',
-    color: '#C62828',
-    flex: 1,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderColor: '#F2F2F7',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  cardFooterMobile: {
-    flexDirection: 'column',
-    alignItems: 'stretch',
-    gap: 12,
-  },
-  amountBreakdown: {
-    gap: 2,
-  },
-  amountBreakdownMobile: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    width: '100%',
-  },
-  subtotalHint: {
-    fontSize: 12.5,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  grandTotalText: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#4a121a',
-  },
-  grandTotalVoided: {
-    textDecorationLine: 'line-through',
-    color: '#C62828',
-  },
-  actionButtonsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  invoicesList: {
     gap: 8,
   },
-  actionButtonsRowMobile: {
-    width: '100%',
-  },
-  detailBtn: {
+  invoiceRowCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F2F2F7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
     borderWidth: 1,
-    borderColor: '#E5E5EA',
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
   },
-  detailBtnMobile: {
-    flex: 1,
+  invoiceRowVoided: {
+    borderLeftColor: '#EF4444',
+    backgroundColor: '#FEF2F2',
+  },
+  invoiceRowRefunded: {
+    borderLeftColor: '#8B5CF6',
+    backgroundColor: '#F5F3FF',
+  },
+  invoiceRowPartial: {
+    borderLeftColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+  },
+  rowCol: {
     justifyContent: 'center',
   },
-  detailBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#4a121a',
-  },
-  printActionBtn: {
+  idAndStatusWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#4a121a',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 6,
+    flexWrap: 'wrap',
   },
-  printActionBtnMobile: {
-    flex: 1,
-    justifyContent: 'center',
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
   },
-  printActionBtnText: {
+  statusBadgeSettled: {
+    backgroundColor: '#DCFCE7',
+  },
+  statusBadgeVoided: {
+    backgroundColor: '#FEE2E2',
+  },
+  statusBadgeRefunded: {
+    backgroundColor: '#EDE9FE',
+  },
+  statusBadgePartial: {
+    backgroundColor: '#FEF3C7',
+  },
+  statusBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  statusBadgeTextSettled: {
+    color: '#059669',
+  },
+  statusBadgeTextVoided: {
+    color: '#DC2626',
+  },
+  statusBadgeTextRefunded: {
+    color: '#7C3AED',
+  },
+  statusBadgeTextPartial: {
+    color: '#D97706',
+  },
+  rowInvoiceIdText: {
     fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  tableChipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  typeBadgeCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  typeBadgeCompactText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  reviewChipCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  reviewChipText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  rowDateText: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  rowStaffText: {
+    fontSize: 11.5,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  rowStaffLabel: {
+    color: '#94A3B8',
+    fontWeight: '700',
+  },
+  rowCustomerText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  itemsSummaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(82, 20, 28, 0.06)',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  itemsSummaryCount: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#52141C',
+  },
+  itemsSummaryPreview: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  rowTotalAmount: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+  rowTotalAmountVoided: {
+    textDecorationLine: 'line-through',
+    color: '#EF4444',
+  },
+  rowPayModeBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 0.8,
+    borderColor: '#CBD5E1',
+  },
+  rowPayModeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  rowTaxHint: {
+    fontSize: 10,
+    color: '#94A3B8',
+    fontWeight: '600',
+  },
+  actionBtnView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 9,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  actionBtnViewText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  actionBtnReceipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#52141C',
+    paddingHorizontal: 9,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  actionBtnReceiptText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-  voidBtn: {
-    backgroundColor: '#FFEBEE',
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFCDD2',
-  },
-  cardReturnBtn: {
+  actionBtnReview: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF3E0',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FFE0B2',
-  },
-  cardReturnBtnMobile: {
-    flex: 1,
-    justifyContent: 'center',
-  },
-  cardReturnBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#D84315',
-  },
-  cardFeedbackBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 3,
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#FDE68A',
+    paddingHorizontal: 7,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
   },
-  cardFeedbackBtnMobile: {
+  actionBtnReviewText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#B45309',
+  },
+  actionBtnReturn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFF1F2',
+    borderWidth: 1,
+    borderColor: '#FECDD3',
+    paddingHorizontal: 7,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  actionBtnReturnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#BE123C',
+  },
+  actionBtnVoid: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    paddingHorizontal: 7,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+
+  /* Mobile card styles */
+  mobileInvoiceCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  mobileCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mobileTotalText: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+  mobileCardMidRow: {
+    gap: 3,
+    borderTopWidth: 0.8,
+    borderBottomWidth: 0.8,
+    borderColor: '#F1F5F9',
+    paddingVertical: 5,
+  },
+  mobileMetaText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  mobileMetaSubText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  mobileCardActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  mobileActionBtnView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
     flex: 1,
     justifyContent: 'center',
   },
-  cardFeedbackBtnText: {
-    fontSize: 13.5,
-    fontWeight: '700',
-    color: '#B45309',
+  mobileActionBtnReceipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#52141C',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 6,
+    flex: 1,
+    justifyContent: 'center',
   },
 
   /* MODAL STYLES */
