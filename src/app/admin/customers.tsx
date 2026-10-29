@@ -10,16 +10,21 @@ import {
   Alert,
   Platform,
   Linking,
+  Share,
   useWindowDimensions,
+  ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
   useRestaurantStore,
   Customer,
   CustomerTier,
+  Invoice,
 } from '../../store/restaurantStore';
 import { getBaseFeedbackUrl } from '../../utils/qrCode';
 import { printInvoiceReceipt } from '../../components/Invoice';
+import PaginationControl from '../../components/PaginationControl';
+import { usePagination } from '../../hooks/usePagination';
 
 /**
  * Normalizes phone numbers to standard international format (e.g. 03001234567 -> 923001234567)
@@ -38,7 +43,7 @@ function formatWhatsAppPhone(phone: string): string {
 
 export default function AdminCustomers() {
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isMobile = width < 850;
   const isSmallMobile = width < 480;
 
   const customers = useRestaurantStore((state) => state.customers);
@@ -53,7 +58,7 @@ export default function AdminCustomers() {
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [tierFilter, setTierFilter] = useState<'All' | CustomerTier>('All');
-  const [sortBy, setSortBy] = useState<'spent' | 'orders' | 'points' | 'recent'>('spent');
+  const [sortBy, setSortBy] = useState<'spent' | 'orders' | 'points' | 'recent' | 'name'>('spent');
 
   // Customer 360 Dossier Modal
   const [dossierCustomer, setDossierCustomer] = useState<Customer | null>(null);
@@ -90,10 +95,24 @@ export default function AdminCustomers() {
     [customers]
   );
   const avgRating = useMemo(() => {
-    if (feedbacks.length === 0) return 4.9;
+    if (feedbacks.length === 0) return '4.9';
     const sum = feedbacks.reduce((acc, f) => acc + (f.overallRating || 5), 0);
     return (sum / feedbacks.length).toFixed(1);
   }, [feedbacks]);
+
+  // Responsive KPI card width styling
+  const kpiCardResponsiveStyle = useMemo<ViewStyle>(() => {
+    if (width < 380) {
+      return { width: '100%', minWidth: '100%' };
+    }
+    if (width < 768) {
+      return { width: '47%', minWidth: 140 };
+    }
+    if (width < 1024) {
+      return { width: '48%', minWidth: 180 };
+    }
+    return { flex: 1, minWidth: 200 };
+  }, [width]);
 
   // Filtered & Sorted Customer List
   const filteredCustomers = useMemo(() => {
@@ -120,11 +139,18 @@ export default function AdminCustomers() {
       if (sortBy === 'orders') return (b.totalOrders || 0) - (a.totalOrders || 0);
       if (sortBy === 'points') return (b.loyaltyPoints || 0) - (a.loyaltyPoints || 0);
       if (sortBy === 'recent') return (b.lastVisit || 0) - (a.lastVisit || 0);
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
       return 0;
     });
 
     return result;
   }, [customers, searchQuery, tierFilter, sortBy]);
+
+  // Pagination for Customer List
+  const customerPagination = usePagination({
+    data: filteredCustomers,
+    initialPageSize: 10,
+  });
 
   // Get Invoices for Dossier Customer
   const customerInvoices = useMemo(() => {
@@ -165,13 +191,13 @@ export default function AdminCustomers() {
   const getTierBadgeStyle = (tier?: CustomerTier) => {
     switch (tier) {
       case 'VIP':
-        return { bg: '#FEF3C7', border: '#F59E0B', text: '#92400E', icon: 'diamond' };
+        return { bg: '#FEF3C7', border: '#F59E0B', text: '#92400E', icon: 'diamond', label: 'VIP' };
       case 'Gold':
-        return { bg: '#FFFBEB', border: '#FBBF24', text: '#B45309', icon: 'trophy' };
+        return { bg: '#FFFBEB', border: '#FBBF24', text: '#B45309', icon: 'trophy', label: 'Gold' };
       case 'Silver':
-        return { bg: '#F1F5F9', border: '#94A3B8', text: '#334155', icon: 'shield-checkmark' };
+        return { bg: '#F1F5F9', border: '#94A3B8', text: '#334155', icon: 'shield-checkmark', label: 'Silver' };
       default:
-        return { bg: '#EFF6FF', border: '#93C5FD', text: '#1E40AF', icon: 'person' };
+        return { bg: '#EFF6FF', border: '#93C5FD', text: '#1E40AF', icon: 'person', label: 'Regular' };
     }
   };
 
@@ -334,289 +360,528 @@ export default function AdminCustomers() {
     setWhatsappModalVisible(false);
   };
 
+  // Export Filtered Customers to CSV
+  const handleExportCSV = () => {
+    if (filteredCustomers.length === 0) {
+      const msg = 'No customers found matching current filter criteria.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Export Notice', msg);
+      return;
+    }
+
+    const headers = 'ID,Name,Phone,Email,Tier,Loyalty Points,Total Visits,Lifetime Spent (Rs.),Address,Tags,Notes\n';
+    const rows = filteredCustomers
+      .map((c) => {
+        const tagsStr = (c.tags || []).join('; ');
+        const notesStr = (c.notes || '').replace(/"/g, '""');
+        const addrStr = (c.address || '').replace(/"/g, '""');
+        return `"${c.id}","${c.name}","${c.phone}","${c.email || ''}","${c.tier || 'Regular'}","${c.loyaltyPoints || 50}","${c.totalOrders || 0}","${c.totalSpent || 0}","${addrStr}","${tagsStr}","${notesStr}"`;
+      })
+      .join('\n');
+
+    const csvContent = headers + rows;
+
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `sultan_customers_${Date.now()}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } else {
+      Share.share({
+        message: csvContent,
+        title: `Sultan_Customers_Export_${Date.now()}.csv`,
+      });
+    }
+  };
+
   return (
     <View style={[styles.container, isMobile && styles.containerMobile]}>
       {/* Top Header */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
-        <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <View style={styles.headerLeft}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             <Ionicons name="people" size={24} color="#D5A943" />
             <Text style={[styles.title, isMobile && styles.titleMobile]}>
               Customer CRM & Loyalty Hub
             </Text>
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>ADMIN CRM</Text>
+            </View>
           </View>
           <Text style={styles.subtitle}>
-            Comprehensive 360° guest records, WhatsApp messaging & dish ratings
+            Comprehensive 360° guest records, WhatsApp direct messaging, bills & ratings
           </Text>
         </View>
 
-        <TouchableOpacity
-          style={[styles.addButton, isMobile && styles.addButtonMobile]}
-          onPress={openAddModal}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="person-add" size={17} color="#140306" style={{ marginRight: 6 }} />
-          <Text style={styles.addButtonText}>Register New Customer</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.headerRight}>
+          <TouchableOpacity
+            style={styles.exportBtn}
+            onPress={handleExportCSV}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Export Customers List to CSV' } as any) : {})}
+          >
+            <Ionicons name="download-outline" size={16} color="#52141C" style={{ marginRight: 6 }} />
+            <Text style={styles.exportBtnText}>{isSmallMobile ? 'Export' : 'Export CSV'}</Text>
+          </TouchableOpacity>
 
-      {/* 4 KPI Metrics Header */}
-      <View style={styles.kpiGrid}>
-        <View style={styles.kpiCard}>
-          <View style={styles.kpiIconWrap}>
-            <Ionicons name="people-outline" size={20} color="#1976D2" />
-          </View>
-          <View>
-            <Text style={styles.kpiLabel}>Total Diners</Text>
-            <Text style={styles.kpiValue}>{customers.length}</Text>
-          </View>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <View style={[styles.kpiIconWrap, { backgroundColor: '#FEF3C7' }]}>
-            <Ionicons name="diamond-outline" size={20} color="#D97706" />
-          </View>
-          <View>
-            <Text style={styles.kpiLabel}>VIP & Gold Guests</Text>
-            <Text style={[styles.kpiValue, { color: '#B45309' }]}>{vipCount}</Text>
-          </View>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <View style={[styles.kpiIconWrap, { backgroundColor: '#DCFCE7' }]}>
-            <Ionicons name="wallet-outline" size={20} color="#16A34A" />
-          </View>
-          <View>
-            <Text style={styles.kpiLabel}>Lifetime Revenue</Text>
-            <Text style={[styles.kpiValue, { color: '#15803D' }]}>
-              Rs. {totalSpentAll.toLocaleString()}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.kpiCard}>
-          <View style={[styles.kpiIconWrap, { backgroundColor: '#F3E8FF' }]}>
-            <Ionicons name="star" size={20} color="#9333EA" />
-          </View>
-          <View>
-            <Text style={styles.kpiLabel}>Guest Feedback</Text>
-            <Text style={[styles.kpiValue, { color: '#7E22CE' }]}>
-              ⭐ {avgRating} ({feedbacks.length})
-            </Text>
-          </View>
+          <TouchableOpacity
+            style={[styles.addButton, isSmallMobile && { flex: 1 }]}
+            onPress={openAddModal}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Register a New Customer Record' } as any) : {})}
+          >
+            <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
+            <Text style={styles.addButtonText}>{isSmallMobile ? 'New Customer' : 'Register New Customer'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
-      {/* Search Bar & Tier Tabs */}
-      <View style={styles.filterSection}>
-        <View style={styles.searchBox}>
-          <View style={styles.searchIconOrb}>
-            <Ionicons name="search" size={16} color="#52141C" />
-          </View>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search by name, phone, email, notes, or tags..."
-            placeholderTextColor="#8A7A70"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.searchClearBtn}>
-              <Ionicons name="close-circle" size={18} color="#D5A943" />
-            </TouchableOpacity>
-          ) : (
-            <View style={styles.searchShortcutBadge}>
-              <Ionicons name="sparkles" size={11} color="#B45309" style={{ marginRight: 3 }} />
-              <Text style={styles.searchShortcutText}>CRM</Text>
+      <ScrollView style={styles.contentScroll} showsVerticalScrollIndicator={false}>
+        {/* 4 KPI Metrics Header (Liquid Glass Info Boxes) */}
+        <View style={styles.kpiGrid}>
+          <View
+            style={[styles.kpiCard, styles.kpiCardSapphire, kpiCardResponsiveStyle]}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+          >
+            <View style={[styles.kpiIconWrap, { backgroundColor: 'rgba(2, 132, 199, 0.18)' }]}>
+              <Ionicons name="people" size={20} color="#0284C7" />
             </View>
+            <View>
+              <Text style={[styles.kpiLabel, { color: '#075985' }]}>Total Diners</Text>
+              <Text style={[styles.kpiValue, { color: '#0369A1' }]}>{customers.length}</Text>
+              <Text style={[styles.kpiSub, { color: '#075985' }]}>Active patrons in CRM</Text>
+            </View>
+          </View>
+
+          <View
+            style={[styles.kpiCard, styles.kpiCardAmber, kpiCardResponsiveStyle]}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+          >
+            <View style={[styles.kpiIconWrap, { backgroundColor: 'rgba(245, 158, 11, 0.18)' }]}>
+              <Ionicons name="diamond" size={20} color="#D97706" />
+            </View>
+            <View>
+              <Text style={[styles.kpiLabel, { color: '#92400E' }]}>VIP & Gold Guests</Text>
+              <Text style={[styles.kpiValue, { color: '#B45309' }]}>{vipCount}</Text>
+              <Text style={[styles.kpiSub, { color: '#92400E' }]}>Top loyalty tier diners</Text>
+            </View>
+          </View>
+
+          <View
+            style={[styles.kpiCard, styles.kpiCardEmerald, kpiCardResponsiveStyle]}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+          >
+            <View style={[styles.kpiIconWrap, { backgroundColor: 'rgba(16, 185, 129, 0.18)' }]}>
+              <Ionicons name="wallet" size={20} color="#059669" />
+            </View>
+            <View>
+              <Text style={[styles.kpiLabel, { color: '#065F46' }]}>Lifetime Revenue</Text>
+              <Text style={[styles.kpiValue, { color: '#047857' }]}>
+                Rs. {totalSpentAll.toLocaleString()}
+              </Text>
+              <Text style={[styles.kpiSub, { color: '#065F46' }]}>Across {totalOrdersAll} total visits</Text>
+            </View>
+          </View>
+
+          <View
+            style={[styles.kpiCard, styles.kpiCardRuby, kpiCardResponsiveStyle]}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+          >
+            <View style={[styles.kpiIconWrap, { backgroundColor: 'rgba(239, 68, 68, 0.18)' }]}>
+              <Ionicons name="star" size={20} color="#DC2626" />
+            </View>
+            <View>
+              <Text style={[styles.kpiLabel, { color: '#991B1B' }]}>Guest Feedback</Text>
+              <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
+                ⭐ {avgRating} ({feedbacks.length})
+              </Text>
+              <Text style={[styles.kpiSub, { color: '#991B1B' }]}>Item ratings & comments</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Search Bar & Tier Tabs */}
+        <View style={styles.filterSection}>
+          <View style={[styles.searchRow, isSmallMobile && { flexDirection: 'column', alignItems: 'stretch' }]}>
+            <View style={styles.searchBox}>
+              <View style={styles.searchIconOrb}>
+                <Ionicons name="search" size={16} color="#52141C" />
+              </View>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search by name, phone, email, notes, or tags..."
+                placeholderTextColor="#8A7A70"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery ? (
+                <TouchableOpacity onPress={() => setSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} style={styles.searchClearBtn}>
+                  <Ionicons name="close-circle" size={18} color="#D5A943" />
+                </TouchableOpacity>
+              ) : (
+                <View style={styles.searchShortcutBadge}>
+                  <Ionicons name="sparkles" size={11} color="#B45309" style={{ marginRight: 3 }} />
+                  <Text style={styles.searchShortcutText}>CRM</Text>
+                </View>
+              )}
+            </View>
+
+            {/* Sort Selector */}
+            <View style={[styles.sortContainer, isSmallMobile && { alignSelf: 'flex-start' }]}>
+              <Ionicons name="swap-vertical" size={16} color="#52141C" style={{ marginRight: 4 }} />
+              <TouchableOpacity
+                onPress={() => {
+                  if (sortBy === 'spent') setSortBy('orders');
+                  else if (sortBy === 'orders') setSortBy('points');
+                  else if (sortBy === 'points') setSortBy('recent');
+                  else if (sortBy === 'recent') setSortBy('name');
+                  else setSortBy('spent');
+                }}
+                style={styles.sortBtn}
+              >
+                <Text style={styles.sortBtnText}>
+                  {sortBy === 'spent' && 'Highest Spend'}
+                  {sortBy === 'orders' && 'Most Visits'}
+                  {sortBy === 'points' && 'Loyalty Points'}
+                  {sortBy === 'recent' && 'Recent Visit'}
+                  {sortBy === 'name' && 'Name (A-Z)'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Tier Tabs Row */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tierTabsRow}
+          >
+            {(['All', 'VIP', 'Gold', 'Silver', 'Regular'] as const).map((tier) => {
+              const count =
+                tier === 'All'
+                  ? customers.length
+                  : customers.filter((c) => (c.tier || 'Regular') === tier).length;
+              const isSelected = tierFilter === tier;
+
+              return (
+                <TouchableOpacity
+                  key={tier}
+                  style={[styles.tierTab, isSelected && styles.tierTabSelected]}
+                  onPress={() => setTierFilter(tier)}
+                  activeOpacity={0.7}
+                >
+                  <Text
+                    style={[styles.tierTabText, isSelected && styles.tierTabTextSelected]}
+                  >
+                    {tier === 'VIP' ? '👑 VIP' : tier === 'Gold' ? '🥇 Gold' : tier === 'Silver' ? '🥈 Silver' : tier} ({count})
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Results Counter & Reset */}
+        <View style={styles.resultsCounterRow}>
+          <Text style={styles.resultsCountText}>
+            Showing <Text style={{ fontWeight: '800', color: '#0F172A' }}>{filteredCustomers.length}</Text> customer(s)
+          </Text>
+          {(searchQuery || tierFilter !== 'All' || sortBy !== 'spent') && (
+            <TouchableOpacity
+              onPress={() => {
+                setSearchQuery('');
+                setTierFilter('All');
+                setSortBy('spent');
+              }}
+              style={styles.clearFilterBtn}
+            >
+              <Ionicons name="refresh" size={13} color="#D84315" style={{ marginRight: 4 }} />
+              <Text style={styles.clearFilterText}>Reset Filters</Text>
+            </TouchableOpacity>
           )}
         </View>
 
-        {/* Tier Tabs */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tierTabsRow}
-        >
-          {(['All', 'VIP', 'Gold', 'Silver', 'Regular'] as const).map((tier) => {
-            const count =
-              tier === 'All'
-                ? customers.length
-                : customers.filter((c) => (c.tier || 'Regular') === tier).length;
-            const isSelected = tierFilter === tier;
-
-            return (
-              <TouchableOpacity
-                key={tier}
-                style={[styles.tierTab, isSelected && styles.tierTabSelected]}
-                onPress={() => setTierFilter(tier)}
-                activeOpacity={0.7}
-              >
-                <Text
-                  style={[styles.tierTabText, isSelected && styles.tierTabTextSelected]}
-                >
-                  {tier === 'VIP' ? '👑 VIP' : tier === 'Gold' ? '🥇 Gold' : tier === 'Silver' ? '🥈 Silver' : tier} ({count})
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Customer Cards List */}
-      <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
+        {/* Customer List Container */}
         {filteredCustomers.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Ionicons name="people-outline" size={54} color="#CBD5E1" />
             <Text style={styles.emptyText}>No customers found</Text>
             <Text style={styles.emptySubtext}>
-              No guests match your search criteria. Try a different query or register a customer.
+              No guests match your search criteria. Try a different query or register a new customer.
             </Text>
+            <TouchableOpacity style={styles.emptyActionBtn} onPress={openAddModal}>
+              <Ionicons name="person-add" size={15} color="#140306" style={{ marginRight: 6 }} />
+              <Text style={styles.emptyActionBtnText}>Register Customer</Text>
+            </TouchableOpacity>
           </View>
         ) : (
-          filteredCustomers.map((cust) => {
-            const badge = getTierBadgeStyle(cust.tier);
+          <View style={styles.customersList}>
+            {/* Desktop Table Column Header */}
+            {!isMobile && (
+              <View style={styles.tableHeaderRow}>
+                <View style={[styles.thCol, { flex: 2.5, minWidth: 200 }]}>
+                  <Text style={styles.thText}>CUSTOMER & TIER</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 2.2, minWidth: 180 }]}>
+                  <Text style={styles.thText}>CONTACT & ADDRESS</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                  <Text style={styles.thText}>SPEND & VISITS</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                  <Text style={styles.thText}>LOYALTY & TAGS</Text>
+                </View>
+                <View style={[styles.thCol, { flex: 2.5, minWidth: 210, alignItems: 'flex-end' }]}>
+                  <Text style={styles.thText}>ACTIONS</Text>
+                </View>
+              </View>
+            )}
 
-            return (
-              <View key={cust.id} style={[styles.card, isMobile && styles.cardMobile]}>
-                <View style={styles.cardMainRow}>
-                  {/* Left Avatar & Tier */}
-                  <View style={styles.avatarCol}>
-                    <View style={styles.avatar}>
-                      <Text style={styles.avatarText}>{getInitials(cust.name)}</Text>
-                    </View>
-                    <View
-                      style={[
-                        styles.tierBadge,
-                        { backgroundColor: badge.bg, borderColor: badge.border },
-                      ]}
-                    >
-                      <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 3 }} />
-                      <Text style={[styles.tierBadgeText, { color: badge.text }]}>
-                        {cust.tier || 'Regular'}
-                      </Text>
-                    </View>
-                  </View>
+            {customerPagination.paginatedData.map((cust) => {
+              const badge = getTierBadgeStyle(cust.tier);
 
-                  {/* Center Details */}
-                  <View style={styles.infoCol}>
-                    <View style={styles.custNameRow}>
-                      <Text style={styles.custName}>{cust.name}</Text>
-                      <View style={styles.pointsPill}>
-                        <Ionicons name="sparkles" size={12} color="#D5A943" style={{ marginRight: 3 }} />
-                        <Text style={styles.pointsPillText}>
-                          {cust.loyaltyPoints || 50} Pts
+              if (isMobile) {
+                return (
+                  <View
+                    key={cust.id}
+                    style={[
+                      styles.mobileCustCard,
+                      cust.tier === 'VIP' && styles.custRowVIP,
+                      cust.tier === 'Gold' && styles.custRowGold,
+                    ]}
+                  >
+                    {/* Top Row: Avatar + Name + Tier on left; Spend + Visits on right */}
+                    <View style={styles.mobileCardTopRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <View style={[styles.avatarCompact, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+                          <Text style={[styles.avatarTextCompact, { color: badge.text }]}>
+                            {getInitials(cust.name)}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.rowCustName} numberOfLines={1}>{cust.name}</Text>
+                          <View style={[styles.tierBadgeCompact, { backgroundColor: badge.bg, borderColor: badge.border, alignSelf: 'flex-start', marginTop: 2 }]}>
+                            <Ionicons name={badge.icon as any} size={10} color={badge.text} style={{ marginRight: 2 }} />
+                            <Text style={[styles.tierBadgeCompactText, { color: badge.text }]}>
+                              {cust.tier || 'Regular'}
+                            </Text>
+                          </View>
+                        </View>
+                      </View>
+
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={styles.mobileSpendText}>
+                          Rs. {(cust.totalSpent || 0).toLocaleString()}
+                        </Text>
+                        <Text style={styles.mobileVisitsText}>
+                          {cust.totalOrders || 0} visits
                         </Text>
                       </View>
                     </View>
 
-                    {/* Phone & Email */}
-                    <View style={styles.contactDetailsRow}>
-                      <View style={styles.contactItem}>
-                        <Ionicons name="call" size={13} color="#D5A943" style={{ marginRight: 4 }} />
-                        <Text style={styles.contactText}>{cust.phone}</Text>
+                    {/* Middle Row: Phone & Points & Location */}
+                    <View style={styles.mobileCardMidRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="call" size={12} color="#D5A943" />
+                        <Text style={styles.mobilePhoneText}>{cust.phone}</Text>
                       </View>
-                      {cust.email ? (
-                        <View style={styles.contactItem}>
-                          <Ionicons name="mail" size={13} color="#64748B" style={{ marginRight: 4 }} />
-                          <Text style={styles.contactText}>{cust.email}</Text>
+                      <View style={styles.pointsPillCompact}>
+                        <Ionicons name="sparkles" size={10} color="#D5A943" />
+                        <Text style={styles.pointsPillCompactText}>{cust.loyaltyPoints || 50} Pts</Text>
+                      </View>
+                      {cust.address ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flex: 1 }}>
+                          <Ionicons name="location-outline" size={11} color="#94A3B8" />
+                          <Text style={styles.mobileAddressText} numberOfLines={1}>{cust.address}</Text>
                         </View>
                       ) : null}
                     </View>
 
-                    {cust.address ? (
-                      <View style={styles.contactItem}>
-                        <Ionicons name="location" size={13} color="#94A3B8" style={{ marginRight: 4 }} />
-                        <Text style={styles.addressText} numberOfLines={1}>
-                          {cust.address}
-                        </Text>
-                      </View>
-                    ) : null}
+                    {/* Bottom Row: Actions */}
+                    <View style={styles.mobileCardActionRow}>
+                      <TouchableOpacity
+                        style={styles.mobileActionBtnView}
+                        onPress={() => {
+                          setDossierCustomer(cust);
+                          setDossierTab('orders');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="eye" size={13} color="#52141C" />
+                        <Text style={styles.actionBtnViewText}>View</Text>
+                      </TouchableOpacity>
 
-                    {/* Tags */}
-                    {cust.tags && cust.tags.length > 0 && (
-                      <View style={styles.tagsRow}>
-                        {cust.tags.map((tag, idx) => (
-                          <View key={idx} style={styles.tagBadge}>
-                            <Text style={styles.tagBadgeText}>#{tag}</Text>
-                          </View>
-                        ))}
-                      </View>
-                    )}
+                      <TouchableOpacity
+                        style={styles.mobileActionBtnWhatsApp}
+                        onPress={() => openWhatsAppModal(cust)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+                        <Text style={styles.actionBtnWhatsAppText}>WhatsApp</Text>
+                      </TouchableOpacity>
 
-                    {/* Notes preview */}
-                    {cust.notes ? (
-                      <View style={styles.notePreviewBox}>
-                        <Ionicons name="chatbox-ellipses-outline" size={12} color="#B45309" style={{ marginRight: 4 }} />
-                        <Text style={styles.notePreviewText} numberOfLines={1}>
-                          {cust.notes}
-                        </Text>
-                      </View>
-                    ) : null}
+                      <TouchableOpacity
+                        style={styles.actionBtnEdit}
+                        onPress={() => openEditModal(cust)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="pencil" size={13} color="#475569" />
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={styles.actionBtnDelete}
+                        onPress={() => handleDelete(cust)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    </View>
                   </View>
+                );
+              }
 
-                  {/* Right Stats & Spend */}
-                  <View style={styles.statsCol}>
-                    <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>Lifetime Spent</Text>
-                      <Text style={styles.statValSpend}>
-                        Rs. {(cust.totalSpent || 0).toLocaleString()}
+              // Desktop / Tablet Horizontal Data Strip
+              return (
+                <View
+                  key={cust.id}
+                  style={[
+                    styles.custRowCard,
+                    cust.tier === 'VIP' && styles.custRowVIP,
+                    cust.tier === 'Gold' && styles.custRowGold,
+                  ]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                >
+                  {/* 1. Customer & Tier */}
+                  <View style={[styles.rowCol, { flex: 2.5, minWidth: 200, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                    <View style={[styles.avatarCompact, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+                      <Text style={[styles.avatarTextCompact, { color: badge.text }]}>
+                        {getInitials(cust.name)}
                       </Text>
                     </View>
-
-                    <View style={styles.statBox}>
-                      <Text style={styles.statLabel}>Total Orders</Text>
-                      <Text style={styles.statValOrders}>{cust.totalOrders || 0} Visits</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.rowCustName} numberOfLines={1}>{cust.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        <View style={[styles.tierBadgeCompact, { backgroundColor: badge.bg, borderColor: badge.border }]}>
+                          <Ionicons name={badge.icon as any} size={10} color={badge.text} style={{ marginRight: 2 }} />
+                          <Text style={[styles.tierBadgeCompactText, { color: badge.text }]}>
+                            {cust.tier || 'Regular'}
+                          </Text>
+                        </View>
+                      </View>
                     </View>
                   </View>
+
+                  {/* 2. Contact & Location */}
+                  <View style={[styles.rowCol, { flex: 2.2, minWidth: 180, gap: 2 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Ionicons name="call" size={12} color="#D5A943" />
+                      <Text style={styles.rowPhoneText}>{cust.phone}</Text>
+                    </View>
+                    {cust.address ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="location-outline" size={11} color="#94A3B8" />
+                        <Text style={styles.rowAddressText} numberOfLines={1}>{cust.address}</Text>
+                      </View>
+                    ) : cust.email ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="mail-outline" size={11} color="#94A3B8" />
+                        <Text style={styles.rowAddressText} numberOfLines={1}>{cust.email}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* 3. Spend & Visits */}
+                  <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
+                    <Text style={styles.rowSpendText}>
+                      Rs. {(cust.totalSpent || 0).toLocaleString()}
+                    </Text>
+                    <Text style={styles.rowVisitsText}>
+                      {cust.totalOrders || 0} {(cust.totalOrders || 0) === 1 ? 'Visit' : 'Visits'}
+                    </Text>
+                  </View>
+
+                  {/* 4. Loyalty Points & Tags */}
+                  <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 3 }]}>
+                    <View style={styles.pointsPillCompact}>
+                      <Ionicons name="sparkles" size={11} color="#D5A943" />
+                      <Text style={styles.pointsPillCompactText}>{cust.loyaltyPoints || 50} Pts</Text>
+                    </View>
+                    {cust.tags && cust.tags.length > 0 && (
+                      <Text style={styles.rowTagSnippet} numberOfLines={1}>
+                        {cust.tags.map((t) => `#${t}`).join(' ')}
+                      </Text>
+                    )}
+                  </View>
+
+                  {/* 5. Actions */}
+                  <View style={[styles.rowCol, { flex: 2.5, minWidth: 210, flexDirection: 'row', justifyContent: 'flex-end', gap: 6, alignItems: 'center' }]}>
+                    {/* View / 360 Dossier Button */}
+                    <TouchableOpacity
+                      style={styles.actionBtnView}
+                      onPress={() => {
+                        setDossierCustomer(cust);
+                        setDossierTab('orders');
+                      }}
+                      activeOpacity={0.75}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'View Customer 360 Dossier & History' } as any) : {})}
+                    >
+                      <Ionicons name="eye" size={14} color="#52141C" />
+                      <Text style={styles.actionBtnViewText}>View</Text>
+                    </TouchableOpacity>
+
+                    {/* WhatsApp Button */}
+                    <TouchableOpacity
+                      style={styles.actionBtnWhatsApp}
+                      onPress={() => openWhatsAppModal(cust)}
+                      activeOpacity={0.75}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Send Direct WhatsApp Message' } as any) : {})}
+                    >
+                      <Ionicons name="logo-whatsapp" size={13} color="#FFFFFF" />
+                      <Text style={styles.actionBtnWhatsAppText}>WhatsApp</Text>
+                    </TouchableOpacity>
+
+                    {/* Edit Button */}
+                    <TouchableOpacity
+                      style={styles.actionBtnEdit}
+                      onPress={() => openEditModal(cust)}
+                      activeOpacity={0.75}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Edit Customer Profile' } as any) : {})}
+                    >
+                      <Ionicons name="pencil" size={13} color="#475569" />
+                    </TouchableOpacity>
+
+                    {/* Delete Button */}
+                    <TouchableOpacity
+                      style={styles.actionBtnDelete}
+                      onPress={() => handleDelete(cust)}
+                      activeOpacity={0.75}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Customer' } as any) : {})}
+                    >
+                      <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                    </TouchableOpacity>
+                  </View>
                 </View>
+              );
+            })}
 
-                {/* Card Bottom Actions Row */}
-                <View style={[styles.cardFooter, isMobile && styles.cardFooterMobile]}>
-                  {/* WhatsApp Direct Messaging Button */}
-                  <TouchableOpacity
-                    style={styles.whatsappBtn}
-                    onPress={() => openWhatsAppModal(cust)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="logo-whatsapp" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                    <Text style={styles.whatsappBtnText}>Send WhatsApp</Text>
-                  </TouchableOpacity>
-
-                  {/* 360 Dossier / Orders Button */}
-                  <TouchableOpacity
-                    style={styles.dossierBtn}
-                    onPress={() => {
-                      setDossierCustomer(cust);
-                      setDossierTab('orders');
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="receipt-outline" size={15} color="#140306" style={{ marginRight: 6 }} />
-                    <Text style={styles.dossierBtnText}>Full Records & History</Text>
-                  </TouchableOpacity>
-
-                  {/* Edit Button */}
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() => openEditModal(cust)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="pencil" size={14} color="#475569" />
-                  </TouchableOpacity>
-
-                  {/* Delete Button */}
-                  <TouchableOpacity
-                    style={styles.deleteBtn}
-                    onPress={() => handleDelete(cust)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="trash-outline" size={14} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })
+            {/* Pagination Controls */}
+            <View style={{ marginTop: 12 }}>
+              <PaginationControl
+                currentPage={customerPagination.currentPage}
+                totalPages={customerPagination.totalPages}
+                totalItems={customerPagination.totalItems}
+                pageSize={customerPagination.pageSize}
+                pageSizeOptions={[10, 20, 50, 100]}
+                onPageChange={customerPagination.goToPage}
+                onPageSizeChange={customerPagination.setPageSize}
+                itemName="guests"
+              />
+            </View>
+          </View>
         )}
       </ScrollView>
 
@@ -650,42 +915,39 @@ export default function AdminCustomers() {
             <Text style={styles.fieldSectionTitle}>Choose Message Template:</Text>
             <View style={styles.templateOptionsRow}>
               {[
-                { key: 'loyalty', label: '👑 VIP Loyalty Points' },
-                { key: 'voucher', label: '🎁 10% Royal Voucher' },
-                { key: 'feedback', label: '⭐ Dish Review Request' },
+                { key: 'loyalty', label: '🌟 Loyalty Thanks' },
+                { key: 'voucher', label: '🎁 10% VIP Voucher' },
+                { key: 'feedback', label: '⭐ Dish Feedback QR' },
                 { key: 'missyou', label: '🍽️ We Miss You' },
-                { key: 'custom', label: '✍️ Custom Message' },
-              ].map((tpl) => (
+                { key: 'custom', label: '✏️ Custom' },
+              ].map((tmpl) => (
                 <TouchableOpacity
-                  key={tpl.key}
+                  key={tmpl.key}
                   style={[
                     styles.templatePill,
-                    selectedTemplateKey === tpl.key && styles.templatePillActive,
+                    selectedTemplateKey === tmpl.key && styles.templatePillActive,
                   ]}
-                  onPress={() => handleTemplateSelect(tpl.key)}
-                  activeOpacity={0.7}
+                  onPress={() => handleTemplateSelect(tmpl.key)}
                 >
                   <Text
                     style={[
                       styles.templatePillText,
-                      selectedTemplateKey === tpl.key && styles.templatePillTextActive,
+                      selectedTemplateKey === tmpl.key && styles.templatePillTextActive,
                     ]}
                   >
-                    {tpl.label}
+                    {tmpl.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Editable Preview Box */}
-            <Text style={styles.fieldSectionTitle}>Message Preview & Edit:</Text>
+            <Text style={styles.fieldSectionTitle}>Message Text (Live Preview):</Text>
             <TextInput
               style={styles.messageTextArea}
+              multiline
               value={customMessage}
               onChangeText={setCustomMessage}
-              multiline
-              numberOfLines={6}
-              placeholder="Type your WhatsApp message..."
+              placeholder="Type your WhatsApp message here..."
               placeholderTextColor="#94A3B8"
             />
 
@@ -702,8 +964,8 @@ export default function AdminCustomers() {
                 onPress={sendWhatsAppMessage}
                 activeOpacity={0.8}
               >
-                <Ionicons name="logo-whatsapp" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                <Text style={styles.modalSendWhatsAppBtnText}>Open WhatsApp & Send</Text>
+                <Ionicons name="logo-whatsapp" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalSendWhatsAppBtnText}>Open in WhatsApp</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -711,9 +973,9 @@ export default function AdminCustomers() {
       </Modal>
 
       {/* ========================================================
-          2. CUSTOMER 360 DOSSIER & ORDER HISTORY MODAL
+          2. CUSTOMER 360 DOSSIER MODAL (FULL RECORDS & HISTORY)
           ======================================================== */}
-      <Modal visible={!!dossierCustomer} transparent animationType="slide">
+      <Modal visible={!!dossierCustomer} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={[styles.dossierModalCard, isMobile && styles.modalContentMobile]}>
             {dossierCustomer && (
@@ -721,25 +983,26 @@ export default function AdminCustomers() {
                 {/* Dossier Header */}
                 <View style={styles.dossierHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <View style={styles.dossierAvatar}>
-                      <Text style={styles.dossierAvatarText}>
+                    <View style={[styles.dossierAvatar, { backgroundColor: getTierBadgeStyle(dossierCustomer.tier).bg, borderColor: getTierBadgeStyle(dossierCustomer.tier).border }]}>
+                      <Text style={[styles.dossierAvatarText, { color: getTierBadgeStyle(dossierCustomer.tier).text }]}>
                         {getInitials(dossierCustomer.name)}
                       </Text>
                     </View>
                     <View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text style={styles.dossierName}>{dossierCustomer.name}</Text>
-                        <View style={styles.pointsPill}>
-                          <Ionicons name="sparkles" size={12} color="#D5A943" style={{ marginRight: 3 }} />
-                          <Text style={styles.pointsPillText}>
-                            {dossierCustomer.loyaltyPoints || 50} Pts
+                        <View style={[styles.tierBadgeCompact, { backgroundColor: getTierBadgeStyle(dossierCustomer.tier).bg, borderColor: getTierBadgeStyle(dossierCustomer.tier).border }]}>
+                          <Ionicons name={getTierBadgeStyle(dossierCustomer.tier).icon as any} size={11} color={getTierBadgeStyle(dossierCustomer.tier).text} style={{ marginRight: 3 }} />
+                          <Text style={[styles.tierBadgeCompactText, { color: getTierBadgeStyle(dossierCustomer.tier).text }]}>
+                            {dossierCustomer.tier || 'Regular'}
                           </Text>
                         </View>
                       </View>
-                      <Text style={styles.dossierPhone}>{dossierCustomer.phone}</Text>
+                      <Text style={styles.dossierPhone}>
+                        📞 {dossierCustomer.phone} {dossierCustomer.email ? `• ✉️ ${dossierCustomer.email}` : ''}
+                      </Text>
                     </View>
                   </View>
-
                   <TouchableOpacity
                     onPress={() => setDossierCustomer(null)}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -751,7 +1014,7 @@ export default function AdminCustomers() {
                 {/* Lifetime KPI Summary */}
                 <View style={styles.dossierKpiRow}>
                   <View style={styles.dossierKpiBox}>
-                    <Text style={styles.dossierKpiLabel}>Tier</Text>
+                    <Text style={styles.dossierKpiLabel}>Tier Status</Text>
                     <Text style={styles.dossierKpiVal}>{dossierCustomer.tier || 'Regular'}</Text>
                   </View>
                   <View style={styles.dossierKpiBox}>
@@ -765,12 +1028,18 @@ export default function AdminCustomers() {
                     <Text style={styles.dossierKpiVal}>{dossierCustomer.totalOrders || 0}</Text>
                   </View>
                   <View style={styles.dossierKpiBox}>
-                    <Text style={styles.dossierKpiLabel}>Average Spend</Text>
+                    <Text style={styles.dossierKpiLabel}>Average Bill</Text>
                     <Text style={styles.dossierKpiVal}>
                       Rs.{' '}
                       {dossierCustomer.totalOrders
                         ? Math.round(dossierCustomer.totalSpent / dossierCustomer.totalOrders).toLocaleString()
                         : '0'}
+                    </Text>
+                  </View>
+                  <View style={styles.dossierKpiBox}>
+                    <Text style={styles.dossierKpiLabel}>Loyalty Points</Text>
+                    <Text style={[styles.dossierKpiVal, { color: '#B45309' }]}>
+                      ✨ {dossierCustomer.loyaltyPoints || 50}
                     </Text>
                   </View>
                 </View>
@@ -781,7 +1050,7 @@ export default function AdminCustomers() {
                     style={[styles.dossierTab, dossierTab === 'orders' && styles.dossierTabActive]}
                     onPress={() => setDossierTab('orders')}
                   >
-                    <Ionicons name="receipt-outline" size={15} color={dossierTab === 'orders' ? '#140306' : '#64748B'} style={{ marginRight: 6 }} />
+                    <Ionicons name="receipt-outline" size={15} color={dossierTab === 'orders' ? '#52141C' : '#64748B'} style={{ marginRight: 6 }} />
                     <Text style={[styles.dossierTabText, dossierTab === 'orders' && styles.dossierTabTextActive]}>
                       Invoices & Bills ({customerInvoices.length})
                     </Text>
@@ -791,7 +1060,7 @@ export default function AdminCustomers() {
                     style={[styles.dossierTab, dossierTab === 'feedback' && styles.dossierTabActive]}
                     onPress={() => setDossierTab('feedback')}
                   >
-                    <Ionicons name="star-outline" size={15} color={dossierTab === 'feedback' ? '#140306' : '#64748B'} style={{ marginRight: 6 }} />
+                    <Ionicons name="star-outline" size={15} color={dossierTab === 'feedback' ? '#52141C' : '#64748B'} style={{ marginRight: 6 }} />
                     <Text style={[styles.dossierTabText, dossierTab === 'feedback' && styles.dossierTabTextActive]}>
                       Dish Reviews ({customerFeedbacks.length})
                     </Text>
@@ -801,9 +1070,9 @@ export default function AdminCustomers() {
                     style={[styles.dossierTab, dossierTab === 'notes' && styles.dossierTabActive]}
                     onPress={() => setDossierTab('notes')}
                   >
-                    <Ionicons name="document-text-outline" size={15} color={dossierTab === 'notes' ? '#140306' : '#64748B'} style={{ marginRight: 6 }} />
+                    <Ionicons name="document-text-outline" size={15} color={dossierTab === 'notes' ? '#52141C' : '#64748B'} style={{ marginRight: 6 }} />
                     <Text style={[styles.dossierTabText, dossierTab === 'notes' && styles.dossierTabTextActive]}>
-                      Notes & Profile
+                      Profile & Notes
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -817,7 +1086,7 @@ export default function AdminCustomers() {
                           No previous orders or bills found for this customer.
                         </Text>
                       ) : (
-                        customerInvoices.map((inv) => (
+                        customerInvoices.map((inv: Invoice) => (
                           <View key={inv.id} style={styles.dossierOrderCard}>
                             <View style={styles.dossierOrderHeader}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1114,6 +1383,15 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
   },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
   title: {
     fontSize: 24,
     fontWeight: '900',
@@ -1123,69 +1401,124 @@ const styles = StyleSheet.create({
   titleMobile: {
     fontSize: 20,
   },
+  roleBadge: {
+    backgroundColor: 'rgba(213, 169, 67, 0.2)',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  roleBadgeText: {
+    color: '#8A5D00',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.5,
+  },
   subtitle: {
     fontSize: 13,
     color: '#64748B',
     marginTop: 2,
     fontWeight: '500',
   },
+  exportBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 9,
+  },
+  exportBtnText: {
+    color: '#52141C',
+    fontWeight: '800',
+    fontSize: 13,
+  },
   addButton: {
     backgroundColor: '#D5A943',
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 9,
     shadowColor: '#D5A943',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
     elevation: 3,
   },
-  addButtonMobile: {
-    width: '100%',
-    justifyContent: 'center',
-  },
   addButtonText: {
     color: '#140306',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 13.5,
+  },
+  contentScroll: {
+    flex: 1,
   },
   kpiGrid: {
     flexDirection: 'row',
-    gap: 14,
+    gap: 12,
     marginBottom: 20,
     flexWrap: 'wrap',
   },
   kpiCard: {
     flex: 1,
     minWidth: 160,
-    backgroundColor: '#FFFFFF',
-    padding: 16,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
     borderRadius: 14,
-    borderWidth: 1,
+    padding: 15,
+    borderLeftWidth: 4.5,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 4,
-    elevation: 1,
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        transition: 'all 0.2s ease',
+      } as any,
+    }),
+  },
+  kpiCardEmerald: {
+    backgroundColor: 'rgba(236, 253, 245, 0.95)',
+    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderLeftColor: '#10B981',
+  },
+  kpiCardSapphire: {
+    backgroundColor: 'rgba(240, 249, 255, 0.95)',
+    borderColor: 'rgba(2, 132, 199, 0.35)',
+    borderLeftColor: '#0284C7',
+  },
+  kpiCardAmber: {
+    backgroundColor: 'rgba(254, 243, 199, 0.95)',
+    borderColor: 'rgba(245, 158, 11, 0.35)',
+    borderLeftColor: '#F59E0B',
+  },
+  kpiCardRuby: {
+    backgroundColor: 'rgba(254, 226, 226, 0.95)',
+    borderColor: 'rgba(239, 68, 68, 0.35)',
+    borderLeftColor: '#EF4444',
   },
   kpiIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 10,
-    backgroundColor: '#E0F2FE',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 8,
   },
   kpiLabel: {
-    fontSize: 12,
+    fontSize: 11,
     color: '#64748B',
-    fontWeight: '600',
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   kpiValue: {
     fontSize: 18,
@@ -1193,32 +1526,49 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     marginTop: 2,
   },
-  filterSection: {
-    gap: 12,
-    marginBottom: 16,
+  kpiSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
   },
-  searchBox: {
+  filterSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  searchRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    gap: 10,
+    marginBottom: 10,
+    flexWrap: 'wrap',
+  },
+  searchBox: {
+    flex: 1,
+    minWidth: 260,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
     paddingHorizontal: 8,
     paddingRight: 10,
-    height: 46,
-    borderRadius: 24,
+    height: 42,
+    borderRadius: 22,
     borderWidth: 1.5,
     borderColor: 'rgba(213, 169, 67, 0.45)',
     gap: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 18px rgba(82, 20, 28, 0.06), 0 2px 6px rgba(213, 169, 67, 0.12), inset 0 1px 0 #FFFFFF',
-        transition: 'all 0.2s ease',
-      } as any,
-    }),
   },
   searchIconOrb: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: 'rgba(82, 20, 28, 0.08)',
     borderWidth: 1,
     borderColor: 'rgba(213, 169, 67, 0.3)',
@@ -1227,7 +1577,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '600',
     color: '#0F172A',
     padding: 0,
@@ -1247,9 +1597,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(254, 243, 199, 0.85)',
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
+    borderRadius: 16,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: 'rgba(245, 158, 11, 0.4)',
   },
@@ -1257,7 +1607,23 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontSize: 9.5,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
+  },
+  sortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+  },
+  sortBtn: {},
+  sortBtnText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#52141C',
   },
   tierTabsRow: {
     flexDirection: 'row',
@@ -1266,286 +1632,359 @@ const styles = StyleSheet.create({
   },
   tierTab: {
     paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingVertical: 7,
     borderRadius: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
   tierTabSelected: {
-    backgroundColor: '#140306',
+    backgroundColor: '#52141C',
     borderColor: '#D5A943',
   },
   tierTabText: {
-    fontSize: 13,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#475569',
   },
   tierTabTextSelected: {
-    color: '#F8FAFC',
+    color: '#FFFFFF',
   },
-  listContainer: {
-    flex: 1,
+  resultsCounterRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  resultsCountText: {
+    fontSize: 12.5,
+    color: '#64748B',
+  },
+  clearFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+  },
+  clearFilterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#D84315',
   },
   emptyContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 60,
+    backgroundColor: '#FFFFFF',
+    padding: 40,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 10,
   },
   emptyText: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '800',
-    color: '#475569',
+    color: '#1E293B',
     marginTop: 12,
   },
   emptySubtext: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: '#64748B',
     textAlign: 'center',
-    maxWidth: 320,
+    maxWidth: 340,
     marginTop: 4,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 18,
+  emptyActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D5A943',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 8,
+    marginTop: 16,
+  },
+  emptyActionBtnText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#140306',
+  },
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 8,
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 6,
-    elevation: 2,
   },
-  cardMobile: {
-    padding: 14,
+  thCol: {
+    justifyContent: 'center',
   },
-  cardMainRow: {
+  thText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  customersList: {
+    gap: 8,
+  },
+  custRowCard: {
     flexDirection: 'row',
-    gap: 14,
-  },
-  avatarCol: {
     alignItems: 'center',
-    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 2,
+    elevation: 1,
+    ...Platform.select({
+      web: {
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
   },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#140306',
+  custRowVIP: {
+    borderLeftColor: '#D5A943',
+    backgroundColor: '#FFFEF8',
+  },
+  custRowGold: {
+    borderLeftColor: '#F59E0B',
+    backgroundColor: '#FFFDF5',
+  },
+  rowCol: {
+    justifyContent: 'center',
+  },
+  avatarCompact: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#D5A943',
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '900',
-  },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  tierBadgeText: {
-    fontSize: 10.5,
+  avatarTextCompact: {
+    fontSize: 13,
     fontWeight: '800',
   },
-  infoCol: {
-    flex: 1,
-  },
-  custNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  custName: {
-    fontSize: 17,
+  rowCustName: {
+    fontSize: 14,
     fontWeight: '800',
     color: '#0F172A',
   },
-  pointsPill: {
+  tierBadgeCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#FDE68A',
   },
-  pointsPillText: {
-    fontSize: 11,
+  tierBadgeCompactText: {
+    fontSize: 10,
     fontWeight: '800',
-    color: '#92400E',
   },
-  contactDetailsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 4,
-    flexWrap: 'wrap',
-  },
-  contactItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  contactText: {
-    fontSize: 13,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  addressText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 2,
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    gap: 6,
-    flexWrap: 'wrap',
-    marginTop: 6,
-  },
-  tagBadge: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-  },
-  tagBadgeText: {
-    fontSize: 11,
-    color: '#475569',
-    fontWeight: '600',
-  },
-  notePreviewBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    marginTop: 6,
-  },
-  notePreviewText: {
-    fontSize: 11.5,
-    color: '#92400E',
-  },
-  statsCol: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  statBox: {
-    alignItems: 'flex-end',
-  },
-  statLabel: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '600',
-  },
-  statValSpend: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: '#15803D',
-  },
-  statValOrders: {
+  rowPhoneText: {
     fontSize: 13,
     fontWeight: '700',
     color: '#0F172A',
   },
-  cardFooter: {
+  rowAddressText: {
+    fontSize: 11.5,
+    color: '#64748B',
+    fontWeight: '500',
+  },
+  rowSpendText: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#047857',
+  },
+  rowVisitsText: {
+    fontSize: 11.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  pointsPillCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    flexWrap: 'wrap',
-  },
-  cardFooterMobile: {
-    justifyContent: 'space-between',
-  },
-  whatsappBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#25D366',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 6,
+    paddingVertical: 2.5,
     borderRadius: 8,
-    shadowColor: '#25D366',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    alignSelf: 'flex-start',
+    gap: 3,
   },
-  whatsappBtnText: {
-    color: '#FFFFFF',
+  pointsPillCompactText: {
+    fontSize: 10.5,
     fontWeight: '800',
-    fontSize: 13,
+    color: '#92400E',
   },
-  dossierBtn: {
+  rowTagSnippet: {
+    fontSize: 10.5,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  actionBtnView: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
+    gap: 4,
+    backgroundColor: '#FFF7ED',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#FED7AA',
+    paddingHorizontal: 9,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
   },
-  dossierBtnText: {
-    color: '#140306',
-    fontWeight: '700',
-    fontSize: 13,
+  actionBtnViewText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#52141C',
   },
-  callBtn: {
+  actionBtnWhatsApp: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
+    gap: 4,
+    backgroundColor: '#25D366',
+    paddingHorizontal: 9,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
   },
-  callBtnText: {
-    color: '#140306',
+  actionBtnWhatsAppText: {
+    fontSize: 12,
     fontWeight: '700',
-    fontSize: 13,
+    color: '#FFFFFF',
   },
-  editBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+  actionBtnEdit: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#CBD5E1',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
   },
-  deleteBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
+  actionBtnDelete: {
+    width: 30,
+    height: 30,
+    borderRadius: 6,
     backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#FCA5A5',
+    ...Platform.select({
+      web: { cursor: 'pointer' } as any,
+    }),
+  },
+  mobileCustCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#3B82F6',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 2,
+    gap: 8,
+  },
+  mobileCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mobileSpendText: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#047857',
+  },
+  mobileVisitsText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  mobileCardMidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  mobilePhoneText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mobileAddressText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  mobileCardActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  mobileActionBtnView: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
+    borderRadius: 6,
+  },
+  mobileActionBtnWhatsApp: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#25D366',
+    paddingHorizontal: 10,
+    paddingVertical: 5.5,
+    borderRadius: 6,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
+  },
+  modalContentMobile: {
+    padding: 14,
+    maxWidth: '100%',
   },
   whatsappModalCard: {
     backgroundColor: '#FFFFFF',
@@ -1693,7 +2132,6 @@ const styles = StyleSheet.create({
     borderColor: '#D5A943',
   },
   dossierAvatarText: {
-    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '900',
   },
@@ -1721,12 +2159,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dossierKpiLabel: {
-    fontSize: 11,
+    fontSize: 10.5,
     color: '#64748B',
     fontWeight: '600',
   },
   dossierKpiVal: {
-    fontSize: 14,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
     marginTop: 2,
@@ -1746,7 +2184,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   dossierTabActive: {
-    borderBottomColor: '#140306',
+    borderBottomColor: '#52141C',
   },
   dossierTabText: {
     fontSize: 13,
@@ -1754,7 +2192,7 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   dossierTabTextActive: {
-    color: '#140306',
+    color: '#52141C',
   },
   dossierScroll: {
     maxHeight: 340,
@@ -1882,6 +2320,23 @@ const styles = StyleSheet.create({
     color: '#64748B',
     lineHeight: 18,
   },
+  tagsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    flexWrap: 'wrap',
+    marginTop: 6,
+  },
+  tagBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  tagBadgeText: {
+    fontSize: 11,
+    color: '#475569',
+    fontWeight: '600',
+  },
   dossierActionRow: {
     flexDirection: 'row',
     justifyContent: 'flex-end',
@@ -1889,6 +2344,49 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
+  },
+  whatsappBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#25D366',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    shadowColor: '#25D366',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  whatsappBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  callBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  callBtnText: {
+    color: '#140306',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
   tabEmptyText: {
     fontSize: 13,
@@ -1902,10 +2400,6 @@ const styles = StyleSheet.create({
     padding: 24,
     width: '100%',
     maxWidth: 520,
-  },
-  modalContentMobile: {
-    padding: 16,
-    maxWidth: '100%',
   },
   modalHeader: {
     flexDirection: 'row',
