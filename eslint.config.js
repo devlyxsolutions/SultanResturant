@@ -9,6 +9,10 @@ module.exports = defineConfig([
     rules: {
       "react-hooks/purity": "warn",
       "react-hooks/preserve-manual-memoization": "warn",
+      "react-hooks/refs": "warn",
+      "react-hooks/set-state-in-effect": "warn",
+      "react-hooks/immutability": "warn",
+      "react/no-unescaped-entities": "off",
     },
   }
 ]);

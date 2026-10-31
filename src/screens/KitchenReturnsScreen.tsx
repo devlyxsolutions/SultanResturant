@@ -170,7 +170,7 @@ export default function KitchenReturnsScreen({ backRoute = '/admin/dashboard' }:
     <View style={styles.container}>
       <KitchenOpsNav backRoute={backRoute} />
 
-      <View style={styles.mainLayout}>
+      <View style={[styles.mainLayout, isMobile && { flexDirection: 'column' }]}>
         {/* Left Column: Sessions List */}
         <View style={[styles.leftPane, isMobile && styles.leftPaneMobile]}>
           <View style={styles.paneTabs}>
@@ -347,7 +347,7 @@ export default function KitchenReturnsScreen({ backRoute = '/admin/dashboard' }:
                     <Text style={styles.cashBoxSub}>Should be returned in cash</Text>
                   </View>
 
-                  <View style={styles.vsDivider} />
+                  {!isMobile && <View style={styles.vsDivider} />}
 
                   <View style={[styles.cashBox, { backgroundColor: BRAND.cream, borderColor: BRAND.gold }]}>
                     <Text style={styles.cashBoxLabel}>Actual Cash Returned</Text>
@@ -425,80 +425,88 @@ export default function KitchenReturnsScreen({ backRoute = '/admin/dashboard' }:
                 )}
 
                 <View style={styles.varTable}>
-                  <View style={styles.thRow}>
-                    <Text style={[styles.th, { flex: 3 }]}>Item & Unit</Text>
-                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Total In</Text>
-                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Expected Left</Text>
-                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Chef Counted</Text>
-                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Variance Qty</Text>
-                    <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Variance Value</Text>
-                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Restock to Store</Text>
-                  </View>
-
-                  {varianceAnalysis.items.map((line) => {
-                    const isLoss = line.diff < 0;
-                    const isGain = line.diff > 0;
-
-                    return (
-                      <View key={line.itemId} style={[styles.trRow, line.isAbnormal && styles.trRowAbnormal]}>
-                        <View style={{ flex: 3 }}>
-                          <Text style={styles.trItemName}>{line.itemName}</Text>
-                          <Text style={styles.trSub}>{line.category} • Cost {money(line.costPerUnit)}/{line.unit}</Text>
-                        </View>
-
-                        <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
-                          {formatQty(line.issued + line.topUp + line.localPurchased, line.unit)}
-                        </Text>
-
-                        <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '600' }]}>
-                          {formatQty(line.expected, line.unit)}
-                        </Text>
-
-                        <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '800', color: BRAND.ink }]}>
-                          {formatQty(line.returnedCount, line.unit)}
-                        </Text>
-
-                        <Text
-                          style={[
-                            styles.tr,
-                            {
-                              flex: 1.8,
-                              textAlign: 'right',
-                              fontWeight: '700',
-                              color: isLoss ? BRAND.danger : isGain ? BRAND.success : BRAND.muted,
-                            },
-                          ]}
-                        >
-                          {isLoss
-                            ? `-${formatQty(Math.abs(line.diff), line.unit)}`
-                            : isGain
-                            ? `+${formatQty(line.diff, line.unit)}`
-                            : '0'}
-                        </Text>
-
-                        <Text
-                          style={[
-                            styles.tr,
-                            {
-                              flex: 2,
-                              textAlign: 'right',
-                              fontWeight: '700',
-                              color: isLoss ? BRAND.danger : isGain ? BRAND.success : BRAND.muted,
-                            },
-                          ]}
-                        >
-                          {line.diffVal !== 0 ? (line.diffVal < 0 ? `-${money(Math.abs(line.diffVal))}` : `+${money(line.diffVal)}`) : 'Rs. 0'}
-                        </Text>
-
-                        <View style={{ flex: 1.8, alignItems: 'flex-end' }}>
-                          <View style={styles.restockPill}>
-                            <Ionicons name="arrow-undo" size={11} color={BRAND.success} />
-                            <Text style={styles.restockPillText}>+{formatQty(line.returnedCount, line.unit)}</Text>
-                          </View>
-                        </View>
+                  <ScrollView
+                    horizontal={width < 900}
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={width < 900 ? { minWidth: 660 } : { width: '100%' }}
+                  >
+                    <View style={{ width: '100%' }}>
+                      <View style={styles.thRow}>
+                        <Text style={[styles.th, { flex: 3 }]}>Item & Unit</Text>
+                        <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Total In</Text>
+                        <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Expected Left</Text>
+                        <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Chef Counted</Text>
+                        <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Variance Qty</Text>
+                        <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Variance Value</Text>
+                        <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Restock to Store</Text>
                       </View>
-                    );
-                  })}
+
+                      {varianceAnalysis.items.map((line) => {
+                        const isLoss = line.diff < 0;
+                        const isGain = line.diff > 0;
+
+                        return (
+                          <View key={line.itemId} style={[styles.trRow, line.isAbnormal && styles.trRowAbnormal]}>
+                            <View style={{ flex: 3 }}>
+                              <Text style={styles.trItemName}>{line.itemName}</Text>
+                              <Text style={styles.trSub}>{line.category} • Cost {money(line.costPerUnit)}/{line.unit}</Text>
+                            </View>
+
+                            <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
+                              {formatQty(line.issued + line.topUp + line.localPurchased, line.unit)}
+                            </Text>
+
+                            <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '600' }]}>
+                              {formatQty(line.expected, line.unit)}
+                            </Text>
+
+                            <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '800', color: BRAND.ink }]}>
+                              {formatQty(line.returnedCount, line.unit)}
+                            </Text>
+
+                            <Text
+                              style={[
+                                styles.tr,
+                                {
+                                  flex: 1.8,
+                                  textAlign: 'right',
+                                  fontWeight: '700',
+                                  color: isLoss ? BRAND.danger : isGain ? BRAND.success : BRAND.muted,
+                                },
+                              ]}
+                            >
+                              {isLoss
+                                ? `-${formatQty(Math.abs(line.diff), line.unit)}`
+                                : isGain
+                                ? `+${formatQty(line.diff, line.unit)}`
+                                : '0'}
+                            </Text>
+
+                            <Text
+                              style={[
+                                styles.tr,
+                                {
+                                  flex: 2,
+                                  textAlign: 'right',
+                                  fontWeight: '700',
+                                  color: isLoss ? BRAND.danger : isGain ? BRAND.success : BRAND.muted,
+                                },
+                              ]}
+                            >
+                              {line.diffVal !== 0 ? (line.diffVal < 0 ? `-${money(Math.abs(line.diffVal))}` : `+${money(line.diffVal)}`) : 'Rs. 0'}
+                            </Text>
+
+                            <View style={{ flex: 1.8, alignItems: 'flex-end' }}>
+                              <View style={styles.restockPill}>
+                                <Ionicons name="arrow-undo" size={11} color={BRAND.success} />
+                                <Text style={styles.restockPillText}>+{formatQty(line.returnedCount, line.unit)}</Text>
+                              </View>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </ScrollView>
                 </View>
               </View>
 
@@ -651,6 +659,10 @@ const styles = StyleSheet.create({
   },
   leftPaneMobile: {
     width: '100%',
+    maxHeight: 220,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
   },
   paneTabs: {
     flexDirection: 'row',
@@ -1072,7 +1084,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    width: 520,
+    width: '100%',
+    maxWidth: 520,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',

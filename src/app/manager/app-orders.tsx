@@ -279,7 +279,7 @@ export default function AppManagerOrdersScreen() {
       {/* Top Banner / Metrics */}
       <View style={styles.headerCard}>
         <View style={styles.headerTitleRow}>
-          <View>
+          <View style={{ flex: 1, minWidth: 220 }}>
             <Text style={styles.headerTitle}>⚡ Sultan App Orders Command Center</Text>
             <Text style={styles.headerSubtitle}>
               Real-time synchronization with Customer Mobile App & In-Restaurant Table QR
@@ -731,6 +731,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 14,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   headerTitle: {
     fontSize: 20,
@@ -872,11 +874,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   orderIdentGroup: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   orderNumber: {
     fontSize: 16,
@@ -1016,9 +1021,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     alignItems: 'center',
+    flexWrap: 'wrap',
   },
   btnAction: {
     flex: 1,
+    minWidth: 130,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

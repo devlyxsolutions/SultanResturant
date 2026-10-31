@@ -1,28 +1,28 @@
-import React, { useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
+  Alert,
   Modal,
   Platform,
-  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
   useWindowDimensions,
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
-import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore } from '../store/opsStore';
+import { useRestaurantStore } from '../store/restaurantStore';
 import {
-  useShiftStore,
-  ShiftRecord,
-  ShiftType,
   CashDenominations,
   INITIAL_DENOMINATIONS,
+  ShiftRecord,
+  ShiftType,
   calculateDenominationTotal,
+  useShiftStore,
 } from '../store/shiftStore';
 
 const REGISTER_OPTIONS = [
@@ -272,7 +272,7 @@ export default function ShiftManagementScreen() {
           >
             <Ionicons name="chevron-back" size={22} color="#0F172A" />
           </TouchableOpacity>
-          <View>
+          <View style={{ flexShrink: 1 }}>
             <Text style={styles.headerTitle}>Shift & Cash Drawer Management</Text>
             <Text style={styles.headerSubtitle}>
               {activeShift
@@ -453,7 +453,7 @@ export default function ShiftManagementScreen() {
 
                 {/* Cashier Selection */}
                 <View style={styles.formRowTwoCol}>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ width: '48%', flexGrow: 1, minWidth: 220 }}>
                     <Text style={styles.fieldLabel}>Cashier / Operator</Text>
                     <View style={styles.cashierSelectContainer}>
                       {staff.map((st) => (
@@ -481,7 +481,7 @@ export default function ShiftManagementScreen() {
                     </View>
                   </View>
 
-                  <View style={{ flex: 1, minWidth: 240 }}>
+                  <View style={{ width: '48%', flexGrow: 1, minWidth: 240 }}>
                     <Text style={styles.fieldLabel}>Opening Cash Float (Petty Change in Drawer)</Text>
                     <View style={styles.inputBoxWithIcon}>
                       <Text style={styles.inputPrefix}>Rs.</Text>
@@ -543,8 +543,8 @@ export default function ShiftManagementScreen() {
                     </View>
                     <Text style={styles.activeShiftTitle}>{activeShift.registerId}</Text>
                     <Text style={styles.activeShiftMeta}>
-                      Shift ID: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeShift.id}</Text> • 
-                      Cashier: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeShift.cashierName}</Text> • 
+                      Shift ID: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeShift.id}</Text> •
+                      Cashier: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{activeShift.cashierName}</Text> •
                       Opened: {new Date(activeShift.openedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </Text>
                   </View>
@@ -818,7 +818,7 @@ export default function ShiftManagementScreen() {
 
                   {/* Card Terminal Slips Count */}
                   <View style={styles.formRowTwoCol}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ width: '48%', flexGrow: 1, minWidth: 200 }}>
                       <Text style={styles.fieldLabel}>POS Card Slips Count (سلپس کی تعداد)</Text>
                       <TextInput
                         style={styles.textInput}
@@ -830,7 +830,7 @@ export default function ShiftManagementScreen() {
                       />
                     </View>
 
-                    <View style={{ flex: 1 }}>
+                    <View style={{ width: '48%', flexGrow: 1, minWidth: 200 }}>
                       <Text style={styles.fieldLabel}>Total Card Slips Amount (سلپس کی کل رقم)</Text>
                       <TextInput
                         style={styles.textInput}
@@ -910,8 +910,8 @@ export default function ShiftManagementScreen() {
                           s.shiftType === 'Morning'
                             ? styles.badgeMorning
                             : s.shiftType === 'Evening'
-                            ? styles.badgeEvening
-                            : styles.badgeNight,
+                              ? styles.badgeEvening
+                              : styles.badgeNight,
                         ]}
                       >
                         <Text style={styles.shiftTypeBadgeText}>{s.shiftType.toUpperCase()}</Text>
@@ -927,8 +927,8 @@ export default function ShiftManagementScreen() {
                         s.status === 'open'
                           ? styles.pillOpen
                           : s.status === 'audited'
-                          ? styles.pillAudited
-                          : styles.pillClosed,
+                            ? styles.pillAudited
+                            : styles.pillClosed,
                       ]}
                     >
                       <Text
@@ -937,15 +937,15 @@ export default function ShiftManagementScreen() {
                           s.status === 'open'
                             ? styles.pillTextOpen
                             : s.status === 'audited'
-                            ? styles.pillTextAudited
-                            : styles.pillTextClosed,
+                              ? styles.pillTextAudited
+                              : styles.pillTextClosed,
                         ]}
                       >
                         {s.status === 'open'
                           ? 'LIVE REGISTER'
                           : s.status === 'audited'
-                          ? 'OFFICIALLY AUDITED'
-                          : 'PENDING AUDIT'}
+                            ? 'OFFICIALLY AUDITED'
+                            : 'PENDING AUDIT'}
                       </Text>
                     </View>
                   </View>
@@ -1008,8 +1008,8 @@ export default function ShiftManagementScreen() {
                           isBalanced
                             ? styles.varBalanced
                             : isShortage
-                            ? styles.varShortage
-                            : styles.varOverage,
+                              ? styles.varShortage
+                              : styles.varOverage,
                         ]}
                       >
                         <Text style={styles.varLabel}>
@@ -1022,16 +1022,16 @@ export default function ShiftManagementScreen() {
                               color: isBalanced
                                 ? '#059669'
                                 : isShortage
-                                ? '#DC2626'
-                                : '#2563EB',
+                                  ? '#DC2626'
+                                  : '#2563EB',
                             },
                           ]}
                         >
                           {isBalanced
                             ? 'Balanced (0)'
                             : isShortage
-                            ? `- Rs. ${Math.abs(variance).toLocaleString()}`
-                            : `+ Rs. ${variance.toLocaleString()}`}
+                              ? `- Rs. ${Math.abs(variance).toLocaleString()}`
+                              : `+ Rs. ${variance.toLocaleString()}`}
                         </Text>
                       </View>
                     </View>
@@ -1218,16 +1218,16 @@ export default function ShiftManagementScreen() {
                           (selectedShiftForDetail.cashVariance || 0) === 0
                             ? '#059669'
                             : (selectedShiftForDetail.cashVariance || 0) > 0
-                            ? '#2563EB'
-                            : '#DC2626',
+                              ? '#2563EB'
+                              : '#DC2626',
                       },
                     ]}
                   >
                     {(selectedShiftForDetail.cashVariance || 0) === 0
                       ? 'EXACT MATCH (Balanced)'
                       : (selectedShiftForDetail.cashVariance || 0) > 0
-                      ? `+ Rs. ${selectedShiftForDetail.cashVariance?.toLocaleString()} (Overage)`
-                      : `- Rs. ${Math.abs(selectedShiftForDetail.cashVariance || 0).toLocaleString()} (Shortage)`}
+                        ? `+ Rs. ${selectedShiftForDetail.cashVariance?.toLocaleString()} (Overage)`
+                        : `- Rs. ${Math.abs(selectedShiftForDetail.cashVariance || 0).toLocaleString()} (Shortage)`}
                   </Text>
                 </View>
               </>
@@ -1284,7 +1284,7 @@ const styles = StyleSheet.create({
   },
   headerMobile: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     gap: 12,
     paddingHorizontal: 16,
   },
@@ -1292,6 +1292,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flexShrink: 1,
   },
   backBtn: {
     width: 42,
@@ -1319,6 +1320,7 @@ const styles = StyleSheet.create({
   },
   modeToggleShell: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: '#F1F5F9',
     borderRadius: 10,
     padding: 3,
@@ -1360,6 +1362,7 @@ const styles = StyleSheet.create({
   },
   tabsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#CBD5E1',
@@ -1452,7 +1455,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   shiftTypeCard: {
-    flex: 1,
+    width: '31%',
+    flexGrow: 1,
     minWidth: 160,
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
@@ -1713,8 +1717,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   metricCard: {
-    flex: 1,
-    minWidth: 160,
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 150,
     backgroundColor: '#F8FAFC',
     borderRadius: 12,
     padding: 16,
@@ -1821,6 +1826,7 @@ const styles = StyleSheet.create({
   denomRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 12,
   },
   noteBadge: {
@@ -1862,6 +1868,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: '#FAF7F3',
     padding: 16,
     borderRadius: 10,
@@ -2030,8 +2038,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   historyFinCol: {
-    flex: 1,
-    minWidth: 110,
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 120,
     backgroundColor: '#F8FAFC',
     padding: 12,
     borderRadius: 8,
@@ -2051,7 +2060,8 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
   varianceCol: {
-    flex: 1,
+    width: '31%',
+    flexGrow: 1,
     minWidth: 130,
     padding: 12,
     borderRadius: 8,

@@ -620,6 +620,7 @@ const styles = StyleSheet.create({
   dateNavGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   dateArrowBtn: {
@@ -662,6 +663,7 @@ const styles = StyleSheet.create({
   topActionsGroup: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
   },
   allPresentBtn: {

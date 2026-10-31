@@ -184,9 +184,18 @@ export default function PlaylandCounterScreen() {
       </View>
 
       {/* Main 2-Column Layout */}
-      <View style={[styles.layout, !isTablet && styles.layoutMobile]}>
+      <ScrollView
+        style={styles.layoutScroll}
+        contentContainerStyle={[styles.layout, !isTablet && styles.layoutMobile]}
+        scrollEnabled={!isTablet}
+        showsVerticalScrollIndicator={false}
+      >
         {/* Left: Clean White Service & Jhoolay Cards */}
-        <ScrollView style={styles.leftColumn} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={[styles.leftColumn, !isTablet && styles.leftColumnMobile]}
+          scrollEnabled={isTablet}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={styles.sectionHeadingBox}>
             <Text style={styles.sectionHeading}>🎡 Services & Jhooley</Text>
             <Text style={styles.sectionSub}>Click any duration to add directly to the ticket bill</Text>
@@ -263,7 +272,7 @@ export default function PlaylandCounterScreen() {
         </ScrollView>
 
         {/* Right: Clean White Customer & Order Bill Panel */}
-        <View style={styles.rightColumn}>
+        <View style={[styles.rightColumn, !isTablet && styles.rightColumnMobile]}>
           {/* 1. Customer & Family Information Card */}
           <View style={styles.whitePanel}>
             <View style={styles.panelHeaderRow}>
@@ -362,7 +371,7 @@ export default function PlaylandCounterScreen() {
           </View>
 
           {/* 2. Order Ticket Bill Card */}
-          <View style={[styles.whitePanel, { flex: 1 }]}>
+          <View style={[styles.whitePanel, isTablet && { flex: 1 }]}>
             <View style={styles.panelHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <Ionicons name="receipt-outline" size={18} color="#4a121a" />
@@ -385,7 +394,11 @@ export default function PlaylandCounterScreen() {
                 <Text style={styles.emptyBillText}>Click any service duration on the left to add tickets</Text>
               </View>
             ) : (
-              <ScrollView style={styles.cartItemsScrollView} showsVerticalScrollIndicator={false}>
+              <ScrollView
+                style={[styles.cartItemsScrollView, !isTablet && { maxHeight: 260 }]}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={false}
+              >
                 {cart.map((item) => (
                   <View key={item.cartItemId} style={styles.billItemCard}>
                     <View style={{ flex: 1 }}>
@@ -465,7 +478,7 @@ export default function PlaylandCounterScreen() {
             </View>
           </View>
         </View>
-      </View>
+      </ScrollView>
 
       {/* Modal: Instant Printed Ticket Receipt */}
       {completedTicket && (
@@ -723,16 +736,25 @@ const styles = StyleSheet.create({
     fontSize: 13.5,
     fontWeight: '800',
   },
-  layout: {
+  layoutScroll: {
     flex: 1,
+  },
+  layout: {
+    flexGrow: 1,
     flexDirection: 'row',
   },
   layoutMobile: {
     flexDirection: 'column',
+    paddingBottom: 24,
   },
   leftColumn: {
     flex: 1.3,
     padding: 18,
+  },
+  leftColumnMobile: {
+    flex: 0,
+    padding: 12,
+    paddingBottom: 0,
   },
   sectionHeadingBox: {
     marginBottom: 16,
@@ -876,6 +898,10 @@ const styles = StyleSheet.create({
     padding: 18,
     gap: 16,
   },
+  rightColumnMobile: {
+    flex: 0,
+    padding: 12,
+  },
   whitePanel: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -909,6 +935,7 @@ const styles = StyleSheet.create({
   inputRow: {
     flexDirection: 'row',
     gap: 8,
+    flexWrap: 'wrap',
   },
   cleanInput: {
     backgroundColor: '#F8FAFC',
@@ -959,6 +986,8 @@ const styles = StyleSheet.create({
     paddingTop: 12,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   wristbandLabel: {
     fontSize: 13.5,
@@ -1016,6 +1045,7 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 8,
     gap: 10,
+    flexWrap: 'wrap',
   },
   billItemTitle: {
     fontSize: 15,
@@ -1067,9 +1097,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 8,
     marginBottom: 14,
+    flexWrap: 'wrap',
   },
   payMethodBtn: {
     flex: 1,
+    minWidth: 85,
     alignItems: 'center',
     paddingVertical: 10,
     borderRadius: 8,

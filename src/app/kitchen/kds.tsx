@@ -896,7 +896,17 @@ export default function KitchenDisplayScreen() {
             showsVerticalScrollIndicator={true}
           >
             {sortedTickets.map((ticket) => (
-              <View key={ticket.id} style={[styles.ticketColumnWrap, isMobile && { width: '100%', maxWidth: '100%', minHeight: 320 }]}>
+              <View
+                key={ticket.id}
+                style={[
+                  styles.ticketColumnWrap,
+                  isMobile && {
+                    width: width >= 560 ? '48%' : '100%',
+                    maxWidth: width >= 560 ? '49%' : '100%',
+                    minHeight: 320,
+                  },
+                ]}
+              >
                 {renderTicket(ticket)}
               </View>
             ))}
@@ -1758,6 +1768,7 @@ const styles = StyleSheet.create({
   },
   invStatsStrip: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#15151A',
@@ -1766,7 +1777,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   invStatBox: {
-    flex: 1,
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 110,
     padding: 10,
     borderRadius: 10,
     backgroundColor: '#1E1E26',

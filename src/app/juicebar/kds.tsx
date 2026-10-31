@@ -1629,6 +1629,7 @@ const styles = StyleSheet.create({
   },
   invStatsStrip: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingHorizontal: 20,
     paddingVertical: 12,
     backgroundColor: '#15151A',
@@ -1638,6 +1639,7 @@ const styles = StyleSheet.create({
   },
   invStatBox: {
     flex: 1,
+    minWidth: 110,
     padding: 10,
     borderRadius: 10,
     backgroundColor: '#1E1E26',

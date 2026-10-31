@@ -104,11 +104,17 @@ export default function LoginScreen() {
   const isWaiterApp = (Platform.OS !== 'web' || params.role === 'waiter') && params.all !== 'true';
 
   const { width: screenWidth } = useWindowDimensions();
-  // Keep strictly 2 rows: 3 per row for <=6 roles, 4 per row for 7-8 roles
+  const isCompactMobile = screenWidth < 480;
   const isDesktopOrTablet = screenWidth >= 640;
+  const isLargeDesktop = screenWidth >= 1024;
+  // Responsive columns across mobile, tablet, and desktop
   const targetCols = displayRoles.length <= 6 ? 3 : displayRoles.length <= 8 ? 4 : 5;
-  const cardWidth = !isDesktopOrTablet
-    ? '48%'
+  const cardWidth = screenWidth < 360
+    ? '100%'
+    : !isDesktopOrTablet
+    ? '46.5%'
+    : !isLargeDesktop
+    ? '31%'
     : targetCols === 5
     ? '18.8%'
     : targetCols === 4
@@ -273,7 +279,7 @@ export default function LoginScreen() {
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
           <View style={styles.content}>
-            <View style={[styles.mainLoginCard, isWaiterApp && styles.mainLoginCardWaiter]}>
+            <View style={[styles.mainLoginCard, isCompactMobile && styles.mainLoginCardMobile, isWaiterApp && styles.mainLoginCardWaiter]}>
               {/* Back to Welcome Screen */}
               <TouchableOpacity
                 style={styles.backToWelcomeBtn}
@@ -285,27 +291,27 @@ export default function LoginScreen() {
               </TouchableOpacity>
 
               {/* Header with HD Logo on Left, Details, and Live Clock on Right */}
-              <View style={styles.header}>
-                <View style={styles.headerLeft}>
+              <View style={[styles.header, !isLargeDesktop && { flexWrap: 'wrap' }]}>
+                <View style={[styles.headerLeft, isCompactMobile && { gap: 10 }]}>
                   <View style={styles.logoBadgeOuter}>
-                    <SultanLogo size="md" width={isDesktopOrTablet ? 116 : 86} height={isDesktopOrTablet ? 98 : 74} style={styles.logoDropShadow} />
+                    <SultanLogo size="md" width={isDesktopOrTablet ? 104 : 68} height={isDesktopOrTablet ? 88 : 58} style={styles.logoDropShadow} />
                   </View>
                   <View style={styles.headerDetails}>
-                    <Text style={styles.title}>
+                    <Text style={[styles.title, isCompactMobile && { fontSize: 18 }]}>
                       {isWaiterApp ? 'Sultan Order Taker Terminal' : 'SULTAN STAFF PORTAL'}
                     </Text>
-                    <Text style={styles.urduSubtitle}>
+                    <Text style={[styles.urduSubtitle, isCompactMobile && { fontSize: 11.5 }]}>
                       {isWaiterApp ? 'آرڈر ٹیکر ٹرمینل • فلور ٹیبلز اور لائیو پنچ' : 'سلطان ریسٹورنٹ سٹاف پورٹل • لاگ ان ٹرمینل منتخب کریں'}
                     </Text>
-                    <Text style={styles.subtitle}>
+                    <Text style={[styles.subtitle, isCompactMobile && { fontSize: 11 }]}>
                       {isWaiterApp ? 'Floor Tables & Live Order Punch' : 'Select your operational terminal to sign in'}
                     </Text>
                   </View>
                 </View>
 
-                {/* Luxury Royal Timepiece Widget on Right */}
+                {/* Luxury Royal Timepiece Widget on Right (Large Desktop or Full-Width Row on Tablet) */}
                 {isDesktopOrTablet && (
-                  <View style={styles.clockCard}>
+                  <View style={[styles.clockCard, !isLargeDesktop && { width: '100%', justifyContent: 'space-between' }]}>
                     {/* Time Cluster with Digital Digit Boxes */}
                     <View style={styles.timeCluster}>
                       <View style={styles.timeDigitBox}>
@@ -345,16 +351,16 @@ export default function LoginScreen() {
               </View>
 
             {isWaiterApp ? (
-              <View style={styles.modalCard}>
+              <View style={[styles.modalCard, isCompactMobile && styles.modalCardMobile]}>
                 {/* Card Header */}
                 <View style={styles.modalHeader}>
                   <View style={styles.modalHeaderLeft}>
                     <View style={styles.modalRoleIconCircle}>
                       <Ionicons name="walk" size={22} color="#451014" />
                     </View>
-                    <View>
-                      <Text style={styles.modalTitle}>Order Taker Sign In</Text>
-                      <Text style={styles.modalSubtitle}>Floor Tables & Live KOT Dispatch</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.modalTitle, isCompactMobile && { fontSize: 17 }]}>Order Taker Sign In</Text>
+                      <Text style={[styles.modalSubtitle, isCompactMobile && { fontSize: 12 }]}>Floor Tables & Live KOT Dispatch</Text>
                     </View>
                   </View>
                 </View>
@@ -461,16 +467,14 @@ export default function LoginScreen() {
                   </TouchableOpacity>
                 </View>
 
-                {Platform.OS === 'web' && (
-                  <TouchableOpacity
-                    style={{ marginTop: 16, alignItems: 'center' }}
-                    onPress={() => router.push('/login?all=true' as any)}
-                  >
-                    <Text style={{ color: '#D5A943', fontSize: 13, textDecorationLine: 'underline' }}>
-                      Switch to Full Staff Portal
-                    </Text>
-                  </TouchableOpacity>
-                )}
+                <TouchableOpacity
+                  style={{ marginTop: 12, alignItems: 'center', paddingVertical: 6 }}
+                  onPress={() => router.push('/login?all=true' as any)}
+                >
+                  <Text style={{ color: '#D5A943', fontSize: 13, fontWeight: '700', textDecorationLine: 'underline' }}>
+                    Switch to Full Staff Portal (All Roles)
+                  </Text>
+                </TouchableOpacity>
               </View>
             ) : (
               // Unified Role Cards Grid (Standard & Custom Roles all in the same 2 rows!)
@@ -758,6 +762,11 @@ const styles = StyleSheet.create({
     maxWidth: 540,
     alignSelf: 'center',
   },
+  mainLoginCardMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 18,
+  },
   backToWelcomeBtn: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -975,9 +984,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   roleCard: {
+    flexGrow: 1,
     backgroundColor: 'rgba(28, 5, 9, 0.94)',
     paddingVertical: 14,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     borderRadius: 16,
     borderWidth: 1.8,
     borderColor: 'rgba(213, 169, 67, 0.45)',
@@ -1093,6 +1103,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 16,
     elevation: 12,
+  },
+  modalCardMobile: {
+    padding: 14,
+    borderRadius: 16,
+    gap: 12,
   },
   modalHeader: {
     flexDirection: 'row',

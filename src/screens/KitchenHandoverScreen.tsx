@@ -1,27 +1,28 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import KitchenOpsNav from '../components/KitchenOpsNav';
+import RoyalDropdown from '../components/RoyalDropdown';
 import ShiftForecastPanel, { KitchenAutomationSettingsModal, shiftTitle } from '../components/ShiftForecastPanel';
+import { useAuthStore } from '../store/authStore';
+import { seedKitchenStarter } from '../store/kitchenSeed';
+import { getActiveSessions, useKitchenStore } from '../store/kitchenStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
-import { useAuthStore } from '../store/authStore';
-import { useKitchenStore, getActiveSessions } from '../store/kitchenStore';
-import { seedKitchenStarter } from '../store/kitchenSeed';
 import type { ShiftKind, ShiftStation } from '../types/kitchen';
 import { SHIFT_KIND_META, SHIFT_STATION_META } from '../types/kitchen';
-import RoyalDropdown from '../components/RoyalDropdown';
 import {
   averageDailyUsage,
   formatQty,
@@ -48,6 +49,7 @@ const BRAND = {
 
 export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
 
   const inventory = useOpsStore((s) => s.inventory);
   const staff = useRestaurantStore((s) => s.staff);
@@ -246,9 +248,9 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
   const activeIssuedValue = !activeSession
     ? 0
     : activeSession.lines.reduce(
-        (sum, l) => sum + (l.issued + l.topUp + l.localPurchased) * l.costPerUnit,
-        0
-      );
+      (sum, l) => sum + (l.issued + l.topUp + l.localPurchased) * l.costPerUnit,
+      0
+    );
 
   const showAlert = (title: string, msg: string) => {
     if (Platform.OS === 'web') window.alert(`${title}\n\n${msg}`);
@@ -553,31 +555,39 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
 
             {/* Issued lines preview */}
             <View style={styles.activeTable}>
-              <View style={styles.tableHeaderRow}>
-                <Text style={[styles.th, { flex: 3 }]}>Raw Material Item</Text>
-                <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Issued</Text>
-                <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Top-Up</Text>
-                <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Market</Text>
-                <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Total In Kitchen</Text>
-              </View>
-              {activeSession.lines.map((l) => (
-                <View key={l.itemId} style={styles.tableRow}>
-                  <View style={{ flex: 3 }}>
-                    <Text style={styles.itemName}>{l.itemName}</Text>
-                    <Text style={styles.itemCategory}>{l.category}</Text>
+              <ScrollView
+                horizontal={width < 768}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={width < 768 ? { minWidth: 560 } : { width: '100%' }}
+              >
+                <View style={{ width: '100%' }}>
+                  <View style={styles.tableHeaderRow}>
+                    <Text style={[styles.th, { flex: 3 }]}>Raw Material Item</Text>
+                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Issued</Text>
+                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Top-Up</Text>
+                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Market</Text>
+                    <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Total In Kitchen</Text>
                   </View>
-                  <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>{formatQty(l.issued, l.unit)}</Text>
-                  <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: l.topUp > 0 ? BRAND.warn : BRAND.muted }]}>
-                    {l.topUp > 0 ? `+${formatQty(l.topUp, l.unit)}` : '-'}
-                  </Text>
-                  <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: l.localPurchased > 0 ? BRAND.info : BRAND.muted }]}>
-                    {l.localPurchased > 0 ? `+${formatQty(l.localPurchased, l.unit)}` : '-'}
-                  </Text>
-                  <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '800' }]}>
-                    {formatQty(l.issued + l.topUp + l.localPurchased, l.unit)}
-                  </Text>
+                  {activeSession.lines.map((l) => (
+                    <View key={l.itemId} style={styles.tableRow}>
+                      <View style={{ flex: 3 }}>
+                        <Text style={styles.itemName}>{l.itemName}</Text>
+                        <Text style={styles.itemCategory}>{l.category}</Text>
+                      </View>
+                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>{formatQty(l.issued, l.unit)}</Text>
+                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: l.topUp > 0 ? BRAND.warn : BRAND.muted }]}>
+                        {l.topUp > 0 ? `+${formatQty(l.topUp, l.unit)}` : '-'}
+                      </Text>
+                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: l.localPurchased > 0 ? BRAND.info : BRAND.muted }]}>
+                        {l.localPurchased > 0 ? `+${formatQty(l.localPurchased, l.unit)}` : '-'}
+                      </Text>
+                      <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '800' }]}>
+                        {formatQty(l.issued + l.topUp + l.localPurchased, l.unit)}
+                      </Text>
+                    </View>
+                  ))}
                 </View>
-              ))}
+              </ScrollView>
             </View>
           </View>
         )}
@@ -814,120 +824,128 @@ export default function KitchenHandoverScreen({ backRoute = '/admin/dashboard' }
 
           {/* Requisition Table */}
           <View style={styles.reqTable}>
-            <View style={styles.tableHeaderRow}>
-              <Text style={[styles.th, { flex: 2.8 }]}>Raw Material Ingredient</Text>
-              <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Stock (Available)</Text>
-              <Text style={[styles.th, { flex: 1.4, textAlign: 'right' }]}>Par / Avg</Text>
-              <Text style={[styles.th, { flex: 2.8, textAlign: 'right' }]}>Request to Issue</Text>
-              <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Line Value</Text>
-            </View>
+            <ScrollView
+              horizontal={width < 768}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={width < 768 ? { minWidth: 640 } : { width: '100%' }}
+            >
+              <View style={{ width: '100%' }}>
+                <View style={styles.tableHeaderRow}>
+                  <Text style={[styles.th, { flex: 2.8 }]}>Raw Material Ingredient</Text>
+                  <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Stock (Available)</Text>
+                  <Text style={[styles.th, { flex: 1.4, textAlign: 'right' }]}>Par / Avg</Text>
+                  <Text style={[styles.th, { flex: 2.8, textAlign: 'right' }]}>Request to Issue</Text>
+                  <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Line Value</Text>
+                </View>
 
-            {filteredItems.map((item) => {
-              const reqVal = quantities[item.id] || '';
-              const reqNum = parseFloat(reqVal) || 0;
-              const isOverStock = reqNum > item.stock;
-              const par = kitchenSettings.par[item.id] || 0;
-              const avg = avgUsage.get(item.id) || 0;
-              const sugVal = Math.max(par, avg * 1.15);
-              const lineCost = reqNum * (item.costPerUnit || 0);
-              const uLabel = shortUnit(item.unit);
+                {filteredItems.map((item) => {
+                  const reqVal = quantities[item.id] || '';
+                  const reqNum = parseFloat(reqVal) || 0;
+                  const isOverStock = reqNum > item.stock;
+                  const par = kitchenSettings.par[item.id] || 0;
+                  const avg = avgUsage.get(item.id) || 0;
+                  const sugVal = Math.max(par, avg * 1.15);
+                  const lineCost = reqNum * (item.costPerUnit || 0);
+                  const uLabel = shortUnit(item.unit);
 
-              return (
-                <View
-                  key={item.id}
-                  style={[
-                    styles.tableRow,
-                    reqNum > 0 && styles.tableRowSelected,
-                    isOverStock && styles.tableRowOverStock,
-                  ]}
-                >
-                  <View style={{ flex: 2.8 }}>
-                    <Text style={[styles.itemName, reqNum > 0 && { color: BRAND.burgundy, fontWeight: '800' }]}>
-                      {item.name}
-                    </Text>
-                    <Text style={styles.itemCategory}>
-                      {item.category} • Cost: {money(item.costPerUnit || 0)} / {uLabel}
-                    </Text>
-                  </View>
-
-                  <View style={{ flex: 2, alignItems: 'flex-end' }}>
-                    <Text
+                  return (
+                    <View
+                      key={item.id}
                       style={[
-                        styles.td,
-                        {
-                          fontWeight: '800',
-                          color: item.stock <= (item.threshold || 5) ? BRAND.danger : BRAND.ink,
-                        },
+                        styles.tableRow,
+                        reqNum > 0 && styles.tableRowSelected,
+                        isOverStock && styles.tableRowOverStock,
                       ]}
                     >
-                      {formatQty(item.stock, uLabel)}
-                    </Text>
-                    {item.stock <= (item.threshold || 5) && (
-                      <View style={styles.lowStockBadge}>
-                        <Text style={styles.lowStockBadgeText}>Low Stock</Text>
+                      <View style={{ flex: 2.8 }}>
+                        <Text style={[styles.itemName, reqNum > 0 && { color: BRAND.burgundy, fontWeight: '800' }]}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.itemCategory}>
+                          {item.category} • Cost: {money(item.costPerUnit || 0)} / {uLabel}
+                        </Text>
                       </View>
-                    )}
-                  </View>
 
-                  <View style={{ flex: 1.4, alignItems: 'flex-end' }}>
-                    <Text style={styles.td}>
-                      {par > 0 ? `${par} ${uLabel}` : avg > 0 ? `~${roundQty(avg, uLabel)}` : '-'}
-                    </Text>
-                  </View>
-
-                  <View style={{ flex: 2.8, alignItems: 'flex-end' }}>
-                    <View style={styles.qtyInputWrap}>
-                      {sugVal > 0 && (
-                        <TouchableOpacity
-                          style={styles.quickParBtn}
-                          onPress={() => handleSetItemPar(item.id, sugVal)}
-                          activeOpacity={0.7}
+                      <View style={{ flex: 2, alignItems: 'flex-end' }}>
+                        <Text
+                          style={[
+                            styles.td,
+                            {
+                              fontWeight: '800',
+                              color: item.stock <= (item.threshold || 5) ? BRAND.danger : BRAND.ink,
+                            },
+                          ]}
                         >
-                          <Text style={styles.quickParBtnText}>Par</Text>
-                        </TouchableOpacity>
-                      )}
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleAdjustItemQty(item.id, -1)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="remove" size={12} color={BRAND.ink} />
-                      </TouchableOpacity>
-                      <TextInput
-                        style={[
-                          styles.qtyInput,
-                          reqNum > 0 && styles.qtyInputFilled,
-                          isOverStock && styles.qtyInputOverStock,
-                        ]}
-                        keyboardType="numeric"
-                        placeholder="0"
-                        value={reqVal}
-                        onChangeText={(t) => setQuantities({ ...quantities, [item.id]: t })}
-                      />
-                      <TouchableOpacity
-                        style={styles.stepBtn}
-                        onPress={() => handleAdjustItemQty(item.id, 1)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="add" size={12} color={BRAND.burgundy} />
-                      </TouchableOpacity>
-                      <Text style={styles.unitSuffix} numberOfLines={1}>{uLabel}</Text>
-                    </View>
-                    {isOverStock && (
-                      <Text style={styles.overStockWarning}>
-                        Only {item.stock} {uLabel} available in store inventory!
-                      </Text>
-                    )}
-                  </View>
+                          {formatQty(item.stock, uLabel)}
+                        </Text>
+                        {item.stock <= (item.threshold || 5) && (
+                          <View style={styles.lowStockBadge}>
+                            <Text style={styles.lowStockBadgeText}>Low Stock</Text>
+                          </View>
+                        )}
+                      </View>
 
-                  <View style={{ flex: 1.8, alignItems: 'flex-end' }}>
-                    <Text style={[styles.td, reqNum > 0 && { fontWeight: '800', color: BRAND.burgundy }]}>
-                      {lineCost > 0 ? money(lineCost) : '-'}
-                    </Text>
-                  </View>
-                </View>
-              );
-            })}
+                      <View style={{ flex: 1.4, alignItems: 'flex-end' }}>
+                        <Text style={styles.td}>
+                          {par > 0 ? `${par} ${uLabel}` : avg > 0 ? `~${roundQty(avg, uLabel)}` : '-'}
+                        </Text>
+                      </View>
+
+                      <View style={{ flex: 2.8, alignItems: 'flex-end' }}>
+                        <View style={styles.qtyInputWrap}>
+                          {sugVal > 0 && (
+                            <TouchableOpacity
+                              style={styles.quickParBtn}
+                              onPress={() => handleSetItemPar(item.id, sugVal)}
+                              activeOpacity={0.7}
+                            >
+                              <Text style={styles.quickParBtnText}>Par</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={styles.stepBtn}
+                            onPress={() => handleAdjustItemQty(item.id, -1)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="remove" size={12} color={BRAND.ink} />
+                          </TouchableOpacity>
+                          <TextInput
+                            style={[
+                              styles.qtyInput,
+                              reqNum > 0 && styles.qtyInputFilled,
+                              isOverStock && styles.qtyInputOverStock,
+                            ]}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            value={reqVal}
+                            onChangeText={(t) => setQuantities({ ...quantities, [item.id]: t })}
+                          />
+                          <TouchableOpacity
+                            style={styles.stepBtn}
+                            onPress={() => handleAdjustItemQty(item.id, 1)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="add" size={12} color={BRAND.burgundy} />
+                          </TouchableOpacity>
+                          <Text style={styles.unitSuffix} numberOfLines={1}>{uLabel}</Text>
+                        </View>
+                        {isOverStock && (
+                          <Text style={styles.overStockWarning}>
+                            Only {item.stock} {uLabel} available in store inventory!
+                          </Text>
+                        )}
+                      </View>
+
+                      <View style={{ flex: 1.8, alignItems: 'flex-end' }}>
+                        <Text style={[styles.td, reqNum > 0 && { fontWeight: '800', color: BRAND.burgundy }]}>
+                          {lineCost > 0 ? money(lineCost) : '-'}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
 
             {filteredItems.length === 0 && (
               <View style={styles.emptyState}>
@@ -1819,7 +1837,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalBox: {
-    width: 480,
+    width: '100%',
+    maxWidth: 480,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     overflow: 'hidden',
@@ -1920,15 +1939,17 @@ const styles = StyleSheet.create({
   floatingDock: {
     position: 'absolute',
     bottom: 12,
-    left: 20,
-    right: 20,
+    left: 12,
+    right: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.98)',
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
     borderWidth: 1.5,
     borderColor: BRAND.gold,
     shadowColor: '#000',
@@ -1971,6 +1992,7 @@ const styles = StyleSheet.create({
   dockRight: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   dockClearBtn: {

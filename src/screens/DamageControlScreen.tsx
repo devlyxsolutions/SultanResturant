@@ -108,16 +108,6 @@ export default function DamageControlScreen({
   const user = useAuthStore((s) => s.user);
   const { can } = useRolePermissions();
 
-  if (user?.role !== 'admin' && !can('canAccessInventory')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Damage & Breakage Control"
-        urduModuleName="نقصان اور ٹوٹ پھوٹ کا کنٹرول"
-        requiredPermission="canAccessInventory"
-        backRoute={backRoute}
-      />
-    );
-  }
   const damageRecords = useOpsStore((s) => s.damageRecords || []);
   const assets = useOpsStore((s) => s.assets || []);
   const logDamageIncident = useOpsStore((s) => s.logDamageIncident);
@@ -403,6 +393,17 @@ export default function DamageControlScreen({
   function alertMsg(title: string, msg: string) {
     if (Platform.OS === 'web') window.alert(`${title}\n${msg}`);
     else Alert.alert(title, msg);
+  }
+
+  if (user?.role !== 'admin' && !can('canAccessInventory')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Damage & Breakage Control"
+        urduModuleName="نقصان اور ٹوٹ پھوٹ کا کنٹرول"
+        requiredPermission="canAccessInventory"
+        backRoute={backRoute}
+      />
+    );
   }
 
   return (
@@ -1049,7 +1050,7 @@ export default function DamageControlScreen({
 
               {/* Qty & Unit Cost */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Quantity Broken *</Text>
                   <TextInput
                     style={styles.input}
@@ -1061,7 +1062,7 @@ export default function DamageControlScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Unit Replacement Cost (PKR) *</Text>
                   <TextInput
                     style={styles.input}
@@ -1076,7 +1077,7 @@ export default function DamageControlScreen({
 
               {/* Location & Reason */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Incident Location *</Text>
                   <TextInput
                     style={styles.input}
@@ -1087,7 +1088,7 @@ export default function DamageControlScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <RoyalDropdown
                     label="Primary Reason"
                     required
@@ -1103,7 +1104,7 @@ export default function DamageControlScreen({
 
               {/* Responsibility */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <RoyalDropdown
                     label="Attributed Responsibility"
                     icon="person-outline"
@@ -1117,7 +1118,7 @@ export default function DamageControlScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Responsible Person / Table No.</Text>
                   <TextInput
                     style={styles.input}
@@ -1131,7 +1132,7 @@ export default function DamageControlScreen({
 
               {/* Action Taken & Amount Recovered */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <RoyalDropdown
                     label="Initial Settlement Action"
                     icon="receipt-outline"
@@ -1142,7 +1143,7 @@ export default function DamageControlScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Amount Recovered (PKR)</Text>
                   <TextInput
                     style={styles.input}
@@ -1698,11 +1699,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   cardHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   codeTag: {
     backgroundColor: LIGHT.roseSoft,
@@ -1746,6 +1750,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     gap: 12,
     marginBottom: 12,
+    flexWrap: 'wrap',
   },
   itemName: {
     fontSize: 18,
@@ -1831,6 +1836,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 12,
     justifyContent: 'flex-end',
+    flexWrap: 'wrap',
   },
   actionBtnOutline: {
     flexDirection: 'row',
@@ -1940,6 +1946,7 @@ const styles = StyleSheet.create({
   twoCol: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   modalChip: {
     paddingHorizontal: 14,
@@ -1996,6 +2003,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#CBD5E1',
     backgroundColor: '#FAFAF9',
+    flexWrap: 'wrap',
   },
   modalCancelBtn: {
     paddingHorizontal: 16,
@@ -2061,6 +2069,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 4,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   sheetKey: {
     fontSize: 13.5,
@@ -2085,9 +2095,11 @@ const styles = StyleSheet.create({
     padding: 4,
     borderRadius: 8,
     marginBottom: 14,
+    flexWrap: 'wrap',
   },
   entryModeTab: {
     flex: 1,
+    minWidth: 140,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -2136,6 +2148,8 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(180, 130, 20, 0.4)',
     borderRadius: 8,
     padding: 12,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   selectedAssetCodeChip: {
     flexDirection: 'row',

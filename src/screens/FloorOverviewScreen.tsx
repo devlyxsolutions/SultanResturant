@@ -126,20 +126,20 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.container} contentContainerStyle={[styles.content, isMobile && { padding: 12 }]}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, isMobile && { padding: 12, gap: 10 }]}>
         <TouchableOpacity
           style={styles.backBtn}
           onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
         >
           <Ionicons name="arrow-back" size={20} color="#F3D179" />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>Sultan 5-Floor Operations</Text>
-          <Text style={styles.headerSubtitle}>Multi-Level Dine-In, Banquet & Rooftop Management</Text>
+        <View style={{ flex: 1, minWidth: 150 }}>
+          <Text style={[styles.headerTitle, isMobile && { fontSize: 17 }]}>Sultan 5-Floor Operations</Text>
+          <Text style={styles.headerSubtitle} numberOfLines={2}>Multi-Level Dine-In, Banquet & Rooftop Management</Text>
         </View>
-        <TouchableOpacity style={styles.setupBtn} onPress={handlePopulateFloors}>
+        <TouchableOpacity style={[styles.setupBtn, isMobile && { paddingHorizontal: 10, paddingVertical: 8 }]} onPress={handlePopulateFloors}>
           <Ionicons name="layers-outline" size={16} color="#24050A" style={{ marginRight: 6 }} />
           <Text style={styles.setupBtnText}>{isMobile ? 'Template' : '5-Floor Template'}</Text>
         </TouchableOpacity>
@@ -354,6 +354,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     marginBottom: 20,
     gap: 12,
     padding: 16,
@@ -543,6 +544,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 12,
   },
   clearFloorBtn: {

@@ -1006,8 +1006,8 @@ export default function TablesBlueprintScreen({
   return (
     <View style={styles.container}>
       {/* Header */}
-      <View style={[styles.header, isMobile && { paddingHorizontal: 12, paddingVertical: 10 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: isMobile ? 160 : 200 }}>
+      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 12, paddingVertical: 10 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexShrink: 1 }}>
           <TouchableOpacity
             style={styles.backBtn}
             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -1015,7 +1015,7 @@ export default function TablesBlueprintScreen({
           >
             <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
+          <View style={{ flexShrink: 1 }}>
             <Text style={[styles.title, isMobile && { fontSize: 17 }]}>Table & Cabin Blueprint</Text>
             {!isSmallMobile && (
               <Text style={styles.subtitle} numberOfLines={1}>Dining tables, couches & Arabian majlis cabins</Text>
@@ -1215,7 +1215,7 @@ export default function TablesBlueprintScreen({
 
             {/* Unified 3-Dropdown Filters Row */}
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
-              <View style={{ flex: 1, minWidth: 150 }}>
+              <View style={{ width: '31%', flexGrow: 1, minWidth: 150 }}>
                 <RoyalDropdown
                   label="Floor"
                   options={[
@@ -1236,7 +1236,7 @@ export default function TablesBlueprintScreen({
                   icon="layers-outline"
                 />
               </View>
-              <View style={{ flex: 1, minWidth: 150 }}>
+              <View style={{ width: '31%', flexGrow: 1, minWidth: 150 }}>
                 <RoyalDropdown
                   label="Seating Zone"
                   options={[
@@ -1256,7 +1256,7 @@ export default function TablesBlueprintScreen({
                   icon="apps-outline"
                 />
               </View>
-              <View style={{ flex: 1, minWidth: 150 }}>
+              <View style={{ width: '31%', flexGrow: 1, minWidth: 150 }}>
                 <RoyalDropdown
                   label="Table Status"
                   options={[
@@ -1408,8 +1408,8 @@ export default function TablesBlueprintScreen({
                     <Text style={[styles.resTimeText, { color: isConfirmed ? '#7D3C98' : '#8E8E93' }]}>{res.timeSlot}</Text>
                     <Text style={styles.resDateText}>{res.reservationDate}</Text>
                   </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={{ flex: 1, minWidth: 160, gap: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <Text style={styles.resName}>{res.customerName}</Text>
                       <View style={[styles.statusPill, { backgroundColor: isConfirmed ? '#F4ECF7' : '#F2F2F7' }]}>
                         <Text style={[styles.statusPillText, { color: isConfirmed ? '#7D3C98' : '#8E8E93' }]}>
@@ -2230,7 +2230,8 @@ export default function TablesBlueprintScreen({
                     return (
                       <View key={tbl.id} style={{
                         width: '31%',
-                        minWidth: 170,
+                        minWidth: 145,
+                        flexGrow: 1,
                         backgroundColor: '#FAF8F5',
                         borderRadius: 10,
                         borderWidth: 1.5,
@@ -2428,7 +2429,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderWidth: 1,
     borderColor: '#ECE8E1',
-    maxWidth: 360,
+    width: '100%',
   },
   searchInput: { flex: 1, paddingVertical: 10, fontSize: 14, color: '#1C1C1E' },
   chip: {
@@ -2497,7 +2498,8 @@ const styles = StyleSheet.create({
   resCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    flexWrap: 'wrap',
+    gap: 12,
     backgroundColor: '#fff',
     borderRadius: 16,
     padding: 14,
@@ -2625,8 +2627,9 @@ const styles = StyleSheet.create({
   zoneSummaryTitle: { fontSize: 14.5, fontWeight: '900', color: BRAND },
   zoneSummaryCardsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   zoneSummaryMiniCard: {
-    flex: 1,
-    minWidth: 120,
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: '#FCFBF9',
     borderRadius: 12,
     padding: 10,
@@ -2719,7 +2722,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   floorBannerBtnText: { fontSize: 13, fontWeight: '800', color: '#2C3E50' },
-  floorCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  floorCardHeader: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 12 },
   floorHeaderBadge: { width: 42, height: 42, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   floorCardName: { fontSize: 18, fontWeight: '900', color: BRAND },
   floorCardBlurb: { fontSize: 13.5, color: '#475569', fontWeight: '600' },
@@ -2791,9 +2794,10 @@ const styles = StyleSheet.create({
   statusMiniDot: { width: 8, height: 8, borderRadius: 4 },
 
   // --- Modal Seating Picker ---
-  seatingTypePickerRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  seatingTypePickerRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   seatingTypeChoiceCard: {
     flex: 1,
+    minWidth: 90,
     backgroundColor: '#FCFBF9',
     borderRadius: 12,
     borderWidth: 1.5,

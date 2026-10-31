@@ -722,9 +722,10 @@ const styles = StyleSheet.create({
   floorBlurb: { fontSize: 13.5, color: '#334155', lineHeight: 18 },
 
   // Zone Counters
-  zoneCountersContainer: { flexDirection: 'row', gap: 8 },
+  zoneCountersContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   zoneCounterItem: {
     flex: 1,
+    minWidth: 95,
     backgroundColor: '#F8F9FA',
     borderRadius: 12,
     borderWidth: 1,
@@ -820,7 +821,7 @@ const styles = StyleSheet.create({
   previewTitle: { fontSize: 16, fontWeight: '900' },
   previewSub: { fontSize: 13, color: '#475569', marginTop: 2, fontWeight: '600' },
 
-  dialogActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
+  dialogActions: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-end', gap: 10, marginTop: 14 },
   ghostBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
   ghostBtnText: { color: '#636366', fontWeight: '800', fontSize: 14 },
   primaryBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 },

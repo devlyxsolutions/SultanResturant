@@ -1,24 +1,24 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import KitchenOpsNav from '../components/KitchenOpsNav';
-import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
+import RoyalDropdown from '../components/RoyalDropdown';
 import { usePagination } from '../hooks/usePagination';
+import { seedKitchenStarter } from '../store/kitchenSeed';
+import { useKitchenStore } from '../store/kitchenStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
-import { useKitchenStore } from '../store/kitchenStore';
-import { seedKitchenStarter } from '../store/kitchenSeed';
 import type { Recipe, RecipeIngredient, RecipeUnit } from '../types/kitchen';
 import {
   computeRecipeCost,
@@ -317,7 +317,7 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
     <View style={styles.container}>
       <KitchenOpsNav backRoute={backRoute} />
 
-      <View style={styles.mainLayout}>
+      <View style={[styles.mainLayout, isMobile && { flexDirection: 'column' }]}>
         {/* Left Column: Menu Items Selector */}
         <View style={[styles.leftPane, isMobile && styles.leftPaneMobile]}>
           <View style={styles.paneHeader}>
@@ -726,122 +726,130 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                       )}
                     </View>
 
-                    <View style={styles.tableHeader}>
-                      <Text style={[styles.th, { flex: 3 }]}>Ingredient & Role</Text>
-                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
-                        {batchScale > 1 ? `Scaled Qty (${batchScale}x)` : 'Qty / Dish'}
-                      </Text>
-                      <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Trim/Waste</Text>
-                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Unit Cost</Text>
-                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
-                        {batchScale > 1 ? `Batch Cost (${batchScale}x)` : 'Dish Cost'}
-                      </Text>
-                      <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>% Share</Text>
-                    </View>
+                    <ScrollView
+                      horizontal={isMobile}
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={isMobile ? { minWidth: 640 } : { width: '100%' }}
+                    >
+                      <View style={{ width: '100%' }}>
+                        <View style={styles.tableHeader}>
+                          <Text style={[styles.th, { flex: 3 }]}>Ingredient & Role</Text>
+                          <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
+                            {batchScale > 1 ? `Scaled Qty (${batchScale}x)` : 'Qty / Dish'}
+                          </Text>
+                          <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Trim/Waste</Text>
+                          <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Store Unit Cost</Text>
+                          <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>
+                            {batchScale > 1 ? `Batch Cost (${batchScale}x)` : 'Dish Cost'}
+                          </Text>
+                          <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>% Share</Text>
+                        </View>
 
-                    {currentCost.lines.map((line, idx) => {
-                      const ing = currentRecipe.ingredients[idx];
-                      const roleMeta = INGREDIENT_ROLES.find((r) => r.id === ing?.role);
-                      const scaledQty = line.portionQty * batchScale;
-                      const scaledCost = line.cost * batchScale;
+                        {currentCost.lines.map((line, idx) => {
+                          const ing = currentRecipe.ingredients[idx];
+                          const roleMeta = INGREDIENT_ROLES.find((r) => r.id === ing?.role);
+                          const scaledQty = line.portionQty * batchScale;
+                          const scaledCost = line.cost * batchScale;
 
-                      return (
-                        <View key={`${line.inventoryItemId}-${idx}`} style={styles.tableRow}>
-                          <View style={{ flex: 3 }}>
-                            <Text style={styles.tdItemName}>{line.name}</Text>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                              {roleMeta && (
-                                <View style={[styles.roleBadge, { backgroundColor: roleMeta.color + '15' }]}>
-                                  <Text style={[styles.roleBadgeText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
+                          return (
+                            <View key={`${line.inventoryItemId}-${idx}`} style={styles.tableRow}>
+                              <View style={{ flex: 3 }}>
+                                <Text style={styles.tdItemName}>{line.name}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                                  {roleMeta && (
+                                    <View style={[styles.roleBadge, { backgroundColor: roleMeta.color + '15' }]}>
+                                      <Text style={[styles.roleBadgeText, { color: roleMeta.color }]}>{roleMeta.label}</Text>
+                                    </View>
+                                  )}
+                                  {ing?.tasteAdjustPct !== 0 && (
+                                    <Text
+                                      style={[
+                                        styles.tastePill,
+                                        { color: (ing?.tasteAdjustPct || 0) > 0 ? BRAND.danger : BRAND.success },
+                                      ]}
+                                    >
+                                      {(ing?.tasteAdjustPct || 0) > 0 ? `+${ing.tasteAdjustPct}%` : `${ing.tasteAdjustPct}%`} spice
+                                    </Text>
+                                  )}
                                 </View>
-                              )}
-                              {ing?.tasteAdjustPct !== 0 && (
-                                <Text
-                                  style={[
-                                    styles.tastePill,
-                                    { color: (ing?.tasteAdjustPct || 0) > 0 ? BRAND.danger : BRAND.success },
-                                  ]}
-                                >
-                                  {(ing?.tasteAdjustPct || 0) > 0 ? `+${ing.tasteAdjustPct}%` : `${ing.tasteAdjustPct}%`} spice
+                              </View>
+
+                              <View style={{ flex: 2, alignItems: 'flex-end' }}>
+                                <Text style={[styles.td, { fontWeight: '700' }]}>
+                                  {scaledQty >= 1000 && (line.unit === 'g' || line.unit === 'ml')
+                                    ? `${(scaledQty / 1000).toFixed(2)} ${line.unit === 'g' ? 'kg' : 'L'}`
+                                    : `${scaledQty.toFixed(1)} ${line.unit}`}
                                 </Text>
-                              )}
-                            </View>
-                          </View>
+                                {batchScale > 1 && (
+                                  <Text style={{ fontSize: 9, color: BRAND.muted }}>
+                                    {line.portionQty.toFixed(1)} {line.unit} / plate
+                                  </Text>
+                                )}
+                              </View>
 
-                          <View style={{ flex: 2, alignItems: 'flex-end' }}>
-                            <Text style={[styles.td, { fontWeight: '700' }]}>
-                              {scaledQty >= 1000 && (line.unit === 'g' || line.unit === 'ml')
-                                ? `${(scaledQty / 1000).toFixed(2)} ${line.unit === 'g' ? 'kg' : 'L'}`
-                                : `${scaledQty.toFixed(1)} ${line.unit}`}
-                            </Text>
-                            {batchScale > 1 && (
-                              <Text style={{ fontSize: 9, color: BRAND.muted }}>
-                                {line.portionQty.toFixed(1)} {line.unit} / plate
+                              <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.muted }]}>
+                                {ing?.wastagePct ? `+${ing.wastagePct}%` : '0%'}
                               </Text>
-                            )}
+
+                              <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>
+                                {line.unitCost ? `${money(line.unitCost)}/${line.unit === 'g' || line.unit === 'kg' ? 'kg' : line.unit}` : 'Not set'}
+                              </Text>
+
+                              <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700', color: BRAND.ink }]}>
+                                {money(scaledCost)}
+                              </Text>
+
+                              <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.burgundy, fontWeight: '600' }]}>
+                                {line.pct.toFixed(1)}%
+                              </Text>
+                            </View>
+                          );
+                        })}
+
+                        {/* Packaging & Overhead Rows */}
+                        <View style={[styles.tableRow, styles.extraCostRow]}>
+                          <View style={{ flex: 3 }}>
+                            <Text style={styles.tdExtraName}>Packaging & Serving Disposables</Text>
+                            <Text style={styles.tdExtraSub}>Boxes, foil wraps, sauce cups, napkins</Text>
                           </View>
-
-                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.muted }]}>
-                            {ing?.wastagePct ? `+${ing.wastagePct}%` : '0%'}
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>—</Text>
+                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>—</Text>
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>Fixed</Text>
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
+                            {money(currentCost.packagingCost)}
                           </Text>
-
-                          <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>
-                            {line.unitCost ? `${money(line.unitCost)}/${line.unit === 'g' || line.unit === 'kg' ? 'kg' : line.unit}` : 'Not set'}
-                          </Text>
-
-                          <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700', color: BRAND.ink }]}>
-                            {money(scaledCost)}
-                          </Text>
-
-                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right', color: BRAND.burgundy, fontWeight: '600' }]}>
-                            {line.pct.toFixed(1)}%
+                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>
+                            {currentCost.totalCost > 0 ? ((currentCost.packagingCost / currentCost.totalCost) * 100).toFixed(1) : 0}%
                           </Text>
                         </View>
-                      );
-                    })}
 
-                    {/* Packaging & Overhead Rows */}
-                    <View style={[styles.tableRow, styles.extraCostRow]}>
-                      <View style={{ flex: 3 }}>
-                        <Text style={styles.tdExtraName}>Packaging & Serving Disposables</Text>
-                        <Text style={styles.tdExtraSub}>Boxes, foil wraps, sauce cups, napkins</Text>
+                        <View style={[styles.tableRow, styles.extraCostRow]}>
+                          <View style={{ flex: 3 }}>
+                            <Text style={styles.tdExtraName}>Kitchen Overhead Allocation ({kitchenSettings.overheadPct}%)</Text>
+                            <Text style={styles.tdExtraSub}>Fuel gas, tandoor coal, electricity share</Text>
+                          </View>
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>—</Text>
+                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>—</Text>
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>{kitchenSettings.overheadPct}%</Text>
+                          <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
+                            {money(currentCost.overheadCost)}
+                          </Text>
+                          <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>
+                            {currentCost.totalCost > 0 ? ((currentCost.overheadCost / currentCost.totalCost) * 100).toFixed(1) : 0}%
+                          </Text>
+                        </View>
+
+                        {/* Total Summary Row */}
+                        <View style={[styles.tableRow, styles.totalCostRow]}>
+                          <Text style={[styles.totalLabel, { flex: 3 }]}>Total Recipe Cost (Portion Cost)</Text>
+                          <Text style={[styles.td, { flex: 2 }]}>—</Text>
+                          <Text style={[styles.td, { flex: 1.5 }]}>—</Text>
+                          <Text style={[styles.td, { flex: 2 }]}>—</Text>
+                          <Text style={[styles.totalValue, { flex: 2, textAlign: 'right' }]}>{money(currentCost.totalCost)}</Text>
+                          <Text style={[styles.totalValue, { flex: 1.5, textAlign: 'right' }]}>100%</Text>
+                        </View>
                       </View>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>—</Text>
-                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>—</Text>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>Fixed</Text>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
-                        {money(currentCost.packagingCost)}
-                      </Text>
-                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>
-                        {currentCost.totalCost > 0 ? ((currentCost.packagingCost / currentCost.totalCost) * 100).toFixed(1) : 0}%
-                      </Text>
-                    </View>
-
-                    <View style={[styles.tableRow, styles.extraCostRow]}>
-                      <View style={{ flex: 3 }}>
-                        <Text style={styles.tdExtraName}>Kitchen Overhead Allocation ({kitchenSettings.overheadPct}%)</Text>
-                        <Text style={styles.tdExtraSub}>Fuel gas, tandoor coal, electricity share</Text>
-                      </View>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>—</Text>
-                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>—</Text>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right' }]}>{kitchenSettings.overheadPct}%</Text>
-                      <Text style={[styles.td, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
-                        {money(currentCost.overheadCost)}
-                      </Text>
-                      <Text style={[styles.td, { flex: 1.5, textAlign: 'right' }]}>
-                        {currentCost.totalCost > 0 ? ((currentCost.overheadCost / currentCost.totalCost) * 100).toFixed(1) : 0}%
-                      </Text>
-                    </View>
-
-                    {/* Total Summary Row */}
-                    <View style={[styles.tableRow, styles.totalCostRow]}>
-                      <Text style={[styles.totalLabel, { flex: 3 }]}>Total Recipe Cost (Portion Cost)</Text>
-                      <Text style={[styles.td, { flex: 2 }]}>—</Text>
-                      <Text style={[styles.td, { flex: 1.5 }]}>—</Text>
-                      <Text style={[styles.td, { flex: 2 }]}>—</Text>
-                      <Text style={[styles.totalValue, { flex: 2, textAlign: 'right' }]}>{money(currentCost.totalCost)}</Text>
-                      <Text style={[styles.totalValue, { flex: 1.5, textAlign: 'right' }]}>100%</Text>
-                    </View>
+                    </ScrollView>
                   </View>
 
                   {/* Target Margin & Recommended Price Simulator Card */}
@@ -880,7 +888,7 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                           Profit:{' '}
                           {money(
                             suggestPrice(currentCost.totalCost, calcMarginPct, kitchenSettings.priceRounding) -
-                              currentCost.totalCost
+                            currentCost.totalCost
                           )}{' '}
                           / dish
                         </Text>
@@ -903,8 +911,8 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                           {currentPrice >= suggestPrice(currentCost.totalCost, calcMarginPct, kitchenSettings.priceRounding)
                             ? 'Above target margin'
                             : `Underpriced by ${money(
-                                suggestPrice(currentCost.totalCost, calcMarginPct, kitchenSettings.priceRounding) - currentPrice
-                              )}`}
+                              suggestPrice(currentCost.totalCost, calcMarginPct, kitchenSettings.priceRounding) - currentPrice
+                            )}`}
                         </Text>
                       </View>
                     </View>
@@ -1238,6 +1246,10 @@ const styles = StyleSheet.create({
   },
   leftPaneMobile: {
     width: '100%',
+    maxHeight: 280,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
   },
   paneHeader: {
     paddingHorizontal: 16,
@@ -1473,6 +1485,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   detailDishName: {
     fontSize: 22,
@@ -1620,6 +1634,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
     marginBottom: 12,
   },
   sectionTitle: {
@@ -1818,7 +1834,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    width: 720,
+    width: '100%',
+    maxWidth: 720,
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -1855,10 +1872,12 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 12,
   },
   formCol: {
+    minWidth: 110,
     marginBottom: 12,
   },
   inputLabel: {
@@ -1886,6 +1905,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     marginTop: 12,
     marginBottom: 10,
     paddingTop: 14,
@@ -2007,7 +2028,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   subModalCard: {
-    width: 520,
+    width: '100%',
+    maxWidth: 520,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',

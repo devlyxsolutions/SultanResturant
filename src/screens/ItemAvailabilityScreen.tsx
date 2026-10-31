@@ -363,6 +363,7 @@ const styles = StyleSheet.create({
   itemCard: {
     width: '48%',
     minWidth: 155,
+    flexGrow: 1,
     backgroundColor: '#fff',
     padding: 14,
     borderRadius: 12,

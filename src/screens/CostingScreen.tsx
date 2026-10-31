@@ -453,115 +453,123 @@ export default function CostingScreen({ backRoute = '/admin/dashboard' }: { back
 
           {/* Table */}
           <View style={styles.tableWrap}>
-            <View style={styles.thRow}>
-              <Text style={[styles.th, { flex: 3 }]}>Menu Dish & Size</Text>
-              <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Raw Ing. Cost</Text>
-              <Text style={[styles.th, { flex: 1.2, textAlign: 'right' }]}>Pack+Ovh</Text>
-              <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Total Cost Price</Text>
-              <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Menu Sale Price</Text>
-              <Text style={[styles.th, { flex: 1.6, textAlign: 'right' }]}>Gross Profit</Text>
-              <Text style={[styles.th, { flex: 1.6, textAlign: 'right' }]}>Margin %</Text>
-              <Text style={[styles.th, { flex: 1.5, textAlign: 'center' }]}>Price Action</Text>
-            </View>
+            <ScrollView
+              horizontal={isMobile}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={isMobile ? { minWidth: 700 } : { width: '100%' }}
+            >
+              <View style={{ width: '100%' }}>
+                <View style={styles.thRow}>
+                  <Text style={[styles.th, { flex: 3 }]}>Menu Dish & Size</Text>
+                  <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Raw Ing. Cost</Text>
+                  <Text style={[styles.th, { flex: 1.2, textAlign: 'right' }]}>Pack+Ovh</Text>
+                  <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Total Cost Price</Text>
+                  <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Menu Sale Price</Text>
+                  <Text style={[styles.th, { flex: 1.6, textAlign: 'right' }]}>Gross Profit</Text>
+                  <Text style={[styles.th, { flex: 1.6, textAlign: 'right' }]}>Margin %</Text>
+                  <Text style={[styles.th, { flex: 1.5, textAlign: 'center' }]}>Price Action</Text>
+                </View>
 
-            {filteredList.map((item) => {
-              const isLow = item.status === 'low';
-              const isNoRecipe = item.status === 'no_recipe';
+                {filteredList.map((item) => {
+                  const isLow = item.status === 'low';
+                  const isNoRecipe = item.status === 'no_recipe';
 
-              return (
-                <View key={item.key} style={[styles.trRow, isLow && styles.trRowLow]}>
-                  <View style={{ flex: 3 }}>
-                    <Text style={styles.trDishName}>{item.name}</Text>
-                    <Text style={styles.trCategory}>{item.category}</Text>
-                  </View>
+                  return (
+                    <View key={item.key} style={[styles.trRow, isLow && styles.trRowLow]}>
+                      <View style={{ flex: 3 }}>
+                        <Text style={styles.trDishName}>{item.name}</Text>
+                        <Text style={styles.trCategory}>{item.category}</Text>
+                      </View>
 
-                  <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
-                    {item.hasRecipe ? money(item.ingredientCost) : '—'}
-                  </Text>
+                      <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
+                        {item.hasRecipe ? money(item.ingredientCost) : '—'}
+                      </Text>
 
-                  <Text style={[styles.tr, { flex: 1.2, textAlign: 'right', color: BRAND.muted }]}>
-                    {item.hasRecipe ? money(item.packagingCost + item.overheadCost) : '—'}
-                  </Text>
+                      <Text style={[styles.tr, { flex: 1.2, textAlign: 'right', color: BRAND.muted }]}>
+                        {item.hasRecipe ? money(item.packagingCost + item.overheadCost) : '—'}
+                      </Text>
 
-                  <Text
-                    style={[
-                      styles.tr,
-                      {
-                        flex: 1.8,
-                        textAlign: 'right',
-                        fontWeight: '800',
-                        color: item.hasRecipe ? BRAND.ink : BRAND.muted,
-                      },
-                    ]}
-                  >
-                    {item.hasRecipe ? money(item.totalCost) : 'Not Costed'}
-                  </Text>
-
-                  <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '800', color: BRAND.goldDark }]}>
-                    {money(item.salePrice)}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.tr,
-                      {
-                        flex: 1.6,
-                        textAlign: 'right',
-                        fontWeight: '700',
-                        color: item.hasRecipe ? (item.profitRs > 0 ? BRAND.success : BRAND.danger) : BRAND.muted,
-                      },
-                    ]}
-                  >
-                    {item.hasRecipe ? money(item.profitRs) : '—'}
-                  </Text>
-
-                  <View style={{ flex: 1.6, alignItems: 'flex-end' }}>
-                    {item.hasRecipe ? (
-                      <View
+                      <Text
                         style={[
-                          styles.marginBadge,
-                          item.marginPercent >= kitchenSettings.targetMarginPct
-                            ? styles.marginBadgeHealthy
-                            : styles.marginBadgeLow,
+                          styles.tr,
+                          {
+                            flex: 1.8,
+                            textAlign: 'right',
+                            fontWeight: '800',
+                            color: item.hasRecipe ? BRAND.ink : BRAND.muted,
+                          },
                         ]}
                       >
-                        <Text
-                          style={[
-                            styles.marginBadgeText,
-                            item.marginPercent >= kitchenSettings.targetMarginPct
-                              ? { color: BRAND.success }
-                              : { color: BRAND.warn },
-                          ]}
-                        >
-                          {item.marginPercent.toFixed(1)}%
-                        </Text>
-                      </View>
-                    ) : (
-                      <TouchableOpacity
-                        style={styles.addBOMBadge}
-                        onPress={() => router.push(`${portalBase}/recipes` as any)}
-                      >
-                        <Text style={styles.addBOMText}>Set BOM</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+                        {item.hasRecipe ? money(item.totalCost) : 'Not Costed'}
+                      </Text>
 
-                  <View style={{ flex: 1.5, alignItems: 'center' }}>
-                    {item.hasRecipe ? (
-                      <TouchableOpacity
-                        style={styles.optimizePriceBtn}
-                        onPress={() => handleOpenPriceAdjuster(item)}
+                      <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', fontWeight: '800', color: BRAND.goldDark }]}>
+                        {money(item.salePrice)}
+                      </Text>
+
+                      <Text
+                        style={[
+                          styles.tr,
+                          {
+                            flex: 1.6,
+                            textAlign: 'right',
+                            fontWeight: '700',
+                            color: item.hasRecipe ? (item.profitRs > 0 ? BRAND.success : BRAND.danger) : BRAND.muted,
+                          },
+                        ]}
                       >
-                        <Ionicons name="sparkles" size={12} color={BRAND.burgundy} />
-                        <Text style={styles.optimizePriceBtnText}>Adjust</Text>
-                      </TouchableOpacity>
-                    ) : (
-                      <Text style={{ fontSize: 11, color: BRAND.muted }}>—</Text>
-                    )}
-                  </View>
-                </View>
-              );
-            })}
+                        {item.hasRecipe ? money(item.profitRs) : '—'}
+                      </Text>
+
+                      <View style={{ flex: 1.6, alignItems: 'flex-end' }}>
+                        {item.hasRecipe ? (
+                          <View
+                            style={[
+                              styles.marginBadge,
+                              item.marginPercent >= kitchenSettings.targetMarginPct
+                                ? styles.marginBadgeHealthy
+                                : styles.marginBadgeLow,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.marginBadgeText,
+                                item.marginPercent >= kitchenSettings.targetMarginPct
+                                  ? { color: BRAND.success }
+                                  : { color: BRAND.warn },
+                              ]}
+                            >
+                              {item.marginPercent.toFixed(1)}%
+                            </Text>
+                          </View>
+                        ) : (
+                          <TouchableOpacity
+                            style={styles.addBOMBadge}
+                            onPress={() => router.push(`${portalBase}/recipes` as any)}
+                          >
+                            <Text style={styles.addBOMText}>Set BOM</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      <View style={{ flex: 1.5, alignItems: 'center' }}>
+                        {item.hasRecipe ? (
+                          <TouchableOpacity
+                            style={styles.optimizePriceBtn}
+                            onPress={() => handleOpenPriceAdjuster(item)}
+                          >
+                            <Ionicons name="sparkles" size={12} color={BRAND.burgundy} />
+                            <Text style={styles.optimizePriceBtnText}>Adjust</Text>
+                          </TouchableOpacity>
+                        ) : (
+                          <Text style={{ fontSize: 11, color: BRAND.muted }}>—</Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
           </View>
         </View>
       </ScrollView>
@@ -1026,7 +1034,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    width: 560,
+    width: '100%',
+    maxWidth: 560,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',
@@ -1058,10 +1067,12 @@ const styles = StyleSheet.create({
   },
   priceCompareRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   priceCol: {
     flex: 1,
+    minWidth: 120,
     backgroundColor: '#FAF7F0',
     borderWidth: 1,
     borderColor: BRAND.border,

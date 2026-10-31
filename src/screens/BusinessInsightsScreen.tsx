@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -16,6 +17,8 @@ import { money, percent, hourLabel } from '../utils/format';
 
 export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
 
   const invoices = useRestaurantStore((s) => s.invoices);
   const tables = useRestaurantStore((s) => s.tables);
@@ -98,7 +101,7 @@ export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' 
         >
           <Ionicons name="arrow-back" size={20} color={BRAND.ink} />
         </TouchableOpacity>
-        <View style={{ flex: 1 }}>
+        <View style={{ flex: 1, minWidth: 180 }}>
           <Text style={styles.headerTitle}>Sultan Business Analytics</Text>
           <Text style={styles.headerSubtitle}>
             5-Floor Revenue, Peak Rush Hours & Best Sellers
@@ -297,29 +300,31 @@ export default function BusinessInsightsScreen({ backRoute = '/admin/dashboard' 
         <Text style={styles.cardSubtitle}>
           Highlights the busiest dinner & lunch rushes to optimize kitchen staffing:
         </Text>
-        <View style={styles.hourlyContainer}>
-          {[12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 0].map((hour) => {
-            const count = hourlyCount[hour] || 0;
-            const barHeight = Math.max(12, Math.round((count / maxHourOrders) * 90));
-            return (
-              <View key={hour} style={styles.hourBarWrapper}>
-                <Text style={styles.hourBarCount}>{count > 0 ? count : ''}</Text>
-                <View style={styles.hourBarColumn}>
-                  <View
-                    style={[
-                      styles.hourBar,
-                      {
-                        height: barHeight,
-                        backgroundColor: count >= maxHourOrders * 0.7 ? '#D32F2F' : BRAND.burgundy,
-                      },
-                    ]}
-                  />
+        <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false}>
+          <View style={[styles.hourlyContainer, isMobile ? { minWidth: 440 } : { width: '100%' }]}>
+            {[12, 13, 14, 15, 18, 19, 20, 21, 22, 23, 0].map((hour) => {
+              const count = hourlyCount[hour] || 0;
+              const barHeight = Math.max(12, Math.round((count / maxHourOrders) * 90));
+              return (
+                <View key={hour} style={styles.hourBarWrapper}>
+                  <Text style={styles.hourBarCount}>{count > 0 ? count : ''}</Text>
+                  <View style={styles.hourBarColumn}>
+                    <View
+                      style={[
+                        styles.hourBar,
+                        {
+                          height: barHeight,
+                          backgroundColor: count >= maxHourOrders * 0.7 ? '#D32F2F' : BRAND.burgundy,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text style={styles.hourBarLabel}>{hourLabel(hour)}</Text>
                 </View>
-                <Text style={styles.hourBarLabel}>{hourLabel(hour)}</Text>
-              </View>
-            );
-          })}
-        </View>
+              );
+            })}
+          </View>
+        </ScrollView>
       </View>
 
       {/* Top 6 Best Sellers */}
@@ -360,6 +365,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     gap: 12,
+    flexWrap: 'wrap',
   },
   backBtn: {
     width: 40,
@@ -488,9 +494,11 @@ const styles = StyleSheet.create({
   channelRow: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   channelCol: {
     flex: 1,
+    minWidth: 130,
     alignItems: 'center',
     padding: 14,
     borderRadius: 10,
@@ -566,6 +574,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderWidth: 1,
     borderColor: '#E2E8F0',
+    flexWrap: 'wrap',
   },
   dishRankBadge: {
     width: 34,

@@ -88,6 +88,7 @@ export default function TableOrderScreen() {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isMobile = width < 850;
+  const isTablet = width >= 850 && width < 1150;
 
   // Tabs & Filters
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
@@ -617,16 +618,16 @@ export default function TableOrderScreen() {
       <StatusBar barStyle="light-content" />
       
       {/* ================= ROYAL SULTAN TOP BAR ================= */}
-      <View style={styles.topBar}>
+      <View style={[styles.topBar, isMobile && { paddingHorizontal: 10, paddingVertical: 8 }]}>
         {/* Standalone Back Button */}
         <TouchableOpacity 
-          style={styles.topBarBackBtn} 
+          style={[styles.topBarBackBtn, width < 480 && { paddingHorizontal: 8, marginRight: 6 }]} 
           onPress={goBack} 
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           activeOpacity={0.75}
         >
           <Ionicons name="chevron-back" size={16} color="#D4AF37" />
-          <Text style={styles.topBarBackText}>Tables</Text>
+          {width >= 420 && <Text style={styles.topBarBackText}>Tables</Text>}
         </TouchableOpacity>
 
         {/* Table & Order Info Block */}
@@ -640,7 +641,7 @@ export default function TableOrderScreen() {
             >
               <SeatingTypeIcon type={seatingType} size={14} color="#D4AF37" />
             </View>
-            <Text style={styles.topBarTableTitle}>{tableName}</Text>
+            <Text style={[styles.topBarTableTitle, isMobile && { fontSize: 14 }]} numberOfLines={1}>{tableName}</Text>
             
             {/* Status Badge */}
             <View style={[
@@ -655,12 +656,12 @@ export default function TableOrderScreen() {
                 styles.statusBadgeText,
                 { color: isBilled ? '#F59E0B' : isExistingOrderActive ? '#EF4444' : '#10B981' }
               ]}>
-                {isBilled ? 'BILL REQUESTED' : isExistingOrderActive ? 'ACTIVE ORDER' : 'AVAILABLE'}
+                {isBilled ? (isMobile ? 'BILLED' : 'BILL REQUESTED') : isExistingOrderActive ? (isMobile ? 'ACTIVE' : 'ACTIVE ORDER') : 'AVAILABLE'}
               </Text>
             </View>
 
-            {/* Active Order Items Badge (No Prices) */}
-            {(alreadyOrderedItems.length > 0 || newCart.length > 0) && (
+            {/* Active Order Items Badge (No Prices) - Hidden on mobile since mobileSwitcher already shows count */}
+            {!isMobile && (alreadyOrderedItems.length > 0 || newCart.length > 0) && (
               <View style={styles.topBarItemsPill}>
                 <Ionicons name="restaurant" size={12} color="#D4AF37" />
                 <Text style={styles.topBarItemsLabel}>Order:</Text>
@@ -789,23 +790,23 @@ export default function TableOrderScreen() {
             LEFT: CATEGORIES SIDEBAR (AUTHENTIC POS VELVET THEME)
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'menu') && (
-          <View style={[styles.categorySidebar, isMobile && styles.categorySidebarMobile]}>
-            {/* Header: CATEGORIES + Count + Grid/List Toggle */}
-            <View style={styles.categoryHeaderRow}>
-              <View style={styles.categoryTitleGroup}>
-                <View style={styles.categoryTitleIconOrb}>
-                  <Ionicons name="apps" size={12} color="#E5B83B" />
+          <View style={[styles.categorySidebar, isTablet && { width: 170, padding: 8 }, isMobile && styles.categorySidebarMobile]}>
+            {/* Header: CATEGORIES + Count + Grid/List Toggle (Desktop/Tablet only) */}
+            {!isMobile && (
+              <View style={styles.categoryHeaderRow}>
+                <View style={styles.categoryTitleGroup}>
+                  <View style={styles.categoryTitleIconOrb}>
+                    <Ionicons name="apps" size={12} color="#E5B83B" />
+                  </View>
+                  <Text style={styles.categoryHeading}>CATEGORIES</Text>
+                  <View style={styles.categoryCountPill}>
+                    <Text style={styles.categoryCountPillText}>
+                      {categoryTiles.length + 1}
+                    </Text>
+                  </View>
                 </View>
-                <Text style={styles.categoryHeading}>CATEGORIES</Text>
-                <View style={styles.categoryCountPill}>
-                  <Text style={styles.categoryCountPillText}>
-                    {categoryTiles.length + 1}
-                  </Text>
-                </View>
-              </View>
 
-              {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
-              {!isMobile && (
+                {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
                 <View style={styles.categoryViewSwitcher}>
                   <TouchableOpacity 
                     style={[styles.viewSwitchBtn, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
@@ -832,36 +833,38 @@ export default function TableOrderScreen() {
                     />
                   </TouchableOpacity>
                 </View>
-              )}
-            </View>
-
-            {/* Quick Find Category Filter */}
-            <View 
-              style={[styles.quickFindBox, isCatSearchFocused && styles.quickFindBoxFocused]}
-              {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-            >
-              <View style={[styles.quickFindIconOrb, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
-                <Ionicons name="search" size={12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
               </View>
-              <TextInput
-                style={styles.quickFindInput}
-                placeholder="Find category..."
-                placeholderTextColor="#64748B"
-                value={categorySearchQuery}
-                onFocus={() => setIsCatSearchFocused(true)}
-                onBlur={() => setIsCatSearchFocused(false)}
-                onChangeText={setCategorySearchQuery}
-              />
-              {categorySearchQuery ? (
-                <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={15} color="#D4AF37" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
+            )}
+
+            {/* Quick Find Category Filter (Desktop/Tablet only) */}
+            {!isMobile && (
+              <View 
+                style={[styles.quickFindBox, isCatSearchFocused && styles.quickFindBoxFocused]}
+                {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+              >
+                <View style={[styles.quickFindIconOrb, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
+                  <Ionicons name="search" size={12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
+                </View>
+                <TextInput
+                  style={styles.quickFindInput}
+                  placeholder="Find category..."
+                  placeholderTextColor="#64748B"
+                  value={categorySearchQuery}
+                  onFocus={() => setIsCatSearchFocused(true)}
+                  onBlur={() => setIsCatSearchFocused(false)}
+                  onChangeText={setCategorySearchQuery}
+                />
+                {categorySearchQuery ? (
+                  <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={15} color="#D4AF37" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
 
             {/* Categories Scrollable Container */}
             <ScrollView 
-              style={styles.categoriesScroll}
+              style={[styles.categoriesScroll, isMobile && { flex: 0 }]}
               contentContainerStyle={[
                 styles.categoriesContainer,
                 isMobile 
@@ -1040,9 +1043,9 @@ export default function TableOrderScreen() {
         {(!isMobile || mobileTab === 'menu') && (
           <View style={styles.centerCatalog}>
             {/* Catalog Subheader: Search + Station chips */}
-            <View style={styles.catalogSubheader}>
+            <View style={[styles.catalogSubheader, isMobile && { flexDirection: 'column', alignItems: 'stretch' }]}>
               {/* Luxury Search Pill Box */}
-              <View style={[styles.searchPillBox, isSearchFocused && styles.searchPillBoxFocused]}>
+              <View style={[styles.searchPillBox, isMobile && { flex: 0, width: '100%', minWidth: 0, height: 40 }, isSearchFocused && styles.searchPillBoxFocused]}>
                 <View style={[styles.searchIconOrb, isSearchFocused && styles.searchIconOrbFocused]}>
                   <Ionicons name="search" size={14} color="#D4AF37" />
                 </View>
@@ -1225,7 +1228,12 @@ export default function TableOrderScreen() {
                         styles.dishCard,
                         isItemInCart && styles.dishCardInCart,
                         isOutOfStock && { opacity: 0.65 },
-                        isMobile && { width: '47.5%', minWidth: 140 }
+                        isTablet && { width: '31%', minWidth: 135, flexGrow: 1 },
+                        isMobile && {
+                          width: width < 360 ? '100%' : width < 560 ? '47%' : '31%',
+                          minWidth: width < 360 ? 0 : 130,
+                          flexGrow: 1,
+                        }
                       ]}
                       onPress={() => addToCart(item)}
                       activeOpacity={0.75}
@@ -1264,15 +1272,16 @@ export default function TableOrderScreen() {
                               {(item.category || 'Mains').toUpperCase()}
                             </Text>
                           </View>
-                          {item.region ? (
-                            <View style={styles.dishCardRegionChip}>
-                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
-                              <Text style={styles.dishCardRegionText} numberOfLines={1}>
-                                {item.region}
-                              </Text>
-                            </View>
-                          ) : null}
                         </View>
+
+                        {item.region ? (
+                          <View style={styles.dishCardRegionChip}>
+                            <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+                            <Text style={styles.dishCardRegionText} numberOfLines={1}>
+                              {item.region}
+                            </Text>
+                          </View>
+                        ) : null}
 
                         {/* Special Badge tag */}
                         {item.badge ? (
@@ -1359,7 +1368,7 @@ export default function TableOrderScreen() {
             RIGHT: CART & ORDER PANE (AUTHENTIC POS THEME)
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'cart') && (
-          <View style={[styles.cartSidebar, isMobile && styles.cartSidebarMobile]}>
+          <View style={[styles.cartSidebar, isTablet && { width: 320 }, isMobile && styles.cartSidebarMobile]}>
             {/* Header: Title + Reset Button */}
             <View style={styles.cartHeaderRow}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -2209,8 +2218,12 @@ const styles = StyleSheet.create({
   },
   categorySidebarMobile: {
     width: '100%',
-    maxHeight: 110,
-    padding: 6,
+    height: 70,
+    minHeight: 70,
+    maxHeight: 70,
+    flexShrink: 0,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
     borderRightWidth: 0,
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(212, 175, 55, 0.25)',
@@ -2376,8 +2389,8 @@ const styles = StyleSheet.create({
     }),
   },
   categoryTileMobile: {
-    width: 105,
-    height: 64,
+    width: 100,
+    height: 56,
   },
   categoryTileActive: {
     backgroundColor: '#E5B83B',
@@ -2877,6 +2890,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.4,
   },
   dishCardRegionChip: {
+    position: 'absolute',
+    bottom: 5,
+    left: 5,
+    zIndex: 4,
     backgroundColor: 'rgba(82, 20, 28, 0.88)',
     borderRadius: 6,
     paddingHorizontal: 5,
@@ -3056,6 +3073,7 @@ const styles = StyleSheet.create({
     }),
   },
   cartSidebarMobile: {
+    flex: 1,
     width: '100%',
     borderLeftWidth: 0,
   },

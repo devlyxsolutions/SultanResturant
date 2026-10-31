@@ -357,8 +357,8 @@ export default function AssetsScreen({
           >
             <Ionicons name="arrow-back" size={20} color={LIGHT.burgundy} />
           </TouchableOpacity>
-          <View>
-            <View style={styles.titleRow}>
+          <View style={{ flex: 1 }}>
+            <View style={[styles.titleRow, { flexWrap: 'wrap' }]}>
               <Ionicons name="diamond" size={20} color={LIGHT.burgundy} />
               <Text style={styles.headerTitle}>Assets & Capital Capex</Text>
               <View style={styles.roleBadge}>
@@ -724,7 +724,7 @@ export default function AssetsScreen({
 
               {/* Cost & Qty */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Unit Purchase Cost (PKR) *</Text>
                   <TextInput
                     style={styles.input}
@@ -736,7 +736,7 @@ export default function AssetsScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Quantity (Units) *</Text>
                   <TextInput
                     style={styles.input}
@@ -751,7 +751,7 @@ export default function AssetsScreen({
 
               {/* Vendor & Phone */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Vendor / Supplier Name</Text>
                   <TextInput
                     style={styles.input}
@@ -762,7 +762,7 @@ export default function AssetsScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Vendor Phone</Text>
                   <TextInput
                     style={styles.input}
@@ -776,7 +776,7 @@ export default function AssetsScreen({
 
               {/* Location & Invoice */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Location / Floor Department</Text>
                   <TextInput
                     style={styles.input}
@@ -787,7 +787,7 @@ export default function AssetsScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Invoice / Bill No.</Text>
                   <TextInput
                     style={styles.input}
@@ -801,7 +801,7 @@ export default function AssetsScreen({
 
               {/* Condition & Status Dropdowns */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <RoyalDropdown
                     label="Physical Condition"
                     required
@@ -812,7 +812,7 @@ export default function AssetsScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <RoyalDropdown
                     label="Operational Status"
                     required
@@ -826,7 +826,7 @@ export default function AssetsScreen({
 
               {/* Depreciation & Serial */}
               <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Depreciation Rate (%/Year)</Text>
                   <TextInput
                     style={styles.input}
@@ -838,7 +838,7 @@ export default function AssetsScreen({
                   />
                 </View>
 
-                <View style={[styles.inputGroup, { flex: 1 }]}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
                   <Text style={styles.inputLabel}>Serial / Chassis No.</Text>
                   <TextInput
                     style={styles.input}
@@ -1487,6 +1487,7 @@ const styles = StyleSheet.create({
     gap: 8,
     marginTop: 14,
     justifyContent: 'flex-end',
+    flexWrap: 'wrap',
   },
   actionBtnOutline: {
     flexDirection: 'row',
@@ -1596,6 +1597,7 @@ const styles = StyleSheet.create({
   twoCol: {
     flexDirection: 'row',
     gap: 12,
+    flexWrap: 'wrap',
   },
   modalChip: {
     paddingHorizontal: 12,
@@ -1661,6 +1663,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#CBD5E1',
     backgroundColor: '#FAFAF9',
+    flexWrap: 'wrap',
   },
   modalCancelBtn: {
     paddingHorizontal: 16,
@@ -1726,6 +1729,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingVertical: 4,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   sheetKey: {
     fontSize: 13,
@@ -1761,6 +1766,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     marginTop: 8,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   damageBannerText: {
     fontSize: 12.5,

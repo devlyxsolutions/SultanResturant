@@ -56,8 +56,16 @@ export default function AdminLayout() {
   const pathname = usePathname();
   
   const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { isCollapsed, setIsCollapsed, toggleCollapsed } = useSidebarStore();
+
+  // On tablet screens (768-1023px), default to collapsed dock on route change so screens get full width
+  useEffect(() => {
+    if (isTablet && !isCollapsed) {
+      setIsCollapsed(true);
+    }
+  }, [pathname, isTablet]);
 
   // Auto-collapse sidebar ONLY when user clicks or touches anywhere outside the sidebar
   useEffect(() => {
@@ -185,7 +193,7 @@ export default function AdminLayout() {
   const isPos = pathname === '/admin/pos' || pathname.endsWith('/pos');
   if (isPos) {
     return (
-      <View style={{ flex: 1, backgroundColor: '#140306' }}>
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#140306' }} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" />
         <Stack 
           screenOptions={{ 
@@ -193,7 +201,7 @@ export default function AdminLayout() {
             contentStyle: { backgroundColor: '#F8FAFC' }
           }} 
         />
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -204,7 +212,7 @@ export default function AdminLayout() {
   // Desktop Sidebar Layout
   if (!isMobile) {
     return (
-      <View style={styles.desktopShell}>
+      <SafeAreaView style={styles.desktopShell} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" />
 
         {/* Global Web Animations & Micro-Interactions */}
@@ -309,54 +317,59 @@ export default function AdminLayout() {
                 </>
               )}
 
-              <View style={styles.breadcrumbBadge}>
-                <Ionicons name="shield-checkmark" size={13} color="#D4AF37" />
-                <Text style={styles.breadcrumbAdmin}>{width < 900 ? 'ADMIN' : 'EXECUTIVE ADMIN'}</Text>
-              </View>
-
-              <Text style={styles.breadcrumbDivider}>/</Text>
-              <Text style={styles.topBarScreenTitle}>{screenTitle}</Text>
+              {width >= 860 && (
+                <>
+                  <View style={styles.breadcrumbBadge}>
+                    <Ionicons name="shield-checkmark" size={13} color="#D4AF37" />
+                    <Text style={styles.breadcrumbAdmin}>{width < 960 ? 'ADMIN' : 'EXECUTIVE ADMIN'}</Text>
+                  </View>
+                  <Text style={styles.breadcrumbDivider}>/</Text>
+                </>
+              )}
+              <Text style={styles.topBarScreenTitle} numberOfLines={1}>{screenTitle}</Text>
             </View>
 
             <View style={styles.topBarRight}>
-              <SyncStatusBadge compact={width < 960} />
+              <SyncStatusBadge compact={width < 1024} />
 
               {/* Fast POS Shortcut - Glowing Sultan Gold */}
               {can('canAccessPOS') && (
                 <TouchableOpacity
-                  style={styles.headerPosBtn}
+                  style={[styles.headerPosBtn, isTablet && { paddingHorizontal: 10, paddingVertical: 6 }]}
                   onPress={() => router.push('/admin/pos')}
                   activeOpacity={0.8}
                 >
                   <Ionicons name="calculator" size={15} color="#24050A" />
-                  <Text style={styles.headerPosBtnText}>POS Billing</Text>
+                  <Text style={styles.headerPosBtnText}>{width < 900 ? 'POS' : 'POS Billing'}</Text>
                 </TouchableOpacity>
               )}
 
               {/* User greeting with Royal Avatar */}
-              <View style={styles.topUserSnippet}>
+              <View style={[styles.topUserSnippet, width < 900 && { paddingHorizontal: 5, paddingVertical: 4 }]}>
                 <View style={styles.topAvatarCircle}>
                   <Text style={styles.topAvatarText}>
                     {(user?.name || 'Admin')[0].toUpperCase()}
                   </Text>
                 </View>
-                <View style={styles.userTextCol}>
-                  {width >= 960 && <Text style={styles.userGreetingSub}>Welcome,</Text>}
-                  <Text style={styles.topUserName} numberOfLines={1}>
-                    {user?.name || 'Admin'}
-                  </Text>
-                </View>
+                {width >= 900 && (
+                  <View style={styles.userTextCol}>
+                    {width >= 1040 && <Text style={styles.userGreetingSub}>Welcome,</Text>}
+                    <Text style={styles.topUserName} numberOfLines={1}>
+                      {user?.name || 'Admin'}
+                    </Text>
+                  </View>
+                )}
               </View>
 
               {/* Logout button */}
               <TouchableOpacity 
-                style={styles.logoutBtn}
+                style={[styles.logoutBtn, width < 900 && { paddingHorizontal: 8 }]}
                 onPress={logout}
                 activeOpacity={0.7}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
               >
-                <Ionicons name="log-out-outline" size={16} color="#F87171" style={{ marginRight: 5 }} />
-                <Text style={styles.logoutText}>Logout</Text>
+                <Ionicons name="log-out-outline" size={16} color="#F87171" style={width >= 900 ? { marginRight: 5 } : undefined} />
+                {width >= 900 && <Text style={styles.logoutText}>Logout</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -374,7 +387,7 @@ export default function AdminLayout() {
             />
           </View>
         </View>
-      </View>
+      </SafeAreaView>
     );
   }
 
@@ -394,8 +407,10 @@ export default function AdminLayout() {
             <Ionicons name="menu" size={24} color="#F3D179" />
           </TouchableOpacity>
           <View style={styles.mobileLogoBox}>
-            <SultanLogo size="xs" width={22} height={22} style={{ marginRight: 6 }} />
-            <Text style={styles.mobileHeaderTitle}>SULTAN ADMIN</Text>
+            <SultanLogo size="xs" width={20} height={20} style={{ marginRight: 6 }} />
+            <Text style={styles.mobileHeaderTitle} numberOfLines={1}>
+              {currentItem ? currentItem.label.toUpperCase() : 'SULTAN ADMIN'}
+            </Text>
           </View>
         </View>
 
@@ -484,6 +499,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+    marginRight: 10,
+    overflow: 'hidden',
   },
   topSidebarToggleBtn: {
     flexDirection: 'row',
@@ -553,11 +571,13 @@ const styles = StyleSheet.create({
     fontSize: 15.5,
     fontWeight: '800',
     letterSpacing: 0.2,
+    flexShrink: 1,
   },
   topBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    flexShrink: 0,
   },
   headerPosBtn: {
     flexDirection: 'row',
@@ -692,6 +712,8 @@ const styles = StyleSheet.create({
   mobileHeaderLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    marginRight: 8,
   },
   hamburgerBtn: {
     padding: 6,
@@ -706,12 +728,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.25)',
+    flexShrink: 1,
   },
   mobileHeaderTitle: {
     color: '#F3D179',
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '900',
-    letterSpacing: 0.8,
+    letterSpacing: 0.6,
+    flexShrink: 1,
   },
   mobileHeaderRight: {
     flexDirection: 'row',

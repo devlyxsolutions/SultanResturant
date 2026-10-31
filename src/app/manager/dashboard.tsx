@@ -351,7 +351,7 @@ export default function ManagerDashboard() {
             <View style={styles.headerLogoCapsule}>
               <SultanLogo size="xs" variant="circle" />
             </View>
-            <View>
+            <View style={{ flexShrink: 1 }}>
               <Text style={styles.headerTitle}>Manager Operations Console</Text>
               <Text style={styles.headerSubtitle}>
                 {formattedDate} • Shift Operations, Floor Status & KDS Velocity
@@ -847,7 +847,16 @@ export default function ManagerDashboard() {
                         {...({ dataSet: { bar: 'grow' } } as any)}
                       />
                     </View>
-                    <Text style={[styles.barLabel, slot.isPeak && styles.barLabelPeak]}>{slot.label}</Text>
+                    <Text
+                      style={[
+                        styles.barLabel,
+                        isMobile && { fontSize: 8.5 },
+                        slot.isPeak && styles.barLabelPeak,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {isMobile ? slot.label.replace(' ', '') : slot.label}
+                    </Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1019,6 +1028,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.28)',
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
@@ -1033,18 +1044,17 @@ const styles = StyleSheet.create({
   },
   headerCardMobile: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 16,
-    padding: 16,
+    alignItems: 'stretch',
+    gap: 12,
+    padding: 14,
   },
   headerLeft: {
-    flex: 1,
+    flexShrink: 1,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flexWrap: 'wrap',
   },
   headerLogoCapsule: {
     padding: 6,
@@ -1339,6 +1349,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+    flexShrink: 1,
+    paddingRight: 8,
   },
   kpiJewelLabel: {
     fontSize: 11,
@@ -1446,6 +1458,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingTop: 10,
@@ -1463,8 +1477,8 @@ const styles = StyleSheet.create({
   },
 
   kpiCardHalf: {
-    flex: 1,
-    minWidth: 280,
+    width: '48.5%',
+    flexGrow: 1,
   },
 
   kpiGrid: {
@@ -1550,17 +1564,21 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   chartCardTwoThirds: {
-    flex: 2,
-    minWidth: 480,
+    width: '63%',
+    flexGrow: 1,
+    minWidth: 300,
   },
   chartCardOneThird: {
-    flex: 1,
-    minWidth: 280,
+    width: '34%',
+    flexGrow: 1,
+    minWidth: 260,
   },
   chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 20,
   },
   sectionTitle: {
@@ -1701,8 +1719,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tableCardHalf: {
-    flex: 1,
-    minWidth: 420,
+    width: '48.5%',
+    flexGrow: 1,
   },
   tableHeaderSection: {
     flexDirection: 'row',

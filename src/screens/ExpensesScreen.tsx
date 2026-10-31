@@ -35,16 +35,6 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   const user = useAuthStore((s) => s.user);
   const { can, canViewRevenue } = useRolePermissions();
 
-  if (user?.role !== 'admin' && !can('canAccessExpenses')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Expenses & Cash Outflow"
-        urduModuleName="اخراجات اور کیش آؤٹ فلو"
-        requiredPermission="canAccessExpenses"
-        backRoute={backRoute}
-      />
-    );
-  }
   const invoices = useRestaurantStore((s) => s.invoices);
   const expenses = useOpsStore((s) => s.expenses);
   const addExpense = useOpsStore((s) => s.addExpense);
@@ -117,6 +107,17 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       ]);
     }
   };
+
+  if (user?.role !== 'admin' && !can('canAccessExpenses')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Expenses & Cash Outflow"
+        urduModuleName="اخراجات اور کیش آؤٹ فلو"
+        requiredPermission="canAccessExpenses"
+        backRoute={backRoute}
+      />
+    );
+  }
 
   return (
     <ScrollView
@@ -433,6 +434,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 6,
   },
   pnlTitle: {
     fontSize: 17,
@@ -615,6 +618,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
   },
   filterPills: {
     flexDirection: 'row',
@@ -647,6 +652,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND.border,
     marginBottom: 12,
     gap: 14,
+    flexWrap: 'wrap',
   },
   expenseIcon: {
     width: 44,
@@ -660,6 +666,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
   },
   itemCategory: {
     fontSize: 16,

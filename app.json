@@ -3,7 +3,7 @@
     "name": "Sultan POS",
     "slug": "sultan-pos",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "sultanpos",
     "userInterfaceStyle": "automatic",
@@ -33,7 +33,7 @@
       ]
     },
     "web": {
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
@@ -50,14 +50,18 @@
     ],
     "experiments": {
       "typedRoutes": true,
-      "reactCompiler": true
+      "reactCompiler": false
     },
     "extra": {
-      "router": {},
+      "router": {
+        "asyncRoutes": {
+          "web": true
+        }
+      },
       "eas": {
-        "projectId": "7dcfac3d-cd0b-4c07-aba9-917e22e18641"
+        "projectId": "de555a47-e8a5-4138-bec3-5c601253aaa4"
       }
     },
-    "owner": "zainulabideen010"
+    "owner": "junaidahsan57"
   }
 }

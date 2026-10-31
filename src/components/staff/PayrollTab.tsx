@@ -565,17 +565,17 @@ export default function PayrollTab({ canViewSalaries = true }: PayrollTabProps) 
           <View style={{ padding: 12 }}>
             {salaryPayments.map((p) => (
               <View key={p.id} style={styles.historyRow}>
-                <View style={{ flex: 1.8 }}>
+                <View style={{ flex: 1.8, minWidth: 120 }}>
                   <Text style={styles.histVoucher}>{p.voucherNumber || p.id}</Text>
                   <Text style={styles.histStaff}>{p.staffName}</Text>
                 </View>
 
-                <View style={{ flex: 1.2 }}>
+                <View style={{ flex: 1.2, minWidth: 100 }}>
                   <Text style={styles.histDate}>{p.paymentDate}</Text>
                   <Text style={styles.histMonth}>Month: {p.month}</Text>
                 </View>
 
-                <View style={{ flex: 1.4 }}>
+                <View style={{ flex: 1.4, minWidth: 100 }}>
                   <Text style={styles.histAmount}>
                     {canViewSalaries ? `Rs. ${p.netPaid.toLocaleString()}` : '••••••'}
                   </Text>
@@ -1047,6 +1047,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
@@ -1151,6 +1153,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: '#52171B',
     padding: 16,
     borderRadius: 12,
@@ -1175,6 +1179,7 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 12,
   },
@@ -1196,10 +1201,12 @@ const styles = StyleSheet.create({
   },
   payMethodsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   payMethodPill: {
     flex: 1,
+    minWidth: 110,
     backgroundColor: '#F1F5F9',
     paddingVertical: 9,
     alignItems: 'center',

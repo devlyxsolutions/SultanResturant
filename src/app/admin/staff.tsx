@@ -84,17 +84,6 @@ export default function StaffManagementScreen({
   const isMobile = width < 768;
 
   const { can } = useRolePermissions();
-  if (role !== 'admin' && !can('canAccessStaff')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Staff & HR / پیرول"
-        urduModuleName="ملازمین اور پیرول"
-        requiredPermission="canAccessStaff"
-        backRoute={backRoute}
-      />
-    );
-  }
-
   const canViewSensitiveSalaries = role === 'admin' || can('canViewRevenue');
 
   const staff = useRestaurantStore((state) => state.staff) || [];
@@ -507,6 +496,17 @@ export default function StaffManagementScreen({
       [key]: !prev[key],
     }));
   };
+
+  if (role !== 'admin' && !can('canAccessStaff')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Staff & HR / پیرول"
+        urduModuleName="ملازمین اور پیرول"
+        requiredPermission="canAccessStaff"
+        backRoute={backRoute}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -1513,8 +1513,8 @@ export default function StaffManagementScreen({
               </View>
 
               {/* Designation & CNIC */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>Job Title / Designation</Text>
                   <TextInput
                     style={styles.formInput}
@@ -1524,7 +1524,7 @@ export default function StaffManagementScreen({
                     onChangeText={setFormDesignation}
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>CNIC / National ID</Text>
                   <TextInput
                     style={styles.formInput}
@@ -1537,8 +1537,8 @@ export default function StaffManagementScreen({
               </View>
 
               {/* Salary & Overtime Rate */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>Monthly Base Salary (PKR) *</Text>
                   <TextInput
                     style={[styles.formInput, { color: '#059669', fontWeight: '800' }]}
@@ -1549,7 +1549,7 @@ export default function StaffManagementScreen({
                     onChangeText={setFormMonthlySalary}
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>Overtime Hourly Rate (PKR)</Text>
                   <TextInput
                     style={[styles.formInput, { color: '#B48214', fontWeight: '800' }]}
@@ -1563,8 +1563,8 @@ export default function StaffManagementScreen({
               </View>
 
               {/* Joining Date & Emergency Contact */}
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>Joining Date</Text>
                   <TextInput
                     style={styles.formInput}
@@ -1574,7 +1574,7 @@ export default function StaffManagementScreen({
                     onChangeText={setFormJoinedDate}
                   />
                 </View>
-                <View style={[styles.formGroup, { flex: 1 }]}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
                   <Text style={styles.formLabel}>Emergency Contact</Text>
                   <TextInput
                     style={styles.formInput}
@@ -1683,7 +1683,7 @@ export default function StaffManagementScreen({
                 <Text style={styles.sectionTitle}>1. Role Identity & Template</Text>
 
                 <View style={styles.formRow}>
-                  <View style={{ flex: 1.5, marginRight: 10 }}>
+                  <View style={{ flex: 1.5, minWidth: 160 }}>
                     <Text style={styles.formLabel}>Role Title *</Text>
                     <TextInput
                       style={styles.formInput}
@@ -1697,7 +1697,7 @@ export default function StaffManagementScreen({
                     />
                   </View>
 
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
                     <Text style={styles.formLabel}>Urdu Title</Text>
                     <TextInput
                       style={styles.formInput}
@@ -1992,6 +1992,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 12,
     paddingHorizontal: 24,
     paddingVertical: 16,
     backgroundColor: '#FFFFFF',
@@ -2006,6 +2008,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+    minWidth: 200,
   },
   backButton: {
     width: 38,
@@ -2046,12 +2050,13 @@ const styles = StyleSheet.create({
   },
   viewTabContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: '#FFFFFF',
     paddingHorizontal: 24,
     paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
-    gap: 12,
+    gap: 10,
   },
   viewTabBtn: {
     flexDirection: 'row',
@@ -2777,9 +2782,12 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   colorPickerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
   },
   colorCircle: {
@@ -2821,6 +2829,8 @@ const styles = StyleSheet.create({
   },
   permGridCard: {
     width: '31%',
+    minWidth: 110,
+    flexGrow: 1,
     backgroundColor: '#F8FAFC',
     borderRadius: 8,
     padding: 10,

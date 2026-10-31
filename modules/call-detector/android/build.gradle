@@ -10,11 +10,11 @@ applyKotlinExpoModulesCorePlugin()
 
 android {
     namespace "com.sultan.calldetector"
-    compileSdkVersion Integer.parseInt(findProperty('android.compileSdkVersion') ?: '35')
+    compileSdkVersion Integer.parseInt(findProperty('android.compileSdkVersion') ?: '37')
 
     defaultConfig {
         minSdkVersion Integer.parseInt(findProperty('android.minSdkVersion') ?: '24')
-        targetSdkVersion Integer.parseInt(findProperty('android.targetSdkVersion') ?: '35')
+        targetSdkVersion Integer.parseInt(findProperty('android.targetSdkVersion') ?: '37')
         versionCode 1
         versionName "1.0.0"
     }

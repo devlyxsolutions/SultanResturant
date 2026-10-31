@@ -347,6 +347,7 @@ export default function OrderTakerScreen() {
       <TouchableOpacity
         style={[
           styles.tableCard,
+          columns === 1 && { marginBottom: 10 },
           isMajlis && styles.majlisTableCard,
           isCouch && styles.couchTableCard,
           isFoodReady && styles.tableCardFoodReady,
@@ -572,18 +573,19 @@ export default function OrderTakerScreen() {
   return (
     <View style={[styles.container, isMobile && { paddingHorizontal: 12 }]}>
       {/* Compact High-Efficiency Order Taker Header */}
-      <View style={styles.compactHeader}>
-        <View style={styles.compactHeaderLeft}>
+      <View style={[styles.compactHeader, width < 420 && { flexWrap: 'wrap', gap: 8 }]}>
+        <View style={[styles.compactHeaderLeft, { marginRight: 6 }]}>
           <View style={styles.waiterAvatar}>
             <Ionicons name="person" size={13} color="#4a121a" />
           </View>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <Text style={styles.waiterNameText}>{displayName}</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={styles.waiterNameText} numberOfLines={1}>{displayName}</Text>
               <View
                 style={[
                   styles.compactFloorBadge,
                   !isAllFloors ? styles.floorBadgeActive : styles.floorBadgeAll,
+                  { maxWidth: '100%' }
                 ]}
               >
                 <Ionicons
@@ -596,6 +598,7 @@ export default function OrderTakerScreen() {
                     styles.compactFloorBadgeText,
                     !isAllFloors ? styles.floorBadgeTextActive : styles.floorBadgeTextAll,
                   ]}
+                  numberOfLines={1}
                 >
                   {!isAllFloors ? authorizedFloors.join(', ') : 'All Floors'}
                 </Text>

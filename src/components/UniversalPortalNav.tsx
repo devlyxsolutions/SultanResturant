@@ -265,12 +265,12 @@ export default function UniversalPortalNav({
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
             <SultanLogo size="sm" width={26} height={26} />
-            <View style={{ marginLeft: 8 }}>
-              <Text style={styles.brandTitle}>
+            <View style={{ marginLeft: 8, flexShrink: 1 }}>
+              <Text style={styles.brandTitle} numberOfLines={1}>
                 {isMobile ? 'Sultan' : 'Sultan Restaurant'}
               </Text>
               <View style={styles.portalBadge}>
-                <Text style={styles.portalBadgeText}>
+                <Text style={styles.portalBadgeText} numberOfLines={1}>
                   {portalRole ? portalRole.toUpperCase() : portalName.toUpperCase()}
                 </Text>
               </View>
@@ -280,17 +280,19 @@ export default function UniversalPortalNav({
 
         {/* Center / Right: Quick Navigation Actions */}
         <View style={styles.actionsRight}>
-          {/* Sidebar Trigger Button */}
-          <TouchableOpacity
-            style={[styles.actionBtn, styles.sidebarTriggerBtn]}
-            onPress={() => setSidebarOpen(true)}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="apps" size={15} color="#4a121a" />
-            <Text style={styles.sidebarTriggerBtnText}>
-              {isMobile ? 'Menu' : '☰ Side Bar'}
-            </Text>
-          </TouchableOpacity>
+          {/* Sidebar Trigger Button (Hide on compact phones where left hamburger is already visible) */}
+          {width >= 440 && (
+            <TouchableOpacity
+              style={[styles.actionBtn, styles.sidebarTriggerBtn]}
+              onPress={() => setSidebarOpen(true)}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="apps" size={15} color="#4a121a" />
+              <Text style={styles.sidebarTriggerBtnText}>
+                {isMobile ? 'Menu' : '☰ Side Bar'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Quick Home Jump */}
           <TouchableOpacity
@@ -587,6 +589,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flex: 1,
+    marginRight: 8,
   },
   hamburgerBtn: {
     padding: 6,
@@ -596,10 +600,12 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(213, 169, 67, 0.35)',
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
   logoTouch: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexShrink: 1,
   },
   brandTitle: {
     color: '#FFFFFF',

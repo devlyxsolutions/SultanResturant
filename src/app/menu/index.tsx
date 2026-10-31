@@ -1,31 +1,28 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  Platform,
-  StatusBar,
-  TextInput,
-  Modal,
-  Alert,
-  Linking,
   ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
   useWindowDimensions,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useRestaurantStore, MenuItem, Table, Ticket } from '../../store/restaurantStore';
-import { useOpsStore } from '../../store/opsStore';
-import { broadcastImmediately } from '../../services/syncService';
-import SultanLogo from '../../components/SultanLogo';
 import IslamicHeroBackground from '../../components/IslamicHeroBackground';
-import { BRAND } from '../../constants/brand';
-import { getTableMenuUrl } from '../../utils/qrCode';
+import SultanLogo from '../../components/SultanLogo';
+import { broadcastImmediately } from '../../services/syncService';
+import { useOpsStore } from '../../store/opsStore';
+import { MenuItem, Ticket, useRestaurantStore } from '../../store/restaurantStore';
 
 // Cart Item Type
 interface CartItem {
@@ -166,14 +163,14 @@ export default function CustomerMenuScreen() {
           }
         }
       }
-    } catch {}
+    } catch { }
   };
 
   // Delete single order from customer history
   const handleDeleteOrder = (orderId: string) => {
     const nextList = orderHistory.filter(o => o.id !== orderId);
     setOrderHistory(nextList);
-    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
     if (activeTrackingOrder?.id === orderId) {
       setActiveTrackingOrder(null);
       setTrackingModalVisible(false);
@@ -186,13 +183,13 @@ export default function CustomerMenuScreen() {
       o => o.status !== 'DELIVERED' && o.status !== 'SERVED' && o.status !== 'CANCELLED'
     );
     setOrderHistory(nextList);
-    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => {});
+    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
   };
 
   // Clear all order history
   const handleClearAllHistory = () => {
     setOrderHistory([]);
-    AsyncStorage.removeItem(STORAGE_KEY_ORDERS).catch(() => {});
+    AsyncStorage.removeItem(STORAGE_KEY_ORDERS).catch(() => { });
     setActiveTrackingOrder(null);
   };
 
@@ -286,7 +283,7 @@ export default function CustomerMenuScreen() {
               useRestaurantStore.getState().syncFromServer({ tables: tblJson.data });
             }
           }
-        } catch {}
+        } catch { }
       }
     };
 
@@ -374,11 +371,11 @@ export default function CustomerMenuScreen() {
           setActiveTrackingOrder(updated);
           setOrderHistory(prev => {
             const nextList = prev.map(o => (o.id === orderId ? updated : o));
-            AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => {});
+            AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
             return nextList;
           });
         }
-      } catch {}
+      } catch { }
     };
 
     fetchLatestStatus();
@@ -396,14 +393,14 @@ export default function CustomerMenuScreen() {
           ) {
             fetchLatestStatus();
           }
-        } catch {}
+        } catch { }
       };
-    } catch {}
+    } catch { }
 
     return () => {
       clearInterval(interval);
       if (ws) {
-        try { ws.close(); } catch {}
+        try { ws.close(); } catch { }
       }
     };
   }, [activeTrackingOrder?.id, activeTrackingOrder?.status]);
@@ -742,7 +739,7 @@ export default function CustomerMenuScreen() {
           address: deliveryAddress.trim(),
         })
       );
-    } catch {}
+    } catch { }
 
     const orderPayload = {
       orderType: orderMode,
@@ -874,12 +871,12 @@ export default function CustomerMenuScreen() {
           syncFromServer({
             tickets: [newTicket, ...(useRestaurantStore.getState().tickets || [])],
           });
-        } catch {}
+        } catch { }
       }
 
       try {
         broadcastImmediately();
-      } catch {}
+      } catch { }
 
       const updatedHistory = [createdOrder, ...orderHistory];
       setOrderHistory(updatedHistory);
@@ -937,7 +934,7 @@ export default function CustomerMenuScreen() {
     const isSoldOut = isItemSoldOut(item);
     const inCartQty = getItemCartQty(item.id);
     const isItemInCart = inCartQty > 0;
-    const cardWidth = isDesktop ? '31.5%' : isTablet ? '31.5%' : '48%';
+    const cardWidth = isDesktop ? '31.5%' : isTablet ? '31.5%' : width < 350 ? '100%' : '48%';
 
     const lowerName = item.name.toLowerCase();
     const hasVariants = Boolean(item.variants && item.variants.length > 0);
@@ -1600,7 +1597,7 @@ export default function CustomerMenuScreen() {
                     <Ionicons name="cart" size={20} color="#D5A943" />
                     <Text style={styles.cartPanelTitle}>Royal Order Tray</Text>
                   </View>
-                  
+
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <View style={styles.cartItemCountTag}>
                       <Text style={styles.cartItemCountTagText}>{totalCartCount} items</Text>
@@ -1911,7 +1908,7 @@ export default function CustomerMenuScreen() {
                     </TouchableOpacity>
                   )}
                 </View>
-                
+
                 {cart.map(c => (
                   <View key={c.cartId} style={styles.checkoutItemRow}>
                     <View style={{ flex: 1 }}>
@@ -3021,6 +3018,7 @@ const styles = StyleSheet.create({
 
   // POS Terminal Styled Dish Card
   dishCard: {
+    flexGrow: 1,
     backgroundColor: 'rgba(255, 255, 255, 0.88)',
     borderRadius: 16,
     paddingVertical: 12,
@@ -3512,6 +3510,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    flex: 1,
+    marginRight: 8,
   },
   floatingCountCircle: {
     width: 32,
@@ -3585,6 +3585,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F0ECE4',
@@ -3903,6 +3905,7 @@ const styles = StyleSheet.create({
   tableSelectTile: {
     width: '31%',
     minWidth: 90,
+    flexGrow: 1,
     backgroundColor: '#FAF8F5',
     borderWidth: 1,
     borderColor: '#E4DDD0',

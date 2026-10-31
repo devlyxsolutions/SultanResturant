@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import SultanLogo from '../SultanLogo';
 import { useRolePermissions } from '../../store/roleStore';
 
@@ -188,6 +189,7 @@ export default function AppSidebar({
 }: AppSidebarProps) {
   const router = useRouter();
   const pathname = usePathname();
+  const insets = useSafeAreaInsets();
   const [collapsed, setCollapsed] = useState(isCollapsed);
   const [searchQuery, setSearchQuery] = useState('');
   const [collapsedCategories, setCollapsedCategories] = useState<Record<string, boolean>>({});
@@ -812,8 +814,11 @@ export default function AppSidebar({
     );
   };
 
-  // If Mobile drawer is active
-  if (isMobileOpen) {
+  // If rendered in Mobile Drawer mode (onCloseMobile provided)
+  if (onCloseMobile !== undefined) {
+    if (!isMobileOpen) {
+      return null;
+    }
     return (
       <Modal
         visible={isMobileOpen}
@@ -823,7 +828,15 @@ export default function AppSidebar({
       >
         <View style={styles.modalOverlay}>
           <Pressable style={styles.modalBackdrop} onPress={onCloseMobile} />
-          <View style={styles.mobileDrawerContainer}>
+          <View
+            style={[
+              styles.mobileDrawerContainer,
+              {
+                paddingTop: Math.max(insets.top, 6),
+                paddingBottom: Math.max(insets.bottom, 8),
+              },
+            ]}
+          >
             {renderSidebarContent(true)}
           </View>
         </View>

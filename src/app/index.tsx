@@ -28,7 +28,8 @@ export default function WelcomeScreen() {
   const { width, height } = useWindowDimensions();
 
   // Screen classification for responsiveness
-  const isCompactMobile = width < 420;
+  const isVerySmallMobile = width < 360;
+  const isCompactMobile = width < 480;
   const isMobile = width < 860;
   const isShortScreen = height < 720;
 
@@ -378,38 +379,38 @@ export default function WelcomeScreen() {
                   
                   <View style={styles.quickTerminalsGrid}>
                     <Link href="/login?role=admin&all=true" asChild>
-                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
                         <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(213, 169, 67, 0.18)' }]}>
                           <Ionicons name="shield-checkmark" size={16} color="#D5A943" />
                         </View>
-                        <Text style={styles.terminalTitle}>Cashier / Admin</Text>
+                        <Text style={styles.terminalTitle} numberOfLines={1}>Cashier / Admin</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/login?role=waiter" asChild>
-                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
                         <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.18)' }]}>
                           <Ionicons name="phone-portrait-outline" size={16} color="#38BDF8" />
                         </View>
-                        <Text style={styles.terminalTitle}>Order Taker</Text>
+                        <Text style={styles.terminalTitle} numberOfLines={1}>Order Taker</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/kitchen/kds" asChild>
-                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
                         <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 113, 133, 0.18)' }]}>
                           <Ionicons name="flame" size={16} color="#FB7185" />
                         </View>
-                        <Text style={styles.terminalTitle}>Kitchen KDS</Text>
+                        <Text style={styles.terminalTitle} numberOfLines={1}>Kitchen KDS</Text>
                       </TouchableOpacity>
                     </Link>
 
                     <Link href="/juicebar/kds" asChild>
-                      <TouchableOpacity style={styles.terminalCard} activeOpacity={0.8}>
+                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
                         <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 191, 36, 0.18)' }]}>
                           <Ionicons name="cafe" size={16} color="#FBBF24" />
                         </View>
-                        <Text style={styles.terminalTitle}>Juice Bar</Text>
+                        <Text style={styles.terminalTitle} numberOfLines={1}>Juice Bar</Text>
                       </TouchableOpacity>
                     </Link>
                   </View>
@@ -839,20 +840,21 @@ const styles = StyleSheet.create({
   quickTerminalsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
     justifyContent: 'space-between',
   },
   terminalCard: {
-    width: '48.5%',
+    width: '47%',
+    flexGrow: 1,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'rgba(25, 5, 8, 0.85)',
     borderWidth: 1.5,
     borderColor: 'rgba(213, 169, 67, 0.4)',
     borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    gap: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    gap: 8,
     ...Platform.select({
       web: {
         cursor: 'pointer',
@@ -861,16 +863,21 @@ const styles = StyleSheet.create({
       } as any,
     }),
   },
+  terminalCardFull: {
+    width: '100%',
+  },
   terminalIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 9,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
   terminalTitle: {
     color: '#FFFFFF',
-    fontSize: 13.5,
+    fontSize: 13,
     fontWeight: '800',
+    flex: 1,
   },
 });

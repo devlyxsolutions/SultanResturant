@@ -1,22 +1,22 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useOpsStore } from '../store/opsStore';
-import { useRestaurantStore } from '../store/restaurantStore';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { useAuthStore } from '../store/authStore';
 import { useKitchenStore } from '../store/kitchenStore';
+import { useOpsStore } from '../store/opsStore';
+import { useRestaurantStore } from '../store/restaurantStore';
 import type { ShiftKind } from '../types/kitchen';
 import { SHIFT_KIND_META } from '../types/kitchen';
 
@@ -204,9 +204,9 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
           <View style={styles.topIconBadge}>
             <Ionicons name="wine" size={20} color="#FF9500" />
           </View>
-          <View>
-            <Text style={styles.topBarTitle}>Juice Corner Handover & Inventory</Text>
-            <Text style={styles.topBarSubtitle}>Fresh Fruits, Dairy, Syrups & Shift Closing</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.topBarTitle} numberOfLines={1}>Juice Corner Handover & Inventory</Text>
+            <Text style={styles.topBarSubtitle} numberOfLines={1}>Fresh Fruits, Dairy, Syrups & Shift Closing</Text>
           </View>
         </View>
 
@@ -527,12 +527,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#3A151A',
   },
   topBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 220,
     gap: 12,
   },
   backBtn: {
@@ -750,6 +754,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 10,
@@ -759,6 +765,7 @@ const styles = StyleSheet.create({
   },
   itemMainCol: {
     flex: 1,
+    minWidth: 160,
     paddingRight: 10,
   },
   itemNameText: {

@@ -1,20 +1,20 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import KitchenOpsNav from '../components/KitchenOpsNav';
 import ShiftForecastPanel, { shiftTitle } from '../components/ShiftForecastPanel';
-import { useKitchenStore, getActiveSessions } from '../store/kitchenStore';
+import { getActiveSessions, useKitchenStore } from '../store/kitchenStore';
 import type { ManualUsageReason } from '../types/kitchen';
 import { MANUAL_REASON_META } from '../types/kitchen';
 import {
@@ -24,8 +24,8 @@ import {
   roundQty,
 } from '../utils/kitchenMath';
 
-import { usePortalBase } from '../hooks/usePortalBase';
 import RoyalDropdown from '../components/RoyalDropdown';
+import { usePortalBase } from '../hooks/usePortalBase';
 
 const BRAND = {
   burgundy: '#52171B',
@@ -46,6 +46,8 @@ const BRAND = {
 
 export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const portalBase = usePortalBase();
   const {
     kitchenSessions,
@@ -581,112 +583,120 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
 
             {/* Table */}
             <View style={styles.inventoryTable}>
-              <View style={styles.thRow}>
-                <Text style={[styles.th, { flex: 3 }]}>Ingredient Name</Text>
-                <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Issued Store</Text>
-                <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Top-Up / Buy</Text>
-                <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>KOT Consumed</Text>
-                <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Taste/Spills ±</Text>
-                <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Live On-Hand</Text>
-                <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>Status</Text>
-                <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>Act</Text>
-              </View>
+              <ScrollView
+                horizontal={isMobile}
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={isMobile ? { minWidth: 680 } : { width: '100%' }}
+              >
+                <View style={{ width: '100%' }}>
+                  <View style={styles.thRow}>
+                    <Text style={[styles.th, { flex: 3 }]}>Ingredient Name</Text>
+                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Issued Store</Text>
+                    <Text style={[styles.th, { flex: 1.5, textAlign: 'right' }]}>Top-Up / Buy</Text>
+                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>KOT Consumed</Text>
+                    <Text style={[styles.th, { flex: 1.8, textAlign: 'right' }]}>Taste/Spills ±</Text>
+                    <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Live On-Hand</Text>
+                    <Text style={[styles.th, { flex: 1.2, textAlign: 'center' }]}>Status</Text>
+                    <Text style={[styles.th, { flex: 1, textAlign: 'center' }]}>Act</Text>
+                  </View>
 
-              {filteredLines.map((line) => {
-                const isCritical = line.status === 'out';
-                const isLow = line.status === 'low';
+                  {filteredLines.map((line) => {
+                    const isCritical = line.status === 'out';
+                    const isLow = line.status === 'low';
 
-                return (
-                  <View key={line.itemId} style={[styles.trRow, isCritical && styles.trRowCritical]}>
-                    <View style={{ flex: 3 }}>
-                      <Text style={styles.trItemName}>{line.itemName}</Text>
-                      <Text style={styles.trCategory}>{line.category} • Cost {money(line.costPerUnit)}/{line.unit}</Text>
-                    </View>
+                    return (
+                      <View key={line.itemId} style={[styles.trRow, isCritical && styles.trRowCritical]}>
+                        <View style={{ flex: 3 }}>
+                          <Text style={styles.trItemName}>{line.itemName}</Text>
+                          <Text style={styles.trCategory}>{line.category} • Cost {money(line.costPerUnit)}/{line.unit}</Text>
+                        </View>
 
-                    <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
-                      {formatQty(line.issued, line.unit)}
-                    </Text>
+                        <Text style={[styles.tr, { flex: 1.5, textAlign: 'right' }]}>
+                          {formatQty(line.issued, line.unit)}
+                        </Text>
 
-                    <Text style={[styles.tr, { flex: 1.5, textAlign: 'right', color: BRAND.info }]}>
-                      {line.topUp + line.localPurchased > 0
-                        ? `+${formatQty(line.topUp + line.localPurchased, line.unit)}`
-                        : '—'}
-                    </Text>
+                        <Text style={[styles.tr, { flex: 1.5, textAlign: 'right', color: BRAND.info }]}>
+                          {line.topUp + line.localPurchased > 0
+                            ? `+${formatQty(line.topUp + line.localPurchased, line.unit)}`
+                            : '—'}
+                        </Text>
 
-                    <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', color: BRAND.burgundy, fontWeight: '700' }]}>
-                      {line.theoreticalUsed > 0 ? `-${formatQty(line.theoreticalUsed, line.unit)}` : '0'}
-                    </Text>
+                        <Text style={[styles.tr, { flex: 1.8, textAlign: 'right', color: BRAND.burgundy, fontWeight: '700' }]}>
+                          {line.theoreticalUsed > 0 ? `-${formatQty(line.theoreticalUsed, line.unit)}` : '0'}
+                        </Text>
 
-                    <Text
-                      style={[
-                        styles.tr,
-                        {
-                          flex: 1.8,
-                          textAlign: 'right',
-                          color: line.manualUsed > 0 ? BRAND.danger : line.manualUsed < 0 ? BRAND.success : BRAND.muted,
-                          fontWeight: '600',
-                        },
-                      ]}
-                    >
-                      {line.manualUsed > 0
-                        ? `-${formatQty(line.manualUsed, line.unit)}`
-                        : line.manualUsed < 0
-                        ? `+${formatQty(Math.abs(line.manualUsed), line.unit)}`
-                        : '0'}
-                    </Text>
-
-                    <Text
-                      style={[
-                        styles.tr,
-                        {
-                          flex: 2,
-                          textAlign: 'right',
-                          fontWeight: '900',
-                          fontSize: 14,
-                          color: isCritical ? BRAND.danger : isLow ? BRAND.warn : BRAND.ink,
-                        },
-                      ]}
-                    >
-                      {formatQty(line.expectedOnHand, line.unit)}
-                    </Text>
-
-                    <View style={{ flex: 1.2, alignItems: 'center' }}>
-                      <View
-                        style={[
-                          styles.statusBadge,
-                          isCritical
-                            ? styles.statusBadgeOut
-                            : isLow
-                            ? styles.statusBadgeLow
-                            : styles.statusBadgeOk,
-                        ]}
-                      >
                         <Text
                           style={[
-                            styles.statusBadgeText,
-                            isCritical
-                              ? { color: BRAND.danger }
-                              : isLow
-                              ? { color: BRAND.warn }
-                              : { color: BRAND.success },
+                            styles.tr,
+                            {
+                              flex: 1.8,
+                              textAlign: 'right',
+                              color: line.manualUsed > 0 ? BRAND.danger : line.manualUsed < 0 ? BRAND.success : BRAND.muted,
+                              fontWeight: '600',
+                            },
                           ]}
                         >
-                          {isCritical ? 'DEPLETED' : isLow ? 'LOW' : 'OK'}
+                          {line.manualUsed > 0
+                            ? `-${formatQty(line.manualUsed, line.unit)}`
+                            : line.manualUsed < 0
+                              ? `+${formatQty(Math.abs(line.manualUsed), line.unit)}`
+                              : '0'}
                         </Text>
-                      </View>
-                    </View>
 
-                    <View style={{ flex: 1, alignItems: 'center' }}>
-                      <TouchableOpacity
-                        style={styles.tuneBtn}
-                        onPress={() => handleOpenAdjustment(line.itemId)}
-                      >
-                        <Ionicons name="options-outline" size={15} color={BRAND.burgundy} />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
+                        <Text
+                          style={[
+                            styles.tr,
+                            {
+                              flex: 2,
+                              textAlign: 'right',
+                              fontWeight: '900',
+                              fontSize: 14,
+                              color: isCritical ? BRAND.danger : isLow ? BRAND.warn : BRAND.ink,
+                            },
+                          ]}
+                        >
+                          {formatQty(line.expectedOnHand, line.unit)}
+                        </Text>
+
+                        <View style={{ flex: 1.2, alignItems: 'center' }}>
+                          <View
+                            style={[
+                              styles.statusBadge,
+                              isCritical
+                                ? styles.statusBadgeOut
+                                : isLow
+                                  ? styles.statusBadgeLow
+                                  : styles.statusBadgeOk,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.statusBadgeText,
+                                isCritical
+                                  ? { color: BRAND.danger }
+                                  : isLow
+                                    ? { color: BRAND.warn }
+                                    : { color: BRAND.success },
+                              ]}
+                            >
+                              {isCritical ? 'DEPLETED' : isLow ? 'LOW' : 'OK'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{ flex: 1, alignItems: 'center' }}>
+                          <TouchableOpacity
+                            style={styles.tuneBtn}
+                            onPress={() => handleOpenAdjustment(line.itemId)}
+                          >
+                            <Ionicons name="options-outline" size={15} color={BRAND.burgundy} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             </View>
           </View>
         )}
@@ -1007,7 +1017,7 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
       {/* MODAL 3: EOD PHYSICAL COUNT SUBMISSION FORM */}
       <Modal visible={closingModalOpen} animationType="slide" transparent>
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, { width: 800, maxHeight: '92%' }]}>
+          <View style={[styles.modalCard, { maxWidth: 800, maxHeight: '92%' }]}>
             <View style={styles.modalHeader}>
               <View>
                 <Text style={styles.modalTitle}>End of Day Physical Kitchen Count</Text>
@@ -1070,62 +1080,70 @@ export default function ChefDayConsoleScreen({ backRoute = '/admin/dashboard' }:
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.countTableHeader}>
-                  <Text style={[styles.th, { flex: 3 }]}>Item Name</Text>
-                  <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Total In</Text>
-                  <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Theoretical Used</Text>
-                  <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Expected Left</Text>
-                  <Text style={[styles.th, { flex: 2.5, textAlign: 'right' }]}>Physical Count</Text>
-                </View>
-
-                {liveLines.map((line) => {
-                  const currentVal = physicalCounts[line.itemId] ?? '';
-                  const numVal = parseFloat(currentVal);
-                  const variance = Number.isFinite(numVal) ? numVal - line.expectedOnHand : 0;
-
-                  return (
-                    <View key={line.itemId} style={styles.countTableRow}>
-                      <View style={{ flex: 3 }}>
-                        <Text style={styles.trItemName}>{line.itemName}</Text>
-                        <Text style={styles.trCategory}>{line.category} ({line.unit})</Text>
-                      </View>
-
-                      <Text style={[styles.tr, { flex: 2, textAlign: 'right' }]}>
-                        {formatQty(line.totalIn, line.unit)}
-                      </Text>
-
-                      <Text style={[styles.tr, { flex: 2, textAlign: 'right', color: BRAND.burgundy }]}>
-                        {formatQty(line.theoreticalUsed + line.manualUsed, line.unit)}
-                      </Text>
-
-                      <Text style={[styles.tr, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
-                        {formatQty(line.expectedOnHand, line.unit)}
-                      </Text>
-
-                      <View style={{ flex: 2.5, alignItems: 'flex-end' }}>
-                        <TextInput
-                          style={styles.countInput}
-                          value={currentVal}
-                          onChangeText={(text) =>
-                            setPhysicalCounts((prev) => ({ ...prev, [line.itemId]: text }))
-                          }
-                          keyboardType="numeric"
-                          placeholder="0"
-                        />
-                        {Number.isFinite(numVal) && Math.abs(variance) > 0.05 && (
-                          <Text
-                            style={[
-                              styles.varianceSubText,
-                              { color: variance < 0 ? BRAND.danger : BRAND.success },
-                            ]}
-                          >
-                            {variance < 0 ? `Short by ${formatQty(Math.abs(variance), line.unit)}` : `Surplus +${formatQty(variance, line.unit)}`}
-                          </Text>
-                        )}
-                      </View>
+                <ScrollView
+                  horizontal={isMobile}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={isMobile ? { minWidth: 540 } : { width: '100%' }}
+                >
+                  <View style={{ width: '100%' }}>
+                    <View style={styles.countTableHeader}>
+                      <Text style={[styles.th, { flex: 3 }]}>Item Name</Text>
+                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Total In</Text>
+                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Theoretical Used</Text>
+                      <Text style={[styles.th, { flex: 2, textAlign: 'right' }]}>Expected Left</Text>
+                      <Text style={[styles.th, { flex: 2.5, textAlign: 'right' }]}>Physical Count</Text>
                     </View>
-                  );
-                })}
+
+                    {liveLines.map((line) => {
+                      const currentVal = physicalCounts[line.itemId] ?? '';
+                      const numVal = parseFloat(currentVal);
+                      const variance = Number.isFinite(numVal) ? numVal - line.expectedOnHand : 0;
+
+                      return (
+                        <View key={line.itemId} style={styles.countTableRow}>
+                          <View style={{ flex: 3 }}>
+                            <Text style={styles.trItemName}>{line.itemName}</Text>
+                            <Text style={styles.trCategory}>{line.category} ({line.unit})</Text>
+                          </View>
+
+                          <Text style={[styles.tr, { flex: 2, textAlign: 'right' }]}>
+                            {formatQty(line.totalIn, line.unit)}
+                          </Text>
+
+                          <Text style={[styles.tr, { flex: 2, textAlign: 'right', color: BRAND.burgundy }]}>
+                            {formatQty(line.theoreticalUsed + line.manualUsed, line.unit)}
+                          </Text>
+
+                          <Text style={[styles.tr, { flex: 2, textAlign: 'right', fontWeight: '700' }]}>
+                            {formatQty(line.expectedOnHand, line.unit)}
+                          </Text>
+
+                          <View style={{ flex: 2.5, alignItems: 'flex-end' }}>
+                            <TextInput
+                              style={styles.countInput}
+                              value={currentVal}
+                              onChangeText={(text) =>
+                                setPhysicalCounts((prev) => ({ ...prev, [line.itemId]: text }))
+                              }
+                              keyboardType="numeric"
+                              placeholder="0"
+                            />
+                            {Number.isFinite(numVal) && Math.abs(variance) > 0.05 && (
+                              <Text
+                                style={[
+                                  styles.varianceSubText,
+                                  { color: variance < 0 ? BRAND.danger : BRAND.success },
+                                ]}
+                              >
+                                {variance < 0 ? `Short by ${formatQty(Math.abs(variance), line.unit)}` : `Surplus +${formatQty(variance, line.unit)}`}
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </ScrollView>
               </View>
 
               <View style={[styles.formCol, { marginTop: 14 }]}>
@@ -1225,6 +1243,7 @@ const styles = StyleSheet.create({
   bannerActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   actionBtnSecondary: {
@@ -1258,6 +1277,7 @@ const styles = StyleSheet.create({
   pendingNoticeBanner: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 14,
     backgroundColor: '#FFF8E1',
     borderWidth: 1,
@@ -1290,6 +1310,7 @@ const styles = StyleSheet.create({
   noSessionBanner: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 14,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -1384,6 +1405,7 @@ const styles = StyleSheet.create({
   filterActions: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   searchBox: {
@@ -1522,7 +1544,7 @@ const styles = StyleSheet.create({
   },
   logCard: {
     flex: 1,
-    minWidth: 320,
+    minWidth: 280,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 14,
@@ -1604,7 +1626,8 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   modalCard: {
-    width: 620,
+    width: '100%',
+    maxWidth: 620,
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
     overflow: 'hidden',
@@ -1658,10 +1681,12 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
     marginBottom: 10,
   },
   formCol: {
+    minWidth: 130,
     marginBottom: 10,
   },
   ingPillRow: {
@@ -1693,6 +1718,8 @@ const styles = StyleSheet.create({
   },
   reasonCard: {
     width: '48%',
+    minWidth: 135,
+    flexGrow: 1,
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
@@ -1764,6 +1791,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: '#FFFFFF',
     padding: 12,
     borderRadius: 8,

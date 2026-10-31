@@ -977,6 +977,7 @@ export default function MenuManagement() {
 
   return (
     <View style={[styles.container, isMobile && styles.containerMobile]}>
+      <ScrollView style={styles.listContainer} contentContainerStyle={{ paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
       {/* Header */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.titleWrap}>
@@ -1214,7 +1215,7 @@ export default function MenuManagement() {
 
         <View style={[styles.filterBarRow, isMobile && styles.filterBarRowMobile]}>
           {/* Search Box */}
-          <View style={[styles.searchBox, { flex: isMobile ? undefined : 1.3, minWidth: isMobile ? '100%' : 260 }]}>
+          <View style={[styles.searchBox, { flexGrow: isMobile ? 0 : 1.3, width: isMobile ? '100%' : undefined, minWidth: isMobile ? '100%' : 260 }]}>
             <View style={styles.searchIconOrb}>
               <Ionicons name="search" size={16} color={BRAND.burgundy} />
             </View>
@@ -1576,7 +1577,6 @@ export default function MenuManagement() {
 
       {/* Main Content Area */}
       <View style={[styles.content, isMobile && styles.contentMobile]}>
-        <ScrollView style={styles.listContainer} showsVerticalScrollIndicator={false}>
           {activeTab !== 'categories' && activeTab !== 'regions' ? (
             // ================= MENU ITEMS / DEALS / STOCK LIST =================
             filteredItems.length === 0 ? (
@@ -2086,8 +2086,8 @@ export default function MenuManagement() {
               </View>
             )
           )}
-        </ScrollView>
       </View>
+      </ScrollView>
 
       {/* ============================================================== */}
       {/* ADD / EDIT ITEM MODAL (With Tabbed Upgrades for 3, 4, and 5)   */}
@@ -2285,8 +2285,8 @@ export default function MenuManagement() {
                   )}
 
                   {/* Selling Price & Cost Price */}
-                  <View style={{ flexDirection: 'row', gap: 12 }}>
-                    <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={styles.inputLabel}>Selling Price (Rs.) *</Text>
                       <TextInput 
                         style={styles.modalInput} 
@@ -2297,7 +2297,7 @@ export default function MenuManagement() {
                         onChangeText={setItemPrice} 
                       />
                     </View>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={styles.inputLabel}>Cost Price (Rs.) (Optional)</Text>
                       <TextInput 
                         style={styles.modalInput} 
@@ -2675,8 +2675,8 @@ export default function MenuManagement() {
                   <Text style={styles.sectionHeading}>Pricing & Profit Margin Analysis</Text>
 
                   {/* Price & Cost Inputs */}
-                  <View style={{ flexDirection: 'row', gap: 14 }}>
-                    <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={styles.inputLabel}>Selling Price (Rs.) *</Text>
                       <TextInput 
                         style={styles.modalInput} 
@@ -2688,7 +2688,7 @@ export default function MenuManagement() {
                       />
                     </View>
 
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, minWidth: 140 }}>
                       <Text style={styles.inputLabel}>Cost of Goods (Rs.)</Text>
                       <TextInput 
                         style={styles.modalInput} 
@@ -2756,8 +2756,8 @@ export default function MenuManagement() {
 
                     {itemTrackStock && (
                       <View style={{ marginTop: 14 }}>
-                        <View style={{ flexDirection: 'row', gap: 14 }}>
-                          <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+                          <View style={{ flex: 1, minWidth: 140 }}>
                             <Text style={styles.inputLabel}>Current In-Stock (Portions)</Text>
                             <TextInput 
                               style={styles.modalInput} 
@@ -2784,7 +2784,7 @@ export default function MenuManagement() {
                             </View>
                           </View>
 
-                          <View style={{ flex: 1 }}>
+                          <View style={{ flex: 1, minWidth: 140 }}>
                             <Text style={styles.inputLabel}>Low Stock Alert Threshold</Text>
                             <TextInput 
                               style={styles.modalInput} 
@@ -3192,11 +3192,11 @@ const styles = StyleSheet.create({
   },
   headerMobile: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     gap: 12,
   },
   titleWrap: {
-    flex: 1,
+    flexShrink: 1,
   },
   pageTitle: {
     fontSize: 26,
@@ -3216,13 +3216,14 @@ const styles = StyleSheet.create({
   headerButtons: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
   },
   addButton: {
     backgroundColor: BRAND.gold,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 10,
     shadowColor: BRAND.gold,
@@ -3234,7 +3235,7 @@ const styles = StyleSheet.create({
   addButtonText: {
     color: '#4a121a',
     fontWeight: '800',
-    fontSize: 14,
+    fontSize: 13,
   },
   kpiContainer: {
     flexDirection: 'row',
@@ -3243,8 +3244,9 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   kpiCard: {
-    flex: 1,
-    minWidth: 140,
+    width: '23%',
+    flexGrow: 1,
+    minWidth: 150,
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 12,
@@ -4504,6 +4506,7 @@ const styles = StyleSheet.create({
   },
   imagePreviewContainer: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 14,
     alignItems: 'center',
     backgroundColor: '#F8F9FA',
@@ -4537,6 +4540,7 @@ const styles = StyleSheet.create({
   presetCard: {
     width: '31%',
     minWidth: 100,
+    flexGrow: 1,
     height: 80,
     borderRadius: 10,
     overflow: 'hidden',

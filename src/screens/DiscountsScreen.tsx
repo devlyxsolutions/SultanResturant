@@ -864,7 +864,7 @@ export default function DiscountsScreen() {
                 <Text style={styles.sectionHeading}>1. Event Identity & Banner</Text>
 
                 <View style={styles.formRow}>
-                  <View style={{ flex: 2, marginRight: 12 }}>
+                  <View style={{ flex: 2, minWidth: 200 }}>
                     <Text style={styles.inputLabel}>Event Campaign Title *</Text>
                     <TextInput
                       style={styles.textInput}
@@ -874,7 +874,7 @@ export default function DiscountsScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 1.5 }}>
+                  <View style={{ flex: 1.5, minWidth: 180 }}>
                     <Text style={styles.inputLabel}>Urdu Subtitle</Text>
                     <TextInput
                       style={styles.textInput}
@@ -886,7 +886,7 @@ export default function DiscountsScreen() {
                 </View>
 
                 <View style={[styles.formRow, { marginTop: 12 }]}>
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, minWidth: 180 }}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                       <Text style={styles.inputLabel}>Promo / Voucher Code *</Text>
                       <TouchableOpacity
@@ -908,7 +908,7 @@ export default function DiscountsScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 2 }}>
+                  <View style={{ flex: 2, minWidth: 220 }}>
                     <Text style={styles.inputLabel}>Campaign Banner Theme</Text>
                     <View style={styles.themePickerRow}>
                       {(['burgundy', 'gold', 'emerald', 'amber', 'sapphire', 'violet'] as BannerTheme[]).map(
@@ -945,7 +945,7 @@ export default function DiscountsScreen() {
                 <Text style={styles.sectionHeading}>2. Discount Value & Caps</Text>
 
                 <View style={styles.formRow}>
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, minWidth: 200 }}>
                     <Text style={styles.inputLabel}>Discount Type</Text>
                     <View style={styles.typeSelectorRow}>
                       <TouchableOpacity
@@ -984,7 +984,7 @@ export default function DiscountsScreen() {
                     </View>
                   </View>
 
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
                     <Text style={styles.inputLabel}>
                       {formData.type === 'percentage' ? 'Percentage Off (%)' : 'Flat Cash Off (Rs.)'} *
                     </Text>
@@ -998,7 +998,7 @@ export default function DiscountsScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
                     <Text style={styles.inputLabel}>Max Discount Cap (Rs.)</Text>
                     <TextInput
                       style={styles.textInput}
@@ -1013,7 +1013,7 @@ export default function DiscountsScreen() {
                 </View>
 
                 <View style={[styles.formRow, { marginTop: 12 }]}>
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, minWidth: 180 }}>
                     <Text style={styles.inputLabel}>Minimum Bill Spend (PKR)</Text>
                     <TextInput
                       style={styles.textInput}
@@ -1026,7 +1026,7 @@ export default function DiscountsScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 180 }}>
                     <Text style={styles.inputLabel}>Campaign Budget Limit (PKR)</Text>
                     <TextInput
                       style={styles.textInput}
@@ -1274,7 +1274,7 @@ export default function DiscountsScreen() {
 
                 {/* Start & End Date Inputs */}
                 <View style={[styles.formRow, { marginTop: 12 }]}>
-                  <View style={{ flex: 1, marginRight: 12 }}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
                     <Text style={styles.inputLabel}>Start Date (YYYY-MM-DD) *</Text>
                     <TextInput
                       style={styles.textInput}
@@ -1284,7 +1284,7 @@ export default function DiscountsScreen() {
                     />
                   </View>
 
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
                     <Text style={styles.inputLabel}>End Date (YYYY-MM-DD) *</Text>
                     <TextInput
                       style={styles.textInput}
@@ -1486,7 +1486,8 @@ export default function DiscountsScreen() {
                     </Text>
 
                     {analyticsCampaign.topDishes && analyticsCampaign.topDishes.length > 0 ? (
-                      <View style={styles.tableContainer}>
+                      <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false}>
+                      <View style={[styles.tableContainer, isMobile && { minWidth: 520 }]}>
                         <View style={styles.tableHeaderRow}>
                           <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Dish Name</Text>
                           <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Category</Text>
@@ -1536,6 +1537,7 @@ export default function DiscountsScreen() {
                           </View>
                         ))}
                       </View>
+                      </ScrollView>
                     ) : (
                       <Text style={styles.noDataHint}>
                         No specific dish breakdown recorded for this event yet.
@@ -1913,9 +1915,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   cardHeaderLeft: {
     flex: 1,
+    minWidth: 200,
   },
   cardHeaderBadgeRow: {
     flexDirection: 'row',
@@ -2128,6 +2133,8 @@ const styles = StyleSheet.create({
   salesStrip: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
     backgroundColor: '#F1F5F9',
     borderRadius: 8,
     padding: 12,
@@ -2136,6 +2143,7 @@ const styles = StyleSheet.create({
   salesMetric: {
     alignItems: 'center',
     flex: 1,
+    minWidth: 110,
   },
   salesMetricLabel: {
     fontSize: 12,
@@ -2157,6 +2165,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 10,
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
@@ -2255,6 +2265,8 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
   },
   inputLabel: {
     fontSize: 13.5,
@@ -2317,11 +2329,13 @@ const styles = StyleSheet.create({
   },
   scopeTabsRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
     marginBottom: 14,
   },
   scopeCardBtn: {
     flex: 1,
+    minWidth: 140,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -2411,6 +2425,8 @@ const styles = StyleSheet.create({
   },
   dishSelectCard: {
     width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 10,
@@ -2461,6 +2477,8 @@ const styles = StyleSheet.create({
   },
   catSelectCard: {
     width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 12,
@@ -2546,11 +2564,13 @@ const styles = StyleSheet.create({
   },
   daysPickerRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 8,
   },
   dayCircle: {
     flex: 1,
+    minWidth: 38,
     height: 38,
     borderRadius: 8,
     borderWidth: 1,

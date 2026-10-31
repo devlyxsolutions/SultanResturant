@@ -623,7 +623,7 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
                 <View key={ret.id} style={styles.returnCard}>
                   {/* Card Header */}
                   <View style={styles.cardHeaderRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap', flex: 1 }}>
                       <View style={[styles.returnIdBadge, { backgroundColor: reasonMeta.bg }]}>
                         <Text style={[styles.returnIdText, { color: reasonMeta.color }]}>{ret.id}</Text>
                       </View>
@@ -1151,11 +1151,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
   },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    flex: 1,
+    minWidth: 220,
   },
   backBtn: {
     width: 38,
@@ -1357,6 +1361,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   returnIdBadge: {
     paddingHorizontal: 8,
@@ -1423,6 +1429,7 @@ const styles = StyleSheet.create({
   reasonCardRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
     gap: 10,
     backgroundColor: BRAND.surface,
     padding: 10,
@@ -1539,6 +1546,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
     paddingTop: 4,
   },
   footerProcessedText: {
@@ -1681,10 +1690,12 @@ const styles = StyleSheet.create({
   },
   scopeToggleRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
   scopeBtn: {
     flex: 1,
+    minWidth: 160,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -1719,6 +1730,7 @@ const styles = StyleSheet.create({
   itemSelectRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
     padding: 10,
     borderBottomWidth: 1,
@@ -1792,6 +1804,8 @@ const styles = StyleSheet.create({
   },
   reasonChoiceCard: {
     width: '48%',
+    minWidth: 140,
+    flexGrow: 1,
     backgroundColor: BRAND.surface,
     borderWidth: 1,
     borderColor: BRAND.border,
@@ -1852,6 +1866,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
     backgroundColor: '#FEF2F2',
     borderWidth: 1,
     borderColor: '#FCA5A5',
@@ -1883,7 +1899,8 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   thermalModalCard: {
-    width: 380,
+    width: '100%',
+    maxWidth: 380,
     maxHeight: '90%',
     backgroundColor: '#FFFFFF',
     borderRadius: 12,

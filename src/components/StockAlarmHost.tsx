@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
 import { useOpsStore } from '../store/opsStore';
@@ -95,10 +95,12 @@ function routeFor(alert: StockAlert, role: string | null | undefined): string {
 
 export default function StockAlarmHost() {
   const router = useRouter();
+  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const bottomOffset = (isMobile ? 76 : 24) + insets.bottom;
+  const isPosScreen = Boolean(pathname && (pathname === '/admin/pos' || pathname.endsWith('/pos')));
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
@@ -194,7 +196,7 @@ export default function StockAlarmHost() {
     return () => loop.stop();
   }, [topSeverity, pulse]);
 
-  if (!enabled || visible.length === 0) return null;
+  if (!enabled || isPosScreen || visible.length === 0) return null;
 
   const snoozeAll = () => {
     snooze(visible.map((a) => a.id), SNOOZE_MIN);

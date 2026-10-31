@@ -753,7 +753,7 @@ export default function AdminDashboard() {
             <View style={styles.headerLogoCapsule}>
               <SultanLogo size="xs" variant="circle" />
             </View>
-            <View>
+            <View style={{ flexShrink: 1 }}>
               <Text style={styles.headerTitle}>Executive Operations Dashboard</Text>
               <Text style={styles.headerSubtitle}>
                 {formattedDate} • {scopeTitle}
@@ -1202,7 +1202,7 @@ export default function AdminDashboard() {
           {...({ dataSet: { card: 'interactive', stagger: 'chart-1' } } as any)}
         >
           <View style={styles.chartHeader}>
-            <View>
+            <View style={{ flex: 1, minWidth: 200 }}>
               <Text style={styles.sectionTitle}>Hourly Sales & Dining Rush Curve</Text>
               <Text style={styles.sectionSubtitle}>Revenue volume and customer rush distribution across operating hours</Text>
             </View>
@@ -1248,7 +1248,16 @@ export default function AdminDashboard() {
                       {...({ dataSet: { bar: 'grow' } } as any)}
                     />
                   </View>
-                  <Text style={[styles.barLabel, slot.isPeak && styles.barLabelPeak]}>{slot.label}</Text>
+                  <Text
+                    style={[
+                      styles.barLabel,
+                      isMobile && { fontSize: 8.5 },
+                      slot.isPeak && styles.barLabelPeak,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {isMobile ? slot.label.replace(' ', '') : slot.label}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </View>
@@ -1891,6 +1900,8 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: 'rgba(212, 175, 55, 0.28)',
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
@@ -1905,18 +1916,17 @@ const styles = StyleSheet.create({
   },
   headerCardMobile: {
     flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: 16,
-    padding: 16,
+    alignItems: 'stretch',
+    gap: 12,
+    padding: 14,
   },
   headerLeft: {
-    flex: 1,
+    flexShrink: 1,
   },
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    flexWrap: 'wrap',
   },
   headerLogoCapsule: {
     padding: 6,
@@ -2346,6 +2356,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
     flexWrap: 'wrap',
+    flexShrink: 1,
+    paddingRight: 8,
   },
   kpiJewelLabel: {
     fontSize: 11,
@@ -2453,6 +2465,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
     borderTopWidth: 1,
     borderTopColor: 'rgba(255, 255, 255, 0.1)',
     paddingTop: 10,
@@ -2484,12 +2498,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   kpiCardHalf: {
-    flex: 1,
-    minWidth: 280,
+    width: '48.5%',
+    flexGrow: 1,
   },
   kpiCardThird: {
-    flex: 1,
-    minWidth: 280,
+    width: '31.5%',
+    flexGrow: 1,
   },
   kpiTopRow: {
     flexDirection: 'row',
@@ -2594,17 +2608,21 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   chartCardTwoThirds: {
-    flex: 2,
-    minWidth: 280,
+    width: '63%',
+    flexGrow: 1,
+    minWidth: 320,
   },
   chartCardOneThird: {
-    flex: 1,
+    width: '34%',
+    flexGrow: 1,
     minWidth: 280,
   },
   chartHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 8,
     marginBottom: 20,
   },
   sectionTitle: {
@@ -2762,11 +2780,14 @@ const styles = StyleSheet.create({
   },
   paymentPillRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 8,
     marginTop: 10,
   },
   paymentPill: {
-    flex: 1,
+    width: '31%',
+    flexGrow: 1,
+    minWidth: 92,
     padding: 10,
     borderRadius: 10,
     alignItems: 'center',
@@ -2805,8 +2826,8 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   tableCardHalf: {
-    flex: 1,
-    minWidth: 420,
+    width: '48.5%',
+    flexGrow: 1,
   },
   tableHeaderSection: {
     flexDirection: 'row',
@@ -2962,8 +2983,9 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   stationBox: {
-    flex: 1,
-    minWidth: 300,
+    width: '31.5%',
+    flexGrow: 1,
+    minWidth: 250,
     borderWidth: 1,
     borderColor: '#E2E8F0',
     borderRadius: 12,
@@ -3118,10 +3140,12 @@ const styles = StyleSheet.create({
   },
   culinaryBoxCardHalf: {
     width: '48.5%',
+    flexGrow: 1,
   },
   culinaryBoxCardOneThird: {
-    flex: 1,
-    minWidth: 320,
+    width: '31.5%',
+    flexGrow: 1,
+    minWidth: 280,
   },
   culinaryBoxHeader: {
     flexDirection: 'row',

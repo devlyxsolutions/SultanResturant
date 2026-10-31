@@ -56,17 +56,6 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const user = useAuthStore((s) => s.user);
   const { can } = useRolePermissions();
 
-  if (user?.role !== 'admin' && !can('canAccessInventory')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Inventory & Stock Management"
-        urduModuleName="اسٹاک اور انوینٹری"
-        requiredPermission="canAccessInventory"
-        backRoute={backRoute}
-      />
-    );
-  }
-
   const inventory = useOpsStore((s) => s.inventory);
   const stockMovements = useOpsStore((s) => s.stockMovements);
   const suppliers = useOpsStore((s) => s.suppliers);
@@ -686,6 +675,17 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
     }
     return { label: 'Manual Adjustment', color: BRAND.purple, bg: BRAND.purpleSoft, icon: 'options' };
   };
+
+  if (user?.role !== 'admin' && !can('canAccessInventory')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Inventory & Stock Management"
+        urduModuleName="اسٹاک اور انوینٹری"
+        requiredPermission="canAccessInventory"
+        backRoute={backRoute}
+      />
+    );
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -2024,7 +2024,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
             <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Item SKU Code *</Text>
                   <TextInput
                     style={styles.input}
@@ -2033,7 +2033,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setFormItemCode}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Urdu Name (Optional)</Text>
                   <TextInput
                     style={styles.input}
@@ -2083,7 +2083,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               />
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Initial Stock ({formUnit})</Text>
                   <TextInput
                     style={styles.input}
@@ -2093,7 +2093,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setFormStock}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Low Stock Alert ({formUnit}) *</Text>
                   <TextInput
                     style={styles.input}
@@ -2106,7 +2106,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </View>
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Unit Cost (Rs. per {formUnit})</Text>
                   <TextInput
                     style={styles.input}
@@ -2116,7 +2116,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setFormCost}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Shelf Life (Days from Receipt)</Text>
                   <TextInput
                     style={styles.input}
@@ -2129,7 +2129,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </View>
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Preferred Vendor / Supplier</Text>
                   <TextInput
                     style={styles.input}
@@ -2138,7 +2138,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setFormSupplier}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Supplier WhatsApp Phone</Text>
                   <TextInput
                     style={styles.input}
@@ -2209,7 +2209,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               />
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Supplier Invoice No. *</Text>
                   <TextInput
                     style={styles.input}
@@ -2218,7 +2218,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setRecInvoiceNo}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Batch / Lot Number *</Text>
                   <TextInput
                     style={styles.input}
@@ -2230,7 +2230,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </View>
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Supplier / Vendor Name *</Text>
                   <TextInput
                     style={styles.input}
@@ -2239,7 +2239,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setRecSupplier}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Received By Staff</Text>
                   <TextInput
                     style={styles.input}
@@ -2271,7 +2271,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               ) : null}
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Quantity Received *</Text>
                   <TextInput
                     style={[styles.input, { fontSize: 18, fontWeight: '700' }]}
@@ -2281,7 +2281,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setRecQty}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Unit Purchase Cost (PKR)</Text>
                   <TextInput
                     style={[styles.input, { fontSize: 18, fontWeight: '700' }]}
@@ -2304,7 +2304,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               ) : null}
 
               <View style={styles.formRow2}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Batch Expiry (Days from Today)</Text>
                   <TextInput
                     style={styles.input}
@@ -2314,7 +2314,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     onChangeText={setRecExpiryDays}
                   />
                 </View>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 160 }}>
                   <Text style={styles.inputLabel}>Store in Zone</Text>
                   <TextInput
                     style={styles.input}
@@ -3323,6 +3323,8 @@ const styles = StyleSheet.create({
     padding: 10,
     borderRadius: 8,
     marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   receivingMetaLabel: {
     fontSize: 12,
@@ -3608,6 +3610,8 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F2F2F7',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   dishStockLabel: {
     fontSize: 12,
@@ -3718,6 +3722,7 @@ const styles = StyleSheet.create({
   formRow2: {
     flexDirection: 'row',
     gap: 10,
+    flexWrap: 'wrap',
   },
   formChip: {
     paddingHorizontal: 10,
@@ -3829,6 +3834,7 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#F2F2F7',
     paddingTop: 10,
+    flexWrap: 'wrap',
   },
   modalCancelBtn: {
     paddingHorizontal: 14,

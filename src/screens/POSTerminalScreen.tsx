@@ -113,6 +113,7 @@ const LivePOSClock = React.memo(() => {
   }, []);
   return <Text style={styles.clockText}>{time}</Text>;
 });
+LivePOSClock.displayName = 'LivePOSClock';
 
 export default function POSTerminalScreen({
   role = 'admin',
@@ -129,9 +130,11 @@ export default function POSTerminalScreen({
     orderType: paramOrderType,
   } = useLocalSearchParams();
   const { width } = useWindowDimensions();
-  const isMobile = width < 850;
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1200;
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
+  const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [categoryViewMode, setCategoryViewMode] = useState<'grid' | 'list'>('grid');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
@@ -190,18 +193,6 @@ export default function POSTerminalScreen({
   // - Order Takers: ALWAYS TRUE (Prices & Totals hidden)
   // - Cashier, Manager, Admin: FALSE by default (Prices & Totals visible)
   const hidePrices = isOrderTakerRole ? true : (isCashierOrManagement ? orderTakerMode : true);
-
-  // Permission Guard
-  if (role !== 'admin' && !can('canAccessPOS')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="POS Billing Terminal"
-        urduModuleName="پی او ایس بلنگ ٹرمینل"
-        requiredPermission="canAccessPOS"
-        backRoute={backRoute}
-      />
-    );
-  }
 
   // Restaurant Store
   const menuItems = useRestaurantStore(state => state.menuItems);
@@ -377,7 +368,7 @@ export default function POSTerminalScreen({
     if (combinedItems.length > 0) {
       setCart(combinedItems);
       setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
-      if (isMobile) {
+      if (isMobile || isTablet) {
         setMobileTab('cart');
       }
     } else {
@@ -1013,7 +1004,7 @@ export default function POSTerminalScreen({
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
       }, 150);
-    } else if (isMobile) {
+    } else if (isMobile || isTablet) {
       setMobileTab('cart');
     }
   };
@@ -1153,6 +1144,18 @@ export default function POSTerminalScreen({
     setPayments(newP);
   };
 
+  // Permission Guard (after all hooks so Rules of Hooks are respected)
+  if (role !== 'admin' && !can('canAccessPOS')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="POS Billing Terminal"
+        urduModuleName="پی او ایس بلنگ ٹرمینل"
+        requiredPermission="canAccessPOS"
+        backRoute={backRoute}
+      />
+    );
+  }
+
   return (
     <View style={styles.fullscreenContainer}>
       <StatusBar barStyle="light-content" />
@@ -1173,7 +1176,7 @@ export default function POSTerminalScreen({
 
           <View style={styles.brandBox}>
             <SultanLogo size="xs" width={22} height={22} style={{ marginRight: 6 }} />
-            <Text style={styles.brandTitle}>{isMobile ? 'SULTAN POS' : 'SULTAN RESTAURANT'}</Text>
+            <Text style={styles.brandTitle}>{isMobile || isTablet ? 'SULTAN POS' : 'SULTAN RESTAURANT'}</Text>
           </View>
 
           {!isMobile && <LivePOSClock />}
@@ -1182,7 +1185,7 @@ export default function POSTerminalScreen({
         {/* Right Side: Shift Status + Fullscreen + Admin Avatar */}
         <View style={[styles.headerRight, isMobile && { gap: 6 }]}>
           <TouchableOpacity 
-            style={[styles.shiftCapsule, isMobile && { paddingHorizontal: 7, paddingVertical: 4 }]} 
+            style={[styles.shiftCapsule, (isMobile || isTablet) && { paddingHorizontal: 7, paddingVertical: 4 }]} 
             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
             onPress={() => router.push(shiftRoute as any)}
             activeOpacity={0.8}
@@ -1242,12 +1245,14 @@ export default function POSTerminalScreen({
               color={hidePrices ? "#F59E0B" : "#10B981"} 
             />
             <Text style={[styles.orderTakerModeText, hidePrices && styles.orderTakerModeTextActive]}>
-              {hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier/Admin)'}
+              {(isMobile || isTablet)
+                ? (hidePrices ? 'Hidden' : 'Prices')
+                : (hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier/Admin)')}
             </Text>
           </TouchableOpacity>
 
           {/* Keyboard Shortcuts Capsule Button (Desktop only) */}
-          {!isMobile && (
+          {!isMobile && !isTablet && (
             <TouchableOpacity 
               style={styles.keyboardCapsuleBtn}
               onPress={() => setShortcutsModalVisible(true)}
@@ -1315,129 +1320,154 @@ export default function POSTerminalScreen({
             LEFT: CATEGORIES 2-COLUMN TILES (BAITHAK PATTERN)
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'menu') && (
-          <View style={[styles.categorySidebar, isMobile && styles.categorySidebarMobile]}>
-            {/* Header: Title + Total Badge + Grid/List Toggle */}
-            <View style={styles.categoryHeaderRow}>
-              <View style={styles.categoryTitleGroup}>
-                <View style={styles.categoryTitleIconOrb}>
-                  <Ionicons name="apps" size={12} color="#E5B83B" />
+          <View style={[styles.categorySidebar, isTablet && { width: 192, padding: 8 }, isMobile && styles.categorySidebarMobile]}>
+            {/* Header: Title + Total Badge + Grid/List Toggle (Desktop/Tablet only) */}
+            {!isMobile && (
+              <View style={[styles.categoryHeaderRow, isTablet && { marginBottom: 6, paddingHorizontal: 0 }]}>
+                <View style={[styles.categoryTitleGroup, isTablet && { gap: 4, flex: 1, marginRight: 4 }]}>
+                  <View style={[styles.categoryTitleIconOrb, isTablet && { width: 18, height: 18, borderRadius: 5 }]}>
+                    <Ionicons name="apps" size={isTablet ? 10 : 12} color="#E5B83B" />
+                  </View>
+                  <Text style={[styles.categoryHeading, isTablet && { fontSize: 9.5, letterSpacing: 0.4 }]} numberOfLines={1}>
+                    CATEGORIES
+                  </Text>
+                  <View style={[styles.categoryCountPill, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }]}>
+                    <Text style={[styles.categoryCountPillText, isTablet && { fontSize: 8.5 }]}>{categoryTiles.length + 1}</Text>
+                  </View>
                 </View>
-                <Text style={styles.categoryHeading}>CATEGORIES</Text>
-                <View style={styles.categoryCountPill}>
-                  <Text style={styles.categoryCountPillText}>{categoryTiles.length + 1}</Text>
-                </View>
-              </View>
 
-              {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
-              {!isMobile && (
-                <View style={styles.categoryViewSwitcher}>
+                {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
+                <View style={[styles.categoryViewSwitcher, isTablet && { padding: 1.5, gap: 1.5, flexShrink: 0 }]}>
                   <TouchableOpacity 
-                    style={[styles.viewSwitchBtn, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
+                    style={[styles.viewSwitchBtn, isTablet && { width: 20, height: 18 }, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
                     onPress={() => setCategoryViewMode('grid')}
                     activeOpacity={0.8}
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
                     <Ionicons 
                       name="grid" 
-                      size={11} 
+                      size={isTablet ? 10 : 11} 
                       color={categoryViewMode === 'grid' ? '#1E293B' : '#A38B7C'} 
                     />
                   </TouchableOpacity>
                   <TouchableOpacity 
-                    style={[styles.viewSwitchBtn, categoryViewMode === 'list' && styles.viewSwitchBtnActive]}
+                    style={[styles.viewSwitchBtn, isTablet && { width: 20, height: 18 }, categoryViewMode === 'list' && styles.viewSwitchBtnActive]}
                     onPress={() => setCategoryViewMode('list')}
                     activeOpacity={0.8}
                     hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
                   >
                     <Ionicons 
                       name="list" 
-                      size={13} 
+                      size={isTablet ? 12 : 13} 
                       color={categoryViewMode === 'list' ? '#1E293B' : '#A38B7C'} 
                     />
                   </TouchableOpacity>
                 </View>
-              )}
-            </View>
-
-            {/* Quick Find Category Search Box */}
-            <View 
-              style={[styles.quickFindBox, isCatSearchFocused && styles.quickFindBoxFocused]}
-              {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-            >
-              <View style={[styles.quickFindIconOrb, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
-                <Ionicons name="search" size={12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
               </View>
-              <TextInput
-                style={styles.quickFindInput}
-                placeholder="Find category..."
-                placeholderTextColor="#64748B"
-                value={categorySearchQuery}
-                onFocus={() => setIsCatSearchFocused(true)}
-                onBlur={() => setIsCatSearchFocused(false)}
-                onChangeText={setCategorySearchQuery}
-              />
-              {categorySearchQuery ? (
-                <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                  <Ionicons name="close-circle" size={15} color="#D4AF37" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
+            )}
+
+            {/* Quick Find Category Search Box (Desktop/Tablet only) */}
+            {!isMobile && (
+              <View 
+                style={[
+                  styles.quickFindBox, 
+                  isTablet && { height: 32, paddingHorizontal: 6, marginBottom: 6, gap: 5 },
+                  isCatSearchFocused && styles.quickFindBoxFocused
+                ]}
+                {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+              >
+                <View style={[styles.quickFindIconOrb, isTablet && { width: 20, height: 20, borderRadius: 10 }, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
+                  <Ionicons name="search" size={isTablet ? 11 : 12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
+                </View>
+                <TextInput
+                  style={[styles.quickFindInput, isTablet && { fontSize: 11 }]}
+                  placeholder="Find category..."
+                  placeholderTextColor="#64748B"
+                  value={categorySearchQuery}
+                  onFocus={() => setIsCatSearchFocused(true)}
+                  onBlur={() => setIsCatSearchFocused(false)}
+                  onChangeText={setCategorySearchQuery}
+                />
+                {categorySearchQuery ? (
+                  <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Ionicons name="close-circle" size={15} color="#D4AF37" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
 
             {/* Categories Scrollable Container */}
             <ScrollView 
-              style={styles.categoriesScroll}
+              style={[styles.categoriesScroll, isMobile && { flex: 0 }]}
               contentContainerStyle={[
                 styles.categoriesContainer,
-                categoryViewMode === 'grid' && styles.categoriesGrid,
-                categoryViewMode === 'list' && styles.categoriesList,
+                isMobile
+                  ? styles.categoriesScrollMobile
+                  : (categoryViewMode === 'grid' ? [styles.categoriesGrid, isTablet && { gap: 5 }] : [styles.categoriesList, isTablet && { gap: 4 }]),
               ]}
               showsVerticalScrollIndicator={false}
+              showsHorizontalScrollIndicator={false}
               horizontal={isMobile}
             >
               {/* ALL Category Item */}
               {(() => {
                 const isAllActive = activeCategory === 'ALL' || activeCategory === 'All';
                 const allCount = (menuItems || []).length;
+                const useGridTile = isMobile || categoryViewMode === 'grid';
                 return (
                   <TouchableOpacity
                     {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                     style={[
-                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
-                      isAllActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
+                      useGridTile ? styles.categoryTile : styles.categoryListRow,
+                      isTablet && categoryViewMode === 'grid' && { width: '48.2%', height: 54, padding: 5, borderRadius: 10 },
+                      isTablet && categoryViewMode === 'list' && { height: 36, paddingHorizontal: 7 },
+                      isMobile && styles.categoryTileMobile,
+                      isAllActive && (useGridTile ? styles.categoryTileActive : styles.categoryListRowActive)
                     ]}
-                    onPress={() => setActiveCategory('ALL')}
+                    onPress={() => {
+                      setActiveCategory('ALL');
+                      if (isTablet && mobileTab === 'cart') setMobileTab('menu');
+                    }}
                     activeOpacity={0.8}
                   >
-                    {categoryViewMode === 'grid' ? (
+                    {useGridTile ? (
                       <>
-                        <View style={styles.tileTopRow}>
-                          <View style={[styles.tileIconOrb, isAllActive && styles.tileIconOrbActive]}>
+                        <View style={[styles.tileTopRow, isMobile && { gap: 10 }]}>
+                          <View style={[styles.tileIconOrb, isTablet && { width: 21, height: 21, borderRadius: 6 }, isMobile && { width: 22, height: 22, borderRadius: 6 }, isAllActive && styles.tileIconOrbActive]}>
                             <Ionicons 
                               name="grid" 
-                              size={13} 
+                              size={isTablet ? 11 : isMobile ? 12 : 13} 
                               color={isAllActive ? '#1E293B' : '#E5B83B'} 
                             />
                           </View>
-                          <View style={[styles.tileCountBadge, isAllActive && styles.tileCountBadgeActive]}>
-                            <Text style={[styles.tileCountText, isAllActive && styles.tileCountTextActive]}>
+                          <View style={[styles.tileCountBadge, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }, isAllActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isTablet && { fontSize: 8.5 }, isAllActive && styles.tileCountTextActive]}>
                               {allCount}
                             </Text>
                           </View>
                         </View>
-                        <Text style={[styles.categoryTileText, isAllActive && styles.categoryTileTextActive]}>
+                        <Text 
+                          style={[
+                            styles.categoryTileText, 
+                            isTablet && { fontSize: 8.5, letterSpacing: 0, lineHeight: 10.5 }, 
+                            isMobile && { fontSize: 11, fontWeight: '900', lineHeight: 14, letterSpacing: 0.3, marginTop: 2 },
+                            isAllActive && styles.categoryTileTextActive
+                          ]}
+                          numberOfLines={isMobile ? 1 : 2}
+                        >
                           ALL
                         </Text>
                       </>
                     ) : (
                       <>
-                        <View style={[styles.listIconOrb, isAllActive && styles.listIconOrbActive]}>
+                        <View style={[styles.listIconOrb, isTablet && { width: 22, height: 22 }, isAllActive && styles.listIconOrbActive]}>
                           <Ionicons 
                             name="grid" 
-                            size={14} 
+                            size={isTablet ? 12 : 14} 
                             color={isAllActive ? '#1E293B' : '#E5B83B'} 
                           />
                         </View>
-                        <Text style={[styles.categoryListText, isAllActive && styles.categoryListTextActive]} numberOfLines={1}>
+                        <Text style={[styles.categoryListText, isTablet && { fontSize: 10 }, isAllActive && styles.categoryListTextActive]} numberOfLines={1}>
                           ALL ITEMS
                         </Text>
                         <View style={[styles.listCountBadge, isAllActive && styles.listCountBadgeActive]}>
@@ -1456,52 +1486,64 @@ export default function POSTerminalScreen({
                 const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
                 const count = categoryCounts[cat] || categoryCounts[cat.toUpperCase()] || 0;
                 const iconName = getCategoryIcon(cat);
+                const useGridTile = isMobile || categoryViewMode === 'grid';
 
                 return (
                   <TouchableOpacity
                     key={cat}
                     {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                     style={[
-                      categoryViewMode === 'grid' ? styles.categoryTile : styles.categoryListRow,
-                      isActive && (categoryViewMode === 'grid' ? styles.categoryTileActive : styles.categoryListRowActive)
+                      useGridTile ? styles.categoryTile : styles.categoryListRow,
+                      isTablet && categoryViewMode === 'grid' && { width: '48.2%', height: 54, padding: 5, borderRadius: 10 },
+                      isTablet && categoryViewMode === 'list' && { height: 36, paddingHorizontal: 7 },
+                      isMobile && styles.categoryTileMobile,
+                      isActive && (useGridTile ? styles.categoryTileActive : styles.categoryListRowActive)
                     ]}
-                    onPress={() => setActiveCategory(cat)}
+                    onPress={() => {
+                      setActiveCategory(cat);
+                      if (isTablet && mobileTab === 'cart') setMobileTab('menu');
+                    }}
                     activeOpacity={0.8}
                   >
-                    {categoryViewMode === 'grid' ? (
+                    {useGridTile ? (
                       <>
-                        <View style={styles.tileTopRow}>
-                          <View style={[styles.tileIconOrb, isActive && styles.tileIconOrbActive]}>
+                        <View style={[styles.tileTopRow, isMobile && { gap: 10 }]}>
+                          <View style={[styles.tileIconOrb, isTablet && { width: 21, height: 21, borderRadius: 6 }, isMobile && { width: 22, height: 22, borderRadius: 6 }, isActive && styles.tileIconOrbActive]}>
                             <Ionicons 
                               name={iconName} 
-                              size={13} 
+                              size={isTablet ? 11 : isMobile ? 12 : 13} 
                               color={isActive ? '#1E293B' : '#E5B83B'} 
                             />
                           </View>
-                          <View style={[styles.tileCountBadge, isActive && styles.tileCountBadgeActive]}>
-                            <Text style={[styles.tileCountText, isActive && styles.tileCountTextActive]}>
+                          <View style={[styles.tileCountBadge, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }, isActive && styles.tileCountBadgeActive]}>
+                            <Text style={[styles.tileCountText, isTablet && { fontSize: 8.5 }, isActive && styles.tileCountTextActive]}>
                               {count}
                             </Text>
                           </View>
                         </View>
                         <Text 
-                          style={[styles.categoryTileText, isActive && styles.categoryTileTextActive]}
-                          numberOfLines={2}
+                          style={[
+                            styles.categoryTileText, 
+                            isTablet && { fontSize: 8.5, letterSpacing: 0, lineHeight: 10.5 }, 
+                            isMobile && { fontSize: 11, fontWeight: '900', lineHeight: 14, letterSpacing: 0.3, marginTop: 2 },
+                            isActive && styles.categoryTileTextActive
+                          ]}
+                          numberOfLines={isMobile ? 1 : 2}
                         >
                           {cat.toUpperCase()}
                         </Text>
                       </>
                     ) : (
                       <>
-                        <View style={[styles.listIconOrb, isActive && styles.listIconOrbActive]}>
+                        <View style={[styles.listIconOrb, isTablet && { width: 22, height: 22 }, isActive && styles.listIconOrbActive]}>
                           <Ionicons 
                             name={iconName} 
-                            size={14} 
+                            size={isTablet ? 12 : 14} 
                             color={isActive ? '#1E293B' : '#E5B83B'} 
                           />
                         </View>
                         <Text 
-                          style={[styles.categoryListText, isActive && styles.categoryListTextActive]}
+                          style={[styles.categoryListText, isTablet && { fontSize: 10 }, isActive && styles.categoryListTextActive]}
                           numberOfLines={1}
                         >
                           {cat.toUpperCase()}
@@ -1520,733 +1562,847 @@ export default function POSTerminalScreen({
 
             {/* Bottom Status & Quick Filter Panel */}
             {!isMobile && (
-              <View style={styles.categoryBottomPanel}>
-                <View style={styles.bottomStatusHeader}>
-                  <Text style={styles.bottomStatusTitle}>FILTER</Text>
-                  <Text style={styles.bottomStatusCount}>
-                    {(activeCategory === 'ALL' || activeCategory === 'All') 
-                      ? `${(menuItems || []).length} items` 
-                      : `${categoryCounts[activeCategory] || categoryCounts[activeCategory.toUpperCase()] || 0} items`}
-                  </Text>
-                </View>
-
-                <View style={styles.bottomActiveCard}>
-                  <View style={styles.bottomActiveIconOrb}>
-                    <Ionicons name={getCategoryIcon(activeCategory)} size={12} color="#D4AF37" />
+              <View style={[styles.categoryBottomPanel, isTablet && { marginTop: 4, paddingTop: 4, gap: 2 }]}>
+                {!isTablet && (
+                  <View style={styles.bottomStatusHeader}>
+                    <Text style={styles.bottomStatusTitle}>FILTER</Text>
+                    <Text style={styles.bottomStatusCount}>
+                      {(activeCategory === 'ALL' || activeCategory === 'All') 
+                        ? `${(menuItems || []).length} items` 
+                        : `${categoryCounts[activeCategory] || categoryCounts[activeCategory.toUpperCase()] || 0} items`}
+                    </Text>
                   </View>
-                  <Text style={styles.bottomActiveName} numberOfLines={1}>
+                )}
+
+                <View style={[styles.bottomActiveCard, isTablet && { height: 26, paddingHorizontal: 6, paddingVertical: 2, gap: 4 }]}>
+                  <View style={[styles.bottomActiveIconOrb, isTablet && { width: 16, height: 16 }]}>
+                    <Ionicons name={getCategoryIcon(activeCategory)} size={10} color="#D4AF37" />
+                  </View>
+                  <Text style={[styles.bottomActiveName, isTablet && { fontSize: 9 }]} numberOfLines={1}>
                     {activeCategory.toUpperCase()}
                   </Text>
-                  {(activeCategory !== 'ALL' && activeCategory !== 'All') && (
+                  {(activeCategory !== 'ALL' && activeCategory !== 'All') ? (
                     <TouchableOpacity 
                       style={styles.bottomResetPill}
-                      onPress={() => setActiveCategory('ALL')}
+                      onPress={() => {
+                        setActiveCategory('ALL');
+                        if (isTablet && mobileTab === 'cart') setMobileTab('menu');
+                      }}
                       activeOpacity={0.7}
                       hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                     >
                       <Ionicons name="close" size={10} color="#FFFFFF" />
                       <Text style={styles.bottomResetText}>Reset</Text>
                     </TouchableOpacity>
-                  )}
+                  ) : isTablet ? (
+                    <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#E5B83B' }}>
+                      {(menuItems || []).length} items
+                    </Text>
+                  ) : null}
                 </View>
               </View>
             )}
           </View>
         )}
 
-        {/* --------------------------------------------------------
-            CENTER: DISH CATALOG GRID (5 COLUMNS ON DESKTOP)
-            -------------------------------------------------------- */}
-        {(!isMobile || mobileTab === 'menu') && (
-          <View style={styles.centerCatalog}>
-            {/* Catalog Top Subheader Bar */}
-            <View style={[styles.catalogSubheader, isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingHorizontal: 12, paddingVertical: 8 }]}>
-              <View style={[styles.catalogTitleRow, isMobile && { justifyContent: 'space-between', width: '100%' }]}>
-                <Text style={[styles.catalogTitle, isMobile && { fontSize: 13.5 }]}>{isMobile ? 'Menu Catalog' : 'SULTAN RESTAURANT Menu'}</Text>
+        {/* RIGHT WORKSPACE CONTAINER (Holds Tablet Mode Switcher + Menu Catalog / Current Cart) */}
+        <View style={{ flex: 1, flexDirection: isTablet ? 'column' : 'row', height: '100%', position: 'relative', overflow: 'hidden' }}>
 
-                {/* Running Orders Pill */}
-                <TouchableOpacity 
-                  style={styles.runningOrdersPill}
-                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                  onPress={() => setPendingOrdersModalVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="time" size={13} color="#D97706" />
-                  <Text style={styles.runningOrdersText}>Running</Text>
-                  {!isMobile && <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>}
-                  <View style={styles.runningOrdersBadge}>
-                    <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-
-              {/* Sultan Royal Luxury Search Bar */}
-              <View 
-                style={[
-                  styles.searchPillBox, 
-                  isSearchFocused && styles.searchPillBoxFocused,
-                  isMobile && { minWidth: 0, width: '100%', height: 40 }
-                ]}
-                {...(Platform.OS === 'web' ? ({ className: 'search-pill-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+          {/* Tablet Landscape Mode Switcher Bar (Portrait-style Menu / Cart Tabs) */}
+          {isTablet && (
+            <View style={styles.mobileSwitcher}>
+              <TouchableOpacity 
+                style={[styles.mobileSwitchBtn, mobileTab === 'menu' && styles.mobileSwitchBtnActive]}
+                onPress={() => setMobileTab('menu')}
+                activeOpacity={0.85}
               >
-                <View style={[styles.searchIconOrb, isSearchFocused && styles.searchIconOrbFocused]}>
-                  <Ionicons name="search" size={15} color={isSearchFocused ? '#D4AF37' : '#52141C'} />
-                </View>
-                <TextInput
-                  ref={searchInputRef}
-                  style={styles.searchPillInput}
-                  placeholder={isMobile ? "Search dishes or code..." : "Search dishes, codes, or categories... (Press F1)"}
-                  placeholderTextColor="#8A7A70"
-                  value={searchQuery}
-                  onFocus={() => setIsSearchFocused(true)}
-                  onBlur={() => setIsSearchFocused(false)}
-                  onChangeText={setSearchQuery}
-                />
-                {searchQuery ? (
-                  <TouchableOpacity 
-                    onPress={() => setSearchQuery('')}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                    style={styles.searchClearBtn}
-                  >
-                    <Ionicons name="close-circle" size={18} color="#D4AF37" />
-                  </TouchableOpacity>
-                ) : (
-                  <View style={styles.searchShortcutBadge}>
-                    <Text style={styles.searchShortcutText}>F1</Text>
-                  </View>
-                )}
-              </View>
+                <Text style={[styles.mobileSwitchText, mobileTab === 'menu' && styles.mobileSwitchTextActive]}>
+                  Menu Dishes ({filteredItems.length})
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.mobileSwitchBtn, mobileTab === 'cart' && styles.mobileSwitchBtnActive]}
+                onPress={() => setMobileTab('cart')}
+                activeOpacity={0.85}
+              >
+                <Text style={[styles.mobileSwitchText, mobileTab === 'cart' && styles.mobileSwitchTextActive]}>
+                  Current Cart ({cart.reduce((s, i) => s + i.qty, 0)})
+                </Text>
+              </TouchableOpacity>
             </View>
+          )}
 
-            {/* Region / Cuisine Quick Filter Pills */}
-            {regions.length > 0 && (
-              <View style={styles.posRegionFilterRow}>
-                <View style={styles.posRegionFilterLead}>
-                  <View style={styles.posRegionLeadIconWrap}>
-                    <Ionicons name="restaurant" size={11} color="#D4AF37" />
-                  </View>
-                  <Text style={styles.posRegionFilterLeadText}>CUISINE</Text>
-                </View>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.posRegionScroll}
-                >
-                  <TouchableOpacity
-                    style={[
-                      styles.posRegionChip,
-                      activeRegion === 'ALL' && styles.posRegionChipActive,
-                    ]}
-                    onPress={() => setActiveRegion('ALL')}
-                    activeOpacity={0.75}
+          {/* --------------------------------------------------------
+              CENTER: DISH CATALOG GRID (5 COLUMNS ON DESKTOP, 4 ON TABLET)
+              -------------------------------------------------------- */}
+          {((!isMobile && !isTablet) || mobileTab === 'menu') && (
+            <View style={styles.centerCatalog}>
+              {/* Catalog Top Subheader Bar */}
+              <View style={[
+                styles.catalogSubheader, 
+                isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
+                isTablet && { paddingHorizontal: 12, paddingVertical: 7, gap: 10 }
+              ]}>
+                <View style={[
+                  styles.catalogTitleRow, 
+                  isMobile && { justifyContent: 'space-between', width: '100%' },
+                  isTablet && { gap: 8 }
+                ]}>
+                  <Text style={[styles.catalogTitle, (isMobile || isTablet) && { fontSize: 13.5 }]}>
+                    {isMobile || isTablet ? 'Menu Catalog' : 'SULTAN RESTAURANT Menu'}
+                  </Text>
+
+                  {/* Running Orders Pill */}
+                  <TouchableOpacity 
+                    style={[styles.runningOrdersPill, isTablet && { paddingHorizontal: 9, paddingVertical: 4 }]}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                    onPress={() => setPendingOrdersModalVisible(true)}
+                    activeOpacity={0.8}
                   >
-                    <Ionicons 
-                      name="globe-outline" 
-                      size={13} 
-                      color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'} 
-                      style={{ marginRight: 2 }} 
-                    />
-                    <Text style={[
-                      styles.posRegionChipText,
-                      activeRegion === 'ALL' && styles.posRegionChipTextActive,
-                    ]}>
-                      All Cuisines
-                    </Text>
-                    <View style={[
-                      styles.posRegionChipBadge,
-                      activeRegion === 'ALL' && styles.posRegionChipBadgeActive
-                    ]}>
-                      <Text style={[
-                        styles.posRegionChipBadgeText,
-                        activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive
-                      ]}>
-                        {regionCounts['ALL'] ?? 0}
-                      </Text>
+                    <Ionicons name="time" size={12} color="#D97706" />
+                    <Text style={[styles.runningOrdersText, isTablet && { fontSize: 11 }]}>Running</Text>
+                    {!isMobile && !isTablet && <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>}
+                    <View style={styles.runningOrdersBadge}>
+                      <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
                     </View>
                   </TouchableOpacity>
+                </View>
 
-                  {regions.map(r => {
-                    const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
-                    const meta = getCuisineMeta(r);
-                    const count = regionCounts[r] || 0;
+                {/* Sultan Royal Luxury Search Bar */}
+                <View 
+                  style={[
+                    styles.searchPillBox, 
+                    isSearchFocused && styles.searchPillBoxFocused,
+                    isTablet && { minWidth: 220, maxWidth: 340, height: 36, paddingHorizontal: 8 },
+                    isMobile && { flex: 0, maxWidth: '100%', minWidth: 0, width: '100%', height: 42 }
+                  ]}
+                  {...(Platform.OS === 'web' ? ({ className: 'search-pill-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+                >
+                  <View style={[styles.searchIconOrb, isTablet && { width: 24, height: 24, borderRadius: 12 }, isSearchFocused && styles.searchIconOrbFocused]}>
+                    <Ionicons name="search" size={isTablet ? 12 : 14} color={isSearchFocused ? '#D4AF37' : '#52141C'} />
+                  </View>
+                  <TextInput
+                    ref={searchInputRef}
+                    style={[styles.searchPillInput, isTablet && { fontSize: 12 }]}
+                    placeholder={isMobile || isTablet ? "Search dishes or code..." : "Search dishes, codes, or categories... (Press F1)"}
+                    placeholderTextColor="#8A7A70"
+                    value={searchQuery}
+                    onFocus={() => setIsSearchFocused(true)}
+                    onBlur={() => setIsSearchFocused(false)}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity 
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.searchClearBtn}
+                    >
+                      <Ionicons name="close-circle" size={16} color="#D4AF37" />
+                    </TouchableOpacity>
+                  ) : (
+                    !isMobile && !isTablet && (
+                      <View style={styles.searchShortcutBadge}>
+                        <Text style={styles.searchShortcutText}>F1</Text>
+                      </View>
+                    )
+                  )}
+                </View>
+              </View>
+
+              {/* Region / Cuisine Quick Filter Pills */}
+              {regions.length > 0 && (
+                <View style={[styles.posRegionFilterRow, isTablet && { paddingHorizontal: 12, paddingVertical: 6, gap: 6 }]}>
+                  <View style={[styles.posRegionFilterLead, isTablet && { paddingHorizontal: 7, paddingVertical: 3.5, gap: 4 }]}>
+                    <View style={[styles.posRegionLeadIconWrap, isTablet && { width: 16, height: 16 }]}>
+                      <Ionicons name="restaurant" size={10} color="#D4AF37" />
+                    </View>
+                    <Text style={[styles.posRegionFilterLeadText, isTablet && { fontSize: 9.5 }]}>CUISINE</Text>
+                  </View>
+                  <ScrollView 
+                    horizontal 
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={[styles.posRegionScroll, isTablet && { gap: 6, paddingRight: 10 }]}
+                  >
+                    <TouchableOpacity
+                      style={[
+                        styles.posRegionChip,
+                        isTablet && { paddingHorizontal: 9, paddingVertical: 4, gap: 4 },
+                        activeRegion === 'ALL' && styles.posRegionChipActive,
+                      ]}
+                      onPress={() => setActiveRegion('ALL')}
+                      activeOpacity={0.75}
+                    >
+                      <Ionicons 
+                        name="globe-outline" 
+                        size={isTablet ? 11 : 13} 
+                        color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'} 
+                        style={{ marginRight: 1 }} 
+                      />
+                      <Text style={[
+                        styles.posRegionChipText,
+                        isTablet && { fontSize: 11 },
+                        activeRegion === 'ALL' && styles.posRegionChipTextActive,
+                      ]}>
+                        All Cuisines
+                      </Text>
+                      <View style={[
+                        styles.posRegionChipBadge,
+                        isTablet && { paddingHorizontal: 5, paddingVertical: 1 },
+                        activeRegion === 'ALL' && styles.posRegionChipBadgeActive
+                      ]}>
+                        <Text style={[
+                          styles.posRegionChipBadgeText,
+                          isTablet && { fontSize: 9 },
+                          activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive
+                        ]}>
+                          {regionCounts['ALL'] ?? 0}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    {regions.map(r => {
+                      const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
+                      const meta = getCuisineMeta(r);
+                      const count = regionCounts[r] || 0;
+
+                      return (
+                        <TouchableOpacity
+                          key={r}
+                          style={[
+                            styles.posRegionChip,
+                            isTablet && { paddingHorizontal: 9, paddingVertical: 4, gap: 4 },
+                            isSelected && styles.posRegionChipActive,
+                          ]}
+                          onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
+                          activeOpacity={0.75}
+                        >
+                          <Text style={[styles.posRegionEmoji, isTablet && { fontSize: 11 }]}>{meta.emoji}</Text>
+                          <Text style={[
+                            styles.posRegionChipText,
+                            isTablet && { fontSize: 11 },
+                            isSelected && styles.posRegionChipTextActive,
+                          ]}>
+                            {r}
+                          </Text>
+                          {count > 0 && (
+                            <View style={[
+                              styles.posRegionChipBadge,
+                              isTablet && { paddingHorizontal: 5, paddingVertical: 1 },
+                              isSelected && styles.posRegionChipBadgeActive
+                            ]}>
+                              <Text style={[
+                                styles.posRegionChipBadgeText,
+                                isTablet && { fontSize: 9 },
+                                isSelected && styles.posRegionChipBadgeTextActive
+                              ]}>
+                                {count}
+                              </Text>
+                            </View>
+                          )}
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Dishes Grid */}
+              <ScrollView 
+                style={styles.dishesScrollView}
+                contentContainerStyle={[
+                  styles.dishesGridContainer, 
+                  isTablet && { padding: 10 },
+                  (isMobile || isTablet) && cart.length > 0 && { paddingBottom: 88 }
+                ]}
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={[styles.dishesGrid, isTablet && { gap: 10 }]}>
+                  {filteredItems.map(item => {
+                    const inCartQty = cart
+                      .filter(c => c.id === item.id || c.id.startsWith(`${item.id}-`))
+                      .reduce((sum, c) => sum + c.qty, 0);
+                    const isItemInCart = inCartQty > 0;
+                    const isOutOfStock = Boolean(item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0);
 
                     return (
                       <TouchableOpacity
-                        key={r}
+                        key={item.id}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                         style={[
-                          styles.posRegionChip,
-                          isSelected && styles.posRegionChipActive,
+                          styles.dishCard,
+                          isItemInCart && styles.dishCardInCart,
+                          isOutOfStock && { opacity: 0.65 },
+                          isTablet && { 
+                            width: '23.6%', 
+                            minWidth: 155, 
+                            flexGrow: 1,
+                            paddingVertical: 8,
+                            paddingHorizontal: 8,
+                            minHeight: 136,
+                            borderRadius: 13,
+                          },
+                          isMobile && { 
+                            width: width < 360 ? '100%' : width < 560 ? '47%' : '31%', 
+                            minWidth: 0,
+                            flexGrow: 1,
+                            paddingVertical: 10, 
+                            paddingHorizontal: 8,
+                            minHeight: 125,
+                          }
                         ]}
-                        onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
+                        onPress={() => addToCart(item)}
                         activeOpacity={0.75}
+                        disabled={isOutOfStock}
                       >
-                        <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
-                        <Text style={[
-                          styles.posRegionChipText,
-                          isSelected && styles.posRegionChipTextActive,
+                        {/* Floating M3 In-Cart Badge */}
+                        {isItemInCart && (
+                          <View style={styles.inCartBadge}>
+                            <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+                            <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
+                          </View>
+                        )}
+
+                        {/* Top: Dish Photo or Fallback Icon */}
+                        <View style={[
+                          styles.dishCardImageWrapper, 
+                          isTablet && { height: 74, marginBottom: 5, borderRadius: 10 },
+                          isMobile && { height: 76 }
                         ]}>
-                          {r}
+                          {item.imageUri && !failedImages[item.id] ? (
+                            <Image 
+                              source={{ uri: item.imageUri }} 
+                              style={styles.dishCardImage} 
+                              resizeMode="cover"
+                              onError={() => setFailedImages(prev => ({ ...prev, [item.id]: true }))}
+                            />
+                          ) : (
+                            <View style={styles.dishCardPlaceholderBox}>
+                              <Ionicons 
+                                name={item.isDeal ? "gift" : "restaurant-outline"} 
+                                size={isTablet ? 24 : 26} 
+                                color="#D4AF37" 
+                              />
+                            </View>
+                          )}
+
+                          {/* Category Chip (Top-Left) */}
+                          <View style={styles.dishCardChipsRow}>
+                            <View style={[styles.dishCardCategoryChip, isTablet && { paddingHorizontal: 5, paddingVertical: 1.5 }]}>
+                              <Text style={[styles.dishCardCategory, isTablet && { fontSize: 8 }]} numberOfLines={1}>
+                                {(item.category || 'Mains').toUpperCase()}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Region Chip (Bottom-Left) */}
+                          {item.region ? (
+                            <View style={[styles.dishCardRegionChip, { position: 'absolute', bottom: 4, left: 4, zIndex: 4 }, isTablet && { paddingHorizontal: 5, paddingVertical: 1.5 }]}>
+                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+                              <Text style={[styles.dishCardRegionText, isTablet && { fontSize: 8 }]} numberOfLines={1}>
+                                {item.region}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          {/* Special Badge tag (Top-Right) */}
+                          {item.badge ? (
+                            <View style={[styles.dishCardBadgeTag, isTablet && { top: 4, right: 4, paddingHorizontal: 5, paddingVertical: 1.5 }]}>
+                              <Text style={[styles.dishCardBadgeText, isTablet && { fontSize: 8 }]} numberOfLines={1}>
+                                {item.badge}
+                              </Text>
+                            </View>
+                          ) : null}
+
+                          {/* Out of Stock Overlay */}
+                          {isOutOfStock && (
+                            <View style={styles.dishSoldOutOverlay}>
+                              <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
+                            </View>
+                          )}
+                        </View>
+
+                        {/* Middle: Dish Name */}
+                        <Text style={[styles.dishCardTitle, isTablet && { fontSize: 11.5, lineHeight: 14.5, marginVertical: 3 }]} numberOfLines={2}>
+                          {item.name}
                         </Text>
-                        {count > 0 && (
-                          <View style={[
-                            styles.posRegionChipBadge,
-                            isSelected && styles.posRegionChipBadgeActive
-                          ]}>
-                            <Text style={[
-                              styles.posRegionChipBadgeText,
-                              isSelected && styles.posRegionChipBadgeTextActive
-                            ]}>
-                              {count}
+
+                        {/* Bottom: Warm Cream Price Capsule OR Order Taker Selector Capsule */}
+                        {hidePrices ? (
+                          <View style={[styles.dishCardOrderPill, isTablet && { paddingHorizontal: 8, paddingVertical: 4, marginTop: 3 }, isItemInCart && styles.dishCardOrderPillActive]}>
+                            <Ionicons 
+                              name={isItemInCart ? "checkmark-circle" : "add-circle-outline"} 
+                              size={12} 
+                              color={isItemInCart ? "#10B981" : "#B45309"} 
+                              style={{ marginRight: 3 }}
+                            />
+                            <Text style={[styles.dishCardOrderText, isTablet && { fontSize: 11 }, isItemInCart && styles.dishCardOrderTextActive]}>
+                              {isItemInCart ? `${inCartQty} in Cart` : 'Add Dish'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={[styles.dishCardPricePill, isTablet && { paddingHorizontal: 10, paddingVertical: 4, marginTop: 3, borderRadius: 10 }, isItemInCart && styles.dishCardPricePillActive]}>
+                            <Text style={[styles.dishCardPriceText, isTablet && { fontSize: 11.5 }, isItemInCart && styles.dishCardPriceTextActive]}>
+                              Rs. {item.price.toLocaleString()}
                             </Text>
                           </View>
                         )}
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
-              </View>
-            )}
 
-            {/* Dishes Grid */}
-            <ScrollView 
-              style={styles.dishesScrollView}
-              contentContainerStyle={styles.dishesGridContainer}
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={styles.dishesGrid}>
-                {filteredItems.map(item => {
-                  const inCartQty = cart
-                    .filter(c => c.id === item.id || c.id.startsWith(`${item.id}-`))
-                    .reduce((sum, c) => sum + c.qty, 0);
-                  const isItemInCart = inCartQty > 0;
-                  const isOutOfStock = Boolean(item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0);
-
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-                      style={[
-                        styles.dishCard,
-                        isItemInCart && styles.dishCardInCart,
-                        isOutOfStock && { opacity: 0.65 },
-                        isMobile && { 
-                          width: width < 420 ? '47.5%' : width < 720 ? '31%' : '23.5%', 
-                          minWidth: 0, 
-                          paddingVertical: 10, 
-                          paddingHorizontal: 8,
-                          minHeight: 125,
-                        }
-                      ]}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={0.75}
-                      disabled={isOutOfStock}
-                    >
-                      {/* Floating M3 In-Cart Badge */}
-                      {isItemInCart && (
-                        <View style={styles.inCartBadge}>
-                          <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
-                          <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
-                        </View>
-                      )}
-
-                      {/* Top: Dish Photo or Fallback Icon */}
-                      <View style={[styles.dishCardImageWrapper, isMobile && { height: 76 }]}>
-                        {item.imageUri ? (
-                          <Image 
-                            source={{ uri: item.imageUri }} 
-                            style={styles.dishCardImage} 
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View style={styles.dishCardPlaceholderBox}>
-                            <Ionicons 
-                              name={item.isDeal ? "gift" : "restaurant-outline"} 
-                              size={26} 
-                              color="#D4AF37" 
-                            />
-                          </View>
-                        )}
-
-                        {/* Category & Region Chips */}
-                        <View style={styles.dishCardChipsRow}>
-                          <View style={styles.dishCardCategoryChip}>
-                            <Text style={styles.dishCardCategory} numberOfLines={1}>
-                              {(item.category || 'Mains').toUpperCase()}
-                            </Text>
-                          </View>
-                          {item.region ? (
-                            <View style={styles.dishCardRegionChip}>
-                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
-                              <Text style={styles.dishCardRegionText} numberOfLines={1}>
-                                {item.region}
-                              </Text>
-                            </View>
-                          ) : null}
-                        </View>
-
-                        {/* Special Badge tag */}
-                        {item.badge ? (
-                          <View style={styles.dishCardBadgeTag}>
-                            <Text style={styles.dishCardBadgeText} numberOfLines={1}>
-                              {item.badge}
-                            </Text>
-                          </View>
-                        ) : null}
-
-                        {/* Out of Stock Overlay */}
-                        {isOutOfStock && (
-                          <View style={styles.dishSoldOutOverlay}>
-                            <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
-                          </View>
-                        )}
-                      </View>
-
-                      {/* Middle: Dish Name */}
-                      <Text style={styles.dishCardTitle} numberOfLines={2}>
-                        {item.name}
-                      </Text>
-
-                      {/* Bottom: Warm Cream Price Capsule OR Order Taker Selector Capsule */}
-                      {hidePrices ? (
-                        <View style={[styles.dishCardOrderPill, isItemInCart && styles.dishCardOrderPillActive]}>
-                          <Ionicons 
-                            name={isItemInCart ? "checkmark-circle" : "add-circle-outline"} 
-                            size={12} 
-                            color={isItemInCart ? "#10B981" : "#B45309"} 
-                            style={{ marginRight: 3 }}
-                          />
-                          <Text style={[styles.dishCardOrderText, isItemInCart && styles.dishCardOrderTextActive]}>
-                            {isItemInCart ? `${inCartQty} in Cart` : 'Add Dish'}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
-                          <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
-                            Rs. {item.price.toLocaleString()}
-                          </Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {filteredItems.length === 0 && (
-                  <View style={styles.noItemsBox}>
-                    <Ionicons name="search" size={40} color="#CBD5E1" />
-                    <Text style={styles.noItemsText}>No items found matching your filter</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          </View>
-        )}
-
-        {/* --------------------------------------------------------
-            RIGHT: CURRENT CART (EXPANDED USER-FRIENDLY SPEC)
-            -------------------------------------------------------- */}
-        {(!isMobile || mobileTab === 'cart') && (
-          <View style={[styles.cartSidebar, isMobile && styles.cartSidebarMobile]}>
-            {/* Header: Title + Item Count + Clear */}
-            <View style={styles.cartHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={styles.cartHeaderIconCircle}>
-                  <Ionicons name="bag-handle" size={17} color="#FFFFFF" />
+                  {filteredItems.length === 0 && (
+                    <View style={styles.noItemsBox}>
+                      <Ionicons name="search" size={40} color="#CBD5E1" />
+                      <Text style={styles.noItemsText}>No items found matching your filter</Text>
+                    </View>
+                  )}
                 </View>
-                <View>
-                  <Text style={styles.cartHeaderTitle}>Current Order</Text>
-                  <Text style={styles.cartHeaderSub}>
-                    {cart.length === 0 ? 'No items in order' : `${cart.reduce((s, i) => s + i.qty, 0)} ${cart.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'} selected`}
-                  </Text>
-                </View>
-              </View>
-
-              {cart.length > 0 && (
-                <TouchableOpacity 
-                  style={styles.cartResetBtn}
-                  onPress={clearCart}
-                  activeOpacity={0.7}
-                  {...(Platform.OS === 'web' ? ({ title: 'Clear entire cart' } as any) : {})}
-                >
-                  <Ionicons name="trash-outline" size={13} color="#DC2626" />
-                  <Text style={styles.cartResetBtnText}>Clear</Text>
-                </TouchableOpacity>
-              )}
+              </ScrollView>
             </View>
+          )}
 
-            {/* Order Type Segmented Switcher (Takeaway / Dine-in / Delivery) */}
-            <View style={styles.orderTypeTabs}>
-              <TouchableOpacity
-                style={[styles.orderTypeTab, orderType === 'takeaway' && styles.orderTypeTabActive]}
-                onPress={() => handleOrderTypeChange('takeaway')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="bag-handle" size={13} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                <Text style={[styles.orderTypeTabText, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
-                  Takeaway
-                </Text>
-                <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
-                  <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.orderTypeTab, orderType === 'dine-in' && styles.orderTypeTabActive]}
-                onPress={() => handleOrderTypeChange('dine-in')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="restaurant" size={13} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                <Text style={[styles.orderTypeTabText, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
-                  Dine-in
-                </Text>
-                <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
-                  <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
-                </View>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.orderTypeTab, orderType === 'delivery' && styles.orderTypeTabActive]}
-                onPress={() => handleOrderTypeChange('delivery')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="bicycle" size={13} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                <Text style={[styles.orderTypeTabText, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
-                  Delivery
-                </Text>
-                <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
-                  <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
-                </View>
-              </TouchableOpacity>
-            </View>
-
-            {/* Table or Customer Bar depending on Order Type */}
-            {orderType === 'dine-in' ? (
-              <View style={styles.tableCabinBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                  <View style={styles.statusIconOrb}>
-                    <Ionicons name="restaurant" size={13} color="#D97706" />
+          {/* --------------------------------------------------------
+              RIGHT: CURRENT CART (FULL-WIDTH PORTRAIT-STYLE ON MOBILE & TABLET)
+              -------------------------------------------------------- */}
+          {((!isMobile && !isTablet) || mobileTab === 'cart') && (
+            <View style={[
+              styles.cartSidebar, 
+              (isMobile || isTablet) && styles.cartSidebarMobile
+            ]}>
+              {/* Header: Title + Item Count + Clear */}
+              <View style={[styles.cartHeaderRow, isTablet && { paddingVertical: 8, paddingHorizontal: 14 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
+                  <View style={[styles.cartHeaderIconCircle, isTablet && { width: 30, height: 30, borderRadius: 15 }]}>
+                    <Ionicons name="bag-handle" size={isTablet ? 14 : 15} color="#FFFFFF" />
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.tableCabinLabel}>Table / Cabin</Text>
-                    <View style={styles.tableCabinPill}>
-                      <Text style={styles.tableCabinPillText} numberOfLines={1}>
-                        {selectedTableObj ? selectedTableObj.name : 'No Table Selected'}
-                      </Text>
-                      {selectedTableObj && (
-                        <Text style={styles.tableCabinPillSub}>
-                          • {getTableFloor(selectedTableObj)} ({getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                <TouchableOpacity 
-                  style={styles.changeTablePill}
-                  onPress={() => setTableModalVisible(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="swap-horizontal" size={13} color="#475569" style={{ marginRight: 3 }} />
-                  <Text style={styles.changeTablePillText}>Change</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.tableCabinBar}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                  <View style={styles.statusIconOrb}>
-                    <Ionicons name="person" size={13} color="#D97706" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.tableCabinLabel}>Customer Details</Text>
-                    <View style={styles.tableCabinPill}>
-                      <Text style={styles.tableCabinPillText} numberOfLines={1}>
-                        {selectedCustomerObj ? selectedCustomerObj.name : 'Walk-in Guest'}
-                      </Text>
-                      {selectedCustomerObj?.phone && (
-                        <Text style={styles.tableCabinPillSub}>
-                          • {selectedCustomerObj.phone}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                </View>
-
-                <TouchableOpacity 
-                  style={styles.changeTablePill}
-                  onPress={() => {
-                    setCustomerSearchQuery('');
-                    setIsCreatingNewCustomer(false);
-                    setCustomerModalVisible(true);
-                  }}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="person-add-outline" size={13} color="#475569" style={{ marginRight: 3 }} />
-                  <Text style={styles.changeTablePillText}>
-                    {selectedCustomerObj ? 'Change' : 'Select'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-
-            {/* Columns Subheader */}
-            <View style={styles.cartColumnSubheader}>
-              <Text style={styles.cartColLabel}>
-                ITEMS IN ORDER ({cart.length})
-              </Text>
-              <Text style={styles.cartColLabel}>
-                {hidePrices ? 'PORTIONS' : 'QTY & SUBTOTAL'}
-              </Text>
-            </View>
-
-            {/* Cart Items or Empty Bag View */}
-            <ScrollView 
-              style={styles.cartItemsScroll}
-              contentContainerStyle={styles.cartItemsScrollContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {cart.length === 0 ? (
-                <View style={styles.emptyCartBox}>
-                  <View style={styles.emptyCartOrb}>
-                    <Ionicons name="basket-outline" size={38} color="#94A3B8" />
-                  </View>
-                  <Text style={styles.emptyCartText}>Cart is currently empty</Text>
-                  <Text style={styles.emptyCartSub}>Tap any dish card on the left to add items</Text>
-                </View>
-              ) : (
-                cart.map(item => (
-                  <View key={item.id} style={styles.cartItemCard}>
-                    {/* Top Row: Dish Name + Trash Button */}
-                    <View style={styles.cartItemTopRow}>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={styles.cartItemName} numberOfLines={2}>{item.name}</Text>
-                        {!hidePrices && (
-                          <Text style={styles.cartItemUnit}>
-                            Rs. {item.price.toLocaleString()} per unit
-                          </Text>
-                        )}
-                      </View>
-
-                      <TouchableOpacity 
-                        style={styles.cartItemTrashBtn}
-                        onPress={() => removeFromCart(item.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        activeOpacity={0.7}
-                        {...(Platform.OS === 'web' ? ({ title: 'Remove item' } as any) : {})}
-                      >
-                        <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                      </TouchableOpacity>
-                    </View>
-
-                    {/* Bottom Row: Controls & Line Total */}
-                    <View style={styles.cartItemBottomRow}>
-                      {/* Stepper Controls */}
-                      <View style={styles.cartStepperBox}>
-                        <TouchableOpacity 
-                          style={styles.cartStepBtn} 
-                          onPress={() => updateQty(item.id, -1)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="remove" size={14} color="#1E293B" />
-                        </TouchableOpacity>
-                        <View style={styles.cartStepQtyBox}>
-                          <Text style={styles.cartStepQty}>{item.qty}</Text>
-                        </View>
-                        <TouchableOpacity 
-                          style={[styles.cartStepBtn, styles.cartStepBtnAdd]} 
-                          onPress={() => updateQty(item.id, 1)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="add" size={14} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Line Total OR Portion Badge in Order Taker mode */}
-                      {hidePrices ? (
-                        <View style={styles.portionPill}>
-                          <Text style={styles.portionPillText}>
-                            {item.qty} {item.qty > 1 ? 'portions' : 'portion'}
-                          </Text>
-                        </View>
-                      ) : (
-                        <View style={styles.cartItemTotalBox}>
-                          <Text style={styles.cartItemTotalLabel}>Total</Text>
-                          <Text style={styles.cartItemTotal}>
-                            Rs. {(item.price * item.qty).toLocaleString()}
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-
-            {/* Settlement Bottom Section */}
-            <View style={styles.cartBottomSettlement}>
-              {/* Financial Lines OR Order Summary */}
-              {hidePrices ? (
-                <View style={styles.orderTakerSummaryBox}>
-                  <View style={styles.orderTakerSummaryRow}>
-                    <View style={styles.orderTakerSummaryItem}>
-                      <Text style={styles.orderTakerSummaryLabel}>Dishes</Text>
-                      <Text style={styles.orderTakerSummaryValue}>{cart.length}</Text>
-                    </View>
-                    <View style={styles.orderTakerSummaryDivider} />
-                    <View style={styles.orderTakerSummaryItem}>
-                      <Text style={styles.orderTakerSummaryLabel}>Portions</Text>
-                      <Text style={styles.orderTakerSummaryValue}>
-                        {cart.reduce((s, i) => s + i.qty, 0)}
-                      </Text>
-                    </View>
-                    <View style={styles.orderTakerSummaryDivider} />
-                    <View style={styles.orderTakerSummaryItem}>
-                      <Text style={styles.orderTakerSummaryLabel}>Dining Type</Text>
-                      <Text style={[styles.orderTakerSummaryValue, { textTransform: 'capitalize', color: '#52141C' }]}>
-                        {orderType}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.orderTakerNoticeBanner}>
-                    <Ionicons name="information-circle-outline" size={14} color="#B45309" />
-                    <Text style={styles.orderTakerNoticeText}>
-                      Order Taker Mode: Dish prices & order totals are hidden.
+                  <View>
+                    <Text style={[styles.cartHeaderTitle, isTablet && { fontSize: 14 }]}>Current Order</Text>
+                    <Text style={[styles.cartHeaderSub, isTablet && { fontSize: 10, marginTop: 0 }]}>
+                      {cart.length === 0 ? 'No items in order' : `${cart.reduce((s, i) => s + i.qty, 0)} ${cart.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'} selected`}
                     </Text>
                   </View>
                 </View>
-              ) : (
-                <>
-                  <View style={styles.mathSummaryLines}>
-                    <View style={styles.mathLine}>
-                      <Text style={styles.mathLabel}>Subtotal</Text>
-                      <Text style={styles.mathValue}>Rs. {subTotal.toFixed(2)}</Text>
+
+                {cart.length > 0 && (
+                  <TouchableOpacity 
+                    style={[styles.cartResetBtn, isTablet && { paddingHorizontal: 10, paddingVertical: 5 }]}
+                    onPress={clearCart}
+                    activeOpacity={0.7}
+                    {...(Platform.OS === 'web' ? ({ title: 'Clear entire cart' } as any) : {})}
+                  >
+                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                    <Text style={[styles.cartResetBtnText, isTablet && { fontSize: 11 }]}>Clear</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Order Type Switcher + Table/Customer Bar (Side-by-side on Tablet Landscape to maximize Cart items height) */}
+              <View style={[isTablet && { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginTop: 7 }]}>
+                {/* Order Type Segmented Switcher (Takeaway / Dine-in / Delivery) */}
+                <View style={[styles.orderTypeTabs, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, padding: 3 }]}>
+                  <TouchableOpacity
+                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'takeaway' && styles.orderTypeTabActive]}
+                    onPress={() => handleOrderTypeChange('takeaway')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="bag-handle" size={12} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
+                      Takeaway
+                    </Text>
+                    {!isMobile && !isTablet && (
+                      <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
+                        <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'dine-in' && styles.orderTypeTabActive]}
+                    onPress={() => handleOrderTypeChange('dine-in')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="restaurant" size={12} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
+                      Dine-in
+                    </Text>
+                    {!isMobile && !isTablet && (
+                      <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
+                        <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'delivery' && styles.orderTypeTabActive]}
+                    onPress={() => handleOrderTypeChange('delivery')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="bicycle" size={12} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
+                      Delivery
+                    </Text>
+                    {!isMobile && !isTablet && (
+                      <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
+                        <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </View>
+
+                {/* Table or Customer Bar depending on Order Type */}
+                {orderType === 'dine-in' ? (
+                  <View style={[styles.tableCabinBar, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, paddingVertical: 6, paddingHorizontal: 12 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                      <View style={[styles.statusIconOrb, isTablet && { width: 26, height: 26, borderRadius: 13 }]}>
+                        <Ionicons name="restaurant" size={12} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.tableCabinLabel, isTablet && { fontSize: 8.5 }]}>Table / Cabin</Text>
+                        <View style={styles.tableCabinPill}>
+                          <Text style={[styles.tableCabinPillText, isTablet && { fontSize: 11.5 }]} numberOfLines={1}>
+                            {selectedTableObj ? selectedTableObj.name : 'No Table Selected'}
+                          </Text>
+                          {selectedTableObj && (
+                            <Text style={[styles.tableCabinPillSub, isTablet && { fontSize: 9.5 }]}>
+                              • {getTableFloor(selectedTableObj)} ({getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
+                            </Text>
+                          )}
+                        </View>
+                      </View>
                     </View>
 
-                    <View style={styles.mathLine}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.mathLabel}>Discount-</Text>
-                        <TouchableOpacity 
-                          style={styles.discountBadgePill}
-                          onPress={() => {
-                            setCustomDiscountInput(discountAmount);
-                            setDiscountModalVisible(true);
-                          }}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="pricetag" size={10} color="#059669" />
-                          <Text style={styles.discountBadgeText}>
-                            {selectedEventCampaign ? selectedEventCampaign.title : (discountVal > 0 ? `Rs. ${discountVal}` : '+ Promo')}
+                    <TouchableOpacity 
+                      style={[styles.changeTablePill, isTablet && { paddingHorizontal: 9, paddingVertical: 5 }]}
+                      onPress={() => setTableModalVisible(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="swap-horizontal" size={12} color="#475569" style={{ marginRight: 3 }} />
+                      <Text style={[styles.changeTablePillText, isTablet && { fontSize: 10.5 }]}>Change</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={[styles.tableCabinBar, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, paddingVertical: 6, paddingHorizontal: 12 }]}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
+                      <View style={[styles.statusIconOrb, isTablet && { width: 26, height: 26, borderRadius: 13 }]}>
+                        <Ionicons name="person" size={12} color="#D97706" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.tableCabinLabel, isTablet && { fontSize: 8.5 }]}>Customer Details</Text>
+                        <View style={styles.tableCabinPill}>
+                          <Text style={[styles.tableCabinPillText, isTablet && { fontSize: 11.5 }]} numberOfLines={1}>
+                            {selectedCustomerObj ? selectedCustomerObj.name : 'Walk-in Guest'}
                           </Text>
+                          {selectedCustomerObj?.phone && (
+                            <Text style={[styles.tableCabinPillSub, isTablet && { fontSize: 9.5 }]}>
+                              • {selectedCustomerObj.phone}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity 
+                      style={[styles.changeTablePill, isTablet && { paddingHorizontal: 9, paddingVertical: 5 }]}
+                      onPress={() => {
+                        setCustomerSearchQuery('');
+                        setIsCreatingNewCustomer(false);
+                        setCustomerModalVisible(true);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="person-add-outline" size={12} color="#475569" style={{ marginRight: 3 }} />
+                      <Text style={[styles.changeTablePillText, isTablet && { fontSize: 10.5 }]}>
+                        {selectedCustomerObj ? 'Change' : 'Select'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              {/* Columns Subheader */}
+              <View style={[styles.cartColumnSubheader, isTablet && { paddingVertical: 5, paddingHorizontal: 14, marginTop: 6 }]}>
+                <Text style={[styles.cartColLabel, isTablet && { fontSize: 9.5 }]}>
+                  ITEMS IN ORDER ({cart.length})
+                </Text>
+                <Text style={[styles.cartColLabel, isTablet && { fontSize: 9.5 }]}>
+                  {hidePrices ? 'PORTIONS' : 'QTY & SUBTOTAL'}
+                </Text>
+              </View>
+
+              {/* Cart Items or Empty Bag View */}
+              <ScrollView 
+                style={[styles.cartItemsScroll, isTablet && { minHeight: 160, flex: 1 }]}
+                contentContainerStyle={[styles.cartItemsScrollContent, isTablet && { paddingVertical: 8, paddingHorizontal: 14, gap: 7 }]}
+                showsVerticalScrollIndicator={true}
+              >
+                {cart.length === 0 ? (
+                  <View style={[styles.emptyCartBox, isTablet && { minHeight: 130, paddingVertical: 14 }]}>
+                    <View style={[styles.emptyCartOrb, isTablet && { width: 52, height: 52, marginBottom: 8 }]}>
+                      <Ionicons name="basket-outline" size={isTablet ? 28 : 38} color="#94A3B8" />
+                    </View>
+                    <Text style={[styles.emptyCartText, isTablet && { fontSize: 13 }]}>Cart is currently empty</Text>
+                    <Text style={[styles.emptyCartSub, isTablet && { fontSize: 11, marginTop: 3 }]}>
+                      {isTablet ? 'Switch to Menu Dishes tab or tap a category on the left to add items' : 'Tap any dish card on the left to add items'}
+                    </Text>
+                  </View>
+                ) : (
+                  cart.map(item => (
+                    <View key={item.id} style={[styles.cartItemCard, isTablet && { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12 }]}>
+                      {/* Top Row: Dish Name + Trash Button */}
+                      <View style={[styles.cartItemTopRow, isTablet && { marginBottom: 5, alignItems: 'center' }]}>
+                        <View style={{ flex: 1, paddingRight: 8 }}>
+                          <Text style={[styles.cartItemName, isTablet && { fontSize: 13.5, lineHeight: 17 }]} numberOfLines={1}>{item.name}</Text>
+                          {!hidePrices && (
+                            <Text style={[styles.cartItemUnit, isTablet && { fontSize: 10.5, marginTop: 1 }]}>
+                              Rs. {item.price.toLocaleString()} / unit
+                            </Text>
+                          )}
+                        </View>
+
+                        <TouchableOpacity 
+                          style={[styles.cartItemTrashBtn, isTablet && { padding: 5 }]}
+                          onPress={() => removeFromCart(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          activeOpacity={0.7}
+                          {...(Platform.OS === 'web' ? ({ title: 'Remove item' } as any) : {})}
+                        >
+                          <Ionicons name="trash-outline" size={14} color="#DC2626" />
                         </TouchableOpacity>
                       </View>
-                      <Text style={[styles.mathValue, { color: '#059669' }]}>Rs. {discountVal.toFixed(2)}</Text>
-                    </View>
 
-                    <View style={styles.mathLine}>
-                      <Text style={[styles.mathLabel, { color: '#0284C7' }]}>Delivery+</Text>
-                      <Text style={[styles.mathValue, { color: '#0284C7' }]}>Rs. {deliveryCharges.toFixed(2)}</Text>
+                      {/* Bottom Row: Controls & Line Total */}
+                      <View style={[styles.cartItemBottomRow, isTablet && { paddingTop: 5 }]}>
+                        {/* Stepper Controls */}
+                        <View style={styles.cartStepperBox}>
+                          <TouchableOpacity 
+                            style={[styles.cartStepBtn, isTablet && { width: 28, height: 28 }]} 
+                            onPress={() => updateQty(item.id, -1)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="remove" size={14} color="#1E293B" />
+                          </TouchableOpacity>
+                          <View style={[styles.cartStepQtyBox, isTablet && { minWidth: 28 }]}>
+                            <Text style={[styles.cartStepQty, isTablet && { fontSize: 12.5 }]}>{item.qty}</Text>
+                          </View>
+                          <TouchableOpacity 
+                            style={[styles.cartStepBtn, styles.cartStepBtnAdd, isTablet && { width: 28, height: 28 }]} 
+                            onPress={() => updateQty(item.id, 1)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="add" size={14} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Line Total OR Portion Badge in Order Taker mode */}
+                        {hidePrices ? (
+                          <View style={[styles.portionPill, isTablet && { paddingHorizontal: 10, paddingVertical: 4 }]}>
+                            <Text style={[styles.portionPillText, isTablet && { fontSize: 11 }]}>
+                              {item.qty} {item.qty > 1 ? 'portions' : 'portion'}
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={styles.cartItemTotalBox}>
+                            <Text style={[styles.cartItemTotalLabel, isTablet && { fontSize: 8.5 }]}>LINE TOTAL</Text>
+                            <Text style={[styles.cartItemTotal, isTablet && { fontSize: 13.5 }]}>
+                              Rs. {(item.price * item.qty).toLocaleString()}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  ))
+                )}
+              </ScrollView>
+
+              {/* Settlement Bottom Section */}
+              <View style={[styles.cartBottomSettlement, isTablet && { paddingVertical: 8, paddingHorizontal: 14 }]}>
+                {/* Financial Lines OR Order Summary */}
+                {hidePrices ? (
+                  <View style={[styles.orderTakerSummaryBox, isTablet && { padding: 8, marginBottom: 6 }]}>
+                    <View style={styles.orderTakerSummaryRow}>
+                      <View style={styles.orderTakerSummaryItem}>
+                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Dishes</Text>
+                        <Text style={[styles.orderTakerSummaryValue, isTablet && { fontSize: 13.5 }]}>{cart.length}</Text>
+                      </View>
+                      <View style={styles.orderTakerSummaryDivider} />
+                      <View style={styles.orderTakerSummaryItem}>
+                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Portions</Text>
+                        <Text style={[styles.orderTakerSummaryValue, isTablet && { fontSize: 13.5 }]}>
+                          {cart.reduce((s, i) => s + i.qty, 0)}
+                        </Text>
+                      </View>
+                      <View style={styles.orderTakerSummaryDivider} />
+                      <View style={styles.orderTakerSummaryItem}>
+                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Dining Type</Text>
+                        <Text style={[styles.orderTakerSummaryValue, { textTransform: 'capitalize', color: '#52141C' }, isTablet && { fontSize: 13.5 }]}>
+                          {orderType}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={[styles.orderTakerNoticeBanner, isTablet && { marginTop: 4, paddingVertical: 3, paddingHorizontal: 6 }]}>
+                      <Ionicons name="information-circle-outline" size={12} color="#B45309" />
+                      <Text style={[styles.orderTakerNoticeText, isTablet && { fontSize: 9.5 }]}>
+                        Order Taker Mode: Prices & totals are hidden.
+                      </Text>
                     </View>
                   </View>
+                ) : (
+                  <>
+                    <View style={[styles.mathSummaryLines, isTablet && { paddingVertical: 5, paddingHorizontal: 12, marginBottom: 6, gap: 2.5 }]}>
+                      <View style={styles.mathLine}>
+                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Subtotal</Text>
+                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>Rs. {subTotal.toFixed(0)}</Text>
+                      </View>
 
-                  {/* Payable Grand Total Banner */}
-                  <View style={styles.payableCard}>
-                    <View style={styles.payableLabelCol}>
-                      <Text style={styles.payableLabel}>TOTAL PAYABLE</Text>
-                      <Text style={styles.payableSub}>Net Order Total</Text>
-                    </View>
-                    <Text style={styles.payableAmount}>Rs. {total.toFixed(2)}</Text>
-                  </View>
-                </>
-              )}
+                      <View style={styles.mathLine}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                          <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Discount-</Text>
+                          <TouchableOpacity 
+                            style={[styles.discountBadgePill, isTablet && { paddingHorizontal: 6, paddingVertical: 1 }]}
+                            onPress={() => {
+                              setCustomDiscountInput(discountAmount);
+                              setDiscountModalVisible(true);
+                            }}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="pricetag" size={9} color="#059669" />
+                            <Text style={[styles.discountBadgeText, isTablet && { fontSize: 9 }]}>
+                              {selectedEventCampaign ? selectedEventCampaign.title : (discountVal > 0 ? `Rs. ${discountVal}` : '+ Promo')}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                        <Text style={[styles.mathValue, { color: '#059669' }, isTablet && { fontSize: 11 }]}>Rs. {discountVal.toFixed(0)}</Text>
+                      </View>
 
-              {/* Action Buttons: Order Taker vs Cashier */}
-              {hidePrices ? (
-                <TouchableOpacity 
-                  style={[styles.proceedPayBtn, cart.length === 0 && { opacity: 0.55 }]}
-                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                  onPress={sendToKitchen}
-                  disabled={cart.length === 0}
-                  activeOpacity={0.85}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Ionicons name="paper-plane" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                    <Text style={styles.proceedPayBtnText}>PUNCH ORDER TO KITCHEN (KOT)</Text>
-                  </View>
-                  <View style={styles.btnShortcutBadge}>
-                    <Text style={styles.btnShortcutBadgeText}>F8</Text>
-                  </View>
-                </TouchableOpacity>
-              ) : (
-                <>
-                  <TouchableOpacity 
-                    style={[styles.proceedPayBtn, cart.length === 0 && { opacity: 0.55 }]}
-                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                    onPress={openCheckout}
-                    disabled={cart.length === 0}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="card-outline" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-                      <Text style={styles.proceedPayBtnText}>PROCEED TO PAYMENT</Text>
-                    </View>
-                    <View style={styles.btnShortcutBadge}>
-                      <Text style={styles.btnShortcutBadgeText}>F9</Text>
-                    </View>
-                  </TouchableOpacity>
+                      <View style={styles.mathLine}>
+                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>GST (16%)+</Text>
+                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>Rs. {tax.toFixed(0)}</Text>
+                      </View>
 
-                  <TouchableOpacity 
-                    style={[styles.holdOrderBtn, cart.length === 0 && { opacity: 0.55 }]}
-                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                    onPress={sendToKitchen}
-                    disabled={cart.length === 0}
-                    activeOpacity={0.85}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      <Ionicons name="pause-circle-outline" size={16} color="#52141C" style={{ marginRight: 8 }} />
-                      <Text style={styles.holdOrderBtnText}>HOLD / PENDING ORDER</Text>
+                      {orderType === 'delivery' && (
+                        <View style={styles.mathLine}>
+                          <Text style={[styles.mathLabel, { color: '#0284C7' }, isTablet && { fontSize: 10.5 }]}>Delivery+</Text>
+                          <Text style={[styles.mathValue, { color: '#0284C7' }, isTablet && { fontSize: 11 }]}>Rs. {deliveryCharges.toFixed(0)}</Text>
+                        </View>
+                      )}
                     </View>
-                    <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.08)', borderColor: 'rgba(82, 20, 28, 0.2)' }]}>
-                      <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
-                    </View>
-                  </TouchableOpacity>
-                </>
-              )}
-            </View>
-          </View>
-        )}
-      </View>
 
-      {/* Floating Bottom Quick Cart Bar on Mobile */}
-      {isMobile && mobileTab === 'menu' && cart.length > 0 && (
-        <View style={styles.mobileFloatingCartContainer}>
-          <TouchableOpacity
-            style={styles.mobileFloatingCartBtn}
-            onPress={() => setMobileTab('cart')}
-            activeOpacity={0.88}
-          >
-            <View style={styles.mobileFloatingCartLeft}>
-              <View style={styles.mobileFloatingCartBadge}>
-                <Text style={styles.mobileFloatingCartBadgeText}>
-                  {cart.reduce((s, i) => s + i.qty, 0)}
-                </Text>
+                    {/* Payable Grand Total Banner */}
+                    <View style={[styles.payableCard, isTablet && { paddingVertical: 7, paddingHorizontal: 14, marginBottom: 7, borderRadius: 11 }]}>
+                      <View style={styles.payableLabelCol}>
+                        <Text style={[styles.payableLabel, isTablet && { fontSize: 10 }]}>TOTAL PAYABLE</Text>
+                        <Text style={[styles.payableSub, isTablet && { fontSize: 8.5, marginTop: 0 }]}>Net Order Total</Text>
+                      </View>
+                      <Text style={[styles.payableAmount, isTablet && { fontSize: 19 }]}>Rs. {Math.round(total).toLocaleString()}</Text>
+                    </View>
+                  </>
+                )}
+
+                {/* Action Buttons: on Tablet Landscape, place side by side at full Portrait size */}
+                <View style={[isTablet && { flexDirection: 'row', gap: 10, alignItems: 'center' }]}>
+                  {hidePrices ? (
+                    <TouchableOpacity 
+                      style={[
+                        styles.proceedPayBtn, 
+                        isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
+                        cart.length === 0 && { opacity: 0.55 }
+                      ]}
+                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                      onPress={sendToKitchen}
+                      disabled={cart.length === 0}
+                      activeOpacity={0.85}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                        <Ionicons name="paper-plane" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
+                        <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>PUNCH ORDER (SEND TO KITCHEN)</Text>
+                      </View>
+                      <View style={styles.btnShortcutBadge}>
+                        <Text style={styles.btnShortcutBadgeText}>F8</Text>
+                      </View>
+                    </TouchableOpacity>
+                  ) : (
+                    <>
+                      <TouchableOpacity 
+                        style={[
+                          styles.proceedPayBtn, 
+                          isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
+                          cart.length === 0 && { opacity: 0.55 }
+                        ]}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                        onPress={openCheckout}
+                        disabled={cart.length === 0}
+                        activeOpacity={0.85}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="card-outline" size={16} color="#FFFFFF" style={{ marginRight: 7 }} />
+                          <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>PROCEED TO PAYMENT</Text>
+                        </View>
+                        <View style={styles.btnShortcutBadge}>
+                          <Text style={styles.btnShortcutBadgeText}>F9</Text>
+                        </View>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={[
+                          styles.holdOrderBtn, 
+                          isTablet && { flex: 1, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
+                          cart.length === 0 && { opacity: 0.55 }
+                        ]}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                        onPress={sendToKitchen}
+                        disabled={cart.length === 0}
+                        activeOpacity={0.85}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                          <Ionicons name="pause-circle-outline" size={16} color="#52141C" style={{ marginRight: 6 }} />
+                          <Text style={[styles.holdOrderBtnText, isTablet && { fontSize: 12 }]}>HOLD / PENDING ORDER</Text>
+                        </View>
+                        <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.08)', borderColor: 'rgba(82, 20, 28, 0.2)' }]}>
+                          <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
+                        </View>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
               </View>
-              <View>
-                <Text style={styles.mobileFloatingCartTitle}>View Current Cart</Text>
-                <Text style={styles.mobileFloatingCartSub}>
-                  {cart.length} {cart.length === 1 ? 'item' : 'items'} in order
-                </Text>
-              </View>
             </View>
+          )}
 
-            <View style={styles.mobileFloatingCartRight}>
-              <Text style={styles.mobileFloatingCartTotal}>
-                {hidePrices
-                  ? `${cart.reduce((s, i) => s + i.qty, 0)} Portions`
-                  : `Rs. ${Math.round(total).toLocaleString()}`}
-              </Text>
-              <Ionicons name="arrow-forward-circle" size={24} color="#D4AF37" />
+          {/* Floating Bottom Quick Cart Bar on Mobile Portrait & Tablet Landscape */}
+          {(isMobile || isTablet) && mobileTab === 'menu' && cart.length > 0 && (
+            <View style={styles.mobileFloatingCartContainer}>
+              <TouchableOpacity
+                style={styles.mobileFloatingCartBtn}
+                onPress={() => setMobileTab('cart')}
+                activeOpacity={0.88}
+              >
+                <View style={styles.mobileFloatingCartLeft}>
+                  <View style={styles.mobileFloatingCartBadge}>
+                    <Text style={styles.mobileFloatingCartBadgeText}>
+                      {cart.reduce((s, i) => s + i.qty, 0)}
+                    </Text>
+                  </View>
+                  <View>
+                    <Text style={styles.mobileFloatingCartTitle}>View Current Cart</Text>
+                    <Text style={styles.mobileFloatingCartSub}>
+                      {cart.length} {cart.length === 1 ? 'item' : 'items'} in order
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.mobileFloatingCartRight}>
+                  <Text style={styles.mobileFloatingCartTotal}>
+                    {hidePrices
+                      ? `${cart.reduce((s, i) => s + i.qty, 0)} Portions`
+                      : `Rs. ${Math.round(total).toLocaleString()}`}
+                  </Text>
+                  <Ionicons name="arrow-forward-circle" size={24} color="#D4AF37" />
+                </View>
+              </TouchableOpacity>
             </View>
-          </TouchableOpacity>
+          )}
         </View>
-      )}
+      </View>
 
       {/* ========================================================
           MODAL: DINING TABLE & CABIN SELECTION (SULTAN ARCHITECTURE)
@@ -3578,8 +3734,15 @@ const styles = StyleSheet.create({
   },
   categorySidebarMobile: {
     width: '100%',
-    maxHeight: 110,
-    padding: 6,
+    height: 76,
+    minHeight: 76,
+    maxHeight: 76,
+    flexShrink: 0,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRightWidth: 0,
+    borderBottomWidth: 1.5,
+    borderBottomColor: 'rgba(212, 175, 55, 0.25)',
   },
   categoryHeaderRow: {
     flexDirection: 'row',
@@ -3705,6 +3868,14 @@ const styles = StyleSheet.create({
   categoriesContainer: {
     paddingBottom: 10,
   },
+  categoriesScrollMobile: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 4,
+    paddingRight: 16,
+    paddingBottom: 0,
+    alignItems: 'center',
+  },
   categoriesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -3732,6 +3903,14 @@ const styles = StyleSheet.create({
         transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
       } as any
     }),
+  },
+  categoryTileMobile: {
+    width: 'auto',
+    minWidth: 108,
+    height: 60,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 12,
   },
   categoryTileActive: {
     backgroundColor: '#E5B83B',
@@ -4343,6 +4522,7 @@ const styles = StyleSheet.create({
     }),
   },
   cartSidebarMobile: {
+    flex: 1,
     width: '100%',
     borderLeftWidth: 0,
   },
@@ -4903,11 +5083,13 @@ const styles = StyleSheet.create({
   modalToolbarTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 10,
     zIndex: 101,
   },
   modalSearchBar: {
     flex: 1,
+    minWidth: 180,
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
@@ -5135,6 +5317,7 @@ const styles = StyleSheet.create({
   seatingTypeFilterBox: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     backgroundColor: '#EDF2F7',
     borderRadius: 8,
     padding: 2.5,
@@ -5235,6 +5418,8 @@ const styles = StyleSheet.create({
   },
   tableModalCard: {
     width: '31%',
+    minWidth: 145,
+    flexGrow: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,

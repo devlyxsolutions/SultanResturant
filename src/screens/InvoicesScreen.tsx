@@ -43,17 +43,6 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
   const effectiveRoleTarget = isActualAdmin ? undefined : (targetRoleOverride || (userRole === 'manager' ? 'manager' : undefined));
   const { can, canViewRevenue, canVoidInvoice, canProcessReturns, canExportReports } = useRolePermissions(effectiveRoleTarget);
 
-  if (!isActualAdmin && !can('canAccessInvoices')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Invoices & Order History"
-        urduModuleName="انوائسز اور آرڈر ہسٹری"
-        requiredPermission="canAccessInvoices"
-        backRoute={backRoute}
-      />
-    );
-  }
-
   const kpiCardResponsiveStyle = useMemo<ViewStyle>(() => {
     if (width < 380) {
       return { width: '100%', minWidth: '100%' };
@@ -394,6 +383,17 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       });
     }
   };
+
+  if (!isActualAdmin && !can('canAccessInvoices')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Invoices & Order History"
+        urduModuleName="انوائسز اور آرڈر ہسٹری"
+        requiredPermission="canAccessInvoices"
+        backRoute={backRoute}
+      />
+    );
+  }
 
   return (
     <View style={styles.container}>

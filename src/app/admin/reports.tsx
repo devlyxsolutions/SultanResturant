@@ -72,17 +72,6 @@ export default function ReportsScreen() {
 
   const { can } = useRolePermissions();
 
-  if (!can('canAccessReports')) {
-    return (
-      <PermissionDeniedScreen
-        moduleName="Financial Reports & Analytics"
-        urduModuleName="مالیاتی رپورٹس اور تجزیات"
-        requiredPermission="canAccessReports"
-        backRoute="/admin/dashboard"
-      />
-    );
-  }
-
   // Stores
   const invoices = useRestaurantStore((s) => s.invoices || []);
   const tables = useRestaurantStore((s) => s.tables || []);
@@ -664,6 +653,17 @@ export default function ReportsScreen() {
     else Alert.alert(title, msg);
   }
 
+  if (!can('canAccessReports')) {
+    return (
+      <PermissionDeniedScreen
+        moduleName="Financial Reports & Analytics"
+        urduModuleName="مالیاتی رپورٹس اور تجزیات"
+        requiredPermission="canAccessReports"
+        backRoute="/admin/dashboard"
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea} edges={['top', 'left', 'right']}>
       {/* Light Header Bar */}
@@ -676,7 +676,7 @@ export default function ReportsScreen() {
           >
             <Ionicons name="arrow-back" size={20} color={LIGHT.burgundy} />
           </TouchableOpacity>
-          <View>
+          <View style={{ flex: 1 }}>
             <View style={styles.titleRow}>
               <Ionicons name="bar-chart" size={20} color={LIGHT.burgundy} />
               <Text style={styles.headerTitle}>Financial Intelligence & Audit</Text>
@@ -1528,7 +1528,8 @@ export default function ReportsScreen() {
                 <Text style={styles.panelSub}>Difference = Issued − (Cooked + Returned)</Text>
               </View>
 
-              <View style={styles.menuTable}>
+              <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false}>
+              <View style={[styles.menuTable, isMobile && { minWidth: 660 }]}>
                 {/* Table Header */}
                 <View style={styles.menuTableHeader}>
                   <Text style={[styles.mth, { flex: 2 }]}>Raw Material Item</Text>
@@ -1640,6 +1641,7 @@ export default function ReportsScreen() {
                   ))
                 )}
               </View>
+              </ScrollView>
             </View>
 
             {/* 2. Cooked Dishes Production Log (Kia Kia Cook Hua) */}
@@ -1654,7 +1656,8 @@ export default function ReportsScreen() {
                 </Text>
               </View>
 
-              <View style={styles.menuTable}>
+              <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false}>
+              <View style={[styles.menuTable, isMobile && { minWidth: 560 }]}>
                 <View style={styles.menuTableHeader}>
                   <Text style={[styles.mth, { flex: 0.6 }]}>#</Text>
                   <Text style={[styles.mth, { flex: 2.2 }]}>Dish Name</Text>
@@ -1702,6 +1705,7 @@ export default function ReportsScreen() {
                   ))
                 )}
               </View>
+              </ScrollView>
             </View>
           </View>
         )}
@@ -2191,6 +2195,7 @@ const styles = StyleSheet.create({
   titleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     gap: 8,
   },
   headerTitle: {
@@ -2423,6 +2428,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     backgroundColor: '#F1F5F9',
     paddingHorizontal: 14,
     paddingVertical: 10,
@@ -2430,6 +2436,7 @@ const styles = StyleSheet.create({
     borderTopColor: '#E2E8F0',
   },
   statementCatText: {
+    flex: 1,
     fontSize: 12,
     fontWeight: '800',
     color: LIGHT.ink,
@@ -2444,12 +2451,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F8FAFC',
   },
   statementItem: {
+    flex: 1,
     fontSize: 13,
     color: LIGHT.textSecondary,
     fontWeight: '500',

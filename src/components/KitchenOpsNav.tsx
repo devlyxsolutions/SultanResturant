@@ -85,9 +85,9 @@ export default function KitchenOpsNav({ backRoute }: { backRoute?: string }) {
           >
             <Ionicons name="arrow-back" size={18} color={BRAND.burgundy} />
           </TouchableOpacity>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.suiteTitle}>Sultan Kitchen Operations Suite</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={[styles.suiteTitle, isMobile && { fontSize: 14 }]}>Sultan Kitchen Operations Suite</Text>
               {activeSession && (
                 <View style={styles.livePill}>
                   <View style={styles.liveDot} />
@@ -97,7 +97,7 @@ export default function KitchenOpsNav({ backRoute }: { backRoute?: string }) {
                 </View>
               )}
             </View>
-            <Text style={styles.suiteSub}>
+            <Text style={styles.suiteSub} numberOfLines={isMobile ? 1 : 2}>
               Store Requisition • Recipes BOM • Auto KOT Deduct • Chef Adjustments • EOD Restock • Food Costing
             </Text>
           </View>
