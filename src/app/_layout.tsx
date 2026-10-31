@@ -1,4 +1,4 @@
-import { Stack, usePathname } from 'expo-router';
+import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Platform, View } from 'react-native';
@@ -46,24 +46,25 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
 }
 
 export default function RootLayout() {
-  const pathname = usePathname();
-
   useEffect(() => {
     // Safely warm-up vector icons on web
     if (Platform.OS === 'web') {
       Font.loadAsync(Ionicons.font).catch(() => {});
     }
 
-    // Initialize real-time cross-device sync hub
-    initSyncService();
+    // Hide splash screen immediately once layout mounts
+    SplashScreen.hideAsync().catch(() => {});
+
+    // Defer sync and background services slightly so first UI frame paints instantaneously
+    const syncTimer = setTimeout(() => {
+      initSyncService();
+    }, 30);
 
     // Initialize native Android incoming call detection listener
     const cleanupCallListener = initCallListener();
 
-    // Hide splash screen immediately once layout mounts
-    SplashScreen.hideAsync().catch(() => {});
-
     return () => {
+      clearTimeout(syncTimer);
       cleanupCallListener();
     };
   }, []);

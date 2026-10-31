@@ -45,6 +45,10 @@ if (Platform.OS === 'android') {
  * if enabled in settings.
  */
 export function initCallListener(): () => void {
+  if (Platform.OS !== 'android') {
+    return () => {};
+  }
+
   const store = useCallStore.getState();
 
   // If enabled, ensure the native service is running

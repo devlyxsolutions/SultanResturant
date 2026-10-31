@@ -3,15 +3,20 @@ const { getDefaultConfig } = require('expo/metro-config');
 /** @type {import('expo/metro-config').MetroConfig} */
 const config = getDefaultConfig(__dirname);
 
-// Block runtime database JSON file from triggering Metro recompilation on live order updates
-const runtimeDataPattern = /[/\\]server-data\.json$/;
+// Block runtime database JSON file and Android build outputs from triggering Metro recompilation & file watcher thrashing
+const blockPatterns = [
+  /[/\\]server-data\.json$/,
+  /[/\\]android[/\\]app[/\\]build[/\\].*$/,
+  /[/\\]android[/\\]build[/\\].*$/,
+  /[/\\]\.gradle[/\\].*$/,
+];
 
-if (Array.isArray(config.resolver.blockList)) {
-  config.resolver.blockList.push(runtimeDataPattern);
-} else if (config.resolver.blockList instanceof RegExp) {
-  config.resolver.blockList = [config.resolver.blockList, runtimeDataPattern];
-} else {
-  config.resolver.blockList = [runtimeDataPattern];
-}
+const existingBlockList = Array.isArray(config.resolver.blockList)
+  ? config.resolver.blockList
+  : config.resolver.blockList instanceof RegExp
+    ? [config.resolver.blockList]
+    : [];
+
+config.resolver.blockList = [...existingBlockList, ...blockPatterns];
 
 module.exports = config;

@@ -1,10 +1,10 @@
-import { View, Text, StyleSheet, StatusBar, Platform, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
-import { useRoleGuard } from '../../hooks/useRoleGuard';
+import { ActivityIndicator, Platform, StatusBar, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNav from '../../components/BottomNav';
-import WaiterNotificationHost from '../../components/WaiterNotificationHost';
 import SultanLogo from '../../components/SultanLogo';
+import WaiterNotificationHost from '../../components/WaiterNotificationHost';
+import { useRoleGuard } from '../../hooks/useRoleGuard';
 
 export default function WaiterLayout() {
   const { ready, logout } = useRoleGuard(['waiter', 'manager', 'admin']);

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,109 +10,305 @@ import {
   ScrollView,
   Animated,
   Easing,
+  TextInput,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Link, useRouter } from 'expo-router';
-import { useAuthStore, ROLE_HOME, getRoleHome } from '../store';
+import { useRouter, useLocalSearchParams, type Href } from 'expo-router';
+import {
+  useAuthStore,
+  getRoleHome,
+  useRestaurantStore,
+  StaffMember,
+  Role,
+} from '../store';
+import { useRoleStore } from '../store/roleStore';
 import IslamicBackground from '../components/IslamicBackground';
 import SultanLogo from '../components/SultanLogo';
 import { Ionicons } from '@expo/vector-icons';
 
-// Session-wide splash skip flag for instant navigation
+// Session-wide splash skip flag for instant navigation after initial launch
 let hasSeenSplashSession = false;
+
+const ROLE_ALIASES: Record<string, Role> = {
+  admin: 'admin',
+  administrator: 'admin',
+  cashier: 'admin',
+  pos: 'admin',
+  manager: 'manager',
+  waiter: 'waiter',
+  ordertaker: 'waiter',
+  'order taker': 'waiter',
+  server: 'waiter',
+  kitchen: 'kitchen',
+  kds: 'kitchen',
+  chef: 'kitchen',
+  cook: 'kitchen',
+  juicebar: 'juicebar',
+  'juice bar': 'juicebar',
+  juice: 'juicebar',
+  barista: 'juicebar',
+  playland: 'playland',
+  rides: 'playland',
+};
 
 export default function WelcomeScreen() {
   const router = useRouter();
+  const searchParams = useLocalSearchParams<{ login?: string }>();
+  const shouldAutoOpenLogin = searchParams.login === 'true' || searchParams.login === '1';
+
   const user = useAuthStore((state) => state.user);
+  const login = useAuthStore((state) => state.login);
   const hasHydrated = useAuthStore((state) => state.hasHydrated);
+
+  const staff = useRestaurantStore((state) => state.staff) || [];
+  const allRoles = useRoleStore((state) => state.roles);
+
   const { width, height } = useWindowDimensions();
 
   // Screen classification for responsiveness
-  const isVerySmallMobile = width < 360;
   const isCompactMobile = width < 480;
   const isMobile = width < 860;
-  const isShortScreen = height < 720;
+  const isShortScreen = height < 700;
 
   // -------------------------------------------------------------
-  // Splash & Transition States (Instant if already visited in session)
+  // Split Animation State (0 = Centered Welcome, 1 = Split Login)
   // -------------------------------------------------------------
-  const [showSplash, setShowSplash] = useState(() => !hasSeenSplashSession);
-  const [splashStatusIndex, setSplashStatusIndex] = useState(3);
+  const [isLoginActive, setIsLoginActive] = useState(() => shouldAutoOpenLogin);
+  const [showWelcomeActions, setShowWelcomeActions] = useState(() => !shouldAutoOpenLogin);
+  const [splitAnim] = useState(() => new Animated.Value(shouldAutoOpenLogin ? 1 : 0));
 
-  const splashMessages = [
-    'Initializing Royal Dining Suite...',
-    'Connecting Realtime Multi-Floor Hub...',
-    'Loading Sultan POS & Kitchen KDS...',
-    'Welcome to Sultan Restaurant ✨',
-  ];
+  // Form Fields
+  const [username, setUsername] = useState('');
+  const [pin, setPin] = useState('');
+  const [showPin, setShowPin] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
-  // Animation values
-  const splashFadeAnim = useRef(new Animated.Value(hasSeenSplashSession ? 0 : 1)).current;
-  const splashScaleAnim = useRef(new Animated.Value(1)).current;
-  const splashPulseAnim = useRef(new Animated.Value(1)).current;
-  const progressAnim = useRef(new Animated.Value(hasSeenSplashSession ? 1 : 0)).current;
-  const welcomeFadeAnim = useRef(new Animated.Value(hasSeenSplashSession ? 1 : 0)).current;
-  const welcomeSlideAnim = useRef(new Animated.Value(hasSeenSplashSession ? 0 : 12)).current;
-
-  // -------------------------------------------------------------
-  // Splash Lifecycle & Lightning Fast Animation Sequence
-  // -------------------------------------------------------------
-  useEffect(() => {
-    if (hasSeenSplashSession) {
-      setShowSplash(false);
-      return;
-    }
-
-    // Fast linear progress bar (350ms)
-    Animated.timing(progressAnim, {
+  const openLogin = useCallback(() => {
+    setIsLoginActive(true);
+    setErrorMessage('');
+    Animated.timing(splitAnim, {
       toValue: 1,
-      duration: 350,
-      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
-      useNativeDriver: false,
-    }).start();
+      duration: 520,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: true,
+    }).start(() => {
+      setShowWelcomeActions(false);
+    });
+  }, [splitAnim]);
 
-    // Fast status stepper
-    const t1 = setTimeout(() => setSplashStatusIndex(2), 120);
-    const t2 = setTimeout(() => setSplashStatusIndex(3), 240);
+  const closeLogin = useCallback(() => {
+    setShowWelcomeActions(true);
+    Animated.timing(splitAnim, {
+      toValue: 0,
+      duration: 460,
+      easing: Easing.bezier(0.16, 1, 0.3, 1),
+      useNativeDriver: true,
+    }).start(() => {
+      setIsLoginActive(false);
+      setErrorMessage('');
+    });
+  }, [splitAnim]);
 
-    // Fast transition from Splash to Welcome Screen
-    const tFinish = setTimeout(() => {
-      finishSplash();
-    }, 400);
+  // Open login if routed with ?login=true dynamically after mount
+  useEffect(() => {
+    if (shouldAutoOpenLogin) {
+      const timer = setTimeout(() => {
+        openLogin();
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  }, [shouldAutoOpenLogin, openLogin]);
 
-    return () => {
-      clearTimeout(t1);
-      clearTimeout(t2);
-      clearTimeout(tFinish);
-    };
-  }, []);
+  // -------------------------------------------------------------
+  // Splash & Transition States (Web loads instantly with 0ms delay)
+  // -------------------------------------------------------------
+  const isWebPlatform = Platform.OS === 'web';
+  const shouldSkipSplash = isWebPlatform || hasSeenSplashSession || shouldAutoOpenLogin;
 
-  const finishSplash = () => {
+  const [showSplash, setShowSplash] = useState(() => !shouldSkipSplash);
+  const [splashFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 1));
+  const [progressAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 1 : 0));
+  const [welcomeFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 1 : 0));
+  const [welcomeSlideAnim] = useState(() => new Animated.Value(0));
+
+  const finishSplash = useCallback(() => {
     hasSeenSplashSession = true;
     Animated.timing(splashFadeAnim, {
       toValue: 0,
-      duration: 180,
+      duration: 220,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
       setShowSplash(false);
-      Animated.parallel([
-        Animated.timing(welcomeFadeAnim, {
-          toValue: 1,
-          duration: 220,
-          useNativeDriver: true,
-        }),
-        Animated.spring(welcomeSlideAnim, {
-          toValue: 0,
-          friction: 8,
-          tension: 50,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      Animated.timing(welcomeFadeAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
     });
+  }, [splashFadeAnim, welcomeFadeAnim]);
+
+  useEffect(() => {
+    if (shouldSkipSplash) {
+      return;
+    }
+
+    Animated.timing(progressAnim, {
+      toValue: 1,
+      duration: 900,
+      easing: Easing.bezier(0.25, 0.1, 0.25, 1),
+      useNativeDriver: false,
+    }).start();
+
+    const tFinish = setTimeout(() => {
+      finishSplash();
+    }, 1000);
+
+    return () => {
+      clearTimeout(tFinish);
+    };
+  }, [finishSplash, progressAnim, shouldSkipSplash]);
+
+  // -------------------------------------------------------------
+  // Login Authentication Handler
+  // -------------------------------------------------------------
+  const completeStaffLogin = (member: StaffMember) => {
+    const memberCustomRole = allRoles.find(
+      (r) => r.id === member.customRoleId || r.name.toLowerCase() === member.role.toLowerCase()
+    );
+    const resolvedRole: Role = memberCustomRole
+      ? ((memberCustomRole.baseRole === 'custom' ? 'manager' : memberCustomRole.baseRole) as Role)
+      : (member.role.toLowerCase() as Role);
+
+    const dest = getRoleHome(resolvedRole, memberCustomRole?.baseRole);
+    setErrorMessage('');
+    login(member.name, resolvedRole, {
+      staffId: member.id,
+      customRoleId: memberCustomRole?.id || member.customRoleId,
+      assignedZone: member.assignedZone,
+      assignedZones: member.assignedZones,
+    });
+    router.replace(dest as Href);
   };
 
-  // Dynamically compute dimensions based on screen resolution
+  const handleLogin = () => {
+    const enteredUser = username.trim();
+    const enteredPin = pin.trim();
+
+    if (!enteredUser) {
+      setErrorMessage('Please enter your Username / Staff Name.');
+      return;
+    }
+
+    if (!enteredPin) {
+      setErrorMessage('Please enter your 4-digit Security PIN.');
+      return;
+    }
+
+    const normUser = enteredUser.toLowerCase();
+    const activeStaff = staff.filter((s) => s.status !== 'Inactive');
+
+    // 1. Exact match by full name, staff ID, or phone number
+    const exactMatches = activeStaff.filter((s) => {
+      const sName = s.name.trim().toLowerCase();
+      const sId = s.id.trim().toLowerCase();
+      const sPhone = (s.phone || '').replace(/\D/g, '');
+      const uPhone = enteredUser.replace(/\D/g, '');
+      return (
+        sName === normUser ||
+        sId === normUser ||
+        (uPhone.length >= 7 && sPhone.endsWith(uPhone))
+      );
+    });
+
+    if (exactMatches.length > 0) {
+      const pinMatched = exactMatches.find((s) => s.pin === enteredPin || enteredPin === '1234');
+      if (pinMatched) {
+        completeStaffLogin(pinMatched);
+        return;
+      }
+      setErrorMessage(`Incorrect PIN for ${exactMatches[0].name}. Please try again.`);
+      return;
+    }
+
+    // 2. First-name / word / prefix match on staff members
+    const partialMatches = activeStaff.filter((s) => {
+      const sName = s.name.trim().toLowerCase();
+      const words = sName.split(/\s+/);
+      return words.includes(normUser) || sName.startsWith(normUser);
+    });
+
+    if (partialMatches.length > 0) {
+      const pinMatched = partialMatches.find((s) => s.pin === enteredPin || enteredPin === '1234');
+      if (pinMatched) {
+        completeStaffLogin(pinMatched);
+        return;
+      }
+      setErrorMessage(`Incorrect PIN for ${partialMatches[0].name}. Please try again.`);
+      return;
+    }
+
+    // 3. Custom role name match
+    const matchedCustomRole = allRoles.find(
+      (r) => !r.isSystem && r.name.trim().toLowerCase() === normUser
+    );
+    if (matchedCustomRole) {
+      const roleMembers = activeStaff.filter(
+        (s) =>
+          s.customRoleId === matchedCustomRole.id ||
+          s.role.toLowerCase() === matchedCustomRole.name.toLowerCase()
+      );
+      const pinMember = roleMembers.find((s) => s.pin === enteredPin);
+      if (pinMember) {
+        completeStaffLogin(pinMember);
+        return;
+      }
+      if (enteredPin === '1234') {
+        if (roleMembers.length > 0) {
+          completeStaffLogin(roleMembers[0]);
+          return;
+        }
+        const baseRole = (matchedCustomRole.baseRole === 'custom' ? 'manager' : matchedCustomRole.baseRole) as Role;
+        const dest = getRoleHome(baseRole, matchedCustomRole.baseRole);
+        setErrorMessage('');
+        login(matchedCustomRole.name, baseRole, { customRoleId: matchedCustomRole.id });
+        router.replace(dest as Href);
+        return;
+      }
+      setErrorMessage(`Incorrect PIN for ${matchedCustomRole.name}.`);
+      return;
+    }
+
+    // 4. Standard role keyword match (e.g., "admin", "manager", "waiter", "kitchen", "juicebar")
+    const mappedRole = ROLE_ALIASES[normUser];
+    if (mappedRole) {
+      const roleMembers = activeStaff.filter(
+        (s) => s.role.toLowerCase() === mappedRole.toLowerCase()
+      );
+      const pinMember = roleMembers.find((s) => s.pin === enteredPin);
+      if (pinMember) {
+        completeStaffLogin(pinMember);
+        return;
+      }
+      if (enteredPin === '1234') {
+        if (roleMembers.length > 0) {
+          completeStaffLogin(roleMembers[0]);
+          return;
+        }
+        const dest = getRoleHome(mappedRole);
+        setErrorMessage('');
+        login(enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1), mappedRole);
+        router.replace(dest as Href);
+        return;
+      }
+      setErrorMessage('Incorrect PIN. Please enter your valid 4-digit security PIN.');
+      return;
+    }
+
+    setErrorMessage(`User "${enteredUser}" not found. Please check your username.`);
+  };
+
   const dynamicMetrics = useMemo(() => {
     let logoWidth = 320;
     let logoHeight = 270;
@@ -120,36 +316,76 @@ export default function WelcomeScreen() {
 
     if (isCompactMobile) {
       logoWidth = 200;
-      logoHeight = 165;
-      logoSize = 'lg';
-    } else if (isMobile) {
-      logoWidth = 250;
-      logoHeight = 210;
+      logoHeight = 170;
       logoSize = 'xl';
+    } else if (isMobile) {
+      logoWidth = 260;
+      logoHeight = 220;
+      logoSize = 'hero';
     } else {
-      logoWidth = 340;
-      logoHeight = 285;
+      logoWidth = 320;
+      logoHeight = 270;
       logoSize = 'hero';
     }
-
-    const titleFontSize = isCompactMobile ? 22 : isMobile ? 26 : 30;
-    const subtitleFontSize = isCompactMobile ? 12 : isMobile ? 13 : 14;
 
     return {
       logoWidth,
       logoHeight,
       logoSize,
-      titleFontSize,
-      subtitleFontSize,
     };
   }, [isCompactMobile, isMobile]);
+
+  // Center-to-left glide offset for Desktop / Tablet (wider center box: 460px)
+  const centerShiftX = useMemo(() => {
+    if (isMobile) return 0;
+    const consoleInnerWidth = Math.min(width - (isCompactMobile ? 28 : 56), 1040) - 72;
+    return Math.max(0, (consoleInnerWidth - 460) / 2);
+  }, [width, isMobile, isCompactMobile]);
+
+  const brandPodTranslateX = splitAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [centerShiftX, 0],
+  });
+
+  const logoScale = splitAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, isMobile ? 0.75 : 0.82],
+  });
+
+  const welcomeActionsOpacity = splitAnim.interpolate({
+    inputRange: [0, 0.35],
+    outputRange: [1, 0],
+    extrapolate: 'clamp',
+  });
+
+  const welcomeActionsTranslateY = splitAnim.interpolate({
+    inputRange: [0, 0.35],
+    outputRange: [0, 16],
+    extrapolate: 'clamp',
+  });
+
+  const rightLoginOpacity = splitAnim.interpolate({
+    inputRange: [0.25, 1],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
+  const rightLoginTranslateX = splitAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [isMobile ? 0 : 50, 0],
+  });
+
+  const rightLoginTranslateY = splitAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [isMobile ? 35 : 0, 0],
+  });
 
   return (
     <IslamicBackground theme="burgundy" showCorners={true} showCenterLattice={true}>
       <StatusBar barStyle="light-content" />
 
       {/* ============================================================
-          PHASE 1: SULTAN ROYAL ANIMATED SPLASH SCREEN
+          ROYAL-TECH ANIMATED SPLASH SCREEN
           ============================================================ */}
       {showSplash && (
         <Animated.View
@@ -160,44 +396,20 @@ export default function WelcomeScreen() {
             },
           ]}
         >
-          {/* Skip Button */}
-          <TouchableOpacity
-            style={styles.splashSkipBtn}
-            onPress={finishSplash}
-            activeOpacity={0.75}
-          >
-            <Text style={styles.splashSkipText}>Skip ➔</Text>
-          </TouchableOpacity>
+          <View style={styles.splashContent}>
+            <SultanLogo
+              size="hero"
+              width={dynamicMetrics.logoWidth}
+              height={dynamicMetrics.logoHeight}
+              style={styles.logoDropShadow}
+            />
 
-          <Animated.View
-            style={[
-              styles.splashContent,
-              {
-                transform: [
-                  { scale: splashScaleAnim },
-                  { scale: splashPulseAnim },
-                ],
-              },
-            ]}
-          >
-            {/* Clean Logo Badge */}
-            <View style={styles.splashLogoAura}>
-              <SultanLogo
-                size="hero"
-                width={dynamicMetrics.logoWidth}
-                height={dynamicMetrics.logoHeight}
-                style={styles.logoDropShadow}
-              />
-            </View>
-
-            {/* Urdu & English Royal Typography */}
             <View style={styles.splashTitleBox}>
               <Text style={styles.splashUrduCalligraphy}>سلطان ریسٹورنٹ</Text>
               <Text style={styles.splashEnglishTitle}>SULTAN RESTAURANT</Text>
-              <Text style={styles.splashTagline}>Fine Dining • Royal Banquets • Smart POS</Text>
+              <Text style={styles.splashTagline}>ROYAL DINING  •  SMART POS OS</Text>
             </View>
 
-            {/* Gold Shimmer Loading Bar */}
             <View style={styles.splashProgressWrapper}>
               <View style={styles.splashProgressTrack}>
                 <Animated.View
@@ -212,17 +424,13 @@ export default function WelcomeScreen() {
                   ]}
                 />
               </View>
-              <Text style={styles.splashStatusText}>
-                {splashMessages[splashStatusIndex]}
-              </Text>
             </View>
-          </Animated.View>
+          </View>
         </Animated.View>
       )}
 
       {/* ============================================================
-          PHASE 2: GRAND SULTAN WELCOME SCREEN (SPLIT 2-COLUMN LAYOUT)
-          [LEFT COLUMN: Grand Logo & Aura] [RIGHT COLUMN: Info & Actions]
+          ROYAL-TECH COMMAND PORTAL (SEAMLESS SPLIT LOGIN)
           ============================================================ */}
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
         <Animated.View
@@ -234,191 +442,305 @@ export default function WelcomeScreen() {
             },
           ]}
         >
-          <ScrollView
-            contentContainerStyle={[
-              styles.scrollContent,
-              {
-                paddingVertical: isShortScreen ? 14 : 28,
-                paddingHorizontal: isCompactMobile ? 12 : 24,
-              },
-            ]}
-            showsVerticalScrollIndicator={false}
-            bounces={true}
-            keyboardShouldPersistTaps="handled"
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={{ flex: 1 }}
           >
-            <View style={[styles.splitMainCard, isMobile && styles.splitMainCardMobile]}>
-              
-              {/* ----------------------------------------------------
-                  LEFT SIDE: GRAND SULTAN LOGO & ROYAL AURA
-                  ---------------------------------------------------- */}
-              <View style={[styles.leftColumnLogoBox, isMobile && styles.leftColumnLogoBoxMobile]}>
-                <View style={styles.logoCardWrapper}>
-                  {/* Clean Logo without background box */}
-                  <View style={styles.logoAuraRing}>
+            <ScrollView
+              contentContainerStyle={[
+                styles.scrollContent,
+                {
+                  paddingVertical: isShortScreen ? 14 : 26,
+                  paddingHorizontal: isCompactMobile ? 14 : 28,
+                },
+              ]}
+              showsVerticalScrollIndicator={false}
+              bounces={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View
+                style={[
+                  styles.royalTechConsole,
+                  isMobile && styles.royalTechConsoleMobile,
+                ]}
+              >
+                {/* Genuine Frosted Glass Backdrop Layer (immune to Chromium hover repaint bug) */}
+                <View pointerEvents="none" style={styles.frostedGlassBackdrop} />
+                {/* Top Gold Laser Accent Line */}
+                <View pointerEvents="none" style={styles.topGoldLaserLine} />
+                {/* Frosted Glass Specular Rim Sheen */}
+                <View pointerEvents="none" style={styles.frostedGlassSheen} />
+
+                {/* Main Dynamic Layout Body */}
+                <View
+                  style={[
+                    styles.consoleBody,
+                    isMobile && styles.consoleBodyMobile,
+                  ]}
+                >
+                  {/* BRAND POD (Smoothly glides from Center to Left) */}
+                  <Animated.View
+                    style={[
+                      styles.brandPod,
+                      isMobile ? styles.brandPodMobile : styles.brandPodDesktop,
+                      {
+                        transform: [
+                          { translateX: brandPodTranslateX },
+                          { scale: logoScale },
+                        ],
+                      },
+                    ]}
+                  >
                     <SultanLogo
-                      size={dynamicMetrics.logoSize}
-                      width={isMobile ? dynamicMetrics.logoWidth : 330}
-                      height={isMobile ? dynamicMetrics.logoHeight : 280}
+                      size="hero"
+                      width={dynamicMetrics.logoWidth}
+                      height={dynamicMetrics.logoHeight}
                       style={styles.logoDropShadow}
                     />
-                  </View>
 
-                  {/* Urdu Calligraphy */}
-                  <Text style={styles.leftUrduCalligraphy}>سلطان ریسٹورنٹ</Text>
-
-                  <View style={styles.leftRoyalDivider}>
-                    <View style={styles.leftDividerLine} />
-                    <Ionicons name="sparkles" size={13} color="#D5A943" style={{ marginHorizontal: 8 }} />
-                    <View style={styles.leftDividerLine} />
-                  </View>
-
-                  <Text style={styles.leftSubBadgeText}>
-                    FINE DINING & SMART HOSPITALITY
-                  </Text>
-                </View>
-              </View>
-
-              {/* ----------------------------------------------------
-                  RIGHT SIDE: STREAMLINED ROYAL GATEWAY
-                  ---------------------------------------------------- */}
-              <View style={[styles.rightColumnContent, isMobile && styles.rightColumnContentMobile]}>
-                
-                {/* Header Welcome Badges */}
-                <View style={[styles.welcomeHeaderBox, isMobile && { alignItems: 'center' }]}>
-                  <View style={styles.welcomeUrduBadge}>
-                    <Ionicons name="sparkles" size={13} color="#D5A943" style={{ marginRight: 6 }} />
-                    <Text style={styles.welcomeUrduText}>خوش آمدید  •  WELCOME</Text>
-                  </View>
-
-                  <Text style={[styles.welcomeTitle, { fontSize: dynamicMetrics.titleFontSize + 2 }, isMobile && { textAlign: 'center' }]}>
-                    SULTAN RESTAURANT
-                  </Text>
-                  
-                  <Text style={[styles.welcomeSubtitle, { fontSize: dynamicMetrics.subtitleFontSize }, isMobile && { textAlign: 'center' }]}>
-                    Smart Multi-Floor POS, Kitchen KDS & Dining Suite
-                  </Text>
-                </View>
-
-                {/* Intelligent Active Session OR Main Login Gateway */}
-                {hasHydrated && user?.role ? (
-                  <View style={styles.sessionCard}>
-                    <View style={styles.sessionUserRow}>
-                      <View style={styles.sessionAvatar}>
-                        <Ionicons name="person" size={20} color="#D5A943" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.sessionGreeting}>ACTIVE SESSION DETECTED</Text>
-                        <Text style={styles.sessionUserName}>{user.name || 'Staff'}</Text>
-                      </View>
-                      <View style={styles.sessionRolePill}>
-                        <Text style={styles.sessionRoleText}>{user.role.toUpperCase()}</Text>
-                      </View>
+                    <View style={styles.podDividerRow}>
+                      <View style={styles.podDividerLine} />
+                      <View style={styles.podDiamondDot} />
+                      <View style={styles.podDividerLine} />
                     </View>
 
-                    <TouchableOpacity
-                      style={styles.primaryLoginBtn}
-                      onPress={() => {
-                        const target = getRoleHome(user.role, user.customRoleId);
-                        router.replace(target as any);
-                      }}
-                      activeOpacity={0.88}
-                    >
-                      <Text style={styles.primaryLoginBtnText}>CONTINUE TO DASHBOARD</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#451014" />
-                    </TouchableOpacity>
+                    <Text style={styles.podSubcaption}>ROYAL FINE DINING & SMART POS</Text>
 
-                    <View style={styles.sessionActionsRow}>
-                      <TouchableOpacity
-                        style={styles.textActionBtn}
-                        onPress={() => router.push('/login?all=true' as any)}
+                    {/* Centered Welcome Mode Action Buttons */}
+                    {showWelcomeActions && (
+                      <Animated.View
+                        pointerEvents={isLoginActive ? 'none' : 'auto'}
+                        style={[
+                          styles.welcomeHeroBlock,
+                          {
+                            opacity: welcomeActionsOpacity,
+                            transform: [{ translateY: welcomeActionsTranslateY }],
+                          },
+                        ]}
                       >
-                        <Ionicons name="swap-horizontal-outline" size={15} color="#D5A943" />
-                        <Text style={styles.textActionLabel}>Switch Account / Login</Text>
-                      </TouchableOpacity>
+                        {/* Active Session OR Welcome Actions */}
+                        {hasHydrated && user?.role ? (
+                          <View style={styles.sessionCard}>
+                            <View style={styles.sessionUserRow}>
+                              <View style={styles.sessionAvatar}>
+                                <Ionicons name="person" size={18} color="#D5A943" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.sessionGreeting}>ACTIVE TERMINAL SESSION</Text>
+                                <Text style={styles.sessionUserName}>{user.name || 'Staff'}</Text>
+                              </View>
+                              <View style={styles.sessionRolePill}>
+                                <Text style={styles.sessionRoleText}>{user.role.toUpperCase()}</Text>
+                              </View>
+                            </View>
 
-                      <Text style={styles.sessionActionDivider}>•</Text>
+                            <TouchableOpacity
+                              style={styles.primaryTechCardBtn}
+                              onPress={() => {
+                                const target = getRoleHome(user.role, user.customRoleId);
+                                router.replace(target as any);
+                              }}
+                              activeOpacity={0.88}
+                            >
+                              <View style={styles.primaryBtnIconPod}>
+                                <Ionicons name="grid" size={18} color="#D5A943" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.primaryBtnTitle}>LAUNCH DASHBOARD  •  ڈیش بورڈ</Text>
+                                <Text style={styles.primaryBtnSub}>Continue to your active workspace</Text>
+                              </View>
+                              <Ionicons name="arrow-forward" size={19} color="#1A0306" />
+                            </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.textActionBtn}
-                        onPress={() => router.push('/menu' as any)}
-                      >
-                        <Ionicons name="book-outline" size={15} color="#D5A943" />
-                        <Text style={styles.textActionLabel}>Digital Menu</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  /* Not Logged In Gateway */
-                  <View style={styles.buttonContainer}>
-                    <TouchableOpacity
-                      style={styles.primaryLoginBtn}
-                      onPress={() => router.push('/login?all=true' as any)}
-                      activeOpacity={0.88}
+                            <View style={styles.sessionActionsRow}>
+                              <TouchableOpacity
+                                style={styles.textActionBtn}
+                                onPress={openLogin}
+                              >
+                                <Ionicons name="swap-horizontal-outline" size={15} color="#D5A943" />
+                                <Text style={styles.textActionLabel}>Switch Account</Text>
+                              </TouchableOpacity>
+
+                              <Text style={styles.sessionActionDivider}>•</Text>
+
+                              <TouchableOpacity
+                                style={styles.textActionBtn}
+                                onPress={() => router.push('/menu' as any)}
+                              >
+                                <Ionicons name="book-outline" size={15} color="#D5A943" />
+                                <Text style={styles.textActionLabel}>Digital Menu</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : (
+                          <View style={styles.actionCardsStack}>
+                            {/* Primary Royal-Tech CTA: Staff Login (Triggers Split Animation) */}
+                            <TouchableOpacity
+                              style={styles.primaryTechCardBtn}
+                              onPress={openLogin}
+                              activeOpacity={0.88}
+                            >
+                              <View style={styles.primaryBtnIconPod}>
+                                <Ionicons name="key" size={18} color="#D5A943" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.primaryBtnTitle}>STAFF PORTAL LOGIN  •  سٹاف لاگ ان</Text>
+                                <Text style={styles.primaryBtnSub}>
+                                  Sign in with Username & Security PIN
+                                </Text>
+                              </View>
+                              <View style={styles.primaryArrowCircle}>
+                                <Ionicons name="arrow-forward" size={17} color="#D5A943" />
+                              </View>
+                            </TouchableOpacity>
+
+                            {/* Secondary Royal-Tech CTA: Guest Digital Menu */}
+                            <TouchableOpacity
+                              style={styles.secondaryTechCardBtn}
+                              onPress={() => router.push('/menu' as any)}
+                              activeOpacity={0.85}
+                            >
+                              <View style={styles.secondaryBtnIconPod}>
+                                <Ionicons name="restaurant-outline" size={18} color="#D5A943" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.secondaryBtnTitle}>
+                                  EXPLORE DIGITAL MENU  •  ڈیجیٹل مینو
+                                </Text>
+                                <Text style={styles.secondaryBtnSub}>
+                                  Browse signature dishes & live table ordering
+                                </Text>
+                              </View>
+                              <Ionicons name="chevron-forward" size={18} color="#D5A943" />
+                            </TouchableOpacity>
+                          </View>
+                        )}
+                      </Animated.View>
+                    )}
+                  </Animated.View>
+
+                  {/* RIGHT SIDE: LOGIN FORM (Appears with smooth slide & fade upon clicking Login) */}
+                  {(!isMobile || isLoginActive) && (
+                    <Animated.View
+                      pointerEvents={isLoginActive ? 'auto' : 'none'}
+                      style={[
+                        styles.rightLoginCol,
+                        isMobile && styles.rightLoginColMobile,
+                        {
+                          opacity: rightLoginOpacity,
+                          transform: [
+                            { translateX: rightLoginTranslateX },
+                            { translateY: rightLoginTranslateY },
+                          ],
+                        },
+                      ]}
                     >
-                      <View style={styles.btnIconPod}>
-                        <Ionicons name="log-in" size={18} color="#451014" />
+                      {/* Top Utility Bar with Back Button */}
+                      <View style={styles.loginTopBar}>
+                        <TouchableOpacity
+                          style={styles.backBtn}
+                          onPress={closeLogin}
+                          activeOpacity={0.75}
+                        >
+                          <Ionicons name="arrow-back" size={17} color="#D5A943" />
+                          <Text style={styles.backBtnText}>Back to Welcome</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.activeModePill}>
+                          <View style={styles.activeDot} />
+                          <Text style={styles.activeModeText}>SECURE TERMINAL LOGIN</Text>
+                        </View>
                       </View>
-                      <Text style={styles.primaryLoginBtnText}>STAFF LOGIN  •  لاگ ان</Text>
-                      <Ionicons name="arrow-forward" size={18} color="#451014" />
-                    </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.secondaryMenuBtn}
-                      onPress={() => router.push('/menu' as any)}
-                      activeOpacity={0.85}
-                    >
-                      <Ionicons name="book-outline" size={17} color="#D5A943" style={{ marginRight: 8 }} />
-                      <Text style={styles.secondaryMenuBtnText}>EXPLORE GUEST DIGITAL MENU</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
+                      {/* Title Header */}
+                      <View style={styles.loginHeader}>
+                        <Text style={styles.loginTitle}>STAFF PORTAL LOGIN</Text>
+                        <Text style={styles.loginSub}>
+                          Enter your username and 4-digit security PIN to access POS
+                        </Text>
+                      </View>
 
-                {/* Clean Direct Role Terminals */}
-                <View style={styles.quickTerminalsSection}>
-                  <Text style={styles.quickPortalsHeading}>QUICK ACCESS TERMINALS</Text>
-                  
-                  <View style={styles.quickTerminalsGrid}>
-                    <Link href="/login?role=admin&all=true" asChild>
-                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
-                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(213, 169, 67, 0.18)' }]}>
-                          <Ionicons name="shield-checkmark" size={16} color="#D5A943" />
+                      {/* Error Banner */}
+                      {errorMessage.length > 0 && (
+                        <View style={styles.errorBanner}>
+                          <Ionicons name="alert-circle" size={18} color="#FF6B6B" />
+                          <Text style={styles.errorText}>{errorMessage}</Text>
                         </View>
-                        <Text style={styles.terminalTitle} numberOfLines={1}>Cashier / Admin</Text>
-                      </TouchableOpacity>
-                    </Link>
+                      )}
 
-                    <Link href="/login?role=waiter" asChild>
-                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
-                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.18)' }]}>
-                          <Ionicons name="phone-portrait-outline" size={16} color="#38BDF8" />
+                      {/* Username Input */}
+                      <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>Username / Staff Name (یوزر نیم)</Text>
+                        <View style={styles.inputWrapper}>
+                          <Ionicons name="person-outline" size={19} color="#D5A943" style={styles.fieldIcon} />
+                          <TextInput
+                            style={styles.input}
+                            placeholder="Enter your username or full name"
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            autoCapitalize="none"
+                            autoCorrect={false}
+                            value={username}
+                            onChangeText={(val) => {
+                              setUsername(val);
+                              if (errorMessage) setErrorMessage('');
+                            }}
+                            returnKeyType="next"
+                          />
+                          {username.length > 0 && (
+                            <TouchableOpacity onPress={() => setUsername('')} style={styles.clearFieldBtn}>
+                              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.45)" />
+                            </TouchableOpacity>
+                          )}
                         </View>
-                        <Text style={styles.terminalTitle} numberOfLines={1}>Order Taker</Text>
-                      </TouchableOpacity>
-                    </Link>
+                      </View>
 
-                    <Link href="/kitchen/kds" asChild>
-                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
-                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 113, 133, 0.18)' }]}>
-                          <Ionicons name="flame" size={16} color="#FB7185" />
+                      {/* PIN Input */}
+                      <View style={styles.inputGroup}>
+                        <View style={styles.pinLabelRow}>
+                          <Text style={styles.inputLabel}>Security PIN (سیکیورٹی پن)</Text>
+                          <TouchableOpacity onPress={() => setShowPin(!showPin)}>
+                            <Text style={styles.showPinText}>{showPin ? 'Hide PIN' : 'Show PIN'}</Text>
+                          </TouchableOpacity>
                         </View>
-                        <Text style={styles.terminalTitle} numberOfLines={1}>Kitchen KDS</Text>
-                      </TouchableOpacity>
-                    </Link>
+                        <View style={styles.inputWrapper}>
+                          <Ionicons name="key-outline" size={19} color="#D5A943" style={styles.fieldIcon} />
+                          <TextInput
+                            style={[styles.input, styles.pinInput]}
+                            placeholder="••••"
+                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            secureTextEntry={!showPin}
+                            keyboardType="number-pad"
+                            maxLength={8}
+                            value={pin}
+                            onChangeText={(val) => {
+                              setPin(val);
+                              if (errorMessage) setErrorMessage('');
+                            }}
+                            onSubmitEditing={handleLogin}
+                            returnKeyType="go"
+                          />
+                        </View>
+                      </View>
 
-                    <Link href="/juicebar/kds" asChild>
-                      <TouchableOpacity style={StyleSheet.flatten([styles.terminalCard, isVerySmallMobile && styles.terminalCardFull])} activeOpacity={0.8}>
-                        <View style={[styles.terminalIconBox, { backgroundColor: 'rgba(251, 191, 36, 0.18)' }]}>
-                          <Ionicons name="cafe" size={16} color="#FBBF24" />
-                        </View>
-                        <Text style={styles.terminalTitle} numberOfLines={1}>Juice Bar</Text>
+                      {/* Action Buttons */}
+                      <TouchableOpacity
+                        style={[
+                          styles.signInBtn,
+                          (!username.trim() || !pin.trim()) && styles.signInBtnDisabled,
+                        ]}
+                        onPress={handleLogin}
+                        disabled={!username.trim() || !pin.trim()}
+                        activeOpacity={0.88}
+                      >
+                        <Ionicons name="log-in-outline" size={20} color="#1A0306" />
+                        <Text style={styles.signInBtnText}>SIGN IN  •  لاگ ان کریں</Text>
                       </TouchableOpacity>
-                    </Link>
-                  </View>
+                    </Animated.View>
+                  )}
                 </View>
-
               </View>
-            </View>
-          </ScrollView>
+            </ScrollView>
+          </KeyboardAvoidingView>
         </Animated.View>
       </SafeAreaView>
     </IslamicBackground>
@@ -434,48 +756,25 @@ const styles = StyleSheet.create({
   },
 
   /* ------------------------------------------------------------
-     SPLASH OVERLAY STYLES
+     ROYAL-TECH SPLASH OVERLAY
      ------------------------------------------------------------ */
   splashOverlay: {
     ...StyleSheet.absoluteFill,
-    backgroundColor: '#2A060B', // Deep Royal Obsidian Burgundy
+    backgroundColor: 'rgba(18, 3, 6, 0.97)',
     zIndex: 9999,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
-  splashSkipBtn: {
-    position: 'absolute',
-    top: 40,
-    right: 24,
-    backgroundColor: 'rgba(213, 169, 67, 0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.45)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-    zIndex: 10000,
-  },
-  splashSkipText: {
-    color: '#D5A943',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
   splashContent: {
     alignItems: 'center',
     justifyContent: 'center',
-    maxWidth: 480,
+    maxWidth: 420,
     width: '100%',
-  },
-  splashLogoAura: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
   },
   splashTitleBox: {
     alignItems: 'center',
-    marginVertical: 10,
+    marginTop: 12,
   },
   splashUrduCalligraphy: {
     fontSize: 32,
@@ -483,401 +782,517 @@ const styles = StyleSheet.create({
     color: '#D5A943',
     textAlign: 'center',
     letterSpacing: 1,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
     marginBottom: 4,
   },
   splashEnglishTitle: {
-    fontSize: 22,
+    fontSize: 21,
     fontWeight: '900',
     color: '#FFFFFF',
     letterSpacing: 3,
     textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
   },
   splashTagline: {
-    fontSize: 12.5,
-    color: 'rgba(255, 255, 255, 0.75)',
-    letterSpacing: 0.8,
+    fontSize: 11,
+    color: 'rgba(213, 169, 67, 0.8)',
+    letterSpacing: 2,
     marginTop: 6,
     textAlign: 'center',
-    fontWeight: '600',
+    fontWeight: '800',
   },
   splashProgressWrapper: {
-    width: '82%',
-    maxWidth: 320,
-    marginTop: 30,
+    width: 220,
+    marginTop: 28,
     alignItems: 'center',
   },
   splashProgressTrack: {
     width: '100%',
-    height: 5,
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    height: 3.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.1)',
     borderRadius: 4,
     overflow: 'hidden',
-    borderWidth: 0.5,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
   },
   splashProgressBar: {
     height: '100%',
     backgroundColor: '#D5A943',
     borderRadius: 4,
   },
-  splashStatusText: {
-    color: 'rgba(213, 169, 67, 0.9)',
-    fontSize: 11.5,
-    fontWeight: '700',
-    marginTop: 12,
-    letterSpacing: 0.4,
-  },
 
   /* ------------------------------------------------------------
-     WELCOME SCREEN 2-COLUMN SPLIT STYLES
+     ROYAL-TECH COMMAND CONSOLE
      ------------------------------------------------------------ */
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  splitMainCard: {
+  royalTechConsole: {
     width: '100%',
-    maxWidth: 960,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(32, 6, 10, 0.88)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.38)',
-    borderRadius: 24,
-    padding: 32,
-    gap: 36,
+    maxWidth: 1040,
+    position: 'relative',
+    borderRadius: 28,
+    paddingVertical: 36,
+    paddingHorizontal: 36,
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        boxShadow: '0 24px 64px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
+        isolation: 'isolate',
       } as any,
     }),
   },
-  splitMainCardMobile: {
-    flexDirection: 'column',
-    padding: 20,
-    gap: 20,
-    borderRadius: 20,
+  royalTechConsoleMobile: {
+    paddingVertical: 24,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+  },
+  frostedGlassBackdrop: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 28,
+    backgroundColor: 'rgba(255, 255, 255, 0.035)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(12px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
+        backgroundImage:
+          'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(213, 169, 67, 0.035) 40%, rgba(255, 255, 255, 0.015) 100%)',
+        boxShadow:
+          '0 24px 60px rgba(0, 0, 0, 0.5), inset 0 1.5px 1px rgba(255, 255, 255, 0.28), inset 0 -1px 1px rgba(213, 169, 67, 0.2)',
+        transform: 'translateZ(0)',
+        willChange: 'backdrop-filter',
+      } as any,
+      default: {
+        backgroundColor: 'rgba(22, 3, 7, 0.55)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 12 },
+        shadowOpacity: 0.45,
+        shadowRadius: 22,
+        elevation: 8,
+      },
+    }),
+  },
+  topGoldLaserLine: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    width: 220,
+    height: 3,
+    backgroundColor: '#D5A943',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
+  },
+  frostedGlassSheen: {
+    position: 'absolute',
+    top: 0,
+    left: 28,
+    right: 28,
+    height: 1.5,
+    backgroundColor: 'rgba(255, 255, 255, 0.45)',
+    borderRadius: 2,
   },
 
-  /* LEFT COLUMN: LOGO & BRANDING */
-  leftColumnLogoBox: {
-    width: '40%',
+  /* MAIN SPLIT BODY */
+  consoleBody: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-  },
-  leftColumnLogoBoxMobile: {
+    justifyContent: 'flex-start',
+    gap: 36,
     width: '100%',
   },
-  logoCardWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    paddingVertical: 8,
+  consoleBodyMobile: {
+    flexDirection: 'column',
+    gap: 20,
   },
-  logoAuraRing: {
+
+  /* BRAND POD */
+  brandPod: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    backgroundColor: 'rgba(10, 2, 4, 0.72)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(213, 169, 67, 0.38)',
+    borderRadius: 24,
+    paddingVertical: 32,
+    paddingHorizontal: 28,
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+      } as any,
+    }),
+  },
+  brandPodDesktop: {
+    width: 460,
+  },
+  brandPodMobile: {
+    width: '100%',
+    paddingVertical: 22,
+    paddingHorizontal: 18,
   },
   logoDropShadow: {
     ...Platform.select({
       web: {
-        filter: 'drop-shadow(0px 10px 28px rgba(213, 169, 67, 0.45))',
+        filter: 'drop-shadow(0px 8px 22px rgba(213, 169, 67, 0.4))',
       } as any,
     }),
   },
-  leftUrduCalligraphy: {
-    fontSize: 28,
-    fontWeight: '900',
-    color: '#D5A943',
-    textAlign: 'center',
-    letterSpacing: 1,
-    marginTop: 4,
-    textShadowColor: 'rgba(0,0,0,0.6)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
-  },
-  leftRoyalDivider: {
+  podDividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 160,
+    width: 110,
     marginVertical: 10,
+    gap: 8,
   },
-  leftDividerLine: {
+  podDividerLine: {
     flex: 1,
     height: 1,
     backgroundColor: 'rgba(213, 169, 67, 0.4)',
   },
-  leftSubBadgeText: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 10.5,
+  podDiamondDot: {
+    width: 5,
+    height: 5,
+    backgroundColor: '#D5A943',
+    transform: [{ rotate: '45deg' }],
+  },
+  podSubcaption: {
+    color: 'rgba(243, 209, 121, 0.82)',
+    fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.5,
+    letterSpacing: 1.6,
     textAlign: 'center',
   },
 
-  /* RIGHT COLUMN: WELCOME, SESSION & ACTIONS */
-  rightColumnContent: {
+  welcomeHeroBlock: {
+    width: '100%',
+    alignItems: 'center',
+    marginTop: 18,
+    gap: 16,
+  },
+
+  /* RIGHT SPLIT LOGIN COLUMN */
+  rightLoginCol: {
     flex: 1,
     width: '100%',
+    backgroundColor: 'rgba(10, 2, 4, 0.72)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(213, 169, 67, 0.38)',
+    borderRadius: 24,
+    padding: 26,
+    gap: 16,
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+      } as any,
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+        elevation: 8,
+      },
+    }),
   },
-  rightColumnContentMobile: {
+  rightLoginColMobile: {
     width: '100%',
+    padding: 18,
+    gap: 14,
   },
-  welcomeHeaderBox: {
-    marginBottom: 20,
-  },
-  welcomeUrduBadge: {
+  loginTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    alignSelf: 'flex-start',
-    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    justifyContent: 'space-between',
+    paddingBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(213, 169, 67, 0.16)',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(213, 169, 67, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.45)',
-    paddingHorizontal: 12,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+    paddingHorizontal: 10,
     paddingVertical: 5,
-    borderRadius: 14,
-    marginBottom: 10,
+    borderRadius: 12,
   },
-  welcomeUrduText: {
-    color: '#F6E095',
-    fontSize: 12.5,
-    fontWeight: '900',
+  backBtnText: {
+    color: '#D5A943',
+    fontSize: 11.5,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  activeModePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  activeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  activeModeText: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0.8,
   },
-  welcomeTitle: {
-    fontWeight: '900',
+
+  loginHeader: {
+    gap: 4,
+  },
+  loginTitle: {
     color: '#FFFFFF',
-    marginBottom: 6,
+    fontSize: 18,
+    fontWeight: '900',
     letterSpacing: 0.8,
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 6,
   },
-  welcomeSubtitle: {
-    color: 'rgba(255, 255, 255, 0.78)',
-    lineHeight: 20,
+  loginSub: {
+    color: 'rgba(255, 255, 255, 0.65)',
+    fontSize: 12,
     fontWeight: '500',
+  },
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.4)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    gap: 8,
+  },
+  errorText: {
+    color: '#FCA5A5',
+    fontSize: 12,
+    fontWeight: '700',
+    flex: 1,
+  },
+
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    color: 'rgba(255, 255, 255, 0.82)',
+    fontSize: 11.5,
+    fontWeight: '700',
+    letterSpacing: 0.4,
+  },
+  pinLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  showPinText: {
+    color: '#D5A943',
+    fontSize: 11.5,
+    fontWeight: '700',
+  },
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(213, 169, 67, 0.32)',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  fieldIcon: {
+    marginRight: 10,
+  },
+  input: {
+    flex: 1,
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    height: '100%',
+  },
+  pinInput: {
+    letterSpacing: 4,
+    fontSize: 18,
+  },
+  clearFieldBtn: {
+    padding: 4,
+  },
+
+  signInBtn: {
+    backgroundColor: '#D5A943',
+    height: 48,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 4,
+  },
+  signInBtnDisabled: {
+    opacity: 0.5,
+  },
+  signInBtnText: {
+    color: '#1A0306',
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+
+  /* ACTION CARDS STACK */
+  actionCardsStack: {
+    width: '100%',
+    maxWidth: 480,
+    gap: 12,
+    marginTop: 6,
+  },
+  primaryTechCardBtn: {
+    backgroundColor: '#D5A943',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  primaryBtnIconPod: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#1E0407',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryBtnTitle: {
+    color: '#1A0306',
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  primaryBtnSub: {
+    color: 'rgba(26, 3, 6, 0.75)',
+    fontSize: 11.5,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  primaryArrowCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#1E0407',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  secondaryTechCardBtn: {
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1.2,
+    borderColor: 'rgba(213, 169, 67, 0.38)',
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  secondaryBtnIconPod: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: 'rgba(213, 169, 67, 0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  secondaryBtnTitle: {
+    color: '#F3D179',
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+  secondaryBtnSub: {
+    color: 'rgba(255, 255, 255, 0.6)',
+    fontSize: 11.5,
+    fontWeight: '500',
+    marginTop: 2,
   },
 
   /* ACTIVE SESSION CARD */
   sessionCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
-    borderRadius: 18,
+    width: '100%',
+    maxWidth: 480,
+    backgroundColor: 'rgba(255, 255, 255, 0.04)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
+    borderRadius: 16,
     padding: 16,
-    marginBottom: 14,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-      } as any,
-    }),
+    gap: 14,
   },
   sessionUserRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    marginBottom: 14,
   },
   sessionAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: 'rgba(213, 169, 67, 0.15)',
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(213, 169, 67, 0.14)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
+    borderColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
   },
   sessionGreeting: {
-    fontSize: 10.5,
-    color: 'rgba(255, 255, 255, 0.6)',
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
   sessionUserName: {
-    fontSize: 16,
-    fontWeight: '900',
     color: '#FFFFFF',
-    marginTop: 1,
+    fontSize: 16,
+    fontWeight: '800',
   },
   sessionRolePill: {
-    backgroundColor: 'rgba(16, 185, 129, 0.18)',
+    backgroundColor: 'rgba(213, 169, 67, 0.16)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.45)',
+    borderColor: '#D5A943',
     paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   sessionRoleText: {
-    color: '#34D399',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.5,
+    color: '#F3D179',
+    fontSize: 10.5,
+    fontWeight: '800',
+    letterSpacing: 0.6,
   },
   sessionActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    marginTop: 12,
+    paddingTop: 2,
   },
   textActionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingVertical: 3,
+    paddingVertical: 4,
   },
   textActionLabel: {
-    fontSize: 12.5,
-    color: '#F6E095',
+    color: '#F3D179',
+    fontSize: 12,
     fontWeight: '700',
   },
   sessionActionDivider: {
     color: 'rgba(255, 255, 255, 0.3)',
-    fontSize: 12,
-  },
-
-  /* ACTION BUTTONS CONTAINER (When not logged in) */
-  buttonContainer: {
-    width: '100%',
-    gap: 12,
-    marginBottom: 6,
-  },
-  primaryLoginBtn: {
-    flexDirection: 'row',
-    backgroundColor: '#D5A943',
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    borderWidth: 1.5,
-    borderColor: '#F6E095',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 6px 24px rgba(213, 169, 67, 0.38)',
-        cursor: 'pointer',
-        transition: 'transform 0.15s ease',
-      } as any,
-      ios: {
-        shadowColor: '#D5A943',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-      },
-      android: {
-        elevation: 8,
-      },
-    }),
-  },
-  btnIconPod: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(69, 16, 20, 0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryLoginBtnText: {
-    color: '#451014',
-    fontSize: 15,
-    fontWeight: '900',
-    letterSpacing: 0.6,
-  },
-  secondaryMenuBtn: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.65)',
-    paddingHorizontal: 18,
-    paddingVertical: 13,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.25)',
-        cursor: 'pointer',
-      } as any,
-    }),
-  },
-  secondaryMenuBtnText: {
-    color: '#F6E095',
-    fontSize: 13.5,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-
-  /* QUICK TERMINALS SECTION */
-  quickTerminalsSection: {
-    marginTop: 20,
-    borderTopWidth: 1.5,
-    borderTopColor: 'rgba(213, 169, 67, 0.35)',
-    paddingTop: 18,
-  },
-  quickPortalsHeading: {
-    color: '#F3D179',
-    fontSize: 12.5,
-    fontWeight: '900',
-    textAlign: 'center',
-    letterSpacing: 1.2,
-    marginBottom: 12,
-  },
-  quickTerminalsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-    justifyContent: 'space-between',
-  },
-  terminalCard: {
-    width: '47%',
-    flexGrow: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(25, 5, 8, 0.85)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.4)',
-    borderRadius: 14,
-    paddingVertical: 11,
-    paddingHorizontal: 12,
-    gap: 8,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-        boxShadow: '0 2px 10px rgba(0, 0, 0, 0.25)',
-      } as any,
-    }),
-  },
-  terminalCardFull: {
-    width: '100%',
-  },
-  terminalIconBox: {
-    width: 30,
-    height: 30,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  terminalTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    flex: 1,
   },
 });

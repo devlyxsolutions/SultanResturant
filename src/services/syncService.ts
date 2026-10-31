@@ -250,11 +250,25 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
-/** Instantaneous state load from Cloud Firestore & Firebase REST endpoint */
+/** Instantaneous state load from Firebase REST endpoint & Cloud Firestore in parallel */
 async function fetchInitialFirebaseState() {
-  let loadedFromFirestore = false;
+  let loadedFromRest = false;
 
-  // 1. Try Cloud Firestore first
+  // 1. Fast non-blocking HTTP REST fetch (<150ms)
+  try {
+    const res = await fetch(FIREBASE_REST_URL);
+    if (res.ok) {
+      const data = await res.json();
+      if (data?.state) {
+        applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+        loadedFromRest = true;
+      }
+    }
+  } catch (e) {
+    console.warn('[SyncService] Initial REST fetch error:', e);
+  }
+
+  // 2. Parallel / secondary check against Cloud Firestore
   const firestoreDb = getFirestoreDb();
   if (firestoreDb) {
     try {
@@ -262,41 +276,24 @@ async function fetchInitialFirebaseState() {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        if (data?.state) {
+        if (
+          data?.state &&
+          (!loadedFromRest || (data.timestamp && data.timestamp > lastProcessedRemoteTimestamp))
+        ) {
           applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-          loadedFromFirestore = true;
+          loadedFromRest = true;
         }
       }
     } catch (e) {
-      console.warn('[SyncService] Initial Firestore fetch error:', e);
+      if (!loadedFromRest) {
+        console.warn('[SyncService] Initial Firestore fetch error:', e);
+      }
     }
   }
 
-  // 2. Also check Firebase Realtime DB REST endpoint (if newer or if Firestore wasn't populated yet)
-  try {
-    const res = await fetch(FIREBASE_REST_URL);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.state) {
-        if (!loadedFromFirestore || (data.timestamp && data.timestamp > lastProcessedRemoteTimestamp)) {
-          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-          // Seed Firestore with the latest state if Firestore was empty
-          if (!loadedFromFirestore && firestoreDb) {
-            try {
-              const cleanData = JSON.parse(JSON.stringify(data));
-              setDoc(doc(firestoreDb, 'sultan_restaurant', 'live_state'), cleanData).catch(() => {});
-            } catch {}
-          }
-        }
-      } else if (!loadedFromFirestore) {
-        hasReceivedInitialSync = true;
-        broadcastLocalState();
-      }
-    }
-  } catch (e) {
-    if (!loadedFromFirestore) {
-      console.warn('[SyncService] Initial REST fetch error:', e);
-    }
+  if (!loadedFromRest) {
+    hasReceivedInitialSync = true;
+    broadcastLocalState();
   }
 }
 
@@ -454,9 +451,9 @@ function initFirebaseSync() {
     });
   }
 
-  // 5. Ultra-responsive 1-second background pulse
+  // 5. Lightweight background fallback pulse (every 4s, since onSnapshot + onValue + SSE are instant)
   if (firebasePollingTimer) clearInterval(firebasePollingTimer);
-  firebasePollingTimer = setInterval(pollFirebaseUpdates, 1000);
+  firebasePollingTimer = setInterval(pollFirebaseUpdates, 4000);
 
   syncStatus = 'connected';
   lastSyncedAt = Date.now();
