@@ -130,8 +130,7 @@ export const useCallStore = create<CallState>()(
         return record;
       },
 
-      handleCallAnswered: (phoneNumber?: string, timestamp?: number) => {
-        const now = timestamp || Date.now();
+      handleCallAnswered: (phoneNumber?: string, _timestamp?: number) => {
         set((prev) => {
           let updatedActive = prev.activeIncomingCall;
           if (updatedActive && (!phoneNumber || arePhonesEqual(updatedActive.normalizedPhone, phoneNumber))) {
@@ -175,8 +174,7 @@ export const useCallStore = create<CallState>()(
         });
       },
 
-      handleMissedCall: (phoneNumber?: string, timestamp?: number) => {
-        const now = timestamp || Date.now();
+      handleMissedCall: (phoneNumber?: string, _timestamp?: number) => {
         set((prev) => {
           const updatedLog = prev.callLog.map((c) => {
             if (c.id === prev.activeIncomingCall?.id || (phoneNumber && arePhonesEqual(c.normalizedPhone, phoneNumber) && c.status === 'incoming')) {

@@ -251,6 +251,8 @@ export default function CustomerMenuScreen() {
     let isMounted = true;
     const fetchLatestCatalog = async () => {
       try {
+        const { isFirebaseConfigured } = require('../../services/firebase');
+        if (isFirebaseConfigured) return;
         const res = await fetch(`${getBaseUrl()}/api/sync`);
         if (res.ok && isMounted) {
           const remoteState = await res.json();

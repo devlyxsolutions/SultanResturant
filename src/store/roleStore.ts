@@ -6,25 +6,31 @@ import { useAuthStore } from './authStore';
 import { useRestaurantStore } from './restaurantStore';
 import { usePathname } from 'expo-router';
 
+let isRoleNotifyPending = false;
 function notifySync() {
-  try {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof (window as any).BroadcastChannel !== 'undefined') {
-      const channel = new BroadcastChannel('sultan_role_sync_channel');
-      channel.postMessage({
-        type: 'ROLES_UPDATED',
-        roles: useRoleStore.getState().roles,
-      });
-      channel.close();
-    }
-  } catch {}
+  if (isRoleNotifyPending) return;
+  isRoleNotifyPending = true;
+  setTimeout(() => {
+    isRoleNotifyPending = false;
+    try {
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof (window as any).BroadcastChannel !== 'undefined') {
+        const channel = new BroadcastChannel('sultan_role_sync_channel');
+        channel.postMessage({
+          type: 'ROLES_UPDATED',
+          roles: useRoleStore.getState().roles,
+        });
+        channel.close();
+      }
+    } catch {}
 
-  try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const { broadcastImmediately } = require('../services/syncService');
-    if (typeof broadcastImmediately === 'function') {
-      broadcastImmediately();
-    }
-  } catch {}
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { broadcastImmediately } = require('../services/syncService');
+      if (typeof broadcastImmediately === 'function') {
+        broadcastImmediately();
+      }
+    } catch {}
+  }, 0);
 }
 
 export interface RolePermissions {

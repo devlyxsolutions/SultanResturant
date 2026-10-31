@@ -80,8 +80,6 @@ export function calculateDenominationTotal(denoms: CashDenominations): number {
   );
 }
 
-const now = Date.now();
-const oneDayAgo = now - 24 * 3600 * 1000;
 const morningStart = new Date();
 morningStart.setHours(9, 0, 0, 0);
 const morningEnd = new Date();

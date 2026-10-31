@@ -357,7 +357,7 @@ export function printTableStandeeHtml(
  * Batch Prints multiple table standees with automatic page breaks.
  */
 export function printAllTablesStandeesHtml(
-  tablesList: Array<{ id: string; name: string; floor?: string; seats?: number; zone?: string; seatingType?: string }>,
+  tablesList: { id: string; name: string; floor?: string; seats?: number; zone?: string; seatingType?: string }[],
   qrMap: Record<string, string>
 ) {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;

@@ -1,5 +1,8 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, Database } from 'firebase/database';
+import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
+
+type FirebaseAppInstance = ReturnType<typeof initializeApp>;
 
 export const firebaseConfig = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY || "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU",
@@ -12,23 +15,61 @@ export const firebaseConfig = {
 };
 
 export const isFirebaseConfigured = Boolean(
-  firebaseConfig.databaseURL && firebaseConfig.apiKey
+  (firebaseConfig.projectId || firebaseConfig.databaseURL) && firebaseConfig.apiKey
 );
 
 export const FIREBASE_REST_BASE_URL = (firebaseConfig.databaseURL || "https://sultan-resturant-default-rtdb.firebaseio.com").replace(/\/+$/, '');
 
+let appInstance: FirebaseAppInstance | null = null;
 let dbInstance: Database | null = null;
+let firestoreInstance: Firestore | null = null;
+
+export function getFirebaseApp(): FirebaseAppInstance | null {
+  if (!isFirebaseConfigured) return null;
+  if (!appInstance) {
+    try {
+      appInstance = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+    } catch (err) {
+      console.warn('[Firebase] App initialization error:', err);
+      return null;
+    }
+  }
+  return appInstance;
+}
 
 export function getFirebaseDb(): Database | null {
   if (!isFirebaseConfigured) return null;
   if (!dbInstance) {
     try {
-      const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
+      const app = getFirebaseApp();
+      if (!app) return null;
       dbInstance = getDatabase(app);
     } catch (err) {
-      console.warn('[Firebase] Initialization error:', err);
+      console.warn('[Firebase] Realtime DB initialization error:', err);
       return null;
     }
   }
   return dbInstance;
 }
+
+export function getFirestoreDb(): Firestore | null {
+  if (!isFirebaseConfigured) return null;
+  if (!firestoreInstance) {
+    try {
+      const app = getFirebaseApp();
+      if (!app) return null;
+      try {
+        firestoreInstance = initializeFirestore(app, {
+          ignoreUndefinedProperties: true,
+        });
+      } catch {
+        firestoreInstance = getFirestore(app);
+      }
+    } catch (err) {
+      console.warn('[Firebase] Firestore initialization error:', err);
+      return null;
+    }
+  }
+  return firestoreInstance;
+}
+

@@ -1,0 +1,9 @@
+com.sultan.calldetector.call-detector-pngs-0 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\generated\res\pngs\release
+com.sultan.calldetector.call-detector-updated_navigation_xml-1 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\generated\updated_navigation_xml\release
+com.sultan.calldetector.call-detector-mergeReleaseResources-2 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+com.sultan.calldetector.call-detector-mergeReleaseResources-3 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+com.sultan.calldetector.call-detector-release-4 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\intermediates\merged_res\release\mergeReleaseResources
+com.sultan.calldetector.call-detector-release-5 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\build\intermediates\packaged_res\release\packageReleaseResources
+com.sultan.calldetector.call-detector-main-6 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\src\main\res
+com.sultan.calldetector.call-detector-release-7 C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android\src\release\res
+gradleHome-0 C:\Users\junaid Ahsan\.gradle

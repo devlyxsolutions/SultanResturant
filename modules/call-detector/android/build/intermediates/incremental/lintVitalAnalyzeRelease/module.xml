@@ -1,0 +1,20 @@
+<lint-module
+    format="1"
+    dir="C:\Users\junaid Ahsan\Desktop\sultan-restaurant\modules\call-detector\android"
+    name=":call-detector"
+    type="LIBRARY"
+    maven="com.sultan.calldetector:call-detector:1.0.0"
+    agpVersion="9.2.1"
+    buildFolder="build"
+    bootClassPath="C:\sdk\platforms\android-37.0\android.jar;C:\sdk\build-tools\36.0.0\core-lambda-stubs.jar"
+    javaSourceLevel="17"
+    compileTarget="android-37.0"
+    neverShrinking="true"
+    highlightGradualR8Api="false">
+  <lintOptions
+      abortOnError="true"
+      absolutePaths="true"
+      checkReleaseBuilds="true"
+      explainIssues="true"/>
+  <variant name="release"/>
+</lint-module>

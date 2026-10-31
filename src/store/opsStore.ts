@@ -1382,13 +1382,20 @@ type OpsState = OpsData & {
   syncFromServer: (remote: Partial<OpsData>) => void;
 };
 
+let isOpsNotifyPending = false;
 function notifySync() {
-  try {
-    const { broadcastImmediately } = require('../services/syncService');
-    if (typeof broadcastImmediately === 'function') {
-      broadcastImmediately();
-    }
-  } catch (e) {}
+  if (isOpsNotifyPending) return;
+  isOpsNotifyPending = true;
+  setTimeout(() => {
+    isOpsNotifyPending = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { broadcastImmediately } = require('../services/syncService');
+      if (typeof broadcastImmediately === 'function') {
+        broadcastImmediately();
+      }
+    } catch {}
+  }, 0);
 }
 
 export const useOpsStore = create<OpsState>()(

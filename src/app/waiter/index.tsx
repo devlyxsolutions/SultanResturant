@@ -323,7 +323,7 @@ export default function OrderTakerScreen() {
 
     const tableTickets = tickets.filter((t) => t.tableId === item.id);
     const isFoodReady = tableTickets.some(isTicketReadyForPickup);
-    const isCooking = tableTickets.some((t) => t.status === 'cooking' && !isFoodReady);
+    const isCooking = tableTickets.some((t) => (t.status === 'pending' || t.status === 'cooking') && !isFoodReady);
     const roundCount = tableTickets.length;
 
     const assignedServer =

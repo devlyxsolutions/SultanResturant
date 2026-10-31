@@ -951,16 +951,17 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         0
       );
 
-      const orders = (table.orders && table.orders.length > 0)
+      const ticketOrders = tableTickets.flatMap(t => (t.items || []).map(i => ({ ...i })));
+      const orders = (table.orders && table.orders.length >= ticketOrders.length && table.orders.length > 0)
         ? table.orders
-        : tableTickets.flatMap(t => (t.items || []).map(i => ({ ...i })));
+        : ticketOrders;
 
       const serverName = table.server || (tableTickets.length > 0 ? tableTickets[tableTickets.length - 1].server : undefined);
 
       return {
         ...table,
         status: 'occupied',
-        billTotal: (table.billTotal && table.billTotal > 0) ? table.billTotal : ticketTotal,
+        billTotal: Math.max(table.billTotal || 0, ticketTotal),
         orders,
         server: serverName || table.server,
         isPaid: false,
@@ -971,13 +972,20 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
   });
 }
 
+let isNotifyPending = false;
 function notifySync() {
-  try {
-    const { broadcastImmediately } = require('../services/syncService');
-    if (typeof broadcastImmediately === 'function') {
-      broadcastImmediately();
-    }
-  } catch (e) { }
+  if (isNotifyPending) return;
+  isNotifyPending = true;
+  setTimeout(() => {
+    isNotifyPending = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
+      const { broadcastImmediately } = require('../services/syncService');
+      if (typeof broadcastImmediately === 'function') {
+        broadcastImmediately();
+      }
+    } catch { }
+  }, 0);
 }
 
 export const useRestaurantStore = create<RestaurantState>()(
@@ -1097,6 +1105,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               return {
                 ...t,
                 status: 'occupied',
+                occupiedSince: t.occupiedSince || Date.now(),
+                isPaid: false,
                 server: serverName,
                 billTotal: (t.billTotal || 0) + itemsTotal,
                 orders: mergedOrders
@@ -2450,19 +2460,28 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       syncFromServer: (remoteState) => set((state) => {
+        const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
         let mergedTickets = remoteState.tickets;
         if (remoteState.tickets) {
           const remoteList = Array.isArray(remoteState.tickets) ? remoteState.tickets : [];
-          mergedTickets = remoteList
+          const normalizedRemote = remoteList
             .filter((rt) => !!rt && typeof rt === 'object' && !!rt.id)
             .map((rt) => {
               const local = (state.tickets || []).find((lt) => lt && lt.id === rt.id);
-              // If local already marked this ticket as served, don't let a stale remote packet revert it to cooking or ready!
-              if (local && local.status === 'served' && rt.status !== 'served') {
+              // Prevent stale remote packets from reverting forward KDS progress (e.g. served/ready/cooking -> pending)
+              if (local && (STATUS_RANK[local.status] ?? 0) > (STATUS_RANK[rt.status] ?? 0)) {
                 return { ...local, items: Array.isArray(local.items) ? local.items : [] };
               }
               return { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
             });
+
+          // Preserve any freshly created local tickets (< 8s old) that are not yet in a stale incoming remote snapshot
+          const remoteIds = new Set(normalizedRemote.map((rt) => rt.id));
+          const nowMs = Date.now();
+          const freshLocalOnly = (state.tickets || []).filter(
+            (lt) => lt && lt.id && !remoteIds.has(lt.id) && lt.timePlaced && Math.abs(nowMs - lt.timePlaced) < 8000
+          );
+          mergedTickets = [...freshLocalOnly, ...normalizedRemote];
         }
 
         const rawTables = remoteState.tables || state.tables;

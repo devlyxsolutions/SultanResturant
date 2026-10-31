@@ -1,14 +1,13 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
-export * from '../types/discount';
 import { 
   EventDiscount, 
   CampaignFormData, 
   CampaignRedemption, 
   TopDishPerformance 
 } from '../types/discount';
-import { checkCampaignValidity } from '../utils/discountCalculator';
+export * from '../types/discount';
 
 const SEED_CAMPAIGNS: EventDiscount[] = [
   {

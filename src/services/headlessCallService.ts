@@ -33,7 +33,7 @@ if (Platform.OS === 'android') {
           store.handleMissedCall(phoneNumber, timestamp);
           break;
       }
-    } catch (err) {
+    } catch {
       // Background task caught
     }
   });

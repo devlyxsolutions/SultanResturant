@@ -5,8 +5,9 @@ import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore, getOpsSyncState } from '../store/opsStore';
 import { useKitchenStore, getKitchenSyncState } from '../store/kitchenStore';
 import { useRoleStore } from '../store/roleStore';
-import { isFirebaseConfigured, getFirebaseDb, FIREBASE_REST_BASE_URL } from './firebase';
+import { isFirebaseConfigured, getFirebaseDb, getFirestoreDb, FIREBASE_REST_BASE_URL } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
+import { doc, getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
 
 export type SyncStatus = 'connected' | 'connecting' | 'offline';
 
@@ -37,12 +38,64 @@ let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let pingTimer: ReturnType<typeof setInterval> | null = null;
 let debounceMutationTimer: ReturnType<typeof setTimeout> | null = null;
 let firebasePollingTimer: ReturnType<typeof setInterval> | null = null;
+let remoteUpdateUnlockTimer: ReturnType<typeof setTimeout> | null = null;
+let activePutAbortController: AbortController | null = null;
+let currentBroadcastSeq: number = 0;
+let lastLocalBroadcastTimestamp: number = 0;
 let lastProcessedRemoteTimestamp: number = 0;
 let lastProcessedPacketId: string = '';
+const processedPacketIds = new Set<string>();
 let sseConnection: any = null;
+let firestoreUnsubscribe: Unsubscribe | null = null;
 let isApplyingRemoteUpdate = false;
 let hasReceivedInitialSync = false;
 let isInitialized = false;
+
+function rememberPacketId(packetId?: string) {
+  if (!packetId) return;
+  lastProcessedPacketId = packetId;
+  processedPacketIds.add(packetId);
+  if (processedPacketIds.size > 80) {
+    const first = processedPacketIds.values().next().value;
+    if (first) processedPacketIds.delete(first);
+  }
+}
+
+function hasSeenPacket(packetId?: string): boolean {
+  if (!packetId) return false;
+  return packetId === lastProcessedPacketId || processedPacketIds.has(packetId);
+}
+
+function applyRemoteStateSafely(state: any, packetId?: string, timestamp?: number) {
+  if (!state || typeof state !== 'object') return;
+  rememberPacketId(packetId);
+  if (typeof timestamp === 'number' && timestamp > lastProcessedRemoteTimestamp) {
+    lastProcessedRemoteTimestamp = timestamp;
+  } else if (!lastProcessedRemoteTimestamp) {
+    lastProcessedRemoteTimestamp = Date.now();
+  }
+  hasReceivedInitialSync = true;
+  isApplyingRemoteUpdate = true;
+  if (debounceMutationTimer) {
+    clearTimeout(debounceMutationTimer);
+    debounceMutationTimer = null;
+  }
+  if (remoteUpdateUnlockTimer) {
+    clearTimeout(remoteUpdateUnlockTimer);
+  }
+
+  applyRemoteState(state);
+
+  lastSyncedAt = Date.now();
+  totalSyncedEvents++;
+  syncStatus = 'connected';
+  notifyListeners();
+
+  remoteUpdateUnlockTimer = setTimeout(() => {
+    isApplyingRemoteUpdate = false;
+    remoteUpdateUnlockTimer = null;
+  }, 250);
+}
 
 function applyRemoteState(state: any) {
   if (!state || typeof state !== 'object') return;
@@ -119,7 +172,7 @@ function notifyListeners() {
   statusListeners.forEach((fn) => {
     try {
       fn(info);
-    } catch (e) {}
+    } catch {}
   });
 }
 
@@ -149,7 +202,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
     if (saved && saved.trim()) {
       return saved.trim();
     }
-  } catch (e) {}
+  } catch {}
 
   // 2. Check build-time environment variable
   const envUrl = process.env.EXPO_PUBLIC_SYNC_SERVER_URL;
@@ -197,30 +250,53 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
-/** Instantaneous state load from Firebase REST endpoint */
+/** Instantaneous state load from Cloud Firestore & Firebase REST endpoint */
 async function fetchInitialFirebaseState() {
+  let loadedFromFirestore = false;
+
+  // 1. Try Cloud Firestore first
+  const firestoreDb = getFirestoreDb();
+  if (firestoreDb) {
+    try {
+      const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data?.state) {
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+          loadedFromFirestore = true;
+        }
+      }
+    } catch (e) {
+      console.warn('[SyncService] Initial Firestore fetch error:', e);
+    }
+  }
+
+  // 2. Also check Firebase Realtime DB REST endpoint (if newer or if Firestore wasn't populated yet)
   try {
     const res = await fetch(FIREBASE_REST_URL);
     if (res.ok) {
       const data = await res.json();
       if (data?.state) {
-        isApplyingRemoteUpdate = true;
-        lastProcessedPacketId = data.packetId || '';
-        lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-        applyRemoteState(data.state);
-        lastSyncedAt = Date.now();
-        totalSyncedEvents++;
-        syncStatus = 'connected';
-        notifyListeners();
-        setTimeout(() => {
-          isApplyingRemoteUpdate = false;
-        }, 150);
-      } else {
+        if (!loadedFromFirestore || (data.timestamp && data.timestamp > lastProcessedRemoteTimestamp)) {
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+          // Seed Firestore with the latest state if Firestore was empty
+          if (!loadedFromFirestore && firestoreDb) {
+            try {
+              const cleanData = JSON.parse(JSON.stringify(data));
+              setDoc(doc(firestoreDb, 'sultan_restaurant', 'live_state'), cleanData).catch(() => {});
+            } catch {}
+          }
+        }
+      } else if (!loadedFromFirestore) {
+        hasReceivedInitialSync = true;
         broadcastLocalState();
       }
     }
   } catch (e) {
-    console.warn('[SyncService] Initial REST fetch error:', e);
+    if (!loadedFromFirestore) {
+      console.warn('[SyncService] Initial REST fetch error:', e);
+    }
   }
 }
 
@@ -233,7 +309,7 @@ function initWebSSE() {
   if (sseConnection) {
     try {
       sseConnection.close();
-    } catch (e) {}
+    } catch {}
     sseConnection = null;
   }
 
@@ -251,22 +327,12 @@ function initWebSSE() {
         // Ignore updates sent by this device
         if (data.senderId === DEVICE_ID) return;
 
-        // Ignore duplicates already processed
-        if (data.packetId && data.packetId === lastProcessedPacketId) return;
+        // Ignore duplicates or older packets
+        if (hasSeenPacket(data.packetId)) return;
+        if (data.timestamp && lastProcessedRemoteTimestamp && data.timestamp < lastProcessedRemoteTimestamp) return;
 
         if (data.state) {
-          lastProcessedPacketId = data.packetId || '';
-          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-          isApplyingRemoteUpdate = true;
-          applyRemoteState(data.state);
-          lastSyncedAt = Date.now();
-          totalSyncedEvents++;
-          syncStatus = 'connected';
-          notifyListeners();
-
-          setTimeout(() => {
-            isApplyingRemoteUpdate = false;
-          }, 150);
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
         }
       } catch (err) {
         console.warn('[SyncService] SSE message parse error:', err);
@@ -288,26 +354,21 @@ async function pollFirebaseUpdates() {
     const res = await fetch(FIREBASE_REST_LAST_UPDATED_URL);
     if (!res.ok) return;
     const lastUpdated = await res.json();
-    if (typeof lastUpdated === 'number' && lastUpdated !== lastProcessedRemoteTimestamp) {
+    if (typeof lastUpdated === 'number' && lastUpdated > lastProcessedRemoteTimestamp) {
       const stateRes = await fetch(FIREBASE_REST_URL);
       if (stateRes.ok) {
         const data = await stateRes.json();
-        if (data?.state && data.senderId !== DEVICE_ID && data.packetId !== lastProcessedPacketId) {
-          lastProcessedPacketId = data.packetId || '';
-          lastProcessedRemoteTimestamp = data.timestamp || lastUpdated;
-          isApplyingRemoteUpdate = true;
-          applyRemoteState(data.state);
-          lastSyncedAt = Date.now();
-          totalSyncedEvents++;
-          syncStatus = 'connected';
-          notifyListeners();
-          setTimeout(() => {
-            isApplyingRemoteUpdate = false;
-          }, 150);
+        if (
+          data?.state &&
+          data.senderId !== DEVICE_ID &&
+          !hasSeenPacket(data.packetId) &&
+          (!data.timestamp || !lastProcessedRemoteTimestamp || data.timestamp >= lastProcessedRemoteTimestamp)
+        ) {
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp || lastUpdated);
         }
       }
     }
-  } catch (err) {
+  } catch {
     // Network retry on next 1-second pulse
   }
 }
@@ -320,10 +381,55 @@ function initFirebaseSync() {
   // 1. Instant initial load from Cloud
   fetchInitialFirebaseState();
 
+  // Fallback unlock for initial sync in case network is slow at boot
+  setTimeout(() => {
+    hasReceivedInitialSync = true;
+  }, 2500);
+
   // 2. Browser SSE Stream for zero-latency instant updates (<100ms)
   initWebSSE();
 
-  // 3. Real-time Firebase SDK WebSocket listener
+  // 3. Real-time Cloud Firestore listener (onSnapshot)
+  const firestoreDb = getFirestoreDb();
+  if (firestoreDb) {
+    if (firestoreUnsubscribe) {
+      try {
+        firestoreUnsubscribe();
+      } catch {}
+      firestoreUnsubscribe = null;
+    }
+
+    try {
+      const liveStateDocRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
+      firestoreUnsubscribe = onSnapshot(
+        liveStateDocRef,
+        (docSnap) => {
+          try {
+            if (!docSnap.exists()) return;
+            const data = docSnap.data();
+            if (!data) return;
+
+            if (data.senderId === DEVICE_ID) return;
+            if (hasSeenPacket(data.packetId)) return;
+            if (data.timestamp && lastProcessedRemoteTimestamp && data.timestamp < lastProcessedRemoteTimestamp) return;
+
+            if (data.state) {
+              applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+            }
+          } catch (err: any) {
+            console.warn('[SyncService] Firestore snapshot parse error:', err);
+          }
+        },
+        (err: any) => {
+          console.warn('[SyncService] Firestore subscription error:', err);
+        }
+      );
+    } catch (err) {
+      console.warn('[SyncService] Failed to attach Firestore listener:', err);
+    }
+  }
+
+  // 4. Real-time Firebase Realtime DB SDK WebSocket listener
   const db = getFirebaseDb();
   if (db) {
     const stateRef = ref(db, 'sultan_restaurant/live_state');
@@ -334,21 +440,11 @@ function initFirebaseSync() {
         if (!data) return;
 
         if (data.senderId === DEVICE_ID) return;
-        if (data.packetId && data.packetId === lastProcessedPacketId) return;
+        if (hasSeenPacket(data.packetId)) return;
+        if (data.timestamp && lastProcessedRemoteTimestamp && data.timestamp < lastProcessedRemoteTimestamp) return;
 
         if (data.state) {
-          lastProcessedPacketId = data.packetId || '';
-          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-          isApplyingRemoteUpdate = true;
-          applyRemoteState(data.state);
-          lastSyncedAt = Date.now();
-          totalSyncedEvents++;
-          syncStatus = 'connected';
-          notifyListeners();
-
-          setTimeout(() => {
-            isApplyingRemoteUpdate = false;
-          }, 150);
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
         }
       } catch (err: any) {
         console.warn('[SyncService] Firebase parse error:', err);
@@ -358,7 +454,7 @@ function initFirebaseSync() {
     });
   }
 
-  // 4. Ultra-responsive 1-second background pulse
+  // 5. Ultra-responsive 1-second background pulse
   if (firebasePollingTimer) clearInterval(firebasePollingTimer);
   firebasePollingTimer = setInterval(pollFirebaseUpdates, 1000);
 
@@ -385,7 +481,7 @@ function connectWebSocket() {
   if (ws) {
     try {
       ws.close();
-    } catch (e) {}
+    } catch {}
     ws = null;
   }
 
@@ -413,7 +509,7 @@ function connectWebSocket() {
         if (ws && ws.readyState === WebSocket.OPEN) {
           try {
             ws.send(JSON.stringify({ type: 'PING' }));
-          } catch (e) {}
+          } catch {}
         }
       }, 12000);
     };
@@ -427,16 +523,7 @@ function connectWebSocket() {
 
         if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
-            hasReceivedInitialSync = true;
-            isApplyingRemoteUpdate = true;
-            applyRemoteState(data.state);
-            lastSyncedAt = Date.now();
-            totalSyncedEvents++;
-            notifyListeners();
-
-            setTimeout(() => {
-              isApplyingRemoteUpdate = false;
-            }, 300);
+            applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           }
         }
       } catch (err) {
@@ -460,7 +547,7 @@ function connectWebSocket() {
         connectWebSocket();
       }, 3500);
     };
-  } catch (err) {
+  } catch {
     syncStatus = 'offline';
     notifyListeners();
     reconnectTimer = setTimeout(() => {
@@ -485,9 +572,11 @@ function broadcastLocalState() {
   const opsState = getOpsSyncState();
   const kitchenState = getKitchenSyncState();
   const roleState = useRoleStore.getState();
-  const now = Date.now();
+  const now = Math.max(Date.now(), lastProcessedRemoteTimestamp + 1, lastLocalBroadcastTimestamp + 1);
+  lastLocalBroadcastTimestamp = now;
+  const broadcastSeq = ++currentBroadcastSeq;
   const packetId = `${DEVICE_ID}_${now}_${Math.random().toString(36).substring(2, 7)}`;
-  lastProcessedPacketId = packetId;
+  rememberPacketId(packetId);
   lastProcessedRemoteTimestamp = now;
 
   const payload = {
@@ -514,24 +603,61 @@ function broadcastLocalState() {
     },
   };
 
-  // 1. If Firebase Cloud DB is active, push to Firebase Realtime Database
+  // 1. If Firebase Cloud DB is active, push to Cloud Firestore & Firebase Realtime Database
   if (isFirebaseConfigured) {
-    // A. Via Firebase Web SDK
+    // Abort any older in-flight HTTP PUT so an older packet can never finish after a newer packet
+    if (activePutAbortController) {
+      try {
+        activePutAbortController.abort();
+      } catch {}
+      activePutAbortController = null;
+    }
+
+    // A. Push to Cloud Firestore (sultan_restaurant/live_state & structured summary docs)
+    const firestoreDb = getFirestoreDb();
+    if (firestoreDb) {
+      try {
+        const cleanPayload = JSON.parse(JSON.stringify(payload));
+        setDoc(doc(firestoreDb, 'sultan_restaurant', 'live_state'), cleanPayload)
+          .then(() => {
+            if (broadcastSeq === currentBroadcastSeq) {
+              lastSyncedAt = Date.now();
+              totalSyncedEvents++;
+              syncStatus = 'connected';
+              notifyListeners();
+            }
+          })
+          .catch((err) => {
+            console.warn('[SyncService] Firestore write error:', err);
+          });
+      } catch {}
+    }
+
+    // B. Via Firebase Realtime DB Web SDK
     const db = getFirebaseDb();
     if (db) {
       try {
         const stateRef = ref(db, 'sultan_restaurant/live_state');
         set(stateRef, payload).catch(() => {});
-      } catch (e) {}
+        const lastUpdatedRef = ref(db, 'sultan_restaurant/last_updated');
+        set(lastUpdatedRef, now).catch(() => {});
+      } catch {}
     }
 
-    // B. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks)
+    // C. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks)
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    if (controller) {
+      activePutAbortController = controller;
+    }
+
     fetch(FIREBASE_REST_URL, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
+      ...(controller ? { signal: controller.signal } : {}),
     })
       .then(() => {
+        if (broadcastSeq !== currentBroadcastSeq) return;
         fetch(FIREBASE_REST_LAST_UPDATED_URL, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
@@ -544,6 +670,7 @@ function broadcastLocalState() {
         notifyListeners();
       })
       .catch((err) => {
+        if (err?.name === 'AbortError') return;
         console.warn('[SyncService] Firebase REST write error:', err);
       });
     return;
@@ -557,7 +684,7 @@ function broadcastLocalState() {
       totalSyncedEvents++;
       notifyListeners();
       return;
-    } catch (e) {}
+    } catch {}
   }
 
   // 3. Fallback to HTTP POST if WebSocket is temporarily disconnected
@@ -569,17 +696,23 @@ function broadcastLocalState() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       }).catch(() => {});
-    } catch (e) {}
+    } catch {}
   }
 }
 
-/** Force immediate cloud broadcast without any debounce delay (e.g. for instant order placement) */
+let immediateBroadcastPending = false;
+/** Force immediate cloud broadcast without any debounce delay (coalesced across synchronous mutations) */
 export function broadcastImmediately() {
   if (debounceMutationTimer) {
     clearTimeout(debounceMutationTimer);
     debounceMutationTimer = null;
   }
-  broadcastLocalState();
+  if (immediateBroadcastPending) return;
+  immediateBroadcastPending = true;
+  setTimeout(() => {
+    immediateBroadcastPending = false;
+    broadcastLocalState();
+  }, 0);
 }
 
 export async function initSyncService() {
@@ -594,7 +727,7 @@ export async function initSyncService() {
   }
 
   const triggerDebouncedBroadcast = () => {
-    if (isApplyingRemoteUpdate) return;
+    if (isApplyingRemoteUpdate || !hasReceivedInitialSync) return;
     if (debounceMutationTimer) clearTimeout(debounceMutationTimer);
     debounceMutationTimer = setTimeout(() => {
       broadcastLocalState();
@@ -616,22 +749,28 @@ export async function initSyncService() {
 
 export async function forceSyncNow(): Promise<boolean> {
   if (isFirebaseConfigured) {
+    const firestoreDb = getFirestoreDb();
+    if (firestoreDb) {
+      try {
+        const docSnap = await getDoc(doc(firestoreDb, 'sultan_restaurant', 'live_state'));
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data?.state) {
+            applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+            return true;
+          }
+        }
+      } catch (err) {
+        console.warn('[SyncService] Firestore forceSync error:', err);
+      }
+    }
+
     try {
       const res = await fetch(FIREBASE_REST_URL);
       if (res.ok) {
         const data = await res.json();
         if (data?.state) {
-          hasReceivedInitialSync = true;
-          isApplyingRemoteUpdate = true;
-          lastProcessedRemoteTimestamp = data.timestamp || Date.now();
-          applyRemoteState(data.state);
-          lastSyncedAt = Date.now();
-          syncStatus = 'connected';
-          totalSyncedEvents++;
-          notifyListeners();
-          setTimeout(() => {
-            isApplyingRemoteUpdate = false;
-          }, 300);
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           return true;
         }
       }
@@ -651,18 +790,10 @@ export async function forceSyncNow(): Promise<boolean> {
     const res = await fetch(`${httpUrl}/api/sync`);
     if (res.ok) {
       const serverState = await res.json();
-      isApplyingRemoteUpdate = true;
-      hasReceivedInitialSync = true;
-      applyRemoteState(serverState);
-      lastSyncedAt = Date.now();
-      syncStatus = 'connected';
-      notifyListeners();
-      setTimeout(() => {
-        isApplyingRemoteUpdate = false;
-      }, 300);
+      applyRemoteStateSafely(serverState);
       return true;
     }
-  } catch (e) {}
+  } catch {}
   reconnect();
   return false;
 }

@@ -1,14 +1,14 @@
-// Ambient test declarations for environments without @types/jest installed
-declare const describe: (name: string, fn: () => void) => void;
-declare const test: (name: string, fn: () => void) => void;
-declare const expect: (val: any) => { toBe: (expected: any) => void };
-
 import {
   normalizePakistaniPhone,
   isValidPakistaniPhone,
   formatPakistaniDisplayPhone,
   arePhonesEqual,
 } from '../phoneNormalization';
+
+// Ambient test declarations for environments without @types/jest installed
+declare const describe: (name: string, fn: () => void) => void;
+declare const test: (name: string, fn: () => void) => void;
+declare const expect: (val: any) => { toBe: (expected: any) => void };
 
 describe('Pakistani Phone Number Normalization', () => {
   const expectedNormalized = '+923001234567';

@@ -20,6 +20,7 @@ import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 import { broadcastImmediately } from '../../services/syncService';
+import { isFirebaseConfigured } from '../../services/firebase';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -163,12 +164,14 @@ export default function KitchenDisplayScreen() {
     // Fetch active kitchen tickets and reconcile confirmed app orders
     const fetchLiveTickets = async () => {
       try {
-        // 1. Fetch tickets from sync endpoint
-        const res = await fetch(`http://${host}:5050/api/sync`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
-            useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
+        // 1. Fetch tickets from local sync endpoint only when Firebase Cloud DB is not active
+        if (!isFirebaseConfigured) {
+          const res = await fetch(`http://${host}:5050/api/sync`);
+          if (res.ok) {
+            const data = await res.json();
+            if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
+              useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
+            }
           }
         }
 
