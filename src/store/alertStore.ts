@@ -11,6 +11,8 @@ type AlertState = {
   /** alert id -> timestamp until which it stays silent */
   snoozedUntil: Record<string, number>;
   snooze: (ids: string[], minutes: number) => void;
+  unsnooze: (id: string) => void;
+  unsnoozeAll: () => void;
   prune: () => void;
 };
 
@@ -27,6 +29,16 @@ export const useAlertStore = create<AlertState>()(
           });
           return { snoozedUntil: next };
         }),
+      unsnooze: (id) =>
+        set((state) => {
+          const next = { ...state.snoozedUntil };
+          delete next[id];
+          return { snoozedUntil: next };
+        }),
+      unsnoozeAll: () =>
+        set(() => ({
+          snoozedUntil: {},
+        })),
       prune: () =>
         set((state) => {
           const now = Date.now();
