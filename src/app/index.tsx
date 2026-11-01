@@ -121,33 +121,40 @@ export default function WelcomeScreen() {
   }, [shouldAutoOpenLogin, openLogin]);
 
   // -------------------------------------------------------------
-  // Splash & Transition States (Web loads instantly with 0ms delay)
+  // Splash & Transition States
   // -------------------------------------------------------------
-  const isWebPlatform = Platform.OS === 'web';
-  const shouldSkipSplash = isWebPlatform || hasSeenSplashSession || shouldAutoOpenLogin;
+  const shouldSkipSplash = shouldAutoOpenLogin;
 
   const [showSplash, setShowSplash] = useState(() => !shouldSkipSplash);
   const [splashFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 1));
   const [progressAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 1 : 0));
   const [welcomeFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 1 : 0));
-  const [welcomeSlideAnim] = useState(() => new Animated.Value(0));
+  const [welcomeSlideAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 10));
 
   const finishSplash = useCallback(() => {
     hasSeenSplashSession = true;
     Animated.timing(splashFadeAnim, {
       toValue: 0,
-      duration: 220,
+      duration: 250,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start(() => {
       setShowSplash(false);
-      Animated.timing(welcomeFadeAnim, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
+      Animated.parallel([
+        Animated.timing(welcomeFadeAnim, {
+          toValue: 1,
+          duration: 250,
+          useNativeDriver: true,
+        }),
+        Animated.spring(welcomeSlideAnim, {
+          toValue: 0,
+          friction: 8,
+          tension: 50,
+          useNativeDriver: true,
+        }),
+      ]).start();
     });
-  }, [splashFadeAnim, welcomeFadeAnim]);
+  }, [splashFadeAnim, welcomeFadeAnim, welcomeSlideAnim]);
 
   useEffect(() => {
     if (shouldSkipSplash) {
@@ -156,14 +163,14 @@ export default function WelcomeScreen() {
 
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 900,
+      duration: 1000,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start();
 
     const tFinish = setTimeout(() => {
       finishSplash();
-    }, 1000);
+    }, 1150);
 
     return () => {
       clearTimeout(tFinish);
