@@ -32,6 +32,7 @@ import { broadcastImmediately } from '../services/syncService';
 import InvoiceComponent from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SultanLogo from '../components/SultanLogo';
+import FullscreenButton from '../components/FullscreenButton';
 import {
   getTableFloor,
   getTableSeatingType,
@@ -1267,15 +1268,7 @@ export default function POSTerminalScreen({
             </TouchableOpacity>
           )}
 
-          {!isMobile && Platform.OS === 'web' && (
-            <TouchableOpacity 
-              style={styles.iconSquareBtn}
-              onPress={toggleFullscreen}
-              activeOpacity={0.7}
-            >
-              <Ionicons name={isFullscreen ? "contract-outline" : "scan-outline"} size={16} color="#D4AF37" />
-            </TouchableOpacity>
-          )}
+          <FullscreenButton variant={isMobile ? 'compact' : 'pill'} />
 
           <View style={styles.userSection}>
             {!isMobile && <Text style={styles.roleLabel}>{user?.name || 'admin'}</Text>}

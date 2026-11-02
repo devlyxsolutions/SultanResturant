@@ -22,6 +22,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import IslamicHeroBackground from '../../components/IslamicHeroBackground';
 import SultanLogo from '../../components/SultanLogo';
+import FullscreenButton from '../../components/FullscreenButton';
 import { broadcastImmediately } from '../../services/syncService';
 import { useOpsStore } from '../../store/opsStore';
 import { MenuItem, Ticket, useRestaurantStore } from '../../store/restaurantStore';
@@ -1684,8 +1685,18 @@ export default function CustomerMenuScreen() {
                   </View>
                 </View>
 
-                {/* Right Top Actions: Sound Chime & My Orders */}
+                {/* Right Top Actions: Sound Chime, Fullscreen & My Orders */}
                 <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                  <FullscreenButton
+                    variant="pill"
+                    style={{
+                      height: 28,
+                      backgroundColor: 'rgba(213, 169, 67, 0.14)',
+                      borderColor: 'rgba(213, 169, 67, 0.35)',
+                      paddingHorizontal: 9,
+                    }}
+                  />
+
                   <TouchableOpacity
                     style={styles.heroSoundPill}
                     onPress={() => setSoundMuted(!soundMuted)}

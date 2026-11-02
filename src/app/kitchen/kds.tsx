@@ -18,6 +18,7 @@ import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
 import { useAuthStore } from '../../store/authStore';
 import { useOpsStore } from '../../store/opsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 import { broadcastImmediately } from '../../services/syncService';
 import { isFirebaseConfigured } from '../../services/firebase';
@@ -733,6 +734,7 @@ export default function KitchenDisplayScreen() {
               >
                 <Ionicons name="log-out-outline" size={15} color="#FF453A" />
               </TouchableOpacity>
+              <FullscreenButton variant="compact" />
               <SyncStatusBadge compact />
             </View>
           )}
@@ -834,6 +836,7 @@ export default function KitchenDisplayScreen() {
               <Text style={styles.logoutNavBtnText}>Logout</Text>
             </TouchableOpacity>
 
+            <FullscreenButton variant="pill" />
             <SyncStatusBadge />
           </View>
         )}

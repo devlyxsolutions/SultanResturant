@@ -26,6 +26,7 @@ import {
   SEATING_ZONE_TYPES,
 } from '../../constants/floors';
 import SeatingTypeIcon from '../../components/SeatingTypeIcon';
+import FullscreenButton from '../../components/FullscreenButton';
 import { broadcastImmediately } from '../../services/syncService';
 import { BRAND as BRAND_PALETTE } from '../../constants/brand';
 
@@ -612,6 +613,16 @@ export default function OrderTakerScreen() {
         </View>
 
         <View style={styles.compactHeaderRight}>
+          <FullscreenButton
+            variant={width < 420 ? 'compact' : 'pill'}
+            style={{
+              height: 28,
+              backgroundColor: '#4a121a',
+              borderColor: 'rgba(213, 169, 67, 0.4)',
+              paddingHorizontal: width < 420 ? 0 : 8,
+            }}
+          />
+
           <TouchableOpacity 
             style={[styles.compactSyncBtn, isSyncing && styles.compactSyncBtnActive]}
             onPress={() => {

@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '../store';
 import SultanLogo from './SultanLogo';
 import SyncStatusBadge from './SyncStatusBadge';
+import FullscreenButton from './FullscreenButton';
 
 const BRAND = {
   burgundy: '#4a121a',
@@ -303,6 +304,9 @@ export default function UniversalPortalNav({
             <Ionicons name="home" size={15} color="#D5A943" />
             {!isMobile && <Text style={styles.homeBtnText}>Home</Text>}
           </TouchableOpacity>
+
+          {/* Full Screen Toggle Button */}
+          <FullscreenButton variant={isMobile ? 'compact' : 'pill'} />
 
           {/* LAN Sync Status */}
           <SyncStatusBadge compact={isMobile} />

@@ -16,6 +16,7 @@ import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useRolePermissions } from '../../store/roleStore';
 import { useSidebarStore } from '../../store/sidebarStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
+import FullscreenButton from '../../components/FullscreenButton';
 import SultanLogo from '../../components/SultanLogo';
 import BottomNav from '../../components/BottomNav';
 import AppSidebar, { NavItem } from '../../components/layout/AppSidebar';
@@ -316,6 +317,7 @@ export default function ManagerLayout() {
             </View>
 
             <View style={styles.topBarRight}>
+              <FullscreenButton variant={width < 1024 ? 'icon' : 'pill'} />
               <SyncStatusBadge compact={width < 1024} />
 
               {can('canAccessPOS') && (
@@ -413,6 +415,7 @@ export default function ManagerLayout() {
         </View>
 
         <View style={styles.mobileHeaderRight}>
+          <FullscreenButton variant="compact" />
           <SyncStatusBadge compact />
           <TouchableOpacity 
             style={styles.mobileLogoutBtn}
