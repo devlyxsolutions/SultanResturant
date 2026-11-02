@@ -1873,45 +1873,18 @@ export default function CustomerMenuScreen() {
                 </ScrollView>
               </View>
 
-              {/* Row 3: Cohesive Sub-Filters (Dietary Badges + Regional Cuisines) */}
-              <View style={styles.subFilterBar}>
-                {/* Dietary Tags */}
-                <View style={styles.dietaryRow}>
-                  {[
-                    { id: 'all', label: 'All Dishes' },
-                    { id: 'specials', label: '⭐ Chef Specials' },
-                    { id: 'spicy', label: '🌶️ Spicy Royal' },
-                    { id: 'veg', label: '🌿 Vegetarian & Breads' },
-                  ].map((tag) => (
-                    <TouchableOpacity
-                      key={tag.id}
-                      style={[
-                        styles.dietaryChip,
-                        dietaryFilter === tag.id && styles.dietaryChipActive,
-                      ]}
-                      onPress={() => setDietaryFilter(tag.id as any)}
-                    >
-                      <Text
-                        style={[
-                          styles.dietaryChipText,
-                          dietaryFilter === tag.id && styles.dietaryChipTextActive,
-                        ]}
-                      >
-                        {tag.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                {/* Sub-Filter Divider */}
-                {regions.length > 0 && <View style={styles.subFilterDivider} />}
-
-                {/* Regional Cuisine Chips */}
-                {regions.length > 0 && (
+              {/* Row 3: Dedicated Regional Cuisines Filter Row */}
+              {regions.length > 0 && (
+                <View style={styles.cuisineRowSection}>
+                  <View style={styles.filterRowHeader}>
+                    <Ionicons name="earth" size={14} color="#895B1E" />
+                    <Text style={styles.filterRowHeaderLabel}>CUISINES</Text>
+                  </View>
                   <ScrollView
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.posRegionScroll}
+                    style={{ flex: 1 }}
                   >
                     <TouchableOpacity
                       style={[
@@ -1997,7 +1970,46 @@ export default function CustomerMenuScreen() {
                       );
                     })}
                   </ScrollView>
-                )}
+                </View>
+              )}
+
+              {/* Row 4: Dietary Quick Filters */}
+              <View style={styles.dietaryRowSection}>
+                <View style={styles.filterRowHeader}>
+                  <Ionicons name="sparkles" size={13} color="#895B1E" />
+                  <Text style={styles.filterRowHeaderLabel}>DIETARY</Text>
+                </View>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.dietaryScroll}
+                  style={{ flex: 1 }}
+                >
+                  {[
+                    { id: 'all', label: 'All Dishes' },
+                    { id: 'specials', label: '⭐ Chef Specials' },
+                    { id: 'spicy', label: '🌶️ Spicy Royal' },
+                    { id: 'veg', label: '🌿 Vegetarian & Breads' },
+                  ].map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
+                      style={[
+                        styles.dietaryChip,
+                        dietaryFilter === tag.id && styles.dietaryChipActive,
+                      ]}
+                      onPress={() => setDietaryFilter(tag.id as any)}
+                    >
+                      <Text
+                        style={[
+                          styles.dietaryChipText,
+                          dietaryFilter === tag.id && styles.dietaryChipTextActive,
+                        ]}
+                      >
+                        {tag.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
               </View>
             </View>
           </View>
@@ -3277,28 +3289,46 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
-  // Sub-Filter Bar (Dietary + Cuisines)
-  subFilterBar: {
+  // Dedicated Cuisine & Dietary Rows
+  cuisineRowSection: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FAF8F5',
     borderRadius: 14,
-    padding: 8,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#EDE3D8',
-    gap: 10,
-    flexWrap: 'wrap',
+    gap: 8,
   },
-  subFilterDivider: {
-    width: 1.5,
-    height: 22,
-    backgroundColor: '#DFCBB5',
-    marginHorizontal: 2,
-  },
-  dietaryRow: {
+  dietaryRowSection: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    backgroundColor: '#FAF8F5',
+    borderRadius: 14,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: '#EDE3D8',
+    gap: 8,
+  },
+  filterRowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingRight: 8,
+    borderRightWidth: 1.5,
+    borderRightColor: '#DFCBB5',
+  },
+  filterRowHeaderLabel: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#895B1E',
+    letterSpacing: 0.8,
+  },
+  dietaryScroll: {
     gap: 6,
+    paddingVertical: 1,
   },
   dietaryChip: {
     backgroundColor: '#FFFFFF',
