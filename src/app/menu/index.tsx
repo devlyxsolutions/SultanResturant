@@ -141,7 +141,7 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
     return () => loop.stop();
   }, [isAutoPlaying, pulseAnim]);
 
-  const cardWidth = isDesktop ? 260 : isTablet ? 230 : 190;
+  const cardWidth = isDesktop ? 280 : isTablet ? 235 : 190;
   const gap = 12;
   const step = cardWidth + gap;
   const totalCards = items.length + 1; // items + end card
@@ -1263,7 +1263,7 @@ export default function CustomerMenuScreen() {
     const isSoldOut = isItemSoldOut(item);
     const inCartQty = getItemCartQty(item.id);
     const isItemInCart = inCartQty > 0;
-    const cardWidth = isDesktop ? 260 : isTablet ? 230 : 190;
+    const cardWidth = isDesktop ? 280 : isTablet ? 235 : 190;
 
     const lowerName = item.name.toLowerCase();
     const hasVariants = Boolean(item.variants && item.variants.length > 0);
@@ -1768,303 +1768,186 @@ export default function CustomerMenuScreen() {
           {/* ========================================================
               2. SEARCH, DIETARY & CUISINE FILTERS
              ======================================================== */}
+          {/* ========================================================
+              2. PROMINENT ROYAL FILTER CONSOLE
+             ======================================================== */}
           <View style={styles.filterSectionContainer}>
-            {/* Search Input Box */}
-            <View style={styles.searchBar}>
-              <Ionicons
-                name="search"
-                size={18}
-                color="#895B1E"
-                style={{ marginRight: 8 }}
-              />
-              <TextInput
-                style={styles.searchInput}
-                placeholder="Search mutton karahi, biryani, handi, bbq, platters, drinks..."
-                placeholderTextColor="#999"
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-              />
-              {searchQuery ? (
-                <TouchableOpacity onPress={() => setSearchQuery('')}>
-                  <Ionicons name="close-circle" size={18} color="#888" />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-
-            {/* Dietary Tags */}
-            <View style={styles.dietaryRow}>
-              {[
-                { id: 'all', label: 'All Dishes' },
-                { id: 'specials', label: '⭐ Chef Specials' },
-                { id: 'spicy', label: '🌶️ Spicy Royal' },
-                { id: 'veg', label: '🌿 Vegetarian & Breads' },
-              ].map((tag) => (
-                <TouchableOpacity
-                  key={tag.id}
-                  style={[
-                    styles.dietaryChip,
-                    dietaryFilter === tag.id && styles.dietaryChipActive,
-                  ]}
-                  onPress={() => setDietaryFilter(tag.id as any)}
-                >
-                  <Text
-                    style={[
-                      styles.dietaryChipText,
-                      dietaryFilter === tag.id && styles.dietaryChipTextActive,
-                    ]}
-                  >
-                    {tag.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Region / Cuisine Filter Bar */}
-            {regions.length > 0 && (
-              <View style={styles.posRegionFilterRow}>
-                <View style={styles.posRegionFilterLead}>
-                  <View style={styles.posRegionLeadIconWrap}>
-                    <Ionicons name="restaurant" size={11} color="#D5A943" />
-                  </View>
-                  <Text style={styles.posRegionFilterLeadText}>CUISINE</Text>
+            <View style={styles.filterConsoleCard}>
+              {/* Row 1: Search Input Bar + Quick Active Reset */}
+              <View style={styles.searchRow}>
+                <View style={styles.searchBar}>
+                  <Ionicons
+                    name="search"
+                    size={20}
+                    color="#D5A943"
+                    style={{ marginRight: 10 }}
+                  />
+                  <TextInput
+                    style={styles.searchInput}
+                    placeholder="Search mutton karahi, chicken handi, seekh kababs, kunafa, drinks..."
+                    placeholderTextColor="#9E8A79"
+                    value={searchQuery}
+                    onChangeText={setSearchQuery}
+                  />
+                  {searchQuery ? (
+                    <TouchableOpacity
+                      onPress={() => setSearchQuery('')}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="close-circle" size={20} color="#895B1E" />
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
+
+                {(activeCat !== 'All' ||
+                  activeRegion !== 'ALL' ||
+                  searchQuery ||
+                  dietaryFilter !== 'all') && (
+                  <TouchableOpacity
+                    style={styles.consoleResetBtn}
+                    onPress={() => {
+                      setActiveCat('All');
+                      setActiveRegion('ALL');
+                      setSearchQuery('');
+                      setDietaryFilter('all');
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="refresh" size={13} color="#D5A943" style={{ marginRight: 4 }} />
+                    <Text style={styles.consoleResetText}>Reset All</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* Row 2: HERO CATEGORY TABS (Prominent, High-Contrast & Bold) */}
+              <View style={styles.categoryNavSection}>
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.posRegionScroll}
+                  contentContainerStyle={styles.categoryNavScroll}
                 >
-                  <TouchableOpacity
-                    style={[
-                      styles.posRegionChip,
-                      activeRegion === 'ALL' && styles.posRegionChipActive,
-                    ]}
-                    onPress={() => setActiveRegion('ALL')}
-                    activeOpacity={0.75}
-                  >
-                    <Ionicons
-                      name="globe-outline"
-                      size={13}
-                      color={activeRegion === 'ALL' ? '#D5A943' : '#8A7A70'}
-                      style={{ marginRight: 2 }}
-                    />
-                    <Text
-                      style={[
-                        styles.posRegionChipText,
-                        activeRegion === 'ALL' && styles.posRegionChipTextActive,
-                      ]}
-                    >
-                      All Cuisines
-                    </Text>
-                    <View
-                      style={[
-                        styles.posRegionChipBadge,
-                        activeRegion === 'ALL' && styles.posRegionChipBadgeActive,
-                      ]}
-                    >
-                      <Text
-                        style={[
-                          styles.posRegionChipBadgeText,
-                          activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive,
-                        ]}
-                      >
-                        {regionCounts['ALL'] ?? 0}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-
-                  {regions.map((r) => {
-                    const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
-                    const meta = getCuisineMeta(r);
-                    const count = regionCounts[r] || 0;
-
+                  {categoryTabs.map((cat) => {
+                    const isActive = activeCat.toLowerCase() === cat.toLowerCase();
+                    const count =
+                      categoryCounts[cat] ||
+                      (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
                     return (
                       <TouchableOpacity
-                        key={r}
+                        key={cat}
                         style={[
-                          styles.posRegionChip,
-                          isSelected && styles.posRegionChipActive,
+                          styles.prominentCatTab,
+                          isActive && styles.prominentCatTabActive,
                         ]}
-                        onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
-                        activeOpacity={0.75}
+                        onPress={() => setActiveCat(cat)}
+                        activeOpacity={0.85}
                       >
-                        <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
+                        <Text style={styles.prominentCatEmoji}>
+                          {getCategoryEmoji(cat)}
+                        </Text>
                         <Text
                           style={[
-                            styles.posRegionChipText,
-                            isSelected && styles.posRegionChipTextActive,
+                            styles.prominentCatText,
+                            isActive && styles.prominentCatTextActive,
                           ]}
                         >
-                          {r}
+                          {cat}
                         </Text>
-                        {count > 0 && (
-                          <View
+                        <View
+                          style={[
+                            styles.prominentCatCount,
+                            isActive && styles.prominentCatCountActive,
+                          ]}
+                        >
+                          <Text
                             style={[
-                              styles.posRegionChipBadge,
-                              isSelected && styles.posRegionChipBadgeActive,
+                              styles.prominentCatCountText,
+                              isActive && styles.prominentCatCountTextActive,
                             ]}
                           >
-                            <Text
-                              style={[
-                                styles.posRegionChipBadgeText,
-                                isSelected && styles.posRegionChipBadgeTextActive,
-                              ]}
-                            >
-                              {count}
-                            </Text>
-                          </View>
-                        )}
+                            {count}
+                          </Text>
+                        </View>
                       </TouchableOpacity>
                     );
                   })}
                 </ScrollView>
               </View>
-            )}
 
-            {/* Category Nav Horizontal Tabs */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.mobileCategoryScroll}
-            >
-              {categoryTabs.map((cat) => {
-                const isActive = activeCat.toLowerCase() === cat.toLowerCase();
-                const count =
-                  categoryCounts[cat] ||
-                  (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
-                return (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catChip, isActive && styles.catChipActive]}
-                    onPress={() => setActiveCat(cat)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.catChipEmoji}>{getCategoryEmoji(cat)}</Text>
-                    <Text
+              {/* Row 3: Cohesive Sub-Filters (Dietary Badges + Regional Cuisines) */}
+              <View style={styles.subFilterBar}>
+                {/* Dietary Tags */}
+                <View style={styles.dietaryRow}>
+                  {[
+                    { id: 'all', label: 'All Dishes' },
+                    { id: 'specials', label: '⭐ Chef Specials' },
+                    { id: 'spicy', label: '🌶️ Spicy Royal' },
+                    { id: 'veg', label: '🌿 Vegetarian & Breads' },
+                  ].map((tag) => (
+                    <TouchableOpacity
+                      key={tag.id}
                       style={[
-                        styles.catChipText,
-                        isActive && styles.catChipTextActive,
+                        styles.dietaryChip,
+                        dietaryFilter === tag.id && styles.dietaryChipActive,
                       ]}
-                    >
-                      {cat}
-                    </Text>
-                    <View
-                      style={[
-                        styles.catCountBadge,
-                        isActive && styles.catCountBadgeActive,
-                      ]}
+                      onPress={() => setDietaryFilter(tag.id as any)}
                     >
                       <Text
                         style={[
-                          styles.catCountBadgeText,
-                          isActive && styles.catCountBadgeTextActive,
+                          styles.dietaryChipText,
+                          dietaryFilter === tag.id && styles.dietaryChipTextActive,
                         ]}
                       >
-                        {count}
+                        {tag.label}
                       </Text>
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-
-          {/* ========================================================
-              3. MAIN CONTENT: DESKTOP SIDEBAR OR FEED
-             ======================================================== */}
-          <View style={styles.contentLayoutContainer}>
-            {/* Desktop Left Categories Sidebar */}
-            {isDesktop && (
-              <View style={styles.desktopSidebar}>
-                <View style={styles.sidebarHeader}>
-                  <Text style={styles.sidebarTitle}>Menu Sections</Text>
-                  <Text style={styles.sidebarSubtitle}>Select a category</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
 
-                {categoryTabs.map((cat) => {
-                  const isActive = activeCat.toLowerCase() === cat.toLowerCase();
-                  const count =
-                    categoryCounts[cat] ||
-                    (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
+                {/* Sub-Filter Divider */}
+                {regions.length > 0 && <View style={styles.subFilterDivider} />}
 
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[
-                        styles.sidebarCatItem,
-                        isActive && styles.sidebarCatItemActive,
-                      ]}
-                      onPress={() => setActiveCat(cat)}
-                    >
-                      <Text style={styles.sidebarCatEmoji}>{getCategoryEmoji(cat)}</Text>
-                      <Text
-                        style={[
-                          styles.sidebarCatName,
-                          isActive && styles.sidebarCatNameActive,
-                        ]}
-                      >
-                        {cat}
-                      </Text>
-                      <View
-                        style={[
-                          styles.sidebarCountBadge,
-                          isActive && styles.sidebarCountBadgeActive,
-                        ]}
-                      >
-                        <Text
-                          style={[
-                            styles.sidebarCountText,
-                            isActive && styles.sidebarCountTextActive,
-                          ]}
-                        >
-                          {count}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {/* Regional Cuisines in Sidebar */}
+                {/* Regional Cuisine Chips */}
                 {regions.length > 0 && (
-                  <>
-                    <View style={[styles.sidebarHeader, { marginTop: 18 }]}>
-                      <Text style={styles.sidebarTitle}>Regional Cuisines</Text>
-                      <Text style={styles.sidebarSubtitle}>Filter by culinary region</Text>
-                    </View>
-
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.posRegionScroll}
+                  >
                     <TouchableOpacity
                       style={[
-                        styles.sidebarCatItem,
-                        activeRegion === 'ALL' && styles.sidebarCatItemActive,
+                        styles.posRegionChip,
+                        activeRegion === 'ALL' && styles.posRegionChipActive,
                       ]}
                       onPress={() => setActiveRegion('ALL')}
+                      activeOpacity={0.75}
                     >
                       <Ionicons
                         name="globe-outline"
-                        size={15}
-                        color={activeRegion === 'ALL' ? '#D5A943' : '#888'}
-                        style={{ marginRight: 8 }}
+                        size={13}
+                        color={activeRegion === 'ALL' ? '#D5A943' : '#8A7A70'}
+                        style={{ marginRight: 3 }}
                       />
                       <Text
                         style={[
-                          styles.sidebarCatName,
-                          activeRegion === 'ALL' && styles.sidebarCatNameActive,
+                          styles.posRegionChipText,
+                          activeRegion === 'ALL' && styles.posRegionChipTextActive,
                         ]}
                       >
                         All Cuisines
                       </Text>
                       <View
                         style={[
-                          styles.sidebarCountBadge,
-                          activeRegion === 'ALL' && styles.sidebarCountBadgeActive,
+                          styles.posRegionChipBadge,
+                          activeRegion === 'ALL' && styles.posRegionChipBadgeActive,
                         ]}
                       >
                         <Text
                           style={[
-                            styles.sidebarCountText,
-                            activeRegion === 'ALL' && styles.sidebarCountTextActive,
+                            styles.posRegionChipBadgeText,
+                            activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive,
                           ]}
                         >
-                          {regionCounts['ALL'] || 0}
+                          {regionCounts['ALL'] ?? 0}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -2078,42 +1961,51 @@ export default function CustomerMenuScreen() {
                         <TouchableOpacity
                           key={r}
                           style={[
-                            styles.sidebarCatItem,
-                            isSelected && styles.sidebarCatItemActive,
+                            styles.posRegionChip,
+                            isSelected && styles.posRegionChipActive,
                           ]}
                           onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
+                          activeOpacity={0.75}
                         >
-                          <Text style={styles.sidebarCatEmoji}>{meta.emoji}</Text>
+                          <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
                           <Text
                             style={[
-                              styles.sidebarCatName,
-                              isSelected && styles.sidebarCatNameActive,
+                              styles.posRegionChipText,
+                              isSelected && styles.posRegionChipTextActive,
                             ]}
                           >
                             {r}
                           </Text>
-                          <View
-                            style={[
-                              styles.sidebarCountBadge,
-                              isSelected && styles.sidebarCountBadgeActive,
-                            ]}
-                          >
-                            <Text
+                          {count > 0 && (
+                            <View
                               style={[
-                                styles.sidebarCountText,
-                                isSelected && styles.sidebarCountTextActive,
+                                styles.posRegionChipBadge,
+                                isSelected && styles.posRegionChipBadgeActive,
                               ]}
                             >
-                              {count}
-                            </Text>
-                          </View>
+                              <Text
+                                style={[
+                                  styles.posRegionChipBadgeText,
+                                  isSelected && styles.posRegionChipBadgeTextActive,
+                                ]}
+                              >
+                                {count}
+                              </Text>
+                            </View>
+                          )}
                         </TouchableOpacity>
                       );
                     })}
-                  </>
+                  </ScrollView>
                 )}
               </View>
-            )}
+            </View>
+          </View>
+
+          {/* ========================================================
+              3. MAIN CONTENT: DISHES FEED & ORDER TRAY
+             ======================================================== */}
+          <View style={styles.contentLayoutContainer}>
 
             {/* Center Dishes Feed & Auto-Sliders */}
             <View style={styles.dishesFeedContainer}>
@@ -3247,30 +3139,161 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
 
-  // 2. Filters & Search Section
+  // 2. Prominent Filter Console Section
   filterSectionContainer: {
     paddingHorizontal: 14,
-    paddingTop: 12,
+    paddingTop: 14,
+    paddingBottom: 4,
+  },
+  filterConsoleCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#DFCBB5',
+    padding: 14,
+    gap: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 6px 20px rgba(58, 15, 18, 0.06)',
+      } as any,
+      default: {
+        shadowColor: '#3A0F12',
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.08,
+        shadowRadius: 8,
+        elevation: 3,
+      },
+    }),
+  },
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
   },
   searchBar: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAF8F5',
     borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderWidth: 1.2,
-    borderColor: '#E8DED3',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderWidth: 1.4,
+    borderColor: '#E2D4C3',
     ...Platform.select({
-      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.03)' } as any,
+      web: {
+        boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.03)',
+      } as any,
     }),
   },
   searchInput: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 13.5,
+    fontWeight: '600',
     color: '#1E0408',
     paddingVertical: 0,
+  },
+  consoleResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#3A0F12',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  consoleResetText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#F3D179',
+  },
+
+  // Prominent Category Nav Section
+  categoryNavSection: {
+    paddingVertical: 2,
+  },
+  categoryNavScroll: {
+    gap: 10,
+    paddingVertical: 2,
+  },
+  prominentCatTab: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAF8F5',
+    borderWidth: 1.5,
+    borderColor: '#DFCBB5',
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    gap: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.16s ease-in-out',
+      } as any,
+    }),
+  },
+  prominentCatTabActive: {
+    backgroundColor: '#52171B',
+    borderColor: '#D5A943',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 14px rgba(82, 23, 27, 0.25)',
+      } as any,
+      default: {
+        elevation: 4,
+      },
+    }),
+  },
+  prominentCatEmoji: {
+    fontSize: 16,
+  },
+  prominentCatText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#3A0F12',
+    letterSpacing: 0.2,
+  },
+  prominentCatTextActive: {
+    color: '#F3D179',
+    fontWeight: '900',
+  },
+  prominentCatCount: {
+    backgroundColor: '#EFE5DA',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+  },
+  prominentCatCountActive: {
+    backgroundColor: 'rgba(213, 169, 67, 0.35)',
+  },
+  prominentCatCountText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#52171B',
+  },
+  prominentCatCountTextActive: {
+    color: '#FFFFFF',
+  },
+
+  // Sub-Filter Bar (Dietary + Cuisines)
+  subFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FAF8F5',
+    borderRadius: 14,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#EDE3D8',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  subFilterDivider: {
+    width: 1.5,
+    height: 22,
+    backgroundColor: '#DFCBB5',
+    marginHorizontal: 2,
   },
   dietaryRow: {
     flexDirection: 'row',
@@ -3279,9 +3302,9 @@ const styles = StyleSheet.create({
   },
   dietaryChip: {
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5DCD1',
-    borderRadius: 20,
+    borderWidth: 1.2,
+    borderColor: '#E2D4C3',
+    borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
@@ -3300,43 +3323,20 @@ const styles = StyleSheet.create({
   },
 
   // Cuisine row
-  posRegionFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  posRegionFilterLead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  posRegionLeadIconWrap: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#3A0F12',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  posRegionFilterLeadText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-    color: '#895B1E',
-  },
   posRegionScroll: {
     gap: 6,
+    paddingVertical: 1,
   },
   posRegionChip: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5DCD1',
-    borderRadius: 18,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    gap: 4,
+    borderWidth: 1.2,
+    borderColor: '#E2D4C3',
+    borderRadius: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    gap: 5,
   },
   posRegionChipActive: {
     backgroundColor: '#3A0F12',
@@ -3371,128 +3371,12 @@ const styles = StyleSheet.create({
     color: '#1E0408',
   },
 
-  // Category horizontal scroll
-  mobileCategoryScroll: {
-    gap: 8,
-    paddingVertical: 2,
-  },
-  catChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E8DFD5',
-    borderRadius: 16,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    gap: 6,
-  },
-  catChipActive: {
-    backgroundColor: '#52171B',
-    borderColor: '#D5A943',
-  },
-  catChipEmoji: {
-    fontSize: 14,
-  },
-  catChipText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#3A0F12',
-  },
-  catChipTextActive: {
-    color: '#F3D179',
-  },
-  catCountBadge: {
-    backgroundColor: '#F7EFE9',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-  },
-  catCountBadgeActive: {
-    backgroundColor: 'rgba(213,169,67,0.3)',
-  },
-  catCountBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#52171B',
-  },
-  catCountBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-
   // 3. Main Content Layout
   contentLayoutContainer: {
     flexDirection: 'row',
     paddingHorizontal: 14,
     marginTop: 14,
     gap: 16,
-  },
-  desktopSidebar: {
-    width: 250,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 18,
-    padding: 14,
-    borderWidth: 1.2,
-    borderColor: '#E8DED3',
-    alignSelf: 'flex-start',
-  },
-  sidebarHeader: {
-    marginBottom: 8,
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0E6DC',
-  },
-  sidebarTitle: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#3A0F12',
-    letterSpacing: 0.5,
-  },
-  sidebarSubtitle: {
-    fontSize: 10.5,
-    color: '#895B1E',
-  },
-  sidebarCatItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 10,
-    marginBottom: 3,
-  },
-  sidebarCatItemActive: {
-    backgroundColor: '#52171B',
-  },
-  sidebarCatEmoji: {
-    fontSize: 14,
-    marginRight: 8,
-  },
-  sidebarCatName: {
-    flex: 1,
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3A0F12',
-  },
-  sidebarCatNameActive: {
-    color: '#F3D179',
-    fontWeight: '800',
-  },
-  sidebarCountBadge: {
-    backgroundColor: '#F5EBE1',
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-  },
-  sidebarCountBadgeActive: {
-    backgroundColor: 'rgba(213,169,67,0.35)',
-  },
-  sidebarCountText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#52171B',
-  },
-  sidebarCountTextActive: {
-    color: '#FFFFFF',
   },
 
   // Center Feed
