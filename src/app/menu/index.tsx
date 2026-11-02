@@ -1,10 +1,12 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Image,
   Modal,
   Platform,
@@ -15,7 +17,7 @@ import {
   TextInput,
   TouchableOpacity,
   useWindowDimensions,
-  View
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import IslamicHeroBackground from '../../components/IslamicHeroBackground';
@@ -24,8 +26,11 @@ import { broadcastImmediately } from '../../services/syncService';
 import { useOpsStore } from '../../store/opsStore';
 import { MenuItem, Ticket, useRestaurantStore } from '../../store/restaurantStore';
 
-// Cart Item Type
-interface CartItem {
+// ==========================================
+// TYPES & STORAGE KEYS
+// ==========================================
+
+export interface CartItem {
   cartId: string;
   item: MenuItem;
   selectedVariant?: string;
@@ -35,7 +40,6 @@ interface CartItem {
   portionLabel?: string;
 }
 
-// Customer Order Record
 export interface CustomerOrderHistory {
   id: string;
   orderNumber: string;
@@ -56,7 +60,16 @@ export interface CustomerOrderHistory {
   deliveryFee: number;
   tax: number;
   total: number;
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'READY_FOR_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'SERVED' | 'CANCELLED';
+  status:
+    | 'PENDING'
+    | 'CONFIRMED'
+    | 'PREPARING'
+    | 'READY'
+    | 'READY_FOR_PICKUP'
+    | 'OUT_FOR_DELIVERY'
+    | 'DELIVERED'
+    | 'SERVED'
+    | 'CANCELLED';
   createdAt: number;
   riderName?: string;
   riderPhone?: string;
@@ -67,6 +80,293 @@ export interface CustomerOrderHistory {
 
 const STORAGE_KEY_PROFILE = '@sultan_customer_profile';
 const STORAGE_KEY_ORDERS = '@sultan_customer_orders_v2';
+
+// ==========================================
+// AUTO CATEGORY SLIDER COMPONENT
+// ==========================================
+
+interface AutoCategorySliderProps {
+  category: string;
+  items: MenuItem[];
+  onViewAll: (category: string) => void;
+  renderCard: (item: MenuItem) => React.ReactNode;
+  isDesktop: boolean;
+  isTablet: boolean;
+  screenWidth: number;
+  getEmoji: (cat: string) => string;
+  getUrdu: (cat: string) => string;
+}
+
+const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
+  category,
+  items,
+  onViewAll,
+  renderCard,
+  isDesktop,
+  isTablet,
+  screenWidth,
+  getEmoji,
+  getUrdu,
+}) => {
+  const scrollRef = useRef<any>(null);
+  const offsetRef = useRef(0);
+  const isInteractingRef = useRef(false);
+  const [isAutoPlaying, setIsAutoPlaying] = useState(true);
+  const [scrollOffset, setScrollOffset] = useState(0);
+
+  // Pulse animation for the Auto-Slider Live badge
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    if (!isAutoPlaying) {
+      pulseAnim.setValue(1);
+      return;
+    }
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1.35,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 900,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [isAutoPlaying, pulseAnim]);
+
+  const cardWidth = isDesktop ? 260 : isTablet ? 230 : 190;
+  const gap = 12;
+  const step = cardWidth + gap;
+  const totalCards = items.length + 1; // items + end card
+
+  // Auto-scroll loop
+  useEffect(() => {
+    if (items.length <= 1 || !isAutoPlaying) return;
+
+    // Stagger slightly by category name hash so not all rows slide at the exact millisecond
+    const hash = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const intervalTime = 3600 + (hash % 800);
+
+    const timer = setInterval(() => {
+      if (isInteractingRef.current) return;
+
+      const current = offsetRef.current;
+      const visibleTrack = screenWidth - (isDesktop ? 360 : 32);
+      const maxScroll = Math.max(0, totalCards * step - visibleTrack);
+
+      if (maxScroll <= 0) return;
+
+      if (current >= maxScroll - 16) {
+        // Smoothly loop back to start
+        scrollRef.current?.scrollTo({ x: 0, animated: true });
+        offsetRef.current = 0;
+        setScrollOffset(0);
+      } else {
+        const next = Math.min(maxScroll, current + step);
+        scrollRef.current?.scrollTo({ x: next, animated: true });
+        offsetRef.current = next;
+        setScrollOffset(next);
+      }
+    }, intervalTime);
+
+    return () => clearInterval(timer);
+  }, [items.length, isAutoPlaying, totalCards, step, screenWidth, isDesktop, category]);
+
+  const handleManualPrev = () => {
+    isInteractingRef.current = true;
+    const current = offsetRef.current;
+    const next = Math.max(0, current - step * (isDesktop ? 2 : 1));
+    scrollRef.current?.scrollTo({ x: next, animated: true });
+    offsetRef.current = next;
+    setScrollOffset(next);
+    setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 3000);
+  };
+
+  const handleManualNext = () => {
+    isInteractingRef.current = true;
+    const current = offsetRef.current;
+    const visibleTrack = screenWidth - (isDesktop ? 360 : 32);
+    const maxScroll = Math.max(0, totalCards * step - visibleTrack);
+    const next =
+      current >= maxScroll - 16 ? 0 : Math.min(maxScroll, current + step * (isDesktop ? 2 : 1));
+    scrollRef.current?.scrollTo({ x: next, animated: true });
+    offsetRef.current = next;
+    setScrollOffset(next);
+    setTimeout(() => {
+      isInteractingRef.current = false;
+    }, 3000);
+  };
+
+  return (
+    <View style={styles.catGallerySection}>
+      {/* Category Slider Header */}
+      <View style={styles.catGalleryHeader}>
+        <View style={styles.catGalleryHeaderLeft}>
+          <View style={styles.catGalleryBadgeIcon}>
+            <Text style={styles.catGalleryEmoji}>{getEmoji(category)}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={styles.catGalleryTitleRow}>
+              <Text style={styles.catGalleryTitle}>{category}</Text>
+              <View style={styles.catGalleryCountPill}>
+                <Text style={styles.catGalleryCountText}>{items.length} items</Text>
+              </View>
+
+              {/* Auto Slider Badge with Play/Pause Toggle */}
+              <TouchableOpacity
+                style={[
+                  styles.autoSliderBadge,
+                  !isAutoPlaying && styles.autoSliderBadgePaused,
+                ]}
+                onPress={() => setIsAutoPlaying(!isAutoPlaying)}
+                activeOpacity={0.8}
+                accessibilityLabel="Toggle Auto Slider"
+              >
+                <Animated.View
+                  style={[
+                    styles.autoSliderDot,
+                    !isAutoPlaying && styles.autoSliderDotPaused,
+                    { transform: [{ scale: isAutoPlaying ? pulseAnim : 1 }] },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.autoSliderBadgeText,
+                    !isAutoPlaying && styles.autoSliderBadgeTextPaused,
+                  ]}
+                >
+                  {isAutoPlaying ? 'AUTO SLIDER' : 'PAUSED'}
+                </Text>
+                <Ionicons
+                  name={isAutoPlaying ? 'pause' : 'play'}
+                  size={9}
+                  color={isAutoPlaying ? '#D5A943' : '#8A7A70'}
+                />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.catGallerySubtitle} numberOfLines={1}>
+              {getUrdu(category)}
+            </Text>
+          </View>
+        </View>
+
+        {/* Right: Manual Arrows & View All */}
+        <View style={styles.sliderControlsRow}>
+          <View style={styles.sliderArrowGroup}>
+            <TouchableOpacity
+              style={[
+                styles.sliderArrowBtn,
+                scrollOffset <= 0 && styles.sliderArrowBtnDisabled,
+              ]}
+              onPress={handleManualPrev}
+              disabled={scrollOffset <= 0}
+              activeOpacity={0.7}
+              accessibilityLabel={`Previous ${category} dishes`}
+            >
+              <Ionicons
+                name="chevron-back"
+                size={16}
+                color={scrollOffset <= 0 ? '#C4B5A5' : '#52171B'}
+              />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.sliderArrowBtn}
+              onPress={handleManualNext}
+              activeOpacity={0.7}
+              accessibilityLabel={`Next ${category} dishes`}
+            >
+              <Ionicons name="chevron-forward" size={16} color="#52171B" />
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.catGalleryViewAllBtn}
+            onPress={() => onViewAll(category)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.catGalleryViewAllText}>View All</Text>
+            <Ionicons name="arrow-forward" size={13} color="#52171B" />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Horizontal Auto-Scroll Track */}
+      <View
+        {...(Platform.OS === 'web'
+          ? ({
+              onMouseEnter: () => {
+                isInteractingRef.current = true;
+              },
+              onMouseLeave: () => {
+                isInteractingRef.current = false;
+              },
+            } as any)
+          : {})}
+      >
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.catGalleryScrollContent}
+          onScrollBeginDrag={() => {
+            isInteractingRef.current = true;
+          }}
+          onScrollEndDrag={() => {
+            setTimeout(() => {
+              isInteractingRef.current = false;
+            }, 2500);
+          }}
+          onMomentumScrollEnd={(e) => {
+            offsetRef.current = e.nativeEvent.contentOffset.x;
+            setScrollOffset(e.nativeEvent.contentOffset.x);
+            setTimeout(() => {
+              isInteractingRef.current = false;
+            }, 2000);
+          }}
+          onScroll={(e) => {
+            offsetRef.current = e.nativeEvent.contentOffset.x;
+            setScrollOffset(e.nativeEvent.contentOffset.x);
+          }}
+          scrollEventThrottle={16}
+        >
+          {items.map(renderCard)}
+
+          {/* End Card: Explore All */}
+          <TouchableOpacity
+            style={[styles.catGalleryEndCard, { width: cardWidth }]}
+            onPress={() => onViewAll(category)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.catGalleryEndIconCircle}>
+              <Ionicons name="sparkles" size={20} color="#D5A943" />
+            </View>
+            <Text style={styles.catGalleryEndTitle}>Explore All</Text>
+            <Text style={styles.catGalleryEndCat} numberOfLines={1}>
+              {category}
+            </Text>
+            <Text style={styles.catGalleryEndCount}>
+              {items.length} signature dishes →
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    </View>
+  );
+};
+
+// ==========================================
+// MAIN CUSTOMER MENU COMPONENT
+// ==========================================
 
 export default function CustomerMenuScreen() {
   const router = useRouter();
@@ -83,30 +383,34 @@ export default function CustomerMenuScreen() {
   const isTablet = width >= 640 && width < 1024;
   const isMobile = width < 640;
 
-  const menuItems = useRestaurantStore(state => state.menuItems);
-  const categories = useRestaurantStore(state => state.categories);
-  const storeRegions = useRestaurantStore(state => state.regions);
-  const tables = useRestaurantStore(state => state.tables);
-  const syncFromServer = useRestaurantStore(state => state.syncFromServer);
-  const unavailableIds = useOpsStore(state => state.unavailableItemIds) || [];
+  // Stores
+  const menuItems = useRestaurantStore((state) => state.menuItems);
+  const categories = useRestaurantStore((state) => state.categories);
+  const storeRegions = useRestaurantStore((state) => state.regions);
+  const tables = useRestaurantStore((state) => state.tables);
+  const syncFromServer = useRestaurantStore((state) => state.syncFromServer);
+  const unavailableIds = useOpsStore((state) => state.unavailableItemIds) || [];
 
   // Order Mode & Active Table
   const [orderMode, setOrderMode] = useState<'dine_in' | 'delivery'>(
     params.mode === 'delivery' ? 'delivery' : 'dine_in'
   );
-  const [selectedTable, setSelectedTable] = useState<{ id: string; name: string; floor: string } | null>(null);
+  const [selectedTable, setSelectedTable] = useState<{
+    id: string;
+    name: string;
+    floor: string;
+  } | null>(null);
   const [tableModalVisible, setTableModalVisible] = useState(false);
   const [activeFloorFilter, setActiveFloorFilter] = useState<string>('Ground Floor');
-  const [copiedLink, setCopiedLink] = useState(false);
 
-  // Search, Category & Region Filters
+  // Search & Filters
   const [activeCat, setActiveCat] = useState('All');
   const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'specials' | 'spicy' | 'veg'>('all');
   const [viewMode, setViewMode] = useState<'gallery' | 'grid'>('gallery');
 
-  // Cart
+  // Cart & Customizer
   const [cart, setCart] = useState<CartItem[]>([]);
   const [customizerItem, setCustomizerItem] = useState<MenuItem | null>(null);
   const [selectedVariant, setSelectedVariant] = useState<string>('');
@@ -125,17 +429,76 @@ export default function CustomerMenuScreen() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [deliveryAddress, setDeliveryAddress] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<'cash_on_delivery' | 'card' | 'jazzcash' | 'easypaisa'>('cash_on_delivery');
+  const [paymentMethod, setPaymentMethod] = useState<
+    'cash_on_delivery' | 'card' | 'jazzcash' | 'easypaisa'
+  >('cash_on_delivery');
   const [submittingOrder, setSubmittingOrder] = useState(false);
 
   // Order History List
   const [orderHistory, setOrderHistory] = useState<CustomerOrderHistory[]>([]);
-
-  // Audio Chime & Mute Controller
   const [soundMuted, setSoundMuted] = useState(false);
-  const lastPlayedStatusRef = useRef<Record<string, string>>({});
 
-  // Audio Chime (Guaranteed Single Playback per Status Transition)
+  // Initialize Table & Load Profile / Orders
+  useEffect(() => {
+    let targetTableId = params.tableId || params.table;
+    let targetTableName = params.tableName;
+    let targetFloor = params.floor;
+
+    if (targetTableId && tables.length > 0) {
+      const matched = tables.find(
+        (t) =>
+          t.id === targetTableId ||
+          t.name.toLowerCase() === targetTableId?.toLowerCase()
+      );
+      if (matched) {
+        setSelectedTable({
+          id: matched.id,
+          name: matched.name,
+          floor: matched.floor || 'Ground Floor',
+        });
+      } else {
+        setSelectedTable({
+          id: targetTableId,
+          name: targetTableName || targetTableId,
+          floor: targetFloor || 'Ground Floor',
+        });
+      }
+    } else if (tables.length > 0 && !selectedTable) {
+      const defaultTable = tables.find((t) => t.status === 'available') || tables[0];
+      if (defaultTable) {
+        setSelectedTable({
+          id: defaultTable.id,
+          name: defaultTable.name,
+          floor: defaultTable.floor || 'Ground Floor',
+        });
+      }
+    }
+  }, [params.table, params.tableId, params.tableName, params.floor, tables]);
+
+  // Load Saved Customer Profile & Order History
+  useEffect(() => {
+    (async () => {
+      try {
+        const rawProfile = await AsyncStorage.getItem(STORAGE_KEY_PROFILE);
+        if (rawProfile) {
+          const parsed = JSON.parse(rawProfile);
+          if (parsed.name) setCustomerName(parsed.name);
+          if (parsed.phone) setCustomerPhone(parsed.phone);
+          if (parsed.address) setDeliveryAddress(parsed.address);
+        }
+
+        const rawOrders = await AsyncStorage.getItem(STORAGE_KEY_ORDERS);
+        if (rawOrders) {
+          const parsedOrders = JSON.parse(rawOrders);
+          if (Array.isArray(parsedOrders)) setOrderHistory(parsedOrders);
+        }
+      } catch {
+        // storage ignored safely
+      }
+    })();
+  }, []);
+
+  // Audio Chime
   const playChime = (type: 'order_placed' | 'status_update') => {
     if (soundMuted) return;
     try {
@@ -148,311 +511,98 @@ export default function CustomerMenuScreen() {
           osc.connect(gain);
           gain.connect(ctx.destination);
           if (type === 'order_placed') {
-            osc.frequency.setValueAtTime(587.33, ctx.currentTime);
-            osc.frequency.setValueAtTime(880.00, ctx.currentTime + 0.12);
-            gain.gain.setValueAtTime(0.18, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.35);
-          } else {
             osc.frequency.setValueAtTime(523.25, ctx.currentTime);
-            osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
-            gain.gain.setValueAtTime(0.18, ctx.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.35);
-            osc.start(ctx.currentTime);
-            osc.stop(ctx.currentTime + 0.35);
+            osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.12);
+            osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.24);
+          } else {
+            osc.frequency.setValueAtTime(440, ctx.currentTime);
+            osc.frequency.setValueAtTime(880, ctx.currentTime + 0.15);
           }
+          gain.gain.setValueAtTime(0.15, ctx.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.45);
         }
       }
-    } catch { }
-  };
-
-  // Delete single order from customer history
-  const handleDeleteOrder = (orderId: string) => {
-    const nextList = orderHistory.filter(o => o.id !== orderId);
-    setOrderHistory(nextList);
-    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
-    if (activeTrackingOrder?.id === orderId) {
-      setActiveTrackingOrder(null);
-      setTrackingModalVisible(false);
+    } catch {
+      // Audio autoplay handled
     }
   };
 
-  // Clear completed orders (Served, Delivered, Cancelled)
-  const handleClearCompletedOrders = () => {
-    const nextList = orderHistory.filter(
-      o => o.status !== 'DELIVERED' && o.status !== 'SERVED' && o.status !== 'CANCELLED'
-    );
-    setOrderHistory(nextList);
-    AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
-  };
-
-  // Clear all order history
-  const handleClearAllHistory = () => {
-    setOrderHistory([]);
-    AsyncStorage.removeItem(STORAGE_KEY_ORDERS).catch(() => { });
-    setActiveTrackingOrder(null);
-  };
-
-  // Clear entire cart tray
-  const handleClearCart = () => {
-    setCart([]);
-  };
-
-  // Remove single item from cart tray
-  const handleRemoveCartItem = (cartId: string) => {
-    setCart(prev => prev.filter(c => c.cartId !== cartId));
-  };
-
+  // Helper: URL base
   const getBaseUrl = () => {
-    if (Platform.OS === 'web') {
-      const host = typeof window !== 'undefined' && window.location?.hostname && window.location.hostname !== '127.0.0.1'
-        ? (window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname)
-        : '192.168.1.4';
-      return `http://${host}:5050`;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const loc = window.location;
+      if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
+        return 'http://localhost:3000';
+      }
+      return `${loc.protocol}//${loc.hostname}:3000`;
     }
-    return 'http://192.168.1.4:5050';
+    return 'http://192.168.100.11:3000';
   };
 
-  const getWsUrl = () => {
-    if (Platform.OS === 'web') {
-      const host = typeof window !== 'undefined' && window.location?.hostname && window.location.hostname !== '127.0.0.1'
-        ? (window.location.hostname === 'localhost' ? 'localhost' : window.location.hostname)
-        : '192.168.1.4';
-      return `ws://${host}:5050`;
-    }
-    return 'ws://192.168.1.4:5050';
-  };
-
-  // 1. Load Saved Profile & Orders
-  useEffect(() => {
-    (async () => {
-      try {
-        const savedProfile = await AsyncStorage.getItem(STORAGE_KEY_PROFILE);
-        if (savedProfile) {
-          const prof = JSON.parse(savedProfile);
-          if (prof.name) setCustomerName(prof.name);
-          if (prof.phone) setCustomerPhone(prof.phone);
-          if (prof.address) setDeliveryAddress(prof.address);
-        }
-
-        const savedOrders = await AsyncStorage.getItem(STORAGE_KEY_ORDERS);
-        if (savedOrders) {
-          const parsed = JSON.parse(savedOrders);
-          if (Array.isArray(parsed)) setOrderHistory(parsed);
-        }
-      } catch (e) {
-        console.warn('[Menu] Failed to load local storage:', e);
-      }
-    })();
-  }, []);
-
-  // 1b. Real-Time Catalog & Tables Sync from Server on Mount
-  useEffect(() => {
-    let isMounted = true;
-    const fetchLatestCatalog = async () => {
-      try {
-        const { isFirebaseConfigured } = require('../../services/firebase');
-        if (isFirebaseConfigured) return;
-        const res = await fetch(`${getBaseUrl()}/api/sync`);
-        if (res.ok && isMounted) {
-          const remoteState = await res.json();
-          if (remoteState) {
-            useRestaurantStore.getState().syncFromServer(remoteState);
-          }
-        }
-      } catch (err) {
-        try {
-          const [menuRes, catRes, tablesRes] = await Promise.all([
-            fetch(`${getBaseUrl()}/api/public/menu`).catch(() => null),
-            fetch(`${getBaseUrl()}/api/public/categories`).catch(() => null),
-            fetch(`${getBaseUrl()}/api/public/tables`).catch(() => null),
-          ]);
-          if (menuRes && menuRes.ok && isMounted) {
-            const menuJson = await menuRes.json();
-            if (menuJson.success && Array.isArray(menuJson.data)) {
-              useRestaurantStore.getState().syncFromServer({ menuItems: menuJson.data });
-            }
-          }
-          if (catRes && catRes.ok && isMounted) {
-            const catJson = await catRes.json();
-            if (catJson.success && Array.isArray(catJson.data)) {
-              useRestaurantStore.getState().syncFromServer({ categories: catJson.data });
-            }
-          }
-          if (tablesRes && tablesRes.ok && isMounted) {
-            const tblJson = await tablesRes.json();
-            if (tblJson.success && Array.isArray(tblJson.data)) {
-              useRestaurantStore.getState().syncFromServer({ tables: tblJson.data });
-            }
-          }
-        } catch { }
-      }
-    };
-
-    fetchLatestCatalog();
-    return () => { isMounted = false; };
-  }, []);
-
-  // 2. Read URL Search Params (Table QR deep linking)
-  const targetTableParam = (params.table || params.tableId || '') as string;
-  const targetTableName = (params.tableName || '') as string;
-
-  useEffect(() => {
-    if (targetTableParam && tables.length > 0) {
-      const matched = tables.find(
-        t => t.id === targetTableParam || t.name === targetTableParam || (targetTableName && t.name === targetTableName)
-      );
-      if (matched) {
-        setSelectedTable(prev => {
-          if (prev?.id === matched.id) return prev;
-          return {
-            id: matched.id,
-            name: matched.name,
-            floor: matched.floor || 'Ground Floor',
-          };
-        });
-        const targetFloor = matched.floor || 'Ground Floor';
-        setActiveFloorFilter(prev => (prev === targetFloor ? prev : targetFloor));
-        setOrderMode(prev => (prev === 'dine_in' ? prev : 'dine_in'));
-        return;
-      }
-    }
-
-    // Fallback: pick first table only if none is selected
-    if (tables.length > 0 && orderMode === 'dine_in') {
-      setSelectedTable(prev => {
-        if (prev) return prev;
-        const firstAvailable = tables[0];
-        return {
-          id: firstAvailable.id,
-          name: firstAvailable.name,
-          floor: firstAvailable.floor || 'Ground Floor',
-        };
-      });
-    }
-  }, [targetTableParam, targetTableName, tables, orderMode]);
-
-  // 3. WebSocket / Polling for Active Tracking (No Infinite Beeping)
-  useEffect(() => {
-    if (!activeTrackingOrder) return;
-
-    const orderId = activeTrackingOrder.id;
-    if (!lastPlayedStatusRef.current[orderId]) {
-      lastPlayedStatusRef.current[orderId] = activeTrackingOrder.status;
-    }
-
-    const fetchLatestStatus = async () => {
-      // If order is completed or cancelled, stop polling
-      if (
-        activeTrackingOrder.status === 'DELIVERED' ||
-        activeTrackingOrder.status === 'SERVED' ||
-        activeTrackingOrder.status === 'CANCELLED'
-      ) {
-        return;
-      }
-
-      try {
-        const res = await fetch(`${getBaseUrl()}/api/public/orders/${orderId}`);
-        const data = await res.json();
-        const orderData = data.order || data.data;
-        if (data.success && orderData) {
-          const newStatus = orderData.status;
-          const oldStatus = lastPlayedStatusRef.current[orderId] || activeTrackingOrder.status;
-
-          // ONLY play chime once when status ACTUALLY transitions
-          if (newStatus && newStatus !== oldStatus) {
-            lastPlayedStatusRef.current[orderId] = newStatus;
-            playChime('status_update');
-          }
-
-          const updated: CustomerOrderHistory = {
-            ...activeTrackingOrder,
-            ...orderData,
-          };
-
-          setActiveTrackingOrder(updated);
-          setOrderHistory(prev => {
-            const nextList = prev.map(o => (o.id === orderId ? updated : o));
-            AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(nextList)).catch(() => { });
-            return nextList;
-          });
-        }
-      } catch { }
-    };
-
-    fetchLatestStatus();
-    const interval = setInterval(fetchLatestStatus, 5000);
-
-    let ws: WebSocket | null = null;
-    try {
-      ws = new WebSocket(getWsUrl());
-      ws.onmessage = (event) => {
-        try {
-          const parsed = JSON.parse(event.data);
-          if (
-            (parsed.type === 'ORDER_STATUS_CHANGED' || parsed.type === 'STATUS_UPDATE') &&
-            parsed.orderId === orderId
-          ) {
-            fetchLatestStatus();
-          }
-        } catch { }
-      };
-    } catch { }
-
-    return () => {
-      clearInterval(interval);
-      if (ws) {
-        try { ws.close(); } catch { }
-      }
-    };
-  }, [activeTrackingOrder?.id, activeTrackingOrder?.status]);
-
-  // Image Fallback
-  const getFallbackImage = (category: string) => {
-    switch (category) {
-      case 'Mains':
-      case 'Karahi & Handi':
-        return 'https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=600&q=80';
-      case 'BBQ':
-      case 'Grill':
-        return 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80';
-      case 'Biryani & Rice':
-        return 'https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80';
-      case 'Desserts':
-        return 'https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80';
-      case 'Drinks':
-      case 'Beverages':
-        return 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80';
-      default:
-        return 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=600&q=80';
-    }
-  };
-
+  // Helper: Category Emoji & Urud Titles
   const getCategoryEmoji = (cat: string) => {
     const lower = cat.toLowerCase();
     if (lower === 'all') return '👑';
     if (lower.includes('karahi') || lower.includes('handi')) return '🥘';
-    if (lower.includes('bbq') || lower.includes('kabab') || lower.includes('grill') || lower.includes('tikka')) return '🍢';
-    if (lower.includes('biryani') || lower.includes('rice') || lower.includes('pulao')) return '🍚';
+    if (
+      lower.includes('bbq') ||
+      lower.includes('kabab') ||
+      lower.includes('grill') ||
+      lower.includes('tikka')
+    )
+      return '🍢';
+    if (lower.includes('biryani') || lower.includes('rice') || lower.includes('pulao'))
+      return '🍚';
     if (lower.includes('mains') || lower.includes('curry')) return '🍲';
-    if (lower.includes('appetizer') || lower.includes('starter') || lower.includes('soup') || lower.includes('roll')) return '🥟';
-    if (lower.includes('naan') || lower.includes('roti') || lower.includes('bread')) return '🫓';
-    if (lower.includes('dessert') || lower.includes('sweet') || lower.includes('kunafa') || lower.includes('kheer')) return '🍨';
-    if (lower.includes('drink') || lower.includes('beverage') || lower.includes('juice') || lower.includes('shake')) return '🍹';
-    if (lower.includes('deal') || lower.includes('combo') || lower.includes('family')) return '🎁';
+    if (
+      lower.includes('appetizer') ||
+      lower.includes('starter') ||
+      lower.includes('soup') ||
+      lower.includes('roll')
+    )
+      return '🥟';
+    if (lower.includes('naan') || lower.includes('roti') || lower.includes('bread'))
+      return '🫓';
+    if (
+      lower.includes('dessert') ||
+      lower.includes('sweet') ||
+      lower.includes('kunafa') ||
+      lower.includes('kheer')
+    )
+      return '🍨';
+    if (
+      lower.includes('drink') ||
+      lower.includes('beverage') ||
+      lower.includes('juice') ||
+      lower.includes('shake')
+    )
+      return '🍹';
+    if (lower.includes('deal') || lower.includes('combo') || lower.includes('family'))
+      return '🎁';
     return '🍽️';
   };
 
   const getCategoryUrduOrTagline = (cat: string) => {
     const lower = cat.toLowerCase();
-    if (lower.includes('appetizer') || lower.includes('starter') || lower.includes('soup') || lower.includes('roll')) {
+    if (
+      lower.includes('appetizer') ||
+      lower.includes('starter') ||
+      lower.includes('soup') ||
+      lower.includes('roll')
+    ) {
       return 'شروع کے لذیذ پکوان • Fresh Starters & Appetizers';
     }
     if (lower.includes('karahi') || lower.includes('handi')) {
       return 'روایتی کڑاہی اور ہانڈی • Fresh Clay Handi & Wok';
     }
-    if (lower.includes('bbq') || lower.includes('grill') || lower.includes('kabab') || lower.includes('tikka')) {
+    if (
+      lower.includes('bbq') ||
+      lower.includes('grill') ||
+      lower.includes('kabab') ||
+      lower.includes('tikka')
+    ) {
       return 'شاہی باربی کیو اور کباب • Charcoal Grills & Skewers';
     }
     if (lower.includes('biryani') || lower.includes('rice') || lower.includes('pulao')) {
@@ -464,10 +614,20 @@ export default function CustomerMenuScreen() {
     if (lower.includes('naan') || lower.includes('roti') || lower.includes('bread')) {
       return 'تازہ تندوری نان اور روٹیاں • Fresh Clay Oven Breads';
     }
-    if (lower.includes('dessert') || lower.includes('sweet') || lower.includes('kunafa') || lower.includes('kheer')) {
+    if (
+      lower.includes('dessert') ||
+      lower.includes('sweet') ||
+      lower.includes('kunafa') ||
+      lower.includes('kheer')
+    ) {
       return 'شاہی میٹھے اور قنافہ • Royal Traditional Desserts & Kunafa';
     }
-    if (lower.includes('drink') || lower.includes('beverage') || lower.includes('juice') || lower.includes('shake')) {
+    if (
+      lower.includes('drink') ||
+      lower.includes('beverage') ||
+      lower.includes('juice') ||
+      lower.includes('shake')
+    ) {
       return 'تازہ مشروبات اور شیکس • Chilled Refreshments & Shakes';
     }
     if (lower.includes('deal') || lower.includes('combo') || lower.includes('family')) {
@@ -478,7 +638,12 @@ export default function CustomerMenuScreen() {
 
   const getCuisineMeta = (name: string) => {
     const lower = name.toLowerCase();
-    if (lower.includes('pakistan') || lower.includes('desi') || lower.includes('karahi') || lower.includes('bbq')) {
+    if (
+      lower.includes('pakistan') ||
+      lower.includes('desi') ||
+      lower.includes('karahi') ||
+      lower.includes('bbq')
+    ) {
       return { icon: 'flame', emoji: '🇵🇰', color: '#16A34A' };
     }
     if (lower.includes('chinese') || lower.includes('asian')) {
@@ -502,35 +667,36 @@ export default function CustomerMenuScreen() {
     return { icon: 'earth', emoji: '🍽️', color: '#B45309' };
   };
 
-  // Guaranteed unique category list starting with 'All'
+  // Categories & Regions Lists
   const categoryTabs = useMemo(() => {
     const set = new Set<string>();
-    (categories || []).forEach(c => {
+    (categories || []).forEach((c) => {
       const clean = (c || '').trim();
       if (clean && clean.toLowerCase() !== 'all') set.add(clean);
     });
     return ['All', ...Array.from(set)];
   }, [categories]);
 
-  // Unique list of active Cuisines / Regions (excluding 'ALL')
   const regions = useMemo(() => {
     const set = new Set<string>();
-    (storeRegions || []).forEach(r => {
+    (storeRegions || []).forEach((r) => {
       const clean = (r || '').trim();
       if (clean && clean.toLowerCase() !== 'all') set.add(clean);
     });
-    (menuItems || []).forEach(m => {
+    (menuItems || []).forEach((m) => {
       const clean = (m.region || '').trim();
       if (clean && clean.toLowerCase() !== 'all') set.add(clean);
     });
     return Array.from(set);
   }, [storeRegions, menuItems]);
 
-  // Real-time cuisine counts for active category
   const regionCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: 0 };
-    (menuItems || []).forEach(item => {
-      const matchCat = activeCat === 'All' || activeCat === 'ALL' || (item.category || '').toLowerCase() === activeCat.toLowerCase();
+    (menuItems || []).forEach((item) => {
+      const matchCat =
+        activeCat === 'All' ||
+        activeCat === 'ALL' ||
+        (item.category || '').toLowerCase() === activeCat.toLowerCase();
       if (!matchCat) return;
       counts['ALL'] = (counts['ALL'] || 0) + 1;
       if (item.region) {
@@ -540,13 +706,13 @@ export default function CustomerMenuScreen() {
     return counts;
   }, [menuItems, activeCat]);
 
-  // Real-time category counts for active region
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { All: 0, ALL: 0 };
-    (menuItems || []).forEach(item => {
+    (menuItems || []).forEach((item) => {
       let matchRegion = true;
       if (activeRegion !== 'ALL' && activeRegion !== 'All') {
-        matchRegion = (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
+        matchRegion =
+          (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
       }
       if (!matchRegion) return;
       counts['All'] = (counts['All'] || 0) + 1;
@@ -558,29 +724,29 @@ export default function CustomerMenuScreen() {
     return counts;
   }, [menuItems, activeRegion]);
 
-  // Filtered Menu Items (Matching Category, Region, Search Query & Dietary Filter)
+  // Filtered Menu Items
   const filteredItems = useMemo(() => {
-    return menuItems.filter(item => {
-      // 1. Category Filter
-      const matchCat = activeCat === 'All' || activeCat === 'ALL' || (item.category || '').toLowerCase() === activeCat.toLowerCase();
+    return menuItems.filter((item) => {
+      const matchCat =
+        activeCat === 'All' ||
+        activeCat === 'ALL' ||
+        (item.category || '').toLowerCase() === activeCat.toLowerCase();
 
-      // 2. Region / Cuisine Filter
       let matchRegion = true;
       if (activeRegion !== 'ALL' && activeRegion !== 'All') {
-        matchRegion = (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
+        matchRegion =
+          (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
       }
 
-      // 3. Search Query
       const q = searchQuery.toLowerCase().trim();
       const matchQuery =
         !q ||
         item.name.toLowerCase().includes(q) ||
-        (item.urduName && item.urduName.toLowerCase().includes(q)) ||
-        (item.description && item.description.toLowerCase().includes(q)) ||
-        (item.category && item.category.toLowerCase().includes(q)) ||
-        (item.region && item.region.toLowerCase().includes(q));
+        Boolean(item.urduName && item.urduName.toLowerCase().includes(q)) ||
+        Boolean(item.description && item.description.toLowerCase().includes(q)) ||
+        Boolean(item.category && item.category.toLowerCase().includes(q)) ||
+        Boolean(item.region && item.region.toLowerCase().includes(q));
 
-      // 4. Dietary Filter
       let matchDiet = true;
       if (dietaryFilter === 'specials') {
         matchDiet = Boolean(item.badge || item.isDeal);
@@ -589,35 +755,45 @@ export default function CustomerMenuScreen() {
         matchDiet = lower.includes('spicy') || lower.includes('karahi') || lower.includes('tikka');
       } else if (dietaryFilter === 'veg') {
         const lower = (item.name + ' ' + (item.category || '')).toLowerCase();
-        matchDiet = lower.includes('veg') || lower.includes('paneer') || lower.includes('daal') || lower.includes('naan') || lower.includes('dessert') || lower.includes('drink');
+        matchDiet =
+          lower.includes('veg') ||
+          lower.includes('paneer') ||
+          lower.includes('daal') ||
+          lower.includes('naan') ||
+          lower.includes('dessert') ||
+          lower.includes('drink');
       }
 
       return matchCat && matchRegion && matchQuery && matchDiet;
     });
   }, [menuItems, activeCat, activeRegion, searchQuery, dietaryFilter]);
 
-  // Grouped items per category for Front-Page Category Gallery Showcase
+  // Grouped Categories for Front-Page Auto-Slider Galleries
   const groupedCategoryGalleries = useMemo(() => {
     const orderedCats: string[] = [];
-    (categoryTabs || []).forEach(c => {
+    (categoryTabs || []).forEach((c) => {
       const clean = (c || '').trim();
-      if (clean && clean.toLowerCase() !== 'all' && !orderedCats.some(x => x.toLowerCase() === clean.toLowerCase())) {
+      if (
+        clean &&
+        clean.toLowerCase() !== 'all' &&
+        !orderedCats.some((x) => x.toLowerCase() === clean.toLowerCase())
+      ) {
         orderedCats.push(clean);
       }
     });
 
-    (menuItems || []).forEach(m => {
+    (menuItems || []).forEach((m) => {
       const c = (m.category || 'Mains').trim();
-      if (c && !orderedCats.some(x => x.toLowerCase() === c.toLowerCase())) {
+      if (c && !orderedCats.some((x) => x.toLowerCase() === c.toLowerCase())) {
         orderedCats.push(c);
       }
     });
 
-    // Base items matching current region, query, and dietary filters
-    const baseItems = menuItems.filter(item => {
+    const baseItems = menuItems.filter((item) => {
       let matchRegion = true;
       if (activeRegion !== 'ALL' && activeRegion !== 'All') {
-        matchRegion = (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
+        matchRegion =
+          (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
       }
       let matchQuery = true;
       if (searchQuery.trim()) {
@@ -637,15 +813,21 @@ export default function CustomerMenuScreen() {
         matchDiet = lower.includes('spicy') || lower.includes('karahi') || lower.includes('tikka');
       } else if (dietaryFilter === 'veg') {
         const lower = (item.name + ' ' + (item.category || '')).toLowerCase();
-        matchDiet = lower.includes('veg') || lower.includes('paneer') || lower.includes('daal') || lower.includes('naan') || lower.includes('dessert') || lower.includes('drink');
+        matchDiet =
+          lower.includes('veg') ||
+          lower.includes('paneer') ||
+          lower.includes('daal') ||
+          lower.includes('naan') ||
+          lower.includes('dessert') ||
+          lower.includes('drink');
       }
       return matchRegion && matchQuery && matchDiet;
     });
 
     const galleries: { category: string; items: MenuItem[] }[] = [];
-    orderedCats.forEach(cat => {
+    orderedCats.forEach((cat) => {
       const catItems = baseItems.filter(
-        item => (item.category || 'Mains').trim().toLowerCase() === cat.toLowerCase()
+        (item) => (item.category || 'Mains').trim().toLowerCase() === cat.toLowerCase()
       );
       if (catItems.length > 0) {
         galleries.push({ category: cat, items: catItems });
@@ -665,14 +847,13 @@ export default function CustomerMenuScreen() {
     );
   };
 
-  // Find item count in cart
   const getItemCartQty = (itemId: string) => {
     return cart
-      .filter(c => c.item.id === itemId)
+      .filter((c) => c.item.id === itemId)
       .reduce((sum, c) => sum + c.qty, 0);
   };
 
-  // Quick Direct Add to Cart (for simple items)
+  // Cart Management
   const handleQuickAdd = (item: MenuItem) => {
     if (isItemSoldOut(item)) return;
 
@@ -689,7 +870,9 @@ export default function CustomerMenuScreen() {
       return;
     }
 
-    const existing = cart.find(c => c.item.id === item.id && !c.selectedVariant && !c.portionLabel);
+    const existing = cart.find(
+      (c) => c.item.id === item.id && !c.selectedVariant && !c.portionLabel
+    );
     if (existing) {
       updateCartQty(existing.cartId, 1);
     } else {
@@ -699,11 +882,10 @@ export default function CustomerMenuScreen() {
         unitPrice: item.price,
         qty: 1,
       };
-      setCart(prev => [...prev, newItem]);
+      setCart((prev) => [...prev, newItem]);
     }
   };
 
-  // Open Customizer
   const handleOpenCustomizer = (item: MenuItem) => {
     if (isItemSoldOut(item)) {
       if (Platform.OS === 'web') {
@@ -726,7 +908,6 @@ export default function CustomerMenuScreen() {
     }
   };
 
-  // Add from Customizer Modal
   const handleAddFromCustomizer = () => {
     if (!customizerItem) return;
 
@@ -743,14 +924,19 @@ export default function CustomerMenuScreen() {
       lowerName.includes('kg');
 
     if (customizerItem.variants && customizerItem.variants.length > 0 && selectedVariant) {
-      const v = customizerItem.variants.find(vr => vr.name === selectedVariant);
+      const v = customizerItem.variants.find((vr) => vr.name === selectedVariant);
       if (v) {
         finalPrice = v.price;
         portionLabel = v.name;
       }
     } else if (isWeightDish) {
       finalPrice = Math.round(customizerItem.price * weightKg);
-      portionLabel = weightKg === 0.25 ? 'Quarter (0.25 kg)' : weightKg === 0.5 ? 'Half (0.5 kg)' : `${weightKg} kg`;
+      portionLabel =
+        weightKg === 0.25
+          ? 'Quarter (0.25 kg)'
+          : weightKg === 0.5
+          ? 'Half (0.5 kg)'
+          : `${weightKg} kg`;
     }
 
     const noteSegments = [];
@@ -768,15 +954,14 @@ export default function CustomerMenuScreen() {
       notes: noteSegments.join(' | ') || undefined,
     };
 
-    setCart(prev => [...prev, newItem]);
+    setCart((prev) => [...prev, newItem]);
     setCustomizerItem(null);
   };
 
-  // Update Cart Quantity
   const updateCartQty = (cartId: string, delta: number) => {
-    setCart(prev =>
+    setCart((prev) =>
       prev
-        .map(ci => {
+        .map((ci) => {
           if (ci.cartId === cartId) {
             const newQ = ci.qty + delta;
             return newQ > 0 ? { ...ci, qty: newQ } : null;
@@ -787,13 +972,16 @@ export default function CustomerMenuScreen() {
     );
   };
 
-  // Quick decrease from card
   const handleQuickDecrease = (itemId: string) => {
-    const existing = [...cart].reverse().find(c => c.item.id === itemId);
+    const existing = [...cart].reverse().find((c) => c.item.id === itemId);
     if (existing) {
       updateCartQty(existing.cartId, -1);
     }
   };
+
+  const handleClearCart = () => setCart([]);
+  const handleRemoveCartItem = (cartId: string) =>
+    setCart((prev) => prev.filter((c) => c.cartId !== cartId));
 
   // Financial Computations
   const subtotal = useMemo(() => {
@@ -805,7 +993,7 @@ export default function CustomerMenuScreen() {
   const grandTotal = subtotal + deliveryFee + tax;
   const totalCartCount = useMemo(() => cart.reduce((sum, i) => sum + i.qty, 0), [cart]);
 
-  // Place Order
+  // Order Submission
   const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
     if (!customerName.trim() || !customerPhone.trim()) {
@@ -833,23 +1021,34 @@ export default function CustomerMenuScreen() {
           address: deliveryAddress.trim(),
         })
       );
-    } catch { }
+    } catch {
+      // storage ignored
+    }
 
     const orderPayload = {
       orderType: orderMode,
       customerName: customerName.trim(),
       customerPhone: customerPhone.trim(),
-      deliveryAddress: orderMode === 'delivery' ? { addressLine: deliveryAddress.trim(), area: 'Customer Area' } : undefined,
-      tableId: orderMode === 'dine_in' ? (selectedTable?.id || 'T-1') : undefined,
-      tableName: orderMode === 'dine_in' ? `${selectedTable?.floor || 'Ground Floor'} • ${selectedTable?.name || 'Table'}` : undefined,
-      tableInfo: orderMode === 'dine_in' && selectedTable ? {
-        tableId: selectedTable.id,
-        tableName: selectedTable.name,
-        floor: selectedTable.floor || 'Ground Floor',
-        seatingType: 'tables',
-      } : undefined,
+      deliveryAddress:
+        orderMode === 'delivery'
+          ? { addressLine: deliveryAddress.trim(), area: 'Customer Area' }
+          : undefined,
+      tableId: orderMode === 'dine_in' ? selectedTable?.id || 'T-1' : undefined,
+      tableName:
+        orderMode === 'dine_in'
+          ? `${selectedTable?.floor || 'Ground Floor'} • ${selectedTable?.name || 'Table'}`
+          : undefined,
+      tableInfo:
+        orderMode === 'dine_in' && selectedTable
+          ? {
+              tableId: selectedTable.id,
+              tableName: selectedTable.name,
+              floor: selectedTable.floor || 'Ground Floor',
+              seatingType: 'tables',
+            }
+          : undefined,
       paymentMethod,
-      items: cart.map(c => ({
+      items: cart.map((c) => ({
         id: c.item.id,
         name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
         qty: c.qty,
@@ -885,7 +1084,7 @@ export default function CustomerMenuScreen() {
             customerName: customerName.trim(),
             customerPhone: customerPhone.trim(),
             deliveryAddress: deliveryAddress.trim(),
-            items: cart.map(c => ({
+            items: cart.map((c) => ({
               name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
               qty: c.qty,
               price: c.unitPrice,
@@ -900,12 +1099,11 @@ export default function CustomerMenuScreen() {
             estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
           };
 
-          // Also reconcile ticket locally if returned
           if (data.ticket) {
             const currentTickets = useRestaurantStore.getState().tickets || [];
             if (!currentTickets.some((t: Ticket) => t.id === data.ticket.id)) {
               useRestaurantStore.getState().syncFromServer({
-                tickets: [data.ticket, ...currentTickets]
+                tickets: [data.ticket, ...currentTickets],
               });
             }
           }
@@ -914,7 +1112,7 @@ export default function CustomerMenuScreen() {
         console.warn('[Menu] Server unreachable, using local fallback:', err);
       }
 
-      // 2. Offline / Local fallback
+      // 2. Offline fallback
       if (!createdOrder) {
         const fallbackId = `ORD-LOC-${Date.now().toString().slice(-6)}`;
         createdOrder = {
@@ -927,7 +1125,7 @@ export default function CustomerMenuScreen() {
           customerName: customerName.trim(),
           customerPhone: customerPhone.trim(),
           deliveryAddress: deliveryAddress.trim(),
-          items: cart.map(c => ({
+          items: cart.map((c) => ({
             name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
             qty: c.qty,
             price: c.unitPrice,
@@ -949,10 +1147,13 @@ export default function CustomerMenuScreen() {
             orderNumber: createdOrder.orderNumber,
             tableId: selectedTable?.id || 'dine-in-app',
             tableName: orderPayload.tableName || 'Customer Table',
-            server: orderMode === 'dine_in' ? 'App Guest (Contactless QR)' : 'Online Delivery',
+            server:
+              orderMode === 'dine_in'
+                ? 'App Guest (Contactless QR)'
+                : 'Online Delivery',
             timePlaced: Date.now(),
             status: 'cooking',
-            items: cart.map(c => ({
+            items: cart.map((c) => ({
               id: c.item.id,
               name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
               price: c.unitPrice,
@@ -965,12 +1166,16 @@ export default function CustomerMenuScreen() {
           syncFromServer({
             tickets: [newTicket, ...(useRestaurantStore.getState().tickets || [])],
           });
-        } catch { }
+        } catch {
+          // ticket sync handled
+        }
       }
 
       try {
         broadcastImmediately();
-      } catch { }
+      } catch {
+        // sync broadcast handled
+      }
 
       const updatedHistory = [createdOrder, ...orderHistory];
       setOrderHistory(updatedHistory);
@@ -993,204 +1198,72 @@ export default function CustomerMenuScreen() {
   const getProgressStage = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return { step: 1, percent: '20%', label: 'Order Received', desc: 'Sent to Sultan Front Desk' };
+        return {
+          step: 1,
+          percent: '20%',
+          label: 'Order Received',
+          desc: 'Sent to Sultan Front Desk',
+        };
       case 'CONFIRMED':
-        return { step: 2, percent: '45%', label: 'Order Confirmed', desc: 'Sent to Royal Kitchen' };
+        return {
+          step: 2,
+          percent: '45%',
+          label: 'Order Confirmed',
+          desc: 'Sent to Royal Kitchen',
+        };
       case 'PREPARING':
-        return { step: 3, percent: '70%', label: 'Cooking in Kitchen', desc: 'Chefs are preparing your dishes' };
+        return {
+          step: 3,
+          percent: '70%',
+          label: 'Cooking in Kitchen',
+          desc: 'Chefs are preparing your dishes',
+        };
       case 'READY':
       case 'READY_FOR_PICKUP':
-        return { step: 4, percent: '88%', label: 'Food Ready', desc: 'Ready for table serving / rider' };
+        return {
+          step: 4,
+          percent: '88%',
+          label: 'Food Ready',
+          desc: 'Ready for table serving / rider',
+        };
       case 'OUT_FOR_DELIVERY':
-        return { step: 4, percent: '90%', label: 'Out for Delivery 🛵', desc: 'Rider is on the way' };
+        return {
+          step: 4,
+          percent: '90%',
+          label: 'Out for Delivery 🛵',
+          desc: 'Rider is on the way',
+        };
       case 'DELIVERED':
       case 'SERVED':
-        return { step: 5, percent: '100%', label: 'Delivered / Served 🎉', desc: 'Enjoy your Sultan meal!' };
+        return {
+          step: 5,
+          percent: '100%',
+          label: 'Delivered / Served 🎉',
+          desc: 'Enjoy your Sultan meal!',
+        };
       case 'CANCELLED':
-        return { step: 0, percent: '0%', label: 'Order Cancelled', desc: 'Order was rejected or cancelled' };
+        return {
+          step: 0,
+          percent: '0%',
+          label: 'Order Cancelled',
+          desc: 'Order was rejected or cancelled',
+        };
       default:
-        return { step: 1, percent: '20%', label: status, desc: 'Processing your order' };
+        return {
+          step: 1,
+          percent: '20%',
+          label: status,
+          desc: 'Processing your order',
+        };
     }
   };
 
-  const floorsList = useMemo(() => {
-    const set = new Set<string>();
-    tables.forEach(t => { if (t.floor) set.add(t.floor); });
-    return ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'];
-  }, [tables]);
-
-  const filteredTablesByFloor = useMemo(() => {
-    return tables.filter(t => (t.floor || 'Ground Floor') === activeFloorFilter);
-  }, [tables, activeFloorFilter]);
-
-  // Render Card Component (Exact POS Terminal Design Language)
-  const renderItemCard = (item: MenuItem) => {
-    const isSoldOut = isItemSoldOut(item);
-    const inCartQty = getItemCartQty(item.id);
-    const isItemInCart = inCartQty > 0;
-    const cardWidth = isDesktop ? '31.5%' : isTablet ? '31.5%' : width < 350 ? '100%' : '48%';
-
-    const lowerName = item.name.toLowerCase();
-    const hasVariants = Boolean(item.variants && item.variants.length > 0);
-    const isWeightDish =
-      lowerName.includes('karahi') ||
-      lowerName.includes('handi') ||
-      lowerName.includes('sajji') ||
-      lowerName.includes('kg');
-
-    return (
-      <TouchableOpacity
-        key={item.id}
-        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-        style={[
-          styles.dishCard,
-          { width: cardWidth as any },
-          isItemInCart && styles.dishCardInCart,
-          isSoldOut && { opacity: 0.65 },
-        ]}
-        onPress={() => (hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item))}
-        activeOpacity={0.8}
-        disabled={isSoldOut}
-      >
-        {/* Floating M3 In-Cart Badge */}
-        {isItemInCart && (
-          <View style={styles.inCartBadge}>
-            <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
-            <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
-          </View>
-        )}
-
-        {/* Top: Dish Photo or Fallback Icon */}
-        <View style={styles.dishCardImageWrapper}>
-          {item.imageUri ? (
-            <Image
-              source={{ uri: item.imageUri }}
-              style={styles.dishCardImage}
-              resizeMode="cover"
-            />
-          ) : (
-            <View style={styles.dishCardPlaceholderBox}>
-              <Ionicons
-                name={item.isDeal ? 'gift' : 'restaurant-outline'}
-                size={26}
-                color="#D4AF37"
-              />
-            </View>
-          )}
-
-          {/* Category & Region Chips */}
-          <View style={styles.dishCardChipsRow}>
-            <View style={styles.dishCardCategoryChip}>
-              <Text style={styles.dishCardCategory} numberOfLines={1}>
-                {(item.category || 'Mains').toUpperCase()}
-              </Text>
-            </View>
-            {item.region ? (
-              <View style={styles.dishCardRegionChip}>
-                <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
-                <Text style={styles.dishCardRegionText} numberOfLines={1}>
-                  {item.region}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-
-          {/* Special Badge tag */}
-          {item.badge ? (
-            <View style={styles.dishCardBadgeTag}>
-              <Text style={styles.dishCardBadgeText} numberOfLines={1}>
-                {item.badge}
-              </Text>
-            </View>
-          ) : item.isDeal ? (
-            <View style={[styles.dishCardBadgeTag, { backgroundColor: '#7C3AED' }]}>
-              <Text style={[styles.dishCardBadgeText, { color: '#FFF' }]} numberOfLines={1}>
-                DEAL
-              </Text>
-            </View>
-          ) : null}
-
-          {/* Out of Stock Overlay */}
-          {isSoldOut && (
-            <View style={styles.dishSoldOutOverlay}>
-              <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
-            </View>
-          )}
-        </View>
-
-        {/* Middle: Dish Name */}
-        <View style={styles.dishTitleWrapper}>
-          <Text style={styles.dishCardTitle} numberOfLines={2}>
-            {item.name}
-          </Text>
-          {item.urduName ? (
-            <Text style={styles.dishCardUrduText} numberOfLines={1}>
-              {item.urduName}
-            </Text>
-          ) : (hasVariants || isWeightDish) ? (
-            <Text style={styles.dishCardVariantHint} numberOfLines={1}>
-              {hasVariants ? `${item.variants?.length} Sizes` : 'Quarter/Half/1kg'}
-            </Text>
-          ) : null}
-        </View>
-
-        {/* Bottom: Warm Cream Price Capsule & Action Controls */}
-        <View style={styles.dishCardBottomSection}>
-          <View style={[styles.dishCardPricePill, isItemInCart && styles.dishCardPricePillActive]}>
-            <Text style={[styles.dishCardPriceText, isItemInCart && styles.dishCardPriceTextActive]}>
-              Rs. {item.price.toLocaleString()}
-            </Text>
-          </View>
-
-          {/* Quick Stepper or Quick Add */}
-          {isItemInCart ? (
-            <View style={styles.cardStepperRow}>
-              <TouchableOpacity
-                style={styles.cardStepperBtnMini}
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  handleQuickDecrease(item.id);
-                }}
-                accessibilityLabel="Decrease quantity"
-              >
-                <Ionicons name="remove" size={13} color="#FFFFFF" />
-              </TouchableOpacity>
-              <Text style={styles.cardStepperCount}>{inCartQty}</Text>
-              <TouchableOpacity
-                style={styles.cardStepperBtnMini}
-                onPress={(e) => {
-                  e.stopPropagation?.();
-                  hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
-                }}
-                accessibilityLabel="Increase quantity"
-              >
-                <Ionicons name="add" size={13} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.cardQuickAddBtn}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name={hasVariants || isWeightDish ? "options-outline" : "add"} size={13} color="#3A0F12" />
-              <Text style={styles.cardQuickAddText}>{hasVariants || isWeightDish ? 'CUSTOMIZE' : 'ADD'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  // Render Category-Wise Gallery Card (Horizontal Showcase Card)
+  // Render Horizontal Dish Card (used in Auto Sliders)
   const renderGalleryItemCard = (item: MenuItem) => {
     const isSoldOut = isItemSoldOut(item);
     const inCartQty = getItemCartQty(item.id);
     const isItemInCart = inCartQty > 0;
-    const cardWidth = isDesktop ? 250 : isTablet ? 220 : 185;
+    const cardWidth = isDesktop ? 260 : isTablet ? 230 : 190;
 
     const lowerName = item.name.toLowerCase();
     const hasVariants = Boolean(item.variants && item.variants.length > 0);
@@ -1203,15 +1276,18 @@ export default function CustomerMenuScreen() {
     return (
       <TouchableOpacity
         key={item.id}
-        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
         style={[
           styles.galleryDishCard,
           { width: cardWidth },
           isItemInCart && styles.galleryDishCardInCart,
           isSoldOut && { opacity: 0.65 },
         ]}
-        onPress={() => (hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item))}
-        activeOpacity={0.82}
+        onPress={() =>
+          hasVariants || isWeightDish
+            ? handleOpenCustomizer(item)
+            : handleQuickAdd(item)
+        }
+        activeOpacity={0.85}
         disabled={isSoldOut}
       >
         {/* Floating In-Cart Badge */}
@@ -1234,8 +1310,8 @@ export default function CustomerMenuScreen() {
             <View style={styles.dishCardPlaceholderBox}>
               <Ionicons
                 name={item.isDeal ? 'gift' : 'restaurant-outline'}
-                size={28}
-                color="#D4AF37"
+                size={30}
+                color="#D5A943"
               />
             </View>
           )}
@@ -1243,7 +1319,12 @@ export default function CustomerMenuScreen() {
           {/* Region Chip */}
           {item.region ? (
             <View style={styles.galleryRegionChip}>
-              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+              <Ionicons
+                name="globe-outline"
+                size={8}
+                color="#D5A943"
+                style={{ marginRight: 3 }}
+              />
               <Text style={styles.dishCardRegionText} numberOfLines={1}>
                 {item.region}
               </Text>
@@ -1282,9 +1363,9 @@ export default function CustomerMenuScreen() {
             <Text style={styles.galleryDishUrdu} numberOfLines={1}>
               {item.urduName}
             </Text>
-          ) : (hasVariants || isWeightDish) ? (
+          ) : hasVariants || isWeightDish ? (
             <Text style={styles.dishCardVariantHint} numberOfLines={1}>
-              {hasVariants ? `${item.variants?.length} Sizes` : 'Quarter/Half/1kg'}
+              {hasVariants ? `${item.variants?.length} Options Available` : 'Custom Weight / Handi'}
             </Text>
           ) : item.description ? (
             <Text style={styles.galleryDishDesc} numberOfLines={1}>
@@ -1295,8 +1376,18 @@ export default function CustomerMenuScreen() {
 
         {/* Bottom: Price + Quick Add or Stepper */}
         <View style={styles.galleryCardBottomRow}>
-          <View style={[styles.galleryPricePill, isItemInCart && styles.galleryPricePillActive]}>
-            <Text style={[styles.galleryPriceText, isItemInCart && styles.galleryPriceTextActive]}>
+          <View
+            style={[
+              styles.galleryPricePill,
+              isItemInCart && styles.galleryPricePillActive,
+            ]}
+          >
+            <Text
+              style={[
+                styles.galleryPriceText,
+                isItemInCart && styles.galleryPriceTextActive,
+              ]}
+            >
               Rs. {item.price.toLocaleString()}
             </Text>
           </View>
@@ -1318,7 +1409,9 @@ export default function CustomerMenuScreen() {
                 style={styles.cardStepperBtnMini}
                 onPress={(e) => {
                   e.stopPropagation?.();
-                  hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
+                  hasVariants || isWeightDish
+                    ? handleOpenCustomizer(item)
+                    : handleQuickAdd(item);
                 }}
                 accessibilityLabel="Increase quantity"
               >
@@ -1330,12 +1423,20 @@ export default function CustomerMenuScreen() {
               style={styles.galleryQuickAddBtn}
               onPress={(e) => {
                 e.stopPropagation?.();
-                hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
+                hasVariants || isWeightDish
+                  ? handleOpenCustomizer(item)
+                  : handleQuickAdd(item);
               }}
               activeOpacity={0.8}
             >
-              <Ionicons name={hasVariants || isWeightDish ? "options-outline" : "add"} size={13} color="#3A0F12" />
-              <Text style={styles.galleryQuickAddText}>{hasVariants || isWeightDish ? 'OPT' : 'ADD'}</Text>
+              <Ionicons
+                name={hasVariants || isWeightDish ? 'options-outline' : 'add'}
+                size={13}
+                color="#1E0408"
+              />
+              <Text style={styles.galleryQuickAddText}>
+                {hasVariants || isWeightDish ? 'CUSTOMIZE' : '+ ADD'}
+              </Text>
             </TouchableOpacity>
           )}
         </View>
@@ -1343,124 +1444,180 @@ export default function CustomerMenuScreen() {
     );
   };
 
-  // Interactive Category-Wise Dishes Slider Component with Arrow Controls & Smooth Scroll
-  const CategorySlider = ({
-    category,
-    items,
-    onViewAll,
-    renderCard,
-  }: {
-    category: string;
-    items: MenuItem[];
-    onViewAll: (category: string) => void;
-    renderCard: (item: MenuItem) => React.ReactNode;
-  }) => {
-    const scrollRef = useRef<any>(null);
-    const [scrollOffset, setScrollOffset] = useState(0);
-    const cardWidth = isDesktop ? 250 : isTablet ? 220 : 185;
-    const slideStep = cardWidth + 12;
+  // Render Grid Dish Card (used in search or single category view)
+  const renderItemCard = (item: MenuItem) => {
+    const isSoldOut = isItemSoldOut(item);
+    const inCartQty = getItemCartQty(item.id);
+    const isItemInCart = inCartQty > 0;
+    const cardWidth = isDesktop ? '31.5%' : isTablet ? '31.5%' : width < 350 ? '100%' : '48%';
 
-    const handleSlideLeft = () => {
-      const nextOffset = Math.max(0, scrollOffset - slideStep * (isDesktop ? 2 : 1));
-      scrollRef.current?.scrollTo({ x: nextOffset, animated: true });
-      setScrollOffset(nextOffset);
-    };
-
-    const handleSlideRight = () => {
-      const nextOffset = scrollOffset + slideStep * (isDesktop ? 2 : 1);
-      scrollRef.current?.scrollTo({ x: nextOffset, animated: true });
-      setScrollOffset(nextOffset);
-    };
+    const lowerName = item.name.toLowerCase();
+    const hasVariants = Boolean(item.variants && item.variants.length > 0);
+    const isWeightDish =
+      lowerName.includes('karahi') ||
+      lowerName.includes('handi') ||
+      lowerName.includes('sajji') ||
+      lowerName.includes('kg');
 
     return (
-      <View style={styles.catGallerySection}>
-        {/* Category Slider Header */}
-        <View style={styles.catGalleryHeader}>
-          <View style={styles.catGalleryHeaderLeft}>
-            <View style={styles.catGalleryBadgeIcon}>
-              <Text style={styles.catGalleryEmoji}>{getCategoryEmoji(category)}</Text>
+      <TouchableOpacity
+        key={item.id}
+        style={[
+          styles.dishCard,
+          { width: cardWidth as any },
+          isItemInCart && styles.dishCardInCart,
+          isSoldOut && { opacity: 0.65 },
+        ]}
+        onPress={() =>
+          hasVariants || isWeightDish
+            ? handleOpenCustomizer(item)
+            : handleQuickAdd(item)
+        }
+        activeOpacity={0.85}
+        disabled={isSoldOut}
+      >
+        {isItemInCart && (
+          <View style={styles.inCartBadge}>
+            <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+            <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
+          </View>
+        )}
+
+        <View style={styles.dishCardImageWrapper}>
+          {item.imageUri ? (
+            <Image
+              source={{ uri: item.imageUri }}
+              style={styles.dishCardImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.dishCardPlaceholderBox}>
+              <Ionicons
+                name={item.isDeal ? 'gift' : 'restaurant-outline'}
+                size={32}
+                color="#D5A943"
+              />
             </View>
-            <View style={{ flex: 1 }}>
-              <View style={styles.catGalleryTitleRow}>
-                <Text style={styles.catGalleryTitle}>{category}</Text>
-                <View style={styles.catGalleryCountPill}>
-                  <Text style={styles.catGalleryCountText}>{items.length} items</Text>
-                </View>
-              </View>
-              <Text style={styles.catGallerySubtitle} numberOfLines={1}>
-                {getCategoryUrduOrTagline(category)}
+          )}
+
+          {item.region ? (
+            <View style={styles.galleryRegionChip}>
+              <Ionicons
+                name="globe-outline"
+                size={8}
+                color="#D5A943"
+                style={{ marginRight: 3 }}
+              />
+              <Text style={styles.dishCardRegionText} numberOfLines={1}>
+                {item.region}
               </Text>
             </View>
-          </View>
+          ) : null}
 
-          {/* Right side: Slider Navigation Arrows + View All */}
-          <View style={styles.sliderControlsRow}>
-            <View style={styles.sliderArrowGroup}>
-              <TouchableOpacity
-                style={[styles.sliderArrowBtn, scrollOffset <= 0 && styles.sliderArrowBtnDisabled]}
-                onPress={handleSlideLeft}
-                disabled={scrollOffset <= 0}
-                activeOpacity={0.7}
-                accessibilityLabel={`Previous ${category} dishes`}
-              >
-                <Ionicons
-                  name="chevron-back"
-                  size={15}
-                  color={scrollOffset <= 0 ? '#C4B5A5' : '#52171B'}
-                />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.sliderArrowBtn}
-                onPress={handleSlideRight}
-                activeOpacity={0.7}
-                accessibilityLabel={`Next ${category} dishes`}
-              >
-                <Ionicons name="chevron-forward" size={15} color="#52171B" />
-              </TouchableOpacity>
+          {item.badge ? (
+            <View style={styles.dishCardBadgeTag}>
+              <Text style={styles.dishCardBadgeText} numberOfLines={1}>
+                {item.badge}
+              </Text>
             </View>
+          ) : item.isDeal ? (
+            <View style={[styles.dishCardBadgeTag, { backgroundColor: '#7C3AED' }]}>
+              <Text style={[styles.dishCardBadgeText, { color: '#FFF' }]} numberOfLines={1}>
+                DEAL
+              </Text>
+            </View>
+          ) : null}
 
-            <TouchableOpacity
-              style={styles.catGalleryViewAllBtn}
-              onPress={() => onViewAll(category)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.catGalleryViewAllText}>View All</Text>
-              <Ionicons name="arrow-forward" size={13} color="#52171B" />
-            </TouchableOpacity>
-          </View>
+          {isSoldOut && (
+            <View style={styles.dishSoldOutOverlay}>
+              <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
+            </View>
+          )}
         </View>
 
-        {/* Horizontal Slider Track */}
-        <ScrollView
-          ref={scrollRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.catGalleryScrollContent}
-          onScroll={(e) => setScrollOffset(e.nativeEvent.contentOffset.x)}
-          scrollEventThrottle={16}
-        >
-          {items.map(renderCard)}
+        <View style={styles.dishCardDetails}>
+          <Text style={styles.dishCardTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.urduName ? (
+            <Text style={styles.dishCardUrdu} numberOfLines={1}>
+              {item.urduName}
+            </Text>
+          ) : hasVariants || isWeightDish ? (
+            <Text style={styles.dishCardVariantHint} numberOfLines={1}>
+              {hasVariants ? `${item.variants?.length} Options` : 'Quarter / Half / 1kg'}
+            </Text>
+          ) : item.description ? (
+            <Text style={styles.dishCardDesc} numberOfLines={1}>
+              {item.description}
+            </Text>
+          ) : null}
+        </View>
 
-          {/* Explore All Category Card */}
-          <TouchableOpacity
-            style={styles.catGalleryEndCard}
-            onPress={() => onViewAll(category)}
-            activeOpacity={0.85}
+        <View style={styles.dishCardBottom}>
+          <View
+            style={[
+              styles.galleryPricePill,
+              isItemInCart && styles.galleryPricePillActive,
+            ]}
           >
-            <View style={styles.catGalleryEndIconCircle}>
-              <Ionicons name="arrow-forward" size={20} color="#52171B" />
+            <Text
+              style={[
+                styles.galleryPriceText,
+                isItemInCart && styles.galleryPriceTextActive,
+              ]}
+            >
+              Rs. {item.price.toLocaleString()}
+            </Text>
+          </View>
+
+          {isItemInCart ? (
+            <View style={styles.cardStepperRow}>
+              <TouchableOpacity
+                style={styles.cardStepperBtnMini}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleQuickDecrease(item.id);
+                }}
+              >
+                <Ionicons name="remove" size={13} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.cardStepperCount}>{inCartQty}</Text>
+              <TouchableOpacity
+                style={styles.cardStepperBtnMini}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  hasVariants || isWeightDish
+                    ? handleOpenCustomizer(item)
+                    : handleQuickAdd(item);
+                }}
+              >
+                <Ionicons name="add" size={13} color="#FFFFFF" />
+              </TouchableOpacity>
             </View>
-            <Text style={styles.catGalleryEndTitle}>Explore All</Text>
-            <Text style={styles.catGalleryEndCat} numberOfLines={1}>
-              {category}
-            </Text>
-            <Text style={styles.catGalleryEndCount}>
-              {items.length} dishes
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.galleryQuickAddBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                hasVariants || isWeightDish
+                  ? handleOpenCustomizer(item)
+                  : handleQuickAdd(item);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={hasVariants || isWeightDish ? 'options-outline' : 'add'}
+                size={13}
+                color="#1E0408"
+              />
+              <Text style={styles.galleryQuickAddText}>
+                {hasVariants || isWeightDish ? 'CUSTOMIZE' : '+ ADD'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
     );
   };
 
@@ -1475,9 +1632,11 @@ export default function CustomerMenuScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ========================================================
-              1. REGAL SULTAN COMPACT HERO HEADER WITH TABLE STATUS
+              1. REGAL SULTAN COMPACT HERO HEADER
              ======================================================== */}
-          <IslamicHeroBackground style={[styles.heroBanner, { paddingTop: 10, paddingBottom: 12 }]}>
+          <IslamicHeroBackground
+            style={[styles.heroBanner, { paddingTop: 10, paddingBottom: 12 }]}
+          >
             <View style={styles.heroOverlayContent}>
               <View style={styles.heroTopActions}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
@@ -1494,7 +1653,9 @@ export default function CustomerMenuScreen() {
                     <SultanLogo size="sm" width={38} height={34} />
                     <View>
                       <Text style={styles.heroMainTitleMini}>SULTAN RESTAURANT</Text>
-                      <Text style={styles.heroSubtitleUrduMini}>سلطان ریستوراں • شاہی دسترخوان</Text>
+                      <Text style={styles.heroSubtitleUrduMini}>
+                        سلطان ریستوراں • شاہی دسترخوان
+                      </Text>
                     </View>
                   </View>
                 </View>
@@ -1510,7 +1671,12 @@ export default function CustomerMenuScreen() {
                       size={13}
                       color={soundMuted ? '#EF4444' : '#D5A943'}
                     />
-                    <Text style={[styles.heroSoundPillText, soundMuted && { color: '#EF4444' }]}>
+                    <Text
+                      style={[
+                        styles.heroSoundPillText,
+                        soundMuted && { color: '#EF4444' },
+                      ]}
+                    >
                       {soundMuted ? 'Muted' : 'Sound ON'}
                     </Text>
                   </TouchableOpacity>
@@ -1521,7 +1687,9 @@ export default function CustomerMenuScreen() {
                       onPress={() => setHistoryModalVisible(true)}
                     >
                       <Ionicons name="receipt-outline" size={13} color="#D5A943" />
-                      <Text style={styles.heroOrdersPillText}>Orders ({orderHistory.length})</Text>
+                      <Text style={styles.heroOrdersPillText}>
+                        Orders ({orderHistory.length})
+                      </Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1539,32 +1707,56 @@ export default function CustomerMenuScreen() {
                       <Ionicons name="qr-code" size={14} color="#D5A943" />
                     </View>
                     <Text style={styles.compactTablePillText} numberOfLines={1}>
-                      {selectedTable?.floor || 'Ground Floor'} • {selectedTable?.name || 'Table T-01'}
+                      {selectedTable?.floor || 'Ground Floor'} •{' '}
+                      {selectedTable?.name || 'Table T-01'}
                     </Text>
-                    <Ionicons name="chevron-down" size={12} color="#D5A943" style={{ marginLeft: 2 }} />
+                    <Ionicons
+                      name="chevron-down"
+                      size={12}
+                      color="#D5A943"
+                      style={{ marginLeft: 2 }}
+                    />
                   </TouchableOpacity>
                 ) : (
                   <View style={styles.compactTablePillDelivery}>
                     <Ionicons name="bicycle" size={14} color="#34D399" />
-                    <Text style={styles.compactDeliveryText}>Sultan Express (35-45m)</Text>
+                    <Text style={styles.compactDeliveryText}>
+                      Sultan Express Delivery (35-45m)
+                    </Text>
                   </View>
                 )}
 
                 {/* Mode Switcher Buttons */}
                 <View style={styles.compactModeToggle}>
                   <TouchableOpacity
-                    style={[styles.compactModeBtn, orderMode === 'dine_in' && styles.compactModeBtnActive]}
+                    style={[
+                      styles.compactModeBtn,
+                      orderMode === 'dine_in' && styles.compactModeBtnActive,
+                    ]}
                     onPress={() => setOrderMode('dine_in')}
                   >
-                    <Text style={[styles.compactModeBtnText, orderMode === 'dine_in' && styles.compactModeBtnTextActive]}>
+                    <Text
+                      style={[
+                        styles.compactModeBtnText,
+                        orderMode === 'dine_in' && styles.compactModeBtnTextActive,
+                      ]}
+                    >
                       Dine-In
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.compactModeBtn, orderMode === 'delivery' && styles.compactModeBtnActive]}
+                    style={[
+                      styles.compactModeBtn,
+                      orderMode === 'delivery' && styles.compactModeBtnActive,
+                    ]}
                     onPress={() => setOrderMode('delivery')}
                   >
-                    <Text style={[styles.compactModeBtnText, orderMode === 'delivery' && styles.compactModeBtnTextActive]}>
+                    <Text
+                      style={[
+                        styles.compactModeBtnText,
+                        orderMode === 'delivery' && styles.compactModeBtnTextActive,
+                      ]}
+                    >
                       Delivery
                     </Text>
                   </TouchableOpacity>
@@ -1574,15 +1766,20 @@ export default function CustomerMenuScreen() {
           </IslamicHeroBackground>
 
           {/* ========================================================
-              3. SEARCH & DIETARY FILTER PILLS
+              2. SEARCH, DIETARY & CUISINE FILTERS
              ======================================================== */}
           <View style={styles.filterSectionContainer}>
             {/* Search Input Box */}
             <View style={styles.searchBar}>
-              <Ionicons name="search" size={18} color="#895B1E" style={{ marginRight: 8 }} />
+              <Ionicons
+                name="search"
+                size={18}
+                color="#895B1E"
+                style={{ marginRight: 8 }}
+              />
               <TextInput
                 style={styles.searchInput}
-                placeholder="Search mutton karahi, chicken handi, seekh kababs, kunafa, drinks..."
+                placeholder="Search mutton karahi, biryani, handi, bbq, platters, drinks..."
                 placeholderTextColor="#999"
                 value={searchQuery}
                 onChangeText={setSearchQuery}
@@ -1601,25 +1798,33 @@ export default function CustomerMenuScreen() {
                 { id: 'specials', label: '⭐ Chef Specials' },
                 { id: 'spicy', label: '🌶️ Spicy Royal' },
                 { id: 'veg', label: '🌿 Vegetarian & Breads' },
-              ].map(tag => (
+              ].map((tag) => (
                 <TouchableOpacity
                   key={tag.id}
-                  style={[styles.dietaryChip, dietaryFilter === tag.id && styles.dietaryChipActive]}
+                  style={[
+                    styles.dietaryChip,
+                    dietaryFilter === tag.id && styles.dietaryChipActive,
+                  ]}
                   onPress={() => setDietaryFilter(tag.id as any)}
                 >
-                  <Text style={[styles.dietaryChipText, dietaryFilter === tag.id && styles.dietaryChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.dietaryChipText,
+                      dietaryFilter === tag.id && styles.dietaryChipTextActive,
+                    ]}
+                  >
                     {tag.label}
                   </Text>
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Region / Cuisine Filter Bar (Exact POS Terminal Style) */}
+            {/* Region / Cuisine Filter Bar */}
             {regions.length > 0 && (
               <View style={styles.posRegionFilterRow}>
                 <View style={styles.posRegionFilterLead}>
                   <View style={styles.posRegionLeadIconWrap}>
-                    <Ionicons name="restaurant" size={11} color="#D4AF37" />
+                    <Ionicons name="restaurant" size={11} color="#D5A943" />
                   </View>
                   <Text style={styles.posRegionFilterLeadText}>CUISINE</Text>
                 </View>
@@ -1639,7 +1844,7 @@ export default function CustomerMenuScreen() {
                     <Ionicons
                       name="globe-outline"
                       size={13}
-                      color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'}
+                      color={activeRegion === 'ALL' ? '#D5A943' : '#8A7A70'}
                       style={{ marginRight: 2 }}
                     />
                     <Text
@@ -1667,7 +1872,7 @@ export default function CustomerMenuScreen() {
                     </View>
                   </TouchableOpacity>
 
-                  {regions.map(r => {
+                  {regions.map((r) => {
                     const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
                     const meta = getCuisineMeta(r);
                     const count = regionCounts[r] || 0;
@@ -1715,15 +1920,17 @@ export default function CustomerMenuScreen() {
               </View>
             )}
 
-            {/* Category Horizontal Slider (with item count badges & icons) */}
+            {/* Category Nav Horizontal Tabs */}
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.mobileCategoryScroll}
             >
-              {categoryTabs.map(cat => {
+              {categoryTabs.map((cat) => {
                 const isActive = activeCat.toLowerCase() === cat.toLowerCase();
-                const count = categoryCounts[cat] || (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
+                const count =
+                  categoryCounts[cat] ||
+                  (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
                 return (
                   <TouchableOpacity
                     key={cat}
@@ -1732,11 +1939,26 @@ export default function CustomerMenuScreen() {
                     activeOpacity={0.8}
                   >
                     <Text style={styles.catChipEmoji}>{getCategoryEmoji(cat)}</Text>
-                    <Text style={[styles.catChipText, isActive && styles.catChipTextActive]}>
+                    <Text
+                      style={[
+                        styles.catChipText,
+                        isActive && styles.catChipTextActive,
+                      ]}
+                    >
                       {cat}
                     </Text>
-                    <View style={[styles.catCountBadge, isActive && styles.catCountBadgeActive]}>
-                      <Text style={[styles.catCountBadgeText, isActive && styles.catCountBadgeTextActive]}>
+                    <View
+                      style={[
+                        styles.catCountBadge,
+                        isActive && styles.catCountBadgeActive,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.catCountBadgeText,
+                          isActive && styles.catCountBadgeTextActive,
+                        ]}
+                      >
                         {count}
                       </Text>
                     </View>
@@ -1747,33 +1969,53 @@ export default function CustomerMenuScreen() {
           </View>
 
           {/* ========================================================
-              4. MAIN CONTENT: DESKTOP SPLIT LAYOUT OR MOBILE FEED
+              3. MAIN CONTENT: DESKTOP SIDEBAR OR FEED
              ======================================================== */}
           <View style={styles.contentLayoutContainer}>
-            {/* Desktop Left Categories & Cuisines Sidebar */}
+            {/* Desktop Left Categories Sidebar */}
             {isDesktop && (
               <View style={styles.desktopSidebar}>
                 <View style={styles.sidebarHeader}>
-                  <Text style={styles.sidebarTitle}>Menu Categories</Text>
-                  <Text style={styles.sidebarSubtitle}>Select a section</Text>
+                  <Text style={styles.sidebarTitle}>Menu Sections</Text>
+                  <Text style={styles.sidebarSubtitle}>Select a category</Text>
                 </View>
 
-                {categoryTabs.map(cat => {
+                {categoryTabs.map((cat) => {
                   const isActive = activeCat.toLowerCase() === cat.toLowerCase();
-                  const count = categoryCounts[cat] || (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
+                  const count =
+                    categoryCounts[cat] ||
+                    (cat === 'All' ? categoryCounts['All'] || menuItems.length : 0);
 
                   return (
                     <TouchableOpacity
                       key={cat}
-                      style={[styles.sidebarCatItem, isActive && styles.sidebarCatItemActive]}
+                      style={[
+                        styles.sidebarCatItem,
+                        isActive && styles.sidebarCatItemActive,
+                      ]}
                       onPress={() => setActiveCat(cat)}
                     >
                       <Text style={styles.sidebarCatEmoji}>{getCategoryEmoji(cat)}</Text>
-                      <Text style={[styles.sidebarCatName, isActive && styles.sidebarCatNameActive]}>
+                      <Text
+                        style={[
+                          styles.sidebarCatName,
+                          isActive && styles.sidebarCatNameActive,
+                        ]}
+                      >
                         {cat}
                       </Text>
-                      <View style={[styles.sidebarCountBadge, isActive && styles.sidebarCountBadgeActive]}>
-                        <Text style={[styles.sidebarCountText, isActive && styles.sidebarCountTextActive]}>
+                      <View
+                        style={[
+                          styles.sidebarCountBadge,
+                          isActive && styles.sidebarCountBadgeActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sidebarCountText,
+                            isActive && styles.sidebarCountTextActive,
+                          ]}
+                        >
                           {count}
                         </Text>
                       </View>
@@ -1781,7 +2023,7 @@ export default function CustomerMenuScreen() {
                   );
                 })}
 
-                {/* Cuisines & Regions in Sidebar */}
+                {/* Regional Cuisines in Sidebar */}
                 {regions.length > 0 && (
                   <>
                     <View style={[styles.sidebarHeader, { marginTop: 18 }]}>
@@ -1790,7 +2032,10 @@ export default function CustomerMenuScreen() {
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.sidebarCatItem, activeRegion === 'ALL' && styles.sidebarCatItemActive]}
+                      style={[
+                        styles.sidebarCatItem,
+                        activeRegion === 'ALL' && styles.sidebarCatItemActive,
+                      ]}
                       onPress={() => setActiveRegion('ALL')}
                     >
                       <Ionicons
@@ -1799,17 +2044,32 @@ export default function CustomerMenuScreen() {
                         color={activeRegion === 'ALL' ? '#D5A943' : '#888'}
                         style={{ marginRight: 8 }}
                       />
-                      <Text style={[styles.sidebarCatName, activeRegion === 'ALL' && styles.sidebarCatNameActive]}>
+                      <Text
+                        style={[
+                          styles.sidebarCatName,
+                          activeRegion === 'ALL' && styles.sidebarCatNameActive,
+                        ]}
+                      >
                         All Cuisines
                       </Text>
-                      <View style={[styles.sidebarCountBadge, activeRegion === 'ALL' && styles.sidebarCountBadgeActive]}>
-                        <Text style={[styles.sidebarCountText, activeRegion === 'ALL' && styles.sidebarCountTextActive]}>
+                      <View
+                        style={[
+                          styles.sidebarCountBadge,
+                          activeRegion === 'ALL' && styles.sidebarCountBadgeActive,
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.sidebarCountText,
+                            activeRegion === 'ALL' && styles.sidebarCountTextActive,
+                          ]}
+                        >
                           {regionCounts['ALL'] || 0}
                         </Text>
                       </View>
                     </TouchableOpacity>
 
-                    {regions.map(r => {
+                    {regions.map((r) => {
                       const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
                       const meta = getCuisineMeta(r);
                       const count = regionCounts[r] || 0;
@@ -1817,15 +2077,33 @@ export default function CustomerMenuScreen() {
                       return (
                         <TouchableOpacity
                           key={r}
-                          style={[styles.sidebarCatItem, isSelected && styles.sidebarCatItemActive]}
+                          style={[
+                            styles.sidebarCatItem,
+                            isSelected && styles.sidebarCatItemActive,
+                          ]}
                           onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
                         >
                           <Text style={styles.sidebarCatEmoji}>{meta.emoji}</Text>
-                          <Text style={[styles.sidebarCatName, isSelected && styles.sidebarCatNameActive]}>
+                          <Text
+                            style={[
+                              styles.sidebarCatName,
+                              isSelected && styles.sidebarCatNameActive,
+                            ]}
+                          >
                             {r}
                           </Text>
-                          <View style={[styles.sidebarCountBadge, isSelected && styles.sidebarCountBadgeActive]}>
-                            <Text style={[styles.sidebarCountText, isSelected && styles.sidebarCountTextActive]}>
+                          <View
+                            style={[
+                              styles.sidebarCountBadge,
+                              isSelected && styles.sidebarCountBadgeActive,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.sidebarCountText,
+                                isSelected && styles.sidebarCountTextActive,
+                              ]}
+                            >
                               {count}
                             </Text>
                           </View>
@@ -1837,16 +2115,17 @@ export default function CustomerMenuScreen() {
               </View>
             )}
 
-            {/* Center Dishes Feed & Category Galleries */}
+            {/* Center Dishes Feed & Auto-Sliders */}
             <View style={styles.dishesFeedContainer}>
               <View style={styles.dishesHeaderRow}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.categoryHeading}>
-                    {activeCat === 'All' ? 'Front Page Galleries' : activeCat} {activeRegion !== 'ALL' ? `• ${activeRegion}` : ''}
+                    {activeCat === 'All' ? 'Front Page Galleries' : activeCat}{' '}
+                    {activeRegion !== 'ALL' ? `• ${activeRegion}` : ''}
                   </Text>
                   <Text style={styles.categorySubheading}>
                     {activeCat === 'All' && viewMode === 'gallery' && !searchQuery
-                      ? `${groupedCategoryGalleries.length} Signature Categories • Curated dishes category-wise`
+                      ? `${groupedCategoryGalleries.length} Signature Categories • Auto-Sliding Dish Showcases`
                       : `${filteredItems.length} authentic dishes prepared to perfection`}
                   </Text>
                 </View>
@@ -1856,7 +2135,10 @@ export default function CustomerMenuScreen() {
                   {activeCat === 'All' && !searchQuery && (
                     <View style={styles.viewModeToggleWrap}>
                       <TouchableOpacity
-                        style={[styles.viewModeToggleBtn, viewMode === 'gallery' && styles.viewModeToggleBtnActive]}
+                        style={[
+                          styles.viewModeToggleBtn,
+                          viewMode === 'gallery' && styles.viewModeToggleBtnActive,
+                        ]}
                         onPress={() => setViewMode('gallery')}
                         activeOpacity={0.8}
                         accessibilityLabel="Category Gallery View"
@@ -1866,13 +2148,21 @@ export default function CustomerMenuScreen() {
                           size={13}
                           color={viewMode === 'gallery' ? '#52171B' : '#777'}
                         />
-                        <Text style={[styles.viewModeToggleText, viewMode === 'gallery' && styles.viewModeToggleTextActive]}>
-                          Gallery
+                        <Text
+                          style={[
+                            styles.viewModeToggleText,
+                            viewMode === 'gallery' && styles.viewModeToggleTextActive,
+                          ]}
+                        >
+                          Auto Sliders
                         </Text>
                       </TouchableOpacity>
 
                       <TouchableOpacity
-                        style={[styles.viewModeToggleBtn, viewMode === 'grid' && styles.viewModeToggleBtnActive]}
+                        style={[
+                          styles.viewModeToggleBtn,
+                          viewMode === 'grid' && styles.viewModeToggleBtnActive,
+                        ]}
                         onPress={() => setViewMode('grid')}
                         activeOpacity={0.8}
                         accessibilityLabel="Grid View"
@@ -1882,14 +2172,22 @@ export default function CustomerMenuScreen() {
                           size={13}
                           color={viewMode === 'grid' ? '#52171B' : '#777'}
                         />
-                        <Text style={[styles.viewModeToggleText, viewMode === 'grid' && styles.viewModeToggleTextActive]}>
+                        <Text
+                          style={[
+                            styles.viewModeToggleText,
+                            viewMode === 'grid' && styles.viewModeToggleTextActive,
+                          ]}
+                        >
                           Grid
                         </Text>
                       </TouchableOpacity>
                     </View>
                   )}
 
-                  {(activeCat !== 'All' || activeRegion !== 'ALL' || searchQuery || dietaryFilter !== 'all') && (
+                  {(activeCat !== 'All' ||
+                    activeRegion !== 'ALL' ||
+                    searchQuery ||
+                    dietaryFilter !== 'all') && (
                     <TouchableOpacity
                       style={styles.activeFilterResetBtn}
                       onPress={() => {
@@ -1900,7 +2198,12 @@ export default function CustomerMenuScreen() {
                       }}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="refresh" size={12} color="#895B1E" style={{ marginRight: 4 }} />
+                      <Ionicons
+                        name="refresh"
+                        size={12}
+                        color="#895B1E"
+                        style={{ marginRight: 4 }}
+                      />
                       <Text style={styles.activeFilterResetText}>Reset All</Text>
                     </TouchableOpacity>
                   )}
@@ -1921,16 +2224,21 @@ export default function CustomerMenuScreen() {
 
                   <View style={styles.focusedCatBannerInfo}>
                     <View style={styles.focusedCatBannerIconBox}>
-                      <Text style={styles.focusedCatBannerEmoji}>{getCategoryEmoji(activeCat)}</Text>
+                      <Text style={styles.focusedCatBannerEmoji}>
+                        {getCategoryEmoji(activeCat)}
+                      </Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.focusedCatBannerTitle}>{activeCat}</Text>
-                      <Text style={styles.focusedCatBannerSubtitle}>{getCategoryUrduOrTagline(activeCat)}</Text>
+                      <Text style={styles.focusedCatBannerSubtitle}>
+                        {getCategoryUrduOrTagline(activeCat)}
+                      </Text>
                     </View>
                   </View>
                 </View>
               )}
 
+              {/* Center Content Body */}
               {filteredItems.length === 0 ? (
                 <View style={styles.emptyStateBox}>
                   <Ionicons name="search-outline" size={48} color="#D5A943" />
@@ -1951,22 +2259,25 @@ export default function CustomerMenuScreen() {
                   </TouchableOpacity>
                 </View>
               ) : activeCat === 'All' && !searchQuery.trim() && viewMode === 'gallery' ? (
-                /* Category-Wise Items Sliders on Front Page */
+                /* Auto-Slider Category Galleries on Front Page */
                 <View style={styles.catGalleriesContainer}>
                   {groupedCategoryGalleries.map(({ category, items }) => (
-                    <CategorySlider
+                    <AutoCategorySlider
                       key={category}
                       category={category}
                       items={items}
                       onViewAll={(cat) => setActiveCat(cat)}
                       renderCard={renderGalleryItemCard}
+                      isDesktop={isDesktop}
+                      isTablet={isTablet}
+                      screenWidth={width}
+                      getEmoji={getCategoryEmoji}
+                      getUrdu={getCategoryUrduOrTagline}
                     />
                   ))}
                 </View>
               ) : (
-                <View style={styles.dishesGrid}>
-                  {filteredItems.map(renderItemCard)}
-                </View>
+                <View style={styles.dishesGrid}>{filteredItems.map(renderItemCard)}</View>
               )}
             </View>
 
@@ -1981,7 +2292,9 @@ export default function CustomerMenuScreen() {
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <View style={styles.cartItemCountTag}>
-                      <Text style={styles.cartItemCountTagText}>{totalCartCount} items</Text>
+                      <Text style={styles.cartItemCountTagText}>
+                        {totalCartCount} items
+                      </Text>
                     </View>
                     {cart.length > 0 && (
                       <TouchableOpacity
@@ -2005,8 +2318,11 @@ export default function CustomerMenuScreen() {
                   </View>
                 ) : (
                   <View style={styles.cartPanelBody}>
-                    <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
-                      {cart.map(c => (
+                    <ScrollView
+                      style={{ maxHeight: 340 }}
+                      showsVerticalScrollIndicator={false}
+                    >
+                      {cart.map((c) => (
                         <View key={c.cartId} style={styles.trayItemRow}>
                           <View style={{ flex: 1, paddingRight: 8 }}>
                             <Text style={styles.trayItemName} numberOfLines={1}>
@@ -2036,7 +2352,6 @@ export default function CustomerMenuScreen() {
                             </TouchableOpacity>
                           </View>
 
-                          {/* 1-Click Delete item from cart */}
                           <TouchableOpacity
                             style={styles.trayItemRemoveBtn}
                             onPress={() => handleRemoveCartItem(c.cartId)}
@@ -2051,7 +2366,9 @@ export default function CustomerMenuScreen() {
                     <View style={styles.traySummaryCard}>
                       <View style={styles.traySummaryRow}>
                         <Text style={styles.summaryLabel}>Subtotal</Text>
-                        <Text style={styles.summaryVal}>Rs. {subtotal.toLocaleString()}</Text>
+                        <Text style={styles.summaryVal}>
+                          Rs. {subtotal.toLocaleString()}
+                        </Text>
                       </View>
                       {deliveryFee > 0 && (
                         <View style={styles.traySummaryRow}>
@@ -2066,7 +2383,9 @@ export default function CustomerMenuScreen() {
                       <View style={styles.trayDivider} />
                       <View style={styles.traySummaryRow}>
                         <Text style={styles.grandLabel}>Grand Total</Text>
-                        <Text style={styles.grandVal}>Rs. {grandTotal.toLocaleString()}</Text>
+                        <Text style={styles.grandVal}>
+                          Rs. {grandTotal.toLocaleString()}
+                        </Text>
                       </View>
                     </View>
 
@@ -2075,7 +2394,9 @@ export default function CustomerMenuScreen() {
                       style={styles.trayCheckoutBtn}
                       onPress={() => setCartModalVisible(true)}
                     >
-                      <Text style={styles.trayCheckoutBtnText}>Proceed to Checkout</Text>
+                      <Text style={styles.trayCheckoutBtnText}>
+                        Proceed to Checkout
+                      </Text>
                       <Ionicons name="arrow-forward" size={16} color="#3A0F12" />
                     </TouchableOpacity>
                   </View>
@@ -2088,7 +2409,7 @@ export default function CustomerMenuScreen() {
         </ScrollView>
 
         {/* ========================================================
-            5. MOBILE FLOATING CART BAR (Mobile & Tablet)
+            4. MOBILE & TABLET FLOATING CART BAR
            ======================================================== */}
         {!isDesktop && cart.length > 0 && (
           <View style={styles.floatingCartMobileWrapper}>
@@ -2114,7 +2435,9 @@ export default function CustomerMenuScreen() {
               </View>
 
               <View style={styles.floatingCartRight}>
-                <Text style={styles.floatingCartTotal}>Rs. {grandTotal.toLocaleString()}</Text>
+                <Text style={styles.floatingCartTotal}>
+                  Rs. {grandTotal.toLocaleString()}
+                </Text>
                 <View style={styles.floatingCartActionPill}>
                   <Text style={styles.floatingCartActionPillText}>View Tray</Text>
                   <Ionicons name="arrow-forward" size={14} color="#3A0F12" />
@@ -2126,7 +2449,7 @@ export default function CustomerMenuScreen() {
       </View>
 
       {/* ========================================================
-          MODAL 1: DISH CUSTOMIZER / PORTION SIZING (CENTERED)
+          MODAL 1: DISH CUSTOMIZER / PORTION SIZING
          ======================================================== */}
       <Modal visible={!!customizerItem} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
@@ -2135,7 +2458,9 @@ export default function CustomerMenuScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.customizerModalTitle}>{customizerItem?.name}</Text>
                 {customizerItem?.urduName ? (
-                  <Text style={styles.customizerModalUrduTitle}>{customizerItem.urduName}</Text>
+                  <Text style={styles.customizerModalUrduTitle}>
+                    {customizerItem.urduName}
+                  </Text>
                 ) : null}
                 <Text style={styles.customizerModalCat}>
                   {customizerItem?.category} • Authentic Royal Preparation
@@ -2147,28 +2472,42 @@ export default function CustomerMenuScreen() {
             </View>
 
             <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
-              {/* Variants / Sizing */}
+              {/* Variants */}
               {customizerItem?.variants && customizerItem.variants.length > 0 ? (
                 <View style={styles.customizerSection}>
                   <Text style={styles.sectionLabel}>Select Serving Size / Portion:</Text>
                   <View style={styles.optionsWrap}>
-                    {customizerItem.variants.map(v => (
+                    {customizerItem.variants.map((v) => (
                       <TouchableOpacity
                         key={v.name}
-                        style={[styles.optionPill, selectedVariant === v.name && styles.optionPillActive]}
+                        style={[
+                          styles.optionPill,
+                          selectedVariant === v.name && styles.optionPillActive,
+                        ]}
                         onPress={() => setSelectedVariant(v.name)}
                       >
-                        <Text style={[styles.optionPillText, selectedVariant === v.name && styles.optionPillTextActive]}>
+                        <Text
+                          style={[
+                            styles.optionPillText,
+                            selectedVariant === v.name && styles.optionPillTextActive,
+                          ]}
+                        >
                           {v.name}
                         </Text>
-                        <Text style={[styles.optionPillPrice, selectedVariant === v.name && styles.optionPillPriceActive]}>
+                        <Text
+                          style={[
+                            styles.optionPillPrice,
+                            selectedVariant === v.name && styles.optionPillPriceActive,
+                          ]}
+                        >
                           Rs. {v.price.toLocaleString()}
                         </Text>
                       </TouchableOpacity>
                     ))}
                   </View>
                 </View>
-              ) : (customizerItem?.name.toLowerCase().includes('karahi') || customizerItem?.name.toLowerCase().includes('handi')) ? (
+              ) : customizerItem?.name.toLowerCase().includes('karahi') ||
+                customizerItem?.name.toLowerCase().includes('handi') ? (
                 <View style={styles.customizerSection}>
                   <Text style={styles.sectionLabel}>Select Weight / Portion:</Text>
                   <View style={styles.optionsWrap}>
@@ -2177,17 +2516,33 @@ export default function CustomerMenuScreen() {
                       { kg: 0.5, label: 'Half (0.5 kg)' },
                       { kg: 1.0, label: 'Full (1.0 kg)' },
                       { kg: 2.0, label: 'Royal Family (2.0 kg)' },
-                    ].map(w => (
+                    ].map((w) => (
                       <TouchableOpacity
                         key={w.kg}
-                        style={[styles.optionPill, weightKg === w.kg && styles.optionPillActive]}
+                        style={[
+                          styles.optionPill,
+                          weightKg === w.kg && styles.optionPillActive,
+                        ]}
                         onPress={() => setWeightKg(w.kg)}
                       >
-                        <Text style={[styles.optionPillText, weightKg === w.kg && styles.optionPillTextActive]}>
+                        <Text
+                          style={[
+                            styles.optionPillText,
+                            weightKg === w.kg && styles.optionPillTextActive,
+                          ]}
+                        >
                           {w.label}
                         </Text>
-                        <Text style={[styles.optionPillPrice, weightKg === w.kg && styles.optionPillPriceActive]}>
-                          Rs. {Math.round((customizerItem?.price || 0) * w.kg).toLocaleString()}
+                        <Text
+                          style={[
+                            styles.optionPillPrice,
+                            weightKg === w.kg && styles.optionPillPriceActive,
+                          ]}
+                        >
+                          Rs.{' '}
+                          {Math.round(
+                            (customizerItem?.price || 0) * w.kg
+                          ).toLocaleString()}
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -2195,82 +2550,90 @@ export default function CustomerMenuScreen() {
                 </View>
               ) : null}
 
-              {/* Spice Level Preference */}
+              {/* Spice Level */}
               <View style={styles.customizerSection}>
                 <Text style={styles.sectionLabel}>Spice Level Preference:</Text>
                 <View style={styles.optionsWrap}>
-                  {(['Mild', 'Medium', 'Spicy', 'Extra Hot'] as const).map(sp => (
+                  {(['Mild', 'Medium', 'Spicy', 'Extra Hot'] as const).map((sp) => (
                     <TouchableOpacity
                       key={sp}
-                      style={[styles.spicePill, spiceLevel === sp && styles.spicePillActive]}
+                      style={[
+                        styles.optionPill,
+                        spiceLevel === sp && styles.optionPillActive,
+                      ]}
                       onPress={() => setSpiceLevel(sp)}
                     >
-                      <Text style={[styles.spicePillText, spiceLevel === sp && styles.spicePillTextActive]}>
-                        {sp === 'Mild' ? '🍃 Mild' : sp === 'Medium' ? '🌶️ Medium' : sp === 'Spicy' ? '🔥 Spicy' : '💥 Extra Hot'}
+                      <Text
+                        style={[
+                          styles.optionPillText,
+                          spiceLevel === sp && styles.optionPillTextActive,
+                        ]}
+                      >
+                        {sp}
                       </Text>
                     </TouchableOpacity>
                   ))}
                 </View>
               </View>
 
-              {/* Special Cooking Notes */}
+              {/* Cooking Notes */}
               <View style={styles.customizerSection}>
                 <Text style={styles.sectionLabel}>Special Cooking Instructions:</Text>
                 <TextInput
-                  style={styles.modalTextInput}
-                  placeholder="e.g., less oil, crispier naan, extra salad & raita..."
+                  style={styles.customizerNotesInput}
+                  placeholder="e.g. Less oil, extra ginger, crisper naan, separate gravy..."
                   placeholderTextColor="#999"
                   value={customizerNotes}
                   onChangeText={setCustomizerNotes}
                 />
               </View>
-
-              {/* Quantity Stepper */}
-              <View style={styles.customizerSection}>
-                <Text style={styles.sectionLabel}>Quantity:</Text>
-                <View style={styles.qtyControlRow}>
-                  <TouchableOpacity
-                    style={styles.qtyControlBtn}
-                    onPress={() => setCustomizerQty(Math.max(1, customizerQty - 1))}
-                  >
-                    <Ionicons name="remove" size={18} color="#3A0F12" />
-                  </TouchableOpacity>
-                  <Text style={styles.qtyControlVal}>{customizerQty}</Text>
-                  <TouchableOpacity
-                    style={styles.qtyControlBtn}
-                    onPress={() => setCustomizerQty(customizerQty + 1)}
-                  >
-                    <Ionicons name="add" size={18} color="#3A0F12" />
-                  </TouchableOpacity>
-                </View>
-              </View>
             </ScrollView>
 
-            <TouchableOpacity
-              style={styles.modalAddCartBtn}
-              onPress={handleAddFromCustomizer}
-              activeOpacity={0.88}
-            >
-              <Ionicons name="cart" size={20} color="#3A0F12" style={{ marginRight: 8 }} />
-              <Text style={styles.modalAddCartBtnText}>Add to Tray</Text>
-            </TouchableOpacity>
+            {/* Customizer Actions */}
+            <View style={styles.customizerActionRow}>
+              <View style={styles.modalStepper}>
+                <TouchableOpacity
+                  style={styles.modalStepperBtn}
+                  onPress={() => setCustomizerQty(Math.max(1, customizerQty - 1))}
+                >
+                  <Ionicons name="remove" size={16} color="#3A0F12" />
+                </TouchableOpacity>
+                <Text style={styles.modalStepperQty}>{customizerQty}</Text>
+                <TouchableOpacity
+                  style={styles.modalStepperBtn}
+                  onPress={() => setCustomizerQty(customizerQty + 1)}
+                >
+                  <Ionicons name="add" size={16} color="#3A0F12" />
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity
+                style={styles.addCustomizerBtn}
+                onPress={handleAddFromCustomizer}
+              >
+                <Text style={styles.addCustomizerBtnText}>Add to Tray</Text>
+                <Ionicons name="checkmark-circle" size={18} color="#3A0F12" />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
 
       {/* ========================================================
-          MODAL 2: CHECKOUT & ORDER REVIEW DRAWER (CENTERED)
+          MODAL 2: FULL CART CHECKOUT MODAL
          ======================================================== */}
-      <Modal visible={cartModalVisible} transparent animationType="fade">
+      <Modal visible={cartModalVisible} transparent animationType="slide">
         <View style={styles.modalBackdrop}>
           <View style={[styles.customizerModalCard, { maxHeight: '90%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customizerModalTitle}>Review & Confirm Order</Text>
+                <Text style={styles.customizerModalTitle}>
+                  {orderMode === 'dine_in' ? 'Table Dining Tray' : 'Delivery Checkout'}
+                </Text>
                 <Text style={styles.customizerModalCat}>
                   {orderMode === 'dine_in'
-                    ? `Dine-In • Table: ${selectedTable?.name || 'Selected'}`
-                    : 'Home Express Delivery'}
+                    ? `${selectedTable?.floor || 'Ground'} • ${selectedTable?.name || 'Table'}`
+                    : 'Sultan Express Delivery'}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setCartModalVisible(false)}>
@@ -2280,115 +2643,96 @@ export default function CustomerMenuScreen() {
 
             <ScrollView showsVerticalScrollIndicator={false}>
               {/* Order Items List */}
-              <View style={styles.checkoutSection}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <Text style={styles.checkoutSectionHeader}>Ordered Dishes ({cart.length})</Text>
-                  {cart.length > 0 && (
-                    <TouchableOpacity onPress={handleClearCart}>
-                      <Text style={{ fontSize: 11, color: '#DC2626', fontWeight: '700' }}>Clear All</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {cart.map(c => (
+              <View style={styles.checkoutItemsList}>
+                {cart.map((c) => (
                   <View key={c.cartId} style={styles.checkoutItemRow}>
-                    <View style={{ flex: 1 }}>
+                    <View style={{ flex: 1, paddingRight: 8 }}>
                       <Text style={styles.checkoutItemName}>{c.item.name}</Text>
                       {c.portionLabel ? (
                         <Text style={styles.checkoutItemSub}>{c.portionLabel}</Text>
                       ) : null}
                       {c.notes ? (
-                        <Text style={styles.checkoutItemNote}>Note: {c.notes}</Text>
+                        <Text style={styles.checkoutItemNotes}>📝 {c.notes}</Text>
                       ) : null}
                       <Text style={styles.checkoutItemPrice}>
                         Rs. {(c.unitPrice * c.qty).toLocaleString()}
                       </Text>
                     </View>
 
-                    <View style={styles.checkoutStepper}>
+                    <View style={styles.trayStepper}>
                       <TouchableOpacity
-                        style={styles.checkoutStepperBtn}
+                        style={styles.trayStepperBtn}
                         onPress={() => updateCartQty(c.cartId, -1)}
                       >
-                        <Ionicons name="remove" size={14} color="#3A0F12" />
+                        <Ionicons name="remove" size={13} color="#3A0F12" />
                       </TouchableOpacity>
-                      <Text style={styles.checkoutStepperQty}>{c.qty}</Text>
+                      <Text style={styles.trayStepperQty}>{c.qty}</Text>
                       <TouchableOpacity
-                        style={styles.checkoutStepperBtn}
+                        style={styles.trayStepperBtn}
                         onPress={() => updateCartQty(c.cartId, 1)}
                       >
-                        <Ionicons name="add" size={14} color="#3A0F12" />
+                        <Ionicons name="add" size={13} color="#3A0F12" />
                       </TouchableOpacity>
                     </View>
-
-                    <TouchableOpacity
-                      style={{ padding: 4, marginLeft: 6 }}
-                      onPress={() => handleRemoveCartItem(c.cartId)}
-                    >
-                      <Ionicons name="trash-outline" size={16} color="#DC2626" />
-                    </TouchableOpacity>
                   </View>
                 ))}
               </View>
 
-              {/* Customer Contact Details */}
+              {/* Guest Profile Inputs */}
               <View style={styles.checkoutSection}>
-                <Text style={styles.checkoutSectionHeader}>Your Contact Details</Text>
-                <View style={styles.inputField}>
-                  <Text style={styles.inputFieldLabel}>Full Name *</Text>
-                  <TextInput
-                    style={styles.textInputBox}
-                    placeholder="Enter your name"
-                    placeholderTextColor="#999"
-                    value={customerName}
-                    onChangeText={setCustomerName}
-                  />
-                </View>
-
-                <View style={styles.inputField}>
-                  <Text style={styles.inputFieldLabel}>Mobile Number *</Text>
-                  <TextInput
-                    style={styles.textInputBox}
-                    placeholder="e.g. 0300 1234567"
-                    placeholderTextColor="#999"
-                    keyboardType="phone-pad"
-                    value={customerPhone}
-                    onChangeText={setCustomerPhone}
-                  />
-                </View>
-
+                <Text style={styles.sectionLabel}>Diner Details:</Text>
+                <TextInput
+                  style={styles.checkoutInput}
+                  placeholder="Full Name (مثلاً: جنید احسان)"
+                  placeholderTextColor="#999"
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                />
+                <TextInput
+                  style={styles.checkoutInput}
+                  placeholder="Phone Number (0300-1234567)"
+                  placeholderTextColor="#999"
+                  keyboardType="phone-pad"
+                  value={customerPhone}
+                  onChangeText={setCustomerPhone}
+                />
                 {orderMode === 'delivery' && (
-                  <View style={styles.inputField}>
-                    <Text style={styles.inputFieldLabel}>Delivery Address *</Text>
-                    <TextInput
-                      style={[styles.textInputBox, { height: 60, textAlignVertical: 'top' }]}
-                      placeholder="House/Office #, Street, Block, City"
-                      placeholderTextColor="#999"
-                      multiline
-                      value={deliveryAddress}
-                      onChangeText={setDeliveryAddress}
-                    />
-                  </View>
+                  <TextInput
+                    style={[styles.checkoutInput, { height: 60 }]}
+                    placeholder="Complete Delivery Address (گھر کا پتہ اور قریبی نشان)"
+                    placeholderTextColor="#999"
+                    multiline
+                    value={deliveryAddress}
+                    onChangeText={setDeliveryAddress}
+                  />
                 )}
               </View>
 
-              {/* Payment Method */}
+              {/* Payment Method Selector */}
               <View style={styles.checkoutSection}>
-                <Text style={styles.checkoutSectionHeader}>Payment Method</Text>
+                <Text style={styles.sectionLabel}>Payment Preference:</Text>
                 <View style={styles.optionsWrap}>
                   {[
-                    { id: 'cash_on_delivery', label: orderMode === 'dine_in' ? '💵 Cash at Table' : '💵 Cash on Delivery' },
-                    { id: 'card', label: '💳 Credit / Debit Card' },
+                    { id: 'cash_on_delivery', label: '💵 Cash on Serving/Delivery' },
+                    { id: 'card', label: '💳 Credit/Debit Card' },
                     { id: 'jazzcash', label: '📱 JazzCash' },
                     { id: 'easypaisa', label: '📲 EasyPaisa' },
-                  ].map(pm => (
+                  ].map((p) => (
                     <TouchableOpacity
-                      key={pm.id}
-                      style={[styles.paymentPill, paymentMethod === pm.id && styles.paymentPillActive]}
-                      onPress={() => setPaymentMethod(pm.id as any)}
+                      key={p.id}
+                      style={[
+                        styles.optionPill,
+                        paymentMethod === p.id && styles.optionPillActive,
+                      ]}
+                      onPress={() => setPaymentMethod(p.id as any)}
                     >
-                      <Text style={[styles.paymentPillText, paymentMethod === pm.id && styles.paymentPillTextActive]}>
-                        {pm.label}
+                      <Text
+                        style={[
+                          styles.optionPillText,
+                          paymentMethod === p.id && styles.optionPillTextActive,
+                        ]}
+                      >
+                        {p.label}
                       </Text>
                     </TouchableOpacity>
                   ))}
@@ -2396,44 +2740,46 @@ export default function CustomerMenuScreen() {
               </View>
 
               {/* Bill Breakdown */}
-              <View style={styles.billBreakdownCard}>
-                <View style={styles.billRow}>
-                  <Text style={styles.billRowLabel}>Subtotal</Text>
-                  <Text style={styles.billRowVal}>Rs. {subtotal.toLocaleString()}</Text>
+              <View style={styles.traySummaryCard}>
+                <View style={styles.traySummaryRow}>
+                  <Text style={styles.summaryLabel}>Subtotal</Text>
+                  <Text style={styles.summaryVal}>Rs. {subtotal.toLocaleString()}</Text>
                 </View>
                 {deliveryFee > 0 && (
-                  <View style={styles.billRow}>
-                    <Text style={styles.billRowLabel}>Delivery Fee</Text>
-                    <Text style={styles.billRowVal}>Rs. {deliveryFee}</Text>
+                  <View style={styles.traySummaryRow}>
+                    <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                    <Text style={styles.summaryVal}>Rs. {deliveryFee}</Text>
                   </View>
                 )}
-                <View style={styles.billRow}>
-                  <Text style={styles.billRowLabel}>Government Tax (GST 5%)</Text>
-                  <Text style={styles.billRowVal}>Rs. {tax.toLocaleString()}</Text>
+                <View style={styles.traySummaryRow}>
+                  <Text style={styles.summaryLabel}>GST (5%)</Text>
+                  <Text style={styles.summaryVal}>Rs. {tax.toLocaleString()}</Text>
                 </View>
-                <View style={styles.billDivider} />
-                <View style={styles.billRow}>
-                  <Text style={styles.billGrandLabel}>Total Payable</Text>
-                  <Text style={styles.billGrandVal}>Rs. {grandTotal.toLocaleString()}</Text>
+                <View style={styles.trayDivider} />
+                <View style={styles.traySummaryRow}>
+                  <Text style={styles.grandLabel}>Total Bill</Text>
+                  <Text style={styles.grandVal}>Rs. {grandTotal.toLocaleString()}</Text>
                 </View>
               </View>
             </ScrollView>
 
-            {/* Place Order CTA */}
+            {/* Confirm Button */}
             <TouchableOpacity
-              style={styles.confirmOrderCTA}
+              style={[
+                styles.confirmOrderBtn,
+                submittingOrder && { opacity: 0.65 },
+              ]}
               onPress={handlePlaceOrder}
               disabled={submittingOrder}
-              activeOpacity={0.88}
             >
               {submittingOrder ? (
-                <ActivityIndicator size="small" color="#3A0F12" />
+                <ActivityIndicator color="#3A0F12" />
               ) : (
                 <>
-                  <Ionicons name="checkmark-circle" size={20} color="#3A0F12" style={{ marginRight: 8 }} />
-                  <Text style={styles.confirmOrderCTAText}>
-                    Confirm & Send Order (Rs. {grandTotal.toLocaleString()})
+                  <Text style={styles.confirmOrderBtnText}>
+                    Confirm & Send to Royal Kitchen
                   </Text>
+                  <Ionicons name="restaurant" size={18} color="#3A0F12" />
                 </>
               )}
             </TouchableOpacity>
@@ -2442,71 +2788,89 @@ export default function CustomerMenuScreen() {
       </Modal>
 
       {/* ========================================================
-          MODAL 3: 5-FLOOR TABLE SELECTOR (CENTERED)
+          MODAL 3: TABLE SELECTOR MODAL
          ======================================================== */}
       <Modal visible={tableModalVisible} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.customizerModalCard}>
+          <View style={[styles.customizerModalCard, { maxHeight: '82%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.customizerModalTitle}>Select Your Table</Text>
-                <Text style={styles.customizerModalCat}>Sultan 5-Floor Restaurant Blueprint</Text>
+                <Text style={styles.customizerModalCat}>
+                  Pick your seating table for direct KDS dispatch
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setTableModalVisible(false)}>
                 <Ionicons name="close-circle" size={26} color="#888" />
               </TouchableOpacity>
             </View>
 
-            {/* Floor Filter Tabs */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ maxHeight: 45, marginBottom: 14 }}>
-              {floorsList.map(fl => (
+            {/* Floor Tabs */}
+            <View style={styles.floorTabsRow}>
+              {['Ground Floor', '1st Floor', '2nd Floor', 'Rooftop'].map((fl) => (
                 <TouchableOpacity
                   key={fl}
-                  style={[styles.floorChip, activeFloorFilter === fl && styles.floorChipActive]}
+                  style={[
+                    styles.floorTabBtn,
+                    activeFloorFilter === fl && styles.floorTabBtnActive,
+                  ]}
                   onPress={() => setActiveFloorFilter(fl)}
                 >
-                  <Text style={[styles.floorChipText, activeFloorFilter === fl && styles.floorChipTextActive]}>
+                  <Text
+                    style={[
+                      styles.floorTabBtnText,
+                      activeFloorFilter === fl && styles.floorTabBtnTextActive,
+                    ]}
+                  >
                     {fl}
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
-            {/* Tables Grid */}
-            <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.tablesPickerGrid}>
-                {filteredTablesByFloor.map(tbl => (
-                  <TouchableOpacity
-                    key={tbl.id}
-                    style={[
-                      styles.tableSelectTile,
-                      selectedTable?.id === tbl.id && styles.tableSelectTileActive,
-                    ]}
-                    onPress={() => {
-                      setSelectedTable({
-                        id: tbl.id,
-                        name: tbl.name,
-                        floor: tbl.floor || activeFloorFilter,
-                      });
-                      setTableModalVisible(false);
-                    }}
-                  >
-                    <Ionicons
-                      name="restaurant-outline"
-                      size={20}
-                      color={selectedTable?.id === tbl.id ? '#D5A943' : '#666'}
-                    />
-                    <Text
-                      style={[
-                        styles.tableSelectTileName,
-                        selectedTable?.id === tbl.id && styles.tableSelectTileNameActive,
-                      ]}
-                    >
-                      {tbl.name}
-                    </Text>
-                    <Text style={styles.tableSelectTileSeats}>{tbl.seats} Seats</Text>
-                  </TouchableOpacity>
-                ))}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <View style={styles.tablesGrid}>
+                {tables
+                  .filter(
+                    (t) => (t.floor || 'Ground Floor') === activeFloorFilter
+                  )
+                  .map((t) => {
+                    const isSelected = selectedTable?.id === t.id;
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[
+                          styles.tableCard,
+                          isSelected && styles.tableCardSelected,
+                        ]}
+                        onPress={() => {
+                          setSelectedTable({
+                            id: t.id,
+                            name: t.name,
+                            floor: t.floor || activeFloorFilter,
+                          });
+                          setTableModalVisible(false);
+                        }}
+                      >
+                        <Ionicons
+                          name="grid"
+                          size={18}
+                          color={isSelected ? '#52171B' : '#D5A943'}
+                        />
+                        <Text
+                          style={[
+                            styles.tableCardName,
+                            isSelected && styles.tableCardNameSelected,
+                          ]}
+                        >
+                          {t.name}
+                        </Text>
+                        <Text style={styles.tableCardSeats}>
+                          {t.seats || 4} Seats
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
               </View>
             </ScrollView>
           </View>
@@ -2514,34 +2878,23 @@ export default function CustomerMenuScreen() {
       </Modal>
 
       {/* ========================================================
-          MODAL 4: LIVE ORDER TRACKING MODAL (CENTERED)
+          MODAL 4: LIVE ORDER TRACKER MODAL
          ======================================================== */}
       <Modal visible={trackingModalVisible} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.customizerModalCard, { maxHeight: '90%' }]}>
+          <View style={[styles.customizerModalCard, { maxHeight: '86%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customizerModalTitle}>⚡ Sultan Live Order Tracker</Text>
-                <Text style={styles.customizerModalCat}>Order #{activeTrackingOrder?.orderNumber}</Text>
+                <Text style={styles.customizerModalTitle}>
+                  Live Order Tracker
+                </Text>
+                <Text style={styles.customizerModalCat}>
+                  Order #{activeTrackingOrder?.orderNumber} • Royal Kitchen
+                </Text>
               </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                {/* Mute button inside modal */}
-                <TouchableOpacity
-                  style={styles.modalSoundBtn}
-                  onPress={() => setSoundMuted(!soundMuted)}
-                >
-                  <Ionicons
-                    name={soundMuted ? 'volume-mute' : 'volume-high'}
-                    size={15}
-                    color={soundMuted ? '#EF4444' : '#D5A943'}
-                  />
-                </TouchableOpacity>
-
-                <TouchableOpacity onPress={() => setTrackingModalVisible(false)}>
-                  <Ionicons name="close-circle" size={26} color="#888" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={() => setTrackingModalVisible(false)}>
+                <Ionicons name="close-circle" size={26} color="#888" />
+              </TouchableOpacity>
             </View>
 
             {activeTrackingOrder ? (
@@ -2554,14 +2907,24 @@ export default function CustomerMenuScreen() {
                     <View style={styles.trackerCardBox}>
                       <View style={styles.trackerStageTop}>
                         <View>
-                          <Text style={[styles.trackerMainLabel, isCancelled && { color: '#D32F2F' }]}>
+                          <Text
+                            style={[
+                              styles.trackerMainLabel,
+                              isCancelled && { color: '#D32F2F' },
+                            ]}
+                          >
                             {stage.label}
                           </Text>
                           <Text style={styles.trackerDescLabel}>{stage.desc}</Text>
                         </View>
                         {!isCancelled && (
                           <View style={styles.trackerTimerBadge}>
-                            <Ionicons name="time" size={14} color="#D5A943" style={{ marginRight: 4 }} />
+                            <Ionicons
+                              name="time"
+                              size={14}
+                              color="#D5A943"
+                              style={{ marginRight: 4 }}
+                            />
                             <Text style={styles.trackerTimerText}>
                               ~{activeTrackingOrder.estimatedDeliveryMinutes || 25} Mins
                             </Text>
@@ -2569,11 +2932,15 @@ export default function CustomerMenuScreen() {
                         )}
                       </View>
 
-                      {/* 5-Step Progress */}
                       {!isCancelled && (
                         <View style={styles.trackerProgressArea}>
                           <View style={styles.trackerProgressLineBg}>
-                            <View style={[styles.trackerProgressLineFill, { width: stage.percent as any }]} />
+                            <View
+                              style={[
+                                styles.trackerProgressLineFill,
+                                { width: stage.percent as any },
+                              ]}
+                            />
                           </View>
 
                           <View style={styles.trackerStepsRow}>
@@ -2583,7 +2950,7 @@ export default function CustomerMenuScreen() {
                               { step: 3, label: 'Cooking' },
                               { step: 4, label: 'Ready' },
                               { step: 5, label: 'Served' },
-                            ].map(s => {
+                            ].map((s) => {
                               const isPassed = stage.step >= s.step;
                               const isCurrent = stage.step === s.step;
                               return (
@@ -2596,9 +2963,15 @@ export default function CustomerMenuScreen() {
                                     ]}
                                   >
                                     {isPassed && !isCurrent ? (
-                                      <Ionicons name="checkmark" size={12} color="#FFF" />
+                                      <Ionicons name="checkmark" size={11} color="#FFF" />
                                     ) : (
-                                      <Text style={[styles.trackerNodeNum, (isPassed || isCurrent) && styles.trackerNodeNumActive]}>
+                                      <Text
+                                        style={[
+                                          styles.trackerNodeNum,
+                                          (isPassed || isCurrent) &&
+                                            styles.trackerNodeNumActive,
+                                        ]}
+                                      >
                                         {s.step}
                                       </Text>
                                     )}
@@ -2614,7 +2987,7 @@ export default function CustomerMenuScreen() {
                   );
                 })()}
 
-                {/* Items in this Order */}
+                {/* Ordered Items List */}
                 <View style={styles.trackerDishesCard}>
                   <Text style={styles.sectionLabel}>Ordered Dishes:</Text>
                   {activeTrackingOrder.items.map((it, idx) => (
@@ -2628,8 +3001,10 @@ export default function CustomerMenuScreen() {
                   ))}
                   <View style={styles.billDivider} />
                   <View style={styles.billRow}>
-                    <Text style={styles.billGrandLabel}>Total Amount</Text>
-                    <Text style={styles.billGrandVal}>Rs. {activeTrackingOrder.total.toLocaleString()}</Text>
+                    <Text style={styles.billGrandLabel}>Total Paid/Due</Text>
+                    <Text style={styles.billGrandVal}>
+                      Rs. {activeTrackingOrder.total.toLocaleString()}
+                    </Text>
                   </View>
                 </View>
               </ScrollView>
@@ -2646,96 +3021,65 @@ export default function CustomerMenuScreen() {
       </Modal>
 
       {/* ========================================================
-          MODAL 5: CUSTOMER ORDER HISTORY (CENTERED & DISMISSABLE)
+          MODAL 5: CUSTOMER ORDER HISTORY
          ======================================================== */}
       <Modal visible={historyModalVisible} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.customizerModalCard, { maxHeight: '86%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customizerModalTitle}>📋 My Order History</Text>
+                <Text style={styles.customizerModalTitle}>📋 Past Orders</Text>
                 <Text style={styles.customizerModalCat}>
-                  {orderHistory.length} {orderHistory.length === 1 ? 'order' : 'orders'} placed
+                  {orderHistory.length} orders recorded
                 </Text>
               </View>
-
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                {orderHistory.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.clearHistoryPill}
-                    onPress={handleClearCompletedOrders}
-                  >
-                    <Ionicons name="checkmark-done" size={13} color="#2E7D32" />
-                    <Text style={styles.clearHistoryPillText}>Clear Completed</Text>
-                  </TouchableOpacity>
-                )}
-
-                {orderHistory.length > 0 && (
-                  <TouchableOpacity
-                    style={[styles.clearHistoryPill, { borderColor: '#EF4444' }]}
-                    onPress={handleClearAllHistory}
-                  >
-                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
-                    <Text style={[styles.clearHistoryPillText, { color: '#DC2626' }]}>Clear All</Text>
-                  </TouchableOpacity>
-                )}
-
-                <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
-                  <Ionicons name="close-circle" size={26} color="#888" />
-                </TouchableOpacity>
-              </View>
+              <TouchableOpacity onPress={() => setHistoryModalVisible(false)}>
+                <Ionicons name="close-circle" size={26} color="#888" />
+              </TouchableOpacity>
             </View>
 
             {orderHistory.length === 0 ? (
               <View style={styles.emptyHistoryBox}>
                 <Ionicons name="receipt-outline" size={44} color="#D5A943" />
-                <Text style={styles.emptyHistoryTitle}>No orders in history</Text>
-                <Text style={styles.emptyHistoryDesc}>All past orders have been cleared.</Text>
+                <Text style={styles.emptyHistoryTitle}>No past orders found</Text>
               </View>
             ) : (
               <ScrollView showsVerticalScrollIndicator={false}>
-                {orderHistory.map(ord => (
+                {orderHistory.map((ord) => (
                   <View key={ord.id} style={styles.historyCardBox}>
                     <View style={styles.historyCardTop}>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.historyOrderNumber}>Order #{ord.orderNumber}</Text>
-                        <Text style={styles.historyOrderDate}>
-                          {new Date(ord.createdAt).toLocaleDateString()} • {new Date(ord.createdAt).toLocaleTimeString()}
+                        <Text style={styles.historyOrdNum}>#{ord.orderNumber}</Text>
+                        <Text style={styles.historyOrdTime}>
+                          {new Date(ord.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
                         </Text>
                       </View>
-
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={styles.historyBadge}>
-                          <Text style={styles.historyBadgeText}>{ord.status.replace(/_/g, ' ')}</Text>
-                        </View>
-
-                        {/* Delete Single Order Button */}
-                        <TouchableOpacity
-                          style={styles.deleteOrderBtn}
-                          onPress={() => handleDeleteOrder(ord.id)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          accessibilityLabel="Delete Order"
-                        >
-                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                        </TouchableOpacity>
+                      <View style={styles.historyOrdStatusPill}>
+                        <Text style={styles.historyOrdStatusText}>{ord.status}</Text>
                       </View>
                     </View>
 
-                    <Text style={styles.historySummaryText} numberOfLines={2}>
-                      {ord.items.map(i => `${i.qty}x ${i.name}`).join(' • ')}
+                    <Text style={styles.historyOrdItems} numberOfLines={2}>
+                      {ord.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
                     </Text>
 
                     <View style={styles.historyCardBottom}>
-                      <Text style={styles.historyTotalAmount}>Rs. {ord.total.toLocaleString()}</Text>
+                      <Text style={styles.historyOrdTotal}>
+                        Rs. {ord.total.toLocaleString()}
+                      </Text>
                       <TouchableOpacity
-                        style={styles.trackOrderBtn}
+                        style={styles.historyTrackBtn}
                         onPress={() => {
                           setActiveTrackingOrder(ord);
                           setHistoryModalVisible(false);
                           setTrackingModalVisible(true);
                         }}
                       >
-                        <Text style={styles.trackOrderBtnText}>Track Order ➔</Text>
+                        <Ionicons name="location-outline" size={13} color="#D5A943" />
+                        <Text style={styles.historyTrackBtnText}>Track</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -2749,194 +3093,120 @@ export default function CustomerMenuScreen() {
   );
 }
 
-// ========================================================
-// ROYAL SULTAN MASTER STYLESHEET (CENTERED POPUPS)
-// ========================================================
+// ==========================================
+// STYLES
+// ==========================================
+
 const styles = StyleSheet.create({
   safeContainer: {
     flex: 1,
-    backgroundColor: '#24050A',
+    backgroundColor: '#FAF8F5',
   },
   screenWrapper: {
     flex: 1,
-    backgroundColor: '#F8F6F2',
   },
   mainScrollView: {
     flex: 1,
   },
   mainScrollContent: {
-    flexGrow: 1,
+    paddingBottom: 40,
   },
 
-  // 1. Hero Cover Banner with Islamic Pattern
+  // 1. Hero Header
   heroBanner: {
-    backgroundColor: '#1C0408',
-    borderBottomWidth: 2,
+    backgroundColor: '#3A0F12',
+    borderBottomWidth: 1.5,
     borderBottomColor: '#D5A943',
-    paddingTop: 14,
-    paddingBottom: 28,
     paddingHorizontal: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    elevation: 8,
   },
   heroOverlayContent: {
-    maxWidth: 1300,
-    alignSelf: 'center',
-    width: '100%',
+    gap: 10,
   },
   heroTopActions: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'space-between',
   },
   heroNavBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  heroMainTitleMini: {
+    color: '#F3D179',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.8,
+  },
+  heroSubtitleUrduMini: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 10.5,
+    fontWeight: '600',
   },
   heroSoundPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(20, 4, 8, 0.75)',
-    borderWidth: 1.2,
-    borderColor: '#D5A94380',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 22,
-    gap: 6,
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderWidth: 1,
+    borderColor: 'rgba(213,169,67,0.35)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   heroSoundPillText: {
-    color: '#D5A943',
-    fontSize: 11.5,
-    fontWeight: '800',
-    letterSpacing: 0.3,
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#F3D179',
   },
   heroOrdersPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(213, 169, 67, 0.22)',
-    borderWidth: 1.2,
+    gap: 4,
+    backgroundColor: 'rgba(213,169,67,0.18)',
+    borderWidth: 1,
     borderColor: '#D5A943',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 22,
-    gap: 7,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 12,
   },
   heroOrdersPillText: {
-    color: '#D5A943',
-    fontSize: 12,
+    fontSize: 10.5,
     fontWeight: '800',
-  },
-  heroBrandingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
-    gap: 20,
-    paddingVertical: 8,
-    width: '100%',
-    maxWidth: 960,
-  },
-  heroBrandingRowMobile: {
-    gap: 12,
-    paddingVertical: 4,
-    justifyContent: 'flex-start',
-  },
-  heroLogoCol: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  heroDetailsCol: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-    minWidth: 0,
-  },
-  crestHaloOuter: {
-    padding: 5,
-    borderRadius: 66,
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.65)',
-    backgroundColor: 'rgba(213, 169, 67, 0.08)',
-    shadowColor: '#D5A943',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.5,
-    shadowRadius: 14,
-    elevation: 8,
-  },
-  crestHaloOuterMobile: {
-    padding: 3,
-    borderRadius: 44,
-    borderWidth: 1.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  crestHalo: {
-    width: 114,
-    height: 114,
-    borderRadius: 57,
-    backgroundColor: 'rgba(32, 6, 11, 0.85)',
-    borderWidth: 2.5,
-    borderColor: '#D5A943',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  crestHaloMobile: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    borderWidth: 1.8,
-  },
-  heroMainTitleMini: {
-    fontSize: 14.5,
-    fontWeight: '900',
     color: '#FFFFFF',
-    letterSpacing: 0.8,
   },
-  heroSubtitleUrduMini: {
-    fontSize: 11,
-    color: '#D5A943',
-    fontWeight: '700',
-  },
+
+  // Compact Dining Bar
   compactDiningBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderRadius: 12,
+    backgroundColor: 'rgba(20, 2, 5, 0.65)',
+    borderRadius: 14,
     paddingHorizontal: 10,
-    paddingVertical: 7,
+    paddingVertical: 6,
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.35)',
-    marginTop: 8,
-    gap: 10,
+    borderColor: 'rgba(213,169,67,0.25)',
   },
   compactTablePill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 6,
     flex: 1,
   },
   compactTableIconBox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    backgroundColor: 'rgba(213, 169, 67, 0.2)',
+    borderRadius: 12,
+    backgroundColor: 'rgba(213,169,67,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   compactTablePillText: {
-    color: '#FDE68A',
+    color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '800',
   },
@@ -2953,499 +3223,276 @@ const styles = StyleSheet.create({
   },
   compactModeToggle: {
     flexDirection: 'row',
-    backgroundColor: 'rgba(255, 255, 255, 0.12)',
-    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 10,
     padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(213,169,67,0.3)',
   },
   compactModeBtn: {
     paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 6,
+    paddingVertical: 4,
+    borderRadius: 8,
   },
   compactModeBtnActive: {
     backgroundColor: '#D5A943',
   },
   compactModeBtnText: {
-    color: '#DDD',
     fontSize: 11,
     fontWeight: '700',
+    color: 'rgba(255,255,255,0.7)',
   },
   compactModeBtnTextActive: {
-    color: '#1C0408',
+    color: '#1E0408',
     fontWeight: '900',
   },
-  heroUrduCrownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 1,
-  },
-  heroUrduStar: {
-    color: '#D5A943',
-    fontSize: 11,
-    opacity: 0.9,
-  },
-  heroSubtitleUrdu: {
-    fontSize: 15,
-    color: '#F5E8C7',
-    fontWeight: '800',
-    letterSpacing: 0.5,
-    textAlign: 'left',
-  },
-  heroMainTitle: {
-    fontSize: 26,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 2,
-    textAlign: 'left',
-    textShadowColor: 'rgba(213, 169, 67, 0.6)',
-    textShadowOffset: { width: 0, height: 1.5 },
-    textShadowRadius: 10,
-  },
-  heroMainTitleMobile: {
-    fontSize: 17.5,
-    letterSpacing: 1.2,
-  },
-  heroSubDesc: {
-    fontSize: 12,
-    color: '#D5A943',
-    fontWeight: '600',
-    marginTop: 2,
-    textAlign: 'left',
-    letterSpacing: 0.2,
-  },
-  heroSubDescMobile: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  heroHighlightsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    marginTop: 10,
-    gap: 7,
-  },
-  heroHighlightsRowMobile: {
-    marginTop: 6,
-    gap: 4.5,
-  },
-  highlightBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'rgba(18, 4, 7, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 16,
-  },
-  highlightBadgeMobile: {
-    gap: 3.5,
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 12,
-  },
-  highlightText: {
-    fontSize: 11,
-    color: '#F3F4F6',
-    fontWeight: '600',
-  },
-  highlightTextMobile: {
-    fontSize: 9.5,
-    fontWeight: '700',
-  },
-  highlightDivider: {
-    width: 1,
-    height: 12,
-    backgroundColor: 'rgba(213, 169, 67, 0.35)',
-  },
 
-  // 2. Mode Selector (Dine-in / Delivery)
-  modeControlContainer: {
-    maxWidth: 1300,
-    alignSelf: 'center',
-    width: '100%',
-    paddingHorizontal: 16,
-    marginTop: -16,
-  },
-  modeToggleBar: {
-    flexDirection: 'row',
-    backgroundColor: '#FFF',
-    borderRadius: 14,
-    padding: 4,
-    borderWidth: 1.5,
-    borderColor: '#E8DFCE',
-    elevation: 3,
-  },
-  modeToggleBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  modeToggleBtnActive: {
-    backgroundColor: '#3A0F12',
-  },
-  modeToggleText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#666',
-  },
-  modeToggleTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
-  },
-  tableBannerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF',
-    marginTop: 8,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E8DFCE',
-    elevation: 1,
-  },
-  tableIconWrapper: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#3A0F12',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
-  tableTitleText: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1C1C1E',
-  },
-  tableSubText: {
-    fontSize: 11,
-    color: '#777',
-    marginTop: 1,
-  },
-  changeTableBtn: {
-    backgroundColor: '#FAF5EA',
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  changeTableBtnText: {
-    fontSize: 11,
-    color: '#895B1E',
-    fontWeight: '800',
-  },
-
-  // 3. Search & Dietary Bar
+  // 2. Filters & Search Section
   filterSectionContainer: {
-    maxWidth: 1300,
-    alignSelf: 'center',
-    width: '100%',
-    paddingHorizontal: 16,
-    marginTop: 14,
+    paddingHorizontal: 14,
+    paddingTop: 12,
+    gap: 10,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderWidth: 1.5,
-    borderColor: '#E8DFCE',
-    elevation: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
+    ...Platform.select({
+      web: { boxShadow: '0 2px 8px rgba(0,0,0,0.03)' } as any,
+    }),
   },
   searchInput: {
     flex: 1,
     fontSize: 13,
-    color: '#1C1C1E',
+    color: '#1E0408',
+    paddingVertical: 0,
   },
   dietaryRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
-    marginTop: 10,
+    gap: 6,
   },
   dietaryChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DBD0',
+    borderColor: '#E5DCD1',
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   dietaryChipActive: {
     backgroundColor: '#3A0F12',
     borderColor: '#D5A943',
   },
   dietaryChipText: {
-    fontSize: 12,
-    color: '#666',
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#52171B',
   },
   dietaryChipTextActive: {
-    color: '#D5A943',
+    color: '#F3D179',
     fontWeight: '800',
   },
+
+  // Cuisine row
   posRegionFilterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 7,
-    marginTop: 8,
     gap: 8,
   },
   posRegionFilterLead: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAF5ED',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 20,
-    gap: 5,
-    flexShrink: 0,
+    gap: 4,
   },
   posRegionLeadIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     backgroundColor: '#3A0F12',
     alignItems: 'center',
     justifyContent: 'center',
   },
   posRegionFilterLeadText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '900',
-    color: '#3A0F12',
-    letterSpacing: 0.6,
+    letterSpacing: 0.8,
+    color: '#895B1E',
   },
   posRegionScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 12,
+    gap: 6,
   },
   posRegionChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 11,
-    paddingVertical: 5.5,
-    borderRadius: 20,
-    backgroundColor: '#FFFDF9',
-    borderWidth: 1.2,
-    borderColor: '#E7DEC8',
-    gap: 6,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
-      } as any,
-      default: {
-        elevation: 1,
-      },
-    }),
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5DCD1',
+    borderRadius: 18,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    gap: 4,
   },
   posRegionChipActive: {
     backgroundColor: '#3A0F12',
-    borderColor: '#D4AF37',
-    borderWidth: 1.5,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 3px 12px rgba(58, 15, 18, 0.28), 0 0 0 1px rgba(212, 175, 55, 0.4)',
-        transform: 'translateY(-1px)',
-      } as any,
-      default: {
-        elevation: 3,
-      },
-    }),
+    borderColor: '#D5A943',
   },
   posRegionEmoji: {
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 12,
   },
   posRegionChipText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#3D2E24',
-    letterSpacing: 0.2,
+    color: '#4A3B32',
   },
   posRegionChipTextActive: {
     color: '#FFFFFF',
-    fontWeight: '900',
   },
   posRegionChipBadge: {
-    backgroundColor: 'rgba(58, 15, 18, 0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    minWidth: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: '#F3E8DF',
+    borderRadius: 8,
+    paddingHorizontal: 5,
+    paddingVertical: 1,
   },
   posRegionChipBadgeActive: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#D5A943',
   },
   posRegionChipBadgeText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
-    color: '#6B4F3B',
+    color: '#52171B',
   },
   posRegionChipBadgeTextActive: {
-    color: '#3A0F12',
-    fontWeight: '900',
+    color: '#1E0408',
   },
+
+  // Category horizontal scroll
   mobileCategoryScroll: {
-    paddingVertical: 10,
     gap: 8,
+    paddingVertical: 2,
   },
   catChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 22,
-    backgroundColor: '#FFF',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E2DBD0',
+    borderColor: '#E8DFD5',
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     gap: 6,
   },
   catChipActive: {
-    backgroundColor: '#3A0F12',
+    backgroundColor: '#52171B',
     borderColor: '#D5A943',
   },
   catChipEmoji: {
     fontSize: 14,
   },
   catChipText: {
-    fontSize: 12.5,
-    color: '#555',
-    fontWeight: '700',
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#3A0F12',
   },
   catChipTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
+    color: '#F3D179',
   },
   catCountBadge: {
-    backgroundColor: 'rgba(58, 15, 18, 0.08)',
+    backgroundColor: '#F7EFE9',
     borderRadius: 10,
     paddingHorizontal: 6,
     paddingVertical: 1.5,
-    marginLeft: 3,
   },
   catCountBadgeActive: {
-    backgroundColor: 'rgba(213, 169, 67, 0.25)',
+    backgroundColor: 'rgba(213,169,67,0.3)',
   },
   catCountBadgeText: {
     fontSize: 10,
     fontWeight: '800',
-    color: '#777',
+    color: '#52171B',
   },
   catCountBadgeTextActive: {
-    color: '#D5A943',
-    fontWeight: '900',
-  },
-  activeFilterResetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAF5ED',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.5)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 14,
-  },
-  activeFilterResetText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#895B1E',
+    color: '#FFFFFF',
   },
 
-  // 4. Split Content Layout
+  // 3. Main Content Layout
   contentLayoutContainer: {
-    maxWidth: 1300,
-    alignSelf: 'center',
-    width: '100%',
     flexDirection: 'row',
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     marginTop: 14,
-    gap: 18,
+    gap: 16,
   },
-
-  // Desktop Left Sidebar
   desktopSidebar: {
-    width: 240,
-    backgroundColor: '#FFF',
-    borderRadius: 16,
+    width: 250,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#ECE4D8',
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
     alignSelf: 'flex-start',
-    elevation: 1,
   },
   sidebarHeader: {
-    marginBottom: 12,
-    paddingBottom: 8,
+    marginBottom: 8,
+    paddingBottom: 6,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE4',
+    borderBottomColor: '#F0E6DC',
   },
   sidebarTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#24050A',
+    color: '#3A0F12',
+    letterSpacing: 0.5,
   },
   sidebarSubtitle: {
-    fontSize: 11,
-    color: '#888',
+    fontSize: 10.5,
+    color: '#895B1E',
   },
   sidebarCatItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
     borderRadius: 10,
-    marginBottom: 4,
+    marginBottom: 3,
   },
   sidebarCatItemActive: {
-    backgroundColor: '#3A0F12',
+    backgroundColor: '#52171B',
   },
   sidebarCatEmoji: {
-    fontSize: 15,
+    fontSize: 14,
     marginRight: 8,
   },
   sidebarCatName: {
     flex: 1,
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
-    color: '#444',
+    color: '#3A0F12',
   },
   sidebarCatNameActive: {
-    color: '#D5A943',
+    color: '#F3D179',
     fontWeight: '800',
   },
   sidebarCountBadge: {
-    backgroundColor: '#F3EFEA',
+    backgroundColor: '#F5EBE1',
+    borderRadius: 8,
     paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 10,
+    paddingVertical: 1,
   },
   sidebarCountBadgeActive: {
-    backgroundColor: 'rgba(213, 169, 67, 0.25)',
+    backgroundColor: 'rgba(213,169,67,0.35)',
   },
   sidebarCountText: {
     fontSize: 10,
-    color: '#777',
     fontWeight: '800',
+    color: '#52171B',
   },
   sidebarCountTextActive: {
-    color: '#D5A943',
+    color: '#FFFFFF',
   },
 
   // Center Feed
@@ -3454,52 +3501,131 @@ const styles = StyleSheet.create({
   },
   dishesHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 14,
   },
   categoryHeading: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '900',
-    color: '#24050A',
+    color: '#1E0408',
   },
   categorySubheading: {
     fontSize: 11.5,
-    color: '#777',
+    color: '#895B1E',
     marginTop: 2,
+    fontWeight: '600',
   },
-  dishesGrid: {
+  viewModeToggleWrap: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5DCD1',
+    padding: 2,
+  },
+  viewModeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  viewModeToggleBtnActive: {
+    backgroundColor: '#F8F1EB',
+  },
+  viewModeToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#777',
+  },
+  viewModeToggleTextActive: {
+    color: '#52171B',
+    fontWeight: '800',
+  },
+  activeFilterResetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  activeFilterResetText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#895B1E',
+  },
+  focusedCatBanner: {
+    backgroundColor: '#FFF8F0',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
+    borderRadius: 14,
+    padding: 12,
+    marginBottom: 14,
+    gap: 8,
+  },
+  backToGalleriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    alignSelf: 'flex-start',
+  },
+  backToGalleriesText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  focusedCatBannerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  focusedCatBannerIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  focusedCatBannerEmoji: {
+    fontSize: 18,
+  },
+  focusedCatBannerTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#3A0F12',
+  },
+  focusedCatBannerSubtitle: {
+    fontSize: 11,
+    color: '#895B1E',
   },
 
-  // Category Gallery Container & Section
+  // Auto Slider Categories Section
   catGalleriesContainer: {
     gap: 20,
-    paddingBottom: 24,
   },
   catGallerySection: {
-    backgroundColor: 'rgba(255, 255, 255, 0.82)',
-    borderRadius: 20,
-    paddingVertical: 16,
-    paddingHorizontal: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.25)',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 14,
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
     ...Platform.select({
-      web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.03)',
-      } as any,
+      web: { boxShadow: '0 4px 16px rgba(0,0,0,0.02)' } as any,
     }),
   },
   catGalleryHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
-    paddingHorizontal: 4,
+    justifyContent: 'space-between',
+    marginBottom: 12,
     gap: 10,
   },
   catGalleryHeaderLeft: {
@@ -3511,7 +3637,7 @@ const styles = StyleSheet.create({
   catGalleryBadgeIcon: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: '#FFF8E7',
     borderWidth: 1.5,
     borderColor: '#D5A943',
@@ -3525,12 +3651,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
   catGalleryTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#24050A',
-    letterSpacing: 0.2,
+    color: '#1E0408',
   },
   catGalleryCountPill: {
     backgroundColor: '#F3E8DF',
@@ -3539,9 +3665,42 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   catGalleryCountText: {
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
     color: '#52171B',
+  },
+  autoSliderBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  autoSliderBadgePaused: {
+    backgroundColor: '#F5EBE1',
+    borderColor: '#C4B5A5',
+  },
+  autoSliderDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D5A943',
+  },
+  autoSliderDotPaused: {
+    backgroundColor: '#8A7A70',
+  },
+  autoSliderBadgeText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+    color: '#895B1E',
+  },
+  autoSliderBadgeTextPaused: {
+    color: '#8A7A70',
   },
   catGallerySubtitle: {
     fontSize: 11,
@@ -3549,38 +3708,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 2,
   },
-  catGalleryViewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8E7',
-    borderWidth: 1.2,
-    borderColor: '#D5A943',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 5,
-  },
-  catGalleryViewAllText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#52171B',
-  },
   sliderControlsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   sliderArrowGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
+    gap: 4,
   },
   sliderArrowBtn: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#FFF8E7',
-    borderWidth: 1.2,
+    borderWidth: 1,
     borderColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
@@ -3590,83 +3733,74 @@ const styles = StyleSheet.create({
     borderColor: '#D8CFC3',
     backgroundColor: '#F7F4EF',
   },
+  catGalleryViewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 16,
+    gap: 4,
+  },
+  catGalleryViewAllText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#52171B',
+  },
   catGalleryScrollContent: {
     paddingVertical: 4,
     paddingHorizontal: 2,
     gap: 12,
   },
-  catGalleryEndCard: {
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: '#D5A943',
-    backgroundColor: 'rgba(255, 248, 235, 0.75)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 14,
-    minHeight: 228,
-  },
-  catGalleryEndIconCircle: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#FFF',
-    borderWidth: 1.5,
-    borderColor: '#D5A943',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  catGalleryEndTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#52171B',
-  },
-  catGalleryEndCat: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#895B1E',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  catGalleryEndCount: {
-    fontSize: 10,
-    color: '#999',
-    marginTop: 4,
-  },
 
-  // Gallery Dish Card (Horizontal Scrolling)
+  // Gallery Dish Card
   galleryDishCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     padding: 10,
     alignItems: 'center',
     justifyContent: 'space-between',
-    minHeight: 228,
-    borderWidth: 1.5,
-    borderColor: 'rgba(235, 225, 215, 0.9)',
+    minHeight: 236,
+    borderWidth: 1.4,
+    borderColor: '#E8DED3',
     position: 'relative',
     ...Platform.select({
       web: {
-        cursor: 'pointer',
-        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.04)',
-        transition: 'all 0.18s ease-in-out',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.03)',
       } as any,
     }),
   },
   galleryDishCardInCart: {
-    borderColor: 'rgba(82, 23, 27, 0.65)',
-    backgroundColor: '#FFF7F7',
+    borderColor: '#52171B',
+    backgroundColor: '#FFFDF9',
     ...Platform.select({
       web: {
-        boxShadow: '0 6px 18px rgba(82, 23, 27, 0.12)',
-        transform: 'translateY(-2px)',
+        boxShadow: '0 6px 16px rgba(82, 23, 27, 0.12)',
       } as any,
     }),
   },
+  inCartBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  inCartBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+  },
   galleryCardImageWrapper: {
     width: '100%',
-    height: 116,
+    height: 118,
     borderRadius: 12,
     overflow: 'hidden',
     position: 'relative',
@@ -3674,260 +3808,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#F8FAFC',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.8)',
-  },
-  galleryRegionChip: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    backgroundColor: 'rgba(58, 15, 18, 0.88)',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    zIndex: 4,
-  },
-  galleryDishTitleWrapper: {
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  galleryDishTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1C0408',
-    textAlign: 'center',
-  },
-  galleryDishUrdu: {
-    fontSize: 11,
-    color: '#895B1E',
-    fontWeight: '600',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  galleryDishDesc: {
-    fontSize: 10,
-    color: '#777',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  galleryCardBottomRow: {
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(0, 0, 0, 0.05)',
-  },
-  galleryPricePill: {
-    backgroundColor: 'rgba(213, 169, 67, 0.12)',
-    paddingHorizontal: 7,
-    paddingVertical: 3.5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
-  },
-  galleryPricePillActive: {
-    backgroundColor: '#52171B',
-    borderColor: '#52171B',
-  },
-  galleryPriceText: {
-    color: '#52171B',
-    fontSize: 11.5,
-    fontWeight: '900',
-  },
-  galleryPriceTextActive: {
-    color: '#FFFFFF',
-  },
-  galleryQuickAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#F3D179',
-    paddingHorizontal: 9,
-    paddingVertical: 4.5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    gap: 2,
-  },
-  galleryQuickAddText: {
-    color: '#52171B',
-    fontSize: 10.5,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
-
-  // Focused Category Hero Banner
-  focusedCatBanner: {
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 16,
-    padding: 14,
-    marginBottom: 16,
-    borderWidth: 1.5,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-    flexWrap: 'wrap',
-  },
-  backToGalleriesBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFF8E7',
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    gap: 5,
-  },
-  backToGalleriesText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#52171B',
-  },
-  focusedCatBannerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    flex: 1,
-  },
-  focusedCatBannerIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#FFF8E7',
-    borderWidth: 1,
-    borderColor: '#D5A943',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  focusedCatBannerEmoji: {
-    fontSize: 20,
-  },
-  focusedCatBannerTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#24050A',
-  },
-  focusedCatBannerSubtitle: {
-    fontSize: 11,
-    color: '#895B1E',
-    fontWeight: '600',
-  },
-
-  // View Mode Switcher
-  viewModeToggleWrap: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(240, 235, 225, 0.9)',
-    borderRadius: 10,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
-  },
-  viewModeToggleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  viewModeToggleBtnActive: {
-    backgroundColor: '#FFF',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
-      } as any,
-    }),
-  },
-  viewModeToggleText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#777',
-  },
-  viewModeToggleTextActive: {
-    color: '#52171B',
-    fontWeight: '800',
-  },
-
-  // POS Terminal Styled Dish Card
-  dishCard: {
-    flexGrow: 1,
-    backgroundColor: 'rgba(255, 255, 255, 0.88)',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 9,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 188,
-    borderWidth: 1.5,
-    borderColor: 'rgba(235, 225, 215, 0.9)',
-    position: 'relative',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any,
-    }),
-  },
-  dishCardInCart: {
-    borderColor: 'rgba(58, 15, 18, 0.65)',
-    backgroundColor: 'rgba(255, 248, 248, 0.96)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 10px 26px rgba(58, 15, 18, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
-        transform: 'translateY(-2px)',
-      } as any,
-    }),
-  },
-  inCartBadge: {
-    position: 'absolute',
-    top: -7,
-    right: -7,
-    backgroundColor: '#3A0F12',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    zIndex: 10,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(58, 15, 18, 0.35)',
-      } as any,
-    }),
-  },
-  inCartBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  dishCardImageWrapper: {
-    width: '100%',
-    height: 102,
-    borderRadius: 12,
-    overflow: 'hidden',
-    position: 'relative',
-    marginBottom: 6,
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.8)',
   },
   dishCardImage: {
     width: '100%',
@@ -3936,77 +3816,43 @@ const styles = StyleSheet.create({
   dishCardPlaceholderBox: {
     width: '100%',
     height: '100%',
+    backgroundColor: '#F8F1EB',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(254, 243, 199, 0.35)',
   },
-  dishCardChipsRow: {
+  galleryRegionChip: {
     position: 'absolute',
-    top: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    zIndex: 4,
-    flexWrap: 'wrap',
-  },
-  dishCardCategoryChip: {
-    backgroundColor: 'rgba(241, 245, 249, 0.88)',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-      } as any,
-    }),
-  },
-  dishCardCategory: {
-    fontSize: 8.5,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  dishCardRegionChip: {
+    top: 6,
+    left: 6,
     backgroundColor: 'rgba(58, 15, 18, 0.88)',
     borderRadius: 6,
     paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
+    paddingVertical: 2,
+    borderWidth: 0.8,
+    borderColor: 'rgba(213, 169, 67, 0.45)',
     flexDirection: 'row',
     alignItems: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-      } as any,
-    }),
+    zIndex: 4,
   },
   dishCardRegionText: {
-    fontSize: 8,
+    fontSize: 9,
+    color: '#F3D179',
     fontWeight: '800',
-    color: '#FDE68A',
   },
   dishCardBadgeTag: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(58, 15, 18, 0.92)',
+    bottom: 6,
+    right: 6,
+    backgroundColor: '#D5A943',
+    borderRadius: 6,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 6,
     zIndex: 4,
   },
   dishCardBadgeText: {
-    color: '#D4AF37',
-    fontSize: 8.5,
+    fontSize: 9,
+    color: '#1E0408',
     fontWeight: '900',
-    letterSpacing: 0.3,
   },
   dishSoldOutOverlay: {
     position: 'absolute',
@@ -4014,279 +3860,327 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 6,
+    zIndex: 5,
   },
   dishSoldOutText: {
-    color: '#FFFFFF',
+    color: '#EF4444',
+    fontSize: 11,
     fontWeight: '900',
-    fontSize: 10.5,
     letterSpacing: 1,
-    backgroundColor: '#DC2626',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 4,
   },
-  dishTitleWrapper: {
+  galleryDishTitleWrapper: {
     width: '100%',
     alignItems: 'center',
-    marginVertical: 4,
-    minHeight: 34,
-    justifyContent: 'center',
+    marginBottom: 8,
   },
-  dishCardTitle: {
+  galleryDishTitle: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#1E293B',
+    fontWeight: '900',
+    color: '#1E0408',
     textAlign: 'center',
-    lineHeight: 17,
   },
-  dishCardUrduText: {
+  galleryDishUrdu: {
     fontSize: 11,
-    fontWeight: '700',
     color: '#895B1E',
+    marginTop: 2,
+    textAlign: 'center',
+    fontWeight: '600',
+  },
+  galleryDishDesc: {
+    fontSize: 10.5,
+    color: '#777',
     marginTop: 2,
     textAlign: 'center',
   },
   dishCardVariantHint: {
     fontSize: 10,
-    fontWeight: '700',
     color: '#B45309',
     marginTop: 2,
-    textAlign: 'center',
+    fontWeight: '700',
   },
-  dishCardBottomSection: {
-    width: '100%',
+  galleryCardBottomRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 4,
-    gap: 6,
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F0E6DC',
   },
-  dishCardPricePill: {
-    backgroundColor: 'rgba(254, 243, 199, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-    paddingHorizontal: 10,
+  galleryPricePill: {
+    backgroundColor: '#F8F1EB',
+    borderRadius: 8,
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 12,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)',
-      } as any,
-    }),
   },
-  dishCardPricePillActive: {
+  galleryPricePillActive: {
     backgroundColor: '#3A0F12',
-    borderColor: '#3A0F12',
   },
-  dishCardPriceText: {
-    fontSize: 12.5,
+  galleryPriceText: {
+    fontSize: 12,
     fontWeight: '900',
-    color: '#92400E',
+    color: '#52171B',
   },
-  dishCardPriceTextActive: {
-    color: '#FFFFFF',
+  galleryPriceTextActive: {
+    color: '#F3D179',
+  },
+  galleryQuickAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#D5A943',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    gap: 3,
+  },
+  galleryQuickAddText: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#1E0408',
   },
   cardStepperRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#3A0F12',
+    backgroundColor: '#52171B',
     borderRadius: 8,
-    padding: 2,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
     gap: 6,
   },
   cardStepperBtnMini: {
-    width: 22,
-    height: 22,
-    borderRadius: 5,
-    backgroundColor: '#52141C',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
   },
   cardStepperCount: {
-    color: '#D5A943',
+    color: '#FFFFFF',
     fontSize: 11.5,
     fontWeight: '900',
-    minWidth: 16,
-    textAlign: 'center',
-  },
-  cardQuickAddBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#D5A943',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 7,
-  },
-  cardQuickAddText: {
-    color: '#3A0F12',
-    fontSize: 10.5,
-    fontWeight: '900',
-    letterSpacing: 0.3,
   },
 
-  // Empty State
-  emptyStateBox: {
-    padding: 40,
+  // End card in auto-slider
+  catGalleryEndCard: {
+    backgroundColor: '#FFFDF9',
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#ECE4D8',
-    marginTop: 12,
+    padding: 16,
+    minHeight: 236,
   },
-  emptyStateTitle: {
-    fontSize: 16,
-    fontWeight: '800',
-    color: '#1C1C1E',
-    marginTop: 10,
+  catGalleryEndIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
   },
-  emptyStateDesc: {
+  catGalleryEndTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#52171B',
+  },
+  catGalleryEndCat: {
     fontSize: 12,
+    fontWeight: '700',
+    color: '#895B1E',
+    marginTop: 2,
+  },
+  catGalleryEndCount: {
+    fontSize: 10.5,
     color: '#777',
     marginTop: 4,
-    textAlign: 'center',
-  },
-  clearSearchBtn: {
-    backgroundColor: '#3A0F12',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  clearSearchBtnText: {
-    color: '#D5A943',
-    fontSize: 12,
-    fontWeight: '800',
   },
 
-  // Desktop Right Cart Panel
-  desktopCartPanel: {
-    width: 320,
-    backgroundColor: '#FFF',
+  // Grid view (fallback / search)
+  dishesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  dishCard: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#ECE4D8',
+    padding: 10,
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
+    marginBottom: 6,
+  },
+  dishCardInCart: {
+    borderColor: '#52171B',
+    backgroundColor: '#FFFDF9',
+  },
+  dishCardImageWrapper: {
+    width: '100%',
+    height: 110,
+    borderRadius: 10,
+    overflow: 'hidden',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginBottom: 8,
+  },
+  dishCardDetails: {
+    marginBottom: 8,
+  },
+  dishCardTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E0408',
+  },
+  dishCardUrdu: {
+    fontSize: 11,
+    color: '#895B1E',
+    marginTop: 2,
+  },
+  dishCardDesc: {
+    fontSize: 10.5,
+    color: '#777',
+    marginTop: 2,
+  },
+  dishCardBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F0E6DC',
+  },
+
+  // Desktop Order Tray Panel
+  desktopCartPanel: {
+    width: 310,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
+    padding: 14,
     alignSelf: 'flex-start',
-    elevation: 2,
+    ...Platform.select({
+      web: { boxShadow: '0 4px 20px rgba(0,0,0,0.04)' } as any,
+    }),
   },
   cartPanelHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingBottom: 12,
+    justifyContent: 'space-between',
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE4',
+    borderBottomColor: '#F0E6DC',
+    marginBottom: 10,
   },
   cartPanelTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '900',
-    color: '#24050A',
+    color: '#1E0408',
   },
   cartItemCountTag: {
-    backgroundColor: '#FAF5EA',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
+    backgroundColor: '#FFF8E7',
     borderWidth: 1,
     borderColor: '#D5A943',
+    borderRadius: 10,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
   },
   cartItemCountTagText: {
     fontSize: 10.5,
-    color: '#895B1E',
     fontWeight: '800',
+    color: '#52171B',
   },
   clearCartIconBtn: {
     padding: 4,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 6,
   },
   emptyTrayBox: {
-    paddingVertical: 36,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 32,
+    gap: 6,
   },
   emptyTrayTitle: {
     fontSize: 14,
     fontWeight: '800',
-    color: '#333',
-    marginTop: 8,
+    color: '#52171B',
   },
   emptyTrayDesc: {
-    fontSize: 11,
-    color: '#888',
+    fontSize: 11.5,
+    color: '#777',
     textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: 14,
   },
   cartPanelBody: {
-    marginTop: 10,
+    gap: 12,
   },
   trayItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#F7F5F0',
+    borderBottomColor: '#F7EFE9',
   },
   trayItemName: {
     fontSize: 12.5,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E0408',
   },
   trayItemSub: {
-    fontSize: 10.5,
+    fontSize: 10,
     color: '#895B1E',
   },
   trayItemPrice: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#3A0F12',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#52171B',
     marginTop: 2,
   },
   trayStepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAF5EA',
-    borderRadius: 6,
-    padding: 2,
+    backgroundColor: '#F7EFE9',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    gap: 6,
   },
   trayStepperBtn: {
     width: 22,
     height: 22,
-    borderRadius: 4,
-    backgroundColor: '#D5A943',
+    borderRadius: 11,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   trayStepperQty: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#3A0F12',
-    paddingHorizontal: 6,
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#1E0408',
   },
   trayItemRemoveBtn: {
-    padding: 4,
     marginLeft: 6,
+    padding: 4,
   },
   traySummaryCard: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 10,
-    padding: 12,
-    marginTop: 12,
+    backgroundColor: '#FFFDF9',
+    borderRadius: 12,
+    padding: 10,
     borderWidth: 1,
-    borderColor: '#EFEAE0',
+    borderColor: '#E8DED3',
+    gap: 4,
   },
   traySummaryRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 2,
   },
   summaryLabel: {
     fontSize: 11.5,
@@ -4294,65 +4188,65 @@ const styles = StyleSheet.create({
   },
   summaryVal: {
     fontSize: 11.5,
-    color: '#333',
     fontWeight: '700',
+    color: '#1E0408',
   },
   trayDivider: {
     height: 1,
-    backgroundColor: '#E5DFD4',
-    marginVertical: 6,
+    backgroundColor: '#E8DED3',
+    marginVertical: 4,
   },
   grandLabel: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#1C1C1E',
+    color: '#52171B',
   },
   grandVal: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#52171B',
   },
   trayCheckoutBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#D5A943',
-    borderRadius: 10,
-    paddingVertical: 12,
-    marginTop: 12,
+    borderRadius: 12,
+    paddingVertical: 10,
     gap: 6,
   },
   trayCheckoutBtnText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#1E0408',
   },
 
-  // 5. Mobile Floating Cart Bar
+  // Floating Cart Mobile Bar
   floatingCartMobileWrapper: {
     position: 'absolute',
-    bottom: 16,
-    left: 16,
-    right: 16,
-    elevation: 6,
+    bottom: 12,
+    left: 14,
+    right: 14,
+    zIndex: 99,
   },
   floatingCartMobileBar: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#3A0F12',
     borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
     borderWidth: 1.5,
     borderColor: '#D5A943',
+    ...Platform.select({
+      web: { boxShadow: '0 8px 24px rgba(0,0,0,0.25)' } as any,
+    }),
   },
   floatingCartLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    flex: 1,
-    marginRight: 8,
   },
   floatingCountCircle: {
     width: 32,
@@ -4365,108 +4259,91 @@ const styles = StyleSheet.create({
   floatingCountCircleText: {
     fontSize: 13,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#1E0408',
   },
   floatingCartTitle: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#FFF',
+    fontWeight: '900',
+    color: '#FFFFFF',
   },
   floatingCartSubtitle: {
     fontSize: 10.5,
-    color: '#D5A943',
+    color: '#F3D179',
   },
   floatingCartRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
   },
   floatingCartTotal: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '900',
-    color: '#FFF',
+    color: '#FFFFFF',
   },
   floatingCartActionPill: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#D5A943',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
     borderRadius: 8,
-    gap: 4,
+    gap: 3,
   },
   floatingCartActionPillText: {
     fontSize: 11,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#1E0408',
   },
 
-  // ========================================================
-  // CENTERED POPUP MODALS ENGINE
-  // ========================================================
+  // Modals Styling
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.72)',
-    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: 16,
   },
   customizerModalCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 22,
-    padding: 20,
-    maxWidth: 600,
     width: '100%',
-    alignSelf: 'center',
+    maxWidth: 520,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
     borderWidth: 1.5,
-    borderColor: '#D5A94370',
-    elevation: 12,
+    borderColor: '#D5A943',
   },
   modalHeaderRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    gap: 8,
-    paddingBottom: 12,
+    justifyContent: 'space-between',
+    paddingBottom: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE4',
-    marginBottom: 10,
+    borderBottomColor: '#F0E6DC',
+    marginBottom: 12,
   },
   customizerModalTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#24050A',
+    color: '#1E0408',
   },
   customizerModalUrduTitle: {
     fontSize: 13,
-    fontWeight: '700',
     color: '#895B1E',
-    marginTop: 1,
+    marginTop: 2,
   },
   customizerModalCat: {
     fontSize: 11,
-    color: '#888',
+    color: '#777',
     marginTop: 2,
   },
-  modalSoundBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#FAF5EA',
-    borderWidth: 1,
-    borderColor: '#D5A94380',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   customizerSection: {
-    marginTop: 12,
+    marginBottom: 14,
   },
   sectionLabel: {
-    fontSize: 12.5,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#1C1C1E',
-    marginBottom: 8,
+    color: '#3A0F12',
+    marginBottom: 6,
   },
   optionsWrap: {
     flexDirection: 'row',
@@ -4474,328 +4351,232 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   optionPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: '#E4DDD0',
-    minWidth: 110,
+    borderColor: '#D8CFC3',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: '#FAF8F5',
   },
   optionPillActive: {
     backgroundColor: '#3A0F12',
     borderColor: '#D5A943',
   },
   optionPillText: {
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#444',
+    color: '#4A3B32',
   },
   optionPillTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
+    color: '#F3D179',
   },
   optionPillPrice: {
-    fontSize: 11,
+    fontSize: 10,
     color: '#895B1E',
-    fontWeight: '800',
-    marginTop: 2,
+    marginTop: 1,
   },
   optionPillPriceActive: {
-    color: '#FFF',
+    color: '#FFFFFF',
   },
-  spicePill: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#FAF8F5',
+  customizerNotesInput: {
     borderWidth: 1,
-    borderColor: '#E4DDD0',
-  },
-  spicePillActive: {
-    backgroundColor: '#3A0F12',
-    borderColor: '#D5A943',
-  },
-  spicePillText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#555',
-  },
-  spicePillTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
-  },
-  modalTextInput: {
-    backgroundColor: '#FAF8F5',
-    borderWidth: 1,
-    borderColor: '#E4DDD0',
+    borderColor: '#D8CFC3',
     borderRadius: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     fontSize: 12,
-    color: '#1C1C1E',
+    color: '#1E0408',
+    backgroundColor: '#FAF8F5',
   },
-  qtyControlRow: {
+  customizerActionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    justifyContent: 'space-between',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0E6DC',
+    gap: 12,
   },
-  qtyControlBtn: {
-    width: 36,
-    height: 36,
+  modalStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5EBE1',
     borderRadius: 10,
-    backgroundColor: '#D5A943',
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    gap: 10,
+  },
+  modalStepperBtn: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  qtyControlVal: {
-    fontSize: 16,
+  modalStepperQty: {
+    fontSize: 14,
     fontWeight: '900',
-    color: '#1C1C1E',
+    color: '#1E0408',
   },
-  modalAddCartBtn: {
+  addCustomizerBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#D5A943',
     borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 14,
+    paddingVertical: 10,
+    gap: 6,
   },
-  modalAddCartBtnText: {
-    fontSize: 14,
+  addCustomizerBtnText: {
+    fontSize: 13,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#1E0408',
   },
 
   // Checkout Modal
-  checkoutSection: {
-    marginBottom: 14,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F0ECE4',
-  },
-  checkoutSectionHeader: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#24050A',
+  checkoutItemsList: {
+    marginBottom: 12,
   },
   checkoutItemRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3E8DF',
   },
   checkoutItemName: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#1C1C1E',
+    color: '#1E0408',
   },
   checkoutItemSub: {
     fontSize: 11,
     color: '#895B1E',
   },
-  checkoutItemNote: {
+  checkoutItemNotes: {
     fontSize: 10.5,
     color: '#777',
-    fontStyle: 'italic',
-  },
-  checkoutItemPrice: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#3A0F12',
     marginTop: 2,
   },
-  checkoutStepper: {
+  checkoutItemPrice: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#52171B',
+    marginTop: 2,
+  },
+  checkoutSection: {
+    marginBottom: 14,
+    gap: 8,
+  },
+  checkoutInput: {
+    borderWidth: 1,
+    borderColor: '#D8CFC3',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    fontSize: 12.5,
+    color: '#1E0408',
+    backgroundColor: '#FAF8F5',
+  },
+  confirmOrderBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#FAF5EA',
-    borderRadius: 8,
-    padding: 2,
-  },
-  checkoutStepperBtn: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
-    backgroundColor: '#D5A943',
-    alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#D5A943',
+    borderRadius: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+    gap: 8,
   },
-  checkoutStepperQty: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#3A0F12',
-    paddingHorizontal: 8,
+  confirmOrderBtnText: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#1E0408',
   },
-  inputField: {
-    marginBottom: 8,
+
+  // Table Selector Modal
+  floorTabsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 12,
   },
-  inputFieldLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#666',
-    marginBottom: 4,
-  },
-  textInputBox: {
-    backgroundColor: '#FAF8F5',
-    borderWidth: 1,
-    borderColor: '#E4DDD0',
+  floorTabBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
     borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    fontSize: 13,
-    color: '#1C1C1E',
-  },
-  paymentPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#FAF8F5',
     borderWidth: 1,
-    borderColor: '#E4DDD0',
+    borderColor: '#D8CFC3',
+    backgroundColor: '#FAF8F5',
   },
-  paymentPillActive: {
+  floorTabBtnActive: {
     backgroundColor: '#3A0F12',
     borderColor: '#D5A943',
   },
-  paymentPillText: {
-    fontSize: 12,
+  floorTabBtnText: {
+    fontSize: 11,
     fontWeight: '700',
-    color: '#555',
+    color: '#52171B',
   },
-  paymentPillTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
+  floorTabBtnTextActive: {
+    color: '#F3D179',
   },
-  billBreakdownCard: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: '#E4DDD0',
-    marginTop: 6,
-  },
-  billRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 3,
-  },
-  billRowLabel: {
-    fontSize: 12,
-    color: '#666',
-  },
-  billRowVal: {
-    fontSize: 12,
-    color: '#1C1C1E',
-    fontWeight: '700',
-  },
-  billDivider: {
-    height: 1,
-    backgroundColor: '#E4DDD0',
-    marginVertical: 6,
-  },
-  billGrandLabel: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#1C1C1E',
-  },
-  billGrandVal: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#3A0F12',
-  },
-  confirmOrderCTA: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#D5A943',
-    borderRadius: 12,
-    paddingVertical: 12,
-    marginTop: 10,
-  },
-  confirmOrderCTAText: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#3A0F12',
-  },
-
-  // Floor & Tables Picker
-  floorChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
-    backgroundColor: '#F3EFEA',
-    marginRight: 8,
-  },
-  floorChipActive: {
-    backgroundColor: '#3A0F12',
-  },
-  floorChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
-  },
-  floorChipTextActive: {
-    color: '#D5A943',
-    fontWeight: '800',
-  },
-  tablesPickerGrid: {
+  tablesGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  tableSelectTile: {
+  tableCard: {
     width: '31%',
-    minWidth: 90,
-    flexGrow: 1,
     backgroundColor: '#FAF8F5',
-    borderWidth: 1,
-    borderColor: '#E4DDD0',
-    borderRadius: 10,
+    borderWidth: 1.2,
+    borderColor: '#E8DED3',
+    borderRadius: 12,
     padding: 10,
     alignItems: 'center',
+    gap: 4,
   },
-  tableSelectTileActive: {
-    backgroundColor: '#3A0F12',
-    borderColor: '#D5A943',
+  tableCardSelected: {
+    backgroundColor: '#FFF8E7',
+    borderColor: '#52171B',
   },
-  tableSelectTileName: {
+  tableCardName: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#333',
-    marginTop: 4,
+    color: '#1E0408',
   },
-  tableSelectTileNameActive: {
-    color: '#D5A943',
+  tableCardNameSelected: {
+    color: '#52171B',
   },
-  tableSelectTileSeats: {
+  tableCardSeats: {
     fontSize: 10,
-    color: '#888',
-    marginTop: 2,
+    color: '#895B1E',
   },
 
-  // Live Tracker Modal
+  // Tracker Modal
   trackerCardBox: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 12,
+    backgroundColor: '#FFFDF9',
+    borderRadius: 14,
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
     padding: 14,
-    borderWidth: 1,
-    borderColor: '#E4DDD0',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   trackerStageTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 12,
   },
   trackerMainLabel: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#52171B',
   },
   trackerDescLabel: {
-    fontSize: 11.5,
-    color: '#666',
+    fontSize: 11,
+    color: '#895B1E',
     marginTop: 2,
   },
   trackerTimerBadge: {
@@ -4804,26 +4585,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#3A0F12',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
+    borderRadius: 10,
   },
   trackerTimerText: {
-    color: '#D5A943',
     fontSize: 11,
     fontWeight: '800',
+    color: '#F3D179',
   },
   trackerProgressArea: {
-    marginTop: 6,
+    marginTop: 8,
   },
   trackerProgressLineBg: {
-    height: 6,
-    backgroundColor: '#E5E5EA',
-    borderRadius: 3,
-    marginBottom: 12,
-    overflow: 'hidden',
+    height: 4,
+    backgroundColor: '#E8DFD5',
+    borderRadius: 2,
+    position: 'relative',
+    marginBottom: 10,
   },
   trackerProgressLineFill: {
     height: '100%',
     backgroundColor: '#D5A943',
+    borderRadius: 2,
   },
   trackerStepsRow: {
     flexDirection: 'row',
@@ -4831,180 +4613,207 @@ const styles = StyleSheet.create({
   },
   trackerStepNode: {
     alignItems: 'center',
-    width: 58,
+    width: 50,
   },
   trackerNodeDot: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#E5E5EA',
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#E8DFD5',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 4,
   },
   trackerNodeDotPassed: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: '#10B981',
   },
   trackerNodeDotCurrent: {
     backgroundColor: '#D5A943',
   },
   trackerNodeNum: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#777',
+    fontSize: 9.5,
+    fontWeight: '900',
+    color: '#666',
   },
   trackerNodeNumActive: {
-    color: '#FFF',
+    color: '#FFFFFF',
   },
   trackerNodeLabel: {
-    fontSize: 9,
-    color: '#666',
+    fontSize: 8.5,
+    fontWeight: '700',
+    color: '#4A3B32',
     textAlign: 'center',
   },
   trackerDishesCard: {
     backgroundColor: '#FAF8F5',
-    borderRadius: 10,
+    borderRadius: 12,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#E4DDD0',
+    borderColor: '#E8DED3',
   },
   trackerDishItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingVertical: 4,
   },
   trackerDishQty: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
-    color: '#3A0F12',
+    color: '#52171B',
     width: 24,
   },
   trackerDishName: {
-    fontSize: 12,
-    color: '#333',
     flex: 1,
+    fontSize: 12,
+    color: '#1E0408',
   },
   trackerDishPrice: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#1E0408',
+  },
+  billDivider: {
+    height: 1,
+    backgroundColor: '#E8DED3',
+    marginVertical: 6,
+  },
+  billRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  billGrandLabel: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#1C1C1E',
+    fontWeight: '900',
+    color: '#52171B',
+  },
+  billGrandVal: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#52171B',
   },
   trackerCloseBtn: {
     backgroundColor: '#3A0F12',
-    borderRadius: 10,
+    borderRadius: 12,
     paddingVertical: 10,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 14,
   },
   trackerCloseBtnText: {
-    color: '#D5A943',
     fontSize: 13,
-    fontWeight: '800',
+    fontWeight: '900',
+    color: '#F3D179',
   },
 
-  // History Modal
-  clearHistoryPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAF5EA',
-    borderWidth: 1,
-    borderColor: '#D5A94380',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
-  },
-  clearHistoryPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#895B1E',
-  },
-  deleteOrderBtn: {
-    padding: 4,
-    backgroundColor: '#FEE2E2',
-    borderRadius: 6,
-  },
+  // Order History Modal
   emptyHistoryBox: {
-    paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 32,
+    gap: 6,
   },
   emptyHistoryTitle: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '800',
-    color: '#1C1C1E',
-    marginTop: 8,
-  },
-  emptyHistoryDesc: {
-    fontSize: 12,
-    color: '#888',
-    marginTop: 2,
+    color: '#52171B',
   },
   historyCardBox: {
-    backgroundColor: '#FAF8F5',
-    borderRadius: 10,
+    backgroundColor: '#FFFDF9',
+    borderRadius: 12,
     padding: 12,
-    marginBottom: 8,
     borderWidth: 1,
-    borderColor: '#E4DDD0',
+    borderColor: '#E8DED3',
+    marginBottom: 8,
+    gap: 4,
   },
   historyCardTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 4,
+    alignItems: 'center',
   },
-  historyOrderNumber: {
-    fontSize: 13.5,
+  historyOrdNum: {
+    fontSize: 13,
     fontWeight: '900',
-    color: '#3A0F12',
+    color: '#1E0408',
   },
-  historyOrderDate: {
+  historyOrdTime: {
     fontSize: 10,
     color: '#888',
-    marginTop: 1,
   },
-  historyBadge: {
-    backgroundColor: '#FAF5EA',
+  historyOrdStatusPill: {
+    backgroundColor: '#FFF8E7',
     borderWidth: 1,
     borderColor: '#D5A943',
+    borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    borderRadius: 4,
   },
-  historyBadgeText: {
+  historyOrdStatusText: {
     fontSize: 9.5,
     fontWeight: '800',
     color: '#895B1E',
   },
-  historySummaryText: {
-    fontSize: 11.5,
-    color: '#555',
-    marginVertical: 4,
+  historyOrdItems: {
+    fontSize: 11,
+    color: '#666',
   },
   historyCardBottom: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: '#EEE',
-    paddingTop: 6,
     marginTop: 4,
   },
-  historyTotalAmount: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#1C1C1E',
+  historyOrdTotal: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#52171B',
   },
-  trackOrderBtn: {
+  historyTrackBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
     backgroundColor: '#3A0F12',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  trackOrderBtnText: {
-    color: '#D5A943',
+  historyTrackBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#F3D179',
+  },
+
+  // Empty state
+  emptyStateBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 40,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#E8DED3',
+    gap: 8,
+  },
+  emptyStateTitle: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#52171B',
+  },
+  emptyStateDesc: {
+    fontSize: 11.5,
+    color: '#777',
+    textAlign: 'center',
+    maxWidth: 280,
+  },
+  clearSearchBtn: {
+    backgroundColor: '#3A0F12',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  clearSearchBtnText: {
     fontSize: 11,
     fontWeight: '800',
+    color: '#F3D179',
   },
 });
