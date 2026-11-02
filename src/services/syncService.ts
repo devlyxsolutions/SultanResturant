@@ -337,7 +337,10 @@ function initWebSSE() {
     });
 
     sse.onerror = () => {
-      // EventSource automatically handles reconnection
+      try {
+        sse.close();
+      } catch {}
+      sseConnection = null;
     };
   } catch (err) {
     console.warn('[SyncService] Failed to initialize SSE stream:', err);
@@ -451,9 +454,11 @@ function initFirebaseSync() {
     });
   }
 
-  // 5. Lightweight background fallback pulse (every 4s, since onSnapshot + onValue + SSE are instant)
-  if (firebasePollingTimer) clearInterval(firebasePollingTimer);
-  firebasePollingTimer = setInterval(pollFirebaseUpdates, 4000);
+  // 5. Lightweight background fallback pulse (only needed on native mobile; web uses persistent WebSockets)
+  if (Platform.OS !== 'web') {
+    if (firebasePollingTimer) clearInterval(firebasePollingTimer);
+    firebasePollingTimer = setInterval(pollFirebaseUpdates, 4000);
+  }
 
   syncStatus = 'connected';
   lastSyncedAt = Date.now();
