@@ -430,24 +430,12 @@ export default function AppSidebar({
             )}
           </TouchableOpacity>
 
-          {/* Action icon: Close for Mobile Drawer, Collapse for Desktop when expanded (Never show in collapsed mode to prevent overlap) */}
-          {isMobileDrawer ? (
+          {/* Action icon: Close for Mobile Drawer */}
+          {isMobileDrawer && (
             <TouchableOpacity onPress={onCloseMobile} style={styles.glassCircleBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
               <Ionicons name="close" size={20} color="#F3D179" />
             </TouchableOpacity>
-          ) : showExpanded ? (
-            <TouchableOpacity 
-              onPress={toggle} 
-              style={styles.glassCircleBtn}
-              activeOpacity={0.7}
-            >
-              <Ionicons 
-                name="chevron-back" 
-                size={16} 
-                color="#F3D179" 
-              />
-            </TouchableOpacity>
-          ) : null}
+          )}
         </View>
 
         {/* 2. USER PROFILE LIQUID CAPSULE */}
