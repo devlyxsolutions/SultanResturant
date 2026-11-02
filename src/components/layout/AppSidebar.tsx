@@ -438,37 +438,6 @@ export default function AppSidebar({
           )}
         </View>
 
-        {/* 2. USER PROFILE LIQUID CAPSULE */}
-        {showExpanded ? (
-          <View style={styles.userCardGlass}>
-            <View style={styles.avatarGlowCircle}>
-              <Text style={styles.avatarText}>{(user?.name || displayRole)[0].toUpperCase()}</Text>
-              <View style={styles.onlineBeaconLive} />
-            </View>
-            <View style={styles.userInfo}>
-              <Text style={styles.userName} numberOfLines={1}>{user?.name || displayRole}</Text>
-              <View style={styles.userStatusRow}>
-                <View style={styles.statusDotLive} />
-                <Text style={styles.userStatusText}>Cloud Synced • Live</Text>
-              </View>
-            </View>
-          </View>
-        ) : (
-          <View 
-            style={styles.userCardCollapsed}
-            {...(Platform.OS === 'web' ? {
-              onMouseEnter: (e: any) => handleItemMouseEnter(e, { label: `${user?.name || displayRole}`, badge: 'Live Online', icon: 'person-outline' }),
-              onMouseLeave: handleItemMouseLeave,
-              className: 'apple-dock-item',
-            } : {})}
-          >
-            <View style={[styles.avatarGlowCircleSmall, { className: 'dock-icon-box' } as any]}>
-              <Text style={styles.avatarTextSmall}>{(user?.name || displayRole)[0].toUpperCase()}</Text>
-              <View style={styles.onlineBeaconLiveSmall} />
-            </View>
-          </View>
-        )}
-
         {/* 3. QUICK SEARCH & FILTER BAR */}
         {showExpanded && (
           <View style={styles.searchContainer}>
