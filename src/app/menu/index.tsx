@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -89,7 +89,7 @@ interface AutoCategorySliderProps {
   category: string;
   items: MenuItem[];
   onViewAll: (category: string) => void;
-  renderCard: (item: MenuItem) => React.ReactNode;
+  renderCard: (item: MenuItem, cardKey?: string) => React.ReactNode;
   isDesktop: boolean;
   isTablet: boolean;
   screenWidth: number;
@@ -112,7 +112,6 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
   const offsetRef = useRef(0);
   const isInteractingRef = useRef(false);
   const [isAutoPlaying, setIsAutoPlaying] = useState(true);
-  const [scrollOffset, setScrollOffset] = useState(0);
 
   // Pulse animation for the Auto-Slider Live badge
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -144,7 +143,72 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
   const cardWidth = isDesktop ? 280 : isTablet ? 235 : 190;
   const gap = 12;
   const step = cardWidth + gap;
-  const totalCards = items.length + 1; // items + end card
+
+  // Build seamless 3-set infinite loop track
+  const { sliderItems, singleCycleWidth } = useMemo(() => {
+    if (items.length <= 1) {
+      return {
+        sliderItems: items.map((it, idx) => ({ item: it, key: `${it.id}_${idx}` })),
+        singleCycleWidth: items.length * step,
+      };
+    }
+
+    const minCycleWidth = Math.max(screenWidth, 600);
+    const cyclesPerSet = Math.max(1, Math.ceil(minCycleWidth / Math.max(1, items.length * step)));
+    const baseSet: MenuItem[] = [];
+    for (let c = 0; c < cyclesPerSet; c++) {
+      baseSet.push(...items);
+    }
+    const cycleWidth = baseSet.length * step;
+
+    // 3 identical sets: [Set 0, Set 1 (middle), Set 2]
+    const list: { item: MenuItem; key: string }[] = [];
+    for (let s = 0; s < 3; s++) {
+      baseSet.forEach((it, idx) => {
+        list.push({ item: it, key: `${it.id}_s${s}_${idx}` });
+      });
+    }
+
+    return {
+      sliderItems: list,
+      singleCycleWidth: cycleWidth,
+    };
+  }, [items, step, screenWidth]);
+
+  // Silently normalize offset to stay inside Set 1 (middle set)
+  const checkAndResetLoop = useCallback(
+    (current: number) => {
+      if (items.length <= 1 || singleCycleWidth <= 0) return current;
+
+      if (current >= singleCycleWidth * 2) {
+        const reset = current - singleCycleWidth;
+        scrollRef.current?.scrollTo({ x: reset, animated: false });
+        offsetRef.current = reset;
+        return reset;
+      } else if (current < singleCycleWidth * 0.5) {
+        const reset = current + singleCycleWidth;
+        scrollRef.current?.scrollTo({ x: reset, animated: false });
+        offsetRef.current = reset;
+        return reset;
+      }
+      return current;
+    },
+    [items.length, singleCycleWidth]
+  );
+
+  // Initialize scroll position in the middle set
+  const hasInitializedRef = useRef(false);
+  useEffect(() => {
+    if (items.length > 1 && singleCycleWidth > 0 && !hasInitializedRef.current) {
+      hasInitializedRef.current = true;
+      const initialOffset = singleCycleWidth;
+      offsetRef.current = initialOffset;
+      const timer = setTimeout(() => {
+        scrollRef.current?.scrollTo({ x: initialOffset, animated: false });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [items.length, singleCycleWidth]);
 
   // Auto-scroll loop
   useEffect(() => {
@@ -152,58 +216,44 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
 
     // Stagger slightly by category name hash so not all rows slide at the exact millisecond
     const hash = category.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const intervalTime = 3600 + (hash % 800);
+    const intervalTime = 3400 + (hash % 800);
 
     const timer = setInterval(() => {
-      if (isInteractingRef.current) return;
+      if (isInteractingRef.current || !scrollRef.current) return;
 
-      const current = offsetRef.current;
-      const visibleTrack = screenWidth - (isDesktop ? 360 : 32);
-      const maxScroll = Math.max(0, totalCards * step - visibleTrack);
+      const next = offsetRef.current + step;
+      scrollRef.current?.scrollTo({ x: next, animated: true });
+      offsetRef.current = next;
 
-      if (maxScroll <= 0) return;
-
-      if (current >= maxScroll - 16) {
-        // Smoothly loop back to start
-        scrollRef.current?.scrollTo({ x: 0, animated: true });
-        offsetRef.current = 0;
-        setScrollOffset(0);
-      } else {
-        const next = Math.min(maxScroll, current + step);
-        scrollRef.current?.scrollTo({ x: next, animated: true });
-        offsetRef.current = next;
-        setScrollOffset(next);
-      }
+      // After animation completes, silent wrap check
+      setTimeout(() => {
+        checkAndResetLoop(offsetRef.current);
+      }, 350);
     }, intervalTime);
 
     return () => clearInterval(timer);
-  }, [items.length, isAutoPlaying, totalCards, step, screenWidth, isDesktop, category]);
+  }, [items.length, isAutoPlaying, step, category, checkAndResetLoop]);
 
   const handleManualPrev = () => {
     isInteractingRef.current = true;
-    const current = offsetRef.current;
-    const next = Math.max(0, current - step * (isDesktop ? 2 : 1));
-    scrollRef.current?.scrollTo({ x: next, animated: true });
-    offsetRef.current = next;
-    setScrollOffset(next);
+    const prev = offsetRef.current - step * (isDesktop ? 2 : 1);
+    scrollRef.current?.scrollTo({ x: prev, animated: true });
+    offsetRef.current = prev;
     setTimeout(() => {
+      checkAndResetLoop(offsetRef.current);
       isInteractingRef.current = false;
-    }, 3000);
+    }, 400);
   };
 
   const handleManualNext = () => {
     isInteractingRef.current = true;
-    const current = offsetRef.current;
-    const visibleTrack = screenWidth - (isDesktop ? 360 : 32);
-    const maxScroll = Math.max(0, totalCards * step - visibleTrack);
-    const next =
-      current >= maxScroll - 16 ? 0 : Math.min(maxScroll, current + step * (isDesktop ? 2 : 1));
+    const next = offsetRef.current + step * (isDesktop ? 2 : 1);
     scrollRef.current?.scrollTo({ x: next, animated: true });
     offsetRef.current = next;
-    setScrollOffset(next);
     setTimeout(() => {
+      checkAndResetLoop(offsetRef.current);
       isInteractingRef.current = false;
-    }, 3000);
+    }, 400);
   };
 
   return (
@@ -263,20 +313,12 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
         <View style={styles.sliderControlsRow}>
           <View style={styles.sliderArrowGroup}>
             <TouchableOpacity
-              style={[
-                styles.sliderArrowBtn,
-                scrollOffset <= 0 && styles.sliderArrowBtnDisabled,
-              ]}
+              style={styles.sliderArrowBtn}
               onPress={handleManualPrev}
-              disabled={scrollOffset <= 0}
               activeOpacity={0.7}
               accessibilityLabel={`Previous ${category} dishes`}
             >
-              <Ionicons
-                name="chevron-back"
-                size={16}
-                color={scrollOffset <= 0 ? '#C4B5A5' : '#52171B'}
-              />
+              <Ionicons name="chevron-back" size={16} color="#52171B" />
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -327,37 +369,19 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
             }, 2500);
           }}
           onMomentumScrollEnd={(e) => {
-            offsetRef.current = e.nativeEvent.contentOffset.x;
-            setScrollOffset(e.nativeEvent.contentOffset.x);
+            const x = e.nativeEvent.contentOffset.x;
+            offsetRef.current = x;
+            checkAndResetLoop(x);
             setTimeout(() => {
               isInteractingRef.current = false;
-            }, 2000);
+            }, 1500);
           }}
           onScroll={(e) => {
             offsetRef.current = e.nativeEvent.contentOffset.x;
-            setScrollOffset(e.nativeEvent.contentOffset.x);
           }}
-          scrollEventThrottle={16}
+          scrollEventThrottle={32}
         >
-          {items.map(renderCard)}
-
-          {/* End Card: Explore All */}
-          <TouchableOpacity
-            style={[styles.catGalleryEndCard, { width: cardWidth }]}
-            onPress={() => onViewAll(category)}
-            activeOpacity={0.85}
-          >
-            <View style={styles.catGalleryEndIconCircle}>
-              <Ionicons name="sparkles" size={20} color="#D5A943" />
-            </View>
-            <Text style={styles.catGalleryEndTitle}>Explore All</Text>
-            <Text style={styles.catGalleryEndCat} numberOfLines={1}>
-              {category}
-            </Text>
-            <Text style={styles.catGalleryEndCount}>
-              {items.length} signature dishes →
-            </Text>
-          </TouchableOpacity>
+          {sliderItems.map((entry) => renderCard(entry.item, entry.key))}
         </ScrollView>
       </View>
     </View>
@@ -1259,7 +1283,7 @@ export default function CustomerMenuScreen() {
   };
 
   // Render Horizontal Dish Card (used in Auto Sliders)
-  const renderGalleryItemCard = (item: MenuItem) => {
+  const renderGalleryItemCard = (item: MenuItem, cardKey?: string) => {
     const isSoldOut = isItemSoldOut(item);
     const inCartQty = getItemCartQty(item.id);
     const isItemInCart = inCartQty > 0;
@@ -1275,7 +1299,7 @@ export default function CustomerMenuScreen() {
 
     return (
       <TouchableOpacity
-        key={item.id}
+        key={cardKey || item.id}
         style={[
           styles.galleryDishCard,
           { width: cardWidth },
