@@ -91,7 +91,7 @@ export default function WelcomeScreen() {
       toValue: 1,
       duration: 520,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setShowWelcomeActions(false);
     });
@@ -103,7 +103,7 @@ export default function WelcomeScreen() {
       toValue: 0,
       duration: 460,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setIsLoginActive(false);
       setErrorMessage('');
@@ -137,20 +137,20 @@ export default function WelcomeScreen() {
       toValue: 0,
       duration: 250,
       easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
+      useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
       setShowSplash(false);
       Animated.parallel([
         Animated.timing(welcomeFadeAnim, {
           toValue: 1,
           duration: 250,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(welcomeSlideAnim, {
           toValue: 0,
           friction: 8,
           tension: 50,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
     });

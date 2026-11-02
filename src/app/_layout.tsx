@@ -67,6 +67,23 @@ export default function RootLayout() {
     // Safely warm-up vector icons on web without throwing unhandled rejections
     if (Platform.OS === 'web') {
       try {
+        if (typeof window !== 'undefined' && (window as any).FontFace) {
+          const fontIonicons = new (window as any).FontFace(
+            'ionicons',
+            "url('/fonts/Ionicons.ttf') format('truetype')"
+          );
+          fontIonicons.load().then((loaded: any) => {
+            (document as any).fonts?.add(loaded);
+          }).catch(() => {});
+
+          const fontMCI = new (window as any).FontFace(
+            'material-community',
+            "url('/fonts/MaterialCommunityIcons.ttf') format('truetype')"
+          );
+          fontMCI.load().then((loaded: any) => {
+            (document as any).fonts?.add(loaded);
+          }).catch(() => {});
+        }
         Font.loadAsync(Ionicons.font).catch(() => {});
       } catch (_) {}
     }
@@ -92,10 +109,31 @@ export default function RootLayout() {
     <>
       {Platform.OS === 'web' && (
         <style>{`
-          /* Non-blocking Font Face Swap for Vector Icons */
+          /* Local + CDN Accelerated Font Faces for Vector Icons */
           @font-face {
             font-family: 'ionicons';
-            src: local('Ionicons'), local('ionicons');
+            src: url('/fonts/Ionicons.ttf') format('truetype'),
+                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype'),
+                 local('Ionicons'), local('ionicons');
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'Ionicons';
+            src: url('/fonts/Ionicons.ttf') format('truetype'),
+                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype'),
+                 local('Ionicons'), local('ionicons');
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'material-community';
+            src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype'),
+                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+            font-display: swap;
+          }
+          @font-face {
+            font-family: 'Material Community Icons';
+            src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype'),
+                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
             font-display: swap;
           }
 
