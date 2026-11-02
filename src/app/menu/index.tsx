@@ -104,6 +104,7 @@ export default function CustomerMenuScreen() {
   const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [dietaryFilter, setDietaryFilter] = useState<'all' | 'specials' | 'spicy' | 'veg'>('all');
+  const [viewMode, setViewMode] = useState<'gallery' | 'grid'>('gallery');
 
   // Cart
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -443,6 +444,38 @@ export default function CustomerMenuScreen() {
     return '🍽️';
   };
 
+  const getCategoryUrduOrTagline = (cat: string) => {
+    const lower = cat.toLowerCase();
+    if (lower.includes('appetizer') || lower.includes('starter') || lower.includes('soup') || lower.includes('roll')) {
+      return 'شروع کے لذیذ پکوان • Fresh Starters & Appetizers';
+    }
+    if (lower.includes('karahi') || lower.includes('handi')) {
+      return 'روایتی کڑاہی اور ہانڈی • Fresh Clay Handi & Wok';
+    }
+    if (lower.includes('bbq') || lower.includes('grill') || lower.includes('kabab') || lower.includes('tikka')) {
+      return 'شاہی باربی کیو اور کباب • Charcoal Grills & Skewers';
+    }
+    if (lower.includes('biryani') || lower.includes('rice') || lower.includes('pulao')) {
+      return 'شاہی بریانی اور پلاؤ • Aromatic Basmati Specialties';
+    }
+    if (lower.includes('mains') || lower.includes('curry')) {
+      return 'شاہی روایتی کھانے اور سالن • Royal Curries & Signature Dishes';
+    }
+    if (lower.includes('naan') || lower.includes('roti') || lower.includes('bread')) {
+      return 'تازہ تندوری نان اور روٹیاں • Fresh Clay Oven Breads';
+    }
+    if (lower.includes('dessert') || lower.includes('sweet') || lower.includes('kunafa') || lower.includes('kheer')) {
+      return 'شاہی میٹھے اور قنافہ • Royal Traditional Desserts & Kunafa';
+    }
+    if (lower.includes('drink') || lower.includes('beverage') || lower.includes('juice') || lower.includes('shake')) {
+      return 'تازہ مشروبات اور شیکس • Chilled Refreshments & Shakes';
+    }
+    if (lower.includes('deal') || lower.includes('combo') || lower.includes('family')) {
+      return 'شاہی فیملی ڈیلز • Exclusive Value Feasts & Combos';
+    }
+    return 'شاہی شاہکار پکوان • Authentic Sultan Specialties';
+  };
+
   const getCuisineMeta = (name: string) => {
     const lower = name.toLowerCase();
     if (lower.includes('pakistan') || lower.includes('desi') || lower.includes('karahi') || lower.includes('bbq')) {
@@ -562,6 +595,65 @@ export default function CustomerMenuScreen() {
       return matchCat && matchRegion && matchQuery && matchDiet;
     });
   }, [menuItems, activeCat, activeRegion, searchQuery, dietaryFilter]);
+
+  // Grouped items per category for Front-Page Category Gallery Showcase
+  const groupedCategoryGalleries = useMemo(() => {
+    const orderedCats: string[] = [];
+    (categoryTabs || []).forEach(c => {
+      const clean = (c || '').trim();
+      if (clean && clean.toLowerCase() !== 'all' && !orderedCats.some(x => x.toLowerCase() === clean.toLowerCase())) {
+        orderedCats.push(clean);
+      }
+    });
+
+    (menuItems || []).forEach(m => {
+      const c = (m.category || 'Mains').trim();
+      if (c && !orderedCats.some(x => x.toLowerCase() === c.toLowerCase())) {
+        orderedCats.push(c);
+      }
+    });
+
+    // Base items matching current region, query, and dietary filters
+    const baseItems = menuItems.filter(item => {
+      let matchRegion = true;
+      if (activeRegion !== 'ALL' && activeRegion !== 'All') {
+        matchRegion = (item.region || '').trim().toLowerCase() === activeRegion.trim().toLowerCase();
+      }
+      let matchQuery = true;
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        matchQuery =
+          item.name.toLowerCase().includes(q) ||
+          Boolean(item.description && item.description.toLowerCase().includes(q)) ||
+          Boolean(item.category && item.category.toLowerCase().includes(q)) ||
+          Boolean(item.urduName && item.urduName.toLowerCase().includes(q)) ||
+          Boolean(item.region && item.region.toLowerCase().includes(q));
+      }
+      let matchDiet = true;
+      if (dietaryFilter === 'specials') {
+        matchDiet = Boolean(item.badge || item.isDeal);
+      } else if (dietaryFilter === 'spicy') {
+        const lower = item.name.toLowerCase();
+        matchDiet = lower.includes('spicy') || lower.includes('karahi') || lower.includes('tikka');
+      } else if (dietaryFilter === 'veg') {
+        const lower = (item.name + ' ' + (item.category || '')).toLowerCase();
+        matchDiet = lower.includes('veg') || lower.includes('paneer') || lower.includes('daal') || lower.includes('naan') || lower.includes('dessert') || lower.includes('drink');
+      }
+      return matchRegion && matchQuery && matchDiet;
+    });
+
+    const galleries: { category: string; items: MenuItem[] }[] = [];
+    orderedCats.forEach(cat => {
+      const catItems = baseItems.filter(
+        item => (item.category || 'Mains').trim().toLowerCase() === cat.toLowerCase()
+      );
+      if (catItems.length > 0) {
+        galleries.push({ category: cat, items: catItems });
+      }
+    });
+
+    return galleries;
+  }, [categoryTabs, menuItems, activeRegion, searchQuery, dietaryFilter]);
 
   // Is Sold Out
   const isItemSoldOut = (item: MenuItem) => {
@@ -1093,6 +1185,285 @@ export default function CustomerMenuScreen() {
     );
   };
 
+  // Render Category-Wise Gallery Card (Horizontal Showcase Card)
+  const renderGalleryItemCard = (item: MenuItem) => {
+    const isSoldOut = isItemSoldOut(item);
+    const inCartQty = getItemCartQty(item.id);
+    const isItemInCart = inCartQty > 0;
+    const cardWidth = isDesktop ? 250 : isTablet ? 220 : 185;
+
+    const lowerName = item.name.toLowerCase();
+    const hasVariants = Boolean(item.variants && item.variants.length > 0);
+    const isWeightDish =
+      lowerName.includes('karahi') ||
+      lowerName.includes('handi') ||
+      lowerName.includes('sajji') ||
+      lowerName.includes('kg');
+
+    return (
+      <TouchableOpacity
+        key={item.id}
+        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+        style={[
+          styles.galleryDishCard,
+          { width: cardWidth },
+          isItemInCart && styles.galleryDishCardInCart,
+          isSoldOut && { opacity: 0.65 },
+        ]}
+        onPress={() => (hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item))}
+        activeOpacity={0.82}
+        disabled={isSoldOut}
+      >
+        {/* Floating In-Cart Badge */}
+        {isItemInCart && (
+          <View style={styles.inCartBadge}>
+            <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
+            <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
+          </View>
+        )}
+
+        {/* Top: Dish Image */}
+        <View style={styles.galleryCardImageWrapper}>
+          {item.imageUri ? (
+            <Image
+              source={{ uri: item.imageUri }}
+              style={styles.dishCardImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <View style={styles.dishCardPlaceholderBox}>
+              <Ionicons
+                name={item.isDeal ? 'gift' : 'restaurant-outline'}
+                size={28}
+                color="#D4AF37"
+              />
+            </View>
+          )}
+
+          {/* Region Chip */}
+          {item.region ? (
+            <View style={styles.galleryRegionChip}>
+              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
+              <Text style={styles.dishCardRegionText} numberOfLines={1}>
+                {item.region}
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Special Badge tag */}
+          {item.badge ? (
+            <View style={styles.dishCardBadgeTag}>
+              <Text style={styles.dishCardBadgeText} numberOfLines={1}>
+                {item.badge}
+              </Text>
+            </View>
+          ) : item.isDeal ? (
+            <View style={[styles.dishCardBadgeTag, { backgroundColor: '#7C3AED' }]}>
+              <Text style={[styles.dishCardBadgeText, { color: '#FFF' }]} numberOfLines={1}>
+                DEAL
+              </Text>
+            </View>
+          ) : null}
+
+          {/* Out of Stock Overlay */}
+          {isSoldOut && (
+            <View style={styles.dishSoldOutOverlay}>
+              <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
+            </View>
+          )}
+        </View>
+
+        {/* Middle: Dish Title & Urdu */}
+        <View style={styles.galleryDishTitleWrapper}>
+          <Text style={styles.galleryDishTitle} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {item.urduName ? (
+            <Text style={styles.galleryDishUrdu} numberOfLines={1}>
+              {item.urduName}
+            </Text>
+          ) : (hasVariants || isWeightDish) ? (
+            <Text style={styles.dishCardVariantHint} numberOfLines={1}>
+              {hasVariants ? `${item.variants?.length} Sizes` : 'Quarter/Half/1kg'}
+            </Text>
+          ) : item.description ? (
+            <Text style={styles.galleryDishDesc} numberOfLines={1}>
+              {item.description}
+            </Text>
+          ) : null}
+        </View>
+
+        {/* Bottom: Price + Quick Add or Stepper */}
+        <View style={styles.galleryCardBottomRow}>
+          <View style={[styles.galleryPricePill, isItemInCart && styles.galleryPricePillActive]}>
+            <Text style={[styles.galleryPriceText, isItemInCart && styles.galleryPriceTextActive]}>
+              Rs. {item.price.toLocaleString()}
+            </Text>
+          </View>
+
+          {isItemInCart ? (
+            <View style={styles.cardStepperRow}>
+              <TouchableOpacity
+                style={styles.cardStepperBtnMini}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  handleQuickDecrease(item.id);
+                }}
+                accessibilityLabel="Decrease quantity"
+              >
+                <Ionicons name="remove" size={13} color="#FFFFFF" />
+              </TouchableOpacity>
+              <Text style={styles.cardStepperCount}>{inCartQty}</Text>
+              <TouchableOpacity
+                style={styles.cardStepperBtnMini}
+                onPress={(e) => {
+                  e.stopPropagation?.();
+                  hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
+                }}
+                accessibilityLabel="Increase quantity"
+              >
+                <Ionicons name="add" size={13} color="#FFFFFF" />
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.galleryQuickAddBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                hasVariants || isWeightDish ? handleOpenCustomizer(item) : handleQuickAdd(item);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name={hasVariants || isWeightDish ? "options-outline" : "add"} size={13} color="#3A0F12" />
+              <Text style={styles.galleryQuickAddText}>{hasVariants || isWeightDish ? 'OPT' : 'ADD'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  // Interactive Category-Wise Dishes Slider Component with Arrow Controls & Smooth Scroll
+  const CategorySlider = ({
+    category,
+    items,
+    onViewAll,
+    renderCard,
+  }: {
+    category: string;
+    items: MenuItem[];
+    onViewAll: (category: string) => void;
+    renderCard: (item: MenuItem) => React.ReactNode;
+  }) => {
+    const scrollRef = useRef<any>(null);
+    const [scrollOffset, setScrollOffset] = useState(0);
+    const cardWidth = isDesktop ? 250 : isTablet ? 220 : 185;
+    const slideStep = cardWidth + 12;
+
+    const handleSlideLeft = () => {
+      const nextOffset = Math.max(0, scrollOffset - slideStep * (isDesktop ? 2 : 1));
+      scrollRef.current?.scrollTo({ x: nextOffset, animated: true });
+      setScrollOffset(nextOffset);
+    };
+
+    const handleSlideRight = () => {
+      const nextOffset = scrollOffset + slideStep * (isDesktop ? 2 : 1);
+      scrollRef.current?.scrollTo({ x: nextOffset, animated: true });
+      setScrollOffset(nextOffset);
+    };
+
+    return (
+      <View style={styles.catGallerySection}>
+        {/* Category Slider Header */}
+        <View style={styles.catGalleryHeader}>
+          <View style={styles.catGalleryHeaderLeft}>
+            <View style={styles.catGalleryBadgeIcon}>
+              <Text style={styles.catGalleryEmoji}>{getCategoryEmoji(category)}</Text>
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={styles.catGalleryTitleRow}>
+                <Text style={styles.catGalleryTitle}>{category}</Text>
+                <View style={styles.catGalleryCountPill}>
+                  <Text style={styles.catGalleryCountText}>{items.length} items</Text>
+                </View>
+              </View>
+              <Text style={styles.catGallerySubtitle} numberOfLines={1}>
+                {getCategoryUrduOrTagline(category)}
+              </Text>
+            </View>
+          </View>
+
+          {/* Right side: Slider Navigation Arrows + View All */}
+          <View style={styles.sliderControlsRow}>
+            <View style={styles.sliderArrowGroup}>
+              <TouchableOpacity
+                style={[styles.sliderArrowBtn, scrollOffset <= 0 && styles.sliderArrowBtnDisabled]}
+                onPress={handleSlideLeft}
+                disabled={scrollOffset <= 0}
+                activeOpacity={0.7}
+                accessibilityLabel={`Previous ${category} dishes`}
+              >
+                <Ionicons
+                  name="chevron-back"
+                  size={15}
+                  color={scrollOffset <= 0 ? '#C4B5A5' : '#52171B'}
+                />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.sliderArrowBtn}
+                onPress={handleSlideRight}
+                activeOpacity={0.7}
+                accessibilityLabel={`Next ${category} dishes`}
+              >
+                <Ionicons name="chevron-forward" size={15} color="#52171B" />
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              style={styles.catGalleryViewAllBtn}
+              onPress={() => onViewAll(category)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.catGalleryViewAllText}>View All</Text>
+              <Ionicons name="arrow-forward" size={13} color="#52171B" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Horizontal Slider Track */}
+        <ScrollView
+          ref={scrollRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.catGalleryScrollContent}
+          onScroll={(e) => setScrollOffset(e.nativeEvent.contentOffset.x)}
+          scrollEventThrottle={16}
+        >
+          {items.map(renderCard)}
+
+          {/* Explore All Category Card */}
+          <TouchableOpacity
+            style={styles.catGalleryEndCard}
+            onPress={() => onViewAll(category)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.catGalleryEndIconCircle}>
+              <Ionicons name="arrow-forward" size={20} color="#52171B" />
+            </View>
+            <Text style={styles.catGalleryEndTitle}>Explore All</Text>
+            <Text style={styles.catGalleryEndCat} numberOfLines={1}>
+              {category}
+            </Text>
+            <Text style={styles.catGalleryEndCount}>
+              {items.length} dishes
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top']}>
       <StatusBar barStyle="light-content" />
@@ -1538,32 +1909,99 @@ export default function CustomerMenuScreen() {
               </View>
             )}
 
-            {/* Center Dishes Grid */}
+            {/* Center Dishes Feed & Category Galleries */}
             <View style={styles.dishesFeedContainer}>
               <View style={styles.dishesHeaderRow}>
-                <View>
+                <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={styles.categoryHeading}>
-                    {activeCat} {activeCat === 'All' ? 'Menu' : ''} {activeRegion !== 'ALL' ? `• ${activeRegion}` : ''}
+                    {activeCat === 'All' ? 'Front Page Galleries' : activeCat} {activeRegion !== 'ALL' ? `• ${activeRegion}` : ''}
                   </Text>
                   <Text style={styles.categorySubheading}>
-                    {filteredItems.length} authentic dishes prepared to perfection
+                    {activeCat === 'All' && viewMode === 'gallery' && !searchQuery
+                      ? `${groupedCategoryGalleries.length} Signature Categories • Curated dishes category-wise`
+                      : `${filteredItems.length} authentic dishes prepared to perfection`}
                   </Text>
                 </View>
-                {(activeCat !== 'All' || activeRegion !== 'ALL' || searchQuery || dietaryFilter !== 'all') && (
-                  <TouchableOpacity
-                    style={styles.activeFilterResetBtn}
-                    onPress={() => {
-                      setActiveCat('All');
-                      setActiveRegion('ALL');
-                      setSearchQuery('');
-                      setDietaryFilter('all');
-                    }}
-                  >
-                    <Ionicons name="refresh" size={12} color="#895B1E" style={{ marginRight: 4 }} />
-                    <Text style={styles.activeFilterResetText}>Reset</Text>
-                  </TouchableOpacity>
-                )}
+
+                {/* Right controls: View Mode toggle (Gallery vs Grid) & Reset */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  {activeCat === 'All' && !searchQuery && (
+                    <View style={styles.viewModeToggleWrap}>
+                      <TouchableOpacity
+                        style={[styles.viewModeToggleBtn, viewMode === 'gallery' && styles.viewModeToggleBtnActive]}
+                        onPress={() => setViewMode('gallery')}
+                        activeOpacity={0.8}
+                        accessibilityLabel="Category Gallery View"
+                      >
+                        <Ionicons
+                          name="images-outline"
+                          size={13}
+                          color={viewMode === 'gallery' ? '#52171B' : '#777'}
+                        />
+                        <Text style={[styles.viewModeToggleText, viewMode === 'gallery' && styles.viewModeToggleTextActive]}>
+                          Gallery
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.viewModeToggleBtn, viewMode === 'grid' && styles.viewModeToggleBtnActive]}
+                        onPress={() => setViewMode('grid')}
+                        activeOpacity={0.8}
+                        accessibilityLabel="Grid View"
+                      >
+                        <Ionicons
+                          name="grid-outline"
+                          size={13}
+                          color={viewMode === 'grid' ? '#52171B' : '#777'}
+                        />
+                        <Text style={[styles.viewModeToggleText, viewMode === 'grid' && styles.viewModeToggleTextActive]}>
+                          Grid
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {(activeCat !== 'All' || activeRegion !== 'ALL' || searchQuery || dietaryFilter !== 'all') && (
+                    <TouchableOpacity
+                      style={styles.activeFilterResetBtn}
+                      onPress={() => {
+                        setActiveCat('All');
+                        setActiveRegion('ALL');
+                        setSearchQuery('');
+                        setDietaryFilter('all');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="refresh" size={12} color="#895B1E" style={{ marginRight: 4 }} />
+                      <Text style={styles.activeFilterResetText}>Reset All</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
+
+              {/* Focused Category Hero Banner (shown when a specific category is active) */}
+              {activeCat !== 'All' && (
+                <View style={styles.focusedCatBanner}>
+                  <TouchableOpacity
+                    style={styles.backToGalleriesBtn}
+                    onPress={() => setActiveCat('All')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="arrow-back" size={15} color="#52171B" />
+                    <Text style={styles.backToGalleriesText}>All Galleries</Text>
+                  </TouchableOpacity>
+
+                  <View style={styles.focusedCatBannerInfo}>
+                    <View style={styles.focusedCatBannerIconBox}>
+                      <Text style={styles.focusedCatBannerEmoji}>{getCategoryEmoji(activeCat)}</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.focusedCatBannerTitle}>{activeCat}</Text>
+                      <Text style={styles.focusedCatBannerSubtitle}>{getCategoryUrduOrTagline(activeCat)}</Text>
+                    </View>
+                  </View>
+                </View>
+              )}
 
               {filteredItems.length === 0 ? (
                 <View style={styles.emptyStateBox}>
@@ -1583,6 +2021,19 @@ export default function CustomerMenuScreen() {
                   >
                     <Text style={styles.clearSearchBtnText}>Reset All Filters</Text>
                   </TouchableOpacity>
+                </View>
+              ) : activeCat === 'All' && !searchQuery.trim() && viewMode === 'gallery' ? (
+                /* Category-Wise Items Sliders on Front Page */
+                <View style={styles.catGalleriesContainer}>
+                  {groupedCategoryGalleries.map(({ category, items }) => (
+                    <CategorySlider
+                      key={category}
+                      category={category}
+                      items={items}
+                      onViewAll={(cat) => setActiveCat(cat)}
+                      renderCard={renderGalleryItemCard}
+                    />
+                  ))}
                 </View>
               ) : (
                 <View style={styles.dishesGrid}>
@@ -3016,6 +3467,389 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
+  },
+
+  // Category Gallery Container & Section
+  catGalleriesContainer: {
+    gap: 20,
+    paddingBottom: 24,
+  },
+  catGallerySection: {
+    backgroundColor: 'rgba(255, 255, 255, 0.82)',
+    borderRadius: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 12,
+    borderWidth: 1.5,
+    borderColor: 'rgba(213, 169, 67, 0.25)',
+    ...Platform.select({
+      web: {
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 6px 20px rgba(0, 0, 0, 0.03)',
+      } as any,
+    }),
+  },
+  catGalleryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 14,
+    paddingHorizontal: 4,
+    gap: 10,
+  },
+  catGalleryHeaderLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  catGalleryBadgeIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1.5,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  catGalleryEmoji: {
+    fontSize: 22,
+  },
+  catGalleryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  catGalleryTitle: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#24050A',
+    letterSpacing: 0.2,
+  },
+  catGalleryCountPill: {
+    backgroundColor: '#F3E8DF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  catGalleryCountText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  catGallerySubtitle: {
+    fontSize: 11,
+    color: '#895B1E',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  catGalleryViewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 5,
+  },
+  catGalleryViewAllText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  sliderControlsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  sliderArrowGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  sliderArrowBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1.2,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sliderArrowBtnDisabled: {
+    opacity: 0.35,
+    borderColor: '#D8CFC3',
+    backgroundColor: '#F7F4EF',
+  },
+  catGalleryScrollContent: {
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+    gap: 12,
+  },
+  catGalleryEndCard: {
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#D5A943',
+    backgroundColor: 'rgba(255, 248, 235, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 14,
+    minHeight: 228,
+  },
+  catGalleryEndIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FFF',
+    borderWidth: 1.5,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  catGalleryEndTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  catGalleryEndCat: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#895B1E',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  catGalleryEndCount: {
+    fontSize: 10,
+    color: '#999',
+    marginTop: 4,
+  },
+
+  // Gallery Dish Card (Horizontal Scrolling)
+  galleryDishCard: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 16,
+    padding: 10,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 228,
+    borderWidth: 1.5,
+    borderColor: 'rgba(235, 225, 215, 0.9)',
+    position: 'relative',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        boxShadow: '0 4px 14px rgba(0, 0, 0, 0.04)',
+        transition: 'all 0.18s ease-in-out',
+      } as any,
+    }),
+  },
+  galleryDishCardInCart: {
+    borderColor: 'rgba(82, 23, 27, 0.65)',
+    backgroundColor: '#FFF7F7',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 6px 18px rgba(82, 23, 27, 0.12)',
+        transform: 'translateY(-2px)',
+      } as any,
+    }),
+  },
+  galleryCardImageWrapper: {
+    width: '100%',
+    height: 116,
+    borderRadius: 12,
+    overflow: 'hidden',
+    position: 'relative',
+    marginBottom: 8,
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(226, 232, 240, 0.8)',
+  },
+  galleryRegionChip: {
+    position: 'absolute',
+    top: 5,
+    left: 5,
+    backgroundColor: 'rgba(58, 15, 18, 0.88)',
+    borderRadius: 6,
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    zIndex: 4,
+  },
+  galleryDishTitleWrapper: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  galleryDishTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1C0408',
+    textAlign: 'center',
+  },
+  galleryDishUrdu: {
+    fontSize: 11,
+    color: '#895B1E',
+    fontWeight: '600',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  galleryDishDesc: {
+    fontSize: 10,
+    color: '#777',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  galleryCardBottomRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(0, 0, 0, 0.05)',
+  },
+  galleryPricePill: {
+    backgroundColor: 'rgba(213, 169, 67, 0.12)',
+    paddingHorizontal: 7,
+    paddingVertical: 3.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+  },
+  galleryPricePillActive: {
+    backgroundColor: '#52171B',
+    borderColor: '#52171B',
+  },
+  galleryPriceText: {
+    color: '#52171B',
+    fontSize: 11.5,
+    fontWeight: '900',
+  },
+  galleryPriceTextActive: {
+    color: '#FFFFFF',
+  },
+  galleryQuickAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3D179',
+    paddingHorizontal: 9,
+    paddingVertical: 4.5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    gap: 2,
+  },
+  galleryQuickAddText: {
+    color: '#52171B',
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+
+  // Focused Category Hero Banner
+  focusedCatBanner: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 16,
+    borderWidth: 1.5,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  backToGalleriesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    gap: 5,
+  },
+  backToGalleriesText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  focusedCatBannerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  focusedCatBannerIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: '#FFF8E7',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  focusedCatBannerEmoji: {
+    fontSize: 20,
+  },
+  focusedCatBannerTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#24050A',
+  },
+  focusedCatBannerSubtitle: {
+    fontSize: 11,
+    color: '#895B1E',
+    fontWeight: '600',
+  },
+
+  // View Mode Switcher
+  viewModeToggleWrap: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(240, 235, 225, 0.9)',
+    borderRadius: 10,
+    padding: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.3)',
+  },
+  viewModeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    gap: 4,
+  },
+  viewModeToggleBtnActive: {
+    backgroundColor: '#FFF',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.08)',
+      } as any,
+    }),
+  },
+  viewModeToggleText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#777',
+  },
+  viewModeToggleTextActive: {
+    color: '#52171B',
+    fontWeight: '800',
   },
 
   // POS Terminal Styled Dish Card
