@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { Platform, View } from 'react-native';
+import { Platform, View, LogBox } from 'react-native';
 import * as Font from 'expo-font';
 import { Ionicons } from '@expo/vector-icons';
 import { initSyncService } from '../services/syncService';
@@ -9,9 +9,17 @@ import { initCallListener } from '../services/headlessCallService';
 import StockAlarmHost from '../components/StockAlarmHost';
 import IncomingCallHost from '../components/IncomingCallHost';
 
+// Ignore benign web font loading timeouts in Expo LogBox
+LogBox.ignoreLogs([
+  'Fetching the font family "ionicons" timed out',
+  'font family "ionicons"',
+  'fontfaceobserver',
+  'ERR_DOWNLOAD',
+]);
+
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Global Web Error Guard against external browser extension crashes & fontfaceobserver timeouts
+// Global Web Error Guard against external browser extension crashes, font timeouts & network stalls
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
   window.addEventListener(
     'error',
@@ -22,7 +30,11 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
       if (
         filename.includes('chrome-extension://') ||
         stack.includes('chrome-extension://') ||
-        message.includes('M_ID')
+        message.includes('M_ID') ||
+        message.includes('font family') ||
+        message.includes('timed out after') ||
+        message.includes('ionicons') ||
+        message.includes('ERR_DOWNLOAD')
       ) {
         event.preventDefault();
         event.stopImmediatePropagation?.();
@@ -33,23 +45,30 @@ if (Platform.OS === 'web' && typeof window !== 'undefined') {
   );
 
   window.addEventListener('unhandledrejection', (event) => {
-    const reasonStr = String(event?.reason?.stack || event?.reason || '');
+    const reasonStr = String(event?.reason?.message || event?.reason?.stack || event?.reason || '');
     if (
       reasonStr.includes('timeout exceeded') ||
       reasonStr.includes('fontfaceobserver') ||
+      reasonStr.includes('font family') ||
+      reasonStr.includes('timed out after') ||
+      reasonStr.includes('ionicons') ||
+      reasonStr.includes('ERR_DOWNLOAD') ||
       reasonStr.includes('chrome-extension://') ||
       reasonStr.includes('M_ID')
     ) {
       event.preventDefault();
+      event.stopImmediatePropagation?.();
     }
   });
 }
 
 export default function RootLayout() {
   useEffect(() => {
-    // Safely warm-up vector icons on web
+    // Safely warm-up vector icons on web without throwing unhandled rejections
     if (Platform.OS === 'web') {
-      Font.loadAsync(Ionicons.font).catch(() => {});
+      try {
+        Font.loadAsync(Ionicons.font).catch(() => {});
+      } catch (_) {}
     }
 
     // Hide splash screen immediately once layout mounts
@@ -73,6 +92,13 @@ export default function RootLayout() {
     <>
       {Platform.OS === 'web' && (
         <style>{`
+          /* Non-blocking Font Face Swap for Vector Icons */
+          @font-face {
+            font-family: 'ionicons';
+            src: local('Ionicons'), local('ionicons');
+            font-display: swap;
+          }
+
           /* ========================================================
              SULTAN RESTAURANT UNIVERSAL ANIMATION & HOVER ENGINE
              ======================================================== */
