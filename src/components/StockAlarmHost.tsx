@@ -153,6 +153,7 @@ export default function StockAlarmHost() {
   const isMobile = width < 768;
   const bottomOffset = (isMobile ? 76 : 24) + insets.bottom;
   const isPosScreen = Boolean(pathname && (pathname === '/admin/pos' || pathname.endsWith('/pos')));
+  const isCustomerMenu = Boolean(pathname && (pathname === '/menu' || pathname.startsWith('/menu')));
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
@@ -309,8 +310,8 @@ export default function StockAlarmHost() {
     return () => loop.stop();
   }, [topSeverity, pulse]);
 
-  // Don't render bell on POS or unauthorized roles, but if modal is open, keep rendering
-  if (!enabled || isPosScreen) return null;
+  // Don't render bell on POS, customer menu, or unauthorized roles
+  if (!enabled || isPosScreen || isCustomerMenu) return null;
   if (activeAlerts.length === 0 && snoozedAlerts.length === 0 && !panelOpen) return null;
 
   const snoozeAll = () => {

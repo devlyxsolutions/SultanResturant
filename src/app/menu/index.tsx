@@ -1475,29 +1475,39 @@ export default function CustomerMenuScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* ========================================================
-              1. REGAL SULTAN HERO & COVER HEADER WITH ISLAMIC PATTERN
+              1. REGAL SULTAN COMPACT HERO HEADER WITH TABLE STATUS
              ======================================================== */}
-          <IslamicHeroBackground style={styles.heroBanner}>
+          <IslamicHeroBackground style={[styles.heroBanner, { paddingTop: 10, paddingBottom: 12 }]}>
             <View style={styles.heroOverlayContent}>
-              <View style={[styles.heroTopActions, isMobile && { justifyContent: 'flex-end', marginBottom: 10 }]}>
-                {!isMobile && (
-                  <TouchableOpacity
-                    style={styles.heroNavBtn}
-                    onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-                  >
-                    <Ionicons name="arrow-back" size={18} color="#FFF" />
-                  </TouchableOpacity>
-                )}
+              <View style={styles.heroTopActions}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  {!isMobile && (
+                    <TouchableOpacity
+                      style={styles.heroNavBtn}
+                      onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+                    >
+                      <Ionicons name="arrow-back" size={18} color="#FFF" />
+                    </TouchableOpacity>
+                  )}
+                  {/* Sultan Mini Seal & Brand Name */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <SultanLogo size="sm" width={38} height={34} />
+                    <View>
+                      <Text style={styles.heroMainTitleMini}>SULTAN RESTAURANT</Text>
+                      <Text style={styles.heroSubtitleUrduMini}>سلطان ریستوراں • شاہی دسترخوان</Text>
+                    </View>
+                  </View>
+                </View>
 
-                <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                  {/* Mute / Unmute Sound Toggle Button */}
+                {/* Right Top Actions: Sound Chime & My Orders */}
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
                   <TouchableOpacity
                     style={styles.heroSoundPill}
                     onPress={() => setSoundMuted(!soundMuted)}
                   >
                     <Ionicons
                       name={soundMuted ? 'volume-mute' : 'volume-high'}
-                      size={14}
+                      size={13}
                       color={soundMuted ? '#EF4444' : '#D5A943'}
                     />
                     <Text style={[styles.heroSoundPillText, soundMuted && { color: '#EF4444' }]}>
@@ -1510,140 +1520,58 @@ export default function CustomerMenuScreen() {
                       style={styles.heroOrdersPill}
                       onPress={() => setHistoryModalVisible(true)}
                     >
-                      <Ionicons name="receipt-outline" size={14} color="#D5A943" />
-                      <Text style={styles.heroOrdersPillText}>My Orders ({orderHistory.length})</Text>
+                      <Ionicons name="receipt-outline" size={13} color="#D5A943" />
+                      <Text style={styles.heroOrdersPillText}>Orders ({orderHistory.length})</Text>
                     </TouchableOpacity>
                   )}
                 </View>
               </View>
 
-              {/* Royal Crest & Branding: Logo on Left, Details on Right (Mobile Optimized) */}
-              <View style={[styles.heroBrandingRow, isMobile && styles.heroBrandingRowMobile]}>
-                {/* Left: Prominent & Grand Logo in Royal Glowing Halo */}
-                <View style={styles.heroLogoCol}>
-                  <View style={[styles.crestHaloOuter, isMobile && styles.crestHaloOuterMobile]}>
-                    <View style={[styles.crestHalo, isMobile && styles.crestHaloMobile]}>
-                      <SultanLogo
-                        size={isMobile ? 'sm' : 'lg'}
-                        width={isMobile ? 64 : 96}
-                        height={isMobile ? 58 : 88}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                {/* Right: Restaurant Details */}
-                <View style={styles.heroDetailsCol}>
-                  {/* Royal Urdu Calligraphy Crown */}
-                  <View style={styles.heroUrduCrownRow}>
-                    <Text style={[styles.heroUrduStar, isMobile && { fontSize: 10 }]}>✦</Text>
-                    <Text style={[styles.heroSubtitleUrdu, isMobile && { fontSize: 13 }]}>سلطان ریستوراں</Text>
-                    <Text style={[styles.heroUrduStar, isMobile && { fontSize: 10 }]}>✦</Text>
-                  </View>
-
-                  <Text
-                    style={[styles.heroMainTitle, isMobile && styles.heroMainTitleMobile]}
-                    numberOfLines={1}
+              {/* Compact Unified Dining & Table Floating Bar */}
+              <View style={styles.compactDiningBar}>
+                {orderMode === 'dine_in' ? (
+                  <TouchableOpacity
+                    style={styles.compactTablePill}
+                    onPress={() => setTableModalVisible(true)}
+                    activeOpacity={0.8}
                   >
-                    SULTAN RESTAURANT
-                  </Text>
-                  <Text style={[styles.heroSubDesc, isMobile && styles.heroSubDescMobile]} numberOfLines={1}>
-                    مغلئی شاہی ذائقے اور باربی کیو • Royal Mughlai
-                  </Text>
-
-                  {/* Highlights Row */}
-                  <View style={[styles.heroHighlightsRow, isMobile && styles.heroHighlightsRowMobile]}>
-                    <View style={[styles.highlightBadge, isMobile && styles.highlightBadgeMobile]}>
-                      <Ionicons name="star" size={isMobile ? 10 : 11} color="#D5A943" />
-                      <Text style={[styles.highlightText, isMobile && styles.highlightTextMobile]}>4.9 (1.8k+)</Text>
+                    <View style={styles.compactTableIconBox}>
+                      <Ionicons name="qr-code" size={14} color="#D5A943" />
                     </View>
-                    <View style={[styles.highlightBadge, isMobile && styles.highlightBadgeMobile]}>
-                      <Ionicons name="shield-checkmark" size={isMobile ? 10 : 11} color="#4ADE80" />
-                      <Text style={[styles.highlightText, isMobile && styles.highlightTextMobile]}>100% Halal</Text>
-                    </View>
-                    <View style={[styles.highlightBadge, isMobile && styles.highlightBadgeMobile]}>
-                      <Ionicons name="flame" size={isMobile ? 10 : 11} color="#F97316" />
-                      <Text style={[styles.highlightText, isMobile && styles.highlightTextMobile]}>Charcoal BBQ</Text>
-                    </View>
+                    <Text style={styles.compactTablePillText} numberOfLines={1}>
+                      {selectedTable?.floor || 'Ground Floor'} • {selectedTable?.name || 'Table T-01'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={12} color="#D5A943" style={{ marginLeft: 2 }} />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.compactTablePillDelivery}>
+                    <Ionicons name="bicycle" size={14} color="#34D399" />
+                    <Text style={styles.compactDeliveryText}>Sultan Express (35-45m)</Text>
                   </View>
+                )}
+
+                {/* Mode Switcher Buttons */}
+                <View style={styles.compactModeToggle}>
+                  <TouchableOpacity
+                    style={[styles.compactModeBtn, orderMode === 'dine_in' && styles.compactModeBtnActive]}
+                    onPress={() => setOrderMode('dine_in')}
+                  >
+                    <Text style={[styles.compactModeBtnText, orderMode === 'dine_in' && styles.compactModeBtnTextActive]}>
+                      Dine-In
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.compactModeBtn, orderMode === 'delivery' && styles.compactModeBtnActive]}
+                    onPress={() => setOrderMode('delivery')}
+                  >
+                    <Text style={[styles.compactModeBtnText, orderMode === 'delivery' && styles.compactModeBtnTextActive]}>
+                      Delivery
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
           </IslamicHeroBackground>
-
-          {/* ========================================================
-              2. DINE-IN TABLE / DELIVERY MODE SELECTOR CARD
-             ======================================================== */}
-          <View style={styles.modeControlContainer}>
-            <View style={styles.modeToggleBar}>
-              <TouchableOpacity
-                style={[styles.modeToggleBtn, orderMode === 'dine_in' && styles.modeToggleBtnActive]}
-                onPress={() => setOrderMode('dine_in')}
-              >
-                <Ionicons
-                  name="restaurant"
-                  size={16}
-                  color={orderMode === 'dine_in' ? '#D5A943' : '#888'}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[styles.modeToggleText, orderMode === 'dine_in' && styles.modeToggleTextActive]}>
-                  Table QR Dine-In
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.modeToggleBtn, orderMode === 'delivery' && styles.modeToggleBtnActive]}
-                onPress={() => setOrderMode('delivery')}
-              >
-                <Ionicons
-                  name="bicycle"
-                  size={16}
-                  color={orderMode === 'delivery' ? '#D5A943' : '#888'}
-                  style={{ marginRight: 6 }}
-                />
-                <Text style={[styles.modeToggleText, orderMode === 'delivery' && styles.modeToggleTextActive]}>
-                  Home Delivery
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Mode Details Strip */}
-            {orderMode === 'dine_in' ? (
-              <View style={styles.tableBannerRow}>
-                <View style={styles.tableIconWrapper}>
-                  <Ionicons name="qr-code" size={18} color="#D5A943" />
-                </View>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={styles.tableTitleText}>
-                    {selectedTable?.floor || 'Ground Floor'} • {selectedTable?.name || 'Table Selected'}
-                  </Text>
-                  <Text style={styles.tableSubText}>
-                    Order sent directly to Royal Kitchen KDS at your table
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  style={styles.changeTableBtn}
-                  onPress={() => setTableModalVisible(true)}
-                >
-                  <Text style={styles.changeTableBtnText}>Change Table</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <View style={styles.tableBannerRow}>
-                <View style={[styles.tableIconWrapper, { backgroundColor: '#064E3B' }]}>
-                  <Ionicons name="flash" size={18} color="#34D399" />
-                </View>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={[styles.tableTitleText, { color: '#065F46' }]}>
-                    Sultan Express Delivery (35-45 mins)
-                  </Text>
-                  <Text style={styles.tableSubText}>
-                    Free delivery on orders above Rs. 2,500 (Standard: Rs. 150)
-                  </Text>
-                </View>
-              </View>
-            )}
-          </View>
 
           {/* ========================================================
               3. SEARCH & DIETARY FILTER PILLS
@@ -2968,6 +2896,83 @@ const styles = StyleSheet.create({
     height: 76,
     borderRadius: 38,
     borderWidth: 1.8,
+  },
+  heroMainTitleMini: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    letterSpacing: 0.8,
+  },
+  heroSubtitleUrduMini: {
+    fontSize: 11,
+    color: '#D5A943',
+    fontWeight: '700',
+  },
+  compactDiningBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
+    marginTop: 8,
+    gap: 10,
+  },
+  compactTablePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    flex: 1,
+  },
+  compactTableIconBox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: 'rgba(213, 169, 67, 0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  compactTablePillText: {
+    color: '#FDE68A',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  compactTablePillDelivery: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  compactDeliveryText: {
+    color: '#34D399',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  compactModeToggle: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    borderRadius: 8,
+    padding: 2,
+  },
+  compactModeBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+  },
+  compactModeBtnActive: {
+    backgroundColor: '#D5A943',
+  },
+  compactModeBtnText: {
+    color: '#DDD',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  compactModeBtnTextActive: {
+    color: '#1C0408',
+    fontWeight: '900',
   },
   heroUrduCrownRow: {
     flexDirection: 'row',
