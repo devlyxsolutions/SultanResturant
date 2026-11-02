@@ -47,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
             assignedZones: meta?.assignedZones,
           },
           isAuthenticated: true,
+          hasHydrated: true,
         }),
       updateUserZones: (assignedZone, assignedZones) =>
         set((state) => ({

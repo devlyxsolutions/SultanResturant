@@ -41,25 +41,27 @@ export function useRoleGuard(allowed: Exclude<Role, null>[]) {
   }, [isAuthenticated, user?.role, user?.customRoleId, allowed, allRoles]);
 
   useEffect(() => {
-    // Safety guard: ensure store is never stuck in unhydrated state on web
+    // Safety guard: ensure store is never stuck in unhydrated state on web or native
     const timer = setTimeout(() => {
       if (!useAuthStore.getState().hasHydrated) {
         useAuthStore.getState().setHasHydrated(true);
       }
-    }, 400);
+    }, 50);
     return () => clearTimeout(timer);
   }, []);
 
+  const isHydratedOrAuthenticated = hasHydrated || (isAuthenticated && !!user?.role);
+
   useEffect(() => {
-    if (hasHydrated && !isAllowed) {
+    if (isHydratedOrAuthenticated && !isAllowed) {
       router.replace('/login');
     }
-  }, [hasHydrated, isAllowed, router]);
+  }, [isHydratedOrAuthenticated, isAllowed, router]);
 
   const logout = () => {
     logoutStore();
     router.replace('/');
   };
 
-  return { ready: hasHydrated && isAllowed, user, logout };
+  return { ready: isHydratedOrAuthenticated && isAllowed, user, logout };
 }

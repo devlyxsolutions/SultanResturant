@@ -89,7 +89,7 @@ export default function WelcomeScreen() {
     setErrorMessage('');
     Animated.timing(splitAnim, {
       toValue: 1,
-      duration: 520,
+      duration: 220,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
       useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
@@ -101,7 +101,7 @@ export default function WelcomeScreen() {
     setShowWelcomeActions(true);
     Animated.timing(splitAnim, {
       toValue: 0,
-      duration: 460,
+      duration: 200,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
       useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
@@ -113,17 +113,14 @@ export default function WelcomeScreen() {
   // Open login if routed with ?login=true dynamically after mount
   useEffect(() => {
     if (shouldAutoOpenLogin) {
-      const timer = setTimeout(() => {
-        openLogin();
-      }, 0);
-      return () => clearTimeout(timer);
+      openLogin();
     }
   }, [shouldAutoOpenLogin, openLogin]);
 
   // -------------------------------------------------------------
   // Splash & Transition States
   // -------------------------------------------------------------
-  const shouldSkipSplash = shouldAutoOpenLogin;
+  const shouldSkipSplash = shouldAutoOpenLogin || hasSeenSplashSession || (hasHydrated && !!user?.role);
 
   const [showSplash, setShowSplash] = useState(() => !shouldSkipSplash);
   const [splashFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 1));
@@ -135,7 +132,7 @@ export default function WelcomeScreen() {
     hasSeenSplashSession = true;
     Animated.timing(splashFadeAnim, {
       toValue: 0,
-      duration: 250,
+      duration: 150,
       easing: Easing.out(Easing.ease),
       useNativeDriver: Platform.OS !== 'web',
     }).start(() => {
@@ -143,13 +140,13 @@ export default function WelcomeScreen() {
       Animated.parallel([
         Animated.timing(welcomeFadeAnim, {
           toValue: 1,
-          duration: 250,
+          duration: 180,
           useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.spring(welcomeSlideAnim, {
           toValue: 0,
           friction: 8,
-          tension: 50,
+          tension: 60,
           useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
@@ -158,19 +155,20 @@ export default function WelcomeScreen() {
 
   useEffect(() => {
     if (shouldSkipSplash) {
+      hasSeenSplashSession = true;
       return;
     }
 
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 1000,
+      duration: 320,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start();
 
     const tFinish = setTimeout(() => {
       finishSplash();
-    }, 1150);
+    }, 380);
 
     return () => {
       clearTimeout(tFinish);

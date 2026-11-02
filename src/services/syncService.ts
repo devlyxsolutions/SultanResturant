@@ -268,24 +268,21 @@ async function fetchInitialFirebaseState() {
     console.warn('[SyncService] Initial REST fetch error:', e);
   }
 
-  // 2. Parallel / secondary check against Cloud Firestore
-  const firestoreDb = getFirestoreDb();
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (
-          data?.state &&
-          (!loadedFromRest || (data.timestamp && data.timestamp > lastProcessedRemoteTimestamp))
-        ) {
-          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-          loadedFromRest = true;
+  // 2. Fallback check against Cloud Firestore only if REST fetch did not succeed
+  if (!loadedFromRest) {
+    const firestoreDb = getFirestoreDb();
+    if (firestoreDb) {
+      try {
+        const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data?.state) {
+            applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+            loadedFromRest = true;
+          }
         }
-      }
-    } catch (e) {
-      if (!loadedFromRest) {
+      } catch (e) {
         console.warn('[SyncService] Initial Firestore fetch error:', e);
       }
     }

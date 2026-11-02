@@ -3,7 +3,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
 import { Platform, View, LogBox } from 'react-native';
 import * as Font from 'expo-font';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { initSyncService } from '../services/syncService';
 import { initCallListener } from '../services/headlessCallService';
 import StockAlarmHost from '../components/StockAlarmHost';
@@ -84,7 +84,10 @@ export default function RootLayout() {
             (document as any).fonts?.add(loaded);
           }).catch(() => {});
         }
-        Font.loadAsync(Ionicons.font).catch(() => {});
+        Font.loadAsync({
+          ...Ionicons.font,
+          ...MaterialCommunityIcons.font,
+        }).catch(() => {});
       } catch (_) {}
     }
 
@@ -94,7 +97,7 @@ export default function RootLayout() {
     // Defer sync and background services slightly so first UI frame paints instantaneously
     const syncTimer = setTimeout(() => {
       initSyncService();
-    }, 30);
+    }, 120);
 
     // Initialize native Android incoming call detection listener
     const cleanupCallListener = initCallListener();
