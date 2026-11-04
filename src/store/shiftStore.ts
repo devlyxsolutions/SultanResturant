@@ -187,6 +187,7 @@ interface ShiftState {
   reopenShift: (shiftId: string, reopenedBy: string) => void;
   setActiveShiftId: (shiftId: string | null) => void;
   getActiveShift: () => ShiftRecord | null;
+  syncFromServer: (remote: { shifts?: ShiftRecord[]; activeShiftId?: string | null }) => void;
 }
 
 export const useShiftStore = create<ShiftState>()(
@@ -314,7 +315,49 @@ export const useShiftStore = create<ShiftState>()(
         if (state.activeShiftId) {
           return state.shifts.find((s) => s.id === state.activeShiftId && s.status === 'open') || null;
         }
-        return null;
+        return state.shifts.find((s) => s.status === 'open') || null;
+      },
+
+      syncFromServer: (remote) => {
+        if (!remote || typeof remote !== 'object') return;
+        set((state) => {
+          let updatedShifts = state.shifts;
+          let updatedActiveId = state.activeShiftId;
+
+          if (Array.isArray(remote.shifts) && remote.shifts.length > 0) {
+            // Merge remote shifts with local shifts, preserving the most recently updated state
+            const shiftMap = new Map<string, ShiftRecord>();
+            // Add local first
+            state.shifts.forEach((s) => shiftMap.set(s.id, s));
+            // Overwrite / merge with incoming remote shifts
+            remote.shifts.forEach((r) => {
+              const existing = shiftMap.get(r.id);
+              if (!existing) {
+                shiftMap.set(r.id, r);
+              } else {
+                // If remote is closed while local was open, or remote has later closedAt/openedAt, trust remote
+                const remoteTime = r.closedAt || r.openedAt || 0;
+                const localTime = existing.closedAt || existing.openedAt || 0;
+                if (remoteTime >= localTime || (existing.status === 'open' && r.status === 'closed')) {
+                  shiftMap.set(r.id, { ...existing, ...r });
+                }
+              }
+            });
+            updatedShifts = Array.from(shiftMap.values()).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+          }
+
+          if (remote.activeShiftId !== undefined) {
+            updatedActiveId = remote.activeShiftId;
+          } else {
+            const currentOpen = updatedShifts.find((s) => s.status === 'open');
+            updatedActiveId = currentOpen ? currentOpen.id : null;
+          }
+
+          return {
+            shifts: updatedShifts,
+            activeShiftId: updatedActiveId,
+          };
+        });
       },
     }),
     {

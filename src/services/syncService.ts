@@ -5,6 +5,7 @@ import { useRestaurantStore } from '../store/restaurantStore';
 import { useOpsStore, getOpsSyncState } from '../store/opsStore';
 import { useKitchenStore, getKitchenSyncState } from '../store/kitchenStore';
 import { useRoleStore } from '../store/roleStore';
+import { useShiftStore } from '../store/shiftStore';
 import { isFirebaseConfigured, getFirebaseDb, getFirestoreDb, FIREBASE_REST_BASE_URL } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
 import { doc, getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
@@ -103,6 +104,12 @@ function applyRemoteState(state: any) {
   useOpsStore.getState().syncFromServer(state);
   useKitchenStore.getState().syncFromServer(state);
   useRoleStore.getState().syncFromServer?.(state);
+  if (state.shifts || state.activeShiftId !== undefined) {
+    useShiftStore.getState().syncFromServer?.({
+      shifts: state.shifts,
+      activeShiftId: state.activeShiftId,
+    });
+  }
 }
 
 // Listeners for UI state updates
@@ -571,6 +578,7 @@ function broadcastLocalState() {
   const opsState = getOpsSyncState();
   const kitchenState = getKitchenSyncState();
   const roleState = useRoleStore.getState();
+  const shiftState = useShiftStore.getState();
   const now = Math.max(Date.now(), lastProcessedRemoteTimestamp + 1, lastLocalBroadcastTimestamp + 1);
   lastLocalBroadcastTimestamp = now;
   const broadcastSeq = ++currentBroadcastSeq;
@@ -597,6 +605,8 @@ function broadcastLocalState() {
       lastBillPaidAlert: state.lastBillPaidAlert,
       lastFoodReadyAlert: state.lastFoodReadyAlert,
       roles: roleState.roles,
+      shifts: shiftState.shifts,
+      activeShiftId: shiftState.activeShiftId,
       ...opsState,
       ...kitchenState,
     },
@@ -744,6 +754,9 @@ export async function initSyncService() {
 
   // Listen to role and permissions store mutations
   useRoleStore.subscribe(triggerDebouncedBroadcast);
+
+  // Listen to shift & cash drawer store mutations
+  useShiftStore.subscribe(triggerDebouncedBroadcast);
 }
 
 export async function forceSyncNow(): Promise<boolean> {
