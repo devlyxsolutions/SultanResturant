@@ -62,15 +62,15 @@ export interface CustomerOrderHistory {
   tax: number;
   total: number;
   status:
-    | 'PENDING'
-    | 'CONFIRMED'
-    | 'PREPARING'
-    | 'READY'
-    | 'READY_FOR_PICKUP'
-    | 'OUT_FOR_DELIVERY'
-    | 'DELIVERED'
-    | 'SERVED'
-    | 'CANCELLED';
+  | 'PENDING'
+  | 'CONFIRMED'
+  | 'PREPARING'
+  | 'READY'
+  | 'READY_FOR_PICKUP'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'SERVED'
+  | 'CANCELLED';
   createdAt: number;
   riderName?: string;
   riderPhone?: string;
@@ -347,13 +347,13 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
       <View
         {...(Platform.OS === 'web'
           ? ({
-              onMouseEnter: () => {
-                isInteractingRef.current = true;
-              },
-              onMouseLeave: () => {
-                isInteractingRef.current = false;
-              },
-            } as any)
+            onMouseEnter: () => {
+              isInteractingRef.current = true;
+            },
+            onMouseLeave: () => {
+              isInteractingRef.current = false;
+            },
+          } as any)
           : {})}
       >
         <ScrollView
@@ -960,8 +960,8 @@ export default function CustomerMenuScreen() {
         weightKg === 0.25
           ? 'Quarter (0.25 kg)'
           : weightKg === 0.5
-          ? 'Half (0.5 kg)'
-          : `${weightKg} kg`;
+            ? 'Half (0.5 kg)'
+            : `${weightKg} kg`;
     }
 
     const noteSegments = [];
@@ -1066,11 +1066,11 @@ export default function CustomerMenuScreen() {
       tableInfo:
         orderMode === 'dine_in' && selectedTable
           ? {
-              tableId: selectedTable.id,
-              tableName: selectedTable.name,
-              floor: selectedTable.floor || 'Ground Floor',
-              seatingType: 'tables',
-            }
+            tableId: selectedTable.id,
+            tableName: selectedTable.name,
+            floor: selectedTable.floor || 'Ground Floor',
+            seatingType: 'tables',
+          }
           : undefined,
       paymentMethod,
       items: cart.map((c) => ({
@@ -1838,20 +1838,20 @@ export default function CustomerMenuScreen() {
                   activeRegion !== 'ALL' ||
                   searchQuery ||
                   dietaryFilter !== 'all') && (
-                  <TouchableOpacity
-                    style={styles.consoleResetBtn}
-                    onPress={() => {
-                      setActiveCat('All');
-                      setActiveRegion('ALL');
-                      setSearchQuery('');
-                      setDietaryFilter('all');
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="refresh" size={13} color="#D5A943" style={{ marginRight: 4 }} />
-                    <Text style={styles.consoleResetText}>Reset All</Text>
-                  </TouchableOpacity>
-                )}
+                    <TouchableOpacity
+                      style={styles.consoleResetBtn}
+                      onPress={() => {
+                        setActiveCat('All');
+                        setActiveRegion('ALL');
+                        setSearchQuery('');
+                        setDietaryFilter('all');
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="refresh" size={13} color="#D5A943" style={{ marginRight: 4 }} />
+                      <Text style={styles.consoleResetText}>Reset All</Text>
+                    </TouchableOpacity>
+                  )}
               </View>
             </View>
           </View>
@@ -1934,25 +1934,25 @@ export default function CustomerMenuScreen() {
                     activeRegion !== 'ALL' ||
                     searchQuery ||
                     dietaryFilter !== 'all') && (
-                    <TouchableOpacity
-                      style={styles.activeFilterResetBtn}
-                      onPress={() => {
-                        setActiveCat('All');
-                        setActiveRegion('ALL');
-                        setSearchQuery('');
-                        setDietaryFilter('all');
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="refresh"
-                        size={12}
-                        color="#895B1E"
-                        style={{ marginRight: 4 }}
-                      />
-                      <Text style={styles.activeFilterResetText}>Reset All</Text>
-                    </TouchableOpacity>
-                  )}
+                      <TouchableOpacity
+                        style={styles.activeFilterResetBtn}
+                        onPress={() => {
+                          setActiveCat('All');
+                          setActiveRegion('ALL');
+                          setSearchQuery('');
+                          setDietaryFilter('all');
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons
+                          name="refresh"
+                          size={12}
+                          color="#895B1E"
+                          style={{ marginRight: 4 }}
+                        />
+                        <Text style={styles.activeFilterResetText}>Reset All</Text>
+                      </TouchableOpacity>
+                    )}
                 </View>
               </View>
 
@@ -2715,7 +2715,7 @@ export default function CustomerMenuScreen() {
                                         style={[
                                           styles.trackerNodeNum,
                                           (isPassed || isCurrent) &&
-                                            styles.trackerNodeNumActive,
+                                          styles.trackerNodeNumActive,
                                         ]}
                                       >
                                         {s.step}

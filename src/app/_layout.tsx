@@ -11,55 +11,111 @@ import IncomingCallHost from '../components/IncomingCallHost';
 
 // Ignore benign web font loading timeouts in Expo LogBox
 LogBox.ignoreLogs([
-  'Fetching the font family "ionicons" timed out',
+  'Fetching the font family',
   'font family "ionicons"',
+  'font family',
   'fontfaceobserver',
   'ERR_DOWNLOAD',
 ]);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-// Global Web Error Guard against external browser extension crashes, font timeouts & network stalls
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  window.addEventListener(
-    'error',
-    (event) => {
-      const filename = String(event?.filename || '');
-      const message = String(event?.message || '');
-      const stack = String(event?.error?.stack || '');
+// Global Web Font Patch & Error Guard against external browser extension crashes, font timeouts & network stalls
+if (Platform.OS === 'web') {
+  // 1. Intercept document.fonts.load so vector icon queries resolve immediately without hitting 12000ms timeout
+  if (typeof document !== 'undefined' && (document as any).fonts && typeof (document as any).fonts.load === 'function') {
+    const originalFontsLoad = (document as any).fonts.load.bind((document as any).fonts);
+    (document as any).fonts.load = function (font: string, text?: string) {
+      const f = String(font || '').toLowerCase();
+      if (f.includes('ionicons') || f.includes('material') || f.includes('vector')) {
+        return Promise.resolve([]);
+      }
+      return originalFontsLoad(font, text);
+    };
+  }
+
+  // 2. Monkey-patch Font.isLoaded so vector icon components never trigger redundant async downloads
+  const origIsLoaded = Font.isLoaded;
+  (Font as any).isLoaded = (fontFamily: string) => {
+    const f = String(fontFamily || '').toLowerCase();
+    if (f.includes('ionicons') || f.includes('material') || f.includes('vector')) {
+      return true;
+    }
+    return origIsLoaded ? origIsLoaded(fontFamily) : true;
+  };
+
+  // 3. Monkey-patch Font.loadAsync so it never rejects or times out on web
+  const origLoadAsync = Font.loadAsync;
+  (Font as any).loadAsync = async (fontFamilyOrFontMap: any, source?: any) => {
+    try {
+      if (typeof fontFamilyOrFontMap === 'object' && fontFamilyOrFontMap !== null) {
+        const filteredMap: Record<string, any> = {};
+        for (const [key, val] of Object.entries(fontFamilyOrFontMap)) {
+          const lk = key.toLowerCase();
+          if (!lk.includes('ionicons') && !lk.includes('material')) {
+            filteredMap[key] = val;
+          }
+        }
+        if (Object.keys(filteredMap).length === 0) return Promise.resolve();
+        fontFamilyOrFontMap = filteredMap;
+      } else if (typeof fontFamilyOrFontMap === 'string') {
+        const lk = fontFamilyOrFontMap.toLowerCase();
+        if (lk.includes('ionicons') || lk.includes('material')) {
+          return Promise.resolve();
+        }
+      }
+      if (origLoadAsync) {
+        await Promise.race([
+          origLoadAsync(fontFamilyOrFontMap, source),
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]);
+      }
+    } catch (_) {
+      // Swallowed safely
+    }
+  };
+
+  if (typeof window !== 'undefined') {
+    window.addEventListener(
+      'error',
+      (event) => {
+        const filename = String(event?.filename || '');
+        const message = String(event?.message || '');
+        const stack = String(event?.error?.stack || '');
+        if (
+          filename.includes('chrome-extension://') ||
+          stack.includes('chrome-extension://') ||
+          message.includes('M_ID') ||
+          message.includes('font family') ||
+          message.includes('timed out after') ||
+          message.includes('ionicons') ||
+          message.includes('ERR_DOWNLOAD')
+        ) {
+          event.preventDefault();
+          event.stopImmediatePropagation?.();
+          return true;
+        }
+      },
+      true
+    );
+
+    window.addEventListener('unhandledrejection', (event) => {
+      const reasonStr = String(event?.reason?.message || event?.reason?.stack || event?.reason || '');
       if (
-        filename.includes('chrome-extension://') ||
-        stack.includes('chrome-extension://') ||
-        message.includes('M_ID') ||
-        message.includes('font family') ||
-        message.includes('timed out after') ||
-        message.includes('ionicons') ||
-        message.includes('ERR_DOWNLOAD')
+        reasonStr.includes('timeout exceeded') ||
+        reasonStr.includes('fontfaceobserver') ||
+        reasonStr.includes('font family') ||
+        reasonStr.includes('timed out after') ||
+        reasonStr.includes('ionicons') ||
+        reasonStr.includes('ERR_DOWNLOAD') ||
+        reasonStr.includes('chrome-extension://') ||
+        reasonStr.includes('M_ID')
       ) {
         event.preventDefault();
         event.stopImmediatePropagation?.();
-        return true;
       }
-    },
-    true
-  );
-
-  window.addEventListener('unhandledrejection', (event) => {
-    const reasonStr = String(event?.reason?.message || event?.reason?.stack || event?.reason || '');
-    if (
-      reasonStr.includes('timeout exceeded') ||
-      reasonStr.includes('fontfaceobserver') ||
-      reasonStr.includes('font family') ||
-      reasonStr.includes('timed out after') ||
-      reasonStr.includes('ionicons') ||
-      reasonStr.includes('ERR_DOWNLOAD') ||
-      reasonStr.includes('chrome-extension://') ||
-      reasonStr.includes('M_ID')
-    ) {
-      event.preventDefault();
-      event.stopImmediatePropagation?.();
-    }
-  });
+    });
+  }
 }
 
 export default function RootLayout() {
@@ -84,10 +140,6 @@ export default function RootLayout() {
             (document as any).fonts?.add(loaded);
           }).catch(() => {});
         }
-        Font.loadAsync({
-          ...Ionicons.font,
-          ...MaterialCommunityIcons.font,
-        }).catch(() => {});
       } catch (_) {}
     }
 
