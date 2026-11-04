@@ -10,6 +10,9 @@ import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.telephony.TelephonyManager
+import android.media.RingtoneManager
+import android.media.ToneGenerator
+import android.media.AudioManager
 import android.util.Log
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.modules.Module
@@ -125,6 +128,29 @@ class CallDetectorModule : Module() {
          * Launches the system settings screen or dialog to exempt Sultan POS from Android battery optimization.
          */
         @SuppressLint("BatteryLife")
+        AsyncFunction("playNotificationSound") { type: String? ->
+            try {
+                val context = appContext.reactContext ?: appContext.currentActivity ?: return@AsyncFunction false
+                val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                val ringtone = RingtoneManager.getRingtone(context.applicationContext, notificationUri)
+                if (ringtone != null) {
+                    ringtone.play()
+                } else {
+                    val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
+                    toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
+                }
+                true
+            } catch (e: Exception) {
+                try {
+                    val toneGen = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+                    toneGen.startTone(ToneGenerator.TONE_PROP_ACK, 350)
+                    true
+                } catch (e2: Exception) {
+                    false
+                }
+            }
+        }
+
         AsyncFunction("requestBatteryOptimizationExemption") {
             val activity = appContext.currentActivity ?: return@AsyncFunction false
             val context = activity.applicationContext

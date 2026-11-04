@@ -15,6 +15,7 @@ import { useRestaurantStore, FoodReadyAlert, Ticket } from '../store/restaurantS
 import { useAuthStore } from '../store';
 import { getTableFloor } from '../constants/floors';
 import { broadcastImmediately } from '../services/syncService';
+import { playNotificationSound } from '../../modules/call-detector/src';
 
 // Reusable Web Audio synth context
 let sharedAudioCtx: AudioContext | null = null;
@@ -63,6 +64,9 @@ function playFoodReadyChime() {
     } catch (e) {}
   } else {
     Vibration.vibrate([0, 300, 150, 300]);
+    try {
+      playNotificationSound('food_ready');
+    } catch (e) {}
   }
 }
 
@@ -91,6 +95,9 @@ function playBillPaidChime() {
     } catch (e) {}
   } else {
     Vibration.vibrate([0, 200, 100, 200]);
+    try {
+      playNotificationSound('bill_paid');
+    } catch (e) {}
   }
 }
 

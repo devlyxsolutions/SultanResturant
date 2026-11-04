@@ -34,6 +34,9 @@ class MockCallDetector {
   async isServiceRunning(): Promise<boolean> {
     return false;
   }
+  async playNotificationSound(type?: string): Promise<boolean> {
+    return true;
+  }
   async checkPermissions(): Promise<PermissionStatusResult> {
     return {
       hasPhoneState: true,
@@ -143,6 +146,20 @@ export async function checkPermissions(): Promise<PermissionStatusResult> {
 /**
  * Launches the native system intent requesting battery optimization exemption.
  */
+/**
+ * Plays a high-priority system notification chime on Android devices.
+ */
+export async function playNotificationSound(type: string = 'default'): Promise<boolean> {
+  try {
+    if (Platform.OS === 'android' && nativeModule && nativeModule.playNotificationSound) {
+      return await nativeModule.playNotificationSound(type);
+    }
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export async function requestBatteryOptimizationExemption(): Promise<boolean> {
   try {
     return await nativeModule.requestBatteryOptimizationExemption();
