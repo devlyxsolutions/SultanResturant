@@ -24,56 +24,17 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 if (Platform.OS === 'web') {
   // 1. Intercept document.fonts.load so vector icon queries resolve immediately without hitting 12000ms timeout
   if (typeof document !== 'undefined' && (document as any).fonts && typeof (document as any).fonts.load === 'function') {
-    const originalFontsLoad = (document as any).fonts.load.bind((document as any).fonts);
-    (document as any).fonts.load = function (font: string, text?: string) {
-      const f = String(font || '').toLowerCase();
-      if (f.includes('ionicons') || f.includes('material') || f.includes('vector')) {
-        return Promise.resolve([]);
-      }
-      return originalFontsLoad(font, text);
-    };
-  }
-
-  // 2. Monkey-patch Font.isLoaded so vector icon components never trigger redundant async downloads
-  const origIsLoaded = Font.isLoaded;
-  (Font as any).isLoaded = (fontFamily: string) => {
-    const f = String(fontFamily || '').toLowerCase();
-    if (f.includes('ionicons') || f.includes('material') || f.includes('vector')) {
-      return true;
-    }
-    return origIsLoaded ? origIsLoaded(fontFamily) : true;
-  };
-
-  // 3. Monkey-patch Font.loadAsync so it never rejects or times out on web
-  const origLoadAsync = Font.loadAsync;
-  (Font as any).loadAsync = async (fontFamilyOrFontMap: any, source?: any) => {
     try {
-      if (typeof fontFamilyOrFontMap === 'object' && fontFamilyOrFontMap !== null) {
-        const filteredMap: Record<string, any> = {};
-        for (const [key, val] of Object.entries(fontFamilyOrFontMap)) {
-          const lk = key.toLowerCase();
-          if (!lk.includes('ionicons') && !lk.includes('material')) {
-            filteredMap[key] = val;
-          }
+      const originalFontsLoad = (document as any).fonts.load.bind((document as any).fonts);
+      (document as any).fonts.load = function (font: string, text?: string) {
+        const f = String(font || '').toLowerCase();
+        if (f.includes('ionicons') || f.includes('material') || f.includes('vector')) {
+          return Promise.resolve([]);
         }
-        if (Object.keys(filteredMap).length === 0) return Promise.resolve();
-        fontFamilyOrFontMap = filteredMap;
-      } else if (typeof fontFamilyOrFontMap === 'string') {
-        const lk = fontFamilyOrFontMap.toLowerCase();
-        if (lk.includes('ionicons') || lk.includes('material')) {
-          return Promise.resolve();
-        }
-      }
-      if (origLoadAsync) {
-        await Promise.race([
-          origLoadAsync(fontFamilyOrFontMap, source),
-          new Promise((resolve) => setTimeout(resolve, 1500)),
-        ]);
-      }
-    } catch (_) {
-      // Swallowed safely
-    }
-  };
+        return originalFontsLoad(font, text);
+      };
+    } catch (_) {}
+  }
 
   if (typeof window !== 'undefined') {
     window.addEventListener(
