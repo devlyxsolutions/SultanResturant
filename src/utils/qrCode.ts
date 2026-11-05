@@ -6,7 +6,7 @@ import { useRestaurantStore } from '../store/restaurantStore';
  * Local Wi-Fi IPv4 address of the host machine.
  * Accessible by any mobile device on the same restaurant Wi-Fi router / mobile hotspot.
  */
-export const DEFAULT_LAN_IP = '192.168.1.4';
+export const DEFAULT_LAN_IP = '192.168.1.14';
 export const DEFAULT_PORT = '8081';
 export const DEFAULT_STABLE_URL = `http://${DEFAULT_LAN_IP}:${DEFAULT_PORT}`;
 

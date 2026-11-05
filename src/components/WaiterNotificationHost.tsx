@@ -63,7 +63,7 @@ function playFoodReadyChime() {
       });
     } catch (e) {}
   } else {
-    Vibration.vibrate([0, 300, 150, 300]);
+    Vibration.vibrate([0, 350, 150, 350, 150, 450]);
     try {
       playNotificationSound('food_ready');
     } catch (e) {}
@@ -159,8 +159,17 @@ export default function WaiterNotificationHost() {
     assignedZonesList.includes('All Floors') || assignedZonesList.length === 0;
 
   const isTableAuthorized = useCallback(
-    (tableId: string, tableName?: string): boolean => {
-      if (isAllFloors) return true;
+    (tableId: string, tableName?: string, serverName?: string): boolean => {
+      // 1. If current staff or logged in user took this order, ALWAYS notify!
+      const currentUserName = (user?.name || currentStaff?.name || '').trim().toLowerCase();
+      if (serverName && currentUserName && (serverName.trim().toLowerCase() === currentUserName || currentUserName.includes(serverName.trim().toLowerCase()) || serverName.trim().toLowerCase().includes(currentUserName))) {
+        return true;
+      }
+      // 2. Admins, Cashiers, Managers or users assigned to All Floors get all alerts
+      if (isAllFloors || user?.role === 'admin' || user?.role === 'manager' || user?.role === 'cashier') {
+        return true;
+      }
+      // 3. Fallback table zone/floor authorization
       const target = tables.find(
         (t) =>
           t.id === tableId ||
@@ -168,9 +177,13 @@ export default function WaiterNotificationHost() {
       );
       if (!target) return true;
       const floor = getTableFloor(target);
-      return assignedZonesList.some((af) => af.toLowerCase() === floor.toLowerCase());
+      return assignedZonesList.some(
+        (af) =>
+          af.toLowerCase() === floor.toLowerCase() ||
+          af.toLowerCase() === (target.zone || '').toLowerCase()
+      );
     },
-    [isAllFloors, tables, assignedZonesList]
+    [isAllFloors, tables, assignedZonesList, user, currentStaff]
   );
 
   // 1. One-touch Audio & Web Notification Unlocker
@@ -210,7 +223,7 @@ export default function WaiterNotificationHost() {
     if (Math.abs(Date.now() - lastFoodReadyAlert.time) > 15 * 60 * 1000) return;
 
     // Check floor authorization
-    if (!isTableAuthorized(lastFoodReadyAlert.tableId, lastFoodReadyAlert.tableName)) return;
+    if (!isTableAuthorized(lastFoodReadyAlert.tableId, lastFoodReadyAlert.tableName, lastFoodReadyAlert.server)) return;
 
     lastProcessedFoodAlertId.current = lastFoodReadyAlert.id;
 

@@ -31,7 +31,7 @@ const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_stat
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
 let isRtdbAccessible = false;
 
-let currentServerAddress = '192.168.1.4';
+let currentServerAddress = '192.168.1.14';
 let syncStatus: SyncStatus = 'offline';
 let lastSyncedAt: number | null = null;
 let totalSyncedEvents = 0;
@@ -244,7 +244,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
   }
 
   // 5. Default fallback to host computer's known LAN IP
-  return '192.168.1.4';
+  return '192.168.1.14';
 }
 
 export async function setCustomServerIp(newAddress: string) {
@@ -469,9 +469,11 @@ function initFirebaseSync() {
   notifyListeners();
 }
 
-function connectWebSocket() {
-  if (isFirebaseConfigured) {
+function connectWebSocket(isLanBridge: boolean = false) {
+  if (isFirebaseConfigured && !isLanBridge) {
     initFirebaseSync();
+    // Also establish local LAN WebSocket bridge in background for 0ms sub-10ms latency
+    setTimeout(() => connectWebSocket(true), 150);
     return;
   }
 
@@ -494,20 +496,27 @@ function connectWebSocket() {
   const { wsUrl } = parseServerEndpoints(currentServerAddress);
 
   if (!wsUrl) {
-    syncStatus = 'offline';
-    notifyListeners();
+    if (!isLanBridge) {
+      syncStatus = 'offline';
+      notifyListeners();
+    }
     return;
   }
 
-  syncStatus = 'connecting';
-  notifyListeners();
+  if (!isLanBridge) {
+    syncStatus = 'connecting';
+    notifyListeners();
+  }
 
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      syncStatus = 'connected';
+      if (!isLanBridge) {
+        syncStatus = 'connected';
+      }
       lastSyncedAt = Date.now();
+      totalSyncedEvents++;
       notifyListeners();
 
       // Start keep-alive ping
@@ -542,22 +551,26 @@ function connectWebSocket() {
     };
 
     ws.onclose = () => {
-      syncStatus = 'offline';
-      notifyListeners();
+      if (!isLanBridge) {
+        syncStatus = 'offline';
+        notifyListeners();
+      }
       if (pingTimer) {
         clearInterval(pingTimer);
         pingTimer = null;
       }
       // Reconnect after 3.5s
       reconnectTimer = setTimeout(() => {
-        connectWebSocket();
+        connectWebSocket(isLanBridge);
       }, 3500);
     };
   } catch {
-    syncStatus = 'offline';
-    notifyListeners();
+    if (!isLanBridge) {
+      syncStatus = 'offline';
+      notifyListeners();
+    }
     reconnectTimer = setTimeout(() => {
-      connectWebSocket();
+      connectWebSocket(isLanBridge);
     }, 4000);
   }
 }
@@ -684,7 +697,7 @@ function broadcastLocalState() {
           console.warn('[SyncService] Firebase REST write error:', err);
         });
     }
-    return;
+    // Also broadcast to local LAN WebSocket/HTTP in parallel for instant 0ms delivery
   }
 
   // 2. Otherwise try WebSocket (LAN or cloud hub)

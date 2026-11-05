@@ -160,7 +160,7 @@ export default function KitchenDisplayScreen() {
 
   // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
   useEffect(() => {
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
+    const host = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
     
     // Fetch active kitchen tickets and reconcile confirmed app orders
     const fetchLiveTickets = async () => {
@@ -361,7 +361,7 @@ export default function KitchenDisplayScreen() {
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
+    const host = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
     const orderId = (ticket as any).orderId;
 
     if (ticket.stationStatus === 'pending') {

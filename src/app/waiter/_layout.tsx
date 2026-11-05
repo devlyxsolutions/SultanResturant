@@ -3,7 +3,6 @@ import { ActivityIndicator, Platform, StatusBar, StyleSheet, Text, View } from '
 import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNav from '../../components/BottomNav';
 import SultanLogo from '../../components/SultanLogo';
-import WaiterNotificationHost from '../../components/WaiterNotificationHost';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 
 export default function WaiterLayout() {
@@ -35,9 +34,6 @@ export default function WaiterLayout() {
         />
       </View>
       <BottomNav role="waiter" onLogout={logout} />
-
-      {/* Live Order Taker Food & Bill Audio/Visual Notification Host */}
-      <WaiterNotificationHost />
     </SafeAreaView>
   );
 }

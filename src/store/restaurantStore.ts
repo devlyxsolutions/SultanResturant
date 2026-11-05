@@ -2143,7 +2143,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         feedbacks: (state.feedbacks || []).filter(f => f.id !== id)
       })),
 
-      onlineFeedbackUrl: 'http://192.168.1.4:8081',
+      onlineFeedbackUrl: 'http://192.168.1.14:8081',
 
       setOnlineFeedbackUrl: (url) => set({
         onlineFeedbackUrl: url.trim().replace(/\/+$/, '')
@@ -2471,6 +2471,21 @@ export const useRestaurantStore = create<RestaurantState>()(
               // Prevent stale remote packets from reverting forward KDS progress (e.g. served/ready/cooking -> pending)
               if (local && (STATUS_RANK[local.status] ?? 0) > (STATUS_RANK[rt.status] ?? 0)) {
                 return { ...local, items: Array.isArray(local.items) ? local.items : [] };
+              }
+              // Merge items to preserve item-level 'ready' or 'served' status
+              if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {
+                const itemRank: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
+                const mergedItems = rt.items.map((remoteItem) => {
+                  const localItem = local.items.find((li) => li.id === remoteItem.id);
+                  if (!localItem) return remoteItem;
+                  const localRank = localItem.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem.completed ? 2 : 0);
+                  const remoteRank = remoteItem.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem.completed ? 2 : 0);
+                  if (localRank > remoteRank) {
+                    return { ...remoteItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
+                  }
+                  return remoteItem;
+                });
+                return { ...rt, items: mergedItems };
               }
               return { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
             });

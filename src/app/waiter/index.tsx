@@ -256,6 +256,7 @@ export default function OrderTakerScreen() {
   const isTicketReadyForPickup = (t: Ticket) => {
     if (t.status === 'ready') return true;
     if (t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready') return true;
+    if (Array.isArray(t.items) && t.items.some((i) => i.itemStatus === 'ready')) return true;
     return false;
   };
 
@@ -489,14 +490,24 @@ export default function OrderTakerScreen() {
           </View>
 
           {/* Kitchen Live Status Badges */}
-          {isFoodReady && !isBilled && (
-            <View style={styles.foodReadyPill}>
-              <Ionicons name="restaurant" size={12} color="#007AFF" />
-              <Text style={styles.foodReadyPillText}>
-                {roundCount > 1 ? `FOOD READY AT PASS (Round #${roundCount})` : 'FOOD READY AT PASS!'}
-              </Text>
-            </View>
-          )}
+          {isFoodReady && !isBilled && (() => {
+            const readyItems = tableTickets.flatMap((t) => (t.items || []).filter((i) => i.itemStatus === 'ready'));
+            const isPartialItemReady = readyItems.length > 0 && tableTickets.every((t) => t.status !== 'ready');
+            const itemNames = readyItems.map((i) => `${i.qty > 1 ? `${i.qty}x ` : ''}${i.name}`).slice(0, 2).join(', ');
+            const extraCount = readyItems.length > 2 ? ` +${readyItems.length - 2} more` : '';
+            return (
+              <View style={styles.foodReadyPill}>
+                <Ionicons name="flash" size={12} color="#007AFF" />
+                <Text style={styles.foodReadyPillText} numberOfLines={1}>
+                  {isPartialItemReady
+                    ? `READY: ${itemNames}${extraCount}`
+                    : roundCount > 1
+                    ? `FOOD READY AT PASS (Round #${roundCount})`
+                    : 'FOOD READY AT PASS!'}
+                </Text>
+              </View>
+            );
+          })()}
           {isCooking && !isFoodReady && !isBilled && (
             <View style={styles.cookingPill}>
               <Ionicons name="flame" size={12} color="#FF9500" />

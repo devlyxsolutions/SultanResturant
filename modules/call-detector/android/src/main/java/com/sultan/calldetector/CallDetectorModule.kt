@@ -13,6 +13,7 @@ import android.telephony.TelephonyManager
 import android.media.RingtoneManager
 import android.media.ToneGenerator
 import android.media.AudioManager
+import android.media.AudioAttributes
 import android.util.Log
 import androidx.core.content.ContextCompat
 import expo.modules.kotlin.modules.Module
@@ -134,11 +135,21 @@ class CallDetectorModule : Module() {
                 val notificationUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
                 val ringtone = RingtoneManager.getRingtone(context.applicationContext, notificationUri)
                 if (ringtone != null) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                        ringtone.audioAttributes = AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_EVENT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    }
                     ringtone.play()
                 } else {
                     val toneGen = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 100)
                     toneGen.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
                 }
+                try {
+                    val musicTone = ToneGenerator(AudioManager.STREAM_MUSIC, 100)
+                    musicTone.startTone(ToneGenerator.TONE_PROP_BEEP2, 400)
+                } catch (_: Exception) {}
                 true
             } catch (e: Exception) {
                 try {

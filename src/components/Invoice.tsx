@@ -569,7 +569,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
   // Automatically purge dropped/dead tunnels and 404 placeholders from store/state
   const effectiveOnlineUrl = (!onlineFeedbackUrl || onlineFeedbackUrl.includes('192.168.1.17') || onlineFeedbackUrl.includes('sultan-resturant.web.app') || onlineFeedbackUrl.includes('.lhr.life'))
-    ? 'http://192.168.1.4:8081'
+    ? 'http://192.168.1.14:8081'
     : onlineFeedbackUrl;
 
   const [qrCodeDataUrl, setQrCodeDataUrl] = React.useState<string>('');
@@ -579,7 +579,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
   React.useEffect(() => {
     if (!onlineFeedbackUrl || onlineFeedbackUrl.includes('192.168.1.17') || onlineFeedbackUrl.includes('sultan-resturant.web.app') || onlineFeedbackUrl.includes('.lhr.life')) {
-      const stableUrl = 'http://192.168.1.4:8081';
+      const stableUrl = 'http://192.168.1.14:8081';
       setOnlineFeedbackUrl(stableUrl);
       setCustomDomainInput(stableUrl);
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -821,7 +821,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
           <TouchableOpacity
             style={styles.qrConfigBtn}
             onPress={() => {
-              setCustomDomainInput(onlineFeedbackUrl || 'http://192.168.1.4:8081');
+              setCustomDomainInput(onlineFeedbackUrl || 'http://192.168.1.14:8081');
               setDomainModalVisible(true);
             }}
             activeOpacity={0.7}
@@ -901,15 +901,15 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
               <TouchableOpacity
                 style={[
                   styles.presetPill,
-                  customDomainInput.includes('192.168.1.4') && styles.presetPillActive,
+                  customDomainInput.includes('192.168.1.14') && styles.presetPillActive,
                 ]}
-                onPress={() => setCustomDomainInput('http://192.168.1.4:8081')}
+                onPress={() => setCustomDomainInput('http://192.168.1.14:8081')}
                 activeOpacity={0.7}
               >
                 <Ionicons name="wifi" size={16} color="#0284C7" style={{ marginRight: 8 }} />
                 <View>
                   <Text style={styles.presetPillTitle}>Restaurant Wi-Fi (Instant & Permanent)</Text>
-                  <Text style={styles.presetPillSub}>http://192.168.1.4:8081</Text>
+                  <Text style={styles.presetPillSub}>http://192.168.1.14:8081</Text>
                 </View>
               </TouchableOpacity>
             </View>

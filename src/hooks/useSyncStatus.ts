@@ -10,7 +10,7 @@ import {
 export function useSyncStatus() {
   const [syncInfo, setSyncInfo] = useState<SyncInfo>({
     status: 'connecting',
-    serverIp: '192.168.1.4',
+    serverIp: '192.168.1.14',
     serverPort: 5050,
     lastSyncedAt: null,
     totalSyncedEvents: 0,

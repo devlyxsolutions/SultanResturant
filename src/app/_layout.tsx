@@ -8,6 +8,7 @@ import { initSyncService } from '../services/syncService';
 import { initCallListener } from '../services/headlessCallService';
 import StockAlarmHost from '../components/StockAlarmHost';
 import IncomingCallHost from '../components/IncomingCallHost';
+import WaiterNotificationHost from '../components/WaiterNotificationHost';
 
 // Ignore benign web font loading timeouts in Expo LogBox
 LogBox.ignoreLogs([
@@ -353,6 +354,8 @@ export default function RootLayout() {
       <StockAlarmHost />
       {/* Live incoming caller ID popup & quick order routing */}
       <IncomingCallHost />
+      {/* Universal Food Ready & Bill Paid Notification Host for Order Takers */}
+      <WaiterNotificationHost />
     </>
   );
 }
