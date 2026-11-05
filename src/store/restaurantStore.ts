@@ -1254,102 +1254,104 @@ export const useRestaurantStore = create<RestaurantState>()(
         return state;
       }),
 
-      placeOrder: (tableId, serverName, orderItems, isAddOn) => set((state) => {
-        const table = state.tables.find(t => t.id === tableId);
-        const existingTickets = state.tickets.filter(t => t.tableId === tableId);
-        const isActuallyAddOn = isAddOn !== undefined ? isAddOn : existingTickets.length > 0;
-        const roundNumber = existingTickets.length + 1;
+      placeOrder: (tableId, serverName, orderItems, isAddOn) => {
+        set((state) => {
+          const table = state.tables.find(t => t.id === tableId);
+          const existingTickets = state.tickets.filter(t => t.tableId === tableId);
+          const isActuallyAddOn = isAddOn !== undefined ? isAddOn : existingTickets.length > 0;
+          const roundNumber = existingTickets.length + 1;
 
-        const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
-        const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
+          const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
+          const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
-        const hasMain = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'main');
-        const hasJuice = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'juice');
+          const hasMain = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'main');
+          const hasJuice = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'juice');
 
-        const maxPrepTime = Math.max(
-          ...orderItems.map(oi => oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15)),
-          10
-        );
+          const maxPrepTime = Math.max(
+            ...orderItems.map(oi => oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15)),
+            10
+          );
 
-        const newTicket: Ticket = {
-          id: newTicketId,
-          tableId, // can be dummy like 'takeaway' or actual tableId
-          tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
-          server: serverName,
-          timePlaced: Date.now(),
-          cookingStartedAt: undefined,
-          estimatedPrepTime: maxPrepTime,
-          status: 'pending',
-          isAddOn: isActuallyAddOn,
-          roundNumber: isActuallyAddOn ? roundNumber : 1,
-          stationStatuses: {
-            main: hasMain ? 'pending' : undefined,
-            juice: hasJuice ? 'pending' : undefined,
-          },
-          items: orderItems.map(oi => ({
-            id: oi.item.id,
-            name: oi.item.name,
-            price: oi.item.price,
-            qty: oi.qty,
-            notes: oi.notes,
-            completed: false,
-            station: oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main'),
-            prepTimeMin: oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15),
-            itemStatus: 'pending',
-          }))
-        };
+          const newTicket: Ticket = {
+            id: newTicketId,
+            tableId, // can be dummy like 'takeaway' or actual tableId
+            tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
+            server: serverName,
+            timePlaced: Date.now(),
+            cookingStartedAt: undefined,
+            estimatedPrepTime: maxPrepTime,
+            status: 'pending',
+            isAddOn: isActuallyAddOn,
+            roundNumber: isActuallyAddOn ? roundNumber : 1,
+            stationStatuses: {
+              main: hasMain ? 'pending' : undefined,
+              juice: hasJuice ? 'pending' : undefined,
+            },
+            items: orderItems.map(oi => ({
+              id: oi.item.id,
+              name: oi.item.name,
+              price: oi.item.price,
+              qty: oi.qty,
+              notes: oi.notes,
+              completed: false,
+              station: oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main'),
+              prepTimeMin: oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15),
+              itemStatus: 'pending',
+            }))
+          };
 
-        const updatedMenuItems = state.menuItems.map(m => {
-          if (!m.trackStock || typeof m.stockQty !== 'number') return m;
-          const matchingQty = orderItems
-            .filter(oi => oi.item.id === m.id || oi.item.id.startsWith(`${m.id}-`))
-            .reduce((sum, oi) => sum + oi.qty, 0);
+          const updatedMenuItems = state.menuItems.map(m => {
+            if (!m.trackStock || typeof m.stockQty !== 'number') return m;
+            const matchingQty = orderItems
+              .filter(oi => oi.item.id === m.id || oi.item.id.startsWith(`${m.id}-`))
+              .reduce((sum, oi) => sum + oi.qty, 0);
 
-          if (matchingQty > 0) {
-            return { ...m, stockQty: Math.max(0, m.stockQty - matchingQty) };
-          }
-          return m;
+            if (matchingQty > 0) {
+              return { ...m, stockQty: Math.max(0, m.stockQty - matchingQty) };
+            }
+            return m;
+          });
+
+          return {
+            tickets: [newTicket, ...state.tickets],
+            menuItems: updatedMenuItems,
+            tables: table
+              ? state.tables.map(t => {
+                if (t.id !== tableId) return t;
+                const existingOrders = t.orders || [];
+                const mergedOrders = existingOrders.map(o => ({ ...o }));
+                orderItems.forEach(oi => {
+                  const found = mergedOrders.find(m => m.id === oi.item.id);
+                  if (found) {
+                    found.qty += oi.qty;
+                  } else {
+                    mergedOrders.push({
+                      id: oi.item.id,
+                      name: oi.item.name,
+                      price: oi.item.price,
+                      qty: oi.qty,
+                      notes: oi.notes,
+                      completed: false,
+                      prepTimeMin: oi.item.prepTimeMin || 15,
+                      itemStatus: 'pending'
+                    });
+                  }
+                });
+                return {
+                  ...t,
+                  status: 'occupied',
+                  occupiedSince: t.occupiedSince || Date.now(),
+                  isPaid: false,
+                  server: serverName,
+                  billTotal: (t.billTotal || 0) + itemsTotal,
+                  orders: mergedOrders
+                };
+              })
+              : state.tables
+          };
         });
-
         notifySync();
-        return {
-          tickets: [newTicket, ...state.tickets],
-          menuItems: updatedMenuItems,
-          tables: table
-            ? state.tables.map(t => {
-              if (t.id !== tableId) return t;
-              const existingOrders = t.orders || [];
-              const mergedOrders = existingOrders.map(o => ({ ...o }));
-              orderItems.forEach(oi => {
-                const found = mergedOrders.find(m => m.id === oi.item.id);
-                if (found) {
-                  found.qty += oi.qty;
-                } else {
-                  mergedOrders.push({
-                    id: oi.item.id,
-                    name: oi.item.name,
-                    price: oi.item.price,
-                    qty: oi.qty,
-                    notes: oi.notes,
-                    completed: false,
-                    prepTimeMin: oi.item.prepTimeMin || 15,
-                    itemStatus: 'pending'
-                  });
-                }
-              });
-              return {
-                ...t,
-                status: 'occupied',
-                occupiedSince: t.occupiedSince || Date.now(),
-                isPaid: false,
-                server: serverName,
-                billTotal: (t.billTotal || 0) + itemsTotal,
-                orders: mergedOrders
-              };
-            })
-            : state.tables
-        };
-      }),
+      },
 
       startCookingTicket: (ticketId, station) => set((state) => {
         const ticket = state.tickets.find(t => t.id === ticketId);
@@ -2508,22 +2510,25 @@ export const useRestaurantStore = create<RestaurantState>()(
         tables: [...state.tables, { ...table, status: table.status || 'available', id: `t${Date.now()}` }]
       })),
 
-      updateTable: (id, updatedTable) => set((state) => {
-        let alert = state.lastBillPaidAlert;
-        if (updatedTable.status === 'available' && alert) {
-          const targetTable = state.tables.find(t => t.id === id);
-          if (
-            alert.tableId === id ||
-            (targetTable && alert.tableName.trim().toLowerCase() === targetTable.name.trim().toLowerCase())
-          ) {
-            alert = null;
+      updateTable: (id, updatedTable) => {
+        set((state) => {
+          let alert = state.lastBillPaidAlert;
+          if (updatedTable.status === 'available' && alert) {
+            const targetTable = state.tables.find(t => t.id === id);
+            if (
+              alert.tableId === id ||
+              (targetTable && alert.tableName.trim().toLowerCase() === targetTable.name.trim().toLowerCase())
+            ) {
+              alert = null;
+            }
           }
-        }
-        return {
-          tables: state.tables.map(t => t.id === id ? { ...t, ...updatedTable } : t),
-          lastBillPaidAlert: alert
-        };
-      }),
+          return {
+            tables: state.tables.map(t => t.id === id ? { ...t, ...updatedTable } : t),
+            lastBillPaidAlert: alert
+          };
+        });
+        notifySync();
+      },
 
       deleteTable: (id) => set((state) => ({
         tables: state.tables.filter(t => t.id !== id)

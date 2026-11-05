@@ -32,6 +32,30 @@ import { BRAND as BRAND_PALETTE } from '../../constants/brand';
 
 const BRAND = BRAND_PALETTE.burgundy;
 
+function playFoodReadyChime() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.12);
+        osc.frequency.setValueAtTime(783.99, now + 0.24);
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.55);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.55);
+      }
+    } catch (_) {}
+  }
+}
+
 export default function OrderTakerScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -47,6 +71,8 @@ export default function OrderTakerScreen() {
   const serveTableTickets = useRestaurantStore((state) => state.serveTableTickets);
   const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
   const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
+  const lastFoodReadyAlert = useRestaurantStore((state) => state.lastFoodReadyAlert);
+  const clearFoodReadyAlert = useRestaurantStore((state) => state.clearFoodReadyAlert);
 
   const user = useAuthStore((state) => state.user);
 
@@ -205,6 +231,34 @@ export default function OrderTakerScreen() {
 
     return true;
   }, [lastBillPaidAlert, dismissedAlerts, tables, isAllFloors, authorizedFloors]);
+
+  // Check if Food Ready alert applies to this waiter's floor
+  const shouldShowFoodReadyAlert = useMemo(() => {
+    if (!lastFoodReadyAlert) return false;
+    if (lastFoodReadyAlert.time && Math.abs(Date.now() - lastFoodReadyAlert.time) > 25 * 60 * 1000) {
+      return false;
+    }
+    const matchingTable = tables.find(
+      (t) =>
+        t.id === lastFoodReadyAlert.tableId ||
+        t.name.trim().toLowerCase() === (lastFoodReadyAlert.tableName || '').trim().toLowerCase()
+    );
+    if (!matchingTable) return false;
+    if (!isAllFloors) {
+      const tableFloor = getTableFloor(matchingTable);
+      if (!authorizedFloors.some((af) => af.toLowerCase() === tableFloor.toLowerCase())) {
+        return false;
+      }
+    }
+    return true;
+  }, [lastFoodReadyAlert, tables, isAllFloors, authorizedFloors]);
+
+  // Audio chime when kitchen/juice bar marks food ready
+  useEffect(() => {
+    if (shouldShowFoodReadyAlert && lastFoodReadyAlert) {
+      playFoodReadyChime();
+    }
+  }, [lastFoodReadyAlert?.id, lastFoodReadyAlert?.time]);
 
   // Effective active floor
   const activeFloor =
@@ -1050,6 +1104,45 @@ export default function OrderTakerScreen() {
           })}
         </ScrollView>
       </View>
+
+        {/* Real-time Food Ready Alert Banner */}
+        {shouldShowFoodReadyAlert && lastFoodReadyAlert && (
+          <View style={[styles.billPaidAlertBanner, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
+            <View style={[styles.billPaidIconBox, { backgroundColor: '#DCFCE7' }]}>
+              <Ionicons name="restaurant" size={20} color="#16A34A" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.billPaidAlertTitle, { color: '#15803D' }]}>
+                🔔 Dish Ready: {lastFoodReadyAlert.tableName}!
+              </Text>
+              <Text style={[styles.billPaidAlertDesc, { color: '#166534' }]}>
+                {lastFoodReadyAlert.station === 'juice' ? '🍹 Juice Bar' : '🍳 Kitchen'} marked{' '}
+                <Text style={{ fontWeight: '700' }}>
+                  {lastFoodReadyAlert.singleItemName || lastFoodReadyAlert.itemsSummary}
+                </Text>{' '}
+                ready. Tap to view table.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#16A34A',
+                paddingHorizontal: 12,
+                paddingVertical: 7,
+                borderRadius: 8,
+                marginRight: 6,
+              }}
+              onPress={() => router.push(`/waiter/order/${lastFoodReadyAlert.tableId}` as any)}
+            >
+              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>View ➔</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.billPaidDismissBtn}
+              onPress={() => clearFoodReadyAlert(lastFoodReadyAlert.id || lastFoodReadyAlert.tableId)}
+            >
+              <Ionicons name="close" size={18} color="#166534" />
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Real-time Bill Paid Alert Banner */}
         {shouldShowBillPaidAlert && lastBillPaidAlert && (
