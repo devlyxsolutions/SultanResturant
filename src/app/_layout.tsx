@@ -125,31 +125,25 @@ export default function RootLayout() {
     <>
       {Platform.OS === 'web' && (
         <style>{`
-          /* Local + CDN Accelerated Font Faces for Vector Icons */
+          /* Instant Local Font Faces for Vector Icons (Zero CDN Latency) */
           @font-face {
             font-family: 'ionicons';
-            src: url('/fonts/Ionicons.ttf') format('truetype'),
-                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype'),
-                 local('Ionicons'), local('ionicons');
+            src: local('Ionicons'), local('ionicons'), url('/fonts/Ionicons.ttf') format('truetype');
             font-display: swap;
           }
           @font-face {
             font-family: 'Ionicons';
-            src: url('/fonts/Ionicons.ttf') format('truetype'),
-                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf') format('truetype'),
-                 local('Ionicons'), local('ionicons');
+            src: local('Ionicons'), local('ionicons'), url('/fonts/Ionicons.ttf') format('truetype');
             font-display: swap;
           }
           @font-face {
             font-family: 'material-community';
-            src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype'),
-                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+            src: local('Material Design Icons'), local('MaterialCommunityIcons'), url('/fonts/MaterialCommunityIcons.ttf') format('truetype');
             font-display: swap;
           }
           @font-face {
             font-family: 'Material Community Icons';
-            src: url('/fonts/MaterialCommunityIcons.ttf') format('truetype'),
-                 url('https://cdn.jsdelivr.net/npm/@expo/vector-icons@14.0.2/build/vendor/react-native-vector-icons/Fonts/MaterialCommunityIcons.ttf') format('truetype');
+            src: local('Material Design Icons'), local('MaterialCommunityIcons'), url('/fonts/MaterialCommunityIcons.ttf') format('truetype');
             font-display: swap;
           }
 

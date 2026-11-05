@@ -2233,6 +2233,60 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist)
+  if (req.method === 'GET') {
+    const DIST_DIR = path.join(__dirname, 'dist');
+    if (fs.existsSync(DIST_DIR)) {
+      let rawPath = (url.pathname || '/').split('?')[0];
+      try {
+        rawPath = decodeURIComponent(rawPath);
+      } catch (_) {}
+      
+      let filePath = path.join(DIST_DIR, rawPath === '/' ? 'index.html' : rawPath);
+      // Prevent directory traversal
+      if (filePath.startsWith(DIST_DIR)) {
+        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+          // Fallback to index.html for client-side Expo router routes (e.g. /admin/dashboard, /pos)
+          filePath = path.join(DIST_DIR, 'index.html');
+        }
+
+        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+          const ext = path.extname(filePath).toLowerCase();
+          const mimeTypes = {
+            '.html': 'text/html; charset=utf-8',
+            '.js': 'application/javascript; charset=utf-8',
+            '.css': 'text/css; charset=utf-8',
+            '.json': 'application/json; charset=utf-8',
+            '.png': 'image/png',
+            '.jpg': 'image/jpeg',
+            '.jpeg': 'image/jpeg',
+            '.gif': 'image/gif',
+            '.svg': 'image/svg+xml',
+            '.ico': 'image/x-icon',
+            '.ttf': 'font/ttf',
+            '.woff': 'font/woff',
+            '.woff2': 'font/woff2',
+            '.mp3': 'audio/mpeg',
+            '.wav': 'audio/wav',
+          };
+          const contentType = mimeTypes[ext] || 'application/octet-stream';
+          const isHashed = rawPath.includes('/_expo/') || rawPath.includes('/assets/') || rawPath.includes('/fonts/');
+          const cacheControl = isHashed 
+            ? 'public, max-age=31536000, immutable' 
+            : 'no-cache, must-revalidate';
+
+          res.writeHead(200, {
+            'Content-Type': contentType,
+            'Cache-Control': cacheControl,
+            'Access-Control-Allow-Origin': '*',
+          });
+          fs.createReadStream(filePath).pipe(res);
+          return;
+        }
+      }
+    }
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'Endpoint not found', server: 'Sultan Restaurant Hub' }));
 }
@@ -2243,6 +2297,11 @@ const server5000 = http.createServer(handleRequest);
 let server80 = null;
 try {
   server80 = http.createServer(handleRequest);
+} catch (e) {}
+
+let server8081 = null;
+try {
+  server8081 = http.createServer(handleRequest);
 } catch (e) {}
 
 const wss = new WebSocketServer({ noServer: true });
@@ -2258,6 +2317,7 @@ function bindUpgrade(srv) {
 bindUpgrade(server);
 bindUpgrade(server5000);
 if (server80) bindUpgrade(server80);
+if (server8081) bindUpgrade(server8081);
 
 function broadcastToClients(msgObj, excludeWs = null) {
   const payload = JSON.stringify(msgObj);
@@ -2411,4 +2471,12 @@ if (server80) {
   server80.listen(80, '0.0.0.0', () => {
     console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
   }).on('error', () => {});
+}
+
+if (server8081 && PORT !== 8081) {
+  server8081.listen(8081, '0.0.0.0', () => {
+    console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
+  }).on('error', () => {
+    // Port 8081 may be in use by Metro bundler during active development - safe to ignore
+  });
 }

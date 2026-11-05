@@ -48,6 +48,8 @@
     "start": "expo start",
     "build": "expo export -p web",
     "hub": "node server.js",
+    "pos": "node server.js",
+    "pos:build": "expo export -p web && node server.js",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",
