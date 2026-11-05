@@ -1,3 +1,4 @@
+import { Platform } from 'react-native';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
@@ -1124,8 +1125,11 @@ export const useRestaurantStore = create<RestaurantState>()(
       floors: INITIAL_FLOORS,
 
       confirmOnlineOrder: async (orderId: string, assignedWaiter?: string) => {
+        const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
+          : 'http://192.168.1.14:5050';
         try {
-          await fetch(`http://127.0.0.1:5050/api/public/orders/${orderId}/status`, {
+          await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'CONFIRMED', assignedWaiter })
@@ -1213,8 +1217,11 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       rejectOnlineOrder: async (orderId: string, reason?: string) => {
+        const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
+          ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
+          : 'http://192.168.1.14:5050';
         try {
-          await fetch(`http://127.0.0.1:5050/api/public/orders/${orderId}/status`, {
+          await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'CANCELLED', managerNotes: reason || 'Rejected by Floor Manager' })

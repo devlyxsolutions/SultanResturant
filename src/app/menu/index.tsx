@@ -25,7 +25,7 @@ import SultanLogo from '../../components/SultanLogo';
 import FullscreenButton from '../../components/FullscreenButton';
 import { broadcastImmediately } from '../../services/syncService';
 import { useOpsStore } from '../../store/opsStore';
-import { MenuItem, Ticket, useRestaurantStore } from '../../store/restaurantStore';
+import { MenuItem, OnlineOrder, Ticket, useRestaurantStore } from '../../store/restaurantStore';
 
 // ==========================================
 // TYPES & STORAGE KEYS
@@ -554,16 +554,16 @@ export default function CustomerMenuScreen() {
     }
   };
 
-  // Helper: URL base
+  // Helper: URL base for Central POS & API Hub
   const getBaseUrl = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       const loc = window.location;
-      if (loc.hostname === 'localhost' || loc.hostname === '127.0.0.1') {
-        return 'http://localhost:3000';
+      if (loc.port === '8081' || loc.port === '5050' || loc.port === '5000' || loc.port === '80' || !loc.port) {
+        return loc.origin;
       }
-      return `${loc.protocol}//${loc.hostname}:3000`;
+      return `${loc.protocol}//${loc.hostname}:5050`;
     }
-    return 'http://192.168.100.11:3000';
+    return 'http://192.168.1.14:5050';
   };
 
   // Helper: Category Emoji & Urud Titles
@@ -1124,6 +1124,57 @@ export default function CustomerMenuScreen() {
             estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
           };
 
+          const formattedOnlineOrder: OnlineOrder = {
+            id: returnedOrder.id,
+            orderNumber: returnedOrder.orderNumber || orderNum,
+            source: 'digital_menu',
+            orderType: orderMode as any,
+            floor: selectedTable?.floor,
+            tableId: selectedTable?.id,
+            tableName: orderPayload.tableName,
+            customer: {
+              name: customerName.trim(),
+              phone: customerPhone.trim(),
+              address: deliveryAddress.trim(),
+            },
+            items: cart.map((c) => ({
+              id: c.item.id,
+              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
+              unitPrice: c.unitPrice,
+              price: c.unitPrice,
+              qty: c.qty,
+              quantity: c.qty,
+              notes: c.notes,
+              station: c.item.station || 'main',
+            })),
+            subtotal,
+            deliveryFee,
+            tax,
+            total: grandTotal,
+            status: (returnedOrder.status as any) || 'PENDING',
+          };
+
+          const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
+          useRestaurantStore.getState().syncFromServer({
+            onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
+            ...(data.pendingConfirmation ? {
+              pendingFloorOrderAlert: {
+                id: `alert-${Date.now()}`,
+                orderId: returnedOrder.id,
+                orderNumber: returnedOrder.orderNumber || orderNum,
+                floor: selectedTable?.floor || 'Ground Floor',
+                tableId: selectedTable?.id || '1',
+                tableName: orderPayload.tableName || 'Table',
+                customerName: customerName.trim(),
+                customerPhone: customerPhone.trim(),
+                total: grandTotal,
+                itemsCount: cart.length,
+                itemsSummary: cart.map(c => `${c.qty}x ${c.item.name}`).join(', '),
+                time: Date.now(),
+              }
+            } : {})
+          });
+
           if (data.ticket) {
             const currentTickets = useRestaurantStore.getState().tickets || [];
             if (!currentTickets.some((t: Ticket) => t.id === data.ticket.id)) {
@@ -1188,6 +1239,57 @@ export default function CustomerMenuScreen() {
               station: c.item.station || 'main',
             })),
           };
+
+          const formattedOnlineOrder: OnlineOrder = {
+            id: createdOrder.id,
+            orderNumber: createdOrder.orderNumber || orderNum,
+            source: 'digital_menu',
+            orderType: orderMode as any,
+            floor: selectedTable?.floor,
+            tableId: selectedTable?.id,
+            tableName: orderPayload.tableName,
+            customer: {
+              name: customerName.trim(),
+              phone: customerPhone.trim(),
+              address: deliveryAddress.trim(),
+            },
+            items: cart.map((c) => ({
+              id: c.item.id,
+              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
+              unitPrice: c.unitPrice,
+              price: c.unitPrice,
+              qty: c.qty,
+              quantity: c.qty,
+              notes: c.notes,
+              station: c.item.station || 'main',
+            })),
+            subtotal,
+            deliveryFee,
+            tax,
+            total: grandTotal,
+            status: 'PENDING',
+          };
+
+          const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
+          useRestaurantStore.getState().syncFromServer({
+            onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
+            ...(orderMode === 'dine_in' ? {
+              pendingFloorOrderAlert: {
+                id: `alert-${Date.now()}`,
+                orderId: createdOrder.id,
+                orderNumber: createdOrder.orderNumber || orderNum,
+                floor: selectedTable?.floor || 'Ground Floor',
+                tableId: selectedTable?.id || '1',
+                tableName: orderPayload.tableName || 'Table',
+                customerName: customerName.trim(),
+                customerPhone: customerPhone.trim(),
+                total: grandTotal,
+                itemsCount: cart.length,
+                itemsSummary: cart.map(c => `${c.qty}x ${c.item.name}`).join(', '),
+                time: Date.now(),
+              }
+            } : {})
+          });
           syncFromServer({
             tickets: [newTicket, ...(useRestaurantStore.getState().tickets || [])],
           });
