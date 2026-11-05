@@ -615,6 +615,8 @@ function broadcastLocalState() {
       zones: state.zones,
       staff: state.staff,
       reservations: state.reservations,
+      onlineOrders: state.onlineOrders,
+      pendingFloorOrderAlert: state.pendingFloorOrderAlert,
       lastBillPaidAlert: state.lastBillPaidAlert,
       lastFoodReadyAlert: state.lastFoodReadyAlert,
       roles: roleState.roles,

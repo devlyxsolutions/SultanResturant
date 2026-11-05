@@ -1705,16 +1705,23 @@ async function handleRequest(req, res) {
           : (orderType === 'takeaway' ? `Express Takeaway: ${customerName}` : `Delivery: ${customerName}`)
       );
 
+      // Determine floor and matching table
+      let foundTable = null;
+      if (targetTableId && targetTableId !== 'DINE-IN-APP') {
+        foundTable = (serverState.tables || []).find(t => t.id === targetTableId || t.name.toLowerCase() === targetTableName.toLowerCase());
+      }
+      const orderFloor = tableInfo.floor || foundTable?.floor || foundTable?.zone || 'Ground Floor';
+
       const newOrder = {
         id: orderId,
         orderNumber,
         source: 'mobile_app',
         orderType: orderType, // 'dine_in' | 'takeaway' | 'delivery'
-        floor: tableInfo.floor || undefined,
-        seatingType: tableInfo.seatingType || undefined, // 'tables' | 'couches' | 'majlis'
+        floor: orderFloor,
+        seatingType: tableInfo.seatingType || foundTable?.seatingType || undefined,
         tableId: targetTableId,
         tableName: targetTableName,
-        cabinNumber: tableInfo.cabinNumber || undefined,
+        cabinNumber: tableInfo.cabinNumber || foundTable?.cabinNumber || undefined,
         roundNumber: roundNum,
         isAddOn,
         customer: {
@@ -1730,58 +1737,58 @@ async function handleRequest(req, res) {
         total: grandTotal,
         paymentMethod: payload.paymentMethod || (orderType === 'dine_in' || orderType === 'takeaway' ? 'pay_at_counter' : 'cash_on_delivery'),
         isPaid: payload.paymentMethod === 'card' || payload.paymentMethod === 'easypaisa' || payload.paymentMethod === 'jazzcash',
-        status: 'PENDING', // PENDING -> CONFIRMED -> PREPARING -> READY -> OUT_FOR_DELIVERY / SERVED
+        status: orderType === 'dine_in' ? 'PENDING' : 'CONFIRMED',
         createdAt: Date.now(),
         estimatedDeliveryMinutes: orderType === 'dine_in' ? 20 : (orderType === 'takeaway' ? 15 : 35)
       };
-
-      // Create Kitchen Ticket (KOT)
-      const kotTicket = {
-        id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
-        orderId: newOrder.id,
-        orderNumber: newOrder.orderNumber,
-        tableId: targetTableId,
-        tableName: targetTableName,
-        server: orderType === 'dine_in' ? `App Customer (Round ${roundNum})` : (orderType === 'takeaway' ? 'Mobile Express Takeaway' : 'Mobile App Delivery'),
-        timePlaced: Date.now(),
-        status: 'cooking',
-        roundNumber: roundNum,
-        isAddOn,
-        items: verifiedItems.map(it => ({
-          id: it.id,
-          name: it.name,
-          price: it.unitPrice,
-          qty: it.qty,
-          notes: it.notes,
-          station: it.station || 'main',
-          completed: false
-        }))
-      };
-
-      // If Dine-In and valid table exists, occupy the table
-      if (orderType === 'dine_in' && targetTableId && targetTableId !== 'DINE-IN-APP') {
-        const foundTable = (serverState.tables || []).find(t => t.id === targetTableId || t.name.toLowerCase() === targetTableName.toLowerCase());
-        if (foundTable) {
-          foundTable.status = 'occupied';
-          foundTable.server = customerName;
-          foundTable.billTotal = (foundTable.billTotal || 0) + grandTotal;
-          if (!foundTable.orders) foundTable.orders = [];
-          foundTable.orders.push(...verifiedItems.map(it => ({
-            id: it.id,
-            name: it.name,
-            price: it.unitPrice,
-            qty: it.qty,
-            completed: false
-          })));
-        }
-      }
 
       // Persist to central state
       if (!serverState.onlineOrders) serverState.onlineOrders = [];
       serverState.onlineOrders.unshift(newOrder);
 
-      if (!serverState.tickets) serverState.tickets = [];
-      serverState.tickets.unshift(kotTicket);
+      // Dine-in orders require Floor Manager confirmation with continuous repeating notification
+      if (orderType === 'dine_in') {
+        const floorAlert = {
+          id: `alert-${Date.now()}`,
+          orderId: newOrder.id,
+          orderNumber: newOrder.orderNumber,
+          floor: orderFloor,
+          tableId: targetTableId,
+          tableName: targetTableName,
+          customerName,
+          customerPhone,
+          total: grandTotal,
+          itemsCount: verifiedItems.length,
+          itemsSummary: verifiedItems.map(i => `${i.qty}x ${i.name}`).join(', '),
+          time: Date.now()
+        };
+        serverState.pendingFloorOrderAlert = floorAlert;
+      } else {
+        // Takeaway / Delivery generates KOT immediately
+        const kotTicket = {
+          id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+          orderId: newOrder.id,
+          orderNumber: newOrder.orderNumber,
+          tableId: targetTableId,
+          tableName: targetTableName,
+          server: orderType === 'takeaway' ? 'Mobile Express Takeaway' : 'Mobile App Delivery',
+          timePlaced: Date.now(),
+          status: 'cooking',
+          roundNumber: roundNum,
+          isAddOn,
+          items: verifiedItems.map(it => ({
+            id: it.id,
+            name: it.name,
+            price: it.unitPrice,
+            qty: it.qty,
+            notes: it.notes,
+            station: it.station || 'main',
+            completed: false
+          }))
+        };
+        if (!serverState.tickets) serverState.tickets = [];
+        serverState.tickets.unshift(kotTicket);
+      }
 
       // Update customer total orders & spent in appUsers and customers
       if (serverState.appUsers) {
@@ -1814,10 +1821,13 @@ async function handleRequest(req, res) {
         timestamp: Date.now()
       });
 
+      let activeTicket = typeof kotTicket !== 'undefined' ? kotTicket : null;
+
       broadcastToClients({
-        type: 'NEW_ORDER_ALERT',
+        type: orderType === 'dine_in' ? 'PENDING_FLOOR_ORDER_ALERT' : 'NEW_ORDER_ALERT',
+        alert: serverState.pendingFloorOrderAlert,
         order: newOrder,
-        ticket: kotTicket,
+        ticket: activeTicket,
         soundAlert: true,
         timestamp: Date.now()
       });
@@ -1827,8 +1837,11 @@ async function handleRequest(req, res) {
         success: true,
         data: newOrder,
         order: newOrder,
-        ticket: kotTicket,
-        message: 'Order created and dispatched to Sultan Kitchen successfully!'
+        ticket: activeTicket,
+        pendingConfirmation: orderType === 'dine_in',
+        message: orderType === 'dine_in'
+          ? 'Order submitted and sent to Floor Manager for confirmation.'
+          : 'Order created and dispatched to Sultan Kitchen successfully!'
       }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -1908,9 +1921,64 @@ async function handleRequest(req, res) {
       if (managerNotes) order.managerNotes = managerNotes;
       order.updatedAt = Date.now();
 
-      const ticket = (serverState.tickets || []).find(t => t.orderId === order.id);
-      if (ticket) {
-        if (status === 'CONFIRMED' || status === 'PREPARING') ticket.status = 'cooking';
+      // Clear pending floor alert if this order was confirmed or cancelled
+      if (serverState.pendingFloorOrderAlert && 
+          (serverState.pendingFloorOrderAlert.orderId === order.id || serverState.pendingFloorOrderAlert.orderNumber === order.orderNumber)) {
+        serverState.pendingFloorOrderAlert = null;
+      }
+
+      let ticket = (serverState.tickets || []).find(t => t.orderId === order.id || (order.orderNumber && t.orderNumber === order.orderNumber));
+      if (status === 'CONFIRMED') {
+        if (!ticket) {
+          ticket = {
+            id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+            orderId: order.id,
+            orderNumber: order.orderNumber,
+            tableId: order.tableId || 'DINE-IN-APP',
+            tableName: order.tableName || 'Dine-In',
+            server: assignedWaiter || order.assignedWaiter || 'Floor Manager Confirmed',
+            timePlaced: Date.now(),
+            status: 'cooking',
+            roundNumber: order.roundNumber || 1,
+            isAddOn: order.isAddOn || false,
+            stationStatuses: { main: 'cooking', juice: 'cooking' },
+            items: (order.items || []).map(it => ({
+              id: it.id,
+              name: it.name,
+              price: it.unitPrice || it.price,
+              qty: it.qty || it.quantity,
+              notes: it.notes,
+              station: it.station || 'main',
+              itemStatus: 'cooking',
+              completed: false
+            }))
+          };
+          if (!serverState.tickets) serverState.tickets = [];
+          serverState.tickets.unshift(ticket);
+        } else {
+          ticket.status = 'cooking';
+          if (assignedWaiter) ticket.server = assignedWaiter;
+        }
+
+        // Occupy table
+        if (order.tableId && order.tableId !== 'DINE-IN-APP') {
+          const foundTable = (serverState.tables || []).find(t => t.id === order.tableId || t.name.toLowerCase() === (order.tableName || '').toLowerCase());
+          if (foundTable) {
+            foundTable.status = 'occupied';
+            if (assignedWaiter || order.assignedWaiter) foundTable.server = assignedWaiter || order.assignedWaiter;
+            foundTable.billTotal = (foundTable.billTotal || 0) + (order.total || 0);
+            if (!foundTable.orders) foundTable.orders = [];
+            foundTable.orders.push(...(order.items || []).map(it => ({
+              id: it.id,
+              name: it.name,
+              price: it.unitPrice || it.price,
+              qty: it.qty || it.quantity,
+              completed: false
+            })));
+          }
+        }
+      } else if (ticket) {
+        if (status === 'PREPARING') ticket.status = 'cooking';
         else if (status === 'READY' || status === 'READY_FOR_PICKUP') ticket.status = 'ready';
         else if (status === 'DELIVERED' || status === 'SERVED') ticket.status = 'served';
       }
@@ -2234,7 +2302,7 @@ async function handleRequest(req, res) {
   }
 
   // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist)
-  if (req.method === 'GET') {
+  if (req.method === 'GET' || req.method === 'HEAD') {
     const DIST_DIR = path.join(__dirname, 'dist');
     if (fs.existsSync(DIST_DIR)) {
       let rawPath = (url.pathname || '/').split('?')[0];
@@ -2332,7 +2400,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'onlineOrders', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles'];
+  const allowedKeys = ['tables', 'tickets', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles'];
   let modified = false;
 
   for (const key of allowedKeys) {

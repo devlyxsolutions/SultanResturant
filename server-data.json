@@ -472,6 +472,33 @@
   ],
   "tickets": [
     {
+      "id": "KOT-2328",
+      "orderId": "ORD-407392",
+      "orderNumber": "SLT-5972",
+      "tableId": "rt-2",
+      "tableName": "Sky Cabin 1",
+      "server": "Sara Ahmed",
+      "timePlaced": 1793881423279,
+      "status": "cooking",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "stationStatuses": {
+        "main": "cooking",
+        "juice": "cooking"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 2,
+          "station": "main",
+          "itemStatus": "cooking",
+          "completed": false
+        }
+      ]
+    },
+    {
       "id": "KOT-1026",
       "orderId": "ORD-881821",
       "orderNumber": "SLT-2965",
@@ -637,7 +664,8 @@
           "name": "Chicken Cheese (Small)",
           "price": 850,
           "qty": 3,
-          "completed": false
+          "completed": true,
+          "itemStatus": "ready"
         },
         {
           "id": "m1791112898285-Medium",
@@ -664,6 +692,104 @@
     }
   ],
   "onlineOrders": [
+    {
+      "id": "ORD-407392",
+      "orderNumber": "SLT-5972",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "floor": "Ground Floor",
+      "seatingType": "majlis",
+      "tableId": "rt-2",
+      "tableName": "Sky Cabin 1",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "Hamza Floor Test",
+        "phone": "03001234567",
+        "address": "In-Restaurant: Sky Cabin 1"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "unitPrice": 1450,
+          "price": 1450,
+          "qty": 2,
+          "quantity": 2,
+          "totalPrice": 2900,
+          "station": "main",
+          "menuItem": {
+            "id": "m1",
+            "name": "Sultan Seekh Kebab",
+            "price": 1450,
+            "description": "Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 2900,
+      "deliveryFee": 0,
+      "tax": 145,
+      "total": 3045,
+      "paymentMethod": "pay_at_counter",
+      "isPaid": false,
+      "status": "CONFIRMED",
+      "createdAt": 1793881407392,
+      "estimatedDeliveryMinutes": 20,
+      "assignedWaiter": "Sara Ahmed",
+      "updatedAt": 1793881423279
+    },
+    {
+      "id": "ORD-313632",
+      "orderNumber": "SLT-3403",
+      "source": "mobile_app",
+      "orderType": "dine_in",
+      "floor": "Ground Floor",
+      "seatingType": "majlis",
+      "tableId": "rt-2",
+      "tableName": "Sky Cabin 1",
+      "roundNumber": 1,
+      "isAddOn": false,
+      "customer": {
+        "name": "Hamza Floor Test",
+        "phone": "03001234567",
+        "address": "In-Restaurant: Sky Cabin 1"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "unitPrice": 1450,
+          "price": 1450,
+          "qty": 2,
+          "quantity": 2,
+          "totalPrice": 2900,
+          "station": "main",
+          "menuItem": {
+            "id": "m1",
+            "name": "Sultan Seekh Kebab",
+            "price": 1450,
+            "description": "Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.",
+            "category": "Mains",
+            "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
+            "isAvailable": true,
+            "station": "main"
+          }
+        }
+      ],
+      "subtotal": 2900,
+      "deliveryFee": 0,
+      "tax": 145,
+      "total": 3045,
+      "paymentMethod": "pay_at_counter",
+      "isPaid": false,
+      "status": "PENDING",
+      "createdAt": 1793881313632,
+      "estimatedDeliveryMinutes": 20
+    },
     {
       "id": "ORD-881821",
       "orderNumber": "SLT-2965",
@@ -2214,6 +2340,24 @@
   ],
   "appUserLogs": [
     {
+      "id": "log-1793881407392",
+      "name": "Hamza Floor Test",
+      "phone": "03001234567",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793881407392,
+      "details": "Placed order #SLT-5972 (Rs. 3,045)"
+    },
+    {
+      "id": "log-1793881313632",
+      "name": "Hamza Floor Test",
+      "phone": "03001234567",
+      "action": "ORDER_PLACED",
+      "deviceInfo": "Mobile App",
+      "timestamp": 1793881313632,
+      "details": "Placed order #SLT-3403 (Rs. 3,045)"
+    },
+    {
       "id": "log-1793041881821",
       "name": "Test Customer",
       "phone": "03001234567",
@@ -3104,5 +3248,19 @@
   ],
   "assets": [],
   "damageRecords": [],
-  "lastBillPaidAlert": null
+  "lastBillPaidAlert": null,
+  "lastFoodReadyAlert": {
+    "id": "item_ready_KOT-3443_m1791112898285-Small_1793878027242",
+    "ticketId": "KOT-3443",
+    "tableId": "1",
+    "tableName": "T-01",
+    "server": "Sara Ahmed",
+    "station": "main",
+    "stationLabel": "Kitchen",
+    "itemsSummary": "1x Chicken Cheese (Small) (Ready to Serve Now!)",
+    "type": "item_ready",
+    "singleItemName": "Chicken Cheese (Small)",
+    "time": 1793878027242
+  },
+  "pendingFloorOrderAlert": null
 }

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
 
-export type Role = 'admin' | 'manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | string | null;
+export type Role = 'admin' | 'manager' | 'floor_manager' | 'Floor Manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | string | null;
 
 export interface User {
   id: string;
@@ -80,6 +80,9 @@ export const ROLE_HOME: Record<string, string> = {
   Admin: '/admin/dashboard',
   manager: '/manager/dashboard',
   Manager: '/manager/dashboard',
+  floor_manager: '/floor-manager',
+  'Floor Manager': '/floor-manager',
+  floormanager: '/floor-manager',
   waiter: '/waiter',
   Waiter: '/waiter',
   kitchen: '/kitchen/kds',
@@ -95,6 +98,7 @@ export function getRoleHome(role?: Role | null, baseRole?: string | null): strin
   if (!role) return '/login';
   const r = (baseRole || role).toLowerCase().replace(/[\s_-]/g, '');
   if (r.includes('admin')) return '/admin/dashboard';
+  if (r.includes('floor')) return '/floor-manager';
   if (r.includes('manager')) return '/manager/dashboard';
   if (r.includes('waiter') || r.includes('ordertaker')) return '/waiter';
   if (r.includes('kitchen') || r.includes('kds') || r.includes('chef') || r.includes('cook')) return '/kitchen/kds';

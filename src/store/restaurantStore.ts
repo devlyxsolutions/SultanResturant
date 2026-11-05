@@ -62,6 +62,64 @@ export type FoodReadyAlert = {
   estimatedMinutes?: number;
 };
 
+export type PendingFloorOrderAlert = {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  floor: string;
+  tableId: string;
+  tableName: string;
+  customerName: string;
+  customerPhone: string;
+  total: number;
+  itemsCount: number;
+  itemsSummary: string;
+  time: number;
+};
+
+export type OnlineOrderItem = {
+  id: string;
+  name: string;
+  unitPrice: number;
+  price?: number;
+  qty: number;
+  quantity?: number;
+  totalPrice?: number;
+  selectedVariant?: string;
+  station?: string;
+  notes?: string;
+};
+
+export type OnlineOrder = {
+  id: string;
+  orderNumber: string;
+  source?: 'mobile_app' | 'digital_menu' | 'pos' | string;
+  orderType: 'dine_in' | 'takeaway' | 'delivery';
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'READY_FOR_PICKUP' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'SERVED' | 'CANCELLED';
+  floor?: string;
+  seatingType?: string;
+  tableId?: string;
+  tableName?: string;
+  cabinNumber?: string;
+  roundNumber?: number;
+  isAddOn?: boolean;
+  assignedWaiter?: string;
+  managerNotes?: string;
+  customer?: {
+    id?: string;
+    name: string;
+    phone: string;
+    address?: string;
+  };
+  items: OnlineOrderItem[];
+  subtotal: number;
+  deliveryFee?: number;
+  tax?: number;
+  total: number;
+  createdAt?: number;
+  updatedAt?: number;
+};
+
 export type Ticket = {
   id: string;
   orderId?: string;
@@ -207,7 +265,7 @@ export type Invoice = {
   feedbackSubmitted?: boolean;
 };
 
-export type StaffRole = 'Admin' | 'Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland' | string;
+export type StaffRole = 'Admin' | 'Manager' | 'Floor Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland' | string;
 export type StaffShift = 'Morning' | 'Evening' | 'Night';
 export type StaffStatus = 'Active' | 'On Leave' | 'Inactive';
 
@@ -307,8 +365,14 @@ type RestaurantState = {
   zones: string[];
   floors: Floor[];
   reservations: Reservation[];
+  onlineOrders: OnlineOrder[];
+  pendingFloorOrderAlert?: PendingFloorOrderAlert | null;
   lastBillPaidAlert?: { id?: string; tableId: string; tableName: string; billTotal: number; time: number } | null;
   lastFoodReadyAlert?: FoodReadyAlert | null;
+
+  confirmOnlineOrder: (orderId: string, assignedWaiter?: string) => Promise<void>;
+  rejectOnlineOrder: (orderId: string, reason?: string) => Promise<void>;
+  clearPendingFloorOrderAlert: (orderId?: string) => void;
 
   placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
@@ -727,6 +791,44 @@ const INITIAL_STAFF: StaffMember[] = [
     address: 'Ichhra, Lahore',
     bankAccountDetails: 'UBL - PK88UNIL000998877665'
   },
+  {
+    id: 'st-fm1',
+    name: 'Rashid Mehmood',
+    phone: '+92 305 6677889',
+    role: 'Floor Manager',
+    pin: '6677',
+    status: 'Active',
+    shift: 'Morning',
+    joinedDate: '2025-02-15',
+    assignedZone: 'Ground Floor',
+    assignedZones: ['Ground Floor'],
+    cnic: '35201-7788990-1',
+    designation: 'Ground Floor Manager',
+    monthlySalary: 55000,
+    hourlyRate: 280,
+    emergencyContact: '+92 321 9988776',
+    address: 'Johar Town, Lahore',
+    bankAccountDetails: 'Meezan Bank - PK12MEZN0099887766'
+  },
+  {
+    id: 'st-fm2',
+    name: 'Tariq Javed',
+    phone: '+92 306 1122334',
+    role: 'Floor Manager',
+    pin: '7788',
+    status: 'Active',
+    shift: 'Evening',
+    joinedDate: '2025-03-01',
+    assignedZone: '1st Floor',
+    assignedZones: ['1st Floor'],
+    cnic: '35202-3344556-3',
+    designation: '1st Floor Manager',
+    monthlySalary: 55000,
+    hourlyRate: 280,
+    emergencyContact: '+92 333 4455667',
+    address: 'Gulberg III, Lahore',
+    bankAccountDetails: 'Bank Alfalah - PK55ALFH0011223344'
+  },
 ];
 
 const INITIAL_ATTENDANCE: AttendanceRecord[] = [
@@ -990,7 +1092,7 @@ function notifySync() {
 
 export const useRestaurantStore = create<RestaurantState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       tables: INITIAL_TABLES,
       invoices: [],
       salesReturns: [],
@@ -1000,6 +1102,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       attendance: INITIAL_ATTENDANCE,
       salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
+      onlineOrders: [],
+      pendingFloorOrderAlert: null,
       tickets: [
         {
           id: 'KOT-1042',
@@ -1018,6 +1122,130 @@ export const useRestaurantStore = create<RestaurantState>()(
       regions: INITIAL_REGIONS,
       zones: INITIAL_FLOORS.map(f => f.name),
       floors: INITIAL_FLOORS,
+
+      confirmOnlineOrder: async (orderId: string, assignedWaiter?: string) => {
+        try {
+          await fetch(`http://127.0.0.1:5050/api/public/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CONFIRMED', assignedWaiter })
+          });
+        } catch (_) {}
+
+        set((state) => {
+          const order = (state.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
+          const updatedOrders = (state.onlineOrders || []).map(o => {
+            if (o.id === orderId || o.orderNumber === orderId) {
+              return { ...o, status: 'CONFIRMED' as const, assignedWaiter: assignedWaiter || o.assignedWaiter };
+            }
+            return o;
+          });
+
+          let updatedTickets = [...state.tickets];
+          let updatedTables = [...state.tables];
+          let updatedAlert = state.pendingFloorOrderAlert;
+          if (updatedAlert && (updatedAlert.orderId === orderId || updatedAlert.orderNumber === orderId)) {
+            updatedAlert = null;
+          }
+
+          if (order) {
+            const existingTicket = updatedTickets.find(t => t.orderId === order.id || (order.orderNumber && t.orderNumber === order.orderNumber));
+            if (!existingTicket) {
+              const kotTicket: Ticket = {
+                id: `KOT-${Date.now().toString().slice(-4)}`,
+                orderId: order.id,
+                orderNumber: order.orderNumber,
+                tableId: order.tableId || 'DINE-IN-APP',
+                tableName: order.tableName || 'Dine-In',
+                server: assignedWaiter || order.assignedWaiter || 'Floor Manager Confirmed',
+                timePlaced: Date.now(),
+                status: 'cooking',
+                roundNumber: order.roundNumber || 1,
+                isAddOn: order.isAddOn || false,
+                stationStatuses: { main: 'cooking', juice: 'cooking' },
+                items: (order.items || []).map(it => ({
+                  id: it.id,
+                  name: it.name,
+                  price: it.unitPrice || it.price || 0,
+                  qty: it.qty || it.quantity || 1,
+                  notes: it.notes,
+                  station: (it.station as any) || 'main',
+                  itemStatus: 'cooking',
+                  completed: false
+                }))
+              };
+              updatedTickets.unshift(kotTicket);
+            }
+
+            if (order.tableId && order.tableId !== 'DINE-IN-APP') {
+              updatedTables = updatedTables.map(t => {
+                if (t.id === order.tableId || t.name.toLowerCase() === (order.tableName || '').toLowerCase()) {
+                  return {
+                    ...t,
+                    status: 'occupied' as const,
+                    server: assignedWaiter || t.server || 'Floor Waiter',
+                    billTotal: (t.billTotal || 0) + (order.total || 0),
+                    orders: [
+                      ...(t.orders || []),
+                      ...(order.items || []).map(it => ({
+                        id: it.id,
+                        name: it.name,
+                        price: it.unitPrice || it.price || 0,
+                        qty: it.qty || it.quantity || 1,
+                        completed: false
+                      }))
+                    ]
+                  };
+                }
+                return t;
+              });
+            }
+          }
+
+          return {
+            onlineOrders: updatedOrders,
+            tickets: updatedTickets,
+            tables: updatedTables,
+            pendingFloorOrderAlert: updatedAlert
+          };
+        });
+        notifySync();
+      },
+
+      rejectOnlineOrder: async (orderId: string, reason?: string) => {
+        try {
+          await fetch(`http://127.0.0.1:5050/api/public/orders/${orderId}/status`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'CANCELLED', managerNotes: reason || 'Rejected by Floor Manager' })
+          });
+        } catch (_) {}
+
+        set((state) => {
+          const updatedOrders = (state.onlineOrders || []).map(o => {
+            if (o.id === orderId || o.orderNumber === orderId) {
+              return { ...o, status: 'CANCELLED' as const, managerNotes: reason };
+            }
+            return o;
+          });
+          let updatedAlert = state.pendingFloorOrderAlert;
+          if (updatedAlert && (updatedAlert.orderId === orderId || updatedAlert.orderNumber === orderId)) {
+            updatedAlert = null;
+          }
+          return {
+            onlineOrders: updatedOrders,
+            pendingFloorOrderAlert: updatedAlert
+          };
+        });
+        notifySync();
+      },
+
+      clearPendingFloorOrderAlert: (orderId?: string) => set((state) => {
+        if (!orderId || state.pendingFloorOrderAlert?.orderId === orderId || state.pendingFloorOrderAlert?.orderNumber === orderId) {
+          return { pendingFloorOrderAlert: null };
+        }
+        return state;
+      }),
 
       placeOrder: (tableId, serverName, orderItems, isAddOn) => set((state) => {
         const table = state.tables.find(t => t.id === tableId);
@@ -2596,6 +2824,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
           ...(remoteState.customers ? { customers: remoteState.customers } : {}),
           ...(remoteState.reservations ? { reservations: remoteState.reservations } : {}),
+          ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
+          ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
           ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
           ...(remoteState.feedbacks ? { feedbacks: remoteState.feedbacks } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? {
@@ -2690,6 +2920,9 @@ export const useRestaurantStore = create<RestaurantState>()(
               }));
           } else {
             state.tickets = [];
+          }
+          if (!Array.isArray(state.onlineOrders)) {
+            state.onlineOrders = [];
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {

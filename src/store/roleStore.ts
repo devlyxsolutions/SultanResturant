@@ -62,7 +62,7 @@ export interface RolePermissions {
   canModifyMenuPrices: boolean; // Change dish selling prices & variants
 }
 
-export type BaseRoleType = 'admin' | 'manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | 'custom';
+export type BaseRoleType = 'admin' | 'manager' | 'floor_manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | 'custom';
 
 export interface CustomRole {
   id: string; // e.g. 'role-admin', 'role-manager', 'role-cashier-1'
@@ -145,6 +145,41 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canApplyCustomDiscount: true,
       canVoidInvoice: true,
       canProcessReturns: true,
+      canStartCloseShift: true,
+      canModifyMenuPrices: false,
+    },
+    createdAt: 1700000000000,
+    updatedAt: 1700000000000,
+  },
+  {
+    id: 'role-floor-manager',
+    name: 'Floor Manager',
+    urduName: 'فلور منیجر',
+    description: 'Floor command, table supervision, live seating occupancy, and digital menu order confirmation.',
+    badgeColor: '#0D9488',
+    icon: 'layers',
+    isSystem: true,
+    baseRole: 'floor_manager',
+    permissions: {
+      canViewRevenue: false, // Blind financial revenue
+      canViewCostPrice: false,
+      canViewCustomerContacts: true,
+      canExportReports: false,
+      canAccessPOS: true,
+      canAccessInvoices: true,
+      canAccessReports: false,
+      canAccessInventory: false,
+      canAccessKitchenHandover: false,
+      canAccessRecipes: false,
+      canAccessDiscounts: true,
+      canAccessStaff: false,
+      canAccessExpenses: false,
+      canAccessFloorPlan: true,
+      canAccessDamages: false,
+      canAccessAssets: false,
+      canApplyCustomDiscount: false,
+      canVoidInvoice: false,
+      canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
     },

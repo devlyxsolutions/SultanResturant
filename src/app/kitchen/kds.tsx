@@ -1,27 +1,27 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
-  Modal,
-  TextInput,
-  Alert,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
-import { useAuthStore } from '../../store/authStore';
-import { useOpsStore } from '../../store/opsStore';
-import SyncStatusBadge from '../../components/SyncStatusBadge';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
-import { broadcastImmediately } from '../../services/syncService';
+import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { isFirebaseConfigured } from '../../services/firebase';
+import { broadcastImmediately } from '../../services/syncService';
+import { useAuthStore } from '../../store/authStore';
+import { useOpsStore } from '../../store/opsStore';
+import { Ticket, useRestaurantStore } from '../../store/restaurantStore';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -161,7 +161,7 @@ export default function KitchenDisplayScreen() {
   // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
   useEffect(() => {
     const host = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
-    
+
     // Fetch active kitchen tickets and reconcile confirmed app orders
     const fetchLiveTickets = async () => {
       try {
@@ -181,7 +181,7 @@ export default function KitchenDisplayScreen() {
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           if (ordersData.success && Array.isArray(ordersData.orders)) {
-            const activeAppOrders = ordersData.orders.filter((o: any) => 
+            const activeAppOrders = ordersData.orders.filter((o: any) =>
               o.status === 'CONFIRMED' || o.status === 'PREPARING' || o.status === 'READY'
             );
 
@@ -228,7 +228,7 @@ export default function KitchenDisplayScreen() {
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     };
 
     fetchLiveTickets();
@@ -268,14 +268,14 @@ export default function KitchenDisplayScreen() {
             });
             useRestaurantStore.getState().syncFromServer({ tickets: updated });
           }
-        } catch (e) {}
+        } catch (e) { }
       };
-    } catch (e) {}
+    } catch (e) { }
 
     return () => {
       clearInterval(pollInterval);
       if (socket) {
-        try { socket.close(); } catch (e) {}
+        try { socket.close(); } catch (e) { }
       }
     };
   }, []);
@@ -373,7 +373,7 @@ export default function KitchenDisplayScreen() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'READY' })
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } else if (ticket.stationStatus === 'ready') {
       bumpTicket(ticket.id, stationFilter);
@@ -382,7 +382,7 @@ export default function KitchenDisplayScreen() {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'SERVED' })
-        }).catch(() => {});
+        }).catch(() => { });
       }
     } else {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
@@ -473,29 +473,29 @@ export default function KitchenDisplayScreen() {
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
             <View style={[
-              styles.timeBadge, 
+              styles.timeBadge,
               isPending && { backgroundColor: '#78350F' },
               isOverdue && { backgroundColor: '#7F1D1D' },
               isReady && { backgroundColor: '#1E3A8A' }
             ]}>
-              <Ionicons 
-                name={isPending ? 'hourglass-outline' : isOverdue ? 'alert-circle' : isReady ? 'checkmark-circle' : 'timer-outline'} 
-                size={13} 
-                color={isOverdue ? '#FCA5A5' : isPending ? '#FDE68A' : '#fff'} 
+              <Ionicons
+                name={isPending ? 'hourglass-outline' : isOverdue ? 'alert-circle' : isReady ? 'checkmark-circle' : 'timer-outline'}
+                size={13}
+                color={isOverdue ? '#FCA5A5' : isPending ? '#FDE68A' : '#fff'}
               />
               <Text style={[styles.timeText, isOverdue && { color: '#FCA5A5' }, isPending && { color: '#FDE68A' }]}>
-                {isPending 
-                  ? `${maxPrepTimeMin}m (Est)` 
+                {isPending
+                  ? `${maxPrepTimeMin}m (Est)`
                   : isReady
                     ? 'READY'
                     : isServed
                       ? 'SERVED'
-                      : isOverdue 
-                        ? `+${Math.floor(overdueSeconds / 60)}m ${overdueSeconds % 60}s` 
+                      : isOverdue
+                        ? `+${Math.floor(overdueSeconds / 60)}m ${overdueSeconds % 60}s`
                         : `${Math.floor(remainingSeconds / 60)}:${(remainingSeconds % 60).toString().padStart(2, '0')}`}
               </Text>
             </View>
-            <TouchableOpacity 
+            <TouchableOpacity
               style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
               onPress={() => setPrintingTicket(item)}
             >
@@ -508,12 +508,12 @@ export default function KitchenDisplayScreen() {
         {/* Live Timer Progress Bar (When Cooking) */}
         {isCooking && (
           <View style={{ height: 4, backgroundColor: 'rgba(0,0,0,0.3)', width: '100%' }}>
-            <View 
-              style={{ 
-                height: 4, 
-                backgroundColor: isOverdue ? '#EF4444' : remainingSeconds <= 180 ? '#F97316' : '#34D399', 
-                width: `${progressPct}%` 
-              }} 
+            <View
+              style={{
+                height: 4,
+                backgroundColor: isOverdue ? '#EF4444' : remainingSeconds <= 180 ? '#F97316' : '#34D399',
+                width: `${progressPct}%`
+              }}
             />
           </View>
         )}
@@ -889,10 +889,10 @@ export default function KitchenDisplayScreen() {
               {activeFilter === 'ready'
                 ? 'No tickets currently waiting for pickup.'
                 : activeFilter === 'cooking'
-                ? 'No items currently in the cooking queue.'
-                : activeFilter === 'addons'
-                ? 'No add-on orders currently pending.'
-                : 'All kitchen tickets have been prepared and served.'}
+                  ? 'No items currently in the cooking queue.'
+                  : activeFilter === 'addons'
+                    ? 'No add-on orders currently pending.'
+                    : 'All kitchen tickets have been prepared and served.'}
             </Text>
           </View>
         ) : (
@@ -927,15 +927,15 @@ export default function KitchenDisplayScreen() {
             <TouchableOpacity style={styles.closeBtn} onPress={() => setPrintingTicket(null)}>
               <Text style={styles.closeBtnText}>Close</Text>
             </TouchableOpacity>
-            
+
             {printingTicket && <OrderSlip ticket={printingTicket} />}
-            
+
             <TouchableOpacity style={styles.printBtnAction} onPress={() => {
-                if (printingTicket) {
-                  printOrderSlip(printingTicket);
-                } else if (typeof window !== 'undefined') {
-                  window.print();
-                }
+              if (printingTicket) {
+                printOrderSlip(printingTicket);
+              } else if (typeof window !== 'undefined') {
+                window.print();
+              }
             }}>
               <Text style={styles.printBtnText}>Print Slip</Text>
             </TouchableOpacity>
