@@ -2449,7 +2449,7 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, () => {
   console.log(`=================================================`);
   console.log(`🏰 SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
   console.log(`📡 Port: ${PORT} (All network interfaces 0.0.0.0)`);
@@ -2461,20 +2461,20 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log(`=================================================`);
 });
 
-server5000.listen(5000, '0.0.0.0', () => {
+server5000.listen(5000, () => {
   console.log(`📡 Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
 }).on('error', (err) => {
   console.log('[Sultan Hub] Port 5000 listener:', err.message);
 });
 
 if (server80) {
-  server80.listen(80, '0.0.0.0', () => {
+  server80.listen(80, () => {
     console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
   }).on('error', () => {});
 }
 
 if (server8081 && PORT !== 8081) {
-  server8081.listen(8081, '0.0.0.0', () => {
+  server8081.listen(8081, () => {
     console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
   }).on('error', () => {
     // Port 8081 may be in use by Metro bundler during active development - safe to ignore

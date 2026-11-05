@@ -29,6 +29,7 @@ export const DEVICE_ID = `dev_${Platform.OS}_${Math.random().toString(36).substr
 
 const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_state.json`;
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
+let isRtdbAccessible = false;
 
 let currentServerAddress = '192.168.1.4';
 let syncStatus: SyncStatus = 'offline';
@@ -257,45 +258,44 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
-/** Instantaneous state load from Firebase REST endpoint & Cloud Firestore in parallel */
+/** Instantaneous state load from Cloud Firestore first, then fallback to REST */
 async function fetchInitialFirebaseState() {
-  let loadedFromRest = false;
+  let loadedFromCloud = false;
 
-  // 1. Fast non-blocking HTTP REST fetch (<150ms)
-  try {
-    const res = await fetch(FIREBASE_REST_URL);
-    if (res.ok) {
-      const data = await res.json();
-      if (data?.state) {
-        applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-        loadedFromRest = true;
-      }
-    }
-  } catch (e) {
-    console.warn('[SyncService] Initial REST fetch error:', e);
-  }
-
-  // 2. Fallback check against Cloud Firestore only if REST fetch did not succeed
-  if (!loadedFromRest) {
-    const firestoreDb = getFirestoreDb();
-    if (firestoreDb) {
-      try {
-        const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data?.state) {
-            applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-            loadedFromRest = true;
-          }
+  // 1. Direct Cloud Firestore state fetch (<100ms)
+  const firestoreDb = getFirestoreDb();
+  if (firestoreDb) {
+    try {
+      const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data?.state) {
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+          loadedFromCloud = true;
         }
-      } catch (e) {
-        console.warn('[SyncService] Initial Firestore fetch error:', e);
       }
+    } catch (e) {
+      console.warn('[SyncService] Initial Firestore fetch error:', e);
     }
   }
 
-  if (!loadedFromRest) {
+  // 2. Fallback to Firebase REST only if Firestore did not load
+  if (!loadedFromCloud) {
+    try {
+      const res = await fetch(FIREBASE_REST_URL);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.state) {
+          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+          loadedFromCloud = true;
+          isRtdbAccessible = true;
+        }
+      }
+    } catch (_) {}
+  }
+
+  if (!loadedFromCloud) {
     hasReceivedInitialSync = true;
     broadcastLocalState();
   }
@@ -303,7 +303,7 @@ async function fetchInitialFirebaseState() {
 
 /** Native browser Server-Sent Events (SSE) stream for zero-latency, sub-100ms real-time pushes */
 function initWebSSE() {
-  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.EventSource) {
+  if (!isRtdbAccessible || Platform.OS !== 'web' || typeof window === 'undefined' || !window.EventSource) {
     return;
   }
 
@@ -353,7 +353,7 @@ function initWebSSE() {
 
 /** High-frequency heartbeat polling (every 1s) to guarantee instant sync on mobile networks */
 async function pollFirebaseUpdates() {
-  if (isApplyingRemoteUpdate) return;
+  if (!isRtdbAccessible || isApplyingRemoteUpdate) return;
   try {
     const res = await fetch(FIREBASE_REST_LAST_UPDATED_URL);
     if (!res.ok) return;
@@ -653,35 +653,37 @@ function broadcastLocalState() {
       } catch {}
     }
 
-    // C. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks)
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    if (controller) {
-      activePutAbortController = controller;
-    }
+    // C. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks if RTDB active)
+    if (isRtdbAccessible) {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      if (controller) {
+        activePutAbortController = controller;
+      }
 
-    fetch(FIREBASE_REST_URL, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      ...(controller ? { signal: controller.signal } : {}),
-    })
-      .then(() => {
-        if (broadcastSeq !== currentBroadcastSeq) return;
-        fetch(FIREBASE_REST_LAST_UPDATED_URL, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(now),
-        }).catch(() => {});
-
-        lastSyncedAt = Date.now();
-        totalSyncedEvents++;
-        syncStatus = 'connected';
-        notifyListeners();
+      fetch(FIREBASE_REST_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        ...(controller ? { signal: controller.signal } : {}),
       })
-      .catch((err) => {
-        if (err?.name === 'AbortError') return;
-        console.warn('[SyncService] Firebase REST write error:', err);
-      });
+        .then(() => {
+          if (broadcastSeq !== currentBroadcastSeq) return;
+          fetch(FIREBASE_REST_LAST_UPDATED_URL, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(now),
+          }).catch(() => {});
+
+          lastSyncedAt = Date.now();
+          totalSyncedEvents++;
+          syncStatus = 'connected';
+          notifyListeners();
+        })
+        .catch((err) => {
+          if (err?.name === 'AbortError') return;
+          console.warn('[SyncService] Firebase REST write error:', err);
+        });
+    }
     return;
   }
 
