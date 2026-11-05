@@ -1033,7 +1033,7 @@ async function handleRequest(req, res) {
   const url = new URL(req.url, `http://${req.headers.host}`);
 
   // 1. Health / System Status
-  if (url.pathname === '/' || url.pathname === '/health' || url.pathname === '/api/status') {
+  if (url.pathname === '/health' || url.pathname === '/api/status' || (url.pathname === '/' && !fs.existsSync(path.join(__dirname, 'dist', 'index.html')))) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'online',
