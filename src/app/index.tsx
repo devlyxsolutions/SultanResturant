@@ -20,6 +20,7 @@ import {
   getRoleHome,
   useRestaurantStore,
   StaffMember,
+  INITIAL_STAFF,
   Role,
 } from '../store';
 import { useRoleStore } from '../store/roleStore';
@@ -51,6 +52,10 @@ const ROLE_ALIASES: Record<string, Role> = {
   barista: 'juicebar',
   playland: 'playland',
   rides: 'playland',
+  floor: 'floor_manager',
+  floormanager: 'floor_manager',
+  'floor manager': 'floor_manager',
+  'floor_manager': 'floor_manager',
 };
 
 export default function WelcomeScreen() {
@@ -213,7 +218,13 @@ export default function WelcomeScreen() {
     }
 
     const normUser = enteredUser.toLowerCase();
-    const activeStaff = staff.filter((s) => s.status !== 'Inactive');
+    const baseStaff = [...(staff || [])];
+    for (const initS of INITIAL_STAFF) {
+      if (!baseStaff.some(s => s.id === initS.id || s.name.trim().toLowerCase() === initS.name.trim().toLowerCase())) {
+        baseStaff.push(initS);
+      }
+    }
+    const activeStaff = baseStaff.filter((s) => s.status !== 'Inactive');
 
     // 1. Exact match by full name, staff ID, or phone number
     const exactMatches = activeStaff.filter((s) => {

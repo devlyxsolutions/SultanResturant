@@ -667,7 +667,7 @@ export const INITIAL_MENU: MenuItem[] = SULTAN_DEFAULT_MENU;
 export const INITIAL_CATEGORIES: string[] = SULTAN_DEFAULT_CATEGORIES;
 export const INITIAL_REGIONS: string[] = SULTAN_DEFAULT_REGIONS;
 
-const INITIAL_STAFF: StaffMember[] = [
+export const INITIAL_STAFF: StaffMember[] = [
   {
     id: 'st1',
     name: 'Junaid Ahsan',
@@ -2819,7 +2819,20 @@ export const useRestaurantStore = create<RestaurantState>()(
           } : {}),
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
           ...(remoteState.floors ? { floors: remoteState.floors } : {}),
-          ...(remoteState.staff ? { staff: remoteState.staff } : {}),
+          ...(remoteState.staff ? {
+            staff: (() => {
+              const sMap = new Map<string, StaffMember>();
+              for (const initS of INITIAL_STAFF) {
+                sMap.set(initS.id, { ...initS });
+              }
+              for (const rem of remoteState.staff) {
+                if (rem && rem.id) {
+                  sMap.set(rem.id, { ...rem });
+                }
+              }
+              return Array.from(sMap.values());
+            })()
+          } : {}),
           ...(remoteState.attendance ? { attendance: remoteState.attendance } : {}),
           ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
           ...(remoteState.customers ? { customers: remoteState.customers } : {}),
@@ -2976,6 +2989,19 @@ export const useRestaurantStore = create<RestaurantState>()(
           state.menuItems = Array.from(menuMap.values());
           state.categories = Array.from(new Set([...(state.categories || SULTAN_DEFAULT_CATEGORIES), ...SULTAN_DEFAULT_CATEGORIES]));
           state.regions = Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...SULTAN_DEFAULT_REGIONS]));
+
+          // Reconcile and guarantee staff members on storage rehydration (ensures Floor Managers exist)
+          const staffMap = new Map<string, StaffMember>();
+          for (const initS of INITIAL_STAFF) {
+            staffMap.set(initS.id, { ...initS });
+          }
+          for (const existing of (state.staff || [])) {
+            if (existing && existing.id) {
+              staffMap.set(existing.id, { ...existing });
+            }
+          }
+          state.staff = Array.from(staffMap.values());
+
           // Normalize and assign true floor and seatingType to any table that has legacy or missing attributes
           state.tables = (state.tables || []).map(t => {
             const inferredFloor = getTableFloor(t);

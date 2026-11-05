@@ -883,6 +883,8 @@ const INITIAL_STATE = {
     { id: 'st3', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
     { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
     { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
+    { id: 'st-fm1', name: 'Rashid Mehmood', phone: '+92 305 6677889', role: 'Floor Manager', pin: '6677', status: 'Active', shift: 'Morning', joinedDate: '2025-02-15', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Ground Floor Manager' },
+    { id: 'st-fm2', name: 'Tariq Javed', phone: '+92 306 1122334', role: 'Floor Manager', pin: '7788', status: 'Active', shift: 'Evening', joinedDate: '2025-03-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: '1st Floor Manager' },
   ],
   reservations: [
     {
@@ -920,6 +922,15 @@ try {
     }
     if (!serverState.tables || serverState.tables.length < 10 || !serverState.tables.some(t => t.seatingType === 'majlis')) {
       serverState.tables = INITIAL_STATE.tables;
+    }
+    if (!Array.isArray(serverState.staff) || serverState.staff.length === 0) {
+      serverState.staff = INITIAL_STATE.staff;
+    } else {
+      for (const initSt of (INITIAL_STATE.staff || [])) {
+        if (!serverState.staff.some(s => s.id === initSt.id || s.name.toLowerCase() === initSt.name.toLowerCase())) {
+          serverState.staff.push(initSt);
+        }
+      }
     }
     console.log('[Sultan Hub] Loaded saved database from server-data.json');
   } else {

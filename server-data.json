@@ -3212,6 +3212,48 @@
       "assignedZones": [
         "1st Floor"
       ]
+    },
+    {
+      "id": "st-fm1",
+      "name": "Rashid Mehmood",
+      "phone": "+92 305 6677889",
+      "role": "Floor Manager",
+      "pin": "6677",
+      "status": "Active",
+      "shift": "Morning",
+      "joinedDate": "2025-02-15",
+      "assignedZone": "Ground Floor",
+      "assignedZones": [
+        "Ground Floor"
+      ],
+      "cnic": "35201-7788990-1",
+      "designation": "Ground Floor Manager",
+      "monthlySalary": 55000,
+      "hourlyRate": 280,
+      "emergencyContact": "+92 321 9988776",
+      "address": "Johar Town, Lahore",
+      "bankAccountDetails": "Meezan Bank - PK12MEZN0099887766"
+    },
+    {
+      "id": "st-fm2",
+      "name": "Tariq Javed",
+      "phone": "+92 306 1122334",
+      "role": "Floor Manager",
+      "pin": "7788",
+      "status": "Active",
+      "shift": "Evening",
+      "joinedDate": "2025-03-01",
+      "assignedZone": "1st Floor",
+      "assignedZones": [
+        "1st Floor"
+      ],
+      "cnic": "35202-3344556-3",
+      "designation": "1st Floor Manager",
+      "monthlySalary": 55000,
+      "hourlyRate": 280,
+      "emergencyContact": "+92 333 4455667",
+      "address": "Gulberg III, Lahore",
+      "bankAccountDetails": "Bank Alfalah - PK55ALFH0011223344"
     }
   ],
   "reservations": [
