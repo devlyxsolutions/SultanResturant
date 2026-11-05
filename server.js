@@ -1,6 +1,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const zlib = require('zlib');
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
@@ -1043,9 +1044,12 @@ async function handleRequest(req, res) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  // 1. Health / System Status
-  if (url.pathname === '/health' || url.pathname === '/api/status' || (url.pathname === '/' && !fs.existsSync(path.join(__dirname, 'dist', 'index.html')))) {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+  // 1. Health / System Status (Pure API endpoints only, never intercept browser HTML paths)
+  if (url.pathname === '/health' || url.pathname === '/api/status') {
+    res.writeHead(200, {
+      'Content-Type': 'application/json',
+      'Cache-Control': 'no-cache, no-store, must-revalidate',
+    });
     res.end(JSON.stringify({
       status: 'online',
       server: 'Sultan Central POS & Mobile Hub',
@@ -2312,7 +2316,7 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist)
+  // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
   if (req.method === 'GET' || req.method === 'HEAD') {
     const DIST_DIR = path.join(__dirname, 'dist');
     if (fs.existsSync(DIST_DIR)) {
@@ -2325,7 +2329,7 @@ async function handleRequest(req, res) {
       // Prevent directory traversal
       if (filePath.startsWith(DIST_DIR)) {
         if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-          // Fallback to index.html for client-side Expo router routes (e.g. /admin/dashboard, /pos)
+          // Fallback to index.html for client-side Expo router routes (e.g. /admin/dashboard, /pos, /floor-manager)
           filePath = path.join(DIST_DIR, 'index.html');
         }
 
@@ -2352,17 +2356,66 @@ async function handleRequest(req, res) {
           const isHashed = rawPath.includes('/_expo/') || rawPath.includes('/assets/') || rawPath.includes('/fonts/');
           const cacheControl = isHashed 
             ? 'public, max-age=31536000, immutable' 
-            : 'no-cache, must-revalidate';
+            : 'no-cache, no-store, must-revalidate';
 
-          res.writeHead(200, {
+          const acceptEncoding = req.headers['accept-encoding'] || '';
+          const canGzip = /\bgzip\b/.test(acceptEncoding) && ['.html', '.js', '.css', '.json', '.svg'].includes(ext);
+
+          const headers = {
             'Content-Type': contentType,
             'Cache-Control': cacheControl,
             'Access-Control-Allow-Origin': '*',
-          });
+          };
+
+          if (canGzip) {
+            headers['Content-Encoding'] = 'gzip';
+            res.writeHead(200, headers);
+            if (req.method === 'HEAD') {
+              res.end();
+              return;
+            }
+            fs.createReadStream(filePath).pipe(zlib.createGzip({ level: 6 })).pipe(res);
+            return;
+          }
+
+          res.writeHead(200, headers);
+          if (req.method === 'HEAD') {
+            res.end();
+            return;
+          }
           fs.createReadStream(filePath).pipe(res);
           return;
         }
       }
+    }
+
+    // If static files are still compiling or being refreshed, show a polite instant loader rather than JSON
+    if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+      res.writeHead(200, {
+        'Content-Type': 'text/html; charset=utf-8',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+      });
+      res.end(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="2">
+  <title>Sultan Restaurant POS - Starting</title>
+  <style>
+    body { background: #1a0f0f; color: #d4af37; font-family: system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+    h1 { margin-bottom: 8px; font-size: 26px; }
+    p { color: #f5e6ca; font-size: 15px; opacity: 0.85; }
+    .loader { width: 40px; height: 40px; border: 4px solid #331515; border-top: 4px solid #d4af37; border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 18px; }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="loader"></div>
+  <h1>👑 Sultan Restaurant POS</h1>
+  <p>Loading application resources, please wait a moment...</p>
+</body>
+</html>`);
+      return;
     }
   }
 
@@ -2418,25 +2471,79 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     if (partialState[key] !== undefined) {
       if (key === 'tickets') {
         const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
-        let mergedTickets = incomingTickets.map(inc => {
-          const existing = (serverState.tickets || []).find(et => et.id === inc.id);
-          if (existing && existing.status === 'served' && inc.status !== 'served') {
-            return existing;
+        const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
+        
+        // Status hierarchy: pending -> cooking -> ready -> served
+        const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
+
+        const existingMap = new Map(existingTickets.map(t => [t.id, t]));
+        const incomingMap = new Map(incomingTickets.map(t => [t.id, t]));
+        const allTicketIds = new Set([...existingMap.keys(), ...incomingMap.keys()]);
+        const mergedList = [];
+
+        for (const tId of allTicketIds) {
+          const inc = incomingMap.get(tId);
+          const ext = existingMap.get(tId);
+
+          if (inc && ext) {
+            const extRank = STATUS_RANK[ext.status] ?? 0;
+            const incRank = STATUS_RANK[inc.status] ?? 0;
+            // Prevent backward status regressing
+            if (extRank > incRank) {
+              mergedList.push(ext);
+            } else {
+              // Merge item-level ready/served states
+              if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
+                const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
+                const mergedItems = inc.items.map(incIt => {
+                  const extIt = extItemsMap.get(incIt.id);
+                  if (!extIt) return incIt;
+                  const extItRank = extIt.itemStatus ? (STATUS_RANK[extIt.itemStatus] ?? 0) : (extIt.completed ? 2 : 0);
+                  const incItRank = incIt.itemStatus ? (STATUS_RANK[incIt.itemStatus] ?? 0) : (incIt.completed ? 2 : 0);
+                  if (extItRank > incItRank) {
+                    return { ...incIt, itemStatus: extIt.itemStatus, completed: extIt.completed, readyAt: extIt.readyAt };
+                  }
+                  return incIt;
+                });
+                mergedList.push({ ...inc, items: mergedItems });
+              } else {
+                mergedList.push(inc);
+              }
+            }
+          } else if (inc) {
+            mergedList.push(inc);
+          } else if (ext) {
+            mergedList.push(ext);
           }
-          return inc;
-        });
-
-        const currentTables = partialState.tables || serverState.tables || [];
-        const hasOccupiedTables = currentTables.some(t => (t.status === 'occupied' || t.status === 'billed') && (t.billTotal || 0) > 0);
-
-        if (mergedTickets.length > 0 || !hasOccupiedTables) {
-          serverState.tickets = mergedTickets;
-        } else {
-          const occupiedIds = new Set(currentTables.filter(t => t.status === 'occupied' || t.status === 'billed').map(t => t.id));
-          const existingActive = (serverState.tickets || []).filter(t => occupiedIds.has(t.tableId));
-          serverState.tickets = existingActive.length > 0 ? existingActive : mergedTickets;
         }
+
+        serverState.tickets = mergedList;
         modified = true;
+      } else if (key === 'tables') {
+        const incomingTables = Array.isArray(partialState.tables) ? partialState.tables : [];
+        if (incomingTables.length > 0) {
+          const currentTables = Array.isArray(serverState.tables) ? serverState.tables : [];
+          const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
+          
+          serverState.tables = currentTables.map(curr => {
+            const inc = incomingMap.get(curr.id);
+            if (!inc) return curr;
+            // Preserve occupied/billed status if server has active table bill
+            if ((curr.status === 'occupied' || curr.status === 'billed') && inc.status === 'available' && (curr.billTotal || 0) > 0) {
+              return curr;
+            }
+            return { ...curr, ...inc };
+          });
+
+          // Append any newly added tables
+          const existingIds = new Set(serverState.tables.map(t => t.id));
+          for (const inc of incomingTables) {
+            if (!existingIds.has(inc.id)) {
+              serverState.tables.push(inc);
+            }
+          }
+          modified = true;
+        }
       } else if (key === 'menuItems') {
         const incomingMenu = Array.isArray(partialState.menuItems) ? partialState.menuItems : [];
         if (incomingMenu.length > 0) {
@@ -2492,8 +2599,137 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       senderId: senderId || 'SERVER',
       timestamp: Date.now()
     }, originWs);
+    pushToFirestoreCloud();
   }
 }
+
+// ==============================================================
+// BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
+// ==============================================================
+const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
+const FIRESTORE_PROJECT_ID = "sultan-resturant";
+const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
+
+let lastProcessedCloudTimestamp = 0;
+let isPushingToFirestore = false;
+let isApplyingCloudUpdate = false;
+let firestorePushTimer = null;
+
+function decodeFirestoreValue(val) {
+  if (!val || typeof val !== 'object') return val;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('nullValue' in val) return null;
+  if ('mapValue' in val) {
+    const fields = val.mapValue.fields || {};
+    const res = {};
+    for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
+    return res;
+  }
+  if ('arrayValue' in val) {
+    const values = val.arrayValue.values || [];
+    return values.map(decodeFirestoreValue);
+  }
+  return val;
+}
+
+function encodeFirestoreValue(val) {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'string') return { stringValue: val };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    if (Number.isInteger(val)) return { integerValue: val.toString() };
+    return { doubleValue: val };
+  }
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map(encodeFirestoreValue) } };
+  }
+  if (typeof val === 'object') {
+    const fields = {};
+    for (const k in val) {
+      if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(val) };
+}
+
+function pushToFirestoreCloud() {
+  if (isApplyingCloudUpdate) return;
+  if (firestorePushTimer) clearTimeout(firestorePushTimer);
+  firestorePushTimer = setTimeout(async () => {
+    if (isPushingToFirestore) return;
+    isPushingToFirestore = true;
+    try {
+      const now = Date.now();
+      lastProcessedCloudTimestamp = now;
+      const payload = {
+        type: 'SERVER_BROADCAST',
+        senderId: 'SERVER_POS_HUB',
+        timestamp: now,
+        state: {
+          tables: serverState.tables,
+          tickets: serverState.tickets,
+          menuItems: serverState.menuItems,
+          categories: serverState.categories,
+          staff: serverState.staff,
+          onlineOrders: serverState.onlineOrders,
+          pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
+          lastBillPaidAlert: serverState.lastBillPaidAlert,
+          lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+          roles: serverState.roles,
+          shifts: serverState.shifts,
+          activeShiftId: serverState.activeShiftId,
+        }
+      };
+      const fields = {};
+      for (const k in payload) {
+        fields[k] = encodeFirestoreValue(payload[k]);
+      }
+      await fetch(FIRESTORE_DOC_URL, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+    } catch (_) {
+      // Local LAN continues seamlessly if cloud is offline
+    } finally {
+      isPushingToFirestore = false;
+    }
+  }, 400);
+}
+
+async function pollFirestoreCloud() {
+  if (isPushingToFirestore) return;
+  try {
+    const res = await fetch(FIRESTORE_DOC_URL);
+    if (!res.ok) return;
+    const doc = await res.json();
+    const fields = doc.fields || {};
+    const senderId = fields.senderId?.stringValue;
+    if (senderId === 'SERVER_POS_HUB') return;
+    const timestamp = Number(fields.timestamp?.integerValue || 0);
+    if (timestamp && timestamp <= lastProcessedCloudTimestamp) return;
+
+    if (fields.state?.mapValue?.fields) {
+      const decodedState = decodeFirestoreValue(fields.state);
+      if (decodedState && typeof decodedState === 'object') {
+        isApplyingCloudUpdate = true;
+        lastProcessedCloudTimestamp = timestamp || Date.now();
+        applyStateUpdate(decodedState, senderId);
+        setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
+      }
+    }
+  } catch (_) {
+    // Network retry next pulse
+  }
+}
+
+// Start Cloud Firestore bridge pulse
+setInterval(pollFirestoreCloud, 2500);
+setTimeout(pollFirestoreCloud, 500);
 
 wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;

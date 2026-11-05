@@ -169,9 +169,9 @@ function notifyListeners() {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   const info: SyncInfo = {
     status: syncStatus,
-    serverIp: isFirebaseConfigured ? 'Firebase Cloud Database' : currentServerAddress,
+    serverIp: currentServerAddress || '192.168.1.14',
     serverPort: SERVER_PORT,
-    serverUrl: isFirebaseConfigured ? 'Firebase Realtime Cloud' : (wsUrl || displayAddress),
+    serverUrl: wsUrl || displayAddress || 'ws://192.168.1.14:5050',
     isCloudDb: isFirebaseConfigured,
     lastSyncedAt,
     totalSyncedEvents,
@@ -189,9 +189,9 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   listener({
     status: syncStatus,
-    serverIp: isFirebaseConfigured ? 'Firebase Cloud Database' : currentServerAddress,
+    serverIp: currentServerAddress || '192.168.1.14',
     serverPort: SERVER_PORT,
-    serverUrl: isFirebaseConfigured ? 'Firebase Realtime Cloud' : (wsUrl || displayAddress),
+    serverUrl: wsUrl || displayAddress || 'ws://192.168.1.14:5050',
     isCloudDb: isFirebaseConfigured,
     lastSyncedAt,
     totalSyncedEvents,
@@ -469,14 +469,7 @@ function initFirebaseSync() {
   notifyListeners();
 }
 
-function connectWebSocket(isLanBridge: boolean = false) {
-  if (isFirebaseConfigured && !isLanBridge) {
-    initFirebaseSync();
-    // Also establish local LAN WebSocket bridge in background for 0ms sub-10ms latency
-    setTimeout(() => connectWebSocket(true), 150);
-    return;
-  }
-
+function connectWebSocket() {
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -496,28 +489,26 @@ function connectWebSocket(isLanBridge: boolean = false) {
   const { wsUrl } = parseServerEndpoints(currentServerAddress);
 
   if (!wsUrl) {
-    if (!isLanBridge) {
-      syncStatus = 'offline';
-      notifyListeners();
-    }
-    return;
-  }
-
-  if (!isLanBridge) {
-    syncStatus = 'connecting';
+    syncStatus = isFirebaseConfigured ? 'connected' : 'offline';
     notifyListeners();
+    return;
   }
 
   try {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
-      if (!isLanBridge) {
-        syncStatus = 'connected';
-      }
+      syncStatus = 'connected';
       lastSyncedAt = Date.now();
       totalSyncedEvents++;
       notifyListeners();
+
+      // Request fresh server state immediately on connect
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send(JSON.stringify({ type: 'PING' }));
+        } catch {}
+      }
 
       // Start keep-alive ping
       pingTimer = setInterval(() => {
@@ -526,7 +517,7 @@ function connectWebSocket(isLanBridge: boolean = false) {
             ws.send(JSON.stringify({ type: 'PING' }));
           } catch {}
         }
-      }, 12000);
+      }, 10000);
     };
 
     ws.onmessage = (event) => {
@@ -551,7 +542,7 @@ function connectWebSocket(isLanBridge: boolean = false) {
     };
 
     ws.onclose = () => {
-      if (!isLanBridge) {
+      if (!isFirebaseConfigured) {
         syncStatus = 'offline';
         notifyListeners();
       }
@@ -559,27 +550,26 @@ function connectWebSocket(isLanBridge: boolean = false) {
         clearInterval(pingTimer);
         pingTimer = null;
       }
-      // Reconnect after 3.5s
+      // Reconnect after 3s
       reconnectTimer = setTimeout(() => {
-        connectWebSocket(isLanBridge);
-      }, 3500);
+        connectWebSocket();
+      }, 3000);
     };
   } catch {
-    if (!isLanBridge) {
+    if (!isFirebaseConfigured) {
       syncStatus = 'offline';
       notifyListeners();
     }
     reconnectTimer = setTimeout(() => {
-      connectWebSocket(isLanBridge);
-    }, 4000);
+      connectWebSocket();
+    }, 3500);
   }
 }
 
 export function reconnect() {
+  connectWebSocket();
   if (isFirebaseConfigured) {
     initFirebaseSync();
-  } else {
-    connectWebSocket();
   }
 }
 
@@ -627,7 +617,31 @@ function broadcastLocalState() {
     },
   };
 
-  // 1. If Firebase Cloud DB is active, push to Cloud Firestore & Firebase Realtime Database
+  // 1. Direct Local LAN WebSocket Broadcast (Instantaneous sub-10ms delivery)
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify(payload));
+      lastSyncedAt = Date.now();
+      totalSyncedEvents++;
+      notifyListeners();
+    } catch (wsErr) {
+      console.warn('[SyncService] Local LAN ws.send error:', wsErr);
+    }
+  }
+
+  // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed fallback delivery)
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  if (httpUrl) {
+    try {
+      fetch(`${httpUrl}/api/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).catch(() => {});
+    } catch {}
+  }
+
+  // 3. Parallel Cloud Firebase Broadcast (Firestore & Realtime Database)
   if (isFirebaseConfigured) {
     // Abort any older in-flight HTTP PUT so an older packet can never finish after a newer packet
     if (activePutAbortController) {
@@ -699,30 +713,6 @@ function broadcastLocalState() {
           console.warn('[SyncService] Firebase REST write error:', err);
         });
     }
-    // Also broadcast to local LAN WebSocket/HTTP in parallel for instant 0ms delivery
-  }
-
-  // 2. Otherwise try WebSocket (LAN or cloud hub)
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    try {
-      ws.send(JSON.stringify(payload));
-      lastSyncedAt = Date.now();
-      totalSyncedEvents++;
-      notifyListeners();
-      return;
-    } catch {}
-  }
-
-  // 3. Fallback to HTTP POST if WebSocket is temporarily disconnected
-  const { httpUrl } = parseServerEndpoints(currentServerAddress);
-  if (httpUrl) {
-    try {
-      fetch(`${httpUrl}/api/sync`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      }).catch(() => {});
-    } catch {}
   }
 }
 
@@ -745,11 +735,13 @@ export async function initSyncService() {
   if (isInitialized) return;
   isInitialized = true;
 
+  try {
+    currentServerAddress = await resolveDefaultServerIp();
+  } catch {}
+  connectWebSocket();
+
   if (isFirebaseConfigured) {
     initFirebaseSync();
-  } else {
-    currentServerAddress = await resolveDefaultServerIp();
-    connectWebSocket();
   }
 
   const triggerDebouncedBroadcast = () => {

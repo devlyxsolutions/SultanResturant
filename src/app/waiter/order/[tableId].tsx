@@ -480,8 +480,11 @@ export default function TableOrderScreen() {
     const successMsg = `Round #${roundNum} sent to Kitchen KDS and Juice Bar!`;
     if (Platform.OS === 'web') {
       window.alert(successMsg);
+      router.replace('/waiter');
     } else {
-      Alert.alert('KOT Dispatched', successMsg);
+      Alert.alert('KOT Dispatched', successMsg, [
+        { text: 'OK', onPress: () => router.replace('/waiter') }
+      ]);
     }
   };
 
