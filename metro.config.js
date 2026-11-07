@@ -26,4 +26,29 @@ const existingBlockList = Array.isArray(config.resolver.blockList)
 
 config.resolver.blockList = [...existingBlockList, ...blockPatterns];
 
+// Automatically ensure Sultan Central POS Hub (server.js on port 5050) is running when Metro starts
+try {
+  const net = require('net');
+  const { spawn } = require('child_process');
+  const probe = new net.Socket();
+  probe.setTimeout(400);
+  probe.once('error', () => {
+    probe.destroy();
+    try {
+      const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+        detached: true,
+        stdio: 'ignore',
+        cwd: __dirname,
+      });
+      child.unref();
+    } catch (_) {}
+  });
+  probe.once('timeout', () => {
+    probe.destroy();
+  });
+  probe.connect(5050, '127.0.0.1', () => {
+    probe.end();
+  });
+} catch (_) {}
+
 module.exports = config;

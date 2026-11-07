@@ -227,7 +227,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return host;
     }
-    return 'localhost';
+    return '127.0.0.1';
   }
 
   // 4. If running on Mobile (Expo Go), extract host computer IP

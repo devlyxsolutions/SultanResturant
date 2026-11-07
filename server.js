@@ -2367,24 +2367,29 @@ async function handleRequest(req, res) {
             'Access-Control-Allow-Origin': '*',
           };
 
-          if (canGzip) {
-            headers['Content-Encoding'] = 'gzip';
+          const cachedAsset = getCachedStaticAsset(filePath, canGzip);
+          if (cachedAsset) {
+            if (canGzip && cachedAsset.gzipped) {
+              headers['Content-Encoding'] = 'gzip';
+              headers['Content-Length'] = cachedAsset.gzipped.length;
+              res.writeHead(200, headers);
+              if (req.method === 'HEAD') {
+                res.end();
+                return;
+              }
+              res.end(cachedAsset.gzipped);
+              return;
+            }
+
+            headers['Content-Length'] = cachedAsset.raw.length;
             res.writeHead(200, headers);
             if (req.method === 'HEAD') {
               res.end();
               return;
             }
-            fs.createReadStream(filePath).pipe(zlib.createGzip({ level: 6 })).pipe(res);
+            res.end(cachedAsset.raw);
             return;
           }
-
-          res.writeHead(200, headers);
-          if (req.method === 'HEAD') {
-            res.end();
-            return;
-          }
-          fs.createReadStream(filePath).pipe(res);
-          return;
         }
       }
     }
@@ -2423,7 +2428,33 @@ async function handleRequest(req, res) {
   res.end(JSON.stringify({ error: 'Endpoint not found', server: 'Sultan Restaurant Hub' }));
 }
 
-// Multi-port HTTP & WebSocket Servers (5050, 5000, 80)
+// In-memory RAM cache for static web assets (raw + gzipped) for <1ms instant page loads
+const staticAssetCache = new Map();
+
+function getCachedStaticAsset(filePath, canGzip) {
+  try {
+    const stat = fs.statSync(filePath);
+    if (!stat.isFile()) return null;
+    const cacheKey = filePath;
+    const cached = staticAssetCache.get(cacheKey);
+    if (cached && cached.mtimeMs === stat.mtimeMs) {
+      if (canGzip && !cached.gzipped) {
+        cached.gzipped = zlib.gzipSync(cached.raw, { level: 6 });
+      }
+      return cached;
+    }
+    const raw = fs.readFileSync(filePath);
+    const entry = {
+      mtimeMs: stat.mtimeMs,
+      raw,
+      gzipped: canGzip ? zlib.gzipSync(raw, { level: 6 }) : null,
+    };
+    staticAssetCache.set(cacheKey, entry);
+    return entry;
+  } catch (_) {
+    return null;
+  }
+}
 const server = http.createServer(handleRequest);
 const server5000 = http.createServer(handleRequest);
 let server80 = null;
@@ -2764,34 +2795,56 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(PORT, '0.0.0.0', () => {
-  console.log(`=================================================`);
-  console.log(`🏰 SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
-  console.log(`📡 Port: ${PORT} (All network interfaces 0.0.0.0)`);
-  console.log(`👤 Auth API: http://localhost:${PORT}/api/auth/login`);
-  console.log(`📊 Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
-  console.log(`🌐 Public Menu: http://localhost:${PORT}/api/public/menu`);
-  console.log(`📦 Online Orders: http://localhost:${PORT}/api/public/orders`);
-  console.log(`⚡ WebSocket URL: ws://localhost:${PORT}`);
-  console.log(`=================================================`);
-});
+function listenDualStack(srv, port, onSuccess, onError) {
+  if (!srv) return;
+  srv.on('error', (err) => {
+    if (onError) onError(err);
+  });
+  try {
+    srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
+  } catch (_) {
+    srv.listen(Number(port), '0.0.0.0', onSuccess);
+  }
+}
 
-server5000.listen(5000, '0.0.0.0', () => {
-  console.log(`📡 Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
-}).on('error', (err) => {
-  console.log('[Sultan Hub] Port 5000 listener:', err.message);
-});
+listenDualStack(
+  server,
+  PORT,
+  () => {
+    console.log(`=================================================`);
+    console.log(`🏰 SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
+    console.log(`📡 Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
+    console.log(`👤 Auth API: http://localhost:${PORT}/api/auth/login`);
+    console.log(`📊 Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+    console.log(`🌐 Public Menu: http://localhost:${PORT}/api/public/menu`);
+    console.log(`📦 Online Orders: http://localhost:${PORT}/api/public/orders`);
+    console.log(`⚡ WebSocket URL: ws://localhost:${PORT}`);
+    console.log(`=================================================`);
+  },
+  (err) => {
+    console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
+  }
+);
+
+listenDualStack(
+  server5000,
+  5000,
+  () => {
+    console.log(`📡 Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+  },
+  (err) => {
+    console.log('[Sultan Hub] Port 5000 listener:', err.message);
+  }
+);
 
 if (server80) {
-  server80.listen(80, '0.0.0.0', () => {
+  listenDualStack(server80, 80, () => {
     console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
-  }).on('error', () => {});
+  });
 }
 
 if (server8081 && PORT !== 8081) {
-  server8081.listen(8081, '0.0.0.0', () => {
+  listenDualStack(server8081, 8081, () => {
     console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
-  }).on('error', () => {
-    // Port 8081 may be in use by Metro bundler during active development - safe to ignore
   });
 }

@@ -30,7 +30,7 @@ import FullscreenButton from '../components/FullscreenButton';
 import { Ionicons } from '@expo/vector-icons';
 
 // Session-wide splash skip flag for instant navigation after initial launch
-let hasSeenSplashSession = false;
+let hasSeenSplashSession = true;
 
 const ROLE_ALIASES: Record<string, Role> = {
   admin: 'admin',
@@ -58,10 +58,10 @@ const ROLE_ALIASES: Record<string, Role> = {
   'floor_manager': 'floor_manager',
 };
 
-export default function WelcomeScreen() {
+export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boolean } = {}) {
   const router = useRouter();
   const searchParams = useLocalSearchParams<{ login?: string }>();
-  const shouldAutoOpenLogin = searchParams.login === 'true' || searchParams.login === '1';
+  const shouldAutoOpenLogin = forceLogin || searchParams.login === 'true' || searchParams.login === '1';
 
   const user = useAuthStore((state) => state.user);
   const login = useAuthStore((state) => state.login);

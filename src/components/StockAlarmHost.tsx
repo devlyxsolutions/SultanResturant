@@ -175,21 +175,32 @@ export default function StockAlarmHost() {
 
   // Time-based cadence for expiry & runway checks (every 30 seconds)
   const [now, setNow] = useState(() => Date.now());
+  const [readyForAlerts, setReadyForAlerts] = useState(false);
+
+  useEffect(() => {
+    if (!enabled) {
+      setReadyForAlerts(false);
+      return;
+    }
+    const timer = setTimeout(() => setReadyForAlerts(true), 250);
+    return () => clearTimeout(timer);
+  }, [enabled]);
+
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
   }, []);
 
-  // 1. Build alerts with stable derivation
+  // 1. Build alerts with stable derivation (deferred 250ms after login so navigation is instantaneous)
   const allAlerts = useMemo(() => {
     try {
-      return enabled
+      return enabled && readyForAlerts
         ? buildAlerts({ sessions, consumption, manual, recipes, inventory, settings, now })
         : [];
     } catch {
       return [];
     }
-  }, [enabled, sessions, consumption, manual, recipes, inventory, settings, now]);
+  }, [enabled, readyForAlerts, sessions, consumption, manual, recipes, inventory, settings, now]);
 
   // 2. Partition into Active vs Snoozed
   const activeAlerts = useMemo(

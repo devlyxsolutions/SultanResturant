@@ -9,7 +9,10 @@ const noopStorage: StateStorage = {
   removeItem: () => {},
 };
 
-/** Direct high-performance synchronous web storage adapter */
+// Pending debounced writes for heavy stores so localStorage never blocks UI navigation or login
+const pendingWrites = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Direct high-performance web storage adapter (non-blocking for large stores, instant for auth) */
 const webLocalStorage: StateStorage = {
   getItem: (name: string) => {
     try {
@@ -24,12 +27,33 @@ const webLocalStorage: StateStorage = {
   setItem: (name: string, value: string) => {
     try {
       if (typeof window !== 'undefined' && window.localStorage) {
-        window.localStorage.setItem(name, value);
+        // Auth session is tiny (<250B) and must persist synchronously before route transitions
+        if (name === 'auth-storage') {
+          window.localStorage.setItem(name, value);
+          return;
+        }
+        // Coalesce & defer heavy store writes off the synchronous UI click/login frame
+        const existing = pendingWrites.get(name);
+        if (existing) clearTimeout(existing);
+        pendingWrites.set(
+          name,
+          setTimeout(() => {
+            pendingWrites.delete(name);
+            try {
+              window.localStorage.setItem(name, value);
+            } catch {}
+          }, 60)
+        );
       }
     } catch {}
   },
   removeItem: (name: string) => {
     try {
+      const existing = pendingWrites.get(name);
+      if (existing) {
+        clearTimeout(existing);
+        pendingWrites.delete(name);
+      }
       if (typeof window !== 'undefined' && window.localStorage) {
         window.localStorage.removeItem(name);
       }

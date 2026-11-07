@@ -29,17 +29,24 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     const orderCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : 'Staff');
     const cashierName = invoice.cashier || (invoice.server?.toLowerCase().includes('pos') ? invoice.server : 'Manager');
     
+    const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
+    
     let text = `================================\n`;
     text += `       SULTAN RESTAURANT       \n`;
     text += `    LUXURY DINING & BANQUET    \n`;
     text += `Food Street, Culinary District, Lahore\n`;
     text += ` Tel: 0300-1234567 • NTN: 8943120-4\n`;
     text += `--------------------------------\n`;
+    if (isUnpaidBill) {
+      text += `*** UNPAID BILL / PROVISIONAL CHECK ***\n`;
+      text += `*** (غیر ادا شدہ بل / کچا بل) ***\n`;
+      text += `--------------------------------\n`;
+    }
     text += `INV #: ${invoice.id}\n`;
     text += `Date: ${dateStr}\n`;
     text += `Type: ${invoice.orderType.toUpperCase()}${invoice.tableName ? ` • Table: ${invoice.tableName}` : ''}\n`;
     text += `Order Taken By: ${orderCreator}\n`;
-    text += `Billed By (Cashier): ${cashierName}\n`;
+    text += `Billed By: ${cashierName}\n`;
     text += `--------------------------------\n`;
     text += `Qty  Item               Amount\n`;
     text += `--------------------------------\n`;
@@ -59,12 +66,18 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
       text += `Notes: ${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}\n`;
     }
     text += `================================\n`;
-    text += `NET PAYABLE: Rs. ${(invoice.total || 0).toLocaleString()}\n`;
-    text += `================================\n`;
-    if (invoice.payments && invoice.payments.length > 0) {
-      invoice.payments.forEach(p => {
-        text += `Paid via ${p.type.toUpperCase()}: Rs. ${(p.amount || 0).toLocaleString()}\n`;
-      });
+    if (isUnpaidBill) {
+      text += `*** TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()} ***\n`;
+      text += `*** PAYMENT PENDING AT CASHIER ***\n`;
+      text += `*** براۓ مہربانی کیش کاؤنٹر پر ادائیگی فرمائیں ***\n`;
+    } else {
+      text += `NET PAYABLE: Rs. ${(invoice.total || 0).toLocaleString()}\n`;
+      text += `================================\n`;
+      if (invoice.payments && invoice.payments.length > 0) {
+        invoice.payments.forEach(p => {
+          text += `Paid via ${p.type.toUpperCase()}: Rs. ${(p.amount || 0).toLocaleString()}\n`;
+        });
+      }
     }
     text += `\nRate Each Dish & Give Feedback:\n${feedbackUrl}\n`;
     text += `\nThank you for dining with Sultan!\n`;
@@ -78,6 +91,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   }
 
   // Web Printing Implementation via Isolated IFrame
+  const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
   const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleDateString();
   const timeStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -93,7 +107,19 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     </tr>
   `).join('');
 
-  const paymentsHtml = (invoice.payments && invoice.payments.length > 0)
+  const paymentsHtml = isUnpaidBill ? `
+    <div style="border: 2px dashed #b91c1c; background-color: #fef2f2; padding: 7px; margin: 8px 0; text-align: center;">
+      <div style="font-size: 13.5px; font-weight: 900; color: #b91c1c; letter-spacing: 0.5px;">
+        *** PAYMENT PENDING (ادائیگی باقی ہے) ***
+      </div>
+      <div style="font-size: 12px; font-weight: 800; color: #1e293b; margin-top: 3px;">
+        TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()}
+      </div>
+      <div style="font-size: 10px; font-weight: bold; color: #4b5563; margin-top: 3px;">
+        براۓ مہربانی کیش کاؤنٹر پر بل ادا فرمائیں
+      </div>
+    </div>
+  ` : (invoice.payments && invoice.payments.length > 0)
     ? invoice.payments.map(p => `
       <div class="summary-row">
         <span>Paid via ${p.type.toUpperCase()}:</span>
@@ -453,6 +479,20 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         ${invoice.customer.address ? `<div class="meta-row"><span>Address: ${invoice.customer.address}</span></div>` : ''}
       ` : ''}
 
+      ${isUnpaidBill ? `
+        <div style="border: 2px dashed #b91c1c; background-color: #fff1f2; padding: 6px; margin: 8px 0; text-align: center;">
+          <div style="font-size: 15px; font-weight: 900; color: #b91c1c; letter-spacing: 1px;">
+            *** UNPAID BILL (غیر ادا شدہ بل) ***
+          </div>
+          <div style="font-size: 11px; font-weight: 800; color: #1e293b; margin-top: 2px;">
+            PROVISIONAL CHECK / ESTIMATE
+          </div>
+          <div style="font-size: 9px; color: #64748b; font-weight: 600;">
+            NOT A SETTLED TAX INVOICE • PAYMENT PENDING AT CASHIER
+          </div>
+        </div>
+      ` : ''}
+
       ${invoice.status === 'voided' ? `
         <div style="text-align: center; color: #c62828; font-weight: bold; font-size: 12px; margin: 8px 0;">
           *** BILL VOIDED / CANCELLED ***
@@ -563,6 +603,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 export default function InvoiceComponent({ invoice }: InvoiceProps) {
   const { width } = useWindowDimensions();
   const isSmall = width < 420;
+  const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
 
   const onlineFeedbackUrl = useRestaurantStore((state) => state.onlineFeedbackUrl);
   const setOnlineFeedbackUrl = useRestaurantStore((state) => state.setOnlineFeedbackUrl);
@@ -685,6 +726,20 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
           </View>
         )}
 
+        {isUnpaidBill && (
+          <View style={{ marginVertical: 8, padding: 8, backgroundColor: 'rgba(239, 68, 68, 0.08)', borderWidth: 1.5, borderColor: '#EF4444', borderStyle: 'dashed', borderRadius: 8, alignItems: 'center' }}>
+            <Text style={{ color: '#EF4444', fontWeight: '900', fontSize: 13, letterSpacing: 0.8 }}>
+              *** UNPAID BILL (غیر ادا شدہ بل) ***
+            </Text>
+            <Text style={{ color: '#1F2937', fontWeight: '700', fontSize: 11, marginTop: 2 }}>
+              PROVISIONAL CHECK / ESTIMATE
+            </Text>
+            <Text style={{ color: '#6B7280', fontSize: 10, marginTop: 1 }}>
+              Payment Pending at Cashier • براۓ مہربانی کیش کاؤنٹر پر ادائیگی فرمائیں
+            </Text>
+          </View>
+        )}
+
         {invoice.status === 'voided' && (
           <View style={{ marginVertical: 6, alignItems: 'center' }}>
             <Text style={styles.voidNotice}>*** BILL VOIDED / CANCELLED ***</Text>
@@ -751,7 +806,16 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
         <Text style={styles.dashedLine}>================================</Text>
 
-        {invoice.payments && invoice.payments.length > 0 ? (
+        {isUnpaidBill ? (
+          <View style={{ marginVertical: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'rgba(239, 68, 68, 0.08)', borderWidth: 1, borderColor: '#EF4444', borderRadius: 8, alignItems: 'center' }}>
+            <Text style={{ color: '#EF4444', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>
+              TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()}
+            </Text>
+            <Text style={{ color: '#4B5563', fontSize: 10.5, fontWeight: '700', marginTop: 3 }}>
+              براۓ مہربانی کیش کاؤنٹر پر ادائیگی فرمائیں
+            </Text>
+          </View>
+        ) : invoice.payments && invoice.payments.length > 0 ? (
           invoice.payments.map((p, idx) => (
             <React.Fragment key={idx}>
               <View style={styles.summaryRow}>

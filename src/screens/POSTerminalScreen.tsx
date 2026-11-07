@@ -29,7 +29,7 @@ import { useShiftStore } from '../store/shiftStore';
 import { useRolePermissions } from '../store/roleStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
 import { broadcastImmediately } from '../services/syncService';
-import InvoiceComponent from '../components/Invoice';
+import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SultanLogo from '../components/SultanLogo';
 import FullscreenButton from '../components/FullscreenButton';
@@ -99,7 +99,7 @@ const getCuisineMeta = (name: string) => {
 };
 
 interface POSTerminalScreenProps {
-  role?: 'admin' | 'manager';
+  role?: 'admin' | 'manager' | 'floor_manager';
   backRoute?: string;
   shiftRoute?: string;
 }
@@ -122,14 +122,13 @@ export default function POSTerminalScreen({
   shiftRoute = '/admin/shift',
 }: POSTerminalScreenProps) {
   const router = useRouter();
-  const {
-    prefillTableId,
-    prefillCustomerId,
-    prefillCustomerPhone,
-    prefillCustomerName,
-    prefillCustomerAddress,
-    orderType: paramOrderType,
-  } = useLocalSearchParams();
+  const searchParams = useLocalSearchParams();
+  const prefillTableId = (searchParams.prefillTableId || searchParams.tableId) as string | undefined;
+  const prefillCustomerId = searchParams.prefillCustomerId as string | undefined;
+  const prefillCustomerPhone = searchParams.prefillCustomerPhone as string | undefined;
+  const prefillCustomerName = searchParams.prefillCustomerName as string | undefined;
+  const prefillCustomerAddress = searchParams.prefillCustomerAddress as string | undefined;
+  const paramOrderType = searchParams.orderType as string | undefined;
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1200;
@@ -162,16 +161,16 @@ export default function POSTerminalScreen({
     );
   }, [user?.role, user?.customRoleId, role]);
 
-  // Check if current user is Cashier, Manager, or Admin (staff who must see product prices & order totals)
+  // Check if current user is Cashier, Manager, Floor Manager, or Admin (staff who must see product prices & order totals)
   const isCashierOrManagement = useMemo(() => {
     if (isOrderTakerRole) return false;
     const userRole = (user?.role || '').toLowerCase();
     const posRole = (role || '').toString().toLowerCase();
     const customRole = (user?.customRoleId || '').toLowerCase();
 
-    if (posRole === 'admin' || posRole === 'manager') return true;
-    if (userRole === 'admin' || userRole === 'manager' || userRole === 'cashier') return true;
-    if (customRole === 'role-admin' || customRole === 'role-manager' || customRole === 'role-cashier') return true;
+    if (posRole === 'admin' || posRole === 'manager' || posRole === 'floor_manager') return true;
+    if (userRole === 'admin' || userRole === 'manager' || userRole === 'cashier' || userRole.includes('floor')) return true;
+    if (customRole === 'role-admin' || customRole === 'role-manager' || customRole === 'role-cashier' || customRole.includes('floor')) return true;
 
     return can('canAccessPOS') || can('canAccessInvoices');
   }, [isOrderTakerRole, user?.role, user?.customRoleId, role, can]);
@@ -344,14 +343,17 @@ export default function POSTerminalScreen({
     setOrderType('dine-in');
     setTableModalVisible(false);
     
-    const tableTickets = tickets.filter(t => t.tableId === tId);
-    const targetTable = tables.find(t => t.id === tId);
+    const targetTable = tables.find(t => t.id === tId || t.name.toLowerCase() === tId.toLowerCase());
+    const tableTickets = tickets.filter(t => 
+      t.tableId === tId || 
+      (targetTable && (t.tableId === targetTable.id || t.tableName?.trim().toLowerCase() === targetTable.name.trim().toLowerCase()))
+    );
     let combinedItems: OrderItem[] = [];
 
     if (tableTickets.length > 0) {
       tableTickets.forEach(ticket => {
         ticket.items.forEach(ti => {
-          const existing = combinedItems.find(i => i.id === ti.id);
+          const existing = combinedItems.find(i => i.id === ti.id && i.name === ti.name);
           if (existing) {
             existing.qty += ti.qty;
           } else {
@@ -359,8 +361,18 @@ export default function POSTerminalScreen({
           }
         });
       });
-    } else if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
-      combinedItems = targetTable.orders.map(o => ({ ...o }));
+    } 
+    if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
+      if (combinedItems.length === 0) {
+        combinedItems = targetTable.orders.map(o => ({ ...o }));
+      } else {
+        targetTable.orders.forEach(to => {
+          const existing = combinedItems.find(i => i.id === to.id || i.name === to.name);
+          if (!existing) {
+            combinedItems.push({ ...to });
+          }
+        });
+      }
     }
 
     const foundWaiter = targetTable?.server || tableTickets.find(t => t.server && !t.server.toLowerCase().includes('pos'))?.server;
@@ -1025,8 +1037,8 @@ export default function POSTerminalScreen({
     const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
     const wasDineIn = orderType === 'dine-in' && targetTableId;
 
-    const userRoleLabel = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : (role === 'admin' ? 'Admin' : 'Cashier');
-    const currentUserName = user?.name ? (user.name.includes(`(${userRoleLabel})`) ? user.name : `${user.name} (${userRoleLabel})`) : (role === 'admin' ? 'Junaid Ahsan (Admin)' : 'POS Cashier');
+    const userRoleLabel = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : (role === 'admin' ? 'Admin' : role === 'floor_manager' ? 'Floor Manager' : 'Cashier');
+    const currentUserName = user?.name ? (user.name.includes(`(${userRoleLabel})`) ? user.name : `${user.name} (${userRoleLabel})`) : (role === 'admin' ? 'Junaid Ahsan (Admin)' : role === 'floor_manager' ? 'Floor Manager' : 'POS Cashier');
     const orderCreator = selectedServer || (wasDineIn ? 'Sara Ahmed' : currentUserName);
     const cashierName = currentUserName;
 
@@ -1143,6 +1155,53 @@ export default function POSTerminalScreen({
       newP[idx].amount = parseFloat(value) || 0;
     }
     setPayments(newP);
+  };
+
+  const handlePrintUnpaidBill = () => {
+    if (cart.length === 0) {
+      const msg = "Please add items to cart before printing bill.";
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert("Empty Cart", msg);
+      return;
+    }
+
+    const targetTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
+    const targetTableName = targetTable ? targetTable.name : (orderType === 'dine-in' ? 'Table' : orderType.toUpperCase());
+
+    const unpaidInvoice: Invoice = {
+      id: `CHK-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
+      orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
+      tableId: selectedTableId || undefined,
+      tableName: targetTableName,
+      customer: selectedCustomerObj,
+      server: selectedServer || user?.name || 'Staff',
+      orderTakenBy: selectedServer || user?.name || 'Staff',
+      cashier: user?.name || 'POS Staff',
+      timePlaced: Date.now(),
+      timeSettled: Date.now(),
+      items: cart,
+      subTotal,
+      discount: discountVal,
+      tax,
+      total,
+      payments: [],
+      status: 'unpaid',
+      isUnpaidBill: true,
+      notes: 'Provisional check (Unpaid bill)',
+    };
+
+    if (selectedTableId) {
+      markTableBilled(selectedTableId, unpaidInvoice.id);
+    }
+    broadcastImmediately();
+    printInvoiceReceipt(unpaidInvoice);
+
+    const alertMsg = `✅ Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTableName}!\nTable status updated to Billed.`;
+    if (Platform.OS === 'web') {
+      window.alert(alertMsg);
+    } else {
+      Alert.alert("Unpaid Bill Printed", alertMsg);
+    }
   };
 
   // Permission Guard (after all hooks so Rules of Hooks are respected)
@@ -2354,6 +2413,22 @@ export default function POSTerminalScreen({
                           <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
                         </View>
                       </TouchableOpacity>
+
+                      {orderType === 'dine-in' && (
+                        <TouchableOpacity 
+                          style={[
+                            styles.unpaidBillBtn,
+                            cart.length === 0 && { opacity: 0.55 }
+                          ]}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                          onPress={handlePrintUnpaidBill}
+                          disabled={cart.length === 0}
+                          activeOpacity={0.85}
+                        >
+                          <Ionicons name="print-outline" size={15} color="#B91C1C" style={{ marginRight: 6 }} />
+                          <Text style={styles.unpaidBillBtnText}>PRINT UNPAID BILL (غیر ادا شدہ بل)</Text>
+                        </TouchableOpacity>
+                      )}
                     </>
                   )}
                 </View>
@@ -5010,6 +5085,31 @@ const styles = StyleSheet.create({
         cursor: 'pointer',
       } as any
     }),
+  },
+  unpaidBillBtn: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#EF4444',
+    borderStyle: 'dashed',
+    paddingVertical: 9.5,
+    borderRadius: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 14,
+    marginTop: 8,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 6px rgba(239, 68, 68, 0.08)',
+        cursor: 'pointer',
+      } as any
+    }),
+  },
+  unpaidBillBtnText: {
+    color: '#B91C1C',
+    fontSize: 12,
+    fontWeight: '800',
+    letterSpacing: 0.4,
   },
   holdOrderBtnText: {
     color: '#52141C',

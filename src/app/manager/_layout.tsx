@@ -48,8 +48,8 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
 ];
 
 export default function ManagerLayout() {
-  // Admin can also open manager screens (e.g. Inventory from the admin dashboard)
-  const { ready, user, logout } = useRoleGuard(['manager', 'admin']);
+  // Admin and Floor Manager can also open relevant manager screens (e.g. POS, Floor Plan)
+  const { ready, user, logout } = useRoleGuard(['manager', 'admin', 'floor_manager', 'Floor Manager']);
   const isActualManager = user?.role !== 'admin';
   const { can, roleName } = useRolePermissions(isActualManager ? undefined : 'manager');
   const { width } = useWindowDimensions();

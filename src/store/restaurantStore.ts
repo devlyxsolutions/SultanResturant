@@ -253,7 +253,8 @@ export type Invoice = {
   payments: Payment[];
   tenderedAmount?: number;
   changeReturned?: number;
-  status?: 'settled' | 'voided' | 'refunded';
+  status?: 'settled' | 'voided' | 'refunded' | 'unpaid';
+  isUnpaidBill?: boolean;
   voidReason?: string;
   voidedAt?: number;
   voidedBy?: string;

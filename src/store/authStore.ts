@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { Platform } from 'react-native';
 import { appStorage } from './storage';
 
 export type Role = 'admin' | 'manager' | 'floor_manager' | 'Floor Manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | string | null;
@@ -34,7 +35,7 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      hasHydrated: false,
+      hasHydrated: Platform.OS === 'web',
       login: (name, role, meta) =>
         set({
           user: {
@@ -59,7 +60,7 @@ export const useAuthStore = create<AuthState>()(
               }
             : null,
         })),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      logout: () => set({ user: null, isAuthenticated: false, hasHydrated: true }),
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
     {
@@ -67,8 +68,15 @@ export const useAuthStore = create<AuthState>()(
       storage: appStorage,
       // Only persist the session, not the runtime hydration flag
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
-      onRehydrateStorage: () => () => {
-        useAuthStore.getState().setHasHydrated(true);
+      onRehydrateStorage: () => (state) => {
+        if (state) {
+          state.hasHydrated = true;
+        }
+        Promise.resolve().then(() => {
+          try {
+            useAuthStore?.getState()?.setHasHydrated(true);
+          } catch {}
+        });
       },
     }
   )

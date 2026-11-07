@@ -1,13 +1,6 @@
-import { useEffect } from 'react';
-import { useRouter } from 'expo-router';
+import WelcomeScreen from './index';
 
 export default function LoginScreen() {
-  const router = useRouter();
-
-  useEffect(() => {
-    // Seamlessly forward to the interactive split-login portal
-    router.replace('/?login=true' as any);
-  }, [router]);
-
-  return null;
+  // Directly render the interactive split-login portal with zero redirect hop
+  return <WelcomeScreen forceLogin />;
 }
