@@ -1,32 +1,32 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Platform,
-  Alert,
-  Modal,
-  useWindowDimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  useOpsStore,
-  useAuthStore,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import PaginationControl from '../components/PaginationControl';
+import RoyalDropdown from '../components/RoyalDropdown';
+import { usePagination } from '../hooks/usePagination';
+import {
   Asset,
+  ASSET_CATEGORIES,
   AssetCategory,
   AssetCondition,
   AssetStatus,
-  ASSET_CATEGORIES,
+  useAuthStore,
+  useOpsStore,
 } from '../store';
-import { money, formatDay } from '../utils/format';
-import RoyalDropdown from '../components/RoyalDropdown';
-import PaginationControl from '../components/PaginationControl';
-import { usePagination } from '../hooks/usePagination';
+import { formatDay, money } from '../utils/format';
 
 const LIGHT = {
   bg: '#F8F9FA',
@@ -330,8 +330,7 @@ export default function AssetsScreen({
 
     alertMsg(
       'Service Logged',
-      `Maintenance of ${money(cost)} recorded for [${maintenanceAsset.assetCode}]. ${
-        maintAutoExpense && cost > 0 ? 'Also booked into restaurant expenses.' : ''
+      `Maintenance of ${money(cost)} recorded for [${maintenanceAsset.assetCode}]. ${maintAutoExpense && cost > 0 ? 'Also booked into restaurant expenses.' : ''
       }`
     );
     setMaintenanceAsset(null);
@@ -496,163 +495,271 @@ export default function AssetsScreen({
               </Text>
             </View>
           ) : (
-            assetsPagination.paginatedData.map((ast) => {
-              const cond = CONDITIONS.find((c) => c.key === ast.condition) || CONDITIONS[1];
-              const stat = STATUSES.find((s) => s.key === ast.status) || STATUSES[0];
-              const maintTotal = (ast.maintenanceLogs || []).reduce((acc, l) => acc + (l.cost || 0), 0);
-              const linkedDamages = damageRecords.filter(
-                (d) => d.assetId === ast.id || d.assetCode === ast.assetCode
-              );
-              const damageLoss = linkedDamages.reduce((sum, d) => sum + (d.totalLoss || 0), 0);
-              const damageUnits = linkedDamages.reduce((sum, d) => sum + (d.quantity || 1), 0);
+            <>
+              {/* Desktop Table Column Header (Same as Suppliers screen) */}
+              {!isMobile && (
+                <View style={styles.tableHeaderRow}>
+                  <View style={[styles.thCol, { flex: 2.8, minWidth: 220 }]}>
+                    <Text style={styles.thText}>ASSET CODE & NAME</Text>
+                  </View>
+                  <View style={[styles.thCol, { flex: 2.2, minWidth: 170 }]}>
+                    <Text style={styles.thText}>CATEGORY & LOCATION</Text>
+                  </View>
+                  <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                    <Text style={styles.thText}>PURCHASE VALUE</Text>
+                  </View>
+                  <View style={[styles.thCol, { flex: 2.0, minWidth: 160 }]}>
+                    <Text style={styles.thText}>BOOK VALUE & STATUS</Text>
+                  </View>
+                  <View style={[styles.thCol, { flex: 2.4, minWidth: 200, alignItems: 'flex-end' }]}>
+                    <Text style={styles.thText}>ACTIONS</Text>
+                  </View>
+                </View>
+              )}
 
-              return (
-                <View key={ast.id} style={styles.assetCard}>
-                  {/* Card Header */}
-                  <View style={styles.cardHeader}>
-                    <View style={styles.cardHeaderLeft}>
-                      <View style={styles.codeTag}>
-                        <Text style={styles.codeTagText}>{ast.assetCode}</Text>
+              {assetsPagination.paginatedData.map((ast) => {
+                const cond = CONDITIONS.find((c) => c.key === ast.condition) || CONDITIONS[1];
+                const stat = STATUSES.find((s) => s.key === ast.status) || STATUSES[0];
+                const maintTotal = (ast.maintenanceLogs || []).reduce((acc, l) => acc + (l.cost || 0), 0);
+                const linkedDamages = damageRecords.filter(
+                  (d) => d.assetId === ast.id || d.assetCode === ast.assetCode
+                );
+                const damageLoss = linkedDamages.reduce((sum, d) => sum + (d.totalLoss || 0), 0);
+                const damageUnits = linkedDamages.reduce((sum, d) => sum + (d.quantity || 1), 0);
+
+                if (isMobile) {
+                  return (
+                    <View
+                      key={ast.id}
+                      style={[
+                        styles.mobileAssetCard,
+                        { borderLeftColor: cond.color || '#10B981' },
+                      ]}
+                    >
+                      {/* Top: Code + Name on left, Cost on right */}
+                      <View style={styles.mobileCardTopRow}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={styles.codeTagCompact}>
+                            <Text style={styles.codeTagCompactText}>{ast.assetCode}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.rowAssetName} numberOfLines={1}>{ast.name}</Text>
+                            {ast.urduName ? <Text style={styles.rowUrduName} numberOfLines={1}>{ast.urduName}</Text> : null}
+                          </View>
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={styles.rowCostGold}>{money(ast.totalCost)}</Text>
+                          <Text style={styles.rowCostSub}>{ast.quantity}x @ {money(ast.cost)}</Text>
+                        </View>
                       </View>
-                      <View style={styles.categoryBadge}>
-                        <Ionicons name="pricetag-outline" size={12} color={LIGHT.burgundy} />
-                        <Text style={styles.categoryBadgeText}>{ast.category}</Text>
+
+                      {/* Mid: Category, Location & Badges */}
+                      <View style={styles.mobileCardMidRow}>
+                        <View style={styles.categoryBadgeCompact}>
+                          <Ionicons name="pricetag-outline" size={11} color={LIGHT.burgundy} />
+                          <Text style={styles.categoryBadgeCompactText} numberOfLines={1}>{ast.category}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
+                          <Text style={styles.rowLocationText} numberOfLines={1}>{ast.location || 'Kitchen'}</Text>
+                        </View>
+                        <View style={[styles.pillBadgeCompact, { backgroundColor: cond.bg, borderColor: cond.border }]}>
+                          <Text style={[styles.pillBadgeCompactText, { color: cond.color }]}>{cond.label}</Text>
+                        </View>
+                        <View style={[styles.pillBadgeCompact, { backgroundColor: stat.bg, borderColor: stat.border }]}>
+                          <Text style={[styles.pillBadgeCompactText, { color: stat.color }]}>{stat.label}</Text>
+                        </View>
+                      </View>
+
+                      {/* Maintenance / Damage Notes if any */}
+                      {(maintTotal > 0 || linkedDamages.length > 0) && (
+                        <View style={styles.mobileAlertRow}>
+                          {maintTotal > 0 && (
+                            <View style={styles.microBadgeAmber}>
+                              <Ionicons name="construct" size={10} color={LIGHT.amber} />
+                              <Text style={styles.microBadgeAmberText}>Service: {money(maintTotal)}</Text>
+                            </View>
+                          )}
+                          {linkedDamages.length > 0 && (
+                            <TouchableOpacity
+                              onPress={() => router.push(role === 'admin' ? '/admin/damages' : '/manager/damages')}
+                              style={styles.microBadgeRose}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="alert-circle" size={10} color={LIGHT.rose} />
+                              <Text style={styles.microBadgeRoseText}>{linkedDamages.length} Damaged ({money(damageLoss)})</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
+
+                      {/* Actions */}
+                      <View style={styles.mobileCardActionRow}>
+                        <TouchableOpacity
+                          style={styles.actionBtnAudit}
+                          onPress={() => setViewAsset(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="document-text-outline" size={13} color={LIGHT.burgundy} />
+                          <Text style={styles.actionBtnAuditText}>Audit</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnService}
+                          onPress={() => setMaintenanceAsset(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
+                          <Text style={styles.actionBtnServiceText}>Service</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnEditCompact}
+                          onPress={() => openEditModal(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="create-outline" size={13} color="#475569" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnDeleteCompact}
+                          onPress={() => handleDelete(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  );
+                }
+
+                // Desktop / Tablet Horizontal Compact Strip (Same as Suppliers screen)
+                return (
+                  <View
+                    key={ast.id}
+                    style={[
+                      styles.astRowCard,
+                      { borderLeftColor: cond.color || '#10B981' },
+                    ]}
+                    {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                  >
+                    {/* 1. Asset Code & Name */}
+                    <View style={[styles.rowCol, { flex: 2.8, minWidth: 220, flexDirection: 'row', alignItems: 'center', gap: 10 }]}>
+                      <View style={styles.codeTagCompact}>
+                        <Text style={styles.codeTagCompactText}>{ast.assetCode}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.rowAssetName} numberOfLines={1}>{ast.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          {ast.urduName ? (
+                            <Text style={styles.rowUrduName} numberOfLines={1}>{ast.urduName}</Text>
+                          ) : null}
+                          <Text style={styles.rowQtyText}>• Qty: {ast.quantity || 1}</Text>
+                        </View>
                       </View>
                     </View>
 
-                    <View style={styles.cardHeaderRight}>
-                      <View style={[styles.pillBadge, { backgroundColor: cond.bg, borderColor: cond.border }]}>
-                        <Text style={[styles.pillBadgeText, { color: cond.color }]}>{cond.label}</Text>
+                    {/* 2. Category & Location */}
+                    <View style={[styles.rowCol, { flex: 2.2, minWidth: 170, gap: 2 }]}>
+                      <View style={styles.categoryBadgeCompact}>
+                        <Ionicons name="pricetag-outline" size={10} color={LIGHT.burgundy} />
+                        <Text style={styles.categoryBadgeCompactText} numberOfLines={1}>{ast.category}</Text>
                       </View>
-                      <View style={[styles.pillBadge, { backgroundColor: stat.bg, borderColor: stat.border }]}>
-                        <Text style={[styles.pillBadgeText, { color: stat.color }]}>{stat.label}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                        <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
+                        <Text style={styles.rowLocationText} numberOfLines={1}>{ast.location || 'Kitchen'}</Text>
+                        {ast.vendor ? (
+                          <Text style={styles.rowVendorText} numberOfLines={1}>• {ast.vendor}</Text>
+                        ) : null}
                       </View>
                     </View>
-                  </View>
 
-                  {/* Title and Specs */}
-                  <View style={styles.titleSection}>
-                    <Text style={styles.assetName}>{ast.name}</Text>
-                    {ast.urduName ? <Text style={styles.urduName}>{ast.urduName}</Text> : null}
-                  </View>
-
-                  {/* Pricing and Details Grid */}
-                  <View style={styles.detailsGrid}>
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>PURCHASE VALUE</Text>
-                      <Text style={styles.detailValueGold}>{money(ast.totalCost)}</Text>
-                      <Text style={styles.detailSub}>
+                    {/* 3. Purchase Value */}
+                    <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
+                      <Text style={styles.rowCostGold}>{money(ast.totalCost)}</Text>
+                      <Text style={styles.rowCostSub}>
                         {ast.quantity}x @ {money(ast.cost)}
                       </Text>
                     </View>
 
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>EST. BOOK VALUE</Text>
-                      <Text style={styles.detailValueDark}>{money(ast.currentValue || ast.totalCost)}</Text>
-                      <Text style={styles.detailSub}>{ast.depreciationRateYearly || 10}% yearly dep.</Text>
-                    </View>
-
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>LOCATION</Text>
-                      <View style={styles.inlineIcon}>
-                        <Ionicons name="location-outline" size={13} color={LIGHT.burgundy} />
-                        <Text style={styles.detailValueText} numberOfLines={1}>
-                          {ast.location}
-                        </Text>
+                    {/* 4. Book Value & Status */}
+                    <View style={[styles.rowCol, { flex: 2.0, minWidth: 160, gap: 2 }]}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={styles.rowBookValue}>{money(ast.currentValue || ast.totalCost)}</Text>
+                        <View style={[styles.pillBadgeCompact, { backgroundColor: cond.bg, borderColor: cond.border }]}>
+                          <Text style={[styles.pillBadgeCompactText, { color: cond.color }]}>{cond.label}</Text>
+                        </View>
                       </View>
-                      <Text style={styles.detailSub}>Installed area</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 2, flexWrap: 'wrap' }}>
+                        <View style={[styles.pillBadgeCompact, { backgroundColor: stat.bg, borderColor: stat.border }]}>
+                          <Text style={[styles.pillBadgeCompactText, { color: stat.color }]}>{stat.label}</Text>
+                        </View>
+                        {maintTotal > 0 && (
+                          <TouchableOpacity
+                            onPress={() => setMaintenanceAsset(ast)}
+                            style={styles.microBadgeAmber}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="construct" size={10} color={LIGHT.amber} />
+                            <Text style={styles.microBadgeAmberText}>{money(maintTotal)}</Text>
+                          </TouchableOpacity>
+                        )}
+                        {linkedDamages.length > 0 && (
+                          <TouchableOpacity
+                            onPress={() => router.push(role === 'admin' ? '/admin/damages' : '/manager/damages')}
+                            style={styles.microBadgeRose}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="alert-circle" size={10} color={LIGHT.rose} />
+                            <Text style={styles.microBadgeRoseText}>{linkedDamages.length} dmg</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
 
-                    <View style={styles.detailItem}>
-                      <Text style={styles.detailLabel}>SUPPLIER / VENDOR</Text>
-                      <Text style={styles.detailValueText} numberOfLines={1}>
-                        {ast.vendor}
-                      </Text>
-                      <Text style={styles.detailSub}>
-                        {ast.vendorPhone || (ast.invoiceNo ? `Inv #${ast.invoiceNo}` : 'Direct')}
-                      </Text>
+                    {/* 5. Actions */}
+                    <View style={[styles.rowCol, { flex: 2.4, minWidth: 200, alignItems: 'flex-end' }]}>
+                      <View style={styles.actionRowCompact}>
+                        <TouchableOpacity
+                          style={styles.actionBtnAudit}
+                          onPress={() => setViewAsset(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="document-text-outline" size={13} color={LIGHT.burgundy} />
+                          <Text style={styles.actionBtnAuditText}>Audit</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnService}
+                          onPress={() => setMaintenanceAsset(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
+                          <Text style={styles.actionBtnServiceText}>Service</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnEditCompact}
+                          onPress={() => openEditModal(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="create-outline" size={13} color="#475569" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.actionBtnDeleteCompact}
+                          onPress={() => handleDelete(ast)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
-
-                  {/* Maintenance Footnote if any */}
-                  {ast.maintenanceLogs && ast.maintenanceLogs.length > 0 && (
-                    <View style={styles.maintBanner}>
-                      <Ionicons name="construct-outline" size={14} color={LIGHT.amber} />
-                      <Text style={styles.maintBannerText}>
-                        {ast.maintenanceLogs.length} Service Log{ast.maintenanceLogs.length > 1 ? 's' : ''} recorded •
-                        Total Repairs: {money(maintTotal)}
-                      </Text>
-                    </View>
-                  )}
-
-                  {/* Breakage / Damage Footnote if any */}
-                  {linkedDamages.length > 0 && (
-                    <TouchableOpacity
-                      style={styles.damageBanner}
-                      onPress={() => router.push(role === 'admin' ? '/admin/damages' : '/manager/damages')}
-                      activeOpacity={0.8}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
-                        <Ionicons name="alert-circle" size={14} color={LIGHT.rose} />
-                        <Text style={styles.damageBannerText}>
-                          {linkedDamages.length} Breakage Incident{linkedDamages.length > 1 ? 's' : ''} ({damageUnits} pcs broken) • Total Loss: {money(damageLoss)}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                        <Text style={styles.damageBannerLink}>Damage Control</Text>
-                        <Ionicons name="chevron-forward" size={13} color={LIGHT.rose} />
-                      </View>
-                    </TouchableOpacity>
-                  )}
-
-                  {/* Action Buttons */}
-                  <View style={styles.cardActions}>
-                    <TouchableOpacity
-                      style={styles.actionBtnOutline}
-                      onPress={() => setViewAsset(ast)}
-                    >
-                      <Ionicons name="document-text-outline" size={14} color={LIGHT.burgundy} />
-                      <Text style={styles.actionBtnOutlineText}>Audit Sheet</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.actionBtnOutline}
-                      onPress={() => setMaintenanceAsset(ast)}
-                    >
-                      <Ionicons name="build-outline" size={14} color={LIGHT.amber} />
-                      <Text style={[styles.actionBtnOutlineText, { color: LIGHT.amber }]}>Log Service</Text>
-                    </TouchableOpacity>
-
-                    {linkedDamages.length > 0 && (
-                      <TouchableOpacity
-                        style={[styles.actionBtnOutline, { borderColor: '#FECDD3' }]}
-                        onPress={() => router.push(role === 'admin' ? '/admin/damages' : '/manager/damages')}
-                      >
-                        <Ionicons name="warning-outline" size={14} color={LIGHT.rose} />
-                        <Text style={[styles.actionBtnOutlineText, { color: LIGHT.rose }]}>
-                          Damages ({linkedDamages.length})
-                        </Text>
-                      </TouchableOpacity>
-                    )}
-
-                    <TouchableOpacity
-                      style={styles.actionBtnOutline}
-                      onPress={() => openEditModal(ast)}
-                    >
-                      <Ionicons name="create-outline" size={14} color={LIGHT.textSecondary} />
-                      <Text style={[styles.actionBtnOutlineText, { color: LIGHT.textSecondary }]}>Edit</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={styles.actionBtnDanger}
-                      onPress={() => handleDelete(ast)}
-                    >
-                      <Ionicons name="trash-outline" size={14} color={LIGHT.rose} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              );
-            })
+                );
+              })}
+            </>
           )}
 
           {filteredAssets.length > 0 && (
@@ -1335,183 +1442,254 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   assetList: {
-    gap: 14,
+    gap: 8,
   },
-  assetCard: {
-    backgroundColor: LIGHT.cardBg,
-    borderRadius: 14,
-    padding: 18,
+  tableHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginBottom: 6,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
+  },
+  thCol: {
+    justifyContent: 'center',
+  },
+  thText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  astRowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    marginBottom: 6,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 3,
     elevation: 1,
   },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
-    flexWrap: 'wrap',
-    gap: 8,
+  rowCol: {
+    justifyContent: 'center',
   },
-  cardHeaderLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  codeTag: {
+  codeTagCompact: {
     backgroundColor: LIGHT.burgundySoft,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     paddingVertical: 3,
-    borderRadius: 6,
+    borderRadius: 5,
     borderWidth: 1,
-    borderColor: 'rgba(82, 23, 27, 0.20)',
+    borderColor: 'rgba(82, 23, 27, 0.18)',
   },
-  codeTagText: {
-    fontSize: 12,
+  codeTagCompactText: {
+    fontSize: 11,
     fontWeight: '800',
     color: LIGHT.burgundy,
-    letterSpacing: 0.5,
+    letterSpacing: 0.4,
   },
-  categoryBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+  rowAssetName: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
   },
-  categoryBadgeText: {
-    fontSize: 12,
-    color: '#1E293B',
+  rowUrduName: {
+    fontSize: 11.5,
+    color: LIGHT.gold,
     fontWeight: '700',
   },
-  cardHeaderRight: {
+  rowQtyText: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  categoryBadgeCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 3,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
   },
-  pillBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 6,
+  categoryBadgeCompactText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '700',
+  },
+  rowLocationText: {
+    fontSize: 11.5,
+    color: '#475569',
+    fontWeight: '600',
+  },
+  rowVendorText: {
+    fontSize: 11,
+    color: '#64748B',
+  },
+  rowCostGold: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: LIGHT.gold,
+  },
+  rowCostSub: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  rowBookValue: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pillBadgeCompact: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
     borderWidth: 1,
   },
-  pillBadgeText: {
-    fontSize: 12,
+  pillBadgeCompactText: {
+    fontSize: 10.5,
     fontWeight: '800',
   },
-  titleSection: {
-    marginBottom: 14,
-  },
-  assetName: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: LIGHT.ink,
-  },
-  urduName: {
-    fontSize: 15,
-    color: LIGHT.gold,
-    marginTop: 2,
-    fontWeight: '700',
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-    paddingVertical: 12,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#F1F5F9',
-  },
-  detailItem: {
-    flex: 1,
-    minWidth: 130,
-  },
-  detailLabel: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: LIGHT.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: 3,
-  },
-  detailValueGold: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: LIGHT.gold,
-  },
-  detailValueDark: {
-    fontSize: 18,
-    fontWeight: '900',
-    color: LIGHT.ink,
-  },
-  detailValueText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: LIGHT.ink,
-  },
-  detailSub: {
-    fontSize: 12,
-    color: LIGHT.textMuted,
-    marginTop: 2,
-  },
-  inlineIcon: {
+  microBadgeAmber: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-  },
-  maintBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+    gap: 3,
     backgroundColor: LIGHT.amberSoft,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 6,
-    marginTop: 10,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
     borderWidth: 1,
     borderColor: LIGHT.amberBorder,
   },
-  maintBannerText: {
-    fontSize: 12.5,
-    color: LIGHT.amber,
+  microBadgeAmberText: {
+    fontSize: 10,
     fontWeight: '800',
+    color: LIGHT.amber,
   },
-  cardActions: {
+  microBadgeRose: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-    justifyContent: 'flex-end',
-    flexWrap: 'wrap',
+    gap: 3,
+    backgroundColor: LIGHT.roseSoft,
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: LIGHT.roseBorder,
   },
-  actionBtnOutline: {
+  microBadgeRoseText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: LIGHT.rose,
+  },
+  actionRowCompact: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    gap: 6,
+  },
+  actionBtnAudit: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
     borderRadius: 6,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: LIGHT.burgundySoft,
+    borderWidth: 1,
+    borderColor: 'rgba(82, 23, 27, 0.2)',
+  },
+  actionBtnAuditText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: LIGHT.burgundy,
+  },
+  actionBtnService: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: LIGHT.amberSoft,
+    borderWidth: 1,
+    borderColor: LIGHT.amberBorder,
+  },
+  actionBtnServiceText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: LIGHT.amber,
+  },
+  actionBtnEditCompact: {
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
   },
-  actionBtnOutlineText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: LIGHT.ink,
-  },
-  actionBtnDanger: {
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+  actionBtnDeleteCompact: {
+    paddingHorizontal: 7,
+    paddingVertical: 5,
     borderRadius: 6,
     backgroundColor: LIGHT.roseSoft,
     borderWidth: 1,
     borderColor: LIGHT.roseBorder,
+  },
+  mobileAssetCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    marginBottom: 8,
+    gap: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  mobileCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mobileCardMidRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  mobileAlertRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flexWrap: 'wrap',
+  },
+  mobileCardActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
   },
   emptyCard: {
     alignItems: 'center',

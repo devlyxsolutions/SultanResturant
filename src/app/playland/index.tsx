@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -33,6 +33,36 @@ export default function PlaylandCounterScreen() {
   const isTablet = width >= 900;
 
   const user = useAuthStore((state) => state.user);
+
+  // Inject sleek and visible scrollbars on Web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      const styleId = 'playland-scrollbar-style';
+      if (!document.getElementById(styleId)) {
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+          /* Ensure smooth and visible scrollbars on Playland Ticketing counter */
+          ::-webkit-scrollbar {
+            width: 8px !important;
+            height: 8px !important;
+          }
+          ::-webkit-scrollbar-track {
+            background: #F1F5F9 !important;
+            border-radius: 4px;
+          }
+          ::-webkit-scrollbar-thumb {
+            background: #CBD5E1 !important;
+            border-radius: 4px;
+          }
+          ::-webkit-scrollbar-thumb:hover {
+            background: #94A3B8 !important;
+          }
+        `;
+        document.head.appendChild(style);
+      }
+    }
+  }, []);
 
   // Playland Store
   const rides = usePlaylandStore((state) => state.rides);
@@ -146,6 +176,289 @@ export default function PlaylandCounterScreen() {
     }
   };
 
+  // 1. Render Left Services & Jhoolay Section
+  const renderServicesSection = () => (
+    <>
+      <View style={styles.sectionHeadingBox}>
+        <Text style={styles.sectionHeading}>🎡 Services & Jhooley</Text>
+        <Text style={styles.sectionSub}>Click any duration to add directly to the ticket bill</Text>
+      </View>
+
+      <View style={styles.servicesGrid}>
+        {activeRides.map((ride) => {
+          const variants = ride.variants && ride.variants.length > 0
+            ? ride.variants
+            : [{ id: `v-${ride.id}`, name: ride.duration || 'Standard', price: ride.price }];
+
+          return (
+            <View key={ride.id} style={styles.serviceCard}>
+              {/* Service Top Info */}
+              <View style={styles.cardTopRow}>
+                <View style={[styles.serviceIconCircle, { backgroundColor: ride.color || '#4a121a' }]}>
+                  <Ionicons name={(ride.icon as any) || 'color-palette-outline'} size={20} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1, marginLeft: 10 }}>
+                  <Text style={styles.serviceCardTitle}>{ride.name}</Text>
+                  <View style={styles.serviceMetaRow}>
+                    <View style={styles.categoryBadge}>
+                      <Text style={styles.categoryBadgeText}>{ride.category.toUpperCase()}</Text>
+                    </View>
+                    {ride.minAge && (
+                      <Text style={styles.ageText}>
+                        <Ionicons name="happy-outline" size={11} color="#6B7280" /> Age: {ride.minAge}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+              </View>
+
+              {/* Duration Variants Stepper Buttons */}
+              <Text style={styles.variantSectionLabel}>Select Duration & Price:</Text>
+              <View style={styles.variantsRow}>
+                {variants.map((v) => {
+                  const cartItemId = `${ride.id}_${v.id}`;
+                  const inCart = cart.find((c) => c.cartItemId === cartItemId);
+
+                  return (
+                    <TouchableOpacity
+                      key={v.id}
+                      style={[
+                        styles.variantButton,
+                        inCart && styles.variantButtonSelected,
+                      ]}
+                      onPress={() => handleSelectVariant(ride, v)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.vName, inCart && styles.vNameSelected]}>{v.name}</Text>
+                        <Text style={[styles.vPrice, inCart && styles.vPriceSelected]}>PKR {v.price}</Text>
+                      </View>
+
+                      {inCart ? (
+                        <View style={styles.vBadgeCount}>
+                          <Text style={styles.vBadgeCountText}>{inCart.qty}</Text>
+                        </View>
+                      ) : (
+                        <View style={styles.vAddCircle}>
+                          <Ionicons name="add" size={13} color="#4a121a" />
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })}
+      </View>
+    </>
+  );
+
+  // 2. Render Customer Details Card
+  const renderCustomerPanel = () => (
+    <View style={styles.whitePanel}>
+      <View style={styles.panelHeaderRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="person-add" size={16} color="#4a121a" />
+          <Text style={styles.panelTitle}>Customer / Family Details</Text>
+        </View>
+        <Text style={styles.panelOptional}>Quick Input</Text>
+      </View>
+
+      {/* Inputs */}
+      <View style={styles.inputRow}>
+        <View style={{ flex: 1.3 }}>
+          <TextInput
+            style={styles.cleanInput}
+            placeholder="👶 Child Name (e.g. Ayan / Zain)"
+            value={childName}
+            onChangeText={(t) => {
+              setChildName(t);
+              setShowCustSuggestions(true);
+            }}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+        <View style={{ width: 75 }}>
+          <TextInput
+            style={styles.cleanInput}
+            placeholder="🎂 Age"
+            value={childAge}
+            onChangeText={setChildAge}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+      </View>
+
+      <View style={[styles.inputRow, { marginTop: 6 }]}>
+        <View style={{ flex: 1.2 }}>
+          <TextInput
+            style={styles.cleanInput}
+            placeholder="📱 Parent Phone (0300-1234567)"
+            keyboardType="phone-pad"
+            value={parentPhone}
+            onChangeText={(t) => {
+              setParentPhone(t);
+              setShowCustSuggestions(true);
+            }}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <TextInput
+            style={styles.cleanInput}
+            placeholder="Parent Name (Optional)"
+            value={parentName}
+            onChangeText={setParentName}
+            placeholderTextColor="#9CA3AF"
+          />
+        </View>
+      </View>
+
+      {/* Customer Suggestions Dropdown */}
+      {showCustSuggestions && customerSuggestions.length > 0 && (
+        <View style={styles.suggestionsCard}>
+          <Text style={styles.suggestionsHeading}>Returning Customer Found:</Text>
+          {customerSuggestions.map((c) => (
+            <TouchableOpacity
+              key={c.id}
+              style={styles.suggestionRow}
+              onPress={() => handleSelectCustomer(c)}
+            >
+              <Ionicons name="person-circle" size={16} color="#4a121a" />
+              <Text style={styles.suggestionMainText}>{c.childName} ({c.parentPhone})</Text>
+              <Text style={styles.suggestionVisitsText}>{c.totalVisits} Visits</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Wristband Color Selector */}
+      <View style={styles.wristbandSelectorRow}>
+        <Text style={styles.wristbandLabel}>Wristband Color:</Text>
+        <View style={styles.colorDotsWrap}>
+          {WRISTBAND_COLORS.map((clr) => (
+            <TouchableOpacity
+              key={clr.name}
+              style={[
+                styles.colorCircle,
+                { backgroundColor: clr.hex },
+                wristbandColor === clr.name && styles.colorCircleActive,
+              ]}
+              onPress={() => setWristbandColor(clr.name)}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+
+  // 3. Render Order Ticket Bill & Checkout Card
+  const renderTicketBillPanel = () => (
+    <View style={styles.whitePanel}>
+      <View style={styles.panelHeaderRow}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Ionicons name="receipt-outline" size={16} color="#4a121a" />
+          <Text style={styles.panelTitle}>
+            Ticket Bill {cartTotalItems > 0 ? `(${cartTotalItems} Tickets)` : ''}
+          </Text>
+        </View>
+        {cart.length > 0 && (
+          <TouchableOpacity onPress={clearCart}>
+            <Text style={styles.clearBtnText}>Clear Bill</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Cart Items */}
+      {cart.length === 0 ? (
+        <View style={styles.emptyBillBox}>
+          <Ionicons name="ticket-outline" size={32} color="#D1D5DB" />
+          <Text style={styles.emptyBillHeader}>No Rides Selected</Text>
+          <Text style={styles.emptyBillText}>Click any service duration on the left to add tickets</Text>
+        </View>
+      ) : (
+        <View style={styles.cartItemsWrap}>
+          {cart.map((item) => (
+            <View key={item.cartItemId} style={styles.billItemCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.billItemTitle}>{item.name}</Text>
+                <Text style={styles.billItemSub}>
+                  {item.variantName ? `${item.variantName} • ` : ''}PKR {item.price} each
+                </Text>
+              </View>
+
+              {/* Stepper Buttons */}
+              <View style={styles.stepperWrap}>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={() => updateQty(item.cartItemId, -1)}
+                >
+                  <Ionicons name="remove" size={13} color="#111827" />
+                </TouchableOpacity>
+                <Text style={styles.stepperValue}>{item.qty}</Text>
+                <TouchableOpacity
+                  style={styles.stepperBtn}
+                  onPress={() => updateQty(item.cartItemId, 1)}
+                >
+                  <Ionicons name="add" size={13} color="#111827" />
+                </TouchableOpacity>
+              </View>
+
+              <Text style={styles.billItemTotal}>PKR {item.price * item.qty}</Text>
+
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => removeFromCart(item.cartItemId)}
+              >
+                <Ionicons name="close-circle" size={18} color="#EF4444" />
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      {/* Payment Mode Selector & Checkout */}
+      <View style={styles.checkoutFooter}>
+        <Text style={styles.payOptionLabel}>Payment Method:</Text>
+        <View style={styles.paymentButtonGroup}>
+          {(['cash', 'card', 'online'] as const).map((mode) => (
+            <TouchableOpacity
+              key={mode}
+              style={[styles.payMethodBtn, paymentMethod === mode && styles.payMethodBtnActive]}
+              onPress={() => setPaymentMethod(mode)}
+            >
+              <Text style={[styles.payMethodText, paymentMethod === mode && styles.payMethodTextActive]}>
+                {mode === 'cash' ? '💵 Cash' : mode === 'card' ? '💳 Card' : '📲 Online'}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* Grand Total */}
+        <View style={styles.grandTotalRow}>
+          <Text style={styles.grandTotalLabel}>Total Payable:</Text>
+          <Text style={styles.grandTotalAmount}>PKR {cartTotal.toLocaleString()}</Text>
+        </View>
+
+        {/* Big Gold Issue Ticket Button */}
+        <TouchableOpacity
+          style={[styles.issueTicketBtn, cart.length === 0 && styles.issueTicketBtnDisabled]}
+          onPress={handleIssueTicket}
+          disabled={cart.length === 0}
+          activeOpacity={0.88}
+        >
+          <Ionicons name="print" size={18} color="#4a121a" style={{ marginRight: 6 }} />
+          <Text style={styles.issueTicketBtnText}>
+            {cart.length === 0
+              ? 'Select Services to Issue Ticket'
+              : `Issue Ticket & Invoice (PKR ${cartTotal.toLocaleString()})`}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
   return (
     <View style={styles.container}>
       {/* Top Banner / Stats Bar (Light & Clean) */}
@@ -183,302 +496,44 @@ export default function PlaylandCounterScreen() {
         </View>
       </View>
 
-      {/* Main 2-Column Layout */}
-      <ScrollView
-        style={styles.layoutScroll}
-        contentContainerStyle={[styles.layout, !isTablet && styles.layoutMobile]}
-        scrollEnabled={!isTablet}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Left: Clean White Service & Jhoolay Cards */}
+      {/* Main Layout: Responsive 2-Column Desktop or Unified Mobile */}
+      {isTablet ? (
+        <View style={styles.layoutDesktop}>
+          {/* Left: Clean White Service & Jhoolay Cards (Independent Smooth Scroll) */}
+          <ScrollView
+            style={styles.leftColumn}
+            contentContainerStyle={styles.leftColumnContent}
+            showsVerticalScrollIndicator={true}
+          >
+            {renderServicesSection()}
+          </ScrollView>
+
+          {/* Right: Clean White Customer & Order Bill Panel (Independent Smooth Scroll) */}
+          <ScrollView
+            style={styles.rightColumn}
+            contentContainerStyle={styles.rightColumnContent}
+            showsVerticalScrollIndicator={true}
+          >
+            {renderCustomerPanel()}
+            {renderTicketBillPanel()}
+          </ScrollView>
+        </View>
+      ) : (
+        /* Mobile: Unified Vertical Scroll */
         <ScrollView
-          style={[styles.leftColumn, !isTablet && styles.leftColumnMobile]}
-          scrollEnabled={isTablet}
-          showsVerticalScrollIndicator={false}
+          style={styles.layoutMobileScroll}
+          contentContainerStyle={styles.layoutMobileContent}
+          showsVerticalScrollIndicator={true}
         >
-          <View style={styles.sectionHeadingBox}>
-            <Text style={styles.sectionHeading}>🎡 Services & Jhooley</Text>
-            <Text style={styles.sectionSub}>Click any duration to add directly to the ticket bill</Text>
+          <View style={styles.leftColumnMobile}>
+            {renderServicesSection()}
           </View>
-
-          {/* Cards Grid */}
-          <View style={styles.servicesGrid}>
-            {activeRides.map((ride) => {
-              const variants = ride.variants && ride.variants.length > 0
-                ? ride.variants
-                : [{ id: `v-${ride.id}`, name: ride.duration || 'Standard', price: ride.price }];
-
-              return (
-                <View key={ride.id} style={styles.serviceCard}>
-                  {/* Service Top Info */}
-                  <View style={styles.cardTopRow}>
-                    <View style={[styles.serviceIconCircle, { backgroundColor: ride.color || '#4a121a' }]}>
-                      <Ionicons name={(ride.icon as any) || 'color-palette-outline'} size={24} color="#ffffff" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 12 }}>
-                      <Text style={styles.serviceCardTitle}>{ride.name}</Text>
-                      <View style={styles.serviceMetaRow}>
-                        <View style={styles.categoryBadge}>
-                          <Text style={styles.categoryBadgeText}>{ride.category.toUpperCase()}</Text>
-                        </View>
-                        {ride.minAge && (
-                          <Text style={styles.ageText}>
-                            <Ionicons name="happy-outline" size={12} color="#6B7280" /> Age: {ride.minAge}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Duration Variants Stepper Buttons */}
-                  <Text style={styles.variantSectionLabel}>Select Duration & Price:</Text>
-                  <View style={styles.variantsRow}>
-                    {variants.map((v) => {
-                      const cartItemId = `${ride.id}_${v.id}`;
-                      const inCart = cart.find((c) => c.cartItemId === cartItemId);
-
-                      return (
-                        <TouchableOpacity
-                          key={v.id}
-                          style={[
-                            styles.variantButton,
-                            inCart && styles.variantButtonSelected,
-                          ]}
-                          onPress={() => handleSelectVariant(ride, v)}
-                          activeOpacity={0.8}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.vName, inCart && styles.vNameSelected]}>{v.name}</Text>
-                            <Text style={[styles.vPrice, inCart && styles.vPriceSelected]}>PKR {v.price}</Text>
-                          </View>
-
-                          {inCart ? (
-                            <View style={styles.vBadgeCount}>
-                              <Text style={styles.vBadgeCountText}>{inCart.qty}</Text>
-                            </View>
-                          ) : (
-                            <View style={styles.vAddCircle}>
-                              <Ionicons name="add" size={14} color="#4a121a" />
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-                </View>
-              );
-            })}
+          <View style={styles.rightColumnMobile}>
+            {renderCustomerPanel()}
+            {renderTicketBillPanel()}
           </View>
         </ScrollView>
-
-        {/* Right: Clean White Customer & Order Bill Panel */}
-        <View style={[styles.rightColumn, !isTablet && styles.rightColumnMobile]}>
-          {/* 1. Customer & Family Information Card */}
-          <View style={styles.whitePanel}>
-            <View style={styles.panelHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="person-add" size={18} color="#4a121a" />
-                <Text style={styles.panelTitle}>Customer / Family Details</Text>
-              </View>
-              <Text style={styles.panelOptional}>Quick Input</Text>
-            </View>
-
-            {/* Inputs */}
-            <View style={styles.inputRow}>
-              <View style={{ flex: 1.2 }}>
-                <TextInput
-                  style={styles.cleanInput}
-                  placeholder="👶 Child Name (e.g. Ayan / Zain)"
-                  value={childName}
-                  onChangeText={(t) => {
-                    setChildName(t);
-                    setShowCustSuggestions(true);
-                  }}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-              <View style={{ width: 90 }}>
-                <TextInput
-                  style={styles.cleanInput}
-                  placeholder="🎂 Age (5)"
-                  value={childAge}
-                  onChangeText={setChildAge}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-            </View>
-
-            <View style={[styles.inputRow, { marginTop: 8 }]}>
-              <View style={{ flex: 1.2 }}>
-                <TextInput
-                  style={styles.cleanInput}
-                  placeholder="📱 Parent Phone (0300-1234567)"
-                  keyboardType="phone-pad"
-                  value={parentPhone}
-                  onChangeText={(t) => {
-                    setParentPhone(t);
-                    setShowCustSuggestions(true);
-                  }}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <TextInput
-                  style={styles.cleanInput}
-                  placeholder="Parent Name (Optional)"
-                  value={parentName}
-                  onChangeText={setParentName}
-                  placeholderTextColor="#9CA3AF"
-                />
-              </View>
-            </View>
-
-            {/* Customer Suggestions Dropdown */}
-            {showCustSuggestions && customerSuggestions.length > 0 && (
-              <View style={styles.suggestionsCard}>
-                <Text style={styles.suggestionsHeading}>Returning Customer Found:</Text>
-                {customerSuggestions.map((c) => (
-                  <TouchableOpacity
-                    key={c.id}
-                    style={styles.suggestionRow}
-                    onPress={() => handleSelectCustomer(c)}
-                  >
-                    <Ionicons name="person-circle" size={18} color="#4a121a" />
-                    <Text style={styles.suggestionMainText}>{c.childName} ({c.parentPhone})</Text>
-                    <Text style={styles.suggestionVisitsText}>{c.totalVisits} Visits</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            {/* Wristband Color Selector */}
-            <View style={styles.wristbandSelectorRow}>
-              <Text style={styles.wristbandLabel}>Wristband Color:</Text>
-              <View style={styles.colorDotsWrap}>
-                {WRISTBAND_COLORS.map((clr) => (
-                  <TouchableOpacity
-                    key={clr.name}
-                    style={[
-                      styles.colorCircle,
-                      { backgroundColor: clr.hex },
-                      wristbandColor === clr.name && styles.colorCircleActive,
-                    ]}
-                    onPress={() => setWristbandColor(clr.name)}
-                  />
-                ))}
-              </View>
-            </View>
-          </View>
-
-          {/* 2. Order Ticket Bill Card */}
-          <View style={[styles.whitePanel, isTablet && { flex: 1 }]}>
-            <View style={styles.panelHeaderRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="receipt-outline" size={18} color="#4a121a" />
-                <Text style={styles.panelTitle}>
-                  Ticket Bill {cartTotalItems > 0 ? `(${cartTotalItems} Tickets)` : ''}
-                </Text>
-              </View>
-              {cart.length > 0 && (
-                <TouchableOpacity onPress={clearCart}>
-                  <Text style={styles.clearBtnText}>Clear Bill</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-
-            {/* Cart Items */}
-            {cart.length === 0 ? (
-              <View style={styles.emptyBillBox}>
-                <Ionicons name="ticket-outline" size={40} color="#D1D5DB" />
-                <Text style={styles.emptyBillHeader}>No Rides Selected</Text>
-                <Text style={styles.emptyBillText}>Click any service duration on the left to add tickets</Text>
-              </View>
-            ) : (
-              <ScrollView
-                style={[styles.cartItemsScrollView, !isTablet && { maxHeight: 260 }]}
-                nestedScrollEnabled
-                showsVerticalScrollIndicator={false}
-              >
-                {cart.map((item) => (
-                  <View key={item.cartItemId} style={styles.billItemCard}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.billItemTitle}>{item.name}</Text>
-                      <Text style={styles.billItemSub}>
-                        {item.variantName ? `${item.variantName} • ` : ''}PKR {item.price} each
-                      </Text>
-                    </View>
-
-                    {/* Stepper Buttons */}
-                    <View style={styles.stepperWrap}>
-                      <TouchableOpacity
-                        style={styles.stepperBtn}
-                        onPress={() => updateQty(item.cartItemId, -1)}
-                      >
-                        <Ionicons name="remove" size={14} color="#111827" />
-                      </TouchableOpacity>
-                      <Text style={styles.stepperValue}>{item.qty}</Text>
-                      <TouchableOpacity
-                        style={styles.stepperBtn}
-                        onPress={() => updateQty(item.cartItemId, 1)}
-                      >
-                        <Ionicons name="add" size={14} color="#111827" />
-                      </TouchableOpacity>
-                    </View>
-
-                    <Text style={styles.billItemTotal}>PKR {item.price * item.qty}</Text>
-
-                    <TouchableOpacity
-                      style={styles.removeBtn}
-                      onPress={() => removeFromCart(item.cartItemId)}
-                    >
-                      <Ionicons name="close-circle" size={18} color="#EF4444" />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* Payment Mode Selector & Checkout */}
-            <View style={styles.checkoutFooter}>
-              <Text style={styles.payOptionLabel}>Payment Method:</Text>
-              <View style={styles.paymentButtonGroup}>
-                {(['cash', 'card', 'online'] as const).map((mode) => (
-                  <TouchableOpacity
-                    key={mode}
-                    style={[styles.payMethodBtn, paymentMethod === mode && styles.payMethodBtnActive]}
-                    onPress={() => setPaymentMethod(mode)}
-                  >
-                    <Text style={[styles.payMethodText, paymentMethod === mode && styles.payMethodTextActive]}>
-                      {mode === 'cash' ? '💵 Cash' : mode === 'card' ? '💳 Card' : '📲 Online'}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Grand Total */}
-              <View style={styles.grandTotalRow}>
-                <Text style={styles.grandTotalLabel}>Total Payable:</Text>
-                <Text style={styles.grandTotalAmount}>PKR {cartTotal.toLocaleString()}</Text>
-              </View>
-
-              {/* Big Gold Issue Ticket Button */}
-              <TouchableOpacity
-                style={[styles.issueTicketBtn, cart.length === 0 && styles.issueTicketBtnDisabled]}
-                onPress={handleIssueTicket}
-                disabled={cart.length === 0}
-                activeOpacity={0.88}
-              >
-                <Ionicons name="print" size={20} color="#4a121a" style={{ marginRight: 8 }} />
-                <Text style={styles.issueTicketBtnText}>
-                  {cart.length === 0
-                    ? 'Select Services to Issue Ticket'
-                    : `Issue Ticket & Invoice (PKR ${cartTotal.toLocaleString()})`}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
+      )}
 
       {/* Modal: Instant Printed Ticket Receipt */}
       {completedTicket && (
@@ -674,32 +729,32 @@ const styles = StyleSheet.create({
   },
   topBanner: {
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: '#CBD5E1',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   bannerLeft: {},
   bannerTitle: {
-    fontSize: 24,
+    fontSize: 20,
     fontWeight: '900',
     color: '#111827',
   },
   bannerSub: {
-    fontSize: 13.5,
+    fontSize: 12,
     color: '#475569',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '500',
   },
   bannerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
     flexWrap: 'wrap',
   },
   todayPill: {
@@ -708,23 +763,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#FDE68A',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderRadius: 20,
-    gap: 6,
+    gap: 5,
   },
   todayPillText: {
     color: '#92400E',
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '700',
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#D5A943',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 7,
   },
   actionBtnSecondary: {
     backgroundColor: 'rgba(213, 169, 67, 0.2)',
@@ -733,52 +788,72 @@ const styles = StyleSheet.create({
   },
   actionBtnText: {
     color: '#4a121a',
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '800',
   },
-  layoutScroll: {
+  layoutDesktop: {
     flex: 1,
-  },
-  layout: {
-    flexGrow: 1,
     flexDirection: 'row',
-  },
-  layoutMobile: {
-    flexDirection: 'column',
-    paddingBottom: 24,
+    height: '100%',
+    overflow: 'hidden',
   },
   leftColumn: {
-    flex: 1.3,
-    padding: 18,
+    flex: 1.25,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  leftColumnContent: {
+    padding: 16,
+    paddingBottom: 40,
+  },
+  rightColumn: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+  },
+  rightColumnContent: {
+    padding: 14,
+    paddingBottom: 40,
+    gap: 12,
+  },
+  layoutMobileScroll: {
+    flex: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  layoutMobileContent: {
+    paddingBottom: 36,
   },
   leftColumnMobile: {
-    flex: 0,
     padding: 12,
     paddingBottom: 0,
   },
+  rightColumnMobile: {
+    padding: 12,
+    gap: 12,
+  },
   sectionHeadingBox: {
-    marginBottom: 16,
+    marginBottom: 12,
   },
   sectionHeading: {
-    fontSize: 19,
+    fontSize: 18,
     fontWeight: '800',
     color: '#111827',
   },
   sectionSub: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#475569',
     marginTop: 2,
   },
   servicesGrid: {
-    gap: 14,
-    paddingBottom: 30,
+    gap: 12,
+    paddingBottom: 20,
   },
   serviceCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 12,
+    padding: 14,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -788,17 +863,17 @@ const styles = StyleSheet.create({
   cardTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   serviceIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   serviceCardTitle: {
-    fontSize: 18,
+    fontSize: 16.5,
     fontWeight: '800',
     color: '#111827',
   },
@@ -806,56 +881,56 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginTop: 4,
+    marginTop: 3,
   },
   categoryBadge: {
     backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
   },
   categoryBadgeText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '800',
     color: '#4a121a',
   },
   ageText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#475569',
     fontWeight: '600',
   },
   variantSectionLabel: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#475569',
-    marginBottom: 10,
+    marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.3,
   },
   variantsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   variantButton: {
     flex: 1,
-    minWidth: 140,
+    minWidth: 125,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#F8FAFC',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
   },
   variantButtonSelected: {
     backgroundColor: '#FFFBEB',
     borderColor: '#D5A943',
   },
   vName: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     fontWeight: '700',
     color: '#1E293B',
   },
@@ -864,50 +939,41 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   vPrice: {
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#4a121a',
-    marginTop: 2,
+    marginTop: 1,
   },
   vPriceSelected: {
     color: '#B45309',
   },
   vAddCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#D5A943',
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 8,
+    marginLeft: 6,
   },
   vBadgeCount: {
     backgroundColor: '#4a121a',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-    marginLeft: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginLeft: 6,
   },
   vBadgeCountText: {
     color: '#FFFFFF',
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '900',
-  },
-  rightColumn: {
-    flex: 1,
-    padding: 18,
-    gap: 16,
-  },
-  rightColumnMobile: {
-    flex: 0,
-    padding: 12,
   },
   whitePanel: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 14,
-    padding: 18,
+    borderRadius: 12,
+    padding: 12,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.04,
@@ -920,61 +986,60 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 8,
   },
   panelTitle: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '800',
     color: '#111827',
   },
   panelOptional: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#64748B',
     fontWeight: '600',
   },
   inputRow: {
     flexDirection: 'row',
     gap: 8,
-    flexWrap: 'wrap',
   },
   cleanInput: {
     backgroundColor: '#F8FAFC',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#CBD5E1',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    fontSize: 14.5,
+    borderRadius: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 13,
     color: '#111827',
   },
   suggestionsCard: {
     backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#D5A943',
-    borderRadius: 8,
-    padding: 10,
-    marginTop: 6,
+    borderRadius: 7,
+    padding: 8,
+    marginTop: 4,
   },
   suggestionsHeading: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#92400E',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   suggestionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 6,
-    gap: 8,
+    paddingVertical: 4,
+    gap: 6,
   },
   suggestionMainText: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#111827',
     fontWeight: '700',
     flex: 1,
   },
   suggestionVisitsText: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '800',
     color: '#4a121a',
   },
@@ -982,129 +1047,126 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
-    paddingTop: 12,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F3F4F6',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 6,
   },
   wristbandLabel: {
-    fontSize: 13.5,
+    fontSize: 12.5,
     color: '#334155',
     fontWeight: '700',
   },
   colorDotsWrap: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   colorCircle: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
   },
   colorCircleActive: {
-    borderWidth: 3.5,
+    borderWidth: 3,
     borderColor: '#111827',
   },
   clearBtnText: {
     color: '#DC2626',
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
   },
   emptyBillBox: {
-    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 32,
+    paddingVertical: 18,
   },
   emptyBillHeader: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '800',
     color: '#334155',
-    marginTop: 8,
+    marginTop: 6,
   },
   emptyBillText: {
-    fontSize: 13.5,
+    fontSize: 12,
     color: '#64748B',
     textAlign: 'center',
-    marginTop: 3,
+    marginTop: 2,
     maxWidth: 240,
   },
-  cartItemsScrollView: {
-    flex: 1,
-    marginVertical: 8,
+  cartItemsWrap: {
+    marginVertical: 4,
   },
   billItemCard: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-    gap: 10,
-    flexWrap: 'wrap',
+    borderColor: '#E2E8F0',
+    borderRadius: 7,
+    padding: 8,
+    marginBottom: 6,
+    gap: 8,
   },
   billItemTitle: {
-    fontSize: 15,
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#111827',
   },
   billItemSub: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     color: '#475569',
-    marginTop: 2,
+    marginTop: 1,
     fontWeight: '500',
   },
   stepperWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#E2E8F0',
-    borderRadius: 6,
+    borderRadius: 5,
   },
   stepperBtn: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
   },
   stepperValue: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
     color: '#111827',
-    paddingHorizontal: 6,
+    paddingHorizontal: 4,
   },
   billItemTotal: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#4a121a',
   },
   removeBtn: {
-    padding: 4,
+    padding: 2,
   },
   checkoutFooter: {
     borderTopWidth: 1,
     borderTopColor: '#CBD5E1',
-    paddingTop: 14,
+    paddingTop: 10,
+    marginTop: 4,
   },
   payOptionLabel: {
-    fontSize: 12.5,
+    fontSize: 11.5,
     fontWeight: '700',
     color: '#475569',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   paymentButtonGroup: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 14,
-    flexWrap: 'wrap',
+    gap: 6,
+    marginBottom: 10,
   },
   payMethodBtn: {
     flex: 1,
-    minWidth: 85,
+    minWidth: 70,
     alignItems: 'center',
-    paddingVertical: 10,
-    borderRadius: 8,
+    paddingVertical: 6,
+    borderRadius: 6,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#CBD5E1',
@@ -1114,7 +1176,7 @@ const styles = StyleSheet.create({
     borderColor: '#4a121a',
   },
   payMethodText: {
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#374151',
   },
@@ -1125,15 +1187,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 14,
+    marginBottom: 10,
   },
   grandTotalLabel: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '800',
     color: '#111827',
   },
   grandTotalAmount: {
-    fontSize: 24,
+    fontSize: 21,
     fontWeight: '900',
     color: '#4a121a',
   },
@@ -1142,19 +1204,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#D5A943',
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 12,
+    borderRadius: 8,
     shadowColor: '#D5A943',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
     elevation: 3,
   },
   issueTicketBtnDisabled: {
-    opacity: 0.4,
+    opacity: 0.45,
   },
   issueTicketBtnText: {
-    fontSize: 16,
+    fontSize: 14.5,
     fontWeight: '900',
     color: '#4a121a',
   },
