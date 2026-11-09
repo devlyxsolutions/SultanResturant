@@ -9,6 +9,7 @@ import {
   Modal,
   Alert,
   Platform,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -54,6 +55,34 @@ function playFloorAttentionChime() {
 export default function FloorManagerScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
+  const { width, height } = useWindowDimensions();
+
+  const isMobile = width < 768;
+  const isSmallMobile = width < 420;
+  const isTablet = width >= 768 && width < 1024;
+  const isDesktop = width >= 1024;
+
+  // Responsive card widths
+  const tableCardWidth = useMemo(() => {
+    if (width >= 1380) return (width - 40 - 3 * 14) / 4;
+    if (width >= 960) return (width - 40 - 2 * 14) / 3;
+    if (width >= 640) return (width - (isMobile ? 24 : 40) - 14) / 2;
+    return '100%';
+  }, [width, isMobile]);
+
+  const kdsCardWidth = useMemo(() => {
+    if (width >= 1380) return (width - 40 - 3 * 14) / 4;
+    if (width >= 960) return (width - 40 - 2 * 14) / 3;
+    if (width >= 640) return (width - (isMobile ? 24 : 40) - 14) / 2;
+    return '100%';
+  }, [width, isMobile]);
+
+  const kpiCardWidth = useMemo(() => {
+    if (width >= 1100) return (width - 40 - 5 * 12) / 6;
+    if (width >= 768) return (width - 40 - 2 * 12) / 3;
+    if (width >= 480) return (width - 24 - 10) / 2;
+    return '100%';
+  }, [width]);
 
   const tables = useRestaurantStore((s) => s.tables || []);
   const tickets = useRestaurantStore((s) => s.tickets || []);
@@ -452,73 +481,92 @@ export default function FloorManagerScreen() {
   return (
     <View style={styles.container}>
       {/* 1. TOP HEADER BAR */}
-      <View style={styles.header}>
-        <View style={styles.headerLeft}>
-          <View style={styles.floorBadgeIcon}>
-            <MaterialCommunityIcons name="layers-triple" size={24} color="#0D9488" />
+      <View style={[styles.header, isMobile && styles.headerMobile]}>
+        <View style={[styles.headerLeft, isMobile && { flex: 1, minWidth: isSmallMobile ? 160 : 200 }]}>
+          <View style={[styles.floorBadgeIcon, isSmallMobile && { width: 36, height: 36, borderRadius: 10 }]}>
+            <MaterialCommunityIcons name="layers-triple" size={isSmallMobile ? 20 : 24} color="#0D9488" />
           </View>
-          <View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Text style={styles.headerTitle}>{selectedFloor.toUpperCase()} CONSOLE</Text>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <Text style={[styles.headerTitle, isSmallMobile && { fontSize: 15 }]} numberOfLines={1}>
+                {selectedFloor.toUpperCase()}
+              </Text>
               <View style={styles.livePulse}>
                 <View style={styles.pulseDot} />
-                <Text style={styles.liveText}>LIVE OPS</Text>
+                <Text style={styles.liveText}>LIVE</Text>
               </View>
             </View>
-            <Text style={styles.headerSubtitle}>
-              Floor Manager: <Text style={{ color: '#D4AF37', fontWeight: '700' }}>{user?.name || 'Manager'}</Text> • Sultan Royal Operations
+            <Text style={styles.headerSubtitle} numberOfLines={1}>
+              <Text style={{ color: '#D4AF37', fontWeight: '700' }}>{user?.name || 'Manager'}</Text> • Sultan Royal Ops
             </Text>
           </View>
         </View>
 
-        <View style={styles.headerRight}>
-          {/* Toggle Full Screen Button */}
-          <TouchableOpacity
-            style={[styles.navBtn, isFullscreen && styles.navBtnActiveFullscreen]}
-            onPress={toggleFullscreen}
-          >
-            <MaterialCommunityIcons
-              name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
-              size={18}
-              color={isFullscreen ? '#10B981' : '#38BDF8'}
-            />
-            <Text style={[styles.navBtnText, isFullscreen && { color: '#10B981' }]}>
-              {isFullscreen ? 'Exit Full' : 'Full Screen'}
-            </Text>
-          </TouchableOpacity>
+        <View style={[styles.headerRight, isMobile && styles.headerRightMobile]}>
+          {/* Toggle Full Screen Button (Web only) */}
+          {Platform.OS === 'web' && !isSmallMobile && (
+            <TouchableOpacity
+              style={[styles.navBtn, isFullscreen && styles.navBtnActiveFullscreen, isMobile && styles.navBtnCompact]}
+              onPress={toggleFullscreen}
+            >
+              <MaterialCommunityIcons
+                name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
+                size={16}
+                color={isFullscreen ? '#10B981' : '#38BDF8'}
+              />
+              <Text style={[styles.navBtnText, isFullscreen && { color: '#10B981' }]}>
+                {isFullscreen ? 'Exit Full' : 'Full'}
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
-            style={styles.navBtn}
+            style={[styles.navBtn, styles.navBtnPos, isMobile && styles.navBtnCompact]}
             onPress={() => router.push('/floor-manager/pos' as any)}
           >
-            <MaterialCommunityIcons name="point-of-sale" size={18} color="#D4AF37" />
-            <Text style={styles.navBtnText}>Open POS</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.navBtn, activeView === 'kds' && { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}
-            onPress={() => setActiveView(activeView === 'kds' ? 'tables' : 'kds')}
-          >
-            <MaterialCommunityIcons name="chef-hat" size={18} color={activeView === 'kds' ? '#F59E0B' : '#10B981'} />
-            <Text style={[styles.navBtnText, activeView === 'kds' && { color: '#F59E0B' }]}>
-              {activeView === 'kds' ? 'View Tables' : 'Floor KDS'}
+            <MaterialCommunityIcons name="point-of-sale" size={16} color="#D4AF37" />
+            <Text style={[styles.navBtnText, { color: '#D4AF37' }]}>
+              {isSmallMobile ? 'POS' : 'Open POS'}
             </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.navBtn, styles.logoutBtn]}
+            style={[
+              styles.navBtn,
+              activeView === 'kds' && { borderColor: '#F59E0B', backgroundColor: 'rgba(245, 158, 11, 0.15)' },
+              isMobile && styles.navBtnCompact,
+            ]}
+            onPress={() => setActiveView(activeView === 'kds' ? 'tables' : 'kds')}
+          >
+            <MaterialCommunityIcons
+              name="chef-hat"
+              size={16}
+              color={activeView === 'kds' ? '#F59E0B' : '#10B981'}
+            />
+            <Text style={[styles.navBtnText, activeView === 'kds' && { color: '#F59E0B' }]}>
+              {activeView === 'kds' ? (isSmallMobile ? 'Tables' : 'View Tables') : (isSmallMobile ? 'KDS' : 'Floor KDS')}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.navBtn, styles.logoutBtn, isMobile && styles.navBtnCompact]}
             onPress={logout}
           >
-            <MaterialCommunityIcons name="logout" size={18} color="#EF4444" />
-            <Text style={[styles.navBtnText, { color: '#EF4444' }]}>Logout</Text>
+            <MaterialCommunityIcons name="logout" size={16} color="#EF4444" />
+            {!isSmallMobile && <Text style={[styles.navBtnText, { color: '#EF4444' }]}>Logout</Text>}
           </TouchableOpacity>
         </View>
       </View>
 
       {/* 2. FLOOR SELECTOR TABS (Available to Admins & Multi-Zone Managers) */}
       {canSwitchFloors && (
-        <View style={styles.floorTabBar}>
-          <Text style={styles.floorTabLabel}>SWITCH FLOOR:</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={[styles.floorTabBar, { paddingHorizontal: isMobile ? 12 : 20 }]}
+          style={styles.floorTabBarScroll}
+        >
+          <Text style={styles.floorTabLabel}>FLOORS:</Text>
           {floorList.map((fName) => {
             const isCurrent = fName.toLowerCase() === selectedFloor.toLowerCase();
             return (
@@ -529,7 +577,7 @@ export default function FloorManagerScreen() {
               >
                 <MaterialCommunityIcons
                   name="storefront"
-                  size={16}
+                  size={15}
                   color={isCurrent ? '#FFF' : '#9CA3AF'}
                 />
                 <Text style={[styles.floorTabText, isCurrent && styles.floorTabTextActive]}>
@@ -538,13 +586,13 @@ export default function FloorManagerScreen() {
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       )}
 
       {/* 2B. PRIMARY CONSOLE VIEW SWITCHER (Floor Tables vs Live KDS) */}
-      <View style={styles.viewSwitcherBar}>
+      <View style={[styles.viewSwitcherBar, isMobile && { paddingHorizontal: 12, gap: 8 }]}>
         <TouchableOpacity
-          style={[styles.viewTab, activeView === 'tables' && styles.viewTabActiveTables]}
+          style={[styles.viewTab, activeView === 'tables' && styles.viewTabActiveTables, isMobile && { flex: 1, justifyContent: 'center', paddingHorizontal: 8 }]}
           onPress={() => setActiveView('tables')}
         >
           <MaterialCommunityIcons
@@ -552,13 +600,16 @@ export default function FloorManagerScreen() {
             size={18}
             color={activeView === 'tables' ? '#0D9488' : '#9CA3AF'}
           />
-          <Text style={[styles.viewTabText, activeView === 'tables' && styles.viewTabTextActiveTables]}>
-            Floor Tables Blueprint ({floorTables.length})
+          <Text
+            style={[styles.viewTabText, activeView === 'tables' && styles.viewTabTextActiveTables]}
+            numberOfLines={1}
+          >
+            {isSmallMobile ? `Tables (${floorTables.length})` : `Floor Tables (${floorTables.length})`}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.viewTab, activeView === 'kds' && styles.viewTabActiveKds]}
+          style={[styles.viewTab, activeView === 'kds' && styles.viewTabActiveKds, isMobile && { flex: 1, justifyContent: 'center', paddingHorizontal: 8 }]}
           onPress={() => setActiveView('kds')}
         >
           <MaterialCommunityIcons
@@ -566,13 +617,16 @@ export default function FloorManagerScreen() {
             size={18}
             color={activeView === 'kds' ? '#F59E0B' : '#9CA3AF'}
           />
-          <Text style={[styles.viewTabText, activeView === 'kds' && styles.viewTabTextActiveKds]}>
-            Live Floor KDS & Cooking ({floorTickets.length})
+          <Text
+            style={[styles.viewTabText, activeView === 'kds' && styles.viewTabTextActiveKds]}
+            numberOfLines={1}
+          >
+            {isSmallMobile ? `KDS (${floorTickets.length})` : `Live KDS (${floorTickets.length})`}
           </Text>
           {(kdsMetrics.cookingCount > 0 || kdsMetrics.readyCount > 0) && (
             <View style={[styles.kdsLiveBadge, kdsMetrics.readyCount > 0 ? styles.kdsBadgeReady : styles.kdsBadgeCooking]}>
               <Text style={styles.kdsBadgeText}>
-                {kdsMetrics.readyCount > 0 ? `🔔 ${kdsMetrics.readyCount} READY` : `🔥 ${kdsMetrics.cookingCount} COOKING`}
+                {kdsMetrics.readyCount > 0 ? `🔔 ${kdsMetrics.readyCount}` : `🔥 ${kdsMetrics.cookingCount}`}
               </Text>
             </View>
           )}
@@ -581,21 +635,27 @@ export default function FloorManagerScreen() {
 
       {/* 3. URGENT PENDING DIGITAL MENU ORDERS QUEUE */}
       {pendingFloorOrders.length > 0 && (
-        <View style={styles.urgentQueueBox}>
+        <View style={[styles.urgentQueueBox, isMobile && { paddingHorizontal: 12, paddingVertical: 8 }]}>
           <View style={styles.urgentQueueHeader}>
-            <MaterialCommunityIcons name="bell-ring" size={20} color="#DC2626" />
-            <Text style={styles.urgentQueueTitle}>
-              {pendingFloorOrders.length} PENDING DIGITAL MENU ORDER{pendingFloorOrders.length > 1 ? 'S' : ''} AWAITING CONFIRMATION
+            <MaterialCommunityIcons name="bell-ring" size={18} color="#DC2626" />
+            <Text style={styles.urgentQueueTitle} numberOfLines={1}>
+              {pendingFloorOrders.length} PENDING ORDER{pendingFloorOrders.length > 1 ? 'S' : ''} AWAITING CONFIRMATION
             </Text>
           </View>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.urgentQueueScroll}>
             {pendingFloorOrders.map((pOrder) => (
-              <View key={pOrder.id} style={styles.urgentOrderCard}>
+              <View
+                key={pOrder.id}
+                style={[
+                  styles.urgentOrderCard,
+                  { width: isMobile ? Math.min(width - 40, 280) : 280 },
+                ]}
+              >
                 <View style={styles.urgentOrderCardHeader}>
                   <Text style={styles.urgentOrderTable}>{pOrder.tableName || pOrder.tableId}</Text>
                   <Text style={styles.urgentOrderTotal}>Rs. {pOrder.total.toLocaleString()}</Text>
                 </View>
-                <Text style={styles.urgentCustomer}>
+                <Text style={styles.urgentCustomer} numberOfLines={1}>
                   {pOrder.customer?.name} • {pOrder.customer?.phone}
                 </Text>
                 <Text style={styles.urgentItems} numberOfLines={2}>
@@ -622,72 +682,74 @@ export default function FloorManagerScreen() {
       )}
 
       {/* 4. FLOOR METRICS (KPIs) STRIP */}
-      <View style={styles.kpiContainer}>
-        <View style={styles.kpiCard}>
+      <View style={[styles.kpiContainer, isMobile && { paddingHorizontal: 12, paddingVertical: 10, gap: 8 }]}>
+        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
           <Text style={styles.kpiLabel}>OCCUPANCY</Text>
-          <Text style={[styles.kpiValue, { color: kpis.occupancyRate > 70 ? '#EF4444' : '#10B981' }]}>
+          <Text style={[styles.kpiValue, { color: kpis.occupancyRate > 70 ? '#EF4444' : '#10B981', fontSize: isSmallMobile ? 18 : 20 }]}>
             {kpis.occupancyRate}%
           </Text>
-          <Text style={styles.kpiSub}>{kpis.occupied + kpis.billed}/{kpis.total} Tables In Use</Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>{kpis.occupied + kpis.billed}/{kpis.total} In Use</Text>
         </View>
 
         <TouchableOpacity 
-          style={[styles.kpiCard, activeView === 'kds' && { borderColor: '#F59E0B' }]}
+          style={[styles.kpiCard, { width: kpiCardWidth }, activeView === 'kds' && { borderColor: '#F59E0B' }]}
           onPress={() => {
             setActiveView('kds');
             setKdsFilter('cooking');
           }}
         >
           <Text style={styles.kpiLabel}>KDS COOKING</Text>
-          <Text style={[styles.kpiValue, { color: kdsMetrics.cookingCount > 0 ? '#F59E0B' : '#9CA3AF' }]}>
+          <Text style={[styles.kpiValue, { color: kdsMetrics.cookingCount > 0 ? '#F59E0B' : '#9CA3AF', fontSize: isSmallMobile ? 18 : 20 }]}>
             {kdsMetrics.cookingCount}
           </Text>
-          <Text style={styles.kpiSub}>{kdsMetrics.totalDishes} Dishes in Kitchen</Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>{kdsMetrics.totalDishes} In Kitchen</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.kpiCard, activeView === 'kds' && { borderColor: '#10B981' }]}
+          style={[styles.kpiCard, { width: kpiCardWidth }, activeView === 'kds' && { borderColor: '#10B981' }]}
           onPress={() => {
             setActiveView('kds');
             setKdsFilter('ready');
           }}
         >
-          <Text style={styles.kpiLabel}>FOOD READY AT PASS</Text>
-          <Text style={[styles.kpiValue, { color: kdsMetrics.readyCount > 0 ? '#10B981' : '#9CA3AF' }]}>
+          <Text style={styles.kpiLabel}>FOOD READY</Text>
+          <Text style={[styles.kpiValue, { color: kdsMetrics.readyCount > 0 ? '#10B981' : '#9CA3AF', fontSize: isSmallMobile ? 18 : 20 }]}>
             {kdsMetrics.readyCount}
           </Text>
-          <Text style={styles.kpiSub}>Urgent Pickup Needed</Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>Pickup Needed</Text>
         </TouchableOpacity>
 
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>BILLED / PAYING</Text>
-          <Text style={[styles.kpiValue, { color: '#3B82F6' }]}>{kpis.billed}</Text>
-          <Text style={styles.kpiSub}>Awaiting Settlement</Text>
+        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
+          <Text style={styles.kpiLabel}>BILLED</Text>
+          <Text style={[styles.kpiValue, { color: '#3B82F6', fontSize: isSmallMobile ? 18 : 20 }]}>{kpis.billed}</Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>Awaiting Pay</Text>
         </View>
 
-        <View style={styles.kpiCard}>
+        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
           <Text style={styles.kpiLabel}>AVAILABLE</Text>
-          <Text style={[styles.kpiValue, { color: '#10B981' }]}>{kpis.available}</Text>
-          <Text style={styles.kpiSub}>Ready for Seating</Text>
+          <Text style={[styles.kpiValue, { color: '#10B981', fontSize: isSmallMobile ? 18 : 20 }]}>{kpis.available}</Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>Ready for Guests</Text>
         </View>
 
-        <View style={styles.kpiCard}>
-          <Text style={styles.kpiLabel}>TODAY'S FLOOR SALES</Text>
-          <Text style={[styles.kpiValue, { color: '#D4AF37' }]}>Rs. {kpis.floorSales.toLocaleString()}</Text>
-          <Text style={styles.kpiSub}>Settled Invoices Today</Text>
+        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
+          <Text style={styles.kpiLabel}>TODAY'S SALES</Text>
+          <Text style={[styles.kpiValue, { color: '#D4AF37', fontSize: isSmallMobile ? 16 : 19 }]} numberOfLines={1}>
+            Rs. {kpis.floorSales.toLocaleString()}
+          </Text>
+          <Text style={styles.kpiSub} numberOfLines={1}>Settled Today</Text>
         </View>
       </View>
 
       {/* 5. CONTROLS: SEARCH & VIEW-SPECIFIC FILTERS */}
-      <View style={styles.controlsBar}>
-        <View style={styles.searchBox}>
+      <View style={[styles.controlsBar, isMobile && { paddingHorizontal: 12, gap: 10 }]}>
+        <View style={[styles.searchBox, isMobile && { minWidth: '100%', width: '100%' }]}>
           <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
           <TextInput
             style={styles.searchInput}
             placeholder={
               activeView === 'kds'
-                ? "Search cooking items, table, or waiter..."
-                : "Search table, assigned waiter, or seating type..."
+                ? "Search items, table, or waiter..."
+                : "Search table, assigned waiter, or type..."
             }
             placeholderTextColor="#6B7280"
             value={searchQuery}
@@ -701,7 +763,12 @@ export default function FloorManagerScreen() {
         </View>
 
         {activeView === 'tables' ? (
-          <View style={styles.filterPills}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterPillsScroll}
+            style={isMobile ? { width: '100%' } : undefined}
+          >
             {(['all', 'occupied', 'ready', 'available', 'billed'] as const).map((filter) => {
               const isActive = statusFilter === filter;
               return (
@@ -720,9 +787,14 @@ export default function FloorManagerScreen() {
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
         ) : (
-          <View style={styles.filterPills}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterPillsScroll}
+            style={isMobile ? { width: '100%' } : undefined}
+          >
             {(['all', 'cooking', 'ready', 'pending'] as const).map((fKey) => {
               const isActive = kdsFilter === fKey;
               return (
@@ -732,22 +804,22 @@ export default function FloorManagerScreen() {
                   onPress={() => setKdsFilter(fKey)}
                 >
                   <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                    {fKey === 'all' && `All Floor KOTs (${floorTickets.length})`}
+                    {fKey === 'all' && `All KOTs (${floorTickets.length})`}
                     {fKey === 'cooking' && `🔥 Cooking (${kdsMetrics.cookingCount})`}
                     {fKey === 'ready' && `🔔 Ready at Pass (${kdsMetrics.readyCount})`}
-                    {fKey === 'pending' && `⏳ In Queue (${kdsMetrics.pendingCount})`}
+                    {fKey === 'pending' && `⏳ Queue (${kdsMetrics.pendingCount})`}
                   </Text>
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
         )}
       </View>
 
       {/* 6. PRIMARY CONTENT AREA: TABLES BLUEPRINT OR LIVE FLOOR KDS */}
       {activeView === 'tables' ? (
-        <ScrollView contentContainerStyle={styles.tablesScroll}>
-          <View style={styles.tablesGrid}>
+        <ScrollView contentContainerStyle={[styles.tablesScroll, isMobile && { paddingHorizontal: 12, paddingBottom: 60 }]}>
+          <View style={[styles.tablesGrid, isMobile && { gap: 10 }]}>
             {displayedTables.map((table) => {
               const tableIdStr = String(table.id).trim().toLowerCase();
               const tableNameStr = table.name.trim().toLowerCase();
@@ -783,6 +855,7 @@ export default function FloorManagerScreen() {
                   key={table.id}
                   style={[
                     styles.tableCard,
+                    { width: tableCardWidth, maxWidth: '100%' },
                     hasReadyFood && styles.tableCardFoodReady,
                     table.status === 'occupied' && !hasReadyFood && styles.tableCardOccupied,
                     table.status === 'billed' && styles.tableCardBilled,
@@ -956,7 +1029,7 @@ export default function FloorManagerScreen() {
         /* ========================================================
            6B. LIVE FLOOR KDS & COOKING MONITOR VIEW
            ======================================================== */
-        <ScrollView contentContainerStyle={styles.tablesScroll}>
+        <ScrollView contentContainerStyle={[styles.tablesScroll, isMobile && { paddingHorizontal: 12, paddingBottom: 60 }]}>
           {displayedKdsTickets.length === 0 ? (
             <View style={styles.kdsEmptyBox}>
               <MaterialCommunityIcons name="chef-hat" size={54} color="#4B5563" style={{ marginBottom: 10 }} />
@@ -973,7 +1046,7 @@ export default function FloorManagerScreen() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.kdsGrid}>
+            <View style={[styles.kdsGrid, isMobile && { gap: 10 }]}>
               {displayedKdsTickets.map((ticket) => {
                 const matchedTable =
                   floorTableMap.get(ticket.tableId) ||
@@ -997,6 +1070,7 @@ export default function FloorManagerScreen() {
                     key={ticket.id}
                     style={[
                       styles.kdsTicketCard,
+                      { width: kdsCardWidth, maxWidth: '100%' },
                       isReady && styles.kdsTicketCardReady,
                       isCooking && !isReady && styles.kdsTicketCardCooking,
                     ]}
@@ -1149,31 +1223,33 @@ export default function FloorManagerScreen() {
       {!!reassignModalTable && (
         <Modal transparent animationType="fade" visible={!!reassignModalTable} onRequestClose={() => setReassignModalTable(null)}>
           <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
+            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 440) : 440 }]}>
               <Text style={styles.modalTitle}>REASSIGN WAITER — {reassignModalTable.name}</Text>
               <Text style={styles.modalSubtitle}>Select which floor waiter will manage this table</Text>
 
-              <View style={styles.modalList}>
-                {floorWaiters.map((w) => {
-                  const isSelected = selectedWaiterName === w.name;
-                  return (
-                    <TouchableOpacity
-                      key={w.id}
-                      style={[styles.modalItem, isSelected && styles.modalItemActive]}
-                      onPress={() => setSelectedWaiterName(w.name)}
-                    >
-                      <MaterialCommunityIcons
-                        name="account"
-                        size={20}
-                        color={isSelected ? '#0D9488' : '#9CA3AF'}
-                      />
-                      <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
-                        {w.name} ({w.designation || 'Waiter'})
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+              <ScrollView style={{ maxHeight: Math.min(height * 0.45, 260), marginBottom: 16 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.modalList}>
+                  {floorWaiters.map((w) => {
+                    const isSelected = selectedWaiterName === w.name;
+                    return (
+                      <TouchableOpacity
+                        key={w.id}
+                        style={[styles.modalItem, isSelected && styles.modalItemActive]}
+                        onPress={() => setSelectedWaiterName(w.name)}
+                      >
+                        <MaterialCommunityIcons
+                          name="account"
+                          size={20}
+                          color={isSelected ? '#0D9488' : '#9CA3AF'}
+                        />
+                        <Text style={[styles.modalItemText, isSelected && styles.modalItemTextActive]}>
+                          {w.name} ({w.designation || 'Waiter'})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
 
               <View style={styles.modalActions}>
                 <TouchableOpacity style={styles.modalBtnCancel} onPress={() => setReassignModalTable(null)}>
@@ -1192,11 +1268,11 @@ export default function FloorManagerScreen() {
       {!!transferModalTable && (
         <Modal transparent animationType="fade" visible={!!transferModalTable} onRequestClose={() => setTransferModalTable(null)}>
           <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
+            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 440) : 440 }]}>
               <Text style={styles.modalTitle}>TRANSFER GUESTS — {transferModalTable.name}</Text>
               <Text style={styles.modalSubtitle}>Select available target table on {selectedFloor}</Text>
 
-              <ScrollView style={{ maxHeight: 220 }}>
+              <ScrollView style={{ maxHeight: Math.min(height * 0.45, 240), marginBottom: 16 }} showsVerticalScrollIndicator={false}>
                 {floorTables
                   .filter((t) => t.id !== transferModalTable.id && t.status === 'available')
                   .map((t) => {
@@ -1241,11 +1317,11 @@ export default function FloorManagerScreen() {
       {!!detailsModalTable && (
         <Modal transparent animationType="fade" visible={!!detailsModalTable} onRequestClose={() => setDetailsModalTable(null)}>
           <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { maxWidth: 560 }]}>
+            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 560) : 560, maxHeight: height - 40 }]}>
               <Text style={styles.modalTitle}>{detailsModalTable.name} — ACTIVE ROUND ORDERS</Text>
               <Text style={styles.modalSubtitle}>Server: {detailsModalTable.server || 'None'} • Floor: {selectedFloor}</Text>
 
-              <ScrollView style={{ maxHeight: 280, marginVertical: 12 }}>
+              <ScrollView style={{ maxHeight: Math.min(height * 0.45, 280), marginVertical: 12 }} showsVerticalScrollIndicator={false}>
                 {(() => {
                   const modalIdStr = String(detailsModalTable.id).trim().toLowerCase();
                   const modalNameStr = detailsModalTable.name?.trim().toLowerCase();
@@ -1299,9 +1375,9 @@ export default function FloorManagerScreen() {
                 })()}
               </ScrollView>
 
-              <View style={styles.modalActions}>
+              <View style={[styles.modalActions, isMobile && { flexDirection: 'column', gap: 8 }]}>
                 <TouchableOpacity
-                  style={styles.modalBtnPrintUnpaid}
+                  style={[styles.modalBtnPrintUnpaid, isMobile && { width: '100%', paddingVertical: 10 }]}
                   onPress={() => {
                     handlePrintTableUnpaidBill(detailsModalTable);
                     setDetailsModalTable(null);
@@ -1311,21 +1387,26 @@ export default function FloorManagerScreen() {
                   <Text style={styles.modalBtnPrintUnpaidText}>Print Unpaid Bill (غیر ادا شدہ بل)</Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.modalBtnPos}
-                  onPress={() => {
-                    const tid = detailsModalTable.id;
-                    setDetailsModalTable(null);
-                    router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: tid } });
-                  }}
-                >
-                  <MaterialCommunityIcons name="plus-circle" size={15} color="#D4AF37" />
-                  <Text style={styles.modalBtnPosText}>Add Items</Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+                  <TouchableOpacity
+                    style={[styles.modalBtnPos, isMobile && { flex: 1, paddingVertical: 10 }]}
+                    onPress={() => {
+                      const tid = detailsModalTable.id;
+                      setDetailsModalTable(null);
+                      router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: tid } });
+                    }}
+                  >
+                    <MaterialCommunityIcons name="plus-circle" size={15} color="#D4AF37" />
+                    <Text style={styles.modalBtnPosText}>Add Items</Text>
+                  </TouchableOpacity>
 
-                <TouchableOpacity style={styles.modalBtnClose} onPress={() => setDetailsModalTable(null)}>
-                  <Text style={styles.modalBtnCloseText}>Close</Text>
-                </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalBtnClose, isMobile && { flex: 1, paddingVertical: 10 }]}
+                    onPress={() => setDetailsModalTable(null)}
+                  >
+                    <Text style={styles.modalBtnCloseText}>Close</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
@@ -1336,39 +1417,39 @@ export default function FloorManagerScreen() {
       {pendingFloorOrders.length > 0 && (
         <Modal transparent animationType="fade" visible={pendingFloorOrders.length > 0}>
           <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { maxWidth: 500, borderColor: '#EF4444', borderWidth: 2 }]}>
+            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 500) : 500, borderColor: '#EF4444', borderWidth: 2, maxHeight: height - 40 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <MaterialCommunityIcons name="bell-ring" size={26} color="#EF4444" />
+                <MaterialCommunityIcons name="bell-ring" size={24} color="#EF4444" />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalTitle, { color: '#EF4444', fontSize: 16 }]}>
+                  <Text style={[styles.modalTitle, { color: '#EF4444', fontSize: isSmallMobile ? 14 : 16 }]}>
                     🚨 NEW DIGITAL MENU ORDER
                   </Text>
-                  <Text style={styles.modalSubtitle}>Requires Floor Manager Confirmation to Dispatch to Kitchen</Text>
+                  <Text style={styles.modalSubtitle} numberOfLines={1}>Requires Confirmation to Dispatch KOT</Text>
                 </View>
               </View>
 
               <View style={{ backgroundColor: '#1F1B18', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#332D27' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '800', color: '#D4AF37' }}>
+                  <Text style={{ fontSize: isSmallMobile ? 16 : 18, fontWeight: '800', color: '#D4AF37' }}>
                     {pendingFloorOrders[0].tableName || pendingFloorOrders[0].tableId}
                   </Text>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#10B981' }}>
+                  <Text style={{ fontSize: isSmallMobile ? 13 : 14, fontWeight: '700', color: '#10B981' }}>
                     Rs. {Number(pendingFloorOrders[0].total || 0).toLocaleString()}
                   </Text>
                 </View>
-                <Text style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 4 }}>
+                <Text style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 4 }} numberOfLines={1}>
                   Customer: <Text style={{ fontWeight: '700' }}>{pendingFloorOrders[0].customer?.name || 'Guest'}</Text>
                   {pendingFloorOrders[0].customer?.phone ? ` • ${pendingFloorOrders[0].customer.phone}` : ''}
                 </Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 11 }}>
+                <Text style={{ color: '#9CA3AF', fontSize: 11 }} numberOfLines={1}>
                   Floor: {selectedFloor} • Placed {new Date(pendingFloorOrders[0].createdAt || Date.now()).toLocaleTimeString()}
                 </Text>
               </View>
 
-              <ScrollView style={{ maxHeight: 180, marginBottom: 14 }}>
+              <ScrollView style={{ maxHeight: Math.min(height * 0.35, 180), marginBottom: 14 }} showsVerticalScrollIndicator={false}>
                 {pendingFloorOrders[0].items?.map((it, idx) => (
                   <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#282420' }}>
-                    <Text style={{ color: '#F3F4F6', fontSize: 13, flex: 1 }}>
+                    <Text style={{ color: '#F3F4F6', fontSize: 13, flex: 1 }} numberOfLines={1}>
                       {it.qty || 1}x {it.name}
                     </Text>
                     <Text style={{ color: '#D4AF37', fontSize: 13, fontWeight: '600' }}>
@@ -1389,7 +1470,7 @@ export default function FloorManagerScreen() {
                   style={[styles.modalBtnSave, { flex: 2, backgroundColor: '#059669' }]}
                   onPress={() => confirmOnlineOrder(pendingFloorOrders[0].id, floorWaiters[0]?.name || user?.name || 'Floor Manager')}
                 >
-                  <Text style={[styles.modalBtnSaveText, { fontWeight: '800' }]}>✓ Confirm & Dispatch KOT</Text>
+                  <Text style={[styles.modalBtnSaveText, { fontWeight: '800' }]}>✓ Confirm KOT</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -1410,19 +1491,25 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 14,
     backgroundColor: '#1A1817',
     borderBottomWidth: 1,
     borderBottomColor: '#2B2622',
   },
+  headerMobile: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 8,
+    flexWrap: 'wrap',
+  },
   headerLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
   },
   floorBadgeIcon: {
-    width: 44,
-    height: 44,
+    width: 42,
+    height: 42,
     borderRadius: 12,
     backgroundColor: '#0F2926',
     borderWidth: 1.5,
@@ -1441,41 +1528,57 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0D9488',
     paddingVertical: 2,
-    paddingHorizontal: 8,
+    paddingHorizontal: 7,
     borderRadius: 12,
-    gap: 5,
+    gap: 4,
   },
   pulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
     backgroundColor: '#FFF',
   },
   liveText: {
     color: '#FFF',
-    fontSize: 10,
+    fontSize: 9.5,
     fontWeight: '800',
   },
   headerSubtitle: {
     color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 11.5,
     marginTop: 2,
   },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 8,
+  },
+  headerRightMobile: {
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'flex-start',
+    width: '100%',
+    marginTop: 2,
   },
   navBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#26221E',
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#3D3630',
     gap: 6,
+  },
+  navBtnCompact: {
+    paddingVertical: 6,
+    paddingHorizontal: 9,
+    gap: 4,
+  },
+  navBtnPos: {
+    backgroundColor: 'rgba(212, 175, 55, 0.12)',
+    borderColor: '#D4AF37',
   },
   logoutBtn: {
     borderColor: '#7F1D1D',
@@ -1487,35 +1590,39 @@ const styles = StyleSheet.create({
   },
   navBtnText: {
     color: '#E5E7EB',
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '700',
+  },
+  floorTabBarScroll: {
+    backgroundColor: '#171514',
+    borderBottomWidth: 1,
+    borderBottomColor: '#26221E',
   },
   floorTabBar: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#171514',
     paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: '#26221E',
-    gap: 10,
+    paddingVertical: 8,
+    gap: 8,
   },
   floorTabLabel: {
     color: '#9CA3AF',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
+    marginRight: 4,
   },
   floorTab: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#24201D',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#38322C',
-    gap: 6,
+    gap: 5,
   },
   floorTabActive: {
     backgroundColor: '#0D9488',
@@ -1523,7 +1630,7 @@ const styles = StyleSheet.create({
   },
   floorTabText: {
     color: '#9CA3AF',
-    fontSize: 12,
+    fontSize: 11.5,
     fontWeight: '600',
   },
   floorTabTextActive: {
@@ -1677,6 +1784,12 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 13,
   },
+  filterPillsScroll: {
+    flexDirection: 'row',
+    gap: 6,
+    alignItems: 'center',
+    paddingVertical: 2,
+  },
   filterPills: {
     flexDirection: 'row',
     gap: 6,
@@ -1713,8 +1826,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   tableCard: {
-    width: '100%',
-    maxWidth: Platform.OS === 'web' ? 340 : '100%',
     backgroundColor: '#1A1817',
     borderRadius: 12,
     borderWidth: 1.5,
@@ -2134,8 +2245,6 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   kdsTicketCard: {
-    width: '100%',
-    maxWidth: Platform.OS === 'web' ? 360 : '100%',
     backgroundColor: '#1A1817',
     borderRadius: 12,
     borderWidth: 1.5,
