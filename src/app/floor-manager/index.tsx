@@ -704,57 +704,75 @@ export default function FloorManagerScreen() {
 
       {/* 4. FLOOR METRICS (KPIs) STRIP */}
       <View style={[styles.kpiContainer, isMobile && { paddingHorizontal: 12, paddingVertical: 10, gap: 8 }]}>
-        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
-          <Text style={styles.kpiLabel}>OCCUPANCY</Text>
-          <Text style={[styles.kpiValue, { color: kpis.occupancyRate > 70 ? '#EF4444' : '#10B981', fontSize: isSmallMobile ? 18 : 20 }]}>
+        <View style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#0D9488', borderTopWidth: 3 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>OCCUPANCY</Text>
+            <MaterialCommunityIcons name="chart-donut" size={16} color="#0D9488" />
+          </View>
+          <Text style={[styles.kpiValue, { color: kpis.occupancyRate > 70 ? '#EF4444' : '#0F766E', fontSize: isSmallMobile ? 18 : 22 }]}>
             {kpis.occupancyRate}%
           </Text>
           <Text style={styles.kpiSub} numberOfLines={1}>{kpis.occupied + kpis.billed}/{kpis.total} In Use</Text>
         </View>
 
         <TouchableOpacity 
-          style={[styles.kpiCard, { width: kpiCardWidth }, activeView === 'kds' && { borderColor: '#F59E0B' }]}
+          style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#F59E0B', borderTopWidth: 3 }, activeView === 'kds' && { borderColor: '#F59E0B' }]}
           onPress={() => {
             setActiveView('kds');
             setKdsFilter('cooking');
           }}
         >
-          <Text style={styles.kpiLabel}>KDS COOKING</Text>
-          <Text style={[styles.kpiValue, { color: kdsMetrics.cookingCount > 0 ? '#F59E0B' : '#9CA3AF', fontSize: isSmallMobile ? 18 : 20 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>KDS COOKING</Text>
+            <MaterialCommunityIcons name="fire" size={16} color="#F59E0B" />
+          </View>
+          <Text style={[styles.kpiValue, { color: kdsMetrics.cookingCount > 0 ? '#D97706' : '#64748B', fontSize: isSmallMobile ? 18 : 22 }]}>
             {kdsMetrics.cookingCount}
           </Text>
           <Text style={styles.kpiSub} numberOfLines={1}>{kdsMetrics.totalDishes} In Kitchen</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.kpiCard, { width: kpiCardWidth }, activeView === 'kds' && { borderColor: '#10B981' }]}
+          style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#10B981', borderTopWidth: 3 }, activeView === 'kds' && { borderColor: '#10B981' }]}
           onPress={() => {
             setActiveView('kds');
             setKdsFilter('ready');
           }}
         >
-          <Text style={styles.kpiLabel}>FOOD READY</Text>
-          <Text style={[styles.kpiValue, { color: kdsMetrics.readyCount > 0 ? '#10B981' : '#9CA3AF', fontSize: isSmallMobile ? 18 : 20 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>FOOD READY</Text>
+            <MaterialCommunityIcons name="bell-ring" size={16} color="#10B981" />
+          </View>
+          <Text style={[styles.kpiValue, { color: kdsMetrics.readyCount > 0 ? '#059669' : '#64748B', fontSize: isSmallMobile ? 18 : 22 }]}>
             {kdsMetrics.readyCount}
           </Text>
           <Text style={styles.kpiSub} numberOfLines={1}>Pickup Needed</Text>
         </TouchableOpacity>
 
-        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
-          <Text style={styles.kpiLabel}>BILLED</Text>
-          <Text style={[styles.kpiValue, { color: '#3B82F6', fontSize: isSmallMobile ? 18 : 20 }]}>{kpis.billed}</Text>
+        <View style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#3B82F6', borderTopWidth: 3 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>BILLED</Text>
+            <MaterialCommunityIcons name="receipt" size={16} color="#3B82F6" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#2563EB', fontSize: isSmallMobile ? 18 : 22 }]}>{kpis.billed}</Text>
           <Text style={styles.kpiSub} numberOfLines={1}>Awaiting Pay</Text>
         </View>
 
-        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
-          <Text style={styles.kpiLabel}>AVAILABLE</Text>
-          <Text style={[styles.kpiValue, { color: '#10B981', fontSize: isSmallMobile ? 18 : 20 }]}>{kpis.available}</Text>
+        <View style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#059669', borderTopWidth: 3 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>AVAILABLE</Text>
+            <MaterialCommunityIcons name="check-circle" size={16} color="#059669" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#059669', fontSize: isSmallMobile ? 18 : 22 }]}>{kpis.available}</Text>
           <Text style={styles.kpiSub} numberOfLines={1}>Ready for Guests</Text>
         </View>
 
-        <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
-          <Text style={styles.kpiLabel}>TODAY'S SALES</Text>
-          <Text style={[styles.kpiValue, { color: '#B45309', fontSize: isSmallMobile ? 16 : 19 }]} numberOfLines={1}>
+        <View style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#D97706', borderTopWidth: 3 }]}>
+          <View style={styles.kpiHeaderRow}>
+            <Text style={styles.kpiLabel}>TODAY'S SALES</Text>
+            <MaterialCommunityIcons name="cash-register" size={16} color="#D97706" />
+          </View>
+          <Text style={[styles.kpiValue, { color: '#B45309', fontSize: isSmallMobile ? 16 : 20 }]} numberOfLines={1}>
             Rs. {kpis.floorSales.toLocaleString()}
           </Text>
           <Text style={styles.kpiSub} numberOfLines={1}>Settled Today</Text>
@@ -792,6 +810,17 @@ export default function FloorManagerScreen() {
           >
             {(['all', 'occupied', 'ready', 'available', 'billed'] as const).map((filter) => {
               const isActive = statusFilter === filter;
+              const count =
+                filter === 'all'
+                  ? kpis.total
+                  : filter === 'occupied'
+                  ? kpis.occupied
+                  : filter === 'ready'
+                  ? kpis.readyCount
+                  : filter === 'available'
+                  ? kpis.available
+                  : kpis.billed;
+
               return (
                 <TouchableOpacity
                   key={filter}
@@ -799,12 +828,17 @@ export default function FloorManagerScreen() {
                   onPress={() => setStatusFilter(filter)}
                 >
                   <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                    {filter === 'all' && `All (${kpis.total})`}
-                    {filter === 'occupied' && `Occupied (${kpis.occupied})`}
-                    {filter === 'ready' && `Food Ready (${kpis.readyCount})`}
-                    {filter === 'available' && `Available (${kpis.available})`}
-                    {filter === 'billed' && `Billed (${kpis.billed})`}
+                    {filter === 'all' && 'All Tables'}
+                    {filter === 'occupied' && 'Occupied'}
+                    {filter === 'ready' && 'Food Ready'}
+                    {filter === 'available' && 'Available'}
+                    {filter === 'billed' && 'Billed'}
                   </Text>
+                  <View style={[styles.filterBadge, isActive && styles.filterBadgeActive]}>
+                    <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+                      {count}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -818,6 +852,15 @@ export default function FloorManagerScreen() {
           >
             {(['all', 'cooking', 'ready', 'pending'] as const).map((fKey) => {
               const isActive = kdsFilter === fKey;
+              const count =
+                fKey === 'all'
+                  ? floorTickets.length
+                  : fKey === 'cooking'
+                  ? kdsMetrics.cookingCount
+                  : fKey === 'ready'
+                  ? kdsMetrics.readyCount
+                  : kdsMetrics.pendingCount;
+
               return (
                 <TouchableOpacity
                   key={fKey}
@@ -825,11 +868,16 @@ export default function FloorManagerScreen() {
                   onPress={() => setKdsFilter(fKey)}
                 >
                   <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
-                    {fKey === 'all' && `All KOTs (${floorTickets.length})`}
-                    {fKey === 'cooking' && `🔥 Cooking (${kdsMetrics.cookingCount})`}
-                    {fKey === 'ready' && `🔔 Ready at Pass (${kdsMetrics.readyCount})`}
-                    {fKey === 'pending' && `⏳ Queue (${kdsMetrics.pendingCount})`}
+                    {fKey === 'all' && 'All KOTs'}
+                    {fKey === 'cooking' && '🔥 Cooking'}
+                    {fKey === 'ready' && '🔔 Ready'}
+                    {fKey === 'pending' && '⏳ Queue'}
                   </Text>
+                  <View style={[styles.filterBadge, isActive && styles.filterBadgeActiveKds]}>
+                    <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
+                      {count}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               );
             })}
@@ -882,10 +930,13 @@ export default function FloorManagerScreen() {
                     table.status === 'billed' && styles.tableCardBilled,
                   ]}
                 >
+                  {/* Status Indicator Bar at Top */}
+                  <View style={[styles.cardTopIndicator, { backgroundColor: statusBadge.border }]} />
+
                   {/* Table Header */}
                   <View style={styles.tableCardHeader}>
-                    <View>
-                      <Text style={styles.tableName}>{table.name}</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.tableName} numberOfLines={1}>{table.name}</Text>
                       <View style={styles.seatingTag}>
                         <MaterialCommunityIcons
                           name={
@@ -895,8 +946,8 @@ export default function FloorManagerScreen() {
                               ? 'chair-rolling'
                               : 'table-furniture'
                           }
-                          size={12}
-                          color="#D4AF37"
+                          size={13}
+                          color="#B45309"
                         />
                         <Text style={styles.seatingText}>
                           {table.seatingType?.toUpperCase() || 'DINING'} • {table.seats || 4} SEATS
@@ -905,6 +956,7 @@ export default function FloorManagerScreen() {
                     </View>
 
                     <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg, borderWidth: 1, borderColor: statusBadge.border }]}>
+                      <View style={[styles.statusDot, { backgroundColor: statusBadge.text }]} />
                       <Text style={[styles.statusBadgeText, { color: statusBadge.text }]}>
                         {statusBadge.label}
                       </Text>
@@ -914,7 +966,10 @@ export default function FloorManagerScreen() {
                   {/* Table Body Info */}
                   <View style={styles.tableCardBody}>
                     <View style={styles.detailRow}>
-                      <Text style={styles.detailLabel}>Assigned Waiter:</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialCommunityIcons name="account-tie-outline" size={13} color="#64748B" />
+                        <Text style={styles.detailLabel}>Assigned Server:</Text>
+                      </View>
                       <TouchableOpacity
                         style={styles.waiterChip}
                         onPress={() => {
@@ -926,14 +981,17 @@ export default function FloorManagerScreen() {
                         <Text style={styles.waiterChipText}>
                           {table.server || 'Unassigned'}
                         </Text>
-                        <MaterialCommunityIcons name="pencil-outline" size={12} color="#9CA3AF" />
+                        <MaterialCommunityIcons name="pencil-outline" size={12} color="#94A3B8" />
                       </TouchableOpacity>
                     </View>
 
                     {table.status !== 'available' && (
                       <>
                         <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Active Tickets:</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialCommunityIcons name="receipt-text-outline" size={13} color="#64748B" />
+                            <Text style={styles.detailLabel}>Active Tickets:</Text>
+                          </View>
                           <Text style={styles.detailVal}>
                             {tableAllTickets.length} KOT{tableAllTickets.length > 1 ? 's' : ''}
                             {unservedTickets.length > 0 && unservedTickets.length !== tableAllTickets.length ? ` (${unservedTickets.length} active)` : ''}
@@ -941,7 +999,10 @@ export default function FloorManagerScreen() {
                         </View>
 
                         <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Current Bill Total:</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialCommunityIcons name="cash" size={14} color="#059669" />
+                            <Text style={styles.detailLabel}>Bill Total:</Text>
+                          </View>
                           <Text style={styles.billTotalVal}>
                             Rs. {(
                               table.billTotal ||
@@ -956,13 +1017,13 @@ export default function FloorManagerScreen() {
                           <View style={styles.cardKdsSnippetBox}>
                             {readyItems.length > 0 && (
                               <View style={styles.snippetPillReady}>
-                                <MaterialCommunityIcons name="bell-ring" size={12} color="#10B981" />
+                                <MaterialCommunityIcons name="bell-ring" size={12} color="#065F46" />
                                 <Text style={styles.snippetPillReadyText}>{readyItems.length} Ready to Serve</Text>
                               </View>
                             )}
                             {cookingItems.length > 0 && (
                               <View style={styles.snippetPillCooking}>
-                                <MaterialCommunityIcons name="fire" size={12} color="#F59E0B" />
+                                <MaterialCommunityIcons name="fire" size={12} color="#92400E" />
                                 <Text style={styles.snippetPillCookingText}>{cookingItems.length} Cooking in KDS</Text>
                               </View>
                             )}
@@ -998,8 +1059,8 @@ export default function FloorManagerScreen() {
                           style={[styles.actionBtn, styles.btnPrintBill]}
                           onPress={() => handlePrintTableUnpaidBill(table)}
                         >
-                          <MaterialCommunityIcons name="printer-outline" size={14} color="#EF4444" />
-                          <Text style={styles.btnPrintBillText}>Print Bill (Unpaid)</Text>
+                          <MaterialCommunityIcons name="printer-outline" size={14} color="#DC2626" />
+                          <Text style={styles.btnPrintBillText}>Print Bill</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity
@@ -1009,7 +1070,7 @@ export default function FloorManagerScreen() {
                             setSelectedTargetTableId('');
                           }}
                         >
-                          <MaterialCommunityIcons name="swap-horizontal" size={16} color="#D4AF37" />
+                          <MaterialCommunityIcons name="swap-horizontal" size={15} color="#854D0E" />
                           <Text style={styles.btnTransferText}>Move</Text>
                         </TouchableOpacity>
 
@@ -1017,8 +1078,8 @@ export default function FloorManagerScreen() {
                           style={[styles.actionBtn, styles.btnDetails]}
                           onPress={() => setDetailsModalTable(table)}
                         >
-                          <MaterialCommunityIcons name="eye-outline" size={16} color="#FFF" />
-                          <Text style={styles.btnDetailsText}>View Items</Text>
+                          <MaterialCommunityIcons name="eye-outline" size={15} color="#334155" />
+                          <Text style={styles.btnDetailsText}>Items</Text>
                         </TouchableOpacity>
 
                         {table.status === 'billed' ? (
@@ -1034,7 +1095,7 @@ export default function FloorManagerScreen() {
                             style={[styles.actionBtn, styles.btnAddOn]}
                             onPress={() => router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: table.id } })}
                           >
-                            <MaterialCommunityIcons name="plus" size={16} color="#D4AF37" />
+                            <MaterialCommunityIcons name="plus" size={15} color="#0F766E" />
                             <Text style={styles.btnAddOnText}>Add-On</Text>
                           </TouchableOpacity>
                         )}
@@ -1777,12 +1838,17 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
     elevation: 1,
   },
+  kpiHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 4,
+  },
   kpiLabel: {
     color: '#64748B',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
-    marginBottom: 4,
   },
   kpiValue: {
     fontSize: 20,
@@ -1832,25 +1898,52 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   filterPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
+    paddingHorizontal: 10,
+    borderRadius: 20,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: '#E2E8F0',
+    gap: 6,
   },
   filterPillActive: {
     backgroundColor: '#0D9488',
     borderColor: '#0F766E',
   },
   filterPillText: {
-    color: '#64748B',
-    fontSize: 11,
+    color: '#475569',
+    fontSize: 11.5,
     fontWeight: '700',
   },
   filterPillTextActive: {
     color: '#FFF',
     fontWeight: '800',
+  },
+  filterBadge: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+    borderRadius: 10,
+    minWidth: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeActive: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  filterBadgeActiveKds: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+  },
+  filterBadgeText: {
+    color: '#475569',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  filterBadgeTextActive: {
+    color: '#FFF',
+    fontWeight: '900',
   },
   tablesScroll: {
     paddingHorizontal: 20,
@@ -1863,15 +1956,25 @@ const styles = StyleSheet.create({
   },
   tableCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     padding: 14,
+    paddingTop: 16,
+    position: 'relative',
+    overflow: 'hidden',
     shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
     shadowRadius: 5,
     elevation: 2,
+  },
+  cardTopIndicator: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 4,
   },
   tableCardOccupied: {
     borderColor: '#F87171',
@@ -1908,10 +2011,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     letterSpacing: 0.5,
   },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    marginRight: 4,
+  },
   statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 3,
     paddingHorizontal: 8,
-    borderRadius: 6,
+    borderRadius: 8,
   },
   statusBadgeText: {
     fontSize: 10,
