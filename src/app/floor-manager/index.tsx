@@ -62,27 +62,48 @@ export default function FloorManagerScreen() {
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
 
-  // Responsive card widths
+  // Responsive column counts & card widths (bulletproof calculation preventing premature row wraps)
+  const numTableColumns = useMemo(() => {
+    if (width >= 1480) return 5;
+    if (width >= 1140) return 4;
+    if (width >= 800) return 3;
+    if (width >= 540) return 2;
+    return 1;
+  }, [width]);
+
   const tableCardWidth = useMemo(() => {
-    if (width >= 1380) return (width - 40 - 3 * 14) / 4;
-    if (width >= 960) return (width - 40 - 2 * 14) / 3;
-    if (width >= 640) return (width - (isMobile ? 24 : 40) - 14) / 2;
-    return '100%';
-  }, [width, isMobile]);
+    if (numTableColumns === 1) return '100%';
+    const scrollbarGutter = Platform.OS === 'web' ? 18 : 0;
+    const padding = isMobile ? 24 : 40;
+    const totalGaps = (numTableColumns - 1) * (isMobile ? 10 : 14);
+    const available = width - padding - scrollbarGutter - totalGaps - 2;
+    return Math.max(180, Math.floor(available / numTableColumns));
+  }, [width, numTableColumns, isMobile]);
 
   const kdsCardWidth = useMemo(() => {
-    if (width >= 1380) return (width - 40 - 3 * 14) / 4;
-    if (width >= 960) return (width - 40 - 2 * 14) / 3;
-    if (width >= 640) return (width - (isMobile ? 24 : 40) - 14) / 2;
-    return '100%';
-  }, [width, isMobile]);
+    if (numTableColumns === 1) return '100%';
+    const scrollbarGutter = Platform.OS === 'web' ? 18 : 0;
+    const padding = isMobile ? 24 : 40;
+    const totalGaps = (numTableColumns - 1) * (isMobile ? 10 : 14);
+    const available = width - padding - scrollbarGutter - totalGaps - 2;
+    return Math.max(180, Math.floor(available / numTableColumns));
+  }, [width, numTableColumns, isMobile]);
+
+  const kpiColumns = useMemo(() => {
+    if (width >= 1100) return 6;
+    if (width >= 768) return 3;
+    if (width >= 480) return 2;
+    return 1;
+  }, [width]);
 
   const kpiCardWidth = useMemo(() => {
-    if (width >= 1100) return (width - 40 - 5 * 12) / 6;
-    if (width >= 768) return (width - 40 - 2 * 12) / 3;
-    if (width >= 480) return (width - 24 - 10) / 2;
-    return '100%';
-  }, [width]);
+    if (kpiColumns === 1) return '100%';
+    const scrollbarGutter = Platform.OS === 'web' ? 18 : 0;
+    const padding = isMobile ? 24 : 40;
+    const totalGaps = (kpiColumns - 1) * 12;
+    const available = width - padding - scrollbarGutter - totalGaps - 2;
+    return Math.max(110, Math.floor(available / kpiColumns));
+  }, [width, kpiColumns, isMobile]);
 
   const tables = useRestaurantStore((s) => s.tables || []);
   const tickets = useRestaurantStore((s) => s.tickets || []);
