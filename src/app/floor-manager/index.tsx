@@ -1457,33 +1457,33 @@ export default function FloorManagerScreen() {
                 })()}
               </ScrollView>
 
-              <View style={[styles.modalActions, isMobile && { flexDirection: 'column', gap: 8 }]}>
+              <View style={styles.modalDetailsFooter}>
                 <TouchableOpacity
-                  style={[styles.modalBtnPrintUnpaid, isMobile && { width: '100%', paddingVertical: 10 }]}
+                  style={styles.modalBtnPrintUnpaid}
                   onPress={() => {
                     handlePrintTableUnpaidBill(detailsModalTable);
                     setDetailsModalTable(null);
                   }}
                 >
-                  <MaterialCommunityIcons name="printer-outline" size={16} color="#FFF" />
+                  <MaterialCommunityIcons name="printer-outline" size={17} color="#FFF" />
                   <Text style={styles.modalBtnPrintUnpaidText}>Print Unpaid Bill (غیر ادا شدہ بل)</Text>
                 </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', gap: 8, width: isMobile ? '100%' : 'auto' }}>
+                <View style={styles.modalSubActionsRow}>
                   <TouchableOpacity
-                    style={[styles.modalBtnPos, isMobile && { flex: 1, paddingVertical: 10 }]}
+                    style={styles.modalBtnPos}
                     onPress={() => {
                       const tid = detailsModalTable.id;
                       setDetailsModalTable(null);
                       router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: tid } });
                     }}
                   >
-                    <MaterialCommunityIcons name="plus-circle" size={15} color="#D4AF37" />
-                    <Text style={styles.modalBtnPosText}>Add Items</Text>
+                    <MaterialCommunityIcons name="plus-circle" size={16} color="#0F766E" />
+                    <Text style={styles.modalBtnPosText}>+ Add Items</Text>
                   </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={[styles.modalBtnClose, isMobile && { flex: 1, paddingVertical: 10 }]}
+                    style={styles.modalBtnClose}
                     onPress={() => setDetailsModalTable(null)}
                   >
                     <Text style={styles.modalBtnCloseText}>Close</Text>
@@ -2662,49 +2662,70 @@ const styles = StyleSheet.create({
   },
 
   /* MODAL BUTTONS */
+  modalDetailsFooter: {
+    gap: 10,
+    marginTop: 6,
+    width: '100%',
+  },
   modalBtnPrintUnpaid: {
-    flex: 2,
+    width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#DC2626',
     paddingVertical: 12,
     borderRadius: 8,
-    gap: 6,
+    gap: 8,
+    shadowColor: '#DC2626',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   modalBtnPrintUnpaidText: {
     color: '#FFF',
-    fontSize: 12.5,
+    fontSize: 13,
     fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  modalSubActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    width: '100%',
   },
   modalBtnPos: {
-    flex: 1.2,
+    flex: 2,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF9C3',
-    borderWidth: 1,
-    borderColor: '#EAB308',
-    paddingVertical: 12,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 8,
-    gap: 4,
+    gap: 6,
   },
   modalBtnPosText: {
-    color: '#854D0E',
-    fontSize: 12,
+    color: '#0F766E',
+    fontSize: 13,
     fontWeight: '800',
   },
   modalBtnClose: {
-    flex: 0.8,
+    flex: 1,
     backgroundColor: '#F1F5F9',
-    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalBtnCloseText: {
-    color: '#64748B',
-    fontSize: 12.5,
+    color: '#475569',
+    fontSize: 13,
     fontWeight: '700',
   },
 });
