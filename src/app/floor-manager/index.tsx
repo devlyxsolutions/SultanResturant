@@ -898,9 +898,6 @@ export default function FloorManagerScreen() {
                   (tk.tableName && tk.tableName.trim().toLowerCase() === tableNameStr)
               );
               const unservedTickets = tableAllTickets.filter((tk) => tk.status !== 'served');
-              const hasReadyFood = unservedTickets.some(
-                (tk) => tk.status === 'ready' || (tk.items && tk.items.some((it) => it.itemStatus === 'ready'))
-              );
               const allTableItems = tableAllTickets.flatMap((tk) => tk.items || []);
               const cookingItems = allTableItems.filter(
                 (i) => i.itemStatus === 'cooking' || (!i.itemStatus && unservedTickets.some((tk) => tk.status === 'cooking'))
@@ -908,6 +905,11 @@ export default function FloorManagerScreen() {
               const readyItems = allTableItems.filter(
                 (i) => i.itemStatus === 'ready' || (!i.itemStatus && unservedTickets.some((tk) => tk.status === 'ready'))
               );
+              const hasReadyFood =
+                readyItems.length > 0 ||
+                unservedTickets.some(
+                  (tk) => tk.status === 'ready' || (tk.items && tk.items.some((it) => it.itemStatus === 'ready'))
+                );
 
               // Determine status badge color
               let statusBadge = { bg: '#ECFDF5', label: 'AVAILABLE', text: '#065F46', border: '#A7F3D0' };
@@ -933,104 +935,106 @@ export default function FloorManagerScreen() {
                   {/* Status Indicator Bar at Top */}
                   <View style={[styles.cardTopIndicator, { backgroundColor: statusBadge.border }]} />
 
-                  {/* Table Header */}
-                  <View style={styles.tableCardHeader}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.tableName} numberOfLines={1}>{table.name}</Text>
-                      <View style={styles.seatingTag}>
-                        <MaterialCommunityIcons
-                          name={
-                            table.seatingType === 'majlis'
-                              ? 'sofa'
-                              : table.seatingType === 'couches'
-                              ? 'chair-rolling'
-                              : 'table-furniture'
-                          }
-                          size={13}
-                          color="#B45309"
-                        />
-                        <Text style={styles.seatingText}>
-                          {table.seatingType?.toUpperCase() || 'DINING'} • {table.seats || 4} SEATS
+                  <View style={{ flex: 1, justifyContent: 'flex-start' }}>
+                    {/* Table Header */}
+                    <View style={styles.tableCardHeader}>
+                      <View style={{ flex: 1, paddingRight: 6 }}>
+                        <Text style={styles.tableName} numberOfLines={1}>{table.name}</Text>
+                        <View style={styles.seatingTag}>
+                          <MaterialCommunityIcons
+                            name={
+                              table.seatingType === 'majlis'
+                                ? 'sofa'
+                                : table.seatingType === 'couches'
+                                ? 'chair-rolling'
+                                : 'table-furniture'
+                            }
+                            size={13}
+                            color="#B45309"
+                          />
+                          <Text style={styles.seatingText}>
+                            {table.seatingType?.toUpperCase() || 'DINING'} • {table.seats || 4} SEATS
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg, borderWidth: 1, borderColor: statusBadge.border }]}>
+                        <View style={[styles.statusDot, { backgroundColor: statusBadge.text }]} />
+                        <Text style={[styles.statusBadgeText, { color: statusBadge.text }]}>
+                          {statusBadge.label}
                         </Text>
                       </View>
                     </View>
 
-                    <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg, borderWidth: 1, borderColor: statusBadge.border }]}>
-                      <View style={[styles.statusDot, { backgroundColor: statusBadge.text }]} />
-                      <Text style={[styles.statusBadgeText, { color: statusBadge.text }]}>
-                        {statusBadge.label}
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Table Body Info */}
-                  <View style={styles.tableCardBody}>
-                    <View style={styles.detailRow}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <MaterialCommunityIcons name="account-tie-outline" size={13} color="#64748B" />
-                        <Text style={styles.detailLabel}>Assigned Server:</Text>
+                    {/* Table Body Info */}
+                    <View style={styles.tableCardBody}>
+                      <View style={styles.detailRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <MaterialCommunityIcons name="account-tie-outline" size={13} color="#64748B" />
+                          <Text style={styles.detailLabel}>Assigned Server:</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.waiterChip}
+                          onPress={() => {
+                            setReassignModalTable(table);
+                            setSelectedWaiterName(table.server || floorWaiters[0]?.name || '');
+                          }}
+                        >
+                          <MaterialCommunityIcons name="account-tie" size={13} color="#0D9488" />
+                          <Text style={styles.waiterChipText} numberOfLines={1} ellipsizeMode="tail">
+                            {table.server || 'Unassigned'}
+                          </Text>
+                          <MaterialCommunityIcons name="pencil-outline" size={11} color="#94A3B8" />
+                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity
-                        style={styles.waiterChip}
-                        onPress={() => {
-                          setReassignModalTable(table);
-                          setSelectedWaiterName(table.server || floorWaiters[0]?.name || '');
-                        }}
-                      >
-                        <MaterialCommunityIcons name="account-tie" size={14} color="#0D9488" />
-                        <Text style={styles.waiterChipText}>
-                          {table.server || 'Unassigned'}
-                        </Text>
-                        <MaterialCommunityIcons name="pencil-outline" size={12} color="#94A3B8" />
-                      </TouchableOpacity>
+
+                      {table.status !== 'available' && (
+                        <>
+                          <View style={styles.detailRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <MaterialCommunityIcons name="receipt-text-outline" size={13} color="#64748B" />
+                              <Text style={styles.detailLabel}>Active Tickets:</Text>
+                            </View>
+                            <Text style={styles.detailVal}>
+                              {tableAllTickets.length} KOT{tableAllTickets.length > 1 ? 's' : ''}
+                              {unservedTickets.length > 0 && unservedTickets.length !== tableAllTickets.length ? ` (${unservedTickets.length} active)` : ''}
+                            </Text>
+                          </View>
+
+                          <View style={styles.detailRow}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <MaterialCommunityIcons name="cash" size={14} color="#059669" />
+                              <Text style={styles.detailLabel}>Bill Total:</Text>
+                            </View>
+                            <Text style={styles.billTotalVal}>
+                              Rs. {(
+                                table.billTotal ||
+                                allTableItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) ||
+                                0
+                              ).toLocaleString()}
+                            </Text>
+                          </View>
+
+                          {/* Live KDS Status Pills right on table card */}
+                          {(cookingItems.length > 0 || readyItems.length > 0) && (
+                            <View style={styles.cardKdsSnippetBox}>
+                              {readyItems.length > 0 && (
+                                <View style={styles.snippetPillReady}>
+                                  <MaterialCommunityIcons name="bell-ring" size={12} color="#065F46" />
+                                  <Text style={styles.snippetPillReadyText}>{readyItems.length} Ready to Serve</Text>
+                                </View>
+                              )}
+                              {cookingItems.length > 0 && (
+                                <View style={styles.snippetPillCooking}>
+                                  <MaterialCommunityIcons name="fire" size={12} color="#92400E" />
+                                  <Text style={styles.snippetPillCookingText}>{cookingItems.length} Cooking in KDS</Text>
+                                </View>
+                              )}
+                            </View>
+                          )}
+                        </>
+                      )}
                     </View>
-
-                    {table.status !== 'available' && (
-                      <>
-                        <View style={styles.detailRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <MaterialCommunityIcons name="receipt-text-outline" size={13} color="#64748B" />
-                            <Text style={styles.detailLabel}>Active Tickets:</Text>
-                          </View>
-                          <Text style={styles.detailVal}>
-                            {tableAllTickets.length} KOT{tableAllTickets.length > 1 ? 's' : ''}
-                            {unservedTickets.length > 0 && unservedTickets.length !== tableAllTickets.length ? ` (${unservedTickets.length} active)` : ''}
-                          </Text>
-                        </View>
-
-                        <View style={styles.detailRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <MaterialCommunityIcons name="cash" size={14} color="#059669" />
-                            <Text style={styles.detailLabel}>Bill Total:</Text>
-                          </View>
-                          <Text style={styles.billTotalVal}>
-                            Rs. {(
-                              table.billTotal ||
-                              allTableItems.reduce((sum, item) => sum + (Number(item.price) || 0) * (Number(item.qty) || 1), 0) ||
-                              0
-                            ).toLocaleString()}
-                          </Text>
-                        </View>
-
-                        {/* Live KDS Status Pills right on table card */}
-                        {(cookingItems.length > 0 || readyItems.length > 0) && (
-                          <View style={styles.cardKdsSnippetBox}>
-                            {readyItems.length > 0 && (
-                              <View style={styles.snippetPillReady}>
-                                <MaterialCommunityIcons name="bell-ring" size={12} color="#065F46" />
-                                <Text style={styles.snippetPillReadyText}>{readyItems.length} Ready to Serve</Text>
-                              </View>
-                            )}
-                            {cookingItems.length > 0 && (
-                              <View style={styles.snippetPillCooking}>
-                                <MaterialCommunityIcons name="fire" size={12} color="#92400E" />
-                                <Text style={styles.snippetPillCookingText}>{cookingItems.length} Cooking in KDS</Text>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                      </>
-                    )}
                   </View>
 
                   {/* Table Action Buttons */}
@@ -1044,62 +1048,68 @@ export default function FloorManagerScreen() {
                         <Text style={styles.btnPunchText}>Seat & Punch Order</Text>
                       </TouchableOpacity>
                     ) : (
-                      <>
+                      <View style={styles.occupiedActionsCol}>
                         {hasReadyFood && (
                           <TouchableOpacity
-                            style={[styles.actionBtn, styles.btnServe]}
+                            style={[styles.actionBtn, styles.btnServeFull]}
                             onPress={() => serveTableTickets(table.id)}
                           >
-                            <MaterialCommunityIcons name="check-all" size={16} color="#FFF" />
-                            <Text style={styles.btnServeText}>Serve Food</Text>
+                            <MaterialCommunityIcons name="bell-ring" size={14} color="#FFF" />
+                            <Text style={styles.btnServeText}>Serve Food to Table</Text>
                           </TouchableOpacity>
                         )}
 
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.btnPrintBill]}
-                          onPress={() => handlePrintTableUnpaidBill(table)}
-                        >
-                          <MaterialCommunityIcons name="printer-outline" size={14} color="#DC2626" />
-                          <Text style={styles.btnPrintBillText}>Print Bill</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.btnTransfer]}
-                          onPress={() => {
-                            setTransferModalTable(table);
-                            setSelectedTargetTableId('');
-                          }}
-                        >
-                          <MaterialCommunityIcons name="swap-horizontal" size={15} color="#854D0E" />
-                          <Text style={styles.btnTransferText}>Move</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                          style={[styles.actionBtn, styles.btnDetails]}
-                          onPress={() => setDetailsModalTable(table)}
-                        >
-                          <MaterialCommunityIcons name="eye-outline" size={15} color="#334155" />
-                          <Text style={styles.btnDetailsText}>Items</Text>
-                        </TouchableOpacity>
-
-                        {table.status === 'billed' ? (
+                        {/* Row 1: Print Bill & Add-On / Clear */}
+                        <View style={styles.actionBtnRow}>
                           <TouchableOpacity
-                            style={[styles.actionBtn, styles.btnSettle]}
-                            onPress={() => settleBill(table.id)}
+                            style={[styles.actionBtn, styles.actionBtnHalf, styles.btnPrintBill]}
+                            onPress={() => handlePrintTableUnpaidBill(table)}
                           >
-                            <MaterialCommunityIcons name="cash-check" size={16} color="#FFF" />
-                            <Text style={styles.btnSettleText}>Clear Table</Text>
+                            <MaterialCommunityIcons name="printer-outline" size={13} color="#DC2626" />
+                            <Text style={styles.btnPrintBillText}>Print Bill</Text>
                           </TouchableOpacity>
-                        ) : (
+
+                          {table.status === 'billed' ? (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnHalf, styles.btnSettle]}
+                              onPress={() => settleBill(table.id)}
+                            >
+                              <MaterialCommunityIcons name="cash-check" size={14} color="#FFF" />
+                              <Text style={styles.btnSettleText}>Clear Table</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              style={[styles.actionBtn, styles.actionBtnHalf, styles.btnAddOn]}
+                              onPress={() => router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: table.id } })}
+                            >
+                              <MaterialCommunityIcons name="plus-circle-outline" size={14} color="#0F766E" />
+                              <Text style={styles.btnAddOnText}>+ Add-On</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Row 2: Move Table & View Items */}
+                        <View style={styles.actionBtnRow}>
                           <TouchableOpacity
-                            style={[styles.actionBtn, styles.btnAddOn]}
-                            onPress={() => router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: table.id } })}
+                            style={[styles.actionBtn, styles.actionBtnHalf, styles.btnTransfer]}
+                            onPress={() => {
+                              setTransferModalTable(table);
+                              setSelectedTargetTableId('');
+                            }}
                           >
-                            <MaterialCommunityIcons name="plus" size={15} color="#0F766E" />
-                            <Text style={styles.btnAddOnText}>Add-On</Text>
+                            <MaterialCommunityIcons name="swap-horizontal" size={14} color="#854D0E" />
+                            <Text style={styles.btnTransferText}>Move</Text>
                           </TouchableOpacity>
-                        )}
-                      </>
+
+                          <TouchableOpacity
+                            style={[styles.actionBtn, styles.actionBtnHalf, styles.btnDetails]}
+                            onPress={() => setDetailsModalTable(table)}
+                          >
+                            <MaterialCommunityIcons name="eye-outline" size={14} color="#334155" />
+                            <Text style={styles.btnDetailsText}>Items</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
                     )}
                   </View>
                 </View>
@@ -1289,7 +1299,7 @@ export default function FloorManagerScreen() {
                           })
                         }
                       >
-                        <MaterialCommunityIcons name="plus" size={14} color="#D4AF37" />
+                        <MaterialCommunityIcons name="plus" size={14} color="#854D0E" />
                         <Text style={styles.kdsActionBtnPosText}>Add Items</Text>
                       </TouchableOpacity>
                     </View>
@@ -1968,6 +1978,8 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.06,
     shadowRadius: 5,
     elevation: 2,
+    justifyContent: 'space-between',
+    minHeight: 200,
   },
   cardTopIndicator: {
     position: 'absolute',
@@ -2068,23 +2080,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     borderRadius: 12,
     gap: 4,
+    maxWidth: '58%',
+    flexShrink: 1,
   },
   waiterChipText: {
     color: '#0F766E',
     fontSize: 11,
     fontWeight: '700',
+    flexShrink: 1,
   },
   tableActions: {
+    width: '100%',
+    marginTop: 4,
+  },
+  occupiedActionsCol: {
+    width: '100%',
+    gap: 6,
+  },
+  actionBtnRow: {
     flexDirection: 'row',
     gap: 6,
-    flexWrap: 'wrap',
+    width: '100%',
+  },
+  actionBtnHalf: {
+    flex: 1,
+    minWidth: 0,
   },
   actionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 10,
+    paddingVertical: 7,
+    paddingHorizontal: 8,
     borderRadius: 6,
     gap: 4,
   },
@@ -2100,6 +2127,17 @@ const styles = StyleSheet.create({
   btnServe: {
     backgroundColor: '#D97706',
     flex: 1,
+  },
+  btnServeFull: {
+    backgroundColor: '#059669',
+    width: '100%',
+    paddingVertical: 7,
+    borderRadius: 6,
+    shadowColor: '#059669',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 3,
+    elevation: 2,
   },
   btnServeText: {
     color: '#FFF',
