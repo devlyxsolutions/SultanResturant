@@ -518,7 +518,7 @@ export default function FloorManagerScreen() {
               </View>
             </View>
             <Text style={styles.headerSubtitle} numberOfLines={1}>
-              <Text style={{ color: '#D4AF37', fontWeight: '700' }}>{user?.name || 'Manager'}</Text> • Sultan Royal Ops
+              <Text style={{ color: '#0F766E', fontWeight: '800' }}>{user?.name || 'Manager'}</Text> • Sultan Royal Ops
             </Text>
           </View>
         </View>
@@ -533,9 +533,9 @@ export default function FloorManagerScreen() {
               <MaterialCommunityIcons
                 name={isFullscreen ? 'fullscreen-exit' : 'fullscreen'}
                 size={16}
-                color={isFullscreen ? '#10B981' : '#38BDF8'}
+                color={isFullscreen ? '#0D9488' : '#0284C7'}
               />
-              <Text style={[styles.navBtnText, isFullscreen && { color: '#10B981' }]}>
+              <Text style={[styles.navBtnText, isFullscreen && { color: '#0D9488' }]}>
                 {isFullscreen ? 'Exit Full' : 'Full'}
               </Text>
             </TouchableOpacity>
@@ -545,8 +545,8 @@ export default function FloorManagerScreen() {
             style={[styles.navBtn, styles.navBtnPos, isMobile && styles.navBtnCompact]}
             onPress={() => router.push('/floor-manager/pos' as any)}
           >
-            <MaterialCommunityIcons name="point-of-sale" size={16} color="#D4AF37" />
-            <Text style={[styles.navBtnText, { color: '#D4AF37' }]}>
+            <MaterialCommunityIcons name="point-of-sale" size={16} color="#854D0E" />
+            <Text style={[styles.navBtnText, { color: '#854D0E' }]}>
               {isSmallMobile ? 'POS' : 'Open POS'}
             </Text>
           </TouchableOpacity>
@@ -754,7 +754,7 @@ export default function FloorManagerScreen() {
 
         <View style={[styles.kpiCard, { width: kpiCardWidth }]}>
           <Text style={styles.kpiLabel}>TODAY'S SALES</Text>
-          <Text style={[styles.kpiValue, { color: '#D4AF37', fontSize: isSmallMobile ? 16 : 19 }]} numberOfLines={1}>
+          <Text style={[styles.kpiValue, { color: '#B45309', fontSize: isSmallMobile ? 16 : 19 }]} numberOfLines={1}>
             Rs. {kpis.floorSales.toLocaleString()}
           </Text>
           <Text style={styles.kpiSub} numberOfLines={1}>Settled Today</Text>
@@ -764,7 +764,7 @@ export default function FloorManagerScreen() {
       {/* 5. CONTROLS: SEARCH & VIEW-SPECIFIC FILTERS */}
       <View style={[styles.controlsBar, isMobile && { paddingHorizontal: 12, gap: 10 }]}>
         <View style={[styles.searchBox, isMobile && { minWidth: '100%', width: '100%' }]}>
-          <MaterialCommunityIcons name="magnify" size={20} color="#9CA3AF" />
+          <MaterialCommunityIcons name="magnify" size={20} color="#64748B" />
           <TextInput
             style={styles.searchInput}
             placeholder={
@@ -862,13 +862,13 @@ export default function FloorManagerScreen() {
               );
 
               // Determine status badge color
-              let statusBadge = { bg: '#10B981', label: 'AVAILABLE', text: '#FFF' };
+              let statusBadge = { bg: '#ECFDF5', label: 'AVAILABLE', text: '#065F46', border: '#A7F3D0' };
               if (table.status === 'occupied') {
                 statusBadge = hasReadyFood
-                  ? { bg: '#D97706', label: 'FOOD READY', text: '#FFF' }
-                  : { bg: '#DC2626', label: 'OCCUPIED', text: '#FFF' };
+                  ? { bg: '#FEF3C7', label: 'FOOD READY', text: '#92400E', border: '#FCD34D' }
+                  : { bg: '#FEE2E2', label: 'OCCUPIED', text: '#DC2626', border: '#FCA5A5' };
               } else if (table.status === 'billed') {
-                statusBadge = { bg: '#2563EB', label: 'BILLED', text: '#FFF' };
+                statusBadge = { bg: '#EFF6FF', label: 'BILLED', text: '#1D4ED8', border: '#BFDBFE' };
               }
 
               return (
@@ -904,7 +904,7 @@ export default function FloorManagerScreen() {
                       </View>
                     </View>
 
-                    <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg }]}>
+                    <View style={[styles.statusBadge, { backgroundColor: statusBadge.bg, borderWidth: 1, borderColor: statusBadge.border }]}>
                       <Text style={[styles.statusBadgeText, { color: statusBadge.text }]}>
                         {statusBadge.label}
                       </Text>
@@ -1449,31 +1449,31 @@ export default function FloorManagerScreen() {
                 </View>
               </View>
 
-              <View style={{ backgroundColor: '#1F1B18', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#332D27' }}>
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={{ fontSize: isSmallMobile ? 16 : 18, fontWeight: '800', color: '#D4AF37' }}>
+                  <Text style={{ fontSize: isSmallMobile ? 16 : 18, fontWeight: '800', color: '#B45309' }}>
                     {pendingFloorOrders[0].tableName || pendingFloorOrders[0].tableId}
                   </Text>
-                  <Text style={{ fontSize: isSmallMobile ? 13 : 14, fontWeight: '700', color: '#10B981' }}>
+                  <Text style={{ fontSize: isSmallMobile ? 13 : 14, fontWeight: '700', color: '#059669' }}>
                     Rs. {Number(pendingFloorOrders[0].total || 0).toLocaleString()}
                   </Text>
                 </View>
-                <Text style={{ color: '#E5E7EB', fontSize: 13, marginBottom: 4 }} numberOfLines={1}>
+                <Text style={{ color: '#334155', fontSize: 13, marginBottom: 4 }} numberOfLines={1}>
                   Customer: <Text style={{ fontWeight: '700' }}>{pendingFloorOrders[0].customer?.name || 'Guest'}</Text>
                   {pendingFloorOrders[0].customer?.phone ? ` • ${pendingFloorOrders[0].customer.phone}` : ''}
                 </Text>
-                <Text style={{ color: '#9CA3AF', fontSize: 11 }} numberOfLines={1}>
+                <Text style={{ color: '#64748B', fontSize: 11 }} numberOfLines={1}>
                   Floor: {selectedFloor} • Placed {new Date(pendingFloorOrders[0].createdAt || Date.now()).toLocaleTimeString()}
                 </Text>
               </View>
 
               <ScrollView style={{ maxHeight: Math.min(height * 0.35, 180), marginBottom: 14 }} showsVerticalScrollIndicator={false}>
                 {pendingFloorOrders[0].items?.map((it, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#282420' }}>
-                    <Text style={{ color: '#F3F4F6', fontSize: 13, flex: 1 }} numberOfLines={1}>
+                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                    <Text style={{ color: '#0F172A', fontSize: 13, flex: 1 }} numberOfLines={1}>
                       {it.qty || 1}x {it.name}
                     </Text>
-                    <Text style={{ color: '#D4AF37', fontSize: 13, fontWeight: '600' }}>
+                    <Text style={{ color: '#B45309', fontSize: 13, fontWeight: '600' }}>
                       Rs. {(Number(it.price || 0) * Number(it.qty || 1)).toLocaleString()}
                     </Text>
                   </View>
@@ -1505,7 +1505,7 @@ export default function FloorManagerScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#121110',
+    backgroundColor: '#F8FAFC',
   },
   header: {
     flexDirection: 'row',
@@ -1513,9 +1513,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 14,
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#2B2622',
+    borderBottomColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
   },
   headerMobile: {
     paddingHorizontal: 12,
@@ -1532,14 +1537,14 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#0F2926',
+    backgroundColor: '#F0FDFA',
     borderWidth: 1.5,
     borderColor: '#0D9488',
     alignItems: 'center',
     justifyContent: 'center',
   },
   headerTitle: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 18,
     fontWeight: '900',
     letterSpacing: 0.8,
@@ -1565,7 +1570,7 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   headerSubtitle: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11.5,
     marginTop: 2,
   },
@@ -1584,12 +1589,12 @@ const styles = StyleSheet.create({
   navBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#26221E',
+    backgroundColor: '#F1F5F9',
     paddingVertical: 7,
     paddingHorizontal: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#3D3630',
+    borderColor: '#CBD5E1',
     gap: 6,
   },
   navBtnCompact: {
@@ -1598,37 +1603,37 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   navBtnPos: {
-    backgroundColor: 'rgba(212, 175, 55, 0.12)',
-    borderColor: '#D4AF37',
+    backgroundColor: '#FEF9C3',
+    borderColor: '#EAB308',
   },
   logoutBtn: {
-    borderColor: '#7F1D1D',
-    backgroundColor: '#241414',
+    borderColor: '#FECACA',
+    backgroundColor: '#FEE2E2',
   },
   navBtnActiveFullscreen: {
-    borderColor: '#10B981',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    borderColor: '#0D9488',
+    backgroundColor: '#F0FDFA',
   },
   navBtnText: {
-    color: '#E5E7EB',
+    color: '#1E293B',
     fontSize: 12,
     fontWeight: '700',
   },
   floorTabBarScroll: {
-    backgroundColor: '#171514',
+    backgroundColor: '#F1F5F9',
     borderBottomWidth: 1,
-    borderBottomColor: '#26221E',
+    borderBottomColor: '#E2E8F0',
   },
   floorTabBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#171514',
+    backgroundColor: '#F1F5F9',
     paddingHorizontal: 20,
     paddingVertical: 8,
     gap: 8,
   },
   floorTabLabel: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -1637,20 +1642,20 @@ const styles = StyleSheet.create({
   floorTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#24201D',
+    backgroundColor: '#FFFFFF',
     paddingVertical: 5,
     paddingHorizontal: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#38322C',
+    borderColor: '#CBD5E1',
     gap: 5,
   },
   floorTabActive: {
     backgroundColor: '#0D9488',
-    borderColor: '#14B8A6',
+    borderColor: '#0F766E',
   },
   floorTabText: {
-    color: '#9CA3AF',
+    color: '#475569',
     fontSize: 11.5,
     fontWeight: '600',
   },
@@ -1659,9 +1664,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   urgentQueueBox: {
-    backgroundColor: '#2A1414',
+    backgroundColor: '#FEF2F2',
     borderBottomWidth: 2,
-    borderBottomColor: '#DC2626',
+    borderBottomColor: '#EF4444',
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
@@ -1672,7 +1677,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   urgentQueueTitle: {
-    color: '#EF4444',
+    color: '#DC2626',
     fontSize: 12,
     fontWeight: '900',
     letterSpacing: 0.6,
@@ -1682,12 +1687,17 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   urgentOrderCard: {
-    backgroundColor: '#1E1B18',
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     borderWidth: 1.5,
-    borderColor: '#DC2626',
+    borderColor: '#EF4444',
     padding: 12,
     width: 280,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
   },
   urgentOrderCardHeader: {
     flexDirection: 'row',
@@ -1696,22 +1706,22 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   urgentOrderTable: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 14,
     fontWeight: '800',
   },
   urgentOrderTotal: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 14,
     fontWeight: '900',
   },
   urgentCustomer: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
     marginBottom: 4,
   },
   urgentItems: {
-    color: '#D4AF37',
+    color: '#B45309',
     fontSize: 11,
     marginBottom: 8,
     lineHeight: 14,
@@ -1722,15 +1732,15 @@ const styles = StyleSheet.create({
   },
   urgentBtnReject: {
     flex: 1,
-    backgroundColor: '#2A1F1F',
+    backgroundColor: '#FEE2E2',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#FCA5A5',
     paddingVertical: 6,
     borderRadius: 6,
     alignItems: 'center',
   },
   urgentBtnRejectText: {
-    color: '#EF4444',
+    color: '#DC2626',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1756,14 +1766,19 @@ const styles = StyleSheet.create({
   kpiCard: {
     flex: 1,
     minWidth: 140,
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     padding: 14,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#2D2824',
+    borderColor: '#E2E8F0',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 1,
   },
   kpiLabel: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 0.5,
@@ -1774,7 +1789,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   kpiSub: {
-    color: '#6B7280',
+    color: '#94A3B8',
     fontSize: 10,
     marginTop: 2,
   },
@@ -1792,17 +1807,17 @@ const styles = StyleSheet.create({
     minWidth: 260,
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#2D2824',
+    borderColor: '#CBD5E1',
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 8,
   },
   searchInput: {
     flex: 1,
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 13,
   },
   filterPillsScroll: {
@@ -1820,18 +1835,18 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 12,
     borderRadius: 16,
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#2D2824',
+    borderColor: '#CBD5E1',
   },
   filterPillActive: {
     backgroundColor: '#0D9488',
-    borderColor: '#14B8A6',
+    borderColor: '#0F766E',
   },
   filterPillText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   filterPillTextActive: {
     color: '#FFF',
@@ -1847,28 +1862,28 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   tableCard: {
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#2D2824',
+    borderColor: '#E2E8F0',
     padding: 14,
-    shadowColor: '#000',
+    shadowColor: '#0F172A',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 3,
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 2,
   },
   tableCardOccupied: {
-    borderColor: '#DC2626',
-    backgroundColor: '#1D1716',
+    borderColor: '#F87171',
+    backgroundColor: '#FFFDFD',
   },
   tableCardFoodReady: {
-    borderColor: '#D97706',
-    backgroundColor: '#231B10',
+    borderColor: '#F59E0B',
+    backgroundColor: '#FFFDF5',
   },
   tableCardBilled: {
-    borderColor: '#2563EB',
-    backgroundColor: '#141A26',
+    borderColor: '#60A5FA',
+    backgroundColor: '#F8FAFF',
   },
   tableCardHeader: {
     flexDirection: 'row',
@@ -1877,9 +1892,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   tableName: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
   },
   seatingTag: {
     flexDirection: 'row',
@@ -1888,7 +1903,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   seatingText: {
-    color: '#D4AF37',
+    color: '#B45309',
     fontSize: 10,
     fontWeight: '700',
     letterSpacing: 0.5,
@@ -1904,8 +1919,10 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   tableCardBody: {
-    backgroundColor: '#141210',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     padding: 10,
     marginBottom: 12,
     gap: 6,
@@ -1916,30 +1933,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   detailLabel: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
+    fontWeight: '500',
   },
   detailVal: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 11,
     fontWeight: '700',
   },
   billTotalVal: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 13,
     fontWeight: '900',
   },
   waiterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#201D1A',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     paddingVertical: 2,
     paddingHorizontal: 8,
     borderRadius: 12,
     gap: 4,
   },
   waiterChipText: {
-    color: '#0D9488',
+    color: '#0F766E',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1976,22 +1996,24 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   btnTransfer: {
-    backgroundColor: '#24201D',
+    backgroundColor: '#FEF9C3',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#EAB308',
   },
   btnTransferText: {
-    color: '#D4AF37',
+    color: '#854D0E',
     fontSize: 11,
     fontWeight: '700',
   },
   btnDetails: {
-    backgroundColor: '#282420',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
   },
   btnDetailsText: {
-    color: '#FFF',
+    color: '#334155',
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   btnSettle: {
     backgroundColor: '#2563EB',
@@ -2003,18 +2025,18 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   btnAddOn: {
-    backgroundColor: '#282420',
+    backgroundColor: '#F0FDFA',
     borderWidth: 1,
-    borderColor: '#3D3630',
+    borderColor: '#0D9488',
   },
   btnAddOnText: {
-    color: '#D4AF37',
+    color: '#0F766E',
     fontSize: 11,
     fontWeight: '700',
   },
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 16,
@@ -2022,21 +2044,26 @@ const styles = StyleSheet.create({
   modalCard: {
     width: '100%',
     maxWidth: 440,
-    backgroundColor: '#1E1B18',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#38322C',
+    borderColor: '#E2E8F0',
     padding: 20,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalTitle: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 15,
     fontWeight: '900',
     marginBottom: 4,
     letterSpacing: 0.5,
   },
   modalSubtitle: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 12,
     marginBottom: 16,
   },
@@ -2047,24 +2074,24 @@ const styles = StyleSheet.create({
   modalItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#26221E',
+    backgroundColor: '#F8FAFC',
     padding: 12,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#38322C',
+    borderColor: '#E2E8F0',
     gap: 10,
   },
   modalItemActive: {
-    backgroundColor: '#0F2926',
+    backgroundColor: '#F0FDFA',
     borderColor: '#0D9488',
   },
   modalItemText: {
-    color: '#E5E7EB',
+    color: '#334155',
     fontSize: 13,
     fontWeight: '600',
   },
   modalItemTextActive: {
-    color: '#0D9488',
+    color: '#0F766E',
     fontWeight: '800',
   },
   modalActions: {
@@ -2073,13 +2100,13 @@ const styles = StyleSheet.create({
   },
   modalBtnCancel: {
     flex: 1,
-    backgroundColor: '#282420',
+    backgroundColor: '#F1F5F9',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
   modalBtnCancelText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 13,
     fontWeight: '700',
   },
@@ -2096,8 +2123,10 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   ticketBox: {
-    backgroundColor: '#24201D',
+    backgroundColor: '#F8FAFC',
     borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
     padding: 10,
     marginBottom: 10,
   },
@@ -2105,17 +2134,17 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
-    borderBottomColor: '#38322C',
+    borderBottomColor: '#E2E8F0',
     paddingBottom: 6,
     marginBottom: 6,
   },
   ticketNumber: {
-    color: '#D4AF37',
+    color: '#B45309',
     fontSize: 12,
     fontWeight: '800',
   },
   ticketStatus: {
-    color: '#10B981',
+    color: '#059669',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2125,61 +2154,62 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
   },
   ticketItemQty: {
-    color: '#D4AF37',
+    color: '#B45309',
     fontSize: 12,
     fontWeight: '800',
     width: 28,
   },
   ticketItemName: {
-    color: '#FFF',
+    color: '#1E293B',
     fontSize: 12,
+    fontWeight: '600',
     flex: 1,
   },
   ticketItemPrice: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 12,
   },
 
   /* VIEW SWITCHER TABS */
   viewSwitcherBar: {
     flexDirection: 'row',
-    backgroundColor: '#171514',
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 20,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#26221E',
+    borderBottomColor: '#E2E8F0',
     gap: 12,
   },
   viewTab: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#201D1A',
+    backgroundColor: '#F8FAFC',
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#332D27',
+    borderColor: '#E2E8F0',
     gap: 8,
   },
   viewTabActiveTables: {
-    backgroundColor: 'rgba(13, 148, 136, 0.15)',
+    backgroundColor: '#F0FDFA',
     borderColor: '#0D9488',
   },
   viewTabActiveKds: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-    borderColor: '#F59E0B',
+    backgroundColor: '#FFFBEB',
+    borderColor: '#D97706',
   },
   viewTabText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 12.5,
     fontWeight: '700',
   },
   viewTabTextActiveTables: {
-    color: '#0D9488',
+    color: '#0F766E',
     fontWeight: '900',
   },
   viewTabTextActiveKds: {
-    color: '#F59E0B',
+    color: '#B45309',
     fontWeight: '900',
   },
   kdsLiveBadge: {
@@ -2200,8 +2230,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
   },
   filterPillActiveKds: {
-    backgroundColor: '#B45309',
-    borderColor: '#F59E0B',
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
   },
 
   /* TABLE CARD KDS SNIPPET */
@@ -2212,13 +2242,13 @@ const styles = StyleSheet.create({
     marginTop: 6,
     paddingTop: 6,
     borderTopWidth: 1,
-    borderTopColor: '#2A2521',
+    borderTopColor: '#E2E8F0',
   },
   snippetPillReady: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#ECFDF5',
     borderWidth: 1,
     borderColor: '#10B981',
     borderRadius: 6,
@@ -2226,7 +2256,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   snippetPillReadyText: {
-    color: '#34D399',
+    color: '#065F46',
     fontSize: 10,
     fontWeight: '800',
   },
@@ -2234,7 +2264,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: '#FFFBEB',
     borderWidth: 1,
     borderColor: '#F59E0B',
     borderRadius: 6,
@@ -2242,19 +2272,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   snippetPillCookingText: {
-    color: '#FBBF24',
+    color: '#92400E',
     fontSize: 10,
     fontWeight: '800',
   },
 
   /* BUTTONS */
   btnPrintBill: {
-    backgroundColor: '#351212',
+    backgroundColor: '#FEF2F2',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#FCA5A5',
   },
   btnPrintBillText: {
-    color: '#EF4444',
+    color: '#DC2626',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -2266,19 +2296,24 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   kdsTicketCard: {
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#332D27',
+    borderColor: '#E2E8F0',
     padding: 14,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 5,
+    elevation: 2,
   },
   kdsTicketCardCooking: {
     borderColor: '#F59E0B',
-    backgroundColor: '#1E1914',
+    backgroundColor: '#FFFDF5',
   },
   kdsTicketCardReady: {
     borderColor: '#10B981',
-    backgroundColor: '#12201A',
+    backgroundColor: '#F0FDF4',
   },
   kdsTicketHeader: {
     flexDirection: 'row',
@@ -2287,25 +2322,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   kdsTableName: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '900',
   },
   addonTag: {
-    backgroundColor: 'rgba(212, 175, 55, 0.2)',
+    backgroundColor: '#FEF9C3',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#EAB308',
     borderRadius: 4,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
   addonTagText: {
-    color: '#D4AF37',
+    color: '#854D0E',
     fontSize: 9,
     fontWeight: '800',
   },
   kdsServerText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
     marginTop: 2,
   },
@@ -2324,7 +2359,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#059669',
   },
   kdsPillPending: {
-    backgroundColor: '#4B5563',
+    backgroundColor: '#64748B',
   },
   kdsStatusPillText: {
     color: '#FFF',
@@ -2338,11 +2373,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: '#2A2521',
+    borderColor: '#E2E8F0',
     marginBottom: 8,
   },
   kdsSubBarText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '600',
   },
@@ -2354,7 +2389,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: '#221E1B',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 6,
@@ -2366,18 +2403,18 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   kdsItemQty: {
-    color: '#D4AF37',
+    color: '#B45309',
     fontSize: 13,
     fontWeight: '900',
     width: 24,
   },
   kdsItemName: {
-    color: '#FFF',
+    color: '#1E293B',
     fontSize: 12.5,
     fontWeight: '700',
   },
   kdsItemNotes: {
-    color: '#F59E0B',
+    color: '#D97706',
     fontSize: 10,
     fontStyle: 'italic',
   },
@@ -2387,32 +2424,32 @@ const styles = StyleSheet.create({
     borderRadius: 4,
   },
   itemTagCooking: {
-    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+    backgroundColor: '#FEF3C7',
     borderWidth: 1,
     borderColor: '#F59E0B',
   },
   itemTagReady: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+    backgroundColor: '#D1FAE5',
     borderWidth: 1,
     borderColor: '#10B981',
   },
   itemTagQueue: {
-    backgroundColor: 'rgba(107, 114, 128, 0.15)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: '#6B7280',
+    borderColor: '#CBD5E1',
   },
   kdsItemStatusText: {
     fontSize: 9.5,
     fontWeight: '800',
   },
   itemTextCooking: {
-    color: '#FBBF24',
+    color: '#92400E',
   },
   itemTextReady: {
-    color: '#34D399',
+    color: '#065F46',
   },
   itemTextQueue: {
-    color: '#9CA3AF',
+    color: '#475569',
   },
   kdsTicketActions: {
     flexDirection: 'row',
@@ -2420,7 +2457,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#2A2521',
+    borderTopColor: '#E2E8F0',
   },
   kdsActionBtnServe: {
     flex: 1.5,
@@ -2443,16 +2480,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#351212',
+    backgroundColor: '#FEE2E2',
     borderWidth: 1,
-    borderColor: '#EF4444',
+    borderColor: '#FCA5A5',
     paddingVertical: 7,
     paddingHorizontal: 8,
     borderRadius: 6,
     gap: 4,
   },
   kdsActionBtnBillText: {
-    color: '#EF4444',
+    color: '#DC2626',
     fontSize: 11,
     fontWeight: '800',
   },
@@ -2461,16 +2498,16 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#26221E',
+    backgroundColor: '#FEF9C3',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#EAB308',
     paddingVertical: 7,
     paddingHorizontal: 8,
     borderRadius: 6,
     gap: 4,
   },
   kdsActionBtnPosText: {
-    color: '#D4AF37',
+    color: '#854D0E',
     fontSize: 11,
     fontWeight: '700',
   },
@@ -2478,20 +2515,20 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 50,
-    backgroundColor: '#1A1817',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#2A2521',
+    borderColor: '#E2E8F0',
     marginHorizontal: 10,
   },
   kdsEmptyTitle: {
-    color: '#FFF',
+    color: '#0F172A',
     fontSize: 16,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
   kdsEmptySubtitle: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 12,
     marginTop: 4,
     textAlign: 'center',
@@ -2519,7 +2556,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#B91C1C',
+    backgroundColor: '#DC2626',
     paddingVertical: 12,
     borderRadius: 8,
     gap: 6,
@@ -2534,28 +2571,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#282420',
+    backgroundColor: '#FEF9C3',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#EAB308',
     paddingVertical: 12,
     borderRadius: 8,
     gap: 4,
   },
   modalBtnPosText: {
-    color: '#D4AF37',
+    color: '#854D0E',
     fontSize: 12,
     fontWeight: '800',
   },
   modalBtnClose: {
     flex: 0.8,
-    backgroundColor: '#24201D',
+    backgroundColor: '#F1F5F9',
     paddingVertical: 12,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
   },
   modalBtnCloseText: {
-    color: '#9CA3AF',
+    color: '#64748B',
     fontSize: 12.5,
     fontWeight: '700',
   },
