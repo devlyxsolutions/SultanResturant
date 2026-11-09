@@ -2838,13 +2838,27 @@ listenDualStack(
 );
 
 if (server80) {
-  listenDualStack(server80, 80, () => {
-    console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
-  });
+  listenDualStack(
+    server80,
+    80,
+    () => {
+      console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+    },
+    (err) => {
+      console.log('[Sultan Hub] Port 80 listener:', err.message);
+    }
+  );
 }
 
 if (server8081 && PORT !== 8081) {
-  listenDualStack(server8081, 8081, () => {
-    console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
-  });
+  listenDualStack(
+    server8081,
+    8081,
+    () => {
+      console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
+    },
+    (err) => {
+      console.log('[Sultan Hub] Port 8081 in use (e.g. by Metro bundler) — primary hub active on 5050 & 5000');
+    }
+  );
 }
