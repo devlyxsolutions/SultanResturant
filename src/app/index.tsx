@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -88,7 +88,27 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   const [username, setUsername] = useState('');
   const [pin, setPin] = useState('');
   const [showPin, setShowPin] = useState(false);
+  const [showTouchKeypad, setShowTouchKeypad] = useState(false);
+  const [focusedField, setFocusedField] = useState<'username' | 'pin' | null>(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const pinInputRef = useRef<React.ComponentRef<typeof TextInput>>(null);
+  const prevAutoOpenRef = useRef(shouldAutoOpenLogin);
+
+  const handleKeypadKey = useCallback(
+    (key: string) => {
+      if (errorMessage) setErrorMessage('');
+      if (key === 'CLR') {
+        setPin('');
+        return;
+      }
+      if (key === 'DEL') {
+        setPin((prev) => prev.slice(0, -1));
+        return;
+      }
+      setPin((prev) => (prev.length < 8 ? prev + key : prev));
+    },
+    [errorMessage]
+  );
 
   const openLogin = useCallback(() => {
     setIsLoginActive(true);
@@ -105,6 +125,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
   const closeLogin = useCallback(() => {
     setShowWelcomeActions(true);
+    setShowTouchKeypad(false);
     Animated.timing(splitAnim, {
       toValue: 0,
       duration: 200,
@@ -118,9 +139,13 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
   // Open login if routed with ?login=true dynamically after mount
   useEffect(() => {
-    if (shouldAutoOpenLogin) {
-      openLogin();
+    if (shouldAutoOpenLogin && !prevAutoOpenRef.current) {
+      prevAutoOpenRef.current = true;
+      const t = setTimeout(() => openLogin(), 0);
+      return () => clearTimeout(t);
     }
+    prevAutoOpenRef.current = shouldAutoOpenLogin;
+    return undefined;
   }, [shouldAutoOpenLogin, openLogin]);
 
   // -------------------------------------------------------------
@@ -327,21 +352,25 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   };
 
   const dynamicMetrics = useMemo(() => {
-    let logoWidth = 320;
-    let logoHeight = 270;
+    let logoWidth = 290;
+    let logoHeight = 240;
     let logoSize: 'sm' | 'md' | 'lg' | 'xl' | 'hero' = 'hero';
 
     if (isCompactMobile) {
-      logoWidth = 200;
-      logoHeight = 170;
+      logoWidth = 185;
+      logoHeight = 155;
       logoSize = 'xl';
     } else if (isMobile) {
-      logoWidth = 260;
-      logoHeight = 220;
+      logoWidth = 230;
+      logoHeight = 195;
+      logoSize = 'hero';
+    } else if (height < 720) {
+      logoWidth = 240;
+      logoHeight = 200;
       logoSize = 'hero';
     } else {
-      logoWidth = 320;
-      logoHeight = 270;
+      logoWidth = 290;
+      logoHeight = 240;
       logoSize = 'hero';
     }
 
@@ -350,23 +379,18 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
       logoHeight,
       logoSize,
     };
-  }, [isCompactMobile, isMobile]);
+  }, [isCompactMobile, isMobile, height]);
 
-  // Center-to-left glide offset for Desktop / Tablet (wider center box: 460px)
+  // Center-to-left glide offset for Desktop / Tablet (brand card: 440px)
   const centerShiftX = useMemo(() => {
     if (isMobile) return 0;
     const consoleInnerWidth = Math.min(width - (isCompactMobile ? 28 : 56), 1040);
-    return Math.max(0, (consoleInnerWidth - 460) / 2);
+    return Math.max(0, (consoleInnerWidth - 440) / 2);
   }, [width, isMobile, isCompactMobile]);
 
   const brandPodTranslateX = splitAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [centerShiftX, 0],
-  });
-
-  const logoScale = splitAnim.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, isMobile ? 0.75 : 0.82],
   });
 
   const welcomeActionsOpacity = splitAnim.interpolate({
@@ -377,24 +401,24 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
   const welcomeActionsTranslateY = splitAnim.interpolate({
     inputRange: [0, 0.35],
-    outputRange: [0, 16],
+    outputRange: [0, 14],
     extrapolate: 'clamp',
   });
 
   const rightLoginOpacity = splitAnim.interpolate({
-    inputRange: [0.25, 1],
+    inputRange: [0.2, 1],
     outputRange: [0, 1],
     extrapolate: 'clamp',
   });
 
   const rightLoginTranslateX = splitAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [isMobile ? 0 : 50, 0],
+    outputRange: [isMobile ? 0 : 40, 0],
   });
 
   const rightLoginTranslateY = splitAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [isMobile ? 35 : 0, 0],
+    outputRange: [isMobile ? 28 : 0, 0],
   });
 
   return (
@@ -490,6 +514,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                 <View
                   style={[
                     styles.consoleBody,
+                    !isMobile && isLoginActive && styles.consoleBodySplitDesktop,
                     isMobile && styles.consoleBodyMobile,
                   ]}
                 >
@@ -498,18 +523,27 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                     style={[
                       styles.brandPod,
                       isMobile ? styles.brandPodMobile : styles.brandPodDesktop,
+                      isMobile && isLoginActive && styles.brandPodMobileCompact,
                       {
-                        transform: [
-                          { translateX: brandPodTranslateX },
-                          { scale: logoScale },
-                        ],
+                        transform: [{ translateX: brandPodTranslateX }],
                       },
                     ]}
                   >
+                    {/* Top Gold Crown Accent */}
+                    <View pointerEvents="none" style={styles.cardGoldCrown} />
+
+                    {/* Terminal Badge Strip */}
+                    {(!isMobile || !isLoginActive) && (
+                      <View style={styles.terminalTopPill}>
+                        <View style={styles.terminalPulseDot} />
+                        <Text style={styles.terminalTopPillText}>SULTAN ROYAL POS OS</Text>
+                      </View>
+                    )}
+
                     <SultanLogo
                       size="hero"
-                      width={dynamicMetrics.logoWidth}
-                      height={dynamicMetrics.logoHeight}
+                      width={isMobile && isLoginActive ? 140 : dynamicMetrics.logoWidth}
+                      height={isMobile && isLoginActive ? 115 : dynamicMetrics.logoHeight}
                       style={styles.logoDropShadow}
                     />
 
@@ -520,6 +554,24 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                     </View>
 
                     <Text style={styles.podSubcaption}>ROYAL FINE DINING & SMART POS</Text>
+
+                    {/* Split-Login Left Card Showcase (fills space symmetrically beside login form on Desktop) */}
+                    {!showWelcomeActions && !isMobile && (
+                      <View style={styles.brandCapabilitiesBox}>
+                        <View style={styles.capabilityItem}>
+                          <Ionicons name="desktop-outline" size={14} color="#D5A943" />
+                          <Text style={styles.capabilityText}>Billing & Table Ops</Text>
+                        </View>
+                        <View style={styles.capabilityItem}>
+                          <Ionicons name="flame-outline" size={14} color="#D5A943" />
+                          <Text style={styles.capabilityText}>Live KDS Kitchen</Text>
+                        </View>
+                        <View style={styles.capabilityItem}>
+                          <Ionicons name="qr-code-outline" size={14} color="#D5A943" />
+                          <Text style={styles.capabilityText}>Contactless QR Sync</Text>
+                        </View>
+                      </View>
+                    )}
 
                     {/* Centered Welcome Mode Action Buttons */}
                     {showWelcomeActions && (
@@ -632,6 +684,16 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                         )}
                       </Animated.View>
                     )}
+
+                    {/* Subtle Footer Security Strip */}
+                    {(!isMobile || !isLoginActive) && (
+                      <View style={styles.brandFooterStrip}>
+                        <Ionicons name="shield-checkmark-outline" size={13} color="rgba(213, 169, 67, 0.72)" />
+                        <Text style={styles.brandFooterText}>
+                          Encrypted Staff PIN Access • Local & Cloud Sync
+                        </Text>
+                      </View>
+                    )}
                   </Animated.View>
 
                   {/* RIGHT SIDE: LOGIN FORM (Appears with smooth slide & fade upon clicking Login) */}
@@ -650,6 +712,9 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                         },
                       ]}
                     >
+                      {/* Top Gold Crown Accent */}
+                      <View pointerEvents="none" style={styles.cardGoldCrown} />
+
                       {/* Top Utility Bar with Back Button */}
                       <View style={styles.loginTopBar}>
                         <TouchableOpacity
@@ -657,21 +722,26 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                           onPress={closeLogin}
                           activeOpacity={0.75}
                         >
-                          <Ionicons name="arrow-back" size={17} color="#D5A943" />
-                          <Text style={styles.backBtnText}>Back to Welcome</Text>
+                          <Ionicons name="arrow-back" size={16} color="#D5A943" />
+                          <Text style={styles.backBtnText}>Back to Home</Text>
                         </TouchableOpacity>
 
                         <View style={styles.activeModePill}>
                           <View style={styles.activeDot} />
-                          <Text style={styles.activeModeText}>SECURE TERMINAL LOGIN</Text>
+                          <Text style={styles.activeModeText}>TERMINAL ONLINE</Text>
                         </View>
                       </View>
 
                       {/* Title Header */}
                       <View style={styles.loginHeader}>
-                        <Text style={styles.loginTitle}>STAFF PORTAL LOGIN</Text>
+                        <View style={styles.loginTitleRow}>
+                          <Text style={styles.loginTitle}>STAFF PORTAL LOGIN</Text>
+                          <View style={styles.loginUrduPill}>
+                            <Text style={styles.loginUrduPillText}>سٹاف لاگ ان</Text>
+                          </View>
+                        </View>
                         <Text style={styles.loginSub}>
-                          Enter your username and 4-digit security PIN to access POS
+                          Sign in using Staff Name, ID, Phone, or Role + 4-digit PIN
                         </Text>
                       </View>
 
@@ -685,20 +755,33 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
                       {/* Username Input */}
                       <View style={styles.inputGroup}>
-                        <Text style={styles.inputLabel}>Username / Staff Name (یوزر نیم)</Text>
-                        <View style={styles.inputWrapper}>
-                          <Ionicons name="person-outline" size={19} color="#D5A943" style={styles.fieldIcon} />
+                        <Text style={styles.inputLabel}>Username / Staff Name / Role (یوزر نیم)</Text>
+                        <View
+                          style={[
+                            styles.inputWrapper,
+                            focusedField === 'username' && styles.inputWrapperFocused,
+                          ]}
+                        >
+                          <Ionicons
+                            name="person-outline"
+                            size={19}
+                            color={focusedField === 'username' ? '#F3D179' : '#D5A943'}
+                            style={styles.fieldIcon}
+                          />
                           <TextInput
                             style={styles.input}
-                            placeholder="Enter your username or full name"
-                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            placeholder="e.g. Tariq, Admin, Floor Manager, Chef..."
+                            placeholderTextColor="rgba(255,255,255,0.38)"
                             autoCapitalize="none"
                             autoCorrect={false}
                             value={username}
+                            onFocus={() => setFocusedField('username')}
+                            onBlur={() => setFocusedField((prev) => (prev === 'username' ? null : prev))}
                             onChangeText={(val) => {
                               setUsername(val);
                               if (errorMessage) setErrorMessage('');
                             }}
+                            onSubmitEditing={() => pinInputRef.current?.focus()}
                             returnKeyType="next"
                           />
                           {username.length > 0 && (
@@ -713,20 +796,68 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                       <View style={styles.inputGroup}>
                         <View style={styles.pinLabelRow}>
                           <Text style={styles.inputLabel}>Security PIN (سیکیورٹی پن)</Text>
-                          <TouchableOpacity onPress={() => setShowPin(!showPin)}>
-                            <Text style={styles.showPinText}>{showPin ? 'Hide PIN' : 'Show PIN'}</Text>
-                          </TouchableOpacity>
+                          <View style={styles.pinToolsRow}>
+                            <TouchableOpacity
+                              style={[
+                                styles.pinToolChip,
+                                showTouchKeypad && styles.pinToolChipActive,
+                              ]}
+                              onPress={() => setShowTouchKeypad((v) => !v)}
+                            >
+                              <Ionicons
+                                name="keypad-outline"
+                                size={13}
+                                color={showTouchKeypad ? '#1A0306' : '#D5A943'}
+                              />
+                              <Text
+                                style={[
+                                  styles.pinToolChipText,
+                                  showTouchKeypad && styles.pinToolChipTextActive,
+                                ]}
+                              >
+                                Keypad
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={styles.pinToolChip}
+                              onPress={() => setShowPin(!showPin)}
+                            >
+                              <Ionicons
+                                name={showPin ? 'eye-off-outline' : 'eye-outline'}
+                                size={13}
+                                color="#D5A943"
+                              />
+                              <Text style={styles.pinToolChipText}>
+                                {showPin ? 'Hide' : 'Show'}
+                              </Text>
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <View style={styles.inputWrapper}>
-                          <Ionicons name="key-outline" size={19} color="#D5A943" style={styles.fieldIcon} />
+
+                        <View
+                          style={[
+                            styles.inputWrapper,
+                            focusedField === 'pin' && styles.inputWrapperFocused,
+                          ]}
+                        >
+                          <Ionicons
+                            name="key-outline"
+                            size={19}
+                            color={focusedField === 'pin' ? '#F3D179' : '#D5A943'}
+                            style={styles.fieldIcon}
+                          />
                           <TextInput
+                            ref={pinInputRef}
                             style={[styles.input, styles.pinInput]}
                             placeholder="••••"
-                            placeholderTextColor="rgba(255,255,255,0.4)"
+                            placeholderTextColor="rgba(255,255,255,0.38)"
                             secureTextEntry={!showPin}
                             keyboardType="number-pad"
                             maxLength={8}
                             value={pin}
+                            onFocus={() => setFocusedField('pin')}
+                            onBlur={() => setFocusedField((prev) => (prev === 'pin' ? null : prev))}
                             onChangeText={(val) => {
                               setPin(val);
                               if (errorMessage) setErrorMessage('');
@@ -734,10 +865,40 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                             onSubmitEditing={handleLogin}
                             returnKeyType="go"
                           />
+                          {pin.length > 0 && (
+                            <TouchableOpacity onPress={() => setPin('')} style={styles.clearFieldBtn}>
+                              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.45)" />
+                            </TouchableOpacity>
+                          )}
                         </View>
+
+                        {/* Optional Touch Keypad for POS Touch Monitors & Tablets */}
+                        {showTouchKeypad && (
+                          <View style={styles.keypadGrid}>
+                            {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'CLR', '0', 'DEL'].map((key) => {
+                              const isAction = key === 'CLR' || key === 'DEL';
+                              return (
+                                <TouchableOpacity
+                                  key={key}
+                                  style={[styles.keypadKey, isAction && styles.keypadKeyAction]}
+                                  onPress={() => handleKeypadKey(key)}
+                                  activeOpacity={0.7}
+                                >
+                                  {key === 'DEL' ? (
+                                    <Ionicons name="backspace-outline" size={18} color="#F3D179" />
+                                  ) : (
+                                    <Text style={[styles.keypadKeyText, isAction && styles.keypadKeyTextAction]}>
+                                      {key}
+                                    </Text>
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        )}
                       </View>
 
-                      {/* Action Buttons */}
+                      {/* Sign In Action Button */}
                       <TouchableOpacity
                         style={[
                           styles.signInBtn,
@@ -854,39 +1015,92 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-start',
-    gap: 36,
+    gap: 28,
     width: '100%',
+  },
+  consoleBodySplitDesktop: {
+    alignItems: 'stretch',
   },
   consoleBodyMobile: {
     flexDirection: 'column',
-    gap: 20,
+    gap: 16,
+  },
+
+  /* SHARED CARD CROWN ACCENT */
+  cardGoldCrown: {
+    position: 'absolute',
+    top: 0,
+    alignSelf: 'center',
+    width: 140,
+    height: 3,
+    backgroundColor: '#D5A943',
+    borderBottomLeftRadius: 4,
+    borderBottomRightRadius: 4,
   },
 
   /* BRAND POD */
   brandPod: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(10, 2, 4, 0.72)',
+    backgroundColor: 'rgba(12, 2, 5, 0.80)',
     borderWidth: 1.2,
-    borderColor: 'rgba(213, 169, 67, 0.38)',
+    borderColor: 'rgba(213, 169, 67, 0.42)',
     borderRadius: 24,
-    paddingVertical: 32,
-    paddingHorizontal: 28,
+    paddingVertical: 28,
+    paddingHorizontal: 26,
+    position: 'relative',
+    overflow: 'hidden',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(22px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(22px) saturate(160%)',
+        boxShadow: '0 22px 54px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
       } as any,
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.45,
+        shadowRadius: 20,
+        elevation: 8,
+      },
     }),
   },
   brandPodDesktop: {
-    width: 460,
+    width: 440,
   },
   brandPodMobile: {
     width: '100%',
     paddingVertical: 22,
     paddingHorizontal: 18,
+  },
+  brandPodMobileCompact: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+  },
+  terminalTopPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(213, 169, 67, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.28)',
+    paddingHorizontal: 11,
+    paddingVertical: 4,
+    borderRadius: 999,
+    marginBottom: 8,
+  },
+  terminalPulseDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
+  },
+  terminalTopPillText: {
+    color: '#F3D179',
+    fontSize: 9.5,
+    fontWeight: '800',
+    letterSpacing: 1.2,
   },
   logoDropShadow: {
     ...Platform.select({
@@ -898,8 +1112,8 @@ const styles = StyleSheet.create({
   podDividerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: 110,
-    marginVertical: 10,
+    width: 120,
+    marginVertical: 8,
     gap: 8,
   },
   podDividerLine: {
@@ -914,41 +1128,81 @@ const styles = StyleSheet.create({
     transform: [{ rotate: '45deg' }],
   },
   podSubcaption: {
-    color: 'rgba(243, 209, 121, 0.82)',
+    color: 'rgba(243, 209, 121, 0.85)',
     fontSize: 10,
     fontWeight: '800',
-    letterSpacing: 1.6,
+    letterSpacing: 1.8,
     textAlign: 'center',
+  },
+  brandCapabilitiesBox: {
+    width: '100%',
+    marginTop: 22,
+    gap: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.2)',
+    borderRadius: 14,
+    padding: 12,
+  },
+  capabilityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  capabilityText: {
+    color: 'rgba(255, 255, 255, 0.82)',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  brandFooterStrip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginTop: 18,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(213, 169, 67, 0.14)',
+    width: '100%',
+  },
+  brandFooterText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 10.5,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
 
   welcomeHeroBlock: {
     width: '100%',
     alignItems: 'center',
-    marginTop: 18,
-    gap: 16,
+    marginTop: 16,
+    gap: 14,
   },
 
   /* RIGHT SPLIT LOGIN COLUMN */
   rightLoginCol: {
     flex: 1,
     width: '100%',
-    backgroundColor: 'rgba(10, 2, 4, 0.72)',
+    backgroundColor: 'rgba(12, 2, 5, 0.82)',
     borderWidth: 1.2,
-    borderColor: 'rgba(213, 169, 67, 0.38)',
+    borderColor: 'rgba(213, 169, 67, 0.42)',
     borderRadius: 24,
-    padding: 26,
+    padding: 28,
     gap: 16,
+    position: 'relative',
+    overflow: 'hidden',
+    justifyContent: 'center',
     ...Platform.select({
       web: {
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '0 16px 40px rgba(0, 0, 0, 0.45)',
+        backdropFilter: 'blur(22px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(22px) saturate(160%)',
+        boxShadow: '0 22px 54px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12)',
       } as any,
       default: {
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
+        shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.45,
-        shadowRadius: 18,
+        shadowRadius: 20,
         elevation: 8,
       },
     }),
@@ -957,12 +1211,13 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: 18,
     gap: 14,
+    borderRadius: 20,
   },
   loginTopBar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingBottom: 8,
+    paddingBottom: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(213, 169, 67, 0.16)',
     flexWrap: 'wrap',
@@ -974,21 +1229,27 @@ const styles = StyleSheet.create({
     gap: 6,
     backgroundColor: 'rgba(213, 169, 67, 0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
+    borderColor: 'rgba(213, 169, 67, 0.32)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
   },
   backBtnText: {
-    color: '#D5A943',
+    color: '#F3D179',
     fontSize: 11.5,
     fontWeight: '800',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   activeModePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
   },
   activeDot: {
     width: 6,
@@ -997,24 +1258,44 @@ const styles = StyleSheet.create({
     backgroundColor: '#10B981',
   },
   activeModeText: {
-    color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 10,
+    color: '#6EE7B7',
+    fontSize: 9.5,
     fontWeight: '800',
     letterSpacing: 0.8,
   },
 
   loginHeader: {
-    gap: 4,
+    gap: 5,
+  },
+  loginTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
   },
   loginTitle: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 20,
     fontWeight: '900',
     letterSpacing: 0.8,
   },
+  loginUrduPill: {
+    backgroundColor: 'rgba(213, 169, 67, 0.14)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.35)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  loginUrduPillText: {
+    color: '#F3D179',
+    fontSize: 12,
+    fontWeight: '800',
+  },
   loginSub: {
     color: 'rgba(255, 255, 255, 0.65)',
-    fontSize: 12,
+    fontSize: 12.5,
     fontWeight: '500',
   },
 
@@ -1037,33 +1318,62 @@ const styles = StyleSheet.create({
   },
 
   inputGroup: {
-    gap: 6,
+    gap: 7,
   },
   inputLabel: {
-    color: 'rgba(255, 255, 255, 0.82)',
+    color: 'rgba(255, 255, 255, 0.86)',
     fontSize: 11.5,
     fontWeight: '700',
-    letterSpacing: 0.4,
+    letterSpacing: 0.3,
   },
   pinLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    gap: 8,
   },
-  showPinText: {
+  pinToolsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  pinToolChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    backgroundColor: 'rgba(213, 169, 67, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.28)',
+  },
+  pinToolChipActive: {
+    backgroundColor: '#D5A943',
+    borderColor: '#D5A943',
+  },
+  pinToolChipText: {
     color: '#D5A943',
-    fontSize: 11.5,
+    fontSize: 11,
     fontWeight: '700',
+  },
+  pinToolChipTextActive: {
+    color: '#1A0306',
+    fontWeight: '800',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(213, 169, 67, 0.32)',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 48,
+    backgroundColor: 'rgba(0, 0, 0, 0.48)',
+    borderWidth: 1.3,
+    borderColor: 'rgba(213, 169, 67, 0.28)',
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    height: 50,
+  },
+  inputWrapperFocused: {
+    borderColor: '#D5A943',
+    backgroundColor: 'rgba(213, 169, 67, 0.08)',
   },
   fieldIcon: {
     marginRight: 10,
@@ -1074,41 +1384,94 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     height: '100%',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+      } as any,
+    }),
   },
   pinInput: {
-    letterSpacing: 4,
+    letterSpacing: 5,
     fontSize: 18,
   },
   clearFieldBtn: {
     padding: 4,
   },
 
+  keypadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.22)',
+    borderRadius: 14,
+    padding: 10,
+  },
+  keypadKey: {
+    width: '31.5%',
+    flexGrow: 1,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(213, 169, 67, 0.24)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keypadKeyAction: {
+    backgroundColor: 'rgba(213, 169, 67, 0.14)',
+    borderColor: 'rgba(213, 169, 67, 0.36)',
+  },
+  keypadKeyText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '800',
+  },
+  keypadKeyTextAction: {
+    color: '#F3D179',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+
   signInBtn: {
     backgroundColor: '#D5A943',
-    height: 48,
-    borderRadius: 12,
+    height: 50,
+    borderRadius: 13,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
     marginTop: 4,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 22px rgba(213, 169, 67, 0.32)',
+      } as any,
+    }),
   },
   signInBtnDisabled: {
-    opacity: 0.5,
+    opacity: 0.45,
+    ...Platform.select({
+      web: {
+        boxShadow: 'none',
+      } as any,
+    }),
   },
   signInBtnText: {
     color: '#1A0306',
-    fontSize: 13.5,
+    fontSize: 14,
     fontWeight: '900',
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
   },
 
   /* ACTION CARDS STACK */
   actionCardsStack: {
     width: '100%',
     maxWidth: 480,
-    gap: 12,
-    marginTop: 6,
+    gap: 11,
+    marginTop: 4,
   },
   primaryTechCardBtn: {
     backgroundColor: '#D5A943',
@@ -1118,6 +1481,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 24px rgba(213, 169, 67, 0.25)',
+      } as any,
+    }),
   },
   primaryBtnIconPod: {
     width: 42,
