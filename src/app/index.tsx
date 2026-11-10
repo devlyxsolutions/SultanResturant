@@ -355,7 +355,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   // Center-to-left glide offset for Desktop / Tablet (wider center box: 460px)
   const centerShiftX = useMemo(() => {
     if (isMobile) return 0;
-    const consoleInnerWidth = Math.min(width - (isCompactMobile ? 28 : 56), 1040) - 72;
+    const consoleInnerWidth = Math.min(width - (isCompactMobile ? 28 : 56), 1040);
     return Math.max(0, (consoleInnerWidth - 460) / 2);
   }, [width, isMobile, isCompactMobile]);
 
@@ -486,13 +486,6 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                   isMobile && styles.royalTechConsoleMobile,
                 ]}
               >
-                {/* Genuine Frosted Glass Backdrop Layer (immune to Chromium hover repaint bug) */}
-                <View pointerEvents="none" style={styles.frostedGlassBackdrop} />
-                {/* Top Gold Laser Accent Line */}
-                <View pointerEvents="none" style={styles.topGoldLaserLine} />
-                {/* Frosted Glass Specular Rim Sheen */}
-                <View pointerEvents="none" style={styles.frostedGlassSheen} />
-
                 {/* Main Dynamic Layout Body */}
                 <View
                   style={[
@@ -851,65 +844,9 @@ const styles = StyleSheet.create({
     width: '100%',
     maxWidth: 1040,
     position: 'relative',
-    borderRadius: 28,
-    paddingVertical: 36,
-    paddingHorizontal: 36,
-    ...Platform.select({
-      web: {
-        isolation: 'isolate',
-      } as any,
-    }),
   },
   royalTechConsoleMobile: {
-    paddingVertical: 24,
-    paddingHorizontal: 18,
-    borderRadius: 24,
-  },
-  frostedGlassBackdrop: {
-    ...StyleSheet.absoluteFill,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.035)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(213, 169, 67, 0.3)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(12px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-        backgroundImage:
-          'linear-gradient(135deg, rgba(255, 255, 255, 0.07) 0%, rgba(213, 169, 67, 0.035) 40%, rgba(255, 255, 255, 0.015) 100%)',
-        boxShadow:
-          '0 24px 60px rgba(0, 0, 0, 0.5), inset 0 1.5px 1px rgba(255, 255, 255, 0.28), inset 0 -1px 1px rgba(213, 169, 67, 0.2)',
-        transform: 'translateZ(0)',
-        willChange: 'backdrop-filter',
-      } as any,
-      default: {
-        backgroundColor: 'rgba(22, 3, 7, 0.55)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.45,
-        shadowRadius: 22,
-        elevation: 8,
-      },
-    }),
-  },
-  topGoldLaserLine: {
-    position: 'absolute',
-    top: 0,
-    alignSelf: 'center',
-    width: 220,
-    height: 3,
-    backgroundColor: '#D5A943',
-    borderBottomLeftRadius: 4,
-    borderBottomRightRadius: 4,
-  },
-  frostedGlassSheen: {
-    position: 'absolute',
-    top: 0,
-    left: 28,
-    right: 28,
-    height: 1.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 2,
+    width: '100%',
   },
 
   /* MAIN SPLIT BODY */
