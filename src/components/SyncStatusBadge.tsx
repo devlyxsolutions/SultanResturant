@@ -170,8 +170,17 @@ export default function SyncStatusBadge({ compact = false }: Props) {
             </View>
 
             <View style={styles.quickPresetsRow}>
-              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.1.14')}>
-                <Text style={styles.presetChipText}>Local LAN (192.168.1.14)</Text>
+              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.100.3')}>
+                <Text style={styles.presetChipText}>Server (192.168.100.3)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.100.155')}>
+                <Text style={styles.presetChipText}>Server (192.168.100.155)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.0.148')}>
+                <Text style={styles.presetChipText}>TP-Link (192.168.0.148)</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('192.168.0.100')}>
+                <Text style={styles.presetChipText}>TP-Link (192.168.0.100)</Text>
               </TouchableOpacity>
               {Platform.OS === 'web' && (
                 <TouchableOpacity style={styles.presetChip} onPress={() => setIpInput('localhost')}>

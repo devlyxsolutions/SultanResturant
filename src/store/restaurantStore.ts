@@ -1126,9 +1126,10 @@ export const useRestaurantStore = create<RestaurantState>()(
       floors: INITIAL_FLOORS,
 
       confirmOnlineOrder: async (orderId: string, assignedWaiter?: string) => {
+        const savedIp = (appStorage.getItem('sultan_server_ip') || '192.168.100.3').trim();
         const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
           ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
-          : 'http://192.168.1.14:5050';
+          : `http://${savedIp}:5050`;
         try {
           await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
@@ -1218,9 +1219,10 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       rejectOnlineOrder: async (orderId: string, reason?: string) => {
+        const savedIp = (appStorage.getItem('sultan_server_ip') || '192.168.100.3').trim();
         const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
           ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
-          : 'http://192.168.1.14:5050';
+          : `http://${savedIp}:5050`;
         try {
           await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',

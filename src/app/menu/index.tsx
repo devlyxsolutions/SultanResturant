@@ -23,7 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import IslamicHeroBackground from '../../components/IslamicHeroBackground';
 import SultanLogo from '../../components/SultanLogo';
 import FullscreenButton from '../../components/FullscreenButton';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import { useOpsStore } from '../../store/opsStore';
 import { MenuItem, OnlineOrder, Ticket, useRestaurantStore } from '../../store/restaurantStore';
 
@@ -556,14 +556,7 @@ export default function CustomerMenuScreen() {
 
   // Helper: URL base for Central POS & API Hub
   const getBaseUrl = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const loc = window.location;
-      if (loc.port === '8081' || loc.port === '5050' || loc.port === '5000' || loc.port === '80' || !loc.port) {
-        return loc.origin;
-      }
-      return `${loc.protocol}//${loc.hostname}:5050`;
-    }
-    return 'http://192.168.1.14:5050';
+    return getActiveServerHttpUrl();
   };
 
   // Helper: Category Emoji & Urud Titles

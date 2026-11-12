@@ -27,6 +27,7 @@ import {
 } from '../../constants/floors';
 import SeatingTypeIcon from '../../components/SeatingTypeIcon';
 import FullscreenButton from '../../components/FullscreenButton';
+import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
 import { BRAND as BRAND_PALETTE } from '../../constants/brand';
 
@@ -678,6 +679,7 @@ export default function OrderTakerScreen() {
         </View>
 
         <View style={styles.compactHeaderRight}>
+          <SyncStatusBadge compact />
           <FullscreenButton
             variant={width < 420 ? 'compact' : 'pill'}
             style={{

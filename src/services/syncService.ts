@@ -31,8 +31,12 @@ const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_stat
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
 let isRtdbAccessible = false;
 
-let currentServerAddress = '192.168.1.14';
+let currentServerAddress = '192.168.100.3';
 let syncStatus: SyncStatus = 'offline';
+let isLanConnected = false;
+let isCloudConnected = false;
+let isDiscoveringLan = false;
+let lanHttpPollTimer: ReturnType<typeof setInterval> | null = null;
 let lastSyncedAt: number | null = null;
 let totalSyncedEvents = 0;
 let ws: WebSocket | null = null;
@@ -169,10 +173,10 @@ function notifyListeners() {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   const info: SyncInfo = {
     status: syncStatus,
-    serverIp: currentServerAddress || '192.168.1.14',
+    serverIp: currentServerAddress || '192.168.100.155',
     serverPort: SERVER_PORT,
-    serverUrl: wsUrl || displayAddress || 'ws://192.168.1.14:5050',
-    isCloudDb: isFirebaseConfigured,
+    serverUrl: wsUrl || displayAddress || 'ws://192.168.100.155:5050',
+    isCloudDb: isCloudConnected,
     lastSyncedAt,
     totalSyncedEvents,
     deviceId: DEVICE_ID,
@@ -189,10 +193,10 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   const { wsUrl, displayAddress } = parseServerEndpoints(currentServerAddress);
   listener({
     status: syncStatus,
-    serverIp: currentServerAddress || '192.168.1.14',
+    serverIp: currentServerAddress || '192.168.100.155',
     serverPort: SERVER_PORT,
-    serverUrl: wsUrl || displayAddress || 'ws://192.168.1.14:5050',
-    isCloudDb: isFirebaseConfigured,
+    serverUrl: wsUrl || displayAddress || 'ws://192.168.100.155:5050',
+    isCloudDb: isCloudConnected,
     lastSyncedAt,
     totalSyncedEvents,
     deviceId: DEVICE_ID,
@@ -202,23 +206,110 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   };
 }
 
+/** Probes a candidate LAN IP to check if Sultan Central POS Hub is running there */
+async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
+  try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+    const res = await fetch(`http://${ip}:${SERVER_PORT}/health`, {
+      method: 'GET',
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    if (timer) clearTimeout(timer);
+    if (!res.ok) return false;
+    const data = await res.json();
+    return Boolean(data && (data.status === 'online' || data.server));
+  } catch {
+    return false;
+  }
+}
+
+/** Automatically discovers the Sultan POS Hub IP across common restaurant LAN subnets (192.168.0.x, 192.168.100.x, 192.168.1.x) */
+export async function discoverLocalServerIp(): Promise<string | null> {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
+    const h = window.location.hostname;
+    if (h !== 'localhost' && h !== '127.0.0.1' && !h.includes('vercel.app') && !h.includes('netlify.app')) {
+      return h;
+    }
+  }
+  if (isDiscoveringLan) return null;
+  isDiscoveringLan = true;
+
+  try {
+    // 1. High-priority known static & router DHCP IPs first (fast <1s check)
+    const priorityIps = [
+      currentServerAddress,
+      '192.168.100.3',
+      '192.168.100.155',
+      '192.168.0.148',
+      '192.168.0.100',
+      '192.168.0.101',
+      '192.168.0.102',
+      '192.168.0.103',
+      '192.168.0.104',
+      '192.168.0.105',
+      '192.168.100.2',
+      '192.168.100.4',
+      '192.168.100.5',
+      '192.168.100.100',
+      '192.168.100.101',
+      '192.168.1.100',
+      '192.168.1.14',
+    ].filter(Boolean);
+
+    const uniquePriority = Array.from(new Set(priorityIps));
+    const fastHits = await Promise.all(
+      uniquePriority.map(async (ip) => ((await probeLanIp(ip, 850)) ? ip : null))
+    );
+    const winnerFast = fastHits.find(Boolean);
+    if (winnerFast) {
+      if (winnerFast !== currentServerAddress) {
+        currentServerAddress = winnerFast;
+        try {
+          await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, winnerFast);
+        } catch {}
+        connectWebSocket();
+      }
+      return winnerFast;
+    }
+
+    // 2. Parallel batch scan across 192.168.0.100-200 and 192.168.100.100-200
+    const subnets = ['192.168.0', '192.168.100', '192.168.1'];
+    for (const subnet of subnets) {
+      const candidates: string[] = [];
+      for (let i = 100; i <= 200; i++) {
+        candidates.push(`${subnet}.${i}`);
+      }
+      for (let i = 2; i < 100; i++) {
+        candidates.push(`${subnet}.${i}`);
+      }
+      const batchSize = 25;
+      for (let b = 0; b < candidates.length; b += batchSize) {
+        if (isLanConnected) return currentServerAddress;
+        const batch = candidates.slice(b, b + batchSize);
+        const results = await Promise.all(
+          batch.map(async (ip) => ((await probeLanIp(ip, 650)) ? ip : null))
+        );
+        const found = results.find(Boolean);
+        if (found) {
+          currentServerAddress = found;
+          try {
+            await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, found);
+          } catch {}
+          connectWebSocket();
+          return found;
+        }
+      }
+    }
+  } catch {} finally {
+    isDiscoveringLan = false;
+  }
+  return null;
+}
+
 /** Resolves default server host based on environment */
 export async function resolveDefaultServerIp(): Promise<string> {
-  // 1. Check custom saved address in storage
-  try {
-    const saved = await AsyncStorage.getItem(STORAGE_KEY_SERVER_IP);
-    if (saved && saved.trim()) {
-      return saved.trim();
-    }
-  } catch {}
-
-  // 2. Check build-time environment variable
-  const envUrl = process.env.EXPO_PUBLIC_SYNC_SERVER_URL;
-  if (envUrl && envUrl.trim()) {
-    return envUrl.trim();
-  }
-
-  // 3. If running in Web browser
+  // 1. If running in Web browser, always prefer the browser's current LAN IP host
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
     if (host.includes('netlify.app') || host.includes('vercel.app')) {
@@ -228,6 +319,20 @@ export async function resolveDefaultServerIp(): Promise<string> {
       return host;
     }
     return '127.0.0.1';
+  }
+
+  // 2. Check custom saved address in storage (ignore old dead 192.168.1.4 / 192.168.1.14 defaults)
+  try {
+    const saved = await AsyncStorage.getItem(STORAGE_KEY_SERVER_IP);
+    if (saved && saved.trim() && saved.trim() !== '192.168.1.4' && saved.trim() !== '192.168.1.14') {
+      return saved.trim();
+    }
+  } catch {}
+
+  // 3. Check build-time environment variable
+  const envUrl = process.env.EXPO_PUBLIC_SYNC_SERVER_URL;
+  if (envUrl && envUrl.trim()) {
+    return envUrl.trim();
   }
 
   // 4. If running on Mobile (Expo Go), extract host computer IP
@@ -244,7 +349,19 @@ export async function resolveDefaultServerIp(): Promise<string> {
   }
 
   // 5. Default fallback to host computer's known LAN IP
-  return '192.168.1.14';
+  return '192.168.100.3';
+}
+
+export function getActiveServerHttpUrl(): string {
+  if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
+    const loc = window.location;
+    if (loc.port === '8081' || loc.port === '5050' || loc.port === '5000' || loc.port === '80' || !loc.port) {
+      return loc.origin;
+    }
+    return `${loc.protocol}//${loc.hostname}:${SERVER_PORT}`;
+  }
+  const { httpUrl } = parseServerEndpoints(currentServerAddress || '192.168.100.3');
+  return httpUrl || `http://192.168.100.3:${SERVER_PORT}`;
 }
 
 export async function setCustomServerIp(newAddress: string) {
@@ -258,11 +375,35 @@ export async function setCustomServerIp(newAddress: string) {
   reconnect();
 }
 
-/** Instantaneous state load from Cloud Firestore first, then fallback to REST */
+/** Instantaneous state load from Local LAN Hub first, then Cloud Firestore / REST */
 async function fetchInitialFirebaseState() {
-  let loadedFromCloud = false;
+  let loadedRemotely = false;
 
-  // 1. Direct Cloud Firestore state fetch (<100ms)
+  // 0. Try Local LAN Central Server first (<50ms on restaurant Wi-Fi / LAN)
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  if (httpUrl) {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 1400) : null;
+      const lanRes = await fetch(`${httpUrl}/api/sync`, {
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+      if (timer) clearTimeout(timer);
+      if (lanRes.ok) {
+        const lanState = await lanRes.json();
+        if (lanState && typeof lanState === 'object') {
+          applyRemoteStateSafely(lanState.state || lanState, lanState.packetId, lanState.timestamp);
+          isLanConnected = true;
+          loadedRemotely = true;
+        }
+      }
+    } catch {
+      // Trigger auto-discovery in background if default IP didn't respond
+      discoverLocalServerIp().catch(() => {});
+    }
+  }
+
+  // 1. Direct Cloud Firestore state fetch (<100ms when internet is available)
   const firestoreDb = getFirestoreDb();
   if (firestoreDb) {
     try {
@@ -271,34 +412,36 @@ async function fetchInitialFirebaseState() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         if (data?.state) {
-          applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-          loadedFromCloud = true;
+          isCloudConnected = true;
+          if (!loadedRemotely) {
+            applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
+            loadedRemotely = true;
+          }
         }
       }
     } catch (e) {
+      isCloudConnected = false;
       console.warn('[SyncService] Initial Firestore fetch error:', e);
     }
   }
 
-  // 2. Fallback to Firebase REST only if Firestore did not load
-  if (!loadedFromCloud) {
+  // 2. Fallback to Firebase REST only if neither LAN nor Firestore loaded
+  if (!loadedRemotely) {
     try {
       const res = await fetch(FIREBASE_REST_URL);
       if (res.ok) {
         const data = await res.json();
         if (data?.state) {
+          isCloudConnected = true;
           applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
-          loadedFromCloud = true;
+          loadedRemotely = true;
           isRtdbAccessible = true;
         }
       }
     } catch (_) {}
   }
 
-  if (!loadedFromCloud) {
-    hasReceivedInitialSync = true;
-    broadcastLocalState();
-  }
+  hasReceivedInitialSync = true;
 }
 
 /** Native browser Server-Sent Events (SSE) stream for zero-latency, sub-100ms real-time pushes */
@@ -463,10 +606,30 @@ function initFirebaseSync() {
     if (firebasePollingTimer) clearInterval(firebasePollingTimer);
     firebasePollingTimer = setInterval(pollFirebaseUpdates, 4000);
   }
+}
 
-  syncStatus = 'connected';
-  lastSyncedAt = Date.now();
-  notifyListeners();
+async function pollLocalLanFallback() {
+  if (isApplyingRemoteUpdate) return;
+  if (ws && ws.readyState === WebSocket.OPEN) return;
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  if (!httpUrl) return;
+  try {
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 1200) : null;
+    const res = await fetch(`${httpUrl}/api/sync`, {
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    if (timer) clearTimeout(timer);
+    if (res.ok) {
+      const serverState = await res.json();
+      if (serverState && typeof serverState === 'object') {
+        isLanConnected = true;
+        applyRemoteStateSafely(serverState.state || serverState, serverState.packetId, serverState.timestamp);
+      }
+    }
+  } catch {
+    discoverLocalServerIp().catch(() => {});
+  }
 }
 
 function connectWebSocket() {
@@ -489,7 +652,7 @@ function connectWebSocket() {
   const { wsUrl } = parseServerEndpoints(currentServerAddress);
 
   if (!wsUrl) {
-    syncStatus = isFirebaseConfigured ? 'connected' : 'offline';
+    syncStatus = isCloudConnected ? 'connected' : 'offline';
     notifyListeners();
     return;
   }
@@ -498,6 +661,7 @@ function connectWebSocket() {
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
+      isLanConnected = true;
       syncStatus = 'connected';
       lastSyncedAt = Date.now();
       totalSyncedEvents++;
@@ -529,6 +693,7 @@ function connectWebSocket() {
 
         if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
+            isLanConnected = true;
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           }
         }
@@ -542,7 +707,8 @@ function connectWebSocket() {
     };
 
     ws.onclose = () => {
-      if (!isFirebaseConfigured) {
+      isLanConnected = false;
+      if (!isCloudConnected) {
         syncStatus = 'offline';
         notifyListeners();
       }
@@ -550,16 +716,20 @@ function connectWebSocket() {
         clearInterval(pingTimer);
         pingTimer = null;
       }
+      // Auto-discover server IP on the local router in case subnet changed (e.g. 192.168.0.x <-> 192.168.100.x)
+      discoverLocalServerIp().catch(() => {});
       // Reconnect after 3s
       reconnectTimer = setTimeout(() => {
         connectWebSocket();
       }, 3000);
     };
   } catch {
-    if (!isFirebaseConfigured) {
+    isLanConnected = false;
+    if (!isCloudConnected) {
       syncStatus = 'offline';
       notifyListeners();
     }
+    discoverLocalServerIp().catch(() => {});
     reconnectTimer = setTimeout(() => {
       connectWebSocket();
     }, 3500);
@@ -739,6 +909,10 @@ export async function initSyncService() {
     currentServerAddress = await resolveDefaultServerIp();
   } catch {}
   connectWebSocket();
+  discoverLocalServerIp().catch(() => {});
+
+  if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
+  lanHttpPollTimer = setInterval(pollLocalLanFallback, 3000);
 
   if (isFirebaseConfigured) {
     initFirebaseSync();
@@ -769,6 +943,44 @@ export async function initSyncService() {
 }
 
 export async function forceSyncNow(): Promise<boolean> {
+  // 1. Always try Local LAN Central Hub first (works 100% offline & online)
+  let { httpUrl } = parseServerEndpoints(currentServerAddress);
+  if (httpUrl) {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 1500) : null;
+      const res = await fetch(`${httpUrl}/api/sync`, {
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+      if (timer) clearTimeout(timer);
+      if (res.ok) {
+        const serverState = await res.json();
+        isLanConnected = true;
+        applyRemoteStateSafely(serverState.state || serverState);
+        reconnect();
+        return true;
+      }
+    } catch {}
+  }
+
+  // 2. If current IP didn't answer, auto-discover LAN Server IP and retry
+  const discovered = await discoverLocalServerIp();
+  if (discovered) {
+    const endpoints = parseServerEndpoints(discovered);
+    if (endpoints.httpUrl) {
+      try {
+        const res = await fetch(`${endpoints.httpUrl}/api/sync`);
+        if (res.ok) {
+          const serverState = await res.json();
+          isLanConnected = true;
+          applyRemoteStateSafely(serverState.state || serverState);
+          return true;
+        }
+      } catch {}
+    }
+  }
+
+  // 3. Fallback to Cloud Firestore / Firebase Realtime DB if internet is available
   if (isFirebaseConfigured) {
     const firestoreDb = getFirestoreDb();
     if (firestoreDb) {
@@ -777,6 +989,7 @@ export async function forceSyncNow(): Promise<boolean> {
         if (docSnap.exists()) {
           const data = docSnap.data();
           if (data?.state) {
+            isCloudConnected = true;
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
             return true;
           }
@@ -791,6 +1004,7 @@ export async function forceSyncNow(): Promise<boolean> {
       if (res.ok) {
         const data = await res.json();
         if (data?.state) {
+          isCloudConnected = true;
           applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           return true;
         }
@@ -798,23 +1012,8 @@ export async function forceSyncNow(): Promise<boolean> {
     } catch (err) {
       console.warn('[SyncService] Firebase forceSync error:', err);
     }
-    return false;
   }
 
-  const { httpUrl } = parseServerEndpoints(currentServerAddress);
-  if (!httpUrl) {
-    reconnect();
-    return false;
-  }
-
-  try {
-    const res = await fetch(`${httpUrl}/api/sync`);
-    if (res.ok) {
-      const serverState = await res.json();
-      applyRemoteStateSafely(serverState);
-      return true;
-    }
-  } catch {}
   reconnect();
   return false;
 }

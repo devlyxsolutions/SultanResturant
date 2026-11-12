@@ -45,6 +45,12 @@ function withCallDetector(config) {
     // 2. Configure <application> components
     const application = androidManifest.manifest.application?.[0];
     if (application) {
+      if (!application.$) {
+        application.$ = {};
+      }
+      // Allow local LAN HTTP and WebSocket (ws://192.168.x.x) traffic on Android 9+
+      application.$['android:usesCleartextTraffic'] = 'true';
+
       if (!application.service) {
         application.service = [];
       }

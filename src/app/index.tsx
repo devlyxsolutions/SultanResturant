@@ -27,6 +27,7 @@ import { useRoleStore } from '../store/roleStore';
 import IslamicBackground from '../components/IslamicBackground';
 import SultanLogo from '../components/SultanLogo';
 import FullscreenButton from '../components/FullscreenButton';
+import SyncStatusBadge from '../components/SyncStatusBadge';
 import { Ionicons } from '@expo/vector-icons';
 
 // Session-wide splash skip flag for instant navigation after initial launch
@@ -474,8 +475,9 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
           ROYAL-TECH COMMAND PORTAL (SEAMLESS SPLIT LOGIN)
           ============================================================ */}
       <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-        {/* Top Floating Fullscreen Utility */}
-        <View style={{ position: 'absolute', top: Platform.OS === 'web' ? 18 : 10, right: 18, zIndex: 100 }}>
+        {/* Top Floating Fullscreen & Server IP Sync Utility */}
+        <View style={{ position: 'absolute', top: Platform.OS === 'web' ? 18 : 10, right: 18, zIndex: 100, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <SyncStatusBadge compact />
           <FullscreenButton variant="pill" />
         </View>
 
