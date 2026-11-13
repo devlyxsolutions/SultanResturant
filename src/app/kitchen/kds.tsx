@@ -18,7 +18,7 @@ import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { isFirebaseConfigured } from '../../services/firebase';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 import { useAuthStore } from '../../store/authStore';
 import { useOpsStore } from '../../store/opsStore';
 import { Ticket, useRestaurantStore } from '../../store/restaurantStore';
@@ -160,24 +160,23 @@ export default function KitchenDisplayScreen() {
 
   // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
   useEffect(() => {
-    const host = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
-
     // Fetch active kitchen tickets and reconcile confirmed app orders
     const fetchLiveTickets = async () => {
       try {
-        // 1. Fetch tickets from local sync endpoint only when Firebase Cloud DB is not active
-        if (!isFirebaseConfigured) {
-          const res = await fetch(`http://${host}:5050/api/sync`);
+        const baseHttpUrl = getActiveServerHttpUrl();
+        // 1. Always fetch tickets from local sync endpoint so offline/LAN KOTs never get skipped
+        try {
+          const res = await fetch(`${baseHttpUrl}/api/sync`);
           if (res.ok) {
             const data = await res.json();
-            if (data && Array.isArray(data.tickets) && data.tickets.length > 0) {
+            if (data && Array.isArray(data.tickets)) {
               useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
             }
           }
-        }
+        } catch (_) {}
 
         // 2. Also reconcile online orders that are CONFIRMED / PREPARING / READY
-        const ordersRes = await fetch(`http://${host}:5050/api/admin/online-orders`);
+        const ordersRes = await fetch(`${baseHttpUrl}/api/admin/online-orders`);
         if (ordersRes.ok) {
           const ordersData = await ordersRes.json();
           if (ordersData.success && Array.isArray(ordersData.orders)) {
@@ -235,7 +234,7 @@ export default function KitchenDisplayScreen() {
     const pollInterval = setInterval(fetchLiveTickets, 3500);
 
     // 2. Direct real-time WebSocket stream for instant KOT Chime & Alert Banner
-    const wsUrl = `ws://${host}:5050`;
+    const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
     let socket: WebSocket | null = null;
     try {
       socket = new WebSocket(wsUrl);
@@ -361,7 +360,7 @@ export default function KitchenDisplayScreen() {
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
-    const host = typeof window !== 'undefined' && window.location?.hostname ? window.location.hostname : 'localhost';
+    const baseHttpUrl = getActiveServerHttpUrl();
     const orderId = (ticket as any).orderId;
 
     if (ticket.stationStatus === 'pending') {
@@ -369,7 +368,7 @@ export default function KitchenDisplayScreen() {
     } else if (ticket.stationStatus === 'cooking') {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
       if (orderId) {
-        fetch(`http://${host}:5050/api/public/orders/${orderId}/status`, {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'READY' })
@@ -378,7 +377,7 @@ export default function KitchenDisplayScreen() {
     } else if (ticket.stationStatus === 'ready') {
       bumpTicket(ticket.id, stationFilter);
       if (orderId) {
-        fetch(`http://${host}:5050/api/public/orders/${orderId}/status`, {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'SERVED' })

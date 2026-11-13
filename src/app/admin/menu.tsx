@@ -21,7 +21,7 @@ import { useRestaurantStore, MenuItem, ComboItem } from '../../store/restaurantS
 import { BRAND } from '../../constants/brand';
 import { FOOD_PRESETS, POPULAR_BADGES } from '../../constants/foodPresets';
 import { money } from '../../utils/format';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import PaginationControl from '../../components/PaginationControl';
 import { usePagination } from '../../hooks/usePagination';
 
@@ -69,11 +69,23 @@ export default function MenuManagement() {
   // Success Feedback Message
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null);
 
+  const getMenuHost = () => {
+    if (typeof window !== 'undefined' && window.location?.hostname) {
+      return window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname;
+    }
+    try {
+      const base = getActiveServerHttpUrl();
+      const clean = base.replace(/^https?:\/\//i, '').replace(/:\d+.*$/, '').replace(/\/.*$/, '');
+      if (clean) return clean;
+    } catch (_) {}
+    return '192.168.100.3';
+  };
+
   // Sync with live central backend on mount
   useEffect(() => {
     const fetchLiveCatalog = async () => {
-      const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+      const ports = [5050, 5000, 80];
+      const host = getMenuHost();
       
       for (const p of ports) {
         try {
@@ -671,8 +683,8 @@ export default function MenuManagement() {
 
     // Sync directly to Sultan Backend Hub (instantly reflected on Mobile App)
     try {
-      const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+      const ports = [5050, 5000, 80];
+      const host = getMenuHost();
       for (const p of ports) {
         try {
           const url = p === 80 ? `http://${host}/api/admin/menu-items` : `http://${host}:${p}/api/admin/menu-items`;
@@ -709,8 +721,8 @@ export default function MenuManagement() {
 
       // Sync deletion to Backend
       try {
-        const ports = [5000, 5050, 80];
-        const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+        const ports = [5050, 5000, 80];
+        const host = getMenuHost();
         for (const p of ports) {
           try {
             const url = p === 80 ? `http://${host}/api/admin/menu-items/${item.id}` : `http://${host}:${p}/api/admin/menu-items/${item.id}`;
@@ -778,8 +790,8 @@ export default function MenuManagement() {
 
     // Sync category to backend
     try {
-      const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+      const ports = [5050, 5000, 80];
+      const host = getMenuHost();
       for (const p of ports) {
         try {
           const url = p === 80 ? `http://${host}/api/admin/categories` : `http://${host}:${p}/api/admin/categories`;
@@ -821,8 +833,8 @@ export default function MenuManagement() {
 
     // Sync category to backend
     try {
-      const ports = [5000, 5050, 80];
-      const host = typeof window !== 'undefined' && window.location?.hostname ? (window.location.hostname === '127.0.0.1' ? 'localhost' : window.location.hostname) : '192.168.1.4';
+      const ports = [5050, 5000, 80];
+      const host = getMenuHost();
       for (const p of ports) {
         try {
           const url = p === 80 ? `http://${host}/api/admin/categories` : `http://${host}:${p}/api/admin/categories`;

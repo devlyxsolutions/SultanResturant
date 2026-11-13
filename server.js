@@ -933,6 +933,47 @@ try {
         }
       }
     }
+    if (!Array.isArray(serverState.deletedTicketIds)) {
+      serverState.deletedTicketIds = ['KOT-1042'];
+    } else if (!serverState.deletedTicketIds.includes('KOT-1042')) {
+      serverState.deletedTicketIds.push('KOT-1042');
+    }
+    if (Array.isArray(serverState.tickets)) {
+      const delSet = new Set(serverState.deletedTicketIds);
+      serverState.tickets = serverState.tickets
+        .filter(t => t && t.id && !delSet.has(t.id))
+        .map(t => {
+          if (t && t.status === 'served' && Array.isArray(t.items)) {
+            return {
+              ...t,
+              items: t.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }))
+            };
+          }
+          return t;
+        });
+    }
+    const activeTicketTableIds = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+    if (Array.isArray(serverState.tables)) {
+      const nowInit = Date.now();
+      serverState.tables = serverState.tables.map(t => {
+        if (t.status === 'occupied' && !activeTicketTableIds.has(t.id) && !t.mergedInto) {
+          return {
+            ...t,
+            status: 'available',
+            billTotal: 0,
+            orders: [],
+            server: undefined,
+            isPaid: false,
+            lastInvoiceId: undefined,
+            occupiedSince: undefined,
+            lastSettledAt: t.lastSettledAt || nowInit,
+          };
+        }
+        return t;
+      });
+    }
+    serverState.lastUpdated = Date.now();
+    fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
     console.log('[Sultan Hub] Loaded saved database from server-data.json');
   } else {
     fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_STATE, null, 2));
@@ -942,17 +983,29 @@ try {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
 }
 
-// Debounced file save to avoid disk thrashing
+// Crash-safe atomic debounced file save + daily backup
+const BACKUP_DIR = path.join(__dirname, 'backups');
 let saveTimer = null;
+let lastBackupDate = '';
 function persistState() {
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
+      const jsonStr = JSON.stringify(serverState, null, 2);
+      const tmpFile = `${DATA_FILE}.tmp`;
+      fs.writeFileSync(tmpFile, jsonStr);
+      fs.renameSync(tmpFile, DATA_FILE);
+
+      const today = new Date().toISOString().split('T')[0];
+      if (today !== lastBackupDate) {
+        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        fs.writeFileSync(path.join(BACKUP_DIR, `server-data-${today}.json`), jsonStr);
+        lastBackupDate = today;
+      }
     } catch (e) {
       console.error('[Sultan Hub] Failed to save state to disk:', e.message);
     }
-  }, 800);
+  }, 400);
 }
 
 // Simple in-memory rate limiter for public endpoints
@@ -2295,8 +2348,49 @@ async function handleRequest(req, res) {
   }
 
   // 8. Legacy / Central Web POS Sync: GET & POST /api/sync
-  if (url.pathname === '/api/sync' && req.method === 'GET') {
+  if (url.pathname === '/api/pos/clear-all' && req.method === 'POST') {
+    const now = Date.now();
+    const removedIds = (serverState.tickets || []).map(t => t && t.id).filter(Boolean);
+    serverState.deletedTicketIds = Array.from(
+      new Set([...(serverState.deletedTicketIds || []), 'KOT-1042', ...removedIds])
+    ).slice(-500);
+    serverState.tickets = [];
+    serverState.tables = (serverState.tables || []).map(t =>
+      t.status === 'occupied' || t.status === 'billed'
+        ? {
+            ...t,
+            status: 'available',
+            billTotal: 0,
+            orders: [],
+            server: undefined,
+            isPaid: false,
+            lastInvoiceId: undefined,
+            occupiedSince: undefined,
+            lastSettledAt: now,
+            mergedInto: undefined,
+            reservationId: undefined,
+          }
+        : t
+    );
+    serverState.lastBillPaidAlert = null;
+    serverState.lastFoodReadyAlert = null;
+    serverState.lastUpdated = now;
+    lastStateFingerprint = computeStateFingerprint(serverState);
+    persistState();
+    broadcastToClients({
+      type: 'SERVER_BROADCAST',
+      state: serverState,
+      senderId: 'POS_CLEAR_ALL',
+      timestamp: now,
+    });
+    pushToFirestoreCloud();
     res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: true, timestamp: now, state: serverState }));
+    return;
+  }
+
+  if (url.pathname === '/api/sync' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(serverState));
     return;
   }
@@ -2304,11 +2398,11 @@ async function handleRequest(req, res) {
   if (url.pathname === '/api/sync' && req.method === 'POST') {
     try {
       const data = await readRequestBody(req);
-      if (data.state) {
+      if (data.state && !hasProcessedServerPacket(data.packetId)) {
         applyStateUpdate(data.state, data.senderId);
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, timestamp: Date.now() }));
+      res.end(JSON.stringify({ success: true, timestamp: Date.now(), state: serverState }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
@@ -2491,59 +2585,146 @@ function broadcastToClients(msgObj, excludeWs = null) {
   }
 }
 
+const recentServerPacketIds = new Set();
+function hasProcessedServerPacket(packetId) {
+  if (!packetId || typeof packetId !== 'string') return false;
+  if (recentServerPacketIds.has(packetId)) return true;
+  recentServerPacketIds.add(packetId);
+  if (recentServerPacketIds.size > 300) {
+    const oldest = recentServerPacketIds.values().next().value;
+    if (oldest) recentServerPacketIds.delete(oldest);
+  }
+  return false;
+}
+
+let lastStateFingerprint = '';
+function computeStateFingerprint(st) {
+  try {
+    return JSON.stringify({
+      tickets: st.tickets || [],
+      deletedTicketIds: st.deletedTicketIds || [],
+      tables: (st.tables || []).map(t => ({
+        id: t.id,
+        status: t.status,
+        billTotal: t.billTotal,
+        isPaid: t.isPaid,
+        server: t.server,
+        occupiedSince: t.occupiedSince,
+        lastSettledAt: t.lastSettledAt,
+        ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
+      })),
+      onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
+      invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
+      menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
+      lastBillPaidAlert: st.lastBillPaidAlert || null,
+      lastFoodReadyAlert: st.lastFoodReadyAlert || null,
+      pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
+    });
+  } catch (_) {
+    return String(Date.now());
+  }
+}
+
 function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
-  // Merge state keys safely
-  const allowedKeys = ['tables', 'tickets', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles'];
+  const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
+
+  // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles'];
   let modified = false;
+
+  // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
+  if (!Array.isArray(serverState.deletedTicketIds)) {
+    serverState.deletedTicketIds = [];
+  }
+  const incomingDeleted = Array.isArray(partialState.deletedTicketIds) ? partialState.deletedTicketIds : [];
+  const autoRetiredTicketIds = [];
+  if (Array.isArray(partialState.tables) && Array.isArray(serverState.tables)) {
+    const currTableMap = new Map(serverState.tables.map(t => [t.id, t]));
+    for (const incT of partialState.tables) {
+      if (!incT || !incT.id) continue;
+      const currT = currTableMap.get(incT.id);
+      if (!currT) continue;
+      const newlyBilled = currT.status !== 'billed' && incT.status === 'billed' && incT.isPaid;
+      const newlySettledFromBilled = currT.status === 'billed' && incT.status === 'available';
+      const newlySettledByTimestamp =
+        (currT.status === 'occupied' || currT.status === 'billed') &&
+        incT.status === 'available' &&
+        incT.lastSettledAt &&
+        incT.lastSettledAt >= (currT.occupiedSince || 0);
+      if (newlyBilled || newlySettledFromBilled || newlySettledByTimestamp) {
+        const cutoff = incT.lastSettledAt || Date.now();
+        for (const tk of (serverState.tickets || [])) {
+          if (tk && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
+            autoRetiredTicketIds.push(tk.id);
+          }
+        }
+      }
+    }
+  }
+  if (incomingDeleted.length > 0 || autoRetiredTicketIds.length > 0) {
+    serverState.deletedTicketIds = Array.from(
+      new Set([...serverState.deletedTicketIds, ...incomingDeleted, ...autoRetiredTicketIds])
+    ).slice(-400);
+  }
+  const deletedSet = new Set(serverState.deletedTicketIds);
 
   for (const key of allowedKeys) {
     if (partialState[key] !== undefined) {
-      if (key === 'tickets') {
+      if (key === 'deletedTicketIds') {
+        modified = true;
+      } else if (key === 'tickets') {
         const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
         const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
         
         // Status hierarchy: pending -> cooking -> ready -> served
         const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
 
-        const existingMap = new Map(existingTickets.map(t => [t.id, t]));
-        const incomingMap = new Map(incomingTickets.map(t => [t.id, t]));
-        const allTicketIds = new Set([...existingMap.keys(), ...incomingMap.keys()]);
+        const existingMap = new Map(existingTickets.filter(t => t && t.id).map(t => [t.id, t]));
+        const incomingMap = new Map(incomingTickets.filter(t => t && t.id).map(t => [t.id, t]));
+        // Incoming keys first so newest KOTs appear at the top of KDS/POS
+        const allTicketIds = new Set([...incomingMap.keys(), ...existingMap.keys()]);
         const mergedList = [];
 
         for (const tId of allTicketIds) {
+          // Never resurrect a ticket that has been billed, settled, or dismissed
+          if (deletedSet.has(tId)) continue;
+
           const inc = incomingMap.get(tId);
           const ext = existingMap.get(tId);
 
           if (inc && ext) {
             const extRank = STATUS_RANK[ext.status] ?? 0;
             const incRank = STATUS_RANK[inc.status] ?? 0;
-            // Prevent backward status regressing
-            if (extRank > incRank) {
-              mergedList.push(ext);
-            } else {
-              // Merge item-level ready/served states
-              if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
-                const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
-                const mergedItems = inc.items.map(incIt => {
-                  const extIt = extItemsMap.get(incIt.id);
-                  if (!extIt) return incIt;
-                  const extItRank = extIt.itemStatus ? (STATUS_RANK[extIt.itemStatus] ?? 0) : (extIt.completed ? 2 : 0);
-                  const incItRank = incIt.itemStatus ? (STATUS_RANK[incIt.itemStatus] ?? 0) : (incIt.completed ? 2 : 0);
-                  if (extItRank > incItRank) {
-                    return { ...incIt, itemStatus: extIt.itemStatus, completed: extIt.completed, readyAt: extIt.readyAt };
-                  }
-                  return incIt;
-                });
-                mergedList.push({ ...inc, items: mergedItems });
-              } else {
-                mergedList.push(inc);
-              }
+            let chosen = extRank > incRank ? { ...ext } : { ...inc };
+
+            // Merge item-level ready/served states
+            if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
+              const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
+              chosen.items = inc.items.map(incIt => {
+                const extIt = extItemsMap.get(incIt.id);
+                if (!extIt) return incIt;
+                const extItRank = extIt.itemStatus ? (STATUS_RANK[extIt.itemStatus] ?? 0) : (extIt.completed ? 2 : 0);
+                const incItRank = incIt.itemStatus ? (STATUS_RANK[incIt.itemStatus] ?? 0) : (incIt.completed ? 2 : 0);
+                if (extItRank > incItRank) {
+                  return { ...incIt, itemStatus: extIt.itemStatus, completed: extIt.completed, readyAt: extIt.readyAt };
+                }
+                return incIt;
+              });
             }
+
+            if (chosen.status === 'served' && Array.isArray(chosen.items)) {
+              chosen.items = chosen.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
+            }
+            mergedList.push(chosen);
           } else if (inc) {
+            if (inc.status === 'served' && Array.isArray(inc.items)) {
+              inc.items = inc.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
+            }
             mergedList.push(inc);
           } else if (ext) {
+            // Preserve active server tickets when an out-of-sync client sends a partial/older ticket list
             mergedList.push(ext);
           }
         }
@@ -2555,14 +2736,60 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         if (incomingTables.length > 0) {
           const currentTables = Array.isArray(serverState.tables) ? serverState.tables : [];
           const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
+          const activeTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
           
           serverState.tables = currentTables.map(curr => {
             const inc = incomingMap.get(curr.id);
             if (!inc) return curr;
-            // Preserve occupied/billed status if server has active table bill
-            if ((curr.status === 'occupied' || curr.status === 'billed') && inc.status === 'available' && (curr.billTotal || 0) > 0) {
-              return curr;
+
+            const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
+
+            // If table has active unbilled tickets on the server, never allow an out-of-sync client to revert it to 'available'
+            if (tableTickets.length > 0 && inc.status !== 'billed') {
+              const ticketTotal = tableTickets.reduce(
+                (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0),
+                0
+              );
+              const ticketOrders = tableTickets.flatMap(tk => (tk.items || []).map(i => ({ ...i })));
+              const base = (inc.status === 'occupied' && (inc.occupiedSince || 0) >= (curr.occupiedSince || 0))
+                ? { ...curr, ...inc }
+                : { ...inc, ...curr };
+              const bestOrders =
+                Array.isArray(base.orders) && base.orders.length >= ticketOrders.length && base.orders.length > 0
+                  ? base.orders
+                  : ticketOrders;
+              return {
+                ...base,
+                status: 'occupied',
+                isPaid: false,
+                occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0) || Date.now(),
+                billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
+                orders: bestOrders,
+                server: inc.server || curr.server || tableTickets[0].server,
+              };
             }
+
+            // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
+            if (
+              tableTickets.length === 0 &&
+              inc.status !== 'billed' &&
+              (inc.status === 'available' ||
+                (curr.status === 'occupied' && ((Array.isArray(curr.orders) && curr.orders.length > 0) || (curr.billTotal || 0) > 0)))
+            ) {
+              return {
+                ...curr,
+                ...inc,
+                status: 'available',
+                billTotal: 0,
+                orders: [],
+                isPaid: false,
+                server: undefined,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
+              };
+            }
+
             return { ...curr, ...inc };
           });
 
@@ -2623,12 +2850,41 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   }
 
   if (modified) {
+    // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
+    const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+    if (Array.isArray(serverState.tables)) {
+      const nowRec = Date.now();
+      serverState.tables = serverState.tables.map(t => {
+        if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto) {
+          return {
+            ...t,
+            status: 'available',
+            billTotal: 0,
+            orders: [],
+            server: undefined,
+            isPaid: false,
+            lastInvoiceId: undefined,
+            occupiedSince: undefined,
+            lastSettledAt: t.lastSettledAt || nowRec,
+          };
+        }
+        return t;
+      });
+    }
+
+    const nextFingerprint = computeStateFingerprint(serverState);
+    if (nextFingerprint === prevFingerprint) {
+      return;
+    }
+    lastStateFingerprint = nextFingerprint;
+    serverState.lastUpdated = Date.now();
     persistState();
+    console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
     broadcastToClients({
       type: 'SERVER_BROADCAST',
       state: serverState,
       senderId: senderId || 'SERVER',
-      timestamp: Date.now()
+      timestamp: serverState.lastUpdated
     }, originWs);
     pushToFirestoreCloud();
   }
@@ -2641,7 +2897,7 @@ const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
 const FIRESTORE_PROJECT_ID = "sultan-resturant";
 const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
 
-let lastProcessedCloudTimestamp = 0;
+let lastProcessedCloudTimestamp = Date.now();
 let isPushingToFirestore = false;
 let isApplyingCloudUpdate = false;
 let firestorePushTimer = null;
@@ -2703,6 +2959,7 @@ function pushToFirestoreCloud() {
         state: {
           tables: serverState.tables,
           tickets: serverState.tickets,
+          deletedTicketIds: serverState.deletedTicketIds || [],
           menuItems: serverState.menuItems,
           categories: serverState.categories,
           staff: serverState.staff,
@@ -2777,7 +3034,9 @@ wss.on('connection', (ws, req) => {
     try {
       const data = JSON.parse(message.toString());
       if (data.type === 'CLIENT_UPDATE' && data.state) {
-        applyStateUpdate(data.state, data.senderId, ws);
+        if (!hasProcessedServerPacket(data.packetId)) {
+          applyStateUpdate(data.state, data.senderId, ws);
+        }
       } else if (data.type === 'PING') {
         ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
       }

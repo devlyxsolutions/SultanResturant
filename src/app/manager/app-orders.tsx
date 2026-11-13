@@ -15,7 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND } from '../../constants/brand';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 
 export interface AppOrder {
   id: string;
@@ -79,13 +79,7 @@ export default function AppManagerOrdersScreen() {
   const staff = useRestaurantStore(state => state.staff) || [];
   const waiters = staff.filter(s => s.role.toLowerCase() === 'waiter');
 
-  const getBaseUrl = () => {
-    if (Platform.OS === 'web') {
-      const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location.hostname || '192.168.1.4');
-      return `http://${host}:5050`;
-    }
-    return 'http://192.168.1.4:5050';
-  };
+  const getBaseUrl = () => getActiveServerHttpUrl();
 
   const fetchOrders = async (silent: boolean = false) => {
     try {
@@ -109,8 +103,7 @@ export default function AppManagerOrdersScreen() {
   useEffect(() => {
     fetchOrders();
 
-    const host = typeof window !== 'undefined' && window.location?.hostname === 'localhost' ? 'localhost' : (window.location?.hostname || '192.168.1.4');
-    const wsUrl = `ws://${host}:5050`;
+    const { wsUrl } = parseServerEndpoints(getBaseUrl());
     let ws: WebSocket | null = null;
 
     try {

@@ -585,8 +585,9 @@ export default function POSTerminalScreen({
   };
 
   const handleClearAllOrphanTickets = () => {
-    if ((tickets || []).length === 0) return;
-    const confirmMsg = "Are you sure you want to clear all running tickets? This will purge all old pending orders.";
+    const hasOccupied = (tables || []).some(t => t.status === 'occupied' || t.status === 'billed');
+    if ((tickets || []).length === 0 && !hasOccupied) return;
+    const confirmMsg = "Are you sure you want to clear all running tickets and release all occupied tables?";
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
         clearAllOldTickets();
@@ -957,6 +958,7 @@ export default function POSTerminalScreen({
     
     const isAddOn = loadedCart.length > 0;
     placeOrder(tId, `${user?.name || 'Staff'} (POS)`, kotItems, isAddOn);
+    broadcastImmediately();
     setLoadedCart(JSON.parse(JSON.stringify(cart)));
     
     const alertMsg = isAddOn 

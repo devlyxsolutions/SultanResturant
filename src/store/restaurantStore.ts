@@ -21,6 +21,7 @@ export type Table = {
   isPaid?: boolean;
   lastInvoiceId?: string;
   occupiedSince?: number;
+  lastSettledAt?: number;
   reservationId?: string;
   /** If set, this table is physically joined to the given primary table (merged reservation / big party). */
   mergedInto?: string;
@@ -358,6 +359,7 @@ export type Floor = {
 type RestaurantState = {
   tables: Table[];
   tickets: Ticket[];
+  deletedTicketIds?: string[];
   invoices: Invoice[];
   customers: Customer[];
   staff: StaffMember[];
@@ -500,7 +502,7 @@ export const INITIAL_FLOORS: Floor[] = [
 const INITIAL_TABLES: Table[] = [
   // Ground Floor
   { id: '1', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-01', seats: 4, status: 'available' },
-  { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'occupied', billTotal: 2500, server: 'Junaid' },
+  { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'available' },
   { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
   { id: '4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
   { id: '5', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
@@ -509,11 +511,11 @@ const INITIAL_TABLES: Table[] = [
   { id: 'f1-t1', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T01', seats: 4, status: 'available' },
   { id: 'f1-t2', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T02', seats: 6, status: 'available' },
   { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
-  { id: 'f1-c2', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 2', seats: 6, status: 'occupied', billTotal: 4800, server: 'Sara Ahmed' },
+  { id: 'f1-c2', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 2', seats: 6, status: 'available' },
   { id: 'f1-m1', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
-  { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'occupied', billTotal: 12500, server: 'Hamza' },
+  { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
   { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
-  { id: 'f1-m4', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 4', name: 'Cabin 4', seats: 6, status: 'reserved', reservationId: 'res-1' },
+  { id: 'f1-m4', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 4', name: 'Cabin 4', seats: 6, status: 'available' },
 
   // 2nd Floor (Banquet & Executive)
   { id: 'f2-t1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'tables', name: 'Banquet T-01', seats: 10, status: 'available' },
@@ -1049,7 +1051,7 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     const activeCookingOrReady = tableTickets.filter(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready');
     const hasUnbilledTickets = tableTickets.some(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
 
-    if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
+      if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
       const ticketTotal = tableTickets.reduce((sum, t) =>
         sum + (t.items || []).reduce((itemSum, item) => itemSum + ((item.price || 0) * (item.qty || 1)), 0),
         0
@@ -1069,6 +1071,20 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         orders,
         server: serverName || table.server,
         isPaid: false,
+      };
+    }
+
+    // If a table is marked 'occupied' but has ZERO active tickets left (e.g. tickets were cleared or cancelled), release it to 'available'
+    if (table.status === 'occupied' && tableTickets.length === 0 && !table.mergedInto) {
+      return {
+        ...table,
+        status: 'available',
+        billTotal: 0,
+        orders: [],
+        server: undefined,
+        isPaid: false,
+        lastInvoiceId: undefined,
+        occupiedSince: undefined,
       };
     }
 
@@ -1106,19 +1122,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       reservations: INITIAL_RESERVATIONS,
       onlineOrders: [],
       pendingFloorOrderAlert: null,
-      tickets: [
-        {
-          id: 'KOT-1042',
-          tableId: '2',
-          tableName: 'T-02',
-          server: 'Junaid',
-          timePlaced: Date.now() - 12 * 60000,
-          status: 'cooking',
-          items: [
-            { id: 'm1', name: 'Sultan Kebab', price: 15.99, qty: 2, completed: false },
-          ]
-        }
-      ],
+      deletedTicketIds: [],
+      tickets: [],
       menuItems: INITIAL_MENU,
       categories: INITIAL_CATEGORIES,
       regions: INITIAL_REGIONS,
@@ -1126,10 +1131,14 @@ export const useRestaurantStore = create<RestaurantState>()(
       floors: INITIAL_FLOORS,
 
       confirmOnlineOrder: async (orderId: string, assignedWaiter?: string) => {
-        const savedIp = (appStorage.getItem('sultan_server_ip') || '192.168.100.3').trim();
-        const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
-          ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
-          : `http://${savedIp}:5050`;
+        let apiBase = 'http://192.168.100.3:5050';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { getActiveServerHttpUrl } = require('../services/syncService');
+          if (typeof getActiveServerHttpUrl === 'function') {
+            apiBase = getActiveServerHttpUrl();
+          }
+        } catch (_) {}
         try {
           await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
@@ -1219,10 +1228,14 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       rejectOnlineOrder: async (orderId: string, reason?: string) => {
-        const savedIp = (appStorage.getItem('sultan_server_ip') || '192.168.100.3').trim();
-        const apiBase = Platform.OS === 'web' && typeof window !== 'undefined'
-          ? (['8081', '5050', '5000', '80'].includes(window.location.port) ? window.location.origin : `${window.location.protocol}//${window.location.hostname}:5050`)
-          : `http://${savedIp}:5050`;
+        let apiBase = 'http://192.168.100.3:5050';
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { getActiveServerHttpUrl } = require('../services/syncService');
+          if (typeof getActiveServerHttpUrl === 'function') {
+            apiBase = getActiveServerHttpUrl();
+          }
+        } catch (_) {}
         try {
           await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
@@ -1343,7 +1356,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 return {
                   ...t,
                   status: 'occupied',
-                  occupiedSince: t.occupiedSince || Date.now(),
+                  occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1, Date.now()),
                   isPaid: false,
                   server: serverName,
                   billTotal: (t.billTotal || 0) + itemsTotal,
@@ -1642,7 +1655,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           const updatedItems = ticket.items.map(item => {
             if ((item.station || 'main') === station) {
-              return { ...item, completed: true };
+              return { ...item, itemStatus: 'served' as const, completed: true };
             }
             return item;
           });
@@ -1674,7 +1687,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           tickets: state.tickets.map(t => t.id === ticketId ? {
             ...t,
             status: 'served',
-            items: t.items.map(i => ({ ...i, completed: true })),
+            items: t.items.map(i => ({ ...i, itemStatus: 'served' as const, completed: true })),
             stationStatuses: allServedStatuses
           } : t),
           lastFoodReadyAlert: updatedAlert
@@ -1700,10 +1713,12 @@ export const useRestaurantStore = create<RestaurantState>()(
 
             const updatedItems = t.items.map(item => {
               if ((item.station || 'main') === station) {
-                if (status === 'ready' || status === 'served') {
-                  return { ...item, completed: true };
+                if (status === 'served') {
+                  return { ...item, itemStatus: 'served' as const, completed: true };
+                } else if (status === 'ready') {
+                  return { ...item, itemStatus: 'ready' as const, completed: true, readyAt: item.readyAt || Date.now() };
                 } else if (status === 'cooking') {
-                  return { ...item, completed: false };
+                  return { ...item, itemStatus: 'cooking' as const, completed: false };
                 }
               }
               return item;
@@ -1780,6 +1795,12 @@ export const useRestaurantStore = create<RestaurantState>()(
           return {
             ...t,
             status,
+            items: t.items.map(i => ({
+              ...i,
+              itemStatus: status,
+              completed: status === 'ready' || status === 'served',
+              readyAt: status === 'ready' ? (i.readyAt || Date.now()) : i.readyAt,
+            })),
             stationStatuses: fallbackStationStatuses
           };
         });
@@ -1792,13 +1813,18 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       serveTableTickets: (tableId) => set((state) => {
-        const hasReady = state.tickets.some(
-          t => t.tableId === tableId && (t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')
-        );
+        const isTicketReady = (t: Ticket) =>
+          t.tableId === tableId &&
+          (t.status === 'ready' ||
+            t.stationStatuses?.main === 'ready' ||
+            t.stationStatuses?.juice === 'ready' ||
+            (Array.isArray(t.items) && t.items.some(i => i.itemStatus === 'ready')));
+
+        const hasReady = state.tickets.some(isTicketReady);
         if (!hasReady) return state;
 
         const updatedTickets = state.tickets.map(t => {
-          if (t.tableId === tableId && (t.status === 'ready' || t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready')) {
+          if (isTicketReady(t)) {
             const servedStatuses: StationStatusMap = {
               main: t.items.some(i => (i.station || 'main') === 'main') ? 'served' : undefined,
               juice: t.items.some(i => (i.station || 'main') === 'juice') ? 'served' : undefined,
@@ -1806,7 +1832,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             return {
               ...t,
               status: 'served' as const,
-              items: t.items.map(i => ({ ...i, completed: true })),
+              items: t.items.map(i => ({ ...i, itemStatus: 'served' as const, completed: true })),
               stationStatuses: servedStatuses
             };
           }
@@ -1833,6 +1859,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         const amount = table?.billTotal || 0;
         const tableName = table ? table.name : `Table ${tableId}`;
         const now = Date.now();
+        const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
 
         notifySync();
         return {
@@ -1845,6 +1872,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             } : t
           ),
           tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
+          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
           lastBillPaidAlert: {
             id: `bill_${tableId}_${now}`,
             tableId,
@@ -1902,6 +1930,9 @@ export const useRestaurantStore = create<RestaurantState>()(
           (targetTableName && foodAlert.tableName.trim().toLowerCase() === targetTableName.trim().toLowerCase())
         );
 
+        const now = Date.now();
+        const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
+
         notifySync();
         return {
           tables: state.tables.map(t =>
@@ -1914,36 +1945,124 @@ export const useRestaurantStore = create<RestaurantState>()(
               isPaid: false,
               lastInvoiceId: undefined,
               occupiedSince: undefined,
+              lastSettledAt: now,
               mergedInto: undefined,
               reservationId: undefined,
             } : t
           ),
           tickets: state.tickets.filter(t => t.tableId !== tableId),
+          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
           lastBillPaidAlert: matchesAlert ? null : state.lastBillPaidAlert,
           lastFoodReadyAlert: matchesFoodAlert ? null : state.lastFoodReadyAlert
         };
       }),
 
       dismissTicket: (ticketId) => set((state) => {
+        const target = (state.tickets || []).find(t => t.id === ticketId);
+        const remainingTickets = (state.tickets || []).filter(t => t.id !== ticketId);
+        const now = Date.now();
+        let updatedTables = state.tables;
+        if (target && target.tableId) {
+          const tableRemaining = remainingTickets.filter(t => t.tableId === target.tableId);
+          updatedTables = state.tables.map(t => {
+            if (t.id !== target.tableId) return t;
+            if (tableRemaining.length === 0 && t.status !== 'billed') {
+              return {
+                ...t,
+                status: 'available',
+                billTotal: 0,
+                server: undefined,
+                orders: [],
+                isPaid: false,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                lastSettledAt: now,
+              };
+            }
+            if (tableRemaining.length > 0) {
+              const newOrders = tableRemaining.flatMap(tk => (tk.items || []).map(i => ({ ...i })));
+              const newTotal = tableRemaining.reduce(
+                (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0),
+                0
+              );
+              return {
+                ...t,
+                billTotal: newTotal,
+                orders: newOrders,
+              };
+            }
+            return t;
+          });
+        }
         notifySync();
         return {
-          tickets: (state.tickets || []).filter(t => t.id !== ticketId)
+          tables: updatedTables,
+          tickets: remainingTickets,
+          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ticketId])).slice(-400),
         };
       }),
 
       clearTableTickets: (tableId) => set((state) => {
+        const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
+        const now = Date.now();
         notifySync();
         return {
-          tickets: (state.tickets || []).filter(t => t.tableId !== tableId)
+          tables: state.tables.map(t =>
+            t.id === tableId && t.status !== 'billed'
+              ? {
+                  ...t,
+                  status: 'available',
+                  billTotal: 0,
+                  server: undefined,
+                  orders: [],
+                  isPaid: false,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  lastSettledAt: now,
+                }
+              : t
+          ),
+          tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
+          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
         };
       }),
 
-      clearAllOldTickets: () => set((state) => {
-        notifySync();
-        return {
-          tickets: []
-        };
-      }),
+      clearAllOldTickets: () => {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { getActiveServerHttpUrl } = require('../services/syncService');
+          const apiBase = typeof getActiveServerHttpUrl === 'function' ? getActiveServerHttpUrl() : 'http://192.168.100.3:5050';
+          fetch(`${apiBase}/api/pos/clear-all`, { method: 'POST' }).catch(() => {});
+        } catch {}
+        set((state) => {
+          const removedIds = (state.tickets || []).map(t => t.id);
+          const now = Date.now();
+          notifySync();
+          return {
+            tables: state.tables.map(t =>
+              t.status === 'occupied' || t.status === 'billed'
+                ? {
+                    ...t,
+                    status: 'available',
+                    billTotal: 0,
+                    server: undefined,
+                    orders: [],
+                    isPaid: false,
+                    lastInvoiceId: undefined,
+                    occupiedSince: undefined,
+                    lastSettledAt: now,
+                    mergedInto: undefined,
+                    reservationId: undefined,
+                  }
+                : t
+            ),
+            tickets: [],
+            deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), 'KOT-1042', ...removedIds])).slice(-400),
+            lastBillPaidAlert: null,
+            lastFoodReadyAlert: null,
+          };
+        });
+      },
 
       transferTable: (fromTableId, toTableId) => set((state) => {
         const fromTable = state.tables.find(t => t.id === fromTableId);
@@ -2702,54 +2821,105 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
-      syncFromServer: (remoteState) => set((state) => {
-        const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
-        let mergedTickets = remoteState.tickets;
-        if (remoteState.tickets) {
-          const remoteList = Array.isArray(remoteState.tickets) ? remoteState.tickets : [];
-          const normalizedRemote = remoteList
-            .filter((rt) => !!rt && typeof rt === 'object' && !!rt.id)
-            .map((rt) => {
-              const local = (state.tickets || []).find((lt) => lt && lt.id === rt.id);
-              // Prevent stale remote packets from reverting forward KDS progress (e.g. served/ready/cooking -> pending)
-              if (local && (STATUS_RANK[local.status] ?? 0) > (STATUS_RANK[rt.status] ?? 0)) {
-                return { ...local, items: Array.isArray(local.items) ? local.items : [] };
+      syncFromServer: (remoteState) => {
+        try {
+          // Suppress store-subscription echo broadcasts whenever syncFromServer is called directly (e.g. from KDS or AppOrders polling)
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { markApplyingRemoteUpdate } = require('../services/syncService');
+          if (typeof markApplyingRemoteUpdate === 'function') {
+            markApplyingRemoteUpdate(350);
+          }
+        } catch {}
+
+        set((state) => {
+          const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
+          const mergedDeletedIds = Array.from(
+            new Set([
+              ...(state.deletedTicketIds || []),
+              ...(Array.isArray(remoteState.deletedTicketIds) ? remoteState.deletedTicketIds : []),
+            ])
+          ).slice(-400);
+          const deletedSet = new Set(mergedDeletedIds);
+
+          let mergedTickets = remoteState.tickets;
+          if (remoteState.tickets) {
+            const remoteList = Array.isArray(remoteState.tickets) ? remoteState.tickets : [];
+            const normalizedRemote = remoteList
+              .filter((rt) => !!rt && typeof rt === 'object' && !!rt.id && !deletedSet.has(rt.id))
+              .map((rt) => {
+                const local = (state.tickets || []).find((lt) => lt && lt.id === rt.id);
+                // Prevent stale remote packets from reverting forward KDS progress (e.g. served/ready/cooking -> pending)
+                if (local && (STATUS_RANK[local.status] ?? 0) > (STATUS_RANK[rt.status] ?? 0)) {
+                  return { ...local, items: Array.isArray(local.items) ? local.items : [] };
+                }
+                // Merge items to preserve item-level 'ready' or 'served' status
+                let finalTicket = { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
+                if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {
+                  const itemRank: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
+                  const mergedItems = rt.items.map((remoteItem) => {
+                    const localItem = local.items.find((li) => li.id === remoteItem.id);
+                    if (!localItem) return remoteItem;
+                    const localRank = localItem.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem.completed ? 2 : 0);
+                    const remoteRank = remoteItem.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem.completed ? 2 : 0);
+                    if (localRank > remoteRank) {
+                      return { ...remoteItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
+                    }
+                    return remoteItem;
+                  });
+                  finalTicket = { ...rt, items: mergedItems };
+                }
+                if (finalTicket.status === 'served' && Array.isArray(finalTicket.items)) {
+                  finalTicket.items = finalTicket.items.map((it) => ({
+                    ...it,
+                    itemStatus: 'served' as const,
+                    completed: true,
+                  }));
+                }
+                return finalTicket;
+              });
+
+            // Preserve ALL local tickets not yet on the server that have not been deleted/billed/settled
+            const remoteIds = new Set(normalizedRemote.map((rt) => rt.id));
+            const remoteTableMap = new Map((remoteState.tables || []).map((t) => [t.id, t]));
+            const freshLocalOnly = (state.tickets || []).filter((lt) => {
+              if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id)) return false;
+              const rTable = remoteTableMap.get(lt.tableId);
+              if (rTable && rTable.lastSettledAt && lt.timePlaced && lt.timePlaced < rTable.lastSettledAt) {
+                return false;
               }
-              // Merge items to preserve item-level 'ready' or 'served' status
-              if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {
-                const itemRank: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
-                const mergedItems = rt.items.map((remoteItem) => {
-                  const localItem = local.items.find((li) => li.id === remoteItem.id);
-                  if (!localItem) return remoteItem;
-                  const localRank = localItem.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem.completed ? 2 : 0);
-                  const remoteRank = remoteItem.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem.completed ? 2 : 0);
-                  if (localRank > remoteRank) {
-                    return { ...remoteItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
-                  }
-                  return remoteItem;
-                });
-                return { ...rt, items: mergedItems };
-              }
-              return { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
+              return true;
             });
+            mergedTickets = [...freshLocalOnly, ...normalizedRemote];
+            if (freshLocalOnly.length > 0) {
+              // Ensure offline-punched tickets are pushed to the server as soon as remote state arrives
+              notifySync();
+            }
+          }
 
-          // Preserve any freshly created local tickets (< 8s old) that are not yet in a stale incoming remote snapshot
-          const remoteIds = new Set(normalizedRemote.map((rt) => rt.id));
-          const nowMs = Date.now();
-          const freshLocalOnly = (state.tickets || []).filter(
-            (lt) => lt && lt.id && !remoteIds.has(lt.id) && lt.timePlaced && Math.abs(nowMs - lt.timePlaced) < 8000
-          );
-          mergedTickets = [...freshLocalOnly, ...normalizedRemote];
-        }
+          let rawTables = state.tables;
+          if (Array.isArray(remoteState.tables) && remoteState.tables.length > 0) {
+            const localTableMap = new Map((state.tables || []).map((t) => [t.id, t]));
+            rawTables = remoteState.tables.map((rt) => {
+              const lt = localTableMap.get(rt.id);
+              if (!lt) return rt;
+              if (
+                lt.status === 'occupied' &&
+                rt.status === 'available' &&
+                (lt.occupiedSince || 0) > (rt.lastSettledAt || 0)
+              ) {
+                return lt;
+              }
+              return rt;
+            });
+          }
+          const finalTickets = mergedTickets || state.tickets || [];
+          const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
 
-        const rawTables = remoteState.tables || state.tables;
-        const finalTickets = mergedTickets || state.tickets || [];
-        const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
-
-        return {
-          ...state,
-          tables: reconciledTables,
-          ...(mergedTickets ? { tickets: mergedTickets } : {}),
+          return {
+            ...state,
+            tables: reconciledTables,
+            deletedTicketIds: mergedDeletedIds,
+            ...(mergedTickets ? { tickets: mergedTickets } : {}),
           ...(remoteState.invoices ? {
             invoices: (() => {
               const remoteList = remoteState.invoices || [];
@@ -2932,7 +3102,8 @@ export const useRestaurantStore = create<RestaurantState>()(
             } : {}
           )),
         };
-      }),
+      });
+      },
     }),
     {
       name: 'restaurant-storage',

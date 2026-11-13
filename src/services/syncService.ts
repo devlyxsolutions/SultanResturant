@@ -56,6 +56,23 @@ let firestoreUnsubscribe: Unsubscribe | null = null;
 let isApplyingRemoteUpdate = false;
 let hasReceivedInitialSync = false;
 let isInitialized = false;
+let hasUnsyncedLocalChanges = false;
+let currentWsUrl = '';
+
+export function markApplyingRemoteUpdate(durationMs = 350) {
+  isApplyingRemoteUpdate = true;
+  if (debounceMutationTimer) {
+    clearTimeout(debounceMutationTimer);
+    debounceMutationTimer = null;
+  }
+  if (remoteUpdateUnlockTimer) {
+    clearTimeout(remoteUpdateUnlockTimer);
+  }
+  remoteUpdateUnlockTimer = setTimeout(() => {
+    isApplyingRemoteUpdate = false;
+    remoteUpdateUnlockTimer = null;
+  }, durationMs);
+}
 
 function rememberPacketId(packetId?: string) {
   if (!packetId) return;
@@ -236,63 +253,73 @@ export async function discoverLocalServerIp(): Promise<string | null> {
   isDiscoveringLan = true;
 
   try {
-    // 1. High-priority known static & router DHCP IPs first (fast <1s check)
+    // 0. Check current address first so we don't flood sockets if already valid
+    if (currentServerAddress && (await probeLanIp(currentServerAddress, 850))) {
+      isLanConnected = true;
+      return currentServerAddress;
+    }
+
+    // 1. High-priority known static & router DHCP IPs in small batches of 6 (prevents Android OkHttp queue timeout)
     const priorityIps = [
-      currentServerAddress,
       '192.168.100.3',
-      '192.168.100.155',
       '192.168.0.148',
       '192.168.0.100',
       '192.168.0.101',
       '192.168.0.102',
+      '192.168.100.155',
       '192.168.0.103',
       '192.168.0.104',
       '192.168.0.105',
+      '192.168.0.106',
       '192.168.100.2',
       '192.168.100.4',
       '192.168.100.5',
+      '192.168.100.6',
       '192.168.100.100',
       '192.168.100.101',
       '192.168.1.100',
-      '192.168.1.14',
+      '192.168.1.2',
     ].filter(Boolean);
 
     const uniquePriority = Array.from(new Set(priorityIps));
-    const fastHits = await Promise.all(
-      uniquePriority.map(async (ip) => ((await probeLanIp(ip, 850)) ? ip : null))
-    );
-    const winnerFast = fastHits.find(Boolean);
-    if (winnerFast) {
-      if (winnerFast !== currentServerAddress) {
-        currentServerAddress = winnerFast;
+    for (let i = 0; i < uniquePriority.length; i += 6) {
+      const chunk = uniquePriority.slice(i, i + 6);
+      const hits = await Promise.all(
+        chunk.map(async (ip) => ((await probeLanIp(ip, 950)) ? ip : null))
+      );
+      const winner = hits.find(Boolean);
+      if (winner) {
+        currentServerAddress = winner;
+        isLanConnected = true;
         try {
-          await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, winnerFast);
+          await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, winner);
         } catch {}
         connectWebSocket();
+        return winner;
       }
-      return winnerFast;
     }
 
-    // 2. Parallel batch scan across 192.168.0.100-200 and 192.168.100.100-200
+    // 2. Scan across 192.168.0.x, 192.168.100.x, and 192.168.1.x in Android-safe batches of 8
     const subnets = ['192.168.0', '192.168.100', '192.168.1'];
     for (const subnet of subnets) {
       const candidates: string[] = [];
-      for (let i = 100; i <= 200; i++) {
+      for (let i = 100; i <= 160; i++) {
         candidates.push(`${subnet}.${i}`);
       }
-      for (let i = 2; i < 100; i++) {
+      for (let i = 2; i <= 50; i++) {
         candidates.push(`${subnet}.${i}`);
       }
-      const batchSize = 25;
+      const batchSize = 8;
       for (let b = 0; b < candidates.length; b += batchSize) {
         if (isLanConnected) return currentServerAddress;
         const batch = candidates.slice(b, b + batchSize);
         const results = await Promise.all(
-          batch.map(async (ip) => ((await probeLanIp(ip, 650)) ? ip : null))
+          batch.map(async (ip) => ((await probeLanIp(ip, 850)) ? ip : null))
         );
         const found = results.find(Boolean);
         if (found) {
           currentServerAddress = found;
+          isLanConnected = true;
           try {
             await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, found);
           } catch {}
@@ -608,31 +635,65 @@ function initFirebaseSync() {
   }
 }
 
+let lastServerKnownUpdated = 0;
+let lastWsReceivedAt = 0;
+
 async function pollLocalLanFallback() {
   if (isApplyingRemoteUpdate) return;
-  if (ws && ws.readyState === WebSocket.OPEN) return;
+  // Only poll via HTTP fallback when WebSocket is disconnected OR no WS traffic arrived in the last 12s
+  if (ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsReceivedAt < 12000 && hasReceivedInitialSync) {
+    return;
+  }
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (!httpUrl) return;
+  const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
   try {
-    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-    const timer = controller ? setTimeout(() => controller.abort(), 1200) : null;
     const res = await fetch(`${httpUrl}/api/sync`, {
       ...(controller ? { signal: controller.signal } : {}),
     });
-    if (timer) clearTimeout(timer);
     if (res.ok) {
       const serverState = await res.json();
+      if (timer) clearTimeout(timer);
       if (serverState && typeof serverState === 'object') {
         isLanConnected = true;
-        applyRemoteStateSafely(serverState.state || serverState, serverState.packetId, serverState.timestamp);
+        syncStatus = 'connected';
+        const srvTs = Number(serverState.lastUpdated || serverState.timestamp || 0);
+        if (!hasReceivedInitialSync || !srvTs || srvTs !== lastServerKnownUpdated) {
+          if (srvTs) lastServerKnownUpdated = srvTs;
+          applyRemoteStateSafely(serverState.state || serverState, serverState.packetId, srvTs || Date.now());
+        } else {
+          notifyListeners();
+        }
+        if (hasUnsyncedLocalChanges) {
+          broadcastLocalState(true);
+        }
       }
+    } else if (timer) {
+      clearTimeout(timer);
     }
   } catch {
-    discoverLocalServerIp().catch(() => {});
+    if (timer) clearTimeout(timer);
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      isLanConnected = false;
+      discoverLocalServerIp().catch(() => {});
+    }
   }
 }
 
-function connectWebSocket() {
+function connectWebSocket(forceReconnect = false) {
+  const { wsUrl } = parseServerEndpoints(currentServerAddress);
+
+  // Never tear down an already-open or connecting WebSocket to the same server URL
+  if (
+    !forceReconnect &&
+    ws &&
+    (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) &&
+    currentWsUrl === wsUrl
+  ) {
+    return;
+  }
+
   if (reconnectTimer) {
     clearTimeout(reconnectTimer);
     reconnectTimer = null;
@@ -644,12 +705,11 @@ function connectWebSocket() {
 
   if (ws) {
     try {
+      ws.onclose = null;
       ws.close();
     } catch {}
     ws = null;
   }
-
-  const { wsUrl } = parseServerEndpoints(currentServerAddress);
 
   if (!wsUrl) {
     syncStatus = isCloudConnected ? 'connected' : 'offline';
@@ -658,12 +718,14 @@ function connectWebSocket() {
   }
 
   try {
+    currentWsUrl = wsUrl;
     ws = new WebSocket(wsUrl);
 
     ws.onopen = () => {
       isLanConnected = true;
       syncStatus = 'connected';
       lastSyncedAt = Date.now();
+      lastWsReceivedAt = Date.now();
       totalSyncedEvents++;
       notifyListeners();
 
@@ -674,18 +736,24 @@ function connectWebSocket() {
         } catch {}
       }
 
-      // Start keep-alive ping
+      // Flush any offline local orders immediately upon reconnection
+      if (hasUnsyncedLocalChanges) {
+        broadcastLocalState(true);
+      }
+
+      // Start keep-alive ping every 5s so lastWsReceivedAt stays fresh
       pingTimer = setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           try {
             ws.send(JSON.stringify({ type: 'PING' }));
           } catch {}
         }
-      }, 10000);
+      }, 5000);
     };
 
     ws.onmessage = (event) => {
       try {
+        lastWsReceivedAt = Date.now();
         const data = JSON.parse(event.data as string);
 
         // Ignore messages sent by this same device
@@ -694,6 +762,9 @@ function connectWebSocket() {
         if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
             isLanConnected = true;
+            if (data.state.lastUpdated) {
+              lastServerKnownUpdated = Number(data.state.lastUpdated);
+            }
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           }
         }
@@ -707,6 +778,7 @@ function connectWebSocket() {
     };
 
     ws.onclose = () => {
+      ws = null;
       isLanConnected = false;
       if (!isCloudConnected) {
         syncStatus = 'offline';
@@ -737,15 +809,16 @@ function connectWebSocket() {
 }
 
 export function reconnect() {
-  connectWebSocket();
+  connectWebSocket(true);
   if (isFirebaseConfigured) {
     initFirebaseSync();
   }
 }
 
 /** Broadcast local state changes to Firebase Cloud Database or WebSocket server */
-function broadcastLocalState() {
-  if (isApplyingRemoteUpdate) return;
+function broadcastLocalState(force = false) {
+  if (!force && isApplyingRemoteUpdate) return;
+  hasUnsyncedLocalChanges = true;
 
   const state = useRestaurantStore.getState();
   const opsState = getOpsSyncState();
@@ -767,6 +840,7 @@ function broadcastLocalState() {
     state: {
       tables: state.tables,
       tickets: state.tickets,
+      deletedTicketIds: state.deletedTicketIds || [],
       invoices: state.invoices,
       customers: state.customers,
       menuItems: state.menuItems,
@@ -791,6 +865,7 @@ function broadcastLocalState() {
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
       ws.send(JSON.stringify(payload));
+      hasUnsyncedLocalChanges = false;
       lastSyncedAt = Date.now();
       totalSyncedEvents++;
       notifyListeners();
@@ -799,7 +874,7 @@ function broadcastLocalState() {
     }
   }
 
-  // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed fallback delivery)
+  // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed fallback delivery + auto-discovery retry)
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (httpUrl) {
     try {
@@ -807,7 +882,40 @@ function broadcastLocalState() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-      }).catch(() => {});
+      })
+        .then(async (res) => {
+          if (res.ok) {
+            hasUnsyncedLocalChanges = false;
+            isLanConnected = true;
+            syncStatus = 'connected';
+            lastSyncedAt = Date.now();
+            totalSyncedEvents++;
+            notifyListeners();
+          }
+        })
+        .catch(() => {
+          // If POST failed (e.g. router subnet changed), auto-discover new server IP and re-send immediately!
+          if (!ws || ws.readyState !== WebSocket.OPEN) {
+            discoverLocalServerIp()
+              .then((discoveredIp) => {
+                if (discoveredIp) {
+                  const retryEp = parseServerEndpoints(discoveredIp);
+                  if (retryEp.httpUrl) {
+                    fetch(`${retryEp.httpUrl}/api/sync`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(payload),
+                    })
+                      .then((r) => {
+                        if (r.ok) hasUnsyncedLocalChanges = false;
+                      })
+                      .catch(() => {});
+                  }
+                }
+              })
+              .catch(() => {});
+          }
+        });
     } catch {}
   }
 
@@ -889,6 +997,7 @@ function broadcastLocalState() {
 let immediateBroadcastPending = false;
 /** Force immediate cloud broadcast without any debounce delay (coalesced across synchronous mutations) */
 export function broadcastImmediately() {
+  hasUnsyncedLocalChanges = true;
   if (debounceMutationTimer) {
     clearTimeout(debounceMutationTimer);
     debounceMutationTimer = null;
@@ -897,7 +1006,7 @@ export function broadcastImmediately() {
   immediateBroadcastPending = true;
   setTimeout(() => {
     immediateBroadcastPending = false;
-    broadcastLocalState();
+    broadcastLocalState(true);
   }, 0);
 }
 
@@ -912,7 +1021,7 @@ export async function initSyncService() {
   discoverLocalServerIp().catch(() => {});
 
   if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
-  lanHttpPollTimer = setInterval(pollLocalLanFallback, 3000);
+  lanHttpPollTimer = setInterval(pollLocalLanFallback, 2200);
 
   if (isFirebaseConfigured) {
     initFirebaseSync();

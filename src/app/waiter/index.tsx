@@ -309,6 +309,7 @@ export default function OrderTakerScreen() {
   }, [scopedByFloorTables]);
 
   const isTicketReadyForPickup = (t: Ticket) => {
+    if (t.status === 'served') return false;
     if (t.status === 'ready') return true;
     if (t.stationStatuses?.main === 'ready' || t.stationStatuses?.juice === 'ready') return true;
     if (Array.isArray(t.items) && t.items.some((i) => i.itemStatus === 'ready')) return true;

@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
 import { useRestaurantStore, Table, Ticket, OnlineOrder, OrderItem, Invoice } from '../../store/restaurantStore';
 import { printInvoiceReceipt } from '../../components/Invoice';
+import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
 
 function playFloorAttentionChime() {
@@ -487,6 +488,7 @@ export default function FloorManagerScreen() {
   const handleReassign = () => {
     if (!reassignModalTable || !selectedWaiterName) return;
     assignTableServer(reassignModalTable.id, selectedWaiterName);
+    broadcastImmediately();
     setReassignModalTable(null);
     setSelectedWaiterName('');
   };
@@ -495,6 +497,7 @@ export default function FloorManagerScreen() {
   const handleTransfer = () => {
     if (!transferModalTable || !selectedTargetTableId) return;
     transferTable(transferModalTable.id, selectedTargetTableId);
+    broadcastImmediately();
     setTransferModalTable(null);
     setSelectedTargetTableId('');
   };
@@ -524,6 +527,7 @@ export default function FloorManagerScreen() {
         </View>
 
         <View style={[styles.headerRight, isMobile && styles.headerRightMobile]}>
+          <SyncStatusBadge compact />
           {/* Toggle Full Screen Button (Web only) */}
           {Platform.OS === 'web' && !isSmallMobile && (
             <TouchableOpacity
@@ -1052,7 +1056,10 @@ export default function FloorManagerScreen() {
                         {hasReadyFood && (
                           <TouchableOpacity
                             style={[styles.actionBtn, styles.btnServeFull]}
-                            onPress={() => serveTableTickets(table.id)}
+                            onPress={() => {
+                              serveTableTickets(table.id);
+                              broadcastImmediately();
+                            }}
                           >
                             <MaterialCommunityIcons name="bell-ring" size={14} color="#FFF" />
                             <Text style={styles.btnServeText}>Serve Food to Table</Text>
@@ -1072,7 +1079,10 @@ export default function FloorManagerScreen() {
                           {table.status === 'billed' ? (
                             <TouchableOpacity
                               style={[styles.actionBtn, styles.actionBtnHalf, styles.btnSettle]}
-                              onPress={() => settleBill(table.id)}
+                              onPress={() => {
+                                settleBill(table.id);
+                                broadcastImmediately();
+                              }}
                             >
                               <MaterialCommunityIcons name="cash-check" size={14} color="#FFF" />
                               <Text style={styles.btnSettleText}>Clear Table</Text>
