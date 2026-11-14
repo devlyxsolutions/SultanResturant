@@ -325,556 +325,556 @@ const INITIAL_STATE = {
   ],
   menuItems: [
     {
-        "id": "m1",
-        "name": "Sultan Seekh Kebab",
-        "region": "Pakistani",
-        "price": 1450,
-        "costPrice": 650,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
-        "description": "Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.",
-        "badge": "Chef Special",
-        "trackStock": true,
-        "stockQty": 35,
-        "lowStockThreshold": 10,
-        "station": "main",
-        "prepTimeMin": 20,
-        "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
-        "isAvailable": true
+      "id": "m1",
+      "name": "Sultan Seekh Kebab",
+      "region": "Pakistani",
+      "price": 1450,
+      "costPrice": 650,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
+      "description": "Tender minced mutton & beef grilled with royal Sultan spices on open charcoal.",
+      "badge": "Chef Special",
+      "trackStock": true,
+      "stockQty": 35,
+      "lowStockThreshold": 10,
+      "station": "main",
+      "prepTimeMin": 20,
+      "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m2",
-        "name": "Desi Murgh Karahi",
-        "region": "Pakistani",
-        "price": 1850,
-        "costPrice": 820,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-        "description": "Fresh chicken cooked in pure desi ghee, fresh tomatoes, ginger and green chillies.",
-        "badge": "Best Seller",
-        "trackStock": true,
-        "stockQty": 25,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "prepTimeMin": 25,
-        "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-        "isAvailable": true
+      "id": "m2",
+      "name": "Desi Murgh Karahi",
+      "region": "Pakistani",
+      "price": 1850,
+      "costPrice": 820,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
+      "description": "Fresh chicken cooked in pure desi ghee, fresh tomatoes, ginger and green chillies.",
+      "badge": "Best Seller",
+      "trackStock": true,
+      "stockQty": 25,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "prepTimeMin": 25,
+      "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m3",
-        "name": "Hummus with Warm Pita",
-        "region": "Arabic",
-        "price": 650,
-        "costPrice": 220,
-        "category": "Appetizers",
-        "imageUri": "https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80",
-        "description": "Creamy chickpea dip with extra virgin olive oil and freshly baked pita bread.",
-        "badge": "Healthy",
-        "trackStock": true,
-        "stockQty": 40,
-        "lowStockThreshold": 10,
-        "station": "main",
-        "prepTimeMin": 8,
-        "imageUrl": "https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80",
-        "isAvailable": true
+      "id": "m3",
+      "name": "Hummus with Warm Pita",
+      "region": "Arabic",
+      "price": 650,
+      "costPrice": 220,
+      "category": "Appetizers",
+      "imageUri": "https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80",
+      "description": "Creamy chickpea dip with extra virgin olive oil and freshly baked pita bread.",
+      "badge": "Healthy",
+      "trackStock": true,
+      "stockQty": 40,
+      "lowStockThreshold": 10,
+      "station": "main",
+      "prepTimeMin": 8,
+      "imageUrl": "https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m4",
-        "name": "Royal Turkish Kunafa",
-        "region": "Turkish",
-        "price": 850,
-        "costPrice": 320,
-        "category": "Desserts",
-        "imageUri": "https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80",
-        "description": "Crunchy golden pastry filled with stretchy sweet cheese, soaked in rose syrup & pistachios.",
-        "badge": "Signature",
-        "trackStock": true,
-        "stockQty": 20,
-        "lowStockThreshold": 6,
-        "station": "main",
-        "prepTimeMin": 12,
-        "imageUrl": "https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80",
-        "isAvailable": true
+      "id": "m4",
+      "name": "Royal Turkish Kunafa",
+      "region": "Turkish",
+      "price": 850,
+      "costPrice": 320,
+      "category": "Desserts",
+      "imageUri": "https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80",
+      "description": "Crunchy golden pastry filled with stretchy sweet cheese, soaked in rose syrup & pistachios.",
+      "badge": "Signature",
+      "trackStock": true,
+      "stockQty": 20,
+      "lowStockThreshold": 6,
+      "station": "main",
+      "prepTimeMin": 12,
+      "imageUrl": "https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m5",
-        "name": "Fresh Mint Margarita",
-        "region": "Continental",
-        "price": 450,
-        "costPrice": 120,
-        "category": "Drinks",
-        "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80",
-        "description": "Blended fresh mint leaves, lemon juice, soda and crushed ice.",
-        "badge": "Chilled",
-        "trackStock": true,
-        "stockQty": 50,
-        "lowStockThreshold": 15,
-        "station": "juice",
-        "prepTimeMin": 5,
-        "imageUrl": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80",
-        "isAvailable": true
+      "id": "m5",
+      "name": "Fresh Mint Margarita",
+      "region": "Continental",
+      "price": 450,
+      "costPrice": 120,
+      "category": "Drinks",
+      "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80",
+      "description": "Blended fresh mint leaves, lemon juice, soda and crushed ice.",
+      "badge": "Chilled",
+      "trackStock": true,
+      "stockQty": 50,
+      "lowStockThreshold": 15,
+      "station": "juice",
+      "prepTimeMin": 5,
+      "imageUrl": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m6",
-        "name": "Fajita Supreme Pizza",
-        "region": "Italian",
-        "price": 1400,
-        "costPrice": 550,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
-        "description": "Crispy crust loaded with fajita chicken, bell peppers, olives and mozzarella.",
-        "badge": "Popular",
-        "trackStock": false,
-        "station": "main",
-        "prepTimeMin": 18,
-        "variants": [
-            {
-                "name": "Small (7\")",
-                "price": 850
-            },
-            {
-                "name": "Medium (10\")",
-                "price": 1400
-            },
-            {
-                "name": "Large (13\")",
-                "price": 1950
-            },
-            {
-                "name": "Family (16\")",
-                "price": 2500
-            }
-        ],
-        "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
-        "isAvailable": true
+      "id": "m6",
+      "name": "Fajita Supreme Pizza",
+      "region": "Italian",
+      "price": 1400,
+      "costPrice": 550,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
+      "description": "Crispy crust loaded with fajita chicken, bell peppers, olives and mozzarella.",
+      "badge": "Popular",
+      "trackStock": false,
+      "station": "main",
+      "prepTimeMin": 18,
+      "variants": [
+        {
+          "name": "Small (7\")",
+          "price": 850
+        },
+        {
+          "name": "Medium (10\")",
+          "price": 1400
+        },
+        {
+          "name": "Large (13\")",
+          "price": 1950
+        },
+        {
+          "name": "Family (16\")",
+          "price": 2500
+        }
+      ],
+      "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m7",
-        "name": "Smoked Mutton Ribs",
-        "region": "Continental",
-        "price": 3500,
-        "costPrice": 1800,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-        "description": "Slow-smoked juicy mutton ribs marinated in Sultan royal rub.",
-        "badge": "Signature",
-        "trackStock": true,
-        "stockQty": 10,
-        "lowStockThreshold": 4,
-        "station": "main",
-        "prepTimeMin": 35,
-        "variants": [
-            {
-                "name": "Half KG",
-                "price": 3500
-            },
-            {
-                "name": "1 KG",
-                "price": 6800
-            }
-        ],
-        "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-        "isAvailable": true
+      "id": "m7",
+      "name": "Smoked Mutton Ribs",
+      "region": "Continental",
+      "price": 3500,
+      "costPrice": 1800,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
+      "description": "Slow-smoked juicy mutton ribs marinated in Sultan royal rub.",
+      "badge": "Signature",
+      "trackStock": true,
+      "stockQty": 10,
+      "lowStockThreshold": 4,
+      "station": "main",
+      "prepTimeMin": 35,
+      "variants": [
+        {
+          "name": "Half KG",
+          "price": 3500
+        },
+        {
+          "name": "1 KG",
+          "price": 6800
+        }
+      ],
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m8",
-        "name": "Sultan Dum Biryani",
-        "region": "Pakistani",
-        "price": 950,
-        "costPrice": 400,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80",
-        "description": "Fragrant basmati rice layered with spiced meat and caramelized onions.",
-        "badge": "Popular",
-        "trackStock": true,
-        "stockQty": 30,
-        "lowStockThreshold": 8,
-        "station": "main",
-        "prepTimeMin": 15,
-        "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80",
-        "isAvailable": true
+      "id": "m8",
+      "name": "Sultan Dum Biryani",
+      "region": "Pakistani",
+      "price": 950,
+      "costPrice": 400,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80",
+      "description": "Fragrant basmati rice layered with spiced meat and caramelized onions.",
+      "badge": "Popular",
+      "trackStock": true,
+      "stockQty": 30,
+      "lowStockThreshold": 8,
+      "station": "main",
+      "prepTimeMin": 15,
+      "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m9",
-        "name": "Grand Sultan Angus Burger",
-        "region": "Fast Food",
-        "price": 1150,
-        "costPrice": 480,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
-        "description": "Juicy 200g beef patty, smoked cheese, caramelized onions and house sauce.",
-        "badge": "Chef Special",
-        "trackStock": true,
-        "stockQty": 20,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "prepTimeMin": 18,
-        "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
-        "isAvailable": true
+      "id": "m9",
+      "name": "Grand Sultan Angus Burger",
+      "region": "Fast Food",
+      "price": 1150,
+      "costPrice": 480,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
+      "description": "Juicy 200g beef patty, smoked cheese, caramelized onions and house sauce.",
+      "badge": "Chef Special",
+      "trackStock": true,
+      "stockQty": 20,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "prepTimeMin": 18,
+      "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m10",
-        "name": "Cheesy Truffle Fries",
-        "region": "Fast Food",
-        "price": 590,
-        "costPrice": 190,
-        "category": "Appetizers",
-        "imageUri": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=600&q=80",
-        "description": "Golden crispy fries topped with melted cheddar, jalapenos and spicy garlic dip.",
-        "badge": "Snack",
-        "trackStock": true,
-        "stockQty": 35,
-        "lowStockThreshold": 10,
-        "station": "main",
-        "prepTimeMin": 10,
-        "imageUrl": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=600&q=80",
-        "isAvailable": true
+      "id": "m10",
+      "name": "Cheesy Truffle Fries",
+      "region": "Fast Food",
+      "price": 590,
+      "costPrice": 190,
+      "category": "Appetizers",
+      "imageUri": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=600&q=80",
+      "description": "Golden crispy fries topped with melted cheddar, jalapenos and spicy garlic dip.",
+      "badge": "Snack",
+      "trackStock": true,
+      "stockQty": 35,
+      "lowStockThreshold": 10,
+      "station": "main",
+      "prepTimeMin": 10,
+      "imageUrl": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m11",
-        "name": "Choco Molten Lava Cake",
-        "region": "Continental",
-        "price": 750,
-        "costPrice": 260,
-        "category": "Desserts",
-        "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80",
-        "description": "Warm chocolate cake with a molten Belgian chocolate center served with vanilla ice cream.",
-        "badge": "Sweet",
-        "trackStock": true,
-        "stockQty": 15,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "prepTimeMin": 15,
-        "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80",
-        "isAvailable": true
+      "id": "m11",
+      "name": "Choco Molten Lava Cake",
+      "region": "Continental",
+      "price": 750,
+      "costPrice": 260,
+      "category": "Desserts",
+      "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80",
+      "description": "Warm chocolate cake with a molten Belgian chocolate center served with vanilla ice cream.",
+      "badge": "Sweet",
+      "trackStock": true,
+      "stockQty": 15,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "prepTimeMin": 15,
+      "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m12",
-        "name": "Mango Kulfa Shake",
-        "region": "Pakistani",
-        "price": 550,
-        "costPrice": 180,
-        "category": "Drinks",
-        "imageUri": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&q=80",
-        "description": "Thick mango pulp blended with traditional kulfa ice cream and dry fruits.",
-        "badge": "Rich",
-        "trackStock": true,
-        "stockQty": 40,
-        "lowStockThreshold": 10,
-        "station": "juice",
-        "prepTimeMin": 6,
-        "imageUrl": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&q=80",
-        "isAvailable": true
+      "id": "m12",
+      "name": "Mango Kulfa Shake",
+      "region": "Pakistani",
+      "price": 550,
+      "costPrice": 180,
+      "category": "Drinks",
+      "imageUri": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&q=80",
+      "description": "Thick mango pulp blended with traditional kulfa ice cream and dry fruits.",
+      "badge": "Rich",
+      "trackStock": true,
+      "stockQty": 40,
+      "lowStockThreshold": 10,
+      "station": "juice",
+      "prepTimeMin": 6,
+      "imageUrl": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m13",
-        "name": "Sultan Special Roghni Naan",
-        "region": "Pakistani",
-        "price": 150,
-        "costPrice": 50,
-        "category": "Appetizers",
-        "imageUri": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&q=80",
-        "description": "Traditional clay oven baked naan brushed with desi ghee and sesame seeds.",
-        "badge": "Hot",
-        "trackStock": true,
-        "stockQty": 100,
-        "lowStockThreshold": 20,
-        "station": "main",
-        "prepTimeMin": 5,
-        "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&q=80",
-        "isAvailable": true
+      "id": "m13",
+      "name": "Sultan Special Roghni Naan",
+      "region": "Pakistani",
+      "price": 150,
+      "costPrice": 50,
+      "category": "Appetizers",
+      "imageUri": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&q=80",
+      "description": "Traditional clay oven baked naan brushed with desi ghee and sesame seeds.",
+      "badge": "Hot",
+      "trackStock": true,
+      "stockQty": 100,
+      "lowStockThreshold": 20,
+      "station": "main",
+      "prepTimeMin": 5,
+      "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m14",
-        "name": "Mutton Shinwari Karahi",
-        "region": "Pakistani",
-        "price": 2800,
-        "costPrice": 1400,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-        "description": "Traditional Shinwari style tender mutton prepared with black pepper, salt and fresh tomatoes.",
-        "badge": "Chef Special",
-        "trackStock": true,
-        "stockQty": 15,
-        "lowStockThreshold": 4,
-        "station": "main",
-        "prepTimeMin": 35,
-        "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-        "isAvailable": true
+      "id": "m14",
+      "name": "Mutton Shinwari Karahi",
+      "region": "Pakistani",
+      "price": 2800,
+      "costPrice": 1400,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
+      "description": "Traditional Shinwari style tender mutton prepared with black pepper, salt and fresh tomatoes.",
+      "badge": "Chef Special",
+      "trackStock": true,
+      "stockQty": 15,
+      "lowStockThreshold": 4,
+      "station": "main",
+      "prepTimeMin": 35,
+      "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m15",
-        "name": "Chicken Manchurian & Egg Fried Rice",
-        "region": "Chinese",
-        "price": 1350,
-        "costPrice": 580,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=600&q=80",
-        "description": "Crispy chicken cubes in tangy spicy red Manchurian sauce served with aromatic egg fried rice.",
-        "badge": "Best Seller",
-        "trackStock": true,
-        "stockQty": 25,
-        "lowStockThreshold": 6,
-        "station": "main",
-        "prepTimeMin": 18,
-        "imageUrl": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=600&q=80",
-        "isAvailable": true
+      "id": "m15",
+      "name": "Chicken Manchurian & Egg Fried Rice",
+      "region": "Chinese",
+      "price": 1350,
+      "costPrice": 580,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=600&q=80",
+      "description": "Crispy chicken cubes in tangy spicy red Manchurian sauce served with aromatic egg fried rice.",
+      "badge": "Best Seller",
+      "trackStock": true,
+      "stockQty": 25,
+      "lowStockThreshold": 6,
+      "station": "main",
+      "prepTimeMin": 18,
+      "imageUrl": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m16",
-        "name": "Chicken Chowmein Classic",
-        "region": "Chinese",
-        "price": 1150,
-        "costPrice": 480,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&q=80",
-        "description": "Stir-fried noodles with julienne chicken, bell peppers, cabbage and house soy glaze.",
-        "badge": "Popular",
-        "trackStock": true,
-        "stockQty": 30,
-        "lowStockThreshold": 8,
-        "station": "main",
-        "prepTimeMin": 15,
-        "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&q=80",
-        "isAvailable": true
+      "id": "m16",
+      "name": "Chicken Chowmein Classic",
+      "region": "Chinese",
+      "price": 1150,
+      "costPrice": 480,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&q=80",
+      "description": "Stir-fried noodles with julienne chicken, bell peppers, cabbage and house soy glaze.",
+      "badge": "Popular",
+      "trackStock": true,
+      "stockQty": 30,
+      "lowStockThreshold": 8,
+      "station": "main",
+      "prepTimeMin": 15,
+      "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m17",
-        "name": "Hot & Sour Chicken Soup",
-        "region": "Chinese",
-        "price": 490,
-        "costPrice": 180,
-        "category": "Appetizers",
-        "imageUri": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80",
-        "description": "Rich dark broth with shredded chicken, mushrooms, tofu, egg ribbon and spicy chili oil.",
-        "badge": "Starter",
-        "trackStock": true,
-        "stockQty": 40,
-        "lowStockThreshold": 10,
-        "station": "main",
-        "prepTimeMin": 10,
-        "imageUrl": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80",
-        "isAvailable": true
+      "id": "m17",
+      "name": "Hot & Sour Chicken Soup",
+      "region": "Chinese",
+      "price": 490,
+      "costPrice": 180,
+      "category": "Appetizers",
+      "imageUri": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80",
+      "description": "Rich dark broth with shredded chicken, mushrooms, tofu, egg ribbon and spicy chili oil.",
+      "badge": "Starter",
+      "trackStock": true,
+      "stockQty": 40,
+      "lowStockThreshold": 10,
+      "station": "main",
+      "prepTimeMin": 10,
+      "imageUrl": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m18",
-        "name": "Grilled Chicken Alfredo Pasta",
-        "region": "Continental",
-        "price": 1490,
-        "costPrice": 620,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=600&q=80",
-        "description": "Fettuccine pasta in rich creamy parmesan garlic sauce topped with grilled chicken breast.",
-        "badge": "Chef Special",
-        "trackStock": true,
-        "stockQty": 20,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "prepTimeMin": 20,
-        "imageUrl": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=600&q=80",
-        "isAvailable": true
+      "id": "m18",
+      "name": "Grilled Chicken Alfredo Pasta",
+      "region": "Continental",
+      "price": 1490,
+      "costPrice": 620,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=600&q=80",
+      "description": "Fettuccine pasta in rich creamy parmesan garlic sauce topped with grilled chicken breast.",
+      "badge": "Chef Special",
+      "trackStock": true,
+      "stockQty": 20,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "prepTimeMin": 20,
+      "imageUrl": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m19",
-        "name": "Crispy Fish & Chips",
-        "region": "Continental",
-        "price": 1650,
-        "costPrice": 720,
-        "category": "Mains",
-        "imageUri": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=600&q=80",
-        "description": "Golden batter fried fish fillet served with thick-cut fries and homemade tartar dip.",
-        "badge": "Popular",
-        "trackStock": true,
-        "stockQty": 18,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "prepTimeMin": 16,
-        "imageUrl": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=600&q=80",
-        "isAvailable": true
+      "id": "m19",
+      "name": "Crispy Fish & Chips",
+      "region": "Continental",
+      "price": 1650,
+      "costPrice": 720,
+      "category": "Mains",
+      "imageUri": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=600&q=80",
+      "description": "Golden batter fried fish fillet served with thick-cut fries and homemade tartar dip.",
+      "badge": "Popular",
+      "trackStock": true,
+      "stockQty": 18,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "prepTimeMin": 16,
+      "imageUrl": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "deal1",
-        "name": "Sultan Family Feast (4-5 Persons)",
-        "region": "Pakistani",
-        "price": 4999,
-        "costPrice": 2300,
-        "category": "Deals",
-        "imageUri": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80",
-        "description": "Complete family banquet: 1x Desi Murgh Karahi + 2x Sultan Seekh Kebabs + 1x Medium Fajita Pizza + 2x Fresh Mint Margaritas + 1x Royal Turkish Kunafa.",
-        "badge": "Family Deal",
-        "isDeal": true,
-        "dealOriginalPrice": 6050,
-        "prepTimeMin": 25,
-        "dealItems": [
-            {
-                "menuItemId": "m2",
-                "name": "Desi Murgh Karahi",
-                "qty": 1,
-                "price": 1850
-            },
-            {
-                "menuItemId": "m1",
-                "name": "Sultan Seekh Kebab",
-                "qty": 2,
-                "price": 1450
-            },
-            {
-                "menuItemId": "m6",
-                "name": "Fajita Supreme Pizza (Medium)",
-                "qty": 1,
-                "price": 1400
-            },
-            {
-                "menuItemId": "m5",
-                "name": "Fresh Mint Margarita",
-                "qty": 2,
-                "price": 450
-            },
-            {
-                "menuItemId": "m4",
-                "name": "Royal Turkish Kunafa",
-                "qty": 1,
-                "price": 850
-            }
-        ],
-        "trackStock": true,
-        "stockQty": 15,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80",
-        "isAvailable": true
+      "id": "deal1",
+      "name": "Sultan Family Feast (4-5 Persons)",
+      "region": "Pakistani",
+      "price": 4999,
+      "costPrice": 2300,
+      "category": "Deals",
+      "imageUri": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80",
+      "description": "Complete family banquet: 1x Desi Murgh Karahi + 2x Sultan Seekh Kebabs + 1x Medium Fajita Pizza + 2x Fresh Mint Margaritas + 1x Royal Turkish Kunafa.",
+      "badge": "Family Deal",
+      "isDeal": true,
+      "dealOriginalPrice": 6050,
+      "prepTimeMin": 25,
+      "dealItems": [
+        {
+          "menuItemId": "m2",
+          "name": "Desi Murgh Karahi",
+          "qty": 1,
+          "price": 1850
+        },
+        {
+          "menuItemId": "m1",
+          "name": "Sultan Seekh Kebab",
+          "qty": 2,
+          "price": 1450
+        },
+        {
+          "menuItemId": "m6",
+          "name": "Fajita Supreme Pizza (Medium)",
+          "qty": 1,
+          "price": 1400
+        },
+        {
+          "menuItemId": "m5",
+          "name": "Fresh Mint Margarita",
+          "qty": 2,
+          "price": 450
+        },
+        {
+          "menuItemId": "m4",
+          "name": "Royal Turkish Kunafa",
+          "qty": 1,
+          "price": 850
+        }
+      ],
+      "trackStock": true,
+      "stockQty": 15,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "deal2",
-        "name": "Royal Couple Platter (2 Persons)",
-        "region": "Arabic",
-        "price": 2850,
-        "costPrice": 1250,
-        "category": "Deals",
-        "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-        "description": "Perfect for two: 2x Sultan Seekh Kebabs + 1x Hummus with Warm Pita + 2x Fresh Mint Margaritas + 1x Royal Turkish Kunafa.",
-        "badge": "Couple Deal",
-        "isDeal": true,
-        "dealOriginalPrice": 3400,
-        "prepTimeMin": 20,
-        "dealItems": [
-            {
-                "menuItemId": "m1",
-                "name": "Sultan Seekh Kebab",
-                "qty": 2,
-                "price": 1450
-            },
-            {
-                "menuItemId": "m3",
-                "name": "Hummus with Warm Pita",
-                "qty": 1,
-                "price": 650
-            },
-            {
-                "menuItemId": "m5",
-                "name": "Fresh Mint Margarita",
-                "qty": 2,
-                "price": 450
-            },
-            {
-                "menuItemId": "m4",
-                "name": "Royal Turkish Kunafa",
-                "qty": 1,
-                "price": 850
-            }
-        ],
-        "trackStock": true,
-        "stockQty": 20,
-        "lowStockThreshold": 5,
-        "station": "main",
-        "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-        "isAvailable": true
+      "id": "deal2",
+      "name": "Royal Couple Platter (2 Persons)",
+      "region": "Arabic",
+      "price": 2850,
+      "costPrice": 1250,
+      "category": "Deals",
+      "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
+      "description": "Perfect for two: 2x Sultan Seekh Kebabs + 1x Hummus with Warm Pita + 2x Fresh Mint Margaritas + 1x Royal Turkish Kunafa.",
+      "badge": "Couple Deal",
+      "isDeal": true,
+      "dealOriginalPrice": 3400,
+      "prepTimeMin": 20,
+      "dealItems": [
+        {
+          "menuItemId": "m1",
+          "name": "Sultan Seekh Kebab",
+          "qty": 2,
+          "price": 1450
+        },
+        {
+          "menuItemId": "m3",
+          "name": "Hummus with Warm Pita",
+          "qty": 1,
+          "price": 650
+        },
+        {
+          "menuItemId": "m5",
+          "name": "Fresh Mint Margarita",
+          "qty": 2,
+          "price": 450
+        },
+        {
+          "menuItemId": "m4",
+          "name": "Royal Turkish Kunafa",
+          "qty": 1,
+          "price": 850
+        }
+      ],
+      "trackStock": true,
+      "stockQty": 20,
+      "lowStockThreshold": 5,
+      "station": "main",
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
+      "isAvailable": true
     },
     {
-        "id": "m-zain",
-        "name": "zain dish",
-        "price": 1200,
-        "costPrice": 550,
-        "category": "Mains",
-        "region": "Pakistani",
-        "station": "main",
-        "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-        "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-        "description": "Chef Zain special tender meat preparation with royal spices and butter gravy.",
-        "badge": "Chef Special",
-        "rating": 4.9,
-        "prepTime": 25,
-        "isAvailable": true
+      "id": "m-zain",
+      "name": "zain dish",
+      "price": 1200,
+      "costPrice": 550,
+      "category": "Mains",
+      "region": "Pakistani",
+      "station": "main",
+      "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+      "description": "Chef Zain special tender meat preparation with royal spices and butter gravy.",
+      "badge": "Chef Special",
+      "rating": 4.9,
+      "prepTime": 25,
+      "isAvailable": true
     },
     {
-        "id": "m-shahi-handi",
-        "name": "Sultan Shahi Handi",
-        "price": 2400,
-        "costPrice": 1100,
-        "category": "Karahi & Handi",
-        "region": "Pakistani",
-        "station": "main",
-        "variants": [
-            {
-                "name": "Half (0.5 kg)",
-                "price": 1350
-            },
-            {
-                "name": "Full (1 kg)",
-                "price": 2400
-            }
-        ],
-        "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
-        "imageUrl": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
-        "description": "Boneless chicken cubes slow-cooked in pure cream, butter, roasted cashew paste and saffron.",
-        "badge": "Royal Handi",
-        "rating": 4.9,
-        "prepTime": 25,
-        "isAvailable": true
+      "id": "m-shahi-handi",
+      "name": "Sultan Shahi Handi",
+      "price": 2400,
+      "costPrice": 1100,
+      "category": "Karahi & Handi",
+      "region": "Pakistani",
+      "station": "main",
+      "variants": [
+        {
+          "name": "Half (0.5 kg)",
+          "price": 1350
+        },
+        {
+          "name": "Full (1 kg)",
+          "price": 2400
+        }
+      ],
+      "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+      "imageUrl": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+      "description": "Boneless chicken cubes slow-cooked in pure cream, butter, roasted cashew paste and saffron.",
+      "badge": "Royal Handi",
+      "rating": 4.9,
+      "prepTime": 25,
+      "isAvailable": true
     },
     {
-        "id": "m-beef-karahi",
-        "name": "Beef Karahii",
-        "price": 2200,
-        "costPrice": 950,
-        "category": "Karahi & Handi",
-        "region": "Pakistani",
-        "station": "main",
-        "variants": [
-            {
-                "name": "Half (0.5 kg)",
-                "price": 1250
-            },
-            {
-                "name": "Full (1 kg)",
-                "price": 2200
-            }
-        ],
-        "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-        "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-        "description": "Tender beef shank cuts slow-cooked in rich spiced tomato & black pepper desi gravy.",
-        "badge": "Signature",
-        "rating": 4.9,
-        "prepTime": 30,
-        "isAvailable": true
+      "id": "m-beef-karahi",
+      "name": "Beef Karahii",
+      "price": 2200,
+      "costPrice": 950,
+      "category": "Karahi & Handi",
+      "region": "Pakistani",
+      "station": "main",
+      "variants": [
+        {
+          "name": "Half (0.5 kg)",
+          "price": 1250
+        },
+        {
+          "name": "Full (1 kg)",
+          "price": 2200
+        }
+      ],
+      "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+      "description": "Tender beef shank cuts slow-cooked in rich spiced tomato & black pepper desi gravy.",
+      "badge": "Signature",
+      "rating": 4.9,
+      "prepTime": 30,
+      "isAvailable": true
     },
     {
-        "id": "m-chicken-cheese",
-        "name": "Chicken Cheese",
-        "price": 950,
-        "costPrice": 420,
-        "category": "Fast Food",
-        "region": "Fast Food",
-        "station": "main",
-        "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
-        "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
-        "description": "Double melted cheese layer topped with marinated grilled chicken breast chunks.",
-        "badge": "Popular",
-        "rating": 4.8,
-        "prepTime": 18,
-        "isAvailable": true
+      "id": "m-chicken-cheese",
+      "name": "Chicken Cheese",
+      "price": 950,
+      "costPrice": 420,
+      "category": "Fast Food",
+      "region": "Fast Food",
+      "station": "main",
+      "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
+      "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
+      "description": "Double melted cheese layer topped with marinated grilled chicken breast chunks.",
+      "badge": "Popular",
+      "rating": 4.8,
+      "prepTime": 18,
+      "isAvailable": true
     }
-],
+  ],
   categories: ['All', 'Mains', 'Karahi & Handi', 'Chinese', 'Continental', 'Fast Food', 'Drinks', 'Appetizers', 'Desserts', 'Deals'],
   zones: ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
   regions: ['Pakistani', 'Chinese', 'Continental', 'Arabic', 'Turkish', 'Fast Food', 'Italian'],
@@ -1592,7 +1592,7 @@ async function handleRequest(req, res) {
 
     if (categoryFilter && categoryFilter.toLowerCase() !== 'all') {
       const catLower = categoryFilter.toLowerCase();
-      items = items.filter(item => 
+      items = items.filter(item =>
         (item.category || '').toLowerCase().includes(catLower) ||
         (item.name || '').toLowerCase().includes(catLower)
       );
@@ -1698,7 +1698,7 @@ async function handleRequest(req, res) {
       for (const cartItem of payload.items) {
         const menuItemId = cartItem.menuItem ? cartItem.menuItem.id : cartItem.id;
         const qty = Math.max(1, parseInt(cartItem.quantity || cartItem.qty || 1, 10));
-        
+
         const dbItem = dbItems.find(m => m.id === menuItemId);
         let unitPrice = dbItem ? Number(dbItem.price) : (Number(cartItem.price) || 0);
 
@@ -1768,7 +1768,7 @@ async function handleRequest(req, res) {
       const tableInfo = payload.tableInfo || {};
       const targetTableId = payload.tableId || tableInfo.tableId || (orderType === 'dine_in' ? 'DINE-IN-APP' : (orderType === 'takeaway' ? 'EXPRESS-TAKEAWAY' : 'DELIVERY'));
       const targetTableName = payload.tableName || tableInfo.tableName || (
-        orderType === 'dine_in' 
+        orderType === 'dine_in'
           ? `${tableInfo.floor || 'Floor'} • ${tableInfo.seatingType || 'Table'} ${tableInfo.tableName || tableInfo.tableNumber || ''}`
           : (orderType === 'takeaway' ? `Express Takeaway: ${customerName}` : `Delivery: ${customerName}`)
       );
@@ -1968,7 +1968,7 @@ async function handleRequest(req, res) {
       const payload = await readRequestBody(req);
       const { status, riderName, riderPhone, assignedWaiter, managerNotes } = payload;
       const validStatuses = ['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'READY_FOR_PICKUP', 'OUT_FOR_DELIVERY', 'DELIVERED', 'SERVED', 'CANCELLED'];
-      
+
       if (!validStatuses.includes(status)) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }));
@@ -1990,8 +1990,8 @@ async function handleRequest(req, res) {
       order.updatedAt = Date.now();
 
       // Clear pending floor alert if this order was confirmed or cancelled
-      if (serverState.pendingFloorOrderAlert && 
-          (serverState.pendingFloorOrderAlert.orderId === order.id || serverState.pendingFloorOrderAlert.orderNumber === order.orderNumber)) {
+      if (serverState.pendingFloorOrderAlert &&
+        (serverState.pendingFloorOrderAlert.orderId === order.id || serverState.pendingFloorOrderAlert.orderNumber === order.orderNumber)) {
         serverState.pendingFloorOrderAlert = null;
       }
 
@@ -2197,8 +2197,8 @@ async function handleRequest(req, res) {
       let assignedTableId = tableId;
       let assignedTableName = tableName;
       if (!assignedTableId) {
-        const availableTable = (serverState.tables || []).find(t => 
-          t.status === 'available' && 
+        const availableTable = (serverState.tables || []).find(t =>
+          t.status === 'available' &&
           (!floor || t.floor === floor) &&
           (!seatingCategory || t.seatingType === seatingCategory)
         );
@@ -2358,18 +2358,18 @@ async function handleRequest(req, res) {
     serverState.tables = (serverState.tables || []).map(t =>
       t.status === 'occupied' || t.status === 'billed'
         ? {
-            ...t,
-            status: 'available',
-            billTotal: 0,
-            orders: [],
-            server: undefined,
-            isPaid: false,
-            lastInvoiceId: undefined,
-            occupiedSince: undefined,
-            lastSettledAt: now,
-            mergedInto: undefined,
-            reservationId: undefined,
-          }
+          ...t,
+          status: 'available',
+          billTotal: 0,
+          orders: [],
+          server: undefined,
+          isPaid: false,
+          lastInvoiceId: undefined,
+          occupiedSince: undefined,
+          lastSettledAt: now,
+          mergedInto: undefined,
+          reservationId: undefined,
+        }
         : t
     );
     serverState.lastBillPaidAlert = null;
@@ -2398,6 +2398,9 @@ async function handleRequest(req, res) {
   if (url.pathname === '/api/sync' && req.method === 'POST') {
     try {
       const data = await readRequestBody(req);
+      const clientIp = req.socket?.remoteAddress || 'unknown';
+      const ticketCount = Array.isArray(data?.state?.tickets) ? data.state.tickets.length : '?';
+      console.log(`[Sultan Hub] HTTP POST /api/sync from ${data.senderId || clientIp} (${clientIp}) tickets=${ticketCount}`);
       if (data.state && !hasProcessedServerPacket(data.packetId)) {
         applyStateUpdate(data.state, data.senderId);
       }
@@ -2417,8 +2420,8 @@ async function handleRequest(req, res) {
       let rawPath = (url.pathname || '/').split('?')[0];
       try {
         rawPath = decodeURIComponent(rawPath);
-      } catch (_) {}
-      
+      } catch (_) { }
+
       let filePath = path.join(DIST_DIR, rawPath === '/' ? 'index.html' : rawPath);
       // Prevent directory traversal
       if (filePath.startsWith(DIST_DIR)) {
@@ -2448,8 +2451,8 @@ async function handleRequest(req, res) {
           };
           const contentType = mimeTypes[ext] || 'application/octet-stream';
           const isHashed = rawPath.includes('/_expo/') || rawPath.includes('/assets/') || rawPath.includes('/fonts/');
-          const cacheControl = isHashed 
-            ? 'public, max-age=31536000, immutable' 
+          const cacheControl = isHashed
+            ? 'public, max-age=31536000, immutable'
             : 'no-cache, no-store, must-revalidate';
 
           const acceptEncoding = req.headers['accept-encoding'] || '';
@@ -2554,12 +2557,12 @@ const server5000 = http.createServer(handleRequest);
 let server80 = null;
 try {
   server80 = http.createServer(handleRequest);
-} catch (e) {}
+} catch (e) { }
 
 let server8081 = null;
 try {
   server8081 = http.createServer(handleRequest);
-} catch (e) {}
+} catch (e) { }
 
 const wss = new WebSocketServer({ noServer: true });
 
@@ -2631,7 +2634,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -2677,7 +2680,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       } else if (key === 'tickets') {
         const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
         const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
-        
+
         // Status hierarchy: pending -> cooking -> ready -> served
         const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
 
@@ -2737,7 +2740,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           const currentTables = Array.isArray(serverState.tables) ? serverState.tables : [];
           const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
           const activeTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
-          
+
           serverState.tables = currentTables.map(curr => {
             const inc = incomingMap.get(curr.id);
             if (!inc) return curr;
@@ -2897,7 +2900,8 @@ const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
 const FIRESTORE_PROJECT_ID = "sultan-resturant";
 const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
 
-let lastProcessedCloudTimestamp = Date.now();
+let lastProcessedCloudTimestamp = 0;
+let lastProcessedCloudUpdateTime = '';
 let isPushingToFirestore = false;
 let isApplyingCloudUpdate = false;
 let firestorePushTimer = null;
@@ -2995,17 +2999,19 @@ async function pollFirestoreCloud() {
     const res = await fetch(FIRESTORE_DOC_URL);
     if (!res.ok) return;
     const doc = await res.json();
+    if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
     const fields = doc.fields || {};
     const senderId = fields.senderId?.stringValue;
     if (senderId === 'SERVER_POS_HUB') return;
     const timestamp = Number(fields.timestamp?.integerValue || 0);
-    if (timestamp && timestamp <= lastProcessedCloudTimestamp) return;
+    if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
 
     if (fields.state?.mapValue?.fields) {
       const decodedState = decodeFirestoreValue(fields.state);
       if (decodedState && typeof decodedState === 'object') {
         isApplyingCloudUpdate = true;
         lastProcessedCloudTimestamp = timestamp || Date.now();
+        if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
         applyStateUpdate(decodedState, senderId);
         setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
       }
@@ -3034,6 +3040,8 @@ wss.on('connection', (ws, req) => {
     try {
       const data = JSON.parse(message.toString());
       if (data.type === 'CLIENT_UPDATE' && data.state) {
+        const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
+        console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
         if (!hasProcessedServerPacket(data.packetId)) {
           applyStateUpdate(data.state, data.senderId, ws);
         }

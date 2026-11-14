@@ -6,6 +6,7 @@ import { useOpsStore, getOpsSyncState } from '../store/opsStore';
 import { useKitchenStore, getKitchenSyncState } from '../store/kitchenStore';
 import { useRoleStore } from '../store/roleStore';
 import { useShiftStore } from '../store/shiftStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { isFirebaseConfigured, getFirebaseDb, getFirestoreDb, FIREBASE_REST_BASE_URL } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
 import { doc, getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
@@ -126,6 +127,7 @@ function applyRemoteState(state: any) {
   useOpsStore.getState().syncFromServer(state);
   useKitchenStore.getState().syncFromServer(state);
   useRoleStore.getState().syncFromServer?.(state);
+  useSettingsStore.getState().syncFromServer?.(state);
   if (state.shifts || state.activeShiftId !== undefined) {
     useShiftStore.getState().syncFromServer?.({
       shifts: state.shifts,
@@ -856,6 +858,7 @@ function broadcastLocalState(force = false) {
       roles: roleState.roles,
       shifts: shiftState.shifts,
       activeShiftId: shiftState.activeShiftId,
+      systemSettings: useSettingsStore.getState().settings,
       ...opsState,
       ...kitchenState,
     },
@@ -1049,9 +1052,15 @@ export async function initSyncService() {
 
   // Listen to shift & cash drawer store mutations
   useShiftStore.subscribe(triggerDebouncedBroadcast);
+
+  // Listen to system settings store mutations
+  useSettingsStore.subscribe(triggerDebouncedBroadcast);
 }
 
 export async function forceSyncNow(): Promise<boolean> {
+  if (hasUnsyncedLocalChanges) {
+    broadcastLocalState(true);
+  }
   // 1. Always try Local LAN Central Hub first (works 100% offline & online)
   let { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (httpUrl) {

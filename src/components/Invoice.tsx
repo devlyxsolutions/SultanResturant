@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Platform, useWindowDimensions, TouchableOpacity
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Invoice, useRestaurantStore } from '../store/restaurantStore';
+import { useSettingsStore } from '../store/settingsStore';
 import SultanLogo from './SultanLogo';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import { generateInvoiceQrCode, getInvoiceFeedbackUrl } from '../utils/qrCode';
@@ -21,7 +22,20 @@ type InvoiceProps = {
  * - Includes scannable QR Code linking to customer item-wise feedback portal.
  */
 export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: string) {
-  const qrCodeDataUrl = precomputedQrCode || await generateInvoiceQrCode(invoice.id);
+  const sysSettings = useSettingsStore.getState().settings;
+  const brandName = (sysSettings.restaurantName || 'SULTAN RESTAURANT').trim();
+  const brandTagline = (sysSettings.tagline || 'LUXURY DINING & BANQUET').trim();
+  const brandAddress = (sysSettings.address || 'Food Street, Culinary District, Lahore').trim();
+  const brandPhone = (sysSettings.phone || '0300-1234567').trim();
+  const brandNtn = (sysSettings.ntnOrTaxId || '8943120-4').trim();
+  const brandFooter = (sysSettings.footerMessage || 'Thank you for dining with Sultan!').trim();
+  const taxLabel = sysSettings.taxLabel || 'GST Tax';
+  const taxRate = sysSettings.taxEnabled ? sysSettings.taxRatePercent : 0;
+  const currency = sysSettings.currencySymbol || 'Rs.';
+
+  const qrCodeDataUrl = sysSettings.showQrOnReceipt
+    ? (precomputedQrCode || await generateInvoiceQrCode(invoice.id))
+    : '';
   const feedbackUrl = getInvoiceFeedbackUrl(invoice.id);
 
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
@@ -32,10 +46,10 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
     
     let text = `================================\n`;
-    text += `       SULTAN RESTAURANT       \n`;
-    text += `    LUXURY DINING & BANQUET    \n`;
-    text += `Food Street, Culinary District, Lahore\n`;
-    text += ` Tel: 0300-1234567 • NTN: 8943120-4\n`;
+    text += `       ${brandName}       \n`;
+    text += `    ${brandTagline}    \n`;
+    if (brandAddress) text += `${brandAddress}\n`;
+    text += ` Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}\n`;
     text += `--------------------------------\n`;
     if (isUnpaidBill) {
       text += `*** UNPAID BILL / PROVISIONAL CHECK ***\n`;
@@ -58,29 +72,31 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     if ((invoice.discount || 0) > 0) {
       text += `Discount: - Rs. ${(invoice.discount || 0).toLocaleString()}\n`;
     }
-    text += `GST Tax (16%): Rs. ${(invoice.tax || 0).toLocaleString()}\n`;
+    text += `${taxLabel} (${taxRate}%): ${currency} ${(invoice.tax || 0).toLocaleString()}\n`;
     if ((invoice.serviceCharge || 0) > 0) {
-      text += `Service Charge: Rs. ${(invoice.serviceCharge || 0).toLocaleString()}\n`;
+      text += `Service Charge: ${currency} ${(invoice.serviceCharge || 0).toLocaleString()}\n`;
     }
     if (invoice.notes || invoice.packagingNotes) {
       text += `Notes: ${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}\n`;
     }
     text += `================================\n`;
     if (isUnpaidBill) {
-      text += `*** TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()} ***\n`;
+      text += `*** TOTAL UNPAID DUE: ${currency} ${(invoice.total || 0).toLocaleString()} ***\n`;
       text += `*** PAYMENT PENDING AT CASHIER ***\n`;
       text += `*** براۓ مہربانی کیش کاؤنٹر پر ادائیگی فرمائیں ***\n`;
     } else {
-      text += `NET PAYABLE: Rs. ${(invoice.total || 0).toLocaleString()}\n`;
+      text += `NET PAYABLE: ${currency} ${(invoice.total || 0).toLocaleString()}\n`;
       text += `================================\n`;
       if (invoice.payments && invoice.payments.length > 0) {
         invoice.payments.forEach(p => {
-          text += `Paid via ${p.type.toUpperCase()}: Rs. ${(p.amount || 0).toLocaleString()}\n`;
+          text += `Paid via ${p.type.toUpperCase()}: ${currency} ${(p.amount || 0).toLocaleString()}\n`;
         });
       }
     }
-    text += `\nRate Each Dish & Give Feedback:\n${feedbackUrl}\n`;
-    text += `\nThank you for dining with Sultan!\n`;
+    if (sysSettings.showQrOnReceipt) {
+      text += `\nRate Each Dish & Give Feedback:\n${feedbackUrl}\n`;
+    }
+    text += `\n${brandFooter}\n`;
 
     try {
       Share.share({ message: text, title: `Invoice #${invoice.id}` });
@@ -441,11 +457,11 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     </head>
     <body>
       <div class="header">
-        <img src="${SULTAN_LOGO_BASE64}" alt="Sultan Logo" class="logo-img" />
-        <h1 class="brand-title">SULTAN RESTAURANT</h1>
-        <div class="brand-sub">LUXURY DINING & BANQUET</div>
-        <div class="contact">Food Street, Culinary District, Lahore</div>
-        <div class="contact">Tel: 0300-1234567 • NTN: 8943120-4</div>
+        ${sysSettings.showLogoOnReceipt ? `<img src="${SULTAN_LOGO_BASE64}" alt="Logo" class="logo-img" />` : ''}
+        <h1 class="brand-title">${brandName}</h1>
+        <div class="brand-sub">${brandTagline}</div>
+        <div class="contact">${brandAddress}</div>
+        <div class="contact">Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}</div>
       </div>
 
       <div class="dashed-line"></div>
@@ -527,13 +543,13 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         </div>
       ` : ''}
       <div class="summary-row">
-        <span>GST Tax (16%):</span>
-        <span style="font-weight: bold;">Rs. ${(invoice.tax || 0).toLocaleString()}</span>
+        <span>${taxLabel} (${taxRate}%):</span>
+        <span style="font-weight: bold;">${currency} ${(invoice.tax || 0).toLocaleString()}</span>
       </div>
       ${(invoice.serviceCharge || 0) > 0 ? `
         <div class="summary-row">
           <span>Service Charge:</span>
-          <span style="font-weight: bold;">Rs. ${(invoice.serviceCharge || 0).toLocaleString()}</span>
+          <span style="font-weight: bold;">${currency} ${(invoice.serviceCharge || 0).toLocaleString()}</span>
         </div>
       ` : ''}
       ${(invoice.notes || invoice.packagingNotes) ? `
@@ -556,16 +572,17 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 
       <div class="dashed-line"></div>
 
-      <!-- Scannable Item-Wise Feedback QR Code -->
+      ${sysSettings.showQrOnReceipt ? `
       <div class="qr-section">
         <div class="qr-section-title">SCAN FOR ITEM-WISE FEEDBACK</div>
         ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="Dish Review QR Code" class="qr-code-img" />` : ''}
         <div class="qr-hint">Rate each dish & earn 50 Sultan Loyalty Points!</div>
         <div class="qr-url-text">${feedbackUrl}</div>
       </div>
+      ` : ''}
 
       <div class="footer">
-        <div style="font-weight: bold; margin-bottom: 2px;">Thank you for dining with Sultan!</div>
+        <div style="font-weight: bold; margin-bottom: 2px;">${brandFooter}</div>
         <div style="color: #666; margin-top: 2px;">We look forward to serving you again.</div>
         <div style="color: #888; font-size: 85%; margin-top: 3px;">Software by Sultan POS System</div>
       </div>

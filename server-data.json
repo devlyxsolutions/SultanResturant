@@ -7,11 +7,77 @@
       "seatingType": "tables",
       "name": "T-01",
       "seats": 4,
-      "status": "available",
-      "billTotal": 0,
-      "orders": [],
+      "status": "occupied",
+      "billTotal": 25250,
+      "orders": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 4,
+          "completed": false,
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Family (16\")",
+          "name": "Fajita Supreme Pizza (Family (16\"))",
+          "price": 2500,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 5,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m9",
+          "name": "Grand Sultan Angus Burger",
+          "price": 1150,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ],
       "isPaid": false,
-      "lastSettledAt": 1794582755787
+      "lastSettledAt": 1794582755787,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794648223369
     },
     {
       "id": "2",
@@ -125,12 +191,51 @@
       "seatingType": "majlis",
       "name": "Cabin 2",
       "seats": 10,
-      "status": "available",
-      "billTotal": 0,
-      "orders": [],
+      "status": "occupied",
+      "billTotal": 22500,
+      "orders": [
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 8,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 5,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 8,
+          "completed": false,
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 5,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ],
       "isPaid": false,
       "cabinNumber": "Cabin 2",
-      "lastSettledAt": 1794582638106
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794646928456
     },
     {
       "name": "MC-01",
@@ -152,12 +257,123 @@
       "zone": "Ground Floor",
       "seatingType": "tables",
       "seats": 4,
-      "status": "available",
+      "status": "occupied",
       "id": "t1791106748755",
       "isPaid": false,
-      "billTotal": 0,
-      "orders": [],
-      "lastSettledAt": 1794582638106
+      "billTotal": 45730,
+      "orders": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 9,
+          "completed": false,
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m5",
+          "name": "Fresh Mint Margarita",
+          "price": 450,
+          "qty": 9,
+          "completed": false,
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m10",
+          "name": "Cheesy Truffle Fries",
+          "price": 590,
+          "qty": 7,
+          "completed": false,
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 6,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 4,
+          "completed": false,
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m14",
+          "name": "Mutton Shinwari Karahi",
+          "price": 2800,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m13",
+          "name": "Sultan Special Roghni Naan",
+          "price": 150,
+          "qty": 4,
+          "completed": false,
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        }
+      ],
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794646854059
     },
     {
       "name": "G-T02",
@@ -165,12 +381,33 @@
       "zone": "Ground Floor",
       "seatingType": "tables",
       "seats": 4,
-      "status": "available",
+      "status": "occupied",
       "id": "t1791106748755_g02",
       "isPaid": false,
-      "orders": [],
-      "billTotal": 0,
-      "lastSettledAt": 1794582638106
+      "orders": [
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ],
+      "billTotal": 2600,
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794649586900
     },
     {
       "name": "G-T03",
@@ -178,12 +415,33 @@
       "zone": "Ground Floor",
       "seatingType": "tables",
       "seats": 4,
-      "status": "available",
+      "status": "occupied",
       "id": "t1791106748756",
       "isPaid": false,
-      "billTotal": 0,
-      "orders": [],
-      "lastSettledAt": 1794582638106
+      "billTotal": 2600,
+      "orders": [
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ],
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794649918487
     },
     {
       "name": "G-T04",
@@ -191,12 +449,24 @@
       "zone": "Ground Floor",
       "seatingType": "tables",
       "seats": 4,
-      "status": "available",
+      "status": "occupied",
       "id": "tGF04",
       "isPaid": false,
-      "billTotal": 0,
-      "orders": [],
-      "lastSettledAt": 1794582638106
+      "billTotal": 1950,
+      "orders": [
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ],
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794651229459
     },
     {
       "name": "G-Couch 1",
@@ -204,12 +474,204 @@
       "zone": "Ground Floor",
       "seatingType": "couches",
       "seats": 6,
-      "status": "available",
+      "status": "occupied",
       "id": "tGF05",
       "isPaid": false,
-      "billTotal": 0,
-      "orders": [],
-      "lastSettledAt": 1794582638106
+      "billTotal": 55828,
+      "orders": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m5",
+          "name": "Fresh Mint Margarita",
+          "price": 450,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m4",
+          "name": "Royal Turkish Kunafa",
+          "price": 850,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 12,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m9",
+          "name": "Grand Sultan Angus Burger",
+          "price": 1150,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m10",
+          "name": "Cheesy Truffle Fries",
+          "price": 590,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m14",
+          "name": "Mutton Shinwari Karahi",
+          "price": 2800,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m13",
+          "name": "Sultan Special Roghni Naan",
+          "price": 150,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m16",
+          "name": "Chicken Chowmein Classic",
+          "price": 1150,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m17",
+          "name": "Hot & Sour Chicken Soup",
+          "price": 490,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m18",
+          "name": "Grilled Chicken Alfredo Pasta",
+          "price": 1490,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "deal2",
+          "name": "Royal Couple Platter (2 Persons)",
+          "price": 2850,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "deal1",
+          "name": "Sultan Family Feast (4-5 Persons)",
+          "price": 4999,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m19",
+          "name": "Crispy Fish & Chips",
+          "price": 1650,
+          "qty": 2,
+          "completed": false,
+          "prepTimeMin": 16,
+          "itemStatus": "pending"
+        }
+      ],
+      "lastSettledAt": 1794582638106,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794646824450
     },
     {
       "name": "G-Couch 2",
@@ -272,12 +734,33 @@
       "zone": "Ground Floor",
       "seatingType": "tables",
       "seats": 4,
-      "status": "available",
+      "status": "occupied",
       "id": "tGF10",
-      "billTotal": 0,
-      "orders": [],
+      "billTotal": 7000,
+      "orders": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 3,
+          "completed": false,
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        }
+      ],
       "isPaid": false,
-      "lastSettledAt": 1794582641258
+      "lastSettledAt": 1794582641258,
+      "server": "Sara Ahmed",
+      "occupiedSince": 1794648590555
     },
     {
       "name": "F1-T01",
@@ -786,17 +1269,115 @@
   ],
   "tickets": [
     {
-      "id": "KOT-5087",
-      "tableId": "3",
-      "tableName": "Couch 1",
+      "id": "KOT-8400",
+      "tableId": "tGF04",
+      "tableName": "G-T04",
       "server": "Sara Ahmed",
-      "timePlaced": 1794583178030,
-      "estimatedPrepTime": 25,
-      "status": "cooking",
+      "timePlaced": 1794651229450,
+      "estimatedPrepTime": 18,
+      "status": "pending",
       "isAddOn": false,
       "roundNumber": 1,
       "stationStatuses": {
-        "main": "cooking"
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-3199",
+      "tableId": "t1791106748756",
+      "tableName": "G-T03",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794649918482,
+      "estimatedPrepTime": 18,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-9742",
+      "tableId": "t1791106748755_g02",
+      "tableName": "G-T02",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794649586893,
+      "estimatedPrepTime": 18,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-9052",
+      "tableId": "tGF10",
+      "tableName": "G-T05",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794648590548,
+      "estimatedPrepTime": 25,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
       },
       "items": [
         {
@@ -807,7 +1388,324 @@
           "completed": false,
           "station": "main",
           "prepTimeMin": 20,
-          "itemStatus": "cooking"
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-6514",
+      "tableId": "1",
+      "tableName": "T-01",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794648223363,
+      "estimatedPrepTime": 35,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 4,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Family (16\")",
+          "name": "Fajita Supreme Pizza (Family (16\"))",
+          "price": 2500,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 5,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m9",
+          "name": "Grand Sultan Angus Burger",
+          "price": 1150,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-3623",
+      "tableId": "5",
+      "tableName": "Cabin 2",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794646928439,
+      "estimatedPrepTime": 18,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending",
+        "juice": "pending"
+      },
+      "items": [
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 8,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 5,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 8,
+          "completed": false,
+          "station": "juice",
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 5,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-9738",
+      "tableId": "t1791106748755",
+      "tableName": "G-T01",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794646854052,
+      "estimatedPrepTime": 35,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending",
+        "juice": "pending"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 9,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m5",
+          "name": "Fresh Mint Margarita",
+          "price": 450,
+          "qty": 9,
+          "completed": false,
+          "station": "juice",
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m10",
+          "name": "Cheesy Truffle Fries",
+          "price": 590,
+          "qty": 7,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 6,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 4,
+          "completed": false,
+          "station": "juice",
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m14",
+          "name": "Mutton Shinwari Karahi",
+          "price": 2800,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m13",
+          "name": "Sultan Special Roghni Naan",
+          "price": 150,
+          "qty": 4,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-6185",
+      "tableId": "tGF05",
+      "tableName": "G-Couch 1",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794646824443,
+      "estimatedPrepTime": 35,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending",
+        "juice": "pending"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
         },
         {
           "id": "m2",
@@ -817,7 +1715,223 @@
           "completed": false,
           "station": "main",
           "prepTimeMin": 25,
-          "itemStatus": "cooking"
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m6-Large (13\")",
+          "name": "Fajita Supreme Pizza (Large (13\"))",
+          "price": 1950,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m5",
+          "name": "Fresh Mint Margarita",
+          "price": 450,
+          "qty": 2,
+          "completed": false,
+          "station": "juice",
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m4",
+          "name": "Royal Turkish Kunafa",
+          "price": 850,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 12,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m7-1 KG",
+          "name": "Smoked Mutton Ribs (1 KG)",
+          "price": 6800,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m8",
+          "name": "Sultan Dum Biryani",
+          "price": 950,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m9",
+          "name": "Grand Sultan Angus Burger",
+          "price": 1150,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m11",
+          "name": "Choco Molten Lava Cake",
+          "price": 750,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m12",
+          "name": "Mango Kulfa Shake",
+          "price": 550,
+          "qty": 1,
+          "completed": false,
+          "station": "juice",
+          "prepTimeMin": 6,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m10",
+          "name": "Cheesy Truffle Fries",
+          "price": 590,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m14",
+          "name": "Mutton Shinwari Karahi",
+          "price": 2800,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 35,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m15",
+          "name": "Chicken Manchurian & Egg Fried Rice",
+          "price": 1350,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 18,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m13",
+          "name": "Sultan Special Roghni Naan",
+          "price": 150,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 5,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m16",
+          "name": "Chicken Chowmein Classic",
+          "price": 1150,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 15,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m17",
+          "name": "Hot & Sour Chicken Soup",
+          "price": 490,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 10,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m18",
+          "name": "Grilled Chicken Alfredo Pasta",
+          "price": 1490,
+          "qty": 3,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "deal2",
+          "name": "Royal Couple Platter (2 Persons)",
+          "price": 2850,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "deal1",
+          "name": "Sultan Family Feast (4-5 Persons)",
+          "price": 4999,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m19",
+          "name": "Crispy Fish & Chips",
+          "price": 1650,
+          "qty": 2,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 16,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-4586",
+      "tableId": "takeaway",
+      "tableName": "Takeaway",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794646792454,
+      "estimatedPrepTime": 25,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "pending"
         },
         {
           "id": "m3",
@@ -827,7 +1941,76 @@
           "completed": false,
           "station": "main",
           "prepTimeMin": 8,
-          "itemStatus": "cooking"
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "m4",
+          "name": "Royal Turkish Kunafa",
+          "price": 850,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 12,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-5087",
+      "tableId": "3",
+      "tableName": "Couch 1",
+      "server": "Sara Ahmed",
+      "timePlaced": 1794583178030,
+      "estimatedPrepTime": 25,
+      "status": "served",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "served"
+      },
+      "items": [
+        {
+          "id": "m1",
+          "name": "Sultan Seekh Kebab",
+          "price": 1450,
+          "qty": 1,
+          "completed": true,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "served",
+          "readyAt": 1794649785141
+        },
+        {
+          "id": "m2",
+          "name": "Desi Murgh Karahi",
+          "price": 1850,
+          "qty": 1,
+          "completed": true,
+          "station": "main",
+          "prepTimeMin": 25,
+          "itemStatus": "served",
+          "readyAt": 1794649785141
+        },
+        {
+          "id": "m3",
+          "name": "Hummus with Warm Pita",
+          "price": 650,
+          "qty": 1,
+          "completed": true,
+          "station": "main",
+          "prepTimeMin": 8,
+          "itemStatus": "served",
+          "readyAt": 1794649785141
         }
       ],
       "cookingStartedAt": 1794583239479
@@ -839,11 +2022,11 @@
       "server": "Sara Ahmed",
       "timePlaced": 1794583158635,
       "estimatedPrepTime": 25,
-      "status": "cooking",
+      "status": "served",
       "isAddOn": false,
       "roundNumber": 1,
       "stationStatuses": {
-        "main": "cooking"
+        "main": "served"
       },
       "items": [
         {
@@ -851,30 +2034,33 @@
           "name": "Desi Murgh Karahi",
           "price": 1850,
           "qty": 1,
-          "completed": false,
+          "completed": true,
           "station": "main",
           "prepTimeMin": 25,
-          "itemStatus": "cooking"
+          "itemStatus": "served",
+          "readyAt": 1794649795796
         },
         {
           "id": "m3",
           "name": "Hummus with Warm Pita",
           "price": 650,
           "qty": 1,
-          "completed": false,
+          "completed": true,
           "station": "main",
           "prepTimeMin": 8,
-          "itemStatus": "cooking"
+          "itemStatus": "served",
+          "readyAt": 1794649795796
         },
         {
           "id": "m6-Large (13\")",
           "name": "Fajita Supreme Pizza (Large (13\"))",
           "price": 1950,
           "qty": 1,
-          "completed": false,
+          "completed": true,
           "station": "main",
           "prepTimeMin": 18,
-          "itemStatus": "cooking"
+          "itemStatus": "served",
+          "readyAt": 1794649795796
         }
       ],
       "cookingStartedAt": 1794583234981
@@ -5990,7 +7176,11 @@
       "station": "main",
       "prepTimeMin": 20,
       "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "isDeal": false,
+      "isPopular": true,
+      "rating": 4.8
     },
     {
       "id": "m2",
@@ -6008,7 +7198,11 @@
       "station": "main",
       "prepTimeMin": 25,
       "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": true,
+      "preparationTimeMinutes": 20,
+      "rating": 4.8,
+      "isDeal": false
     },
     {
       "id": "m3",
@@ -6026,7 +7220,11 @@
       "station": "main",
       "prepTimeMin": 8,
       "imageUrl": "https://images.unsplash.com/photo-1577906096429-f73c2c312435?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": false
     },
     {
       "id": "m4",
@@ -6045,7 +7243,10 @@
       "prepTimeMin": 12,
       "imageUrl": "https://images.unsplash.com/photo-1608836561226-d621b10a26e8?w=600&q=80",
       "isAvailable": true,
-      "isDeal": false
+      "isDeal": false,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20,
+      "isPopular": false
     },
     {
       "id": "m5",
@@ -6063,7 +7264,11 @@
       "station": "juice",
       "prepTimeMin": 5,
       "imageUrl": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20,
+      "isDeal": false
     },
     {
       "id": "m6",
@@ -6097,7 +7302,11 @@
         }
       ],
       "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": false
     },
     {
       "id": "m7",
@@ -6125,7 +7334,11 @@
         }
       ],
       "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "isDeal": false,
+      "isPopular": false,
+      "rating": 4.8
     },
     {
       "id": "m8",
@@ -6143,7 +7356,11 @@
       "station": "main",
       "prepTimeMin": 15,
       "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20,
+      "isPopular": false,
+      "isDeal": false
     },
     {
       "id": "m9",
@@ -6161,7 +7378,11 @@
       "station": "main",
       "prepTimeMin": 18,
       "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": true
     },
     {
       "id": "m10",
@@ -6179,7 +7400,11 @@
       "station": "main",
       "prepTimeMin": 10,
       "imageUrl": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": false,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m11",
@@ -6197,7 +7422,11 @@
       "station": "main",
       "prepTimeMin": 15,
       "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "isDeal": false,
+      "preparationTimeMinutes": 20,
+      "rating": 4.8
     },
     {
       "id": "m12",
@@ -6215,7 +7444,11 @@
       "station": "juice",
       "prepTimeMin": 6,
       "imageUrl": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "rating": 4.8,
+      "isDeal": false,
+      "isPopular": false,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m13",
@@ -6233,7 +7466,11 @@
       "station": "main",
       "prepTimeMin": 5,
       "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "preparationTimeMinutes": 20,
+      "rating": 4.8,
+      "isDeal": false,
+      "isPopular": false
     },
     {
       "id": "m14",
@@ -6251,7 +7488,11 @@
       "station": "main",
       "prepTimeMin": 35,
       "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": true,
+      "isDeal": false,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m15",
@@ -6269,7 +7510,11 @@
       "station": "main",
       "prepTimeMin": 18,
       "imageUrl": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": true,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20,
+      "isDeal": false
     },
     {
       "id": "m16",
@@ -6287,7 +7532,11 @@
       "station": "main",
       "prepTimeMin": 15,
       "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": false,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m17",
@@ -6305,7 +7554,11 @@
       "station": "main",
       "prepTimeMin": 10,
       "imageUrl": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": false,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m18",
@@ -6323,7 +7576,11 @@
       "station": "main",
       "prepTimeMin": 20,
       "imageUrl": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isDeal": false,
+      "rating": 4.8,
+      "isPopular": true,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m19",
@@ -6341,7 +7598,11 @@
       "station": "main",
       "prepTimeMin": 16,
       "imageUrl": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "preparationTimeMinutes": 20,
+      "rating": 4.8,
+      "isDeal": false
     },
     {
       "id": "deal1",
@@ -6393,7 +7654,10 @@
       "lowStockThreshold": 5,
       "station": "main",
       "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "deal2",
@@ -6439,7 +7703,10 @@
       "lowStockThreshold": 5,
       "station": "main",
       "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=600&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "rating": 4.8,
+      "preparationTimeMinutes": 20
     },
     {
       "id": "m-zain",
@@ -6456,7 +7723,9 @@
       "rating": 4.9,
       "prepTime": 25,
       "isAvailable": true,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "isPopular": true,
+      "isDeal": false
     },
     {
       "id": "m-shahi-handi",
@@ -6483,7 +7752,9 @@
       "rating": 4.9,
       "prepTime": 25,
       "isAvailable": true,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "isPopular": false,
+      "isDeal": false
     },
     {
       "id": "m-beef-karahi",
@@ -6509,7 +7780,10 @@
       "badge": "Signature",
       "rating": 4.9,
       "prepTime": 30,
-      "isAvailable": true
+      "isAvailable": true,
+      "isPopular": false,
+      "preparationTimeMinutes": 30,
+      "isDeal": false
     },
     {
       "id": "m-chicken-cheese",
@@ -6539,7 +7813,10 @@
           "price": 1800,
           "name": "Large"
         }
-      ]
+      ],
+      "preparationTimeMinutes": 18,
+      "isPopular": false,
+      "isDeal": false
     }
   ],
   "categories": [
@@ -7090,451 +8367,439 @@
     }
   ],
   "lastBillPaidAlert": null,
-  "lastFoodReadyAlert": {
-    "id": "cook_KOT-5087_main_1794583239479",
-    "ticketId": "KOT-5087",
-    "tableId": "3",
-    "tableName": "Couch 1",
-    "server": "Sara Ahmed",
-    "station": "main",
-    "stationLabel": "Kitchen",
-    "itemsSummary": "Cooking started! (Timer: 25 mins)",
-    "type": "cooking_started",
-    "estimatedMinutes": 25,
-    "time": 1794583239479
-  },
+  "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
   "inventory": [
     {
-      "receivedDate": 1794236170765,
-      "supplierPhone": "+92 300 4567891",
-      "batchNumber": "B-26-CHK-081",
-      "expiryDate": 1794754570765,
-      "itemCode": "SKU-MT-001",
-      "urduName": "چکن بون لیس",
-      "name": "Chicken (Boneless)",
-      "threshold": 20,
-      "invoiceNo": "AMP-8821",
-      "stock": 15,
-      "updatedAt": 1794408970765,
-      "unit": "kg",
-      "supplier": "Al-Madina Fresh Poultry Ltd",
-      "costPerUnit": 780,
       "id": "inv1",
-      "location": "Deep Freezer #2 (Poultry)",
-      "category": "Meat"
-    },
-    {
-      "stock": 35,
-      "threshold": 15,
-      "invoiceNo": "HBM-5501",
-      "itemCode": "SKU-MT-002",
-      "urduName": "مٹن مکس بوٹی",
-      "batchNumber": "B-26-MUT-044",
-      "unit": "kg",
-      "id": "inv2",
-      "supplierPhone": "+92 321 8765432",
-      "costPerUnit": 2200,
-      "location": "Deep Freezer #1 (Meat)",
-      "category": "Meat",
-      "receivedDate": 1794236170765,
-      "name": "Mutton (Mix Cut)",
-      "updatedAt": 1794408970765,
-      "expiryDate": 1795532170765,
-      "supplier": "Hazrat Bilal Meat & Beef Center"
-    },
-    {
-      "location": "Dry Ration Store - Shelf A",
-      "category": "Grains",
-      "expiryDate": 1810047370765,
-      "name": "Basmati Rice (Kainat)",
-      "receivedDate": 1794236170765,
-      "invoiceNo": "NSG-4412",
-      "threshold": 15,
-      "batchNumber": "B-26-RIC-012",
-      "supplier": "National Spices & Grains Mart",
-      "costPerUnit": 360,
-      "supplierPhone": "+92 345 9988776",
-      "itemCode": "SKU-GR-001",
-      "unit": "kg",
-      "stock": 50,
-      "urduName": "باسمتی چاول کائنات",
-      "updatedAt": 1794408970765,
-      "id": "inv3"
-    },
-    {
-      "updatedAt": 1794408970765,
-      "urduName": "فائن آٹا / میدہ",
-      "itemCode": "SKU-GR-002",
-      "id": "inv4",
-      "name": "Wheat Flour (Fine Atta)",
-      "expiryDate": 1802271370765,
-      "stock": 40,
-      "batchNumber": "B-26-FLR-009",
-      "supplier": "National Spices & Grains Mart",
-      "receivedDate": 1794236170765,
-      "unit": "kg",
-      "invoiceNo": "NSG-4412",
+      "supplierPhone": "+92 300 4567891",
+      "updatedAt": 1794562413012,
       "threshold": 20,
-      "costPerUnit": 150,
-      "location": "Dry Ration Store - Shelf A",
+      "category": "Meat",
+      "name": "Chicken (Boneless)",
+      "urduName": "چکن بون لیس",
+      "supplier": "Al-Madina Fresh Poultry Ltd",
+      "location": "Deep Freezer #2 (Poultry)",
+      "receivedDate": 1794389613012,
+      "invoiceNo": "AMP-8821",
+      "expiryDate": 1794908013012,
+      "itemCode": "SKU-MT-001",
+      "unit": "kg",
+      "stock": 15,
+      "batchNumber": "B-26-CHK-081",
+      "costPerUnit": 780
+    },
+    {
+      "id": "inv2",
+      "unit": "kg",
+      "location": "Deep Freezer #1 (Meat)",
+      "urduName": "مٹن مکس بوٹی",
+      "supplier": "Hazrat Bilal Meat & Beef Center",
+      "invoiceNo": "HBM-5501",
+      "category": "Meat",
+      "supplierPhone": "+92 321 8765432",
+      "threshold": 15,
+      "itemCode": "SKU-MT-002",
+      "stock": 35,
+      "updatedAt": 1794562413012,
+      "receivedDate": 1794389613012,
+      "expiryDate": 1795685613012,
+      "name": "Mutton (Mix Cut)",
+      "batchNumber": "B-26-MUT-044",
+      "costPerUnit": 2200
+    },
+    {
+      "unit": "kg",
       "category": "Grains",
-      "supplierPhone": "+92 345 9988776"
-    },
-    {
-      "urduName": "کوکنگ آئل کنو��ا",
-      "receivedDate": 1794236170765,
-      "itemCode": "SKU-PT-001",
-      "supplierPhone": "+92 345 9988776",
-      "unit": "Liters",
-      "batchNumber": "B-26-OIL-091",
-      "updatedAt": 1794408970765,
+      "location": "Dry Ration Store - Shelf A",
+      "urduName": "باسمتی چاول کائنات",
       "supplier": "National Spices & Grains Mart",
-      "stock": 45,
-      "costPerUnit": 520,
+      "stock": 50,
       "invoiceNo": "NSG-4412",
+      "name": "Basmati Rice (Kainat)",
+      "receivedDate": 1794389613012,
+      "updatedAt": 1794562413012,
       "threshold": 15,
+      "expiryDate": 1810200813012,
+      "supplierPhone": "+92 345 9988776",
+      "id": "inv3",
+      "batchNumber": "B-26-RIC-012",
+      "costPerUnit": 360,
+      "itemCode": "SKU-GR-001"
+    },
+    {
+      "category": "Grains",
+      "location": "Dry Ration Store - Shelf A",
+      "name": "Wheat Flour (Fine Atta)",
+      "urduName": "فائن آٹا / میدہ",
+      "supplier": "National Spices & Grains Mart",
+      "stock": 40,
+      "supplierPhone": "+92 345 9988776",
+      "invoiceNo": "NSG-4412",
+      "id": "inv4",
+      "updatedAt": 1794562413012,
+      "threshold": 20,
+      "expiryDate": 1802424813012,
+      "unit": "kg",
+      "batchNumber": "B-26-FLR-009",
+      "costPerUnit": 150,
+      "receivedDate": 1794389613012,
+      "itemCode": "SKU-GR-002"
+    },
+    {
+      "threshold": 15,
+      "supplierPhone": "+92 345 9988776",
+      "updatedAt": 1794562413012,
+      "receivedDate": 1794389613012,
       "name": "Cooking Oil (Canola 16L)",
+      "expiryDate": 1805016813012,
+      "itemCode": "SKU-PT-001",
+      "batchNumber": "B-26-OIL-091",
+      "costPerUnit": 520,
+      "stock": 45,
+      "id": "inv5",
+      "urduName": "کوکنگ آئل کنولا",
+      "supplier": "National Spices & Grains Mart",
       "location": "Dry Ration Store - Shelf B",
+      "unit": "Liters",
       "category": "Pantry",
-      "expiryDate": 1804863370765,
-      "id": "inv5"
+      "invoiceNo": "NSG-4412"
     },
     {
-      "unit": "kg",
-      "location": "Walk-in Chiller",
-      "category": "Dairy",
-      "costPerUnit": 240,
-      "id": "inv6",
-      "invoiceNo": "PPD-1022",
-      "threshold": 10,
-      "supplier": "Punjab Pure Dairy & Khoya Farm",
-      "stock": 12,
-      "name": "Yogurt (Fresh Dahi)",
       "batchNumber": "B-26-YOG-015",
-      "supplierPhone": "+92 302 9876543",
-      "expiryDate": 1794668170765,
-      "receivedDate": 1794236170765,
-      "updatedAt": 1794408970765,
-      "itemCode": "SKU-DY-001",
-      "urduName": "تازہ دہی"
-    },
-    {
-      "threshold": 15,
-      "invoiceNo": "SGP-9011",
-      "costPerUnit": 120,
-      "location": "Dry Ration Store - Shelf B",
-      "category": "Produce",
-      "receivedDate": 1794236170765,
-      "stock": 30,
-      "unit": "kg",
-      "supplier": "Sindh Green Fresh Produce Wholesale",
-      "supplierPhone": "+92 333 5551234",
-      "expiryDate": 1795186570765,
-      "updatedAt": 1794408970765,
-      "name": "Onions (Piaz)",
-      "urduName": "پیاز دیسی",
-      "batchNumber": "B-26-ONN-032",
-      "id": "inv7",
-      "itemCode": "SKU-PR-001"
-    },
-    {
-      "unit": "kg",
-      "id": "inv8",
-      "urduName": "ٹماٹر فارمی",
-      "threshold": 12,
-      "itemCode": "SKU-PR-002",
-      "supplierPhone": "+92 333 5551234",
-      "costPerUnit": 150,
-      "invoiceNo": "SGP-9011",
-      "stock": 18,
-      "location": "Walk-in Chiller",
-      "category": "Produce",
-      "receivedDate": 1794236170765,
-      "name": "Tomatoes (Tamatar)",
-      "batchNumber": "B-26-TOM-088",
-      "updatedAt": 1794408970765,
-      "supplier": "Sindh Green Fresh Produce Wholesale",
-      "expiryDate": 1794840970765
-    },
-    {
-      "supplier": "Sindh Green Fresh Produce Wholesale",
-      "unit": "kg",
-      "receivedDate": 1794236170765,
-      "batchNumber": "B-26-MNT-003",
-      "updatedAt": 1794408970765,
-      "stock": 1.5,
-      "location": "Walk-in Chiller",
-      "category": "Produce",
-      "expiryDate": 1794408970765,
-      "itemCode": "SKU-PR-003",
-      "urduName": "پودینہ و دھنیا",
-      "name": "Mint & Coriander Leaves",
-      "supplierPhone": "+92 333 5551234",
-      "id": "inv9",
-      "threshold": 5,
-      "invoiceNo": "SGP-8977",
-      "costPerUnit": 400
-    },
-    {
-      "batchNumber": "B-26-PEP-210",
-      "receivedDate": 1794236170765,
-      "supplier": "Gourmet Beverages & Mineral Water",
-      "expiryDate": 1799679370765,
-      "supplierPhone": "+92 300 1234567",
-      "threshold": 24,
-      "location": "Beverage Cold Room",
-      "category": "Beverages",
-      "invoiceNo": "GBM-3320",
-      "name": "Pepsi 1L Bottled",
-      "itemCode": "SKU-BV-001",
-      "urduName": "پیپسی ایک لیٹر",
-      "id": "inv10",
+      "costPerUnit": 240,
+      "updatedAt": 1794562413012,
+      "threshold": 10,
+      "receivedDate": 1794389613012,
       "stock": 12,
-      "updatedAt": 1794408970765,
-      "costPerUnit": 150,
-      "unit": "bottles"
+      "unit": "kg",
+      "itemCode": "SKU-DY-001",
+      "expiryDate": 1794821613012,
+      "category": "Dairy",
+      "urduName": "تازہ دہی",
+      "supplier": "Punjab Pure Dairy & Khoya Farm",
+      "location": "Walk-in Chiller",
+      "supplierPhone": "+92 302 9876543",
+      "name": "Yogurt (Fresh Dahi)",
+      "id": "inv6",
+      "invoiceNo": "PPD-1022"
     },
     {
-      "unit": "bottles",
-      "threshold": 48,
+      "receivedDate": 1794389613012,
+      "itemCode": "SKU-PR-001",
+      "id": "inv7",
+      "stock": 30,
+      "batchNumber": "B-26-ONN-032",
+      "costPerUnit": 120,
+      "name": "Onions (Piaz)",
+      "supplierPhone": "+92 333 5551234",
+      "invoiceNo": "SGP-9011",
+      "expiryDate": 1795340013012,
+      "updatedAt": 1794562413012,
+      "threshold": 15,
+      "category": "Produce",
+      "urduName": "پیاز دیسی",
+      "supplier": "Sindh Green Fresh Produce Wholesale",
+      "location": "Dry Ration Store - Shelf B",
+      "unit": "kg"
+    },
+    {
+      "batchNumber": "B-26-TOM-088",
+      "costPerUnit": 150,
+      "itemCode": "SKU-PR-002",
+      "invoiceNo": "SGP-9011",
+      "id": "inv8",
+      "stock": 18,
+      "name": "Tomatoes (Tamatar)",
+      "threshold": 12,
+      "updatedAt": 1794562413012,
+      "expiryDate": 1794994413012,
+      "supplierPhone": "+92 333 5551234",
+      "category": "Produce",
+      "urduName": "ٹماٹر فارمی",
+      "supplier": "Sindh Green Fresh Produce Wholesale",
+      "location": "Walk-in Chiller",
+      "unit": "kg",
+      "receivedDate": 1794389613012
+    },
+    {
+      "invoiceNo": "SGP-8977",
+      "stock": 1.5,
+      "supplierPhone": "+92 333 5551234",
+      "itemCode": "SKU-PR-003",
+      "unit": "kg",
+      "expiryDate": 1794562413012,
+      "urduName": "پودینہ و دھنیا",
+      "supplier": "Sindh Green Fresh Produce Wholesale",
+      "location": "Walk-in Chiller",
+      "category": "Produce",
+      "id": "inv9",
+      "batchNumber": "B-26-MNT-003",
+      "costPerUnit": 400,
+      "threshold": 5,
+      "receivedDate": 1794389613012,
+      "updatedAt": 1794562413012,
+      "name": "Mint & Coriander Leaves"
+    },
+    {
       "invoiceNo": "GBM-3320",
-      "supplierPhone": "+92 300 1234567",
-      "receivedDate": 1794236170765,
-      "id": "inv11",
-      "batchNumber": "B-26-WAT-110",
+      "urduName": "پیپسی ایک لیٹر",
       "supplier": "Gourmet Beverages & Mineral Water",
-      "expiryDate": 1802271370765,
+      "unit": "bottles",
       "location": "Beverage Cold Room",
       "category": "Beverages",
-      "itemCode": "SKU-BV-002",
-      "name": "Mineral Water 500ml",
-      "urduName": "منرل واٹر",
-      "updatedAt": 1794408970765,
-      "stock": 60,
-      "costPerUnit": 55
+      "id": "inv10",
+      "itemCode": "SKU-BV-001",
+      "supplierPhone": "+92 300 1234567",
+      "expiryDate": 1799832813012,
+      "batchNumber": "B-26-PEP-210",
+      "costPerUnit": 150,
+      "threshold": 24,
+      "name": "Pepsi 1L Bottled",
+      "updatedAt": 1794562413012,
+      "stock": 12,
+      "receivedDate": 1794389613012
     },
     {
-      "itemCode": "SKU-FL-001",
-      "receivedDate": 1794236170765,
-      "unit": "cylinders",
-      "stock": 3,
-      "urduName": "کمرشل گیس سلنڈر",
-      "id": "inv12",
-      "threshold": 2,
-      "invoiceNo": "ARL-7712",
+      "name": "Mineral Water 500ml",
+      "expiryDate": 1802424813012,
+      "location": "Beverage Cold Room",
+      "urduName": "منرل واٹر",
+      "supplier": "Gourmet Beverages & Mineral Water",
+      "category": "Beverages",
+      "threshold": 48,
+      "updatedAt": 1794562413012,
+      "batchNumber": "B-26-WAT-110",
+      "costPerUnit": 55,
+      "receivedDate": 1794389613012,
+      "itemCode": "SKU-BV-002",
+      "unit": "bottles",
+      "supplierPhone": "+92 300 1234567",
+      "invoiceNo": "GBM-3320",
+      "stock": 60,
+      "id": "inv11"
+    },
+    {
       "batchNumber": "B-26-LPG-004",
       "costPerUnit": 11000,
-      "supplier": "Al-Rehman LPG & Charcoal Agency",
       "name": "Commercial LPG Cylinder (45kg)",
-      "supplierPhone": "+92 322 1199887",
-      "updatedAt": 1794408970765,
+      "invoiceNo": "ARL-7712",
+      "category": "Fuel",
+      "urduName": "کمرشل گیس سلنڈر",
+      "supplier": "Al-Rehman LPG & Charcoal Agency",
       "location": "Cooking Line / Kitchen",
-      "category": "Fuel"
+      "supplierPhone": "+92 322 1199887",
+      "stock": 3,
+      "receivedDate": 1794389613012,
+      "unit": "cylinders",
+      "updatedAt": 1794562413012,
+      "id": "inv12",
+      "threshold": 2,
+      "itemCode": "SKU-FL-001"
     },
     {
-      "supplierPhone": "+92 322 1199887",
-      "invoiceNo": "ARL-7712",
-      "threshold": 50,
-      "itemCode": "SKU-FL-002",
-      "id": "inv13",
-      "unit": "kg",
-      "urduName": "کوئلہ باربی کیو",
-      "costPerUnit": 90,
-      "receivedDate": 1794236170765,
-      "location": "Dry Ration Store - Shelf B",
-      "category": "Fuel",
       "batchNumber": "B-26-CHR-055",
-      "updatedAt": 1794408970765,
+      "costPerUnit": 90,
+      "supplierPhone": "+92 322 1199887",
+      "receivedDate": 1794389613012,
+      "itemCode": "SKU-FL-002",
       "name": "Charcoal BBQ (Hardwood)",
+      "threshold": 50,
+      "updatedAt": 1794562413012,
       "stock": 80,
+      "invoiceNo": "ARL-7712",
+      "category": "Fuel",
+      "unit": "kg",
+      "id": "inv13",
+      "location": "Dry Ration Store - Shelf B",
+      "urduName": "کوئلہ باربی کیو",
       "supplier": "Al-Rehman LPG & Charcoal Agency"
     },
     {
-      "batchNumber": "B-26-TIS-022",
-      "threshold": 15,
-      "invoiceNo": "MPE-1230",
-      "id": "inv14",
-      "itemCode": "SKU-SP-001",
-      "name": "Tissue & Cutlery Packs",
-      "urduName": "ٹشو اور کٹلری",
-      "receivedDate": 1794236170765,
-      "updatedAt": 1794408970765,
-      "location": "Packaging Store",
+      "supplierPhone": "+92 301 7766554",
       "category": "Supplies",
-      "unit": "packs",
+      "invoiceNo": "MPE-1230",
+      "batchNumber": "B-26-TIS-022",
       "costPerUnit": 180,
-      "stock": 20,
+      "unit": "packs",
+      "location": "Packaging Store",
+      "urduName": "ٹشو اور کٹلری",
       "supplier": "Modern Pack & Eco Disposables",
-      "supplierPhone": "+92 301 7766554"
+      "updatedAt": 1794562413012,
+      "threshold": 15,
+      "stock": 20,
+      "itemCode": "SKU-SP-001",
+      "receivedDate": 1794389613012,
+      "id": "inv14",
+      "name": "Tissue & Cutlery Packs"
     },
     {
-      "updatedAt": 1794408970765,
-      "name": "Sultan Takeaway Boxes (Embossed)",
-      "receivedDate": 1794236170765,
-      "itemCode": "SKU-PK-001",
-      "urduName": "سلطان باکسز",
       "stock": 150,
-      "costPerUnit": 25,
-      "unit": "pcs",
-      "threshold": 200,
+      "itemCode": "SKU-PK-001",
+      "name": "Sultan Takeaway Boxes (Embossed)",
+      "updatedAt": 1794562413012,
       "batchNumber": "B-26-BOX-101",
+      "costPerUnit": 25,
+      "threshold": 200,
+      "receivedDate": 1794389613012,
       "invoiceNo": "MPE-1230",
-      "supplier": "Modern Pack & Eco Disposables",
+      "category": "Packaging",
       "supplierPhone": "+92 301 7766554",
-      "id": "inv15",
       "location": "Packaging Store",
-      "category": "Packaging"
+      "urduName": "سلطان باکسز",
+      "supplier": "Modern Pack & Eco Disposables",
+      "unit": "pcs",
+      "id": "inv15"
     },
     {
       "invoiceNo": "PFO-2026",
-      "threshold": 20,
-      "receivedDate": 1794236170765,
-      "unit": "kg",
-      "expiryDate": 1794927370765,
-      "itemCode": "SKU-JC-001",
-      "stock": 45,
-      "urduName": "تازہ مالٹا و مسمی",
-      "batchNumber": "B-26-ORG-01",
-      "supplierPhone": "+92 305 1234888",
       "id": "inv16",
-      "location": "Juice Corner Chiller",
+      "itemCode": "SKU-JC-001",
+      "unit": "kg",
       "category": "Juice & Fruits",
-      "name": "Fresh Oranges (Mosambi)",
+      "urduName": "تازہ مالٹا و مسمی",
+      "supplier": "Punjab Fresh Orchards",
+      "location": "Juice Corner Chiller",
+      "threshold": 20,
+      "batchNumber": "B-26-ORG-01",
       "costPerUnit": 220,
-      "updatedAt": 1794408970765,
-      "supplier": "Punjab Fresh Orchards"
+      "updatedAt": 1794562413012,
+      "supplierPhone": "+92 305 1234888",
+      "stock": 45,
+      "receivedDate": 1794389613012,
+      "name": "Fresh Oranges (Mosambi)",
+      "expiryDate": 1795080813012
     },
     {
-      "location": "Juice Corner Basket",
-      "category": "Juice & Fruits",
-      "threshold": 10,
-      "invoiceNo": "PFO-2027",
-      "supplier": "Punjab Fresh Orchards",
-      "unit": "dozens",
-      "supplierPhone": "+92 305 1234888",
-      "expiryDate": 1794754570765,
-      "costPerUnit": 180,
-      "updatedAt": 1794408970765,
+      "name": "Fresh Bananas (Kela)",
+      "expiryDate": 1794908013012,
       "stock": 18,
       "batchNumber": "B-26-BAN-02",
-      "receivedDate": 1794236170765,
-      "name": "Fresh Bananas (Kela)",
+      "costPerUnit": 180,
+      "location": "Juice Corner Basket",
       "urduName": "تازہ کیلے",
+      "supplier": "Punjab Fresh Orchards",
+      "invoiceNo": "PFO-2027",
+      "category": "Juice & Fruits",
+      "receivedDate": 1794389613012,
+      "supplierPhone": "+92 305 1234888",
       "itemCode": "SKU-JC-002",
+      "updatedAt": 1794562413012,
+      "threshold": 10,
+      "unit": "dozens",
       "id": "inv17"
     },
     {
-      "itemCode": "SKU-JC-003",
+      "location": "Juice Corner Chiller",
+      "stock": 8,
       "urduName": "کاغذی لیموں",
       "supplierPhone": "+92 333 5551234",
-      "id": "inv18",
-      "invoiceNo": "SGP-9022",
-      "threshold": 4,
-      "costPerUnit": 320,
-      "unit": "kg",
       "supplier": "Sindh Green Fresh Produce Wholesale",
-      "expiryDate": 1795100170765,
-      "batchNumber": "B-26-LEM-03",
-      "receivedDate": 1794236170765,
-      "updatedAt": 1794408970765,
-      "stock": 8,
+      "category": "Juice & Fruits",
+      "invoiceNo": "SGP-9022",
       "name": "Fresh Lemons (Kaghzi Leemo)",
-      "location": "Juice Corner Chiller",
-      "category": "Juice & Fruits"
+      "expiryDate": 1795253613012,
+      "batchNumber": "B-26-LEM-03",
+      "costPerUnit": 320,
+      "threshold": 4,
+      "updatedAt": 1794562413012,
+      "id": "inv18",
+      "itemCode": "SKU-JC-003",
+      "unit": "kg",
+      "receivedDate": 1794389613012
     },
     {
-      "updatedAt": 1794408970765,
-      "location": "Juice Bar Refrigerator",
-      "category": "Dairy",
-      "stock": 30,
       "id": "inv19",
-      "receivedDate": 1794236170765,
-      "unit": "liters",
-      "supplier": "Punjab Pure Dairy & Khoya Farm",
-      "supplierPhone": "+92 302 9876543",
-      "batchNumber": "B-26-MLK-04",
-      "invoiceNo": "PPD-1035",
-      "costPerUnit": 260,
-      "threshold": 15,
       "urduName": "تازہ دودھ 1 لیٹر",
-      "expiryDate": 1794840970765,
-      "name": "Whole Milk (Chilled Pack 1L)",
-      "itemCode": "SKU-JC-004"
+      "supplier": "Punjab Pure Dairy & Khoya Farm",
+      "expiryDate": 1794994413012,
+      "location": "Juice Bar Refrigerator",
+      "updatedAt": 1794562413012,
+      "unit": "liters",
+      "threshold": 15,
+      "category": "Dairy",
+      "batchNumber": "B-26-MLK-04",
+      "costPerUnit": 260,
+      "itemCode": "SKU-JC-004",
+      "invoiceNo": "PPD-1035",
+      "supplierPhone": "+92 302 9876543",
+      "stock": 30,
+      "receivedDate": 1794389613012,
+      "name": "Whole Milk (Chilled Pack 1L)"
     },
     {
-      "threshold": 5,
-      "name": "Rooh Afza / Rose Syrup 800ml",
-      "invoiceNo": "NSG-4450",
-      "costPerUnit": 480,
-      "urduName": "ر��ح افزا بوتل",
-      "itemCode": "SKU-JC-005",
-      "stock": 10,
-      "receivedDate": 1794236170765,
-      "unit": "bottles",
-      "location": "Juice Corner Shelf",
+      "expiryDate": 1820568813012,
       "category": "Beverages",
-      "updatedAt": 1794408970765,
-      "expiryDate": 1820415370765,
-      "supplierPhone": "+92 345 9988776",
-      "batchNumber": "B-26-ROH-05",
+      "receivedDate": 1794389613012,
+      "urduName": "روح افزا بوتل",
       "supplier": "National Spices & Grains Mart",
-      "id": "inv20"
+      "location": "Juice Corner Shelf",
+      "name": "Rooh Afza / Rose Syrup 800ml",
+      "updatedAt": 1794562413012,
+      "stock": 10,
+      "batchNumber": "B-26-ROH-05",
+      "costPerUnit": 480,
+      "threshold": 5,
+      "id": "inv20",
+      "unit": "bottles",
+      "invoiceNo": "NSG-4450",
+      "itemCode": "SKU-JC-005",
+      "supplierPhone": "+92 345 9988776"
     },
     {
+      "urduName": "جوس گلاس ڈسپوزایبل",
+      "supplier": "Modern Pack & Eco Disposables",
+      "location": "Juice Corner Under-counter",
+      "name": "Disposable Juice Glasses (500ml)",
+      "id": "inv21",
+      "category": "Packaging",
+      "supplierPhone": "+92 301 7766554",
+      "updatedAt": 1794562413012,
+      "threshold": 100,
+      "unit": "pcs",
+      "invoiceNo": "MPE-1244",
       "itemCode": "SKU-JC-006",
       "stock": 300,
-      "threshold": 100,
-      "supplierPhone": "+92 301 7766554",
-      "urduName": "جوس گلاس ڈسپوزایبل",
-      "invoiceNo": "MPE-1244",
-      "unit": "pcs",
-      "costPerUnit": 12,
-      "id": "inv21",
-      "updatedAt": 1794408970765,
       "batchNumber": "B-26-GLS-06",
-      "supplier": "Modern Pack & Eco Disposables",
-      "name": "Disposable Juice Glasses (500ml)",
-      "receivedDate": 1794236170765,
-      "location": "Juice Corner Under-counter",
-      "category": "Packaging"
+      "costPerUnit": 12,
+      "receivedDate": 1794389613012
     },
     {
-      "itemCode": "SKU-JC-007",
-      "supplierPhone": "+92 301 7766554",
-      "name": "Paper Straws (Boba & Juice)",
+      "receivedDate": 1794389613012,
       "urduName": "پائپ اسٹرا",
-      "invoiceNo": "MPE-1245",
       "threshold": 5,
-      "batchNumber": "B-26-STR-07",
-      "updatedAt": 1794408970765,
-      "receivedDate": 1794236170765,
       "supplier": "Modern Pack & Eco Disposables",
-      "unit": "packs",
-      "id": "inv22",
+      "updatedAt": 1794562413012,
       "location": "Juice Corner Under-counter",
       "category": "Supplies",
       "stock": 15,
+      "supplierPhone": "+92 301 7766554",
+      "name": "Paper Straws (Boba & Juice)",
+      "id": "inv22",
+      "unit": "packs",
+      "itemCode": "SKU-JC-007",
+      "invoiceNo": "MPE-1245",
+      "batchNumber": "B-26-STR-07",
       "costPerUnit": 120
     },
     {
-      "urduName": "برف آئس بلاک",
-      "id": "inv23",
-      "updatedAt": 1794408970765,
-      "batchNumber": "B-26-ICE-08",
-      "itemCode": "SKU-JC-008",
-      "unit": "kg",
-      "threshold": 20,
-      "expiryDate": 1794581770765,
-      "invoiceNo": "CIF-3011",
-      "supplier": "Capital Ice Factory",
-      "receivedDate": 1794236170765,
-      "supplierPhone": "+92 321 4455667",
-      "stock": 50,
       "location": "Juice Bar Ice Chest",
-      "category": "Juice & Fruits",
+      "urduName": "برف آئس بلاک",
+      "supplier": "Capital Ice Factory",
+      "unit": "kg",
+      "invoiceNo": "CIF-3011",
+      "batchNumber": "B-26-ICE-08",
       "costPerUnit": 25,
-      "name": "Food Grade Crushed Ice"
+      "category": "Juice & Fruits",
+      "stock": 50,
+      "receivedDate": 1794389613012,
+      "expiryDate": 1794735213012,
+      "name": "Food Grade Crushed Ice",
+      "supplierPhone": "+92 321 4455667",
+      "id": "inv23",
+      "itemCode": "SKU-JC-008",
+      "threshold": 20,
+      "updatedAt": 1794562413012
     },
     {
       "supplier": "",
@@ -8517,77 +9782,85 @@
       "contactPerson": "033451979328"
     },
     {
-      "whatsapp": "+92 300 4567891",
-      "email": "madinapoultry.lhr@gmail.com",
-      "totalPurchases": 680000,
-      "category": "Meat & Poultry",
       "rating": 5,
-      "updatedAt": 1794408970765,
-      "address": "Shop #14, Tollinton Poultry Market, Jail Road",
-      "contactPerson": "Haji Muhammad Rafiq",
-      "name": "Al-Madina Fresh Poultry Ltd",
       "city": "Lahore",
-      "paymentTerms": "Credit 7 Days",
-      "status": "active",
+      "category": "Meat & Poultry",
+      "updatedAt": 1794562413012,
       "notes": "Daily fresh delivery at 8:00 AM. 100% Halal Certified hand-slaughtered.",
+      "whatsapp": "+92 300 4567891",
+      "address": "Shop #14, Tollinton Poultry Market, Jail Road",
+      "status": "active",
+      "paymentTerms": "Credit 7 Days",
       "suppliedItems": [
         "Chicken (Boneless)",
         "Chicken Whole (Skinless)",
         "Chicken Wings & Drumsticks",
         "Chicken Broiler"
       ],
+      "contactPerson": "Haji Muhammad Rafiq",
       "id": "sup-1",
+      "phone": "+92 300 4567891",
+      "totalPurchases": 680000,
+      "createdAt": 1789464813012,
+      "email": "madinapoultry.lhr@gmail.com",
+      "name": "Al-Madina Fresh Poultry Ltd",
+      "currentBalance": 24500,
       "bankDetails": {
+        "accountNumber": "0101-0102938475",
         "iban": "PK45MEZN0001010102938475",
         "bankName": "Meezan Bank",
-        "accountNumber": "0101-0102938475",
         "accountTitle": "Al-Madina Poultry Traders"
-      },
-      "createdAt": 1789311370765,
-      "phone": "+92 300 4567891",
-      "currentBalance": 24500
+      }
     },
     {
+      "updatedAt": 1794476013012,
+      "name": "Hazrat Bilal Meat & Beef Center",
+      "phone": "+92 321 8765432",
+      "paymentTerms": "Cash on Delivery",
+      "address": "Bakra Mandi Gate #2, Shahpur Kanjran, Multan Road",
+      "email": "bilalmeat.lahore@gmail.com",
+      "createdAt": 1786872813012,
       "status": "active",
+      "id": "sup-2",
+      "totalPurchases": 1450000,
+      "category": "Meat & Poultry",
+      "city": "Lahore",
       "whatsapp": "+92 321 8765432",
       "bankDetails": {
-        "accountNumber": "0342-100293849",
         "iban": "PK12ALFH0342100293849001",
         "bankName": "Bank Alfalah",
+        "accountNumber": "0342-100293849",
         "accountTitle": "Hazrat Bilal Meat Supplies"
       },
-      "createdAt": 1786719370765,
-      "category": "Meat & Poultry",
-      "notes": "Premium goat mutton and fresh beef cuts for BBQ skewers and Karahi.",
+      "currentBalance": 0,
+      "rating": 5,
       "contactPerson": "Ch. Bilal Hussain",
-      "id": "sup-2",
-      "phone": "+92 321 8765432",
-      "city": "Lahore",
-      "totalPurchases": 1450000,
-      "paymentTerms": "Cash on Delivery",
       "suppliedItems": [
         "Mutton (Mix Cut)",
         "Mutton Chops",
         "Beef Boneless Keema",
         "Beef Nihari Cuts"
       ],
-      "name": "Hazrat Bilal Meat & Beef Center",
-      "address": "Bakra Mandi Gate #2, Shahpur Kanjran, Multan Road",
-      "currentBalance": 0,
-      "email": "bilalmeat.lahore@gmail.com",
-      "rating": 5,
-      "updatedAt": 1794322570765
+      "notes": "Premium goat mutton and fresh beef cuts for BBQ skewers and Karahi."
     },
     {
-      "city": "Lahore",
-      "totalPurchases": 320000,
-      "email": "sindhgreens.mandi@yahoo.com",
-      "contactPerson": "Malik Zulfiqar",
-      "category": "Fresh Produce",
+      "phone": "+92 333 5551234",
+      "name": "Sindh Green Fresh Produce Wholesale",
       "whatsapp": "+92 333 5551234",
-      "status": "active",
-      "createdAt": 1790607370766,
-      "updatedAt": 1794408970766,
+      "email": "sindhgreens.mandi@yahoo.com",
+      "category": "Fresh Produce",
+      "updatedAt": 1794562413012,
+      "id": "sup-3",
+      "bankDetails": {
+        "accountTitle": "Sindh Green Vegetable Commission",
+        "bankName": "Habib Bank Limited (HBL)",
+        "accountNumber": "0042-7901823901",
+        "iban": "PK89HABB0042790182390101"
+      },
+      "city": "Lahore",
+      "rating": 4.8,
+      "currentBalance": 18200,
+      "address": "Shed #48, Badami Bagh Vegetable Wholesale Market",
       "suppliedItems": [
         "Onions (Piaz)",
         "Tomatoes (Tamatar)",
@@ -8596,34 +9869,29 @@
         "Green Chillies",
         "Lemon"
       ],
-      "phone": "+92 333 5551234",
-      "address": "Shed #48, Badami Bagh Vegetable Wholesale Market",
-      "currentBalance": 18200,
-      "paymentTerms": "Credit 15 Days",
-      "rating": 4.8,
-      "name": "Sindh Green Fresh Produce Wholesale",
-      "bankDetails": {
-        "accountTitle": "Sindh Green Vegetable Commission",
-        "bankName": "Habib Bank Limited (HBL)",
-        "accountNumber": "0042-7901823901",
-        "iban": "PK89HABB0042790182390101"
-      },
       "notes": "Morning crates dispatched at 6:00 AM directly from Mandi auction.",
-      "id": "sup-3"
+      "contactPerson": "Malik Zulfiqar",
+      "paymentTerms": "Credit 15 Days",
+      "status": "active",
+      "createdAt": 1790760813012,
+      "totalPurchases": 320000
     },
     {
-      "bankDetails": {
-        "accountTitle": "National Grains & Spices Wholesale",
-        "bankName": "MCB Bank",
-        "iban": "PK33MUCB1092882736192001",
-        "accountNumber": "1092-882736192"
-      },
-      "currentBalance": 45000,
+      "rating": 4.9,
       "name": "National Spices & Grains Mart",
-      "id": "sup-4",
-      "updatedAt": 1794236170766,
       "phone": "+92 302 9988776",
-      "address": "Shop 112, Akbari Mandi, Circular Road, Walled City",
+      "email": "nationalspices.akbari@gmail.com",
+      "paymentTerms": "Credit 30 Days",
+      "bankDetails": {
+        "iban": "PK33MUCB1092882736192001",
+        "bankName": "MCB Bank",
+        "accountNumber": "1092-882736192",
+        "accountTitle": "National Grains & Spices Wholesale"
+      },
+      "status": "active",
+      "createdAt": 1784280813012,
+      "id": "sup-4",
+      "currentBalance": 45000,
       "suppliedItems": [
         "Super Basmati Rice (Kainat 1121)",
         "Wheat Flour (Fine Atta)",
@@ -8631,37 +9899,37 @@
         "Shan Karahi/Biryani Masala",
         "Whole Spices (Garam Masala)"
       ],
-      "status": "active",
-      "category": "Grains & Dry Ration",
-      "whatsapp": "+92 302 9988776",
-      "notes": "Direct bulk import from mills. Top grade aroma aged rice for Sultan Biryani.",
       "contactPerson": "Sheikh Tariq Mehmood",
-      "createdAt": 1784127370766,
+      "address": "Shop 112, Akbari Mandi, Circular Road, Walled City",
+      "notes": "Direct bulk import from mills. Top grade aroma aged rice for Sultan Biryani.",
       "city": "Lahore",
-      "rating": 4.9,
-      "email": "nationalspices.akbari@gmail.com",
-      "paymentTerms": "Credit 30 Days",
-      "totalPurchases": 940000
+      "whatsapp": "+92 302 9988776",
+      "category": "Grains & Dry Ration",
+      "totalPurchases": 940000,
+      "updatedAt": 1794389613012
     },
     {
-      "createdAt": 1788015370766,
+      "paymentTerms": "Credit 7 Days",
+      "city": "Lahore",
+      "updatedAt": 1794562413012,
       "phone": "+92 312 6677889",
       "bankDetails": {
+        "iban": "PK56FAYS3091002938192801",
         "bankName": "Faysal Bank",
-        "accountNumber": "3091-0029381928",
         "accountTitle": "Mehran Dairy & Milk Farm",
-        "iban": "PK56FAYS3091002938192801"
+        "accountNumber": "3091-0029381928"
       },
-      "address": "Farm #8, Raiwind Road Dairy Complex",
-      "status": "active",
-      "city": "Lahore",
-      "totalPurchases": 410000,
-      "notes": "Unadulterated pure buffalo milk and dahi for Raita, Lassi, and Karahi gravies.",
-      "contactPerson": "Ustad Nasir Dairywala",
-      "paymentTerms": "Credit 7 Days",
-      "currentBalance": 12800,
+      "email": "mehrandairyfarms@gmail.com",
+      "id": "sup-5",
       "name": "Mehran Fresh Dairy Farms & Processing",
+      "whatsapp": "+92 312 6677889",
       "rating": 5,
+      "totalPurchases": 410000,
+      "createdAt": 1788168813012,
+      "currentBalance": 12800,
+      "status": "active",
+      "address": "Farm #8, Raiwind Road Dairy Complex",
+      "contactPerson": "Ustad Nasir Dairywala",
       "suppliedItems": [
         "Fresh Buffalo Milk",
         "Thick Yogurt (Dahi)",
@@ -8669,14 +9937,25 @@
         "Fresh Cream (Malai)",
         "Desi Ghee (Tin 5kg)"
       ],
-      "updatedAt": 1794408970766,
-      "whatsapp": "+92 312 6677889",
-      "email": "mehrandairyfarms@gmail.com",
-      "id": "sup-5",
+      "notes": "Unadulterated pure buffalo milk and dahi for Raita, Lassi, and Karahi gravies.",
       "category": "Dairy & Bakery"
     },
     {
-      "city": "Lahore",
+      "updatedAt": 1794303213012,
+      "totalPurchases": 520000,
+      "rating": 4.7,
+      "status": "active",
+      "currentBalance": 15600,
+      "email": "sultanbeverages.dist@gmail.com",
+      "id": "sup-6",
+      "name": "Sultan Beverage & Cola Distributors",
+      "phone": "+92 304 3322110",
+      "bankDetails": {
+        "accountTitle": "Sultan Beverage Distributors",
+        "iban": "PK77UNIL2401998877665501",
+        "bankName": "United Bank Limited (UBL)",
+        "accountNumber": "2401-9988776655"
+      },
       "suppliedItems": [
         "Pepsi (1.5L / 500ml / Cans)",
         "7Up (1.5L / Cans)",
@@ -8684,62 +9963,63 @@
         "Nestle Pure Life Mineral Water (500ml / 1.5L)",
         "Gourmet Club Soda"
       ],
-      "createdAt": 1785855370766,
-      "paymentTerms": "Credit 15 Days",
-      "email": "sultanbeverages.dist@gmail.com",
-      "rating": 4.7,
-      "currentBalance": 15600,
-      "id": "sup-6",
-      "totalPurchases": 520000,
-      "phone": "+92 304 3322110",
-      "name": "Sultan Beverage & Cola Distributors",
-      "category": "Beverages & Drinks",
-      "whatsapp": "+92 304 3322110",
-      "notes": "Official franchisee distributor with returnable glass bottle crates exchange.",
       "contactPerson": "Kamran Siddiqui",
-      "updatedAt": 1794149770766,
-      "status": "active",
-      "bankDetails": {
-        "iban": "PK77UNIL2401998877665501",
-        "accountNumber": "2401-9988776655",
-        "accountTitle": "Sultan Beverage Distributors",
-        "bankName": "United Bank Limited (UBL)"
-      },
-      "address": "Pepsi Route Depot, Kot Lakhpat Industrial Area"
+      "createdAt": 1786008813012,
+      "category": "Beverages & Drinks",
+      "address": "Pepsi Route Depot, Kot Lakhpat Industrial Area",
+      "city": "Lahore",
+      "notes": "Official franchisee distributor with returnable glass bottle crates exchange.",
+      "whatsapp": "+92 304 3322110",
+      "paymentTerms": "Credit 15 Days"
     },
     {
-      "createdAt": 1789311370766,
-      "totalPurchases": 290000,
-      "category": "Fuel & Charcoal",
-      "whatsapp": "+92 322 1199887",
+      "notes": "Emergency LPG cylinder replacement within 45 minutes on call.",
+      "paymentTerms": "Cash on Delivery",
+      "contactPerson": "Mian Farooq Gaswala",
       "suppliedItems": [
         "Commercial 45kg LPG Cylinders",
         "Domestic 11.8kg LPG Cylinders",
         "Babul Hardwood BBQ Charcoal (50kg Bags)"
       ],
-      "paymentTerms": "Cash on Delivery",
-      "rating": 4.8,
-      "city": "Lahore",
-      "contactPerson": "Mian Farooq Gaswala",
-      "name": "Al-Rehman LPG & Charcoal Agency",
-      "address": "Main Ferozepur Road near Kahna Nau",
-      "notes": "Emergency LPG cylinder replacement within 45 minutes on call.",
-      "phone": "+92 322 1199887",
-      "status": "active",
       "id": "sup-7",
-      "updatedAt": 1794063370766,
+      "createdAt": 1789464813012,
+      "name": "Al-Rehman LPG & Charcoal Agency",
+      "rating": 4.8,
+      "currentBalance": 0,
+      "category": "Fuel & Charcoal",
+      "phone": "+92 322 1199887",
+      "updatedAt": 1794216813012,
       "bankDetails": {
-        "accountTitle": "Al-Rehman Gas & Energy Services",
-        "bankName": "Allied Bank Limited (ABL)",
+        "iban": "PK19ABPA0010098273615201",
         "accountNumber": "0010-0982736152",
-        "iban": "PK19ABPA0010098273615201"
+        "accountTitle": "Al-Rehman Gas & Energy Services",
+        "bankName": "Allied Bank Limited (ABL)"
       },
-      "currentBalance": 0
+      "whatsapp": "+92 322 1199887",
+      "address": "Main Ferozepur Road near Kahna Nau",
+      "city": "Lahore",
+      "totalPurchases": 290000,
+      "status": "active"
     },
     {
-      "email": "modernpack.lahore@gmail.com",
+      "status": "active",
       "currentBalance": 22000,
-      "updatedAt": 1793976970766,
+      "bankDetails": {
+        "bankName": "Askari Bank",
+        "accountNumber": "0192-3847561029",
+        "iban": "PK44ASCM0192384756102901",
+        "accountTitle": "Modern Pack & Paper Products"
+      },
+      "city": "Lahore",
+      "category": "Packaging & Disposables",
+      "createdAt": 1787736813012,
+      "whatsapp": "+92 301 7766554",
+      "phone": "+92 301 7766554",
+      "totalPurchases": 260000,
+      "rating": 4.9,
+      "address": "Urdu Bazaar Packaging Plaza, Hall Road",
+      "email": "modernpack.lahore@gmail.com",
+      "contactPerson": "Salman Butt",
       "suppliedItems": [
         "Sultan Printed Takeaway Boxes",
         "Foil Containers (500ml/1000ml)",
@@ -8747,30 +10027,14 @@
         "Paper Bags & Napkins",
         "Cutlery Packs"
       ],
+      "id": "sup-8",
       "name": "Modern Pack & Eco Disposables",
-      "status": "active",
-      "bankDetails": {
-        "iban": "PK44ASCM0192384756102901",
-        "accountTitle": "Modern Pack & Paper Products",
-        "bankName": "Askari Bank",
-        "accountNumber": "0192-3847561029"
-      },
-      "contactPerson": "Salman Butt",
-      "city": "Lahore",
-      "notes": "Food-grade heat-resistant packaging with Sultan Restaurant custom golden embossed logo.",
-      "address": "Urdu Bazaar Packaging Plaza, Hall Road",
+      "updatedAt": 1794130413012,
       "paymentTerms": "Credit 15 Days",
-      "createdAt": 1787583370766,
-      "category": "Packaging & Disposables",
-      "rating": 4.9,
-      "phone": "+92 301 7766554",
-      "whatsapp": "+92 301 7766554",
-      "totalPurchases": 260000,
-      "id": "sup-8"
+      "notes": "Food-grade heat-resistant packaging with Sultan Restaurant custom golden embossed logo."
     },
     {
-      "status": "active",
-      "address": "Brandreth Road Industrial Market",
+      "contactPerson": "Asif Iqbal",
       "suppliedItems": [
         "Commercial Dishwashing Liquid (20L)",
         "Heavy Floor Degreaser",
@@ -8778,26 +10042,27 @@
         "Hand Sanitizer",
         "Chef Caps & Aprons"
       ],
+      "updatedAt": 1794044013012,
+      "currentBalance": 6500,
+      "city": "Lahore",
       "totalPurchases": 140000,
       "notes": "Pest control & kitchen sanitation chemical supplies with safety compliance sheets.",
-      "createdAt": 1790175370766,
-      "phone": "+92 306 4433221",
       "id": "sup-9",
-      "city": "Lahore",
-      "paymentTerms": "Credit 30 Days",
       "name": "Master Clean & Kitchen Hygiene Solutions",
-      "updatedAt": 1793890570766,
-      "email": "masterclean.hygiene@gmail.com",
-      "rating": 4.6,
+      "whatsapp": "+92 306 4433221",
+      "status": "active",
+      "createdAt": 1790328813012,
+      "phone": "+92 306 4433221",
       "bankDetails": {
         "bankName": "Dubai Islamic Bank",
+        "accountTitle": "Master Hygiene Solutions",
         "iban": "PK60DIBP0281998877661101",
-        "accountNumber": "0281-9988776611",
-        "accountTitle": "Master Hygiene Solutions"
+        "accountNumber": "0281-9988776611"
       },
-      "contactPerson": "Asif Iqbal",
-      "currentBalance": 6500,
-      "whatsapp": "+92 306 4433221",
+      "paymentTerms": "Credit 30 Days",
+      "rating": 4.6,
+      "email": "masterclean.hygiene@gmail.com",
+      "address": "Brandreth Road Industrial Market",
       "category": "Cleaning & Kitchen Supplies"
     },
     {
@@ -9376,6 +10641,983 @@
     }
   ],
   "kitchenConsumption": [
+    {
+      "id": "ce-KOT-4586-1794646792454-m2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-4586",
+      "menuItemId": "m2",
+      "menuItemName": "Desi Murgh Karahi",
+      "qty": 1,
+      "at": 1794646792454,
+      "revenue": 1850,
+      "cost": 860.4807999999999,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 0.773
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.153
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.263
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.102
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-4586-1794646792454-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-4586",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 1,
+      "at": 1794646792454,
+      "revenue": 650,
+      "cost": 62.2864,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 0.143
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.04
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-4586-1794646792454-m1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-4586",
+      "menuItemId": "m1",
+      "menuItemName": "Sultan Seekh Kebab",
+      "qty": 1,
+      "at": 1794646792454,
+      "revenue": 1450,
+      "cost": 1219.82912,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 0.468
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.085
+        },
+        {
+          "itemId": "inv13",
+          "qty": 0.35
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-4586-1794646792454-m4",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-4586",
+      "menuItemId": "m4",
+      "menuItemName": "Royal Turkish Kunafa",
+      "qty": 1,
+      "at": 1794646792454,
+      "revenue": 850,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m1",
+      "menuItemName": "Sultan Seekh Kebab",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 1450,
+      "cost": 1219.82912,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 0.468
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.085
+        },
+        {
+          "itemId": "inv13",
+          "qty": 0.35
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m2",
+      "menuItemName": "Desi Murgh Karahi",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 1850,
+      "cost": 860.4807999999999,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 0.773
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.153
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.263
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.102
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 1300,
+      "cost": 124.5728,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 0.286
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.08
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m6-Large (13\")",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m6",
+      "menuItemName": "Fajita Supreme Pizza (Large (13\"))",
+      "variantName": "Large (13\")",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 1950,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m5",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m5",
+      "menuItemName": "Fresh Mint Margarita",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 900,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m4",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m4",
+      "menuItemName": "Royal Turkish Kunafa",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 850,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m7-1 KG",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m7",
+      "menuItemName": "Smoked Mutton Ribs (1 KG)",
+      "variantName": "1 KG",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 6800,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m8",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m8",
+      "menuItemName": "Sultan Dum Biryani",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 1900,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m9",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m9",
+      "menuItemName": "Grand Sultan Angus Burger",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 1150,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m11",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m11",
+      "menuItemName": "Choco Molten Lava Cake",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 750,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m12",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m12",
+      "menuItemName": "Mango Kulfa Shake",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 550,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m10",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m10",
+      "menuItemName": "Cheesy Truffle Fries",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 590,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m14",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m14",
+      "menuItemName": "Mutton Shinwari Karahi",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 5600,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m15",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m15",
+      "menuItemName": "Chicken Manchurian & Egg Fried Rice",
+      "qty": 1,
+      "at": 1794646824443,
+      "revenue": 1350,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m13",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m13",
+      "menuItemName": "Sultan Special Roghni Naan",
+      "qty": 3,
+      "at": 1794646824443,
+      "revenue": 450,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m16",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m16",
+      "menuItemName": "Chicken Chowmein Classic",
+      "qty": 3,
+      "at": 1794646824443,
+      "revenue": 3450,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m17",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m17",
+      "menuItemName": "Hot & Sour Chicken Soup",
+      "qty": 3,
+      "at": 1794646824443,
+      "revenue": 1470,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m18",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m18",
+      "menuItemName": "Grilled Chicken Alfredo Pasta",
+      "qty": 3,
+      "at": 1794646824443,
+      "revenue": 4470,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-deal2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "deal2",
+      "menuItemName": "Royal Couple Platter (2 Persons)",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 5700,
+      "cost": 5003.88928,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 1.872
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.339
+        },
+        {
+          "itemId": "inv13",
+          "qty": 1.4
+        },
+        {
+          "itemId": "inv4",
+          "qty": 0.286
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.08
+        }
+      ],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-deal1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "deal1",
+      "menuItemName": "Sultan Family Feast (4-5 Persons)",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 9998,
+      "cost": 6600.27808,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 1.545
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.306
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.525
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.204
+        },
+        {
+          "itemId": "inv2",
+          "qty": 1.872
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.339
+        },
+        {
+          "itemId": "inv13",
+          "qty": 1.4
+        }
+      ],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6185-1794646824443-m19",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6185",
+      "menuItemId": "m19",
+      "menuItemName": "Crispy Fish & Chips",
+      "qty": 2,
+      "at": 1794646824443,
+      "revenue": 3300,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m1",
+      "menuItemName": "Sultan Seekh Kebab",
+      "qty": 1,
+      "at": 1794646854052,
+      "revenue": 1450,
+      "cost": 1219.82912,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 0.468
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.085
+        },
+        {
+          "itemId": "inv13",
+          "qty": 0.35
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m2",
+      "menuItemName": "Desi Murgh Karahi",
+      "qty": 3,
+      "at": 1794646854052,
+      "revenue": 5550,
+      "cost": 2581.4424,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 2.318
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.459
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.788
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.306
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 9,
+      "at": 1794646854052,
+      "revenue": 5850,
+      "cost": 560.5776,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 1.285
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.36
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m5",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m5",
+      "menuItemName": "Fresh Mint Margarita",
+      "qty": 9,
+      "at": 1794646854052,
+      "revenue": 4050,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m8",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m8",
+      "menuItemName": "Sultan Dum Biryani",
+      "qty": 1,
+      "at": 1794646854052,
+      "revenue": 950,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m7-1 KG",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m7",
+      "menuItemName": "Smoked Mutton Ribs (1 KG)",
+      "variantName": "1 KG",
+      "qty": 1,
+      "at": 1794646854052,
+      "revenue": 6800,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m10",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m10",
+      "menuItemName": "Cheesy Truffle Fries",
+      "qty": 7,
+      "at": 1794646854052,
+      "revenue": 4130,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m11",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m11",
+      "menuItemName": "Choco Molten Lava Cake",
+      "qty": 6,
+      "at": 1794646854052,
+      "revenue": 4500,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m12",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m12",
+      "menuItemName": "Mango Kulfa Shake",
+      "qty": 4,
+      "at": 1794646854052,
+      "revenue": 2200,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m15",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m15",
+      "menuItemName": "Chicken Manchurian & Egg Fried Rice",
+      "qty": 3,
+      "at": 1794646854052,
+      "revenue": 4050,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m14",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m14",
+      "menuItemName": "Mutton Shinwari Karahi",
+      "qty": 2,
+      "at": 1794646854052,
+      "revenue": 5600,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9738-1794646854052-m13",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9738",
+      "menuItemId": "m13",
+      "menuItemName": "Sultan Special Roghni Naan",
+      "qty": 4,
+      "at": 1794646854052,
+      "revenue": 600,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-3623-1794646928439-m8",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3623",
+      "menuItemId": "m8",
+      "menuItemName": "Sultan Dum Biryani",
+      "qty": 8,
+      "at": 1794646928439,
+      "revenue": 7600,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-3623-1794646928439-m11",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3623",
+      "menuItemId": "m11",
+      "menuItemName": "Choco Molten Lava Cake",
+      "qty": 5,
+      "at": 1794646928439,
+      "revenue": 3750,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-3623-1794646928439-m12",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3623",
+      "menuItemId": "m12",
+      "menuItemName": "Mango Kulfa Shake",
+      "qty": 8,
+      "at": 1794646928439,
+      "revenue": 4400,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-3623-1794646928439-m15",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3623",
+      "menuItemId": "m15",
+      "menuItemName": "Chicken Manchurian & Egg Fried Rice",
+      "qty": 5,
+      "at": 1794646928439,
+      "revenue": 6750,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m1",
+      "menuItemName": "Sultan Seekh Kebab",
+      "qty": 1,
+      "at": 1794648223363,
+      "revenue": 1450,
+      "cost": 1219.82912,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 0.468
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.085
+        },
+        {
+          "itemId": "inv13",
+          "qty": 0.35
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m2",
+      "menuItemName": "Desi Murgh Karahi",
+      "qty": 2,
+      "at": 1794648223363,
+      "revenue": 3700,
+      "cost": 1720.9615999999999,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 1.545
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.306
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.525
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.204
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 4,
+      "at": 1794648223363,
+      "revenue": 2600,
+      "cost": 249.1456,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 0.571
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.16
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m6-Family (16\")",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m6",
+      "menuItemName": "Fajita Supreme Pizza (Family (16\"))",
+      "variantName": "Family (16\")",
+      "qty": 1,
+      "at": 1794648223363,
+      "revenue": 2500,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m8",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m8",
+      "menuItemName": "Sultan Dum Biryani",
+      "qty": 5,
+      "at": 1794648223363,
+      "revenue": 4750,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m7-1 KG",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m7",
+      "menuItemName": "Smoked Mutton Ribs (1 KG)",
+      "variantName": "1 KG",
+      "qty": 1,
+      "at": 1794648223363,
+      "revenue": 6800,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-6514-1794648223363-m9",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-6514",
+      "menuItemId": "m9",
+      "menuItemName": "Grand Sultan Angus Burger",
+      "qty": 3,
+      "at": 1794648223363,
+      "revenue": 3450,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-9052-1794648590548-m1",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9052",
+      "menuItemId": "m1",
+      "menuItemName": "Sultan Seekh Kebab",
+      "qty": 1,
+      "at": 1794648590548,
+      "revenue": 1450,
+      "cost": 1219.82912,
+      "usage": [
+        {
+          "itemId": "inv2",
+          "qty": 0.468
+        },
+        {
+          "itemId": "inv7",
+          "qty": 0.085
+        },
+        {
+          "itemId": "inv13",
+          "qty": 0.35
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9052-1794648590548-m2",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9052",
+      "menuItemId": "m2",
+      "menuItemName": "Desi Murgh Karahi",
+      "qty": 3,
+      "at": 1794648590548,
+      "revenue": 5550,
+      "cost": 2581.4424,
+      "usage": [
+        {
+          "itemId": "inv1",
+          "qty": 2.318
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.459
+        },
+        {
+          "itemId": "inv8",
+          "qty": 0.788
+        },
+        {
+          "itemId": "inv6",
+          "qty": 0.306
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9742-1794649586893-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9742",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 1,
+      "at": 1794649586893,
+      "revenue": 650,
+      "cost": 62.2864,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 0.143
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.04
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-9742-1794649586893-m6-Large (13\")",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-9742",
+      "menuItemId": "m6",
+      "menuItemName": "Fajita Supreme Pizza (Large (13\"))",
+      "variantName": "Large (13\")",
+      "qty": 1,
+      "at": 1794649586893,
+      "revenue": 1950,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-3199-1794649918482-m3",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3199",
+      "menuItemId": "m3",
+      "menuItemName": "Hummus with Warm Pita",
+      "qty": 1,
+      "at": 1794649918482,
+      "revenue": 650,
+      "cost": 62.2864,
+      "usage": [
+        {
+          "itemId": "inv4",
+          "qty": 0.143
+        },
+        {
+          "itemId": "inv5",
+          "qty": 0.04
+        }
+      ],
+      "missingRecipe": false
+    },
+    {
+      "id": "ce-KOT-3199-1794649918482-m6-Large (13\")",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-3199",
+      "menuItemId": "m6",
+      "menuItemName": "Fajita Supreme Pizza (Large (13\"))",
+      "variantName": "Large (13\")",
+      "qty": 1,
+      "at": 1794649918482,
+      "revenue": 1950,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-8400-1794651229450-m6-Large (13\")",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-8400",
+      "menuItemId": "m6",
+      "menuItemName": "Fajita Supreme Pizza (Large (13\"))",
+      "variantName": "Large (13\")",
+      "qty": 1,
+      "at": 1794651229450,
+      "revenue": 1950,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
     {
       "id": "ce-KOT-5087-1794583178030-m1",
       "sessionId": "ks-active-evening",
@@ -10896,6 +13138,60 @@
   },
   "shifts": [
     {
+      "id": "SH-20261114-02",
+      "shiftType": "Evening",
+      "registerId": "Counter #1 (Main Dining)",
+      "cashierId": "st2",
+      "cashierName": "Ali Khan",
+      "openedAt": 1794655800000,
+      "openedBy": "Junaid Ahsan (Admin)",
+      "openingFloat": 8000,
+      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
+      "status": "open"
+    },
+    {
+      "id": "SH-20261114-01",
+      "shiftType": "Morning",
+      "registerId": "Counter #1 (Main Dining)",
+      "cashierId": "st4",
+      "cashierName": "Sara Ahmed",
+      "openedAt": 1794628800000,
+      "openedBy": "Ali Khan (Manager)",
+      "openingFloat": 5000,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "status": "closed",
+      "closedAt": 1794654000000,
+      "closedBy": "Sara Ahmed (Cashier)",
+      "closedRole": "Cashier",
+      "actualCountedCash": 48650,
+      "denominations": {
+        "d5000": 6,
+        "d1000": 14,
+        "d500": 7,
+        "d100": 10,
+        "d50": 3,
+        "d20": 0,
+        "d10": 0,
+        "coins": 0
+      },
+      "cardSlipsCount": 9,
+      "cardSlipsTotal": 18400,
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "systemCashSales": 43650,
+      "systemCardSales": 18400,
+      "systemOnlineSales": 4200,
+      "systemTotalSales": 66250,
+      "settledOrdersCount": 22,
+      "cashPayouts": 0,
+      "expectedCashInDrawer": 48650,
+      "cashVariance": 0,
+      "varianceType": "balanced",
+      "auditedBy": "Ali Khan (Manager)",
+      "auditedAt": 1794654900000,
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "isApproved": true
+    },
+    {
       "id": "SH-20261112-02",
       "shiftType": "Evening",
       "registerId": "Counter #1 (Main Dining)",
@@ -10950,150 +13246,133 @@
       "isApproved": true
     },
     {
-      "shiftType": "Evening",
-      "cashierId": "st2",
       "openedBy": "Junaid Ahsan (Admin)",
       "registerId": "Counter #1 (Main Dining)",
-      "id": "SH-20261110-02",
-      "cashierName": "Ali Khan",
-      "openedAt": 1794310200000,
+      "cashierId": "st2",
+      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
       "status": "open",
       "openingFloat": 8000,
-      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer."
+      "id": "SH-20261110-02",
+      "shiftType": "Evening",
+      "cashierName": "Ali Khan",
+      "openedAt": 1794310200000
     },
     {
+      "closedAt": 1794308400000,
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "cardSlipsCount": 9,
+      "openedBy": "Ali Khan (Manager)",
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "settledOrdersCount": 22,
+      "auditedAt": 1794309300000,
+      "cashierId": "st4",
+      "systemCardSales": 18400,
+      "systemCashSales": 43650,
+      "systemTotalSales": 66250,
+      "cashPayouts": 0,
+      "auditedBy": "Ali Khan (Manager)",
+      "cashierName": "Sara Ahmed",
+      "expectedCashInDrawer": 48650,
+      "denominations": {
+        "d100": 10,
+        "d5000": 6,
+        "d50": 3,
+        "d1000": 14,
+        "d10": 0,
+        "d500": 7,
+        "d20": 0,
+        "coins": 0
+      },
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "id": "SH-20261110-01",
+      "registerId": "Counter #1 (Main Dining)",
+      "actualCountedCash": 48650,
+      "closedBy": "Sara Ahmed (Cashier)",
+      "varianceType": "balanced",
+      "status": "closed",
       "systemOnlineSales": 4200,
       "openedAt": 1794283200000,
-      "settledOrdersCount": 22,
       "isApproved": true,
-      "closedBy": "Sara Ahmed (Cashier)",
-      "systemCardSales": 18400,
-      "actualCountedCash": 48650,
-      "systemTotalSales": 66250,
       "shiftType": "Morning",
-      "closedAt": 1794308400000,
-      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
       "openingFloat": 5000,
-      "denominations": {
-        "d100": 10,
-        "d5000": 6,
-        "d50": 3,
-        "d1000": 14,
-        "d10": 0,
-        "d500": 7,
-        "d20": 0,
-        "coins": 0
-      },
       "cashVariance": 0,
-      "varianceType": "balanced",
-      "openedBy": "Ali Khan (Manager)",
-      "cardSlipsTotal": 18400,
-      "cashierId": "st4",
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
       "closedRole": "Cashier",
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
-      "registerId": "Counter #1 (Main Dining)",
-      "cashierName": "Sara Ahmed",
-      "expectedCashInDrawer": 48650,
-      "systemCashSales": 43650,
-      "auditedBy": "Ali Khan (Manager)",
-      "status": "closed",
-      "id": "SH-20261110-01",
-      "cashPayouts": 0,
-      "cardSlipsCount": 9,
-      "auditedAt": 1794309300000
+      "cardSlipsTotal": 18400
     },
     {
-      "id": "SH-20261109-02",
-      "openedBy": "Junaid Ahsan (Admin)",
-      "openingFloat": 8000,
-      "shiftType": "Evening",
       "registerId": "Counter #1 (Main Dining)",
-      "openedAt": 1794223800000,
-      "cashierId": "st2",
       "status": "open",
-      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "cashierName": "Ali Khan"
-    },
-    {
-      "cashPayouts": 0,
-      "registerId": "Counter #1 (Main Dining)",
-      "shiftType": "Morning",
-      "systemTotalSales": 66250,
-      "systemCashSales": 43650,
-      "auditedBy": "Ali Khan (Manager)",
-      "openedAt": 1794196800000,
-      "systemCardSales": 18400,
-      "cardSlipsCount": 9,
-      "cashierName": "Sara Ahmed",
-      "closedAt": 1794222000000,
-      "settledOrdersCount": 22,
-      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
-      "isApproved": true,
-      "openedBy": "Ali Khan (Manager)",
-      "cashierId": "st4",
-      "varianceType": "balanced",
-      "id": "SH-20261109-01",
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
-      "cashVariance": 0,
-      "closedBy": "Sara Ahmed (Cashier)",
-      "auditedAt": 1794222900000,
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "status": "closed",
-      "expectedCashInDrawer": 48650,
-      "denominations": {
-        "d20": 0,
-        "d100": 10,
-        "d5000": 6,
-        "d10": 0,
-        "d50": 3,
-        "d1000": 14,
-        "d500": 7,
-        "coins": 0
-      },
-      "actualCountedCash": 48650,
-      "systemOnlineSales": 4200,
-      "closedRole": "Cashier",
-      "cardSlipsTotal": 18400,
-      "openingFloat": 5000
-    },
-    {
-      "openedAt": 1794097800000,
+      "openedBy": "Junaid Ahsan (Admin)",
       "cashierName": "Ali Khan",
-      "openingFloat": 8000,
       "shiftType": "Evening",
-      "openedBy": "Junaid Ahsan (Admin)",
-      "id": "SH-20261108-02",
       "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "registerId": "Counter #1 (Main Dining)",
-      "status": "open",
-      "cashierId": "st2"
+      "id": "SH-20261109-02",
+      "openingFloat": 8000,
+      "cashierId": "st2",
+      "openedAt": 1794223800000
     },
     {
-      "openingFloat": 5000,
-      "auditedAt": 1794096900000,
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
-      "systemCashSales": 43650,
-      "cardSlipsTotal": 18400,
-      "systemCardSales": 18400,
-      "isApproved": true,
-      "cashPayouts": 0,
-      "registerId": "Counter #1 (Main Dining)",
-      "cashierName": "Sara Ahmed",
-      "closedBy": "Sara Ahmed (Cashier)",
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "cashVariance": 0,
-      "auditedBy": "Ali Khan (Manager)",
-      "closedRole": "Cashier",
       "shiftType": "Morning",
-      "expectedCashInDrawer": 48650,
-      "cashierId": "st4",
-      "varianceType": "balanced",
+      "closedBy": "Sara Ahmed (Cashier)",
+      "openedAt": 1794196800000,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "id": "SH-20261109-01",
+      "actualCountedCash": 48650,
+      "cardSlipsTotal": 18400,
       "systemOnlineSales": 4200,
-      "openedBy": "Ali Khan (Manager)",
-      "settledOrdersCount": 22,
-      "closedAt": 1794096000000,
+      "cashVariance": 0,
+      "cashierName": "Sara Ahmed",
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "openingFloat": 5000,
+      "systemCardSales": 18400,
+      "systemCashSales": 43650,
+      "varianceType": "balanced",
+      "systemTotalSales": 66250,
+      "auditedBy": "Ali Khan (Manager)",
       "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "settledOrdersCount": 22,
+      "isApproved": true,
+      "cashierId": "st4",
+      "expectedCashInDrawer": 48650,
+      "denominations": {
+        "d20": 0,
+        "d100": 10,
+        "d5000": 6,
+        "d10": 0,
+        "d50": 3,
+        "d1000": 14,
+        "d500": 7,
+        "coins": 0
+      },
+      "closedRole": "Cashier",
+      "cashPayouts": 0,
+      "closedAt": 1794222000000,
+      "auditedAt": 1794222900000,
+      "cardSlipsCount": 9,
+      "openedBy": "Ali Khan (Manager)",
+      "registerId": "Counter #1 (Main Dining)",
+      "status": "closed"
+    },
+    {
+      "id": "SH-20261108-02",
+      "shiftType": "Evening",
+      "cashierName": "Ali Khan",
+      "openedBy": "Junaid Ahsan (Admin)",
+      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
+      "status": "open",
+      "openedAt": 1794097800000,
+      "openingFloat": 8000,
+      "cashierId": "st2",
+      "registerId": "Counter #1 (Main Dining)"
+    },
+    {
+      "registerId": "Counter #1 (Main Dining)",
+      "varianceType": "balanced",
+      "systemCashSales": 43650,
+      "shiftType": "Morning",
+      "systemCardSales": 18400,
+      "systemOnlineSales": 4200,
+      "expectedCashInDrawer": 48650,
       "denominations": {
         "d100": 10,
         "d5000": 6,
@@ -11104,47 +13383,67 @@
         "d20": 0,
         "coins": 0
       },
-      "systemTotalSales": 66250,
-      "status": "closed",
+      "openingFloat": 5000,
       "openedAt": 1794070800000,
-      "id": "SH-20261108-01",
+      "cashPayouts": 0,
+      "closedBy": "Sara Ahmed (Cashier)",
+      "cashVariance": 0,
       "cardSlipsCount": 9,
-      "actualCountedCash": 48650
+      "isApproved": true,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "closedRole": "Cashier",
+      "actualCountedCash": 48650,
+      "systemTotalSales": 66250,
+      "auditedBy": "Ali Khan (Manager)",
+      "cardSlipsTotal": 18400,
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "cashierId": "st4",
+      "auditedAt": 1794096900000,
+      "settledOrdersCount": 22,
+      "cashierName": "Sara Ahmed",
+      "status": "closed",
+      "openedBy": "Ali Khan (Manager)",
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "id": "SH-20261108-01",
+      "closedAt": 1794096000000
     },
     {
+      "shiftType": "Evening",
+      "openedAt": 1793964600000,
+      "cashierName": "Ali Khan",
+      "registerId": "Counter #1 (Main Dining)",
       "openingFloat": 8000,
       "status": "open",
-      "openedAt": 1793964600000,
       "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "openedBy": "Junaid Ahsan (Admin)",
       "cashierId": "st2",
       "id": "SH-20261106-02",
-      "shiftType": "Evening",
-      "registerId": "Counter #1 (Main Dining)",
-      "cashierName": "Ali Khan"
+      "openedBy": "Junaid Ahsan (Admin)"
     },
     {
-      "cardSlipsTotal": 18400,
-      "settledOrdersCount": 22,
-      "shiftType": "Morning",
-      "id": "SH-20261106-01",
-      "cashVariance": 0,
-      "expectedCashInDrawer": 48650,
-      "openedAt": 1793937600000,
-      "openingFloat": 5000,
-      "auditedBy": "Ali Khan (Manager)",
-      "systemCardSales": 18400,
-      "closedAt": 1793962800000,
-      "cashPayouts": 0,
-      "closedBy": "Sara Ahmed (Cashier)",
       "auditedAt": 1793963700000,
-      "closedRole": "Cashier",
-      "systemCashSales": 43650,
-      "actualCountedCash": 48650,
       "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
-      "isApproved": true,
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "actualCountedCash": 48650,
+      "auditedBy": "Ali Khan (Manager)",
+      "systemOnlineSales": 4200,
+      "cardSlipsCount": 9,
+      "openedBy": "Ali Khan (Manager)",
+      "expectedCashInDrawer": 48650,
+      "cashPayouts": 0,
+      "id": "SH-20261106-01",
+      "closedAt": 1793962800000,
+      "cashierId": "st4",
+      "registerId": "Counter #1 (Main Dining)",
+      "systemTotalSales": 66250,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
       "cashierName": "Sara Ahmed",
+      "settledOrdersCount": 22,
+      "openedAt": 1793937600000,
+      "systemCardSales": 18400,
+      "systemCashSales": 43650,
+      "cardSlipsTotal": 18400,
       "status": "closed",
+      "closedBy": "Sara Ahmed (Cashier)",
       "denominations": {
         "d100": 10,
         "d1000": 14,
@@ -11156,51 +13455,34 @@
         "d20": 0
       },
       "varianceType": "balanced",
-      "openedBy": "Ali Khan (Manager)",
-      "cardSlipsCount": 9,
-      "systemOnlineSales": 4200,
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "cashierId": "st4",
-      "registerId": "Counter #1 (Main Dining)",
-      "systemTotalSales": 66250
-    },
-    {
-      "openedBy": "Junaid Ahsan (Admin)",
-      "registerId": "Counter #1 (Main Dining)",
-      "shiftType": "Evening",
-      "status": "open",
-      "cashierId": "st2",
-      "openingFloat": 8000,
-      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "openedAt": 1793878200000,
-      "cashierName": "Ali Khan",
-      "id": "SH-20261105-02"
-    },
-    {
-      "settledOrdersCount": 22,
-      "shiftType": "Morning",
-      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
-      "cardSlipsCount": 9,
-      "openingFloat": 5000,
-      "cardSlipsTotal": 18400,
-      "registerId": "Counter #1 (Main Dining)",
-      "cashVariance": 0,
-      "cashPayouts": 0,
-      "id": "SH-20261105-01",
-      "systemCardSales": 18400,
-      "auditedAt": 1793877300000,
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
-      "closedAt": 1793876400000,
-      "openedAt": 1793851200000,
       "isApproved": true,
-      "systemCashSales": 43650,
-      "expectedCashInDrawer": 48650,
-      "varianceType": "balanced",
-      "cashierName": "Sara Ahmed",
       "closedRole": "Cashier",
-      "auditedBy": "Ali Khan (Manager)",
+      "shiftType": "Morning",
+      "openingFloat": 5000,
+      "cashVariance": 0
+    },
+    {
+      "openingFloat": 8000,
+      "id": "SH-20261105-02",
+      "cashierId": "st2",
+      "registerId": "Counter #1 (Main Dining)",
+      "openedAt": 1793878200000,
+      "openedBy": "Junaid Ahsan (Admin)",
+      "shiftType": "Evening",
+      "cashierName": "Ali Khan",
+      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
+      "status": "open"
+    },
+    {
+      "auditedAt": 1793877300000,
+      "cashPayouts": 0,
+      "cardSlipsCount": 9,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
       "systemOnlineSales": 4200,
+      "settledOrdersCount": 22,
+      "actualCountedCash": 48650,
+      "cashVariance": 0,
       "denominations": {
         "d100": 10,
         "d50": 3,
@@ -11211,53 +13493,75 @@
         "d10": 0,
         "d500": 7
       },
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "systemTotalSales": 66250,
-      "status": "closed",
-      "openedBy": "Ali Khan (Manager)",
-      "cashierId": "st4",
+      "auditedBy": "Ali Khan (Manager)",
+      "openingFloat": 5000,
       "closedBy": "Sara Ahmed (Cashier)",
-      "actualCountedCash": 48650
+      "openedAt": 1793851200000,
+      "cashierId": "st4",
+      "systemTotalSales": 66250,
+      "varianceType": "balanced",
+      "registerId": "Counter #1 (Main Dining)",
+      "openedBy": "Ali Khan (Manager)",
+      "expectedCashInDrawer": 48650,
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "status": "closed",
+      "closedAt": 1793876400000,
+      "id": "SH-20261105-01",
+      "isApproved": true,
+      "closedRole": "Cashier",
+      "shiftType": "Morning",
+      "systemCashSales": 43650,
+      "systemCardSales": 18400,
+      "cashierName": "Sara Ahmed",
+      "cardSlipsTotal": 18400
     },
     {
-      "status": "open",
-      "openingFloat": 8000,
-      "shiftNumber": "2-02",
-      "shiftType": "Evening",
-      "id": "SH-20261104-02",
       "openedAt": 1793791800000,
-      "openedBy": "Ali Khan",
       "registerId": "Counter #1 (Main Dining)",
+      "id": "SH-20261104-02",
+      "shiftNumber": "2-02",
       "cashierName": "Ali Khan",
+      "shiftType": "Evening",
+      "openingFloat": 8000,
+      "status": "open",
+      "openedBy": "Ali Khan",
       "cashierId": "st2"
     },
     {
-      "id": "SH-20261102-02",
-      "shiftType": "Evening",
       "registerId": "Counter #1 (Main Dining)",
-      "cashierId": "st2",
-      "cashierName": "Ali Khan",
-      "openedAt": 1793619000000,
       "openedBy": "Junaid Ahsan (Admin)",
-      "openingFloat": 8000,
       "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
+      "shiftType": "Evening",
+      "openingFloat": 8000,
+      "openedAt": 1793619000000,
+      "id": "SH-20261102-02",
+      "cashierName": "Ali Khan",
+      "cashierId": "st2",
       "status": "open"
     },
     {
-      "id": "SH-20261102-01",
-      "shiftType": "Morning",
-      "registerId": "Counter #1 (Main Dining)",
-      "cashierId": "st4",
-      "cashierName": "Sara Ahmed",
       "openedAt": 1793592000000,
-      "openedBy": "Ali Khan (Manager)",
-      "openingFloat": 5000,
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "status": "audited",
-      "closedAt": 1793617200000,
+      "cashPayouts": 0,
+      "id": "SH-20261102-01",
       "closedBy": "Sara Ahmed (Cashier)",
-      "closedRole": "Cashier",
+      "expectedCashInDrawer": 48650,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "settledOrdersCount": 22,
       "actualCountedCash": 48650,
+      "cardSlipsTotal": 18400,
+      "registerId": "Counter #1 (Main Dining)",
+      "cashVariance": 0,
+      "systemOnlineSales": 4200,
+      "openingFloat": 5000,
+      "systemCardSales": 18400,
+      "closedRole": "Cashier",
+      "systemCashSales": 43650,
+      "shiftType": "Morning",
+      "systemTotalSales": 66250,
+      "isApproved": true,
+      "varianceType": "balanced",
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
       "denominations": {
         "d500": 7,
         "d10": 0,
@@ -11268,183 +13572,172 @@
         "d50": 3,
         "d100": 10
       },
-      "cardSlipsCount": 9,
-      "cardSlipsTotal": 18400,
-      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
-      "systemCashSales": 43650,
-      "systemCardSales": 18400,
-      "systemOnlineSales": 4200,
-      "systemTotalSales": 66250,
-      "settledOrdersCount": 22,
-      "cashPayouts": 0,
-      "expectedCashInDrawer": 48650,
-      "cashVariance": 0,
-      "varianceType": "balanced",
-      "auditedBy": "Junaid Ahsan (admin)",
       "auditedAt": 1793641968685,
-      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
-      "isApproved": true
+      "cashierId": "st4",
+      "cardSlipsCount": 9,
+      "closedAt": 1793617200000,
+      "status": "audited",
+      "auditedBy": "Junaid Ahsan (admin)",
+      "openedBy": "Ali Khan (Manager)",
+      "cashierName": "Sara Ahmed"
     },
     {
-      "shiftType": "Morning",
+      "openedBy": "Ali Khan (manager)",
       "id": "SH-20261031-05",
-      "status": "closed",
+      "registerId": "Counter #1 (Main Dining)",
+      "shiftType": "Morning",
       "openingFloat": 5000,
-      "openedAt": 1793455153483,
+      "cashierName": "Ali Khan",
+      "closedAt": 1793465000000,
+      "cashierId": "st2",
+      "status": "closed",
+      "openedAt": 1793455153483
+    },
+    {
+      "systemCardSales": 0,
+      "openedBy": "Ali Khan (manager)",
+      "varianceType": "balanced",
+      "actualCountedCash": 5000,
+      "systemCashSales": 0,
       "cashierName": "Ali Khan",
       "cashierId": "st2",
       "registerId": "Counter #1 (Main Dining)",
-      "openedBy": "Ali Khan (manager)",
-      "closedAt": 1793465000000
-    },
-    {
-      "systemOnlineSales": 0,
-      "actualCountedCash": 5000,
-      "openedBy": "Ali Khan (manager)",
-      "registerId": "Counter #1 (Main Dining)",
-      "cardSlipsCount": 0,
-      "status": "closed",
-      "id": "SH-20261031-04",
-      "closedRole": "manager",
-      "openedAt": 1793454976916,
-      "systemTotalSales": 0,
-      "cashierName": "Ali Khan",
-      "systemCashSales": 0,
-      "varianceType": "balanced",
-      "shiftType": "Morning",
-      "systemCardSales": 0,
-      "closedBy": "Ali Khan (manager)",
       "openingFloat": 5000,
       "closedAt": 1793454995275,
-      "expectedCashInDrawer": 5000,
       "settledOrdersCount": 0,
-      "cashPayouts": 0,
+      "shiftType": "Morning",
+      "cardSlipsTotal": 0,
       "cashVariance": 0,
+      "systemTotalSales": 0,
+      "cardSlipsCount": 0,
+      "id": "SH-20261031-04",
+      "cashPayouts": 0,
+      "closedBy": "Ali Khan (manager)",
+      "closedRole": "manager",
+      "expectedCashInDrawer": 5000,
+      "openedAt": 1793454976916,
+      "systemOnlineSales": 0,
+      "status": "closed"
+    },
+    {
+      "cashPayouts": 24000,
+      "isApproved": true,
+      "closedRole": "admin",
+      "varianceType": "shortage",
+      "cashVariance": -121330,
+      "systemOnlineSales": 0,
+      "openingFloat": 5000,
+      "shiftType": "Night",
+      "systemTotalSales": 190330,
+      "registerId": "Counter #1 (Main Dining)",
+      "actualCountedCash": 50000,
+      "cardSlipsTotal": 0,
+      "openedAt": 1792607323350,
+      "closedBy": "Junaid Ahsan (admin)",
+      "cardSlipsCount": 0,
+      "openedBy": "Junaid Ahsan (admin)",
       "cashierId": "st2",
+      "expectedCashInDrawer": 171330,
+      "settledOrdersCount": 33,
+      "auditedBy": "Junaid Ahsan (admin)",
+      "closedAt": 1793454673555,
+      "status": "audited",
+      "auditedAt": 1793454718619,
+      "id": "SH-20261021-03",
+      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
+      "systemCashSales": 190330,
+      "cashierName": "Ali Khan",
+      "systemCardSales": 0
+    },
+    {
+      "openedBy": "Ali Khan (manager)",
+      "id": "SH-20261015-04",
+      "cashierId": "st4",
+      "cashierName": "Sara Ahmed",
+      "shiftType": "Evening",
+      "openingFloat": 5000,
+      "status": "open",
+      "openedAt": 1792089562705,
+      "registerId": "Counter #1 (Main Dining)"
+    },
+    {
+      "closedBy": "Ali Khan (manager)",
+      "openedAt": 1792089532987,
+      "auditedAt": 1792089803553,
+      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
+      "cashPayouts": 0,
+      "cashierId": "st2",
+      "cardSlipsTotal": 0,
+      "id": "SH-20261015-03",
+      "auditedBy": "Ali Khan (manager)",
+      "status": "audited",
+      "cardSlipsCount": 0,
+      "systemTotalSales": 0,
+      "systemCashSales": 0,
+      "systemCardSales": 0,
+      "registerId": "Counter #1 (Main Dining)",
+      "actualCountedCash": 5000,
+      "closedAt": 1792089550297,
+      "openingFloat": 5000,
+      "systemOnlineSales": 0,
+      "cashierName": "Ali Khan",
+      "closedRole": "manager",
+      "cashVariance": 0,
+      "isApproved": true,
+      "shiftType": "Morning",
+      "varianceType": "balanced",
+      "settledOrdersCount": 0,
+      "openedBy": "Ali Khan (manager)",
+      "expectedCashInDrawer": 5000
+    },
+    {
+      "closedAt": 1792607199302,
+      "openingFloat": 8000,
+      "id": "SH-20261015-02",
+      "cashVariance": -157989.96,
+      "cardSlipsCount": 0,
+      "actualCountedCash": 150,
+      "openedBy": "Junaid Ahsan (Admin)",
+      "varianceType": "shortage",
+      "auditedAt": 1792607292838,
+      "systemCardSales": 0,
+      "systemCashSales": 150139.96,
+      "cashierId": "st2",
+      "cashierName": "Ali Khan",
+      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
+      "systemOnlineSales": 0,
+      "status": "audited",
+      "expectedCashInDrawer": 158139.96,
+      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
+      "auditedBy": "Junaid Ahsan (admin)",
+      "settledOrdersCount": 6,
+      "closedRole": "admin",
+      "systemTotalSales": 150139.96,
+      "isApproved": true,
+      "cashPayouts": 0,
+      "closedBy": "Junaid Ahsan (admin)",
+      "openedAt": 1792063800000,
+      "shiftType": "Evening",
+      "registerId": "Counter #1 (Main Dining)",
       "cardSlipsTotal": 0
     },
     {
-      "closedRole": "admin",
-      "systemTotalSales": 190330,
-      "cardSlipsCount": 0,
-      "systemOnlineSales": 0,
-      "id": "SH-20261021-03",
-      "actualCountedCash": 50000,
-      "auditedAt": 1793454718619,
-      "cashPayouts": 24000,
-      "openedBy": "Junaid Ahsan (admin)",
-      "cardSlipsTotal": 0,
-      "varianceType": "shortage",
-      "expectedCashInDrawer": 171330,
-      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
-      "openedAt": 1792607323350,
       "registerId": "Counter #1 (Main Dining)",
-      "systemCashSales": 190330,
-      "settledOrdersCount": 33,
-      "systemCardSales": 0,
-      "shiftType": "Night",
-      "isApproved": true,
-      "status": "audited",
-      "auditedBy": "Junaid Ahsan (admin)",
-      "closedAt": 1793454673555,
-      "openingFloat": 5000,
-      "cashierId": "st2",
-      "closedBy": "Junaid Ahsan (admin)",
-      "cashVariance": -121330,
-      "cashierName": "Ali Khan"
-    },
-    {
-      "cashierId": "st4",
-      "status": "open",
-      "id": "SH-20261015-04",
-      "cashierName": "Sara Ahmed",
-      "openedBy": "Ali Khan (manager)",
-      "openedAt": 1792089562705,
-      "registerId": "Counter #1 (Main Dining)",
-      "shiftType": "Evening",
-      "openingFloat": 5000
-    },
-    {
-      "cashierName": "Ali Khan",
-      "closedRole": "manager",
-      "openedBy": "Ali Khan (manager)",
-      "expectedCashInDrawer": 5000,
-      "auditedBy": "Ali Khan (manager)",
-      "isApproved": true,
-      "cashPayouts": 0,
-      "systemTotalSales": 0,
-      "closedAt": 1792089550297,
-      "varianceType": "balanced",
-      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
-      "openingFloat": 5000,
-      "registerId": "Counter #1 (Main Dining)",
-      "systemCardSales": 0,
-      "status": "audited",
-      "shiftType": "Morning",
       "cashVariance": 0,
-      "openedAt": 1792089532987,
-      "cardSlipsTotal": 0,
-      "auditedAt": 1792089803553,
-      "cashierId": "st2",
-      "actualCountedCash": 5000,
-      "systemCashSales": 0,
-      "closedBy": "Ali Khan (manager)",
-      "cardSlipsCount": 0,
-      "systemOnlineSales": 0,
-      "id": "SH-20261015-03",
-      "settledOrdersCount": 0
-    },
-    {
-      "systemOnlineSales": 0,
-      "openedBy": "Junaid Ahsan (Admin)",
-      "actualCountedCash": 150,
-      "status": "audited",
-      "cashPayouts": 0,
-      "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "auditedBy": "Junaid Ahsan (admin)",
-      "shiftType": "Evening",
-      "settledOrdersCount": 6,
-      "openingFloat": 8000,
-      "systemTotalSales": 150139.96,
-      "closedRole": "admin",
-      "cashierId": "st2",
-      "cashVariance": -157989.96,
-      "systemCashSales": 150139.96,
-      "systemCardSales": 0,
-      "id": "SH-20261015-02",
-      "auditedAt": 1792607292838,
-      "cardSlipsTotal": 0,
-      "isApproved": true,
-      "openedAt": 1792063800000,
-      "expectedCashInDrawer": 158139.96,
-      "closedBy": "Junaid Ahsan (admin)",
-      "cardSlipsCount": 0,
-      "varianceType": "shortage",
-      "registerId": "Counter #1 (Main Dining)",
-      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
-      "cashierName": "Ali Khan",
-      "closedAt": 1792607199302
-    },
-    {
-      "registerId": "Counter #1 (Main Dining)",
-      "openedAt": 1792036800000,
-      "cashierName": "Sara Ahmed",
-      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
-      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
-      "varianceType": "balanced",
-      "status": "audited",
-      "settledOrdersCount": 22,
-      "closedAt": 1792062000000,
-      "closedBy": "Sara Ahmed (Cashier)",
-      "auditedAt": 1792090345697,
-      "isApproved": true,
-      "id": "SH-20261015-01",
-      "shiftType": "Morning",
-      "systemTotalSales": 66250,
-      "auditedBy": "Ali Khan (manager)",
-      "closedRole": "Cashier",
-      "cashierId": "st4",
+      "openedBy": "Ali Khan (Manager)",
+      "openingFloat": 5000,
       "systemCardSales": 18400,
+      "systemCashSales": 43650,
+      "actualCountedCash": 48650,
+      "cardSlipsCount": 9,
+      "closedAt": 1792062000000,
+      "varianceType": "balanced",
+      "id": "SH-20261015-01",
+      "systemOnlineSales": 4200,
+      "isApproved": true,
+      "closedRole": "Cashier",
+      "cashierName": "Sara Ahmed",
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
       "denominations": {
         "coins": 0,
         "d500": 7,
@@ -11455,17 +13748,20 @@
         "d50": 3,
         "d100": 10
       },
-      "cardSlipsTotal": 18400,
-      "systemOnlineSales": 4200,
-      "actualCountedCash": 48650,
-      "openedBy": "Ali Khan (Manager)",
-      "systemCashSales": 43650,
-      "expectedCashInDrawer": 48650,
+      "shiftType": "Morning",
       "cashPayouts": 0,
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "cardSlipsCount": 9,
-      "cashVariance": 0,
-      "openingFloat": 5000
+      "systemTotalSales": 66250,
+      "auditNotes": "Shift reconciled and verified with CCTV & cash physical drop.",
+      "auditedAt": 1792090345697,
+      "expectedCashInDrawer": 48650,
+      "settledOrdersCount": 22,
+      "cardSlipsTotal": 18400,
+      "cashierId": "st4",
+      "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "auditedBy": "Ali Khan (manager)",
+      "openedAt": 1792036800000,
+      "status": "audited",
+      "closedBy": "Sara Ahmed (Cashier)"
     }
   ],
   "activeShiftId": "SH-20261104-02",
@@ -11716,7 +14012,7 @@
       "id": "role-playland"
     }
   ],
-  "lastUpdated": 1794583239349,
+  "lastUpdated": 1794651232964,
   "deletedTicketIds": [
     "KOT-1042",
     "KOT-5647"

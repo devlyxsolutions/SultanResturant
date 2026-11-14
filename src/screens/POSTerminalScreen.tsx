@@ -27,6 +27,7 @@ import {
 } from '../store';
 import { useShiftStore } from '../store/shiftStore';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
 import { broadcastImmediately } from '../services/syncService';
 import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
@@ -542,12 +543,15 @@ export default function POSTerminalScreen({
   }, [menuItems, activeCategory, regions]);
 
   // Financial Calculations
+  const systemSettings = useSettingsStore((s) => s.settings);
+  const effectiveTaxRate = systemSettings.taxEnabled ? (systemSettings.taxRatePercent || 0) / 100 : 0;
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const discountVal = parseFloat(discountAmount) || 0;
   const afterDiscount = Math.max(0, subTotal - discountVal);
-  const deliveryCharges = orderType === 'delivery' ? 150 : 0;
-  const tax = afterDiscount * 0.16;
-  const total = afterDiscount + tax + deliveryCharges;
+  const deliveryCharges = orderType === 'delivery' ? (systemSettings.deliveryFeeDefault ?? 150) : 0;
+  const tax = afterDiscount * effectiveTaxRate;
+  const rawTotal = afterDiscount + tax + deliveryCharges;
+  const total = systemSettings.roundTotals ? Math.round(rawTotal) : rawTotal;
 
   const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
   const remaining = Math.max(0, total - totalPaid);
@@ -1014,8 +1018,8 @@ export default function POSTerminalScreen({
     if (autoOpenCheckout) {
       setTimeout(() => {
         const ticketSub = ticket.items.reduce((s, it) => s + (it.price * it.qty), 0);
-        const ticketTax = ticketSub * 0.16;
-        const ticketTotal = Math.round(ticketSub + ticketTax);
+        const ticketTax = ticketSub * effectiveTaxRate;
+        const ticketTotal = systemSettings.roundTotals ? Math.round(ticketSub + ticketTax) : ticketSub + ticketTax;
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
       }, 150);
@@ -2329,8 +2333,10 @@ export default function POSTerminalScreen({
                       </View>
 
                       <View style={styles.mathLine}>
-                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>GST (16%)+</Text>
-                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>Rs. {tax.toFixed(0)}</Text>
+                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>
+                          {systemSettings.taxLabel || 'GST'} ({systemSettings.taxEnabled ? systemSettings.taxRatePercent : 0}%)+
+                        </Text>
+                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>{systemSettings.currencySymbol || 'Rs.'} {tax.toFixed(0)}</Text>
                       </View>
 
                       {orderType === 'delivery' && (
