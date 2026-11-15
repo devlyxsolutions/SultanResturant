@@ -31,13 +31,13 @@ import SyncStatusBadge from '../components/SyncStatusBadge';
 import { Ionicons } from '@expo/vector-icons';
 
 // Session-wide splash skip flag for instant navigation after initial launch
-let hasSeenSplashSession = true;
+let hasSeenSplashSession = false;
 
 const ROLE_ALIASES: Record<string, Role> = {
   admin: 'admin',
   administrator: 'admin',
-  cashier: 'admin',
-  pos: 'admin',
+  cashier: 'manager',
+  pos: 'manager',
   manager: 'manager',
   waiter: 'waiter',
   ordertaker: 'waiter',
@@ -152,7 +152,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   // -------------------------------------------------------------
   // Splash & Transition States
   // -------------------------------------------------------------
-  const shouldSkipSplash = shouldAutoOpenLogin || hasSeenSplashSession || (hasHydrated && !!user?.role);
+  const shouldSkipSplash = shouldAutoOpenLogin || hasSeenSplashSession;
 
   const [showSplash, setShowSplash] = useState(() => !shouldSkipSplash);
   const [splashFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 1));
@@ -193,14 +193,14 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
     Animated.timing(progressAnim, {
       toValue: 1,
-      duration: 320,
+      duration: 900,
       easing: Easing.bezier(0.25, 0.1, 0.25, 1),
       useNativeDriver: false,
     }).start();
 
     const tFinish = setTimeout(() => {
       finishSplash();
-    }, 380);
+    }, 980);
 
     return () => {
       clearTimeout(tFinish);
@@ -323,11 +323,14 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
       return;
     }
 
-    // 4. Standard role keyword match (e.g., "admin", "manager", "waiter", "kitchen", "juicebar")
+    // 4. Standard role keyword match (e.g., "admin", "manager", "cashier", "waiter", "kitchen", "juicebar")
     const mappedRole = ROLE_ALIASES[normUser];
     if (mappedRole) {
-      const roleMembers = activeStaff.filter(
-        (s) => s.role.toLowerCase() === mappedRole.toLowerCase()
+      const isCashierKeyword = normUser === 'cashier' || normUser === 'pos';
+      const roleMembers = activeStaff.filter((s) =>
+        isCashierKeyword
+          ? s.role.toLowerCase() === 'cashier' || s.customRoleId === 'role-cashier'
+          : s.role.toLowerCase() === mappedRole.toLowerCase()
       );
       const pinMember = roleMembers.find((s) => s.pin === enteredPin);
       if (pinMember) {
@@ -341,7 +344,11 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         }
         const dest = getRoleHome(mappedRole);
         setErrorMessage('');
-        login(enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1), mappedRole);
+        login(
+          enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1),
+          mappedRole,
+          isCashierKeyword ? { customRoleId: 'role-cashier' } : undefined
+        );
         router.replace(dest as Href);
         return;
       }
@@ -431,6 +438,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
           ============================================================ */}
       {showSplash && (
         <Animated.View
+          onTouchStart={finishSplash}
           style={[
             styles.splashOverlay,
             {

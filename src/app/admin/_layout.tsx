@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useRolePermissions } from '../../store/roleStore';
 import { useSidebarStore } from '../../store/sidebarStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import SultanLogo from '../../components/SultanLogo';
@@ -53,6 +54,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
 export default function AdminLayout() {
   const { ready, user, logout } = useRoleGuard(['admin']);
   const { can } = useRolePermissions();
+  const systemSettings = useSettingsStore((s) => s.settings);
   const { width } = useWindowDimensions();
   const router = useRouter();
   const pathname = usePathname();
@@ -156,27 +158,32 @@ export default function AdminLayout() {
 
   const filteredMenuItems = useMemo(() => {
     return ADMIN_MENU_ITEMS.filter((item) => {
-      if (item.route === '/admin/pos' && !can('canAccessPOS')) return false;
-      if (item.route === '/admin/invoices' && !can('canAccessInvoices')) return false;
-      if (item.route === '/admin/returns' && !can('canProcessReturns')) return false;
-      if (item.route === '/admin/discounts' && !can('canAccessDiscounts')) return false;
-      if (item.route === '/admin/staff' && !can('canAccessStaff')) return false;
-      if (item.route === '/admin/reports' && !can('canAccessReports')) return false;
-      if (item.route === '/admin/inventory' && !can('canAccessInventory')) return false;
-      if (item.route === '/admin/suppliers' && !can('canAccessInventory')) return false;
-      if (item.route === '/admin/damages' && !can('canAccessInventory')) return false;
-      if (item.route === '/admin/expenses' && !can('canAccessExpenses')) return false;
-      if (item.route === '/admin/assets' && !can('canAccessExpenses')) return false;
-      if (item.route === '/admin/kitchen-handover' && !can('canAccessKitchenHandover')) return false;
-      if (item.route === '/admin/kitchen-returns' && !can('canAccessKitchenHandover')) return false;
-      if (item.route === '/admin/recipes' && !can('canAccessRecipes')) return false;
-      if (item.route === '/admin/costing' && (!can('canAccessRecipes') || !can('canViewCostPrice'))) return false;
+      if (item.route === '/menu' && systemSettings.enableDigitalQrMenu === false) return false;
+      if (item.route === '/admin/app-orders' && systemSettings.enableOnlineOrders === false) return false;
+      if (item.route === '/admin/pos' && (!can('canAccessPOS') || systemSettings.enablePosModule === false)) return false;
+      if (item.route === '/admin/invoices' && (!can('canAccessInvoices') || systemSettings.enableInvoicesModule === false)) return false;
+      if (item.route === '/admin/returns' && (!can('canProcessReturns') || systemSettings.enableReturnsModule === false)) return false;
+      if (item.route === '/admin/discounts' && (!can('canAccessDiscounts') || systemSettings.enableDiscountsModule === false)) return false;
+      if (item.route === '/admin/staff' && (!can('canAccessStaff') || systemSettings.enableStaffHrModule === false)) return false;
+      if (item.route === '/admin/reports' && (!can('canAccessReports') || systemSettings.enableReportsModule === false)) return false;
+      if (item.route === '/admin/insights' && systemSettings.enableInsightsModule === false) return false;
+      if (item.route === '/admin/inventory' && (!can('canAccessInventory') || systemSettings.enableInventoryModule === false)) return false;
+      if (item.route === '/admin/suppliers' && (!can('canAccessInventory') || systemSettings.enableSuppliersModule === false)) return false;
+      if (item.route === '/admin/damages' && (!can('canAccessInventory') || systemSettings.enableDamagesModule === false)) return false;
+      if (item.route === '/admin/expenses' && (!can('canAccessExpenses') || systemSettings.enableExpensesModule === false)) return false;
+      if (item.route === '/admin/assets' && (!can('canAccessExpenses') || systemSettings.enableAssetsModule === false)) return false;
+      if (item.route === '/admin/kitchen-handover' && (!can('canAccessKitchenHandover') || systemSettings.enableKitchenHandoverModule === false)) return false;
+      if (item.route === '/admin/kitchen-returns' && (!can('canAccessKitchenHandover') || systemSettings.enableKitchenHandoverModule === false)) return false;
+      if (item.route === '/admin/recipes' && (!can('canAccessRecipes') || systemSettings.enableRecipesBomModule === false)) return false;
+      if (item.route === '/admin/costing' && (!can('canAccessRecipes') || !can('canViewCostPrice') || systemSettings.enableRecipesBomModule === false)) return false;
       if (item.route === '/admin/menu' && !can('canModifyMenuPrices')) return false;
-      if (item.route === '/admin/customers' && !can('canViewCustomerContacts')) return false;
-      if (item.route === '/admin/shift' && !can('canStartCloseShift')) return false;
+      if (item.route === '/admin/customers' && (!can('canViewCustomerContacts') || systemSettings.enableCustomerCrmModule === false)) return false;
+      if (item.route === '/admin/shift' && (!can('canStartCloseShift') || systemSettings.enableShiftModule === false)) return false;
+      if ((item.route === '/admin/tables' || item.route === '/admin/floors') && systemSettings.enableFloorPlanModule === false) return false;
+      if (item.route === '/admin/playland' && systemSettings.enablePlayland === false) return false;
       return true;
     });
-  }, [can]);
+  }, [can, systemSettings]);
 
   if (!ready) {
     return (

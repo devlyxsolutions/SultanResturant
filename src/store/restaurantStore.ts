@@ -4,6 +4,7 @@ import { persist } from 'zustand/middleware';
 import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
 import { getTableFloor, getTableSeatingType } from '../constants/floors';
 import type { SalesReturn } from '../types/returns';
+import type { RolePermissions } from './roleStore';
 import { appStorage } from './storage';
 
 export type Table = {
@@ -268,7 +269,7 @@ export type Invoice = {
   feedbackSubmitted?: boolean;
 };
 
-export type StaffRole = 'Admin' | 'Manager' | 'Floor Manager' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland' | string;
+export type StaffRole = 'Admin' | 'Manager' | 'Floor Manager' | 'Cashier' | 'cashier' | 'Waiter' | 'Kitchen' | 'JuiceBar' | 'Playland' | string;
 export type StaffShift = 'Morning' | 'Evening' | 'Night';
 export type StaffStatus = 'Active' | 'On Leave' | 'Inactive';
 
@@ -319,6 +320,8 @@ export type StaffMember = {
   assignedZone?: string;
   assignedZones?: string[];
   customRoleId?: string;
+  /** Per-staff / per-cashier individual permission overrides (layered on top of assigned role). */
+  permissionOverrides?: Partial<RolePermissions>;
   // Detailed Employee & Payroll Profiles
   cnic?: string;
   designation?: string;
@@ -832,6 +835,42 @@ export const INITIAL_STAFF: StaffMember[] = [
     emergencyContact: '+92 333 4455667',
     address: 'Gulberg III, Lahore',
     bankAccountDetails: 'Bank Alfalah - PK55ALFH0011223344'
+  },
+  {
+    id: 'st-c1',
+    name: 'Usman Tariq',
+    phone: '+92 307 2233445',
+    role: 'Cashier',
+    customRoleId: 'role-cashier',
+    pin: '3333',
+    status: 'Active',
+    shift: 'Morning',
+    joinedDate: '2025-03-15',
+    cnic: '35202-4455667-1',
+    designation: 'Senior Counter Cashier',
+    monthlySalary: 45000,
+    hourlyRate: 240,
+    emergencyContact: '+92 300 7788991',
+    address: 'Garden Town, Lahore',
+    bankAccountDetails: 'Meezan Bank - PK22MEZN0044556677'
+  },
+  {
+    id: 'st-c2',
+    name: 'Bilal Hassan',
+    phone: '+92 308 8899001',
+    role: 'Cashier',
+    customRoleId: 'role-cashier',
+    pin: '4444',
+    status: 'Active',
+    shift: 'Evening',
+    joinedDate: '2025-04-01',
+    cnic: '35201-6677889-5',
+    designation: 'Evening Shift Cashier',
+    monthlySalary: 40000,
+    hourlyRate: 210,
+    emergencyContact: '+92 322 1122334',
+    address: 'Model Town, Lahore',
+    bankAccountDetails: 'HBL - PK77HABB0033445566'
   },
 ];
 

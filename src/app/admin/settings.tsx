@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -15,9 +15,16 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useSettingsStore } from '../../store/settingsStore';
+import SultanLogo from '../../components/SultanLogo';
+import { useSettingsStore, SystemSettings, DEFAULT_SYSTEM_SETTINGS } from '../../store/settingsStore';
 import { useRestaurantStore, StaffMember, StaffRole, StaffShift } from '../../store/restaurantStore';
-import { useRoleStore } from '../../store/roleStore';
+import {
+  useRoleStore,
+  CustomRole,
+  RolePermissions,
+  BaseRoleType,
+  ADMIN_PERMISSIONS,
+} from '../../store/roleStore';
 import { useAuthStore } from '../../store/authStore';
 import {
   subscribeToSyncStatus,
@@ -37,15 +44,568 @@ import {
   resetAllOperationalData,
 } from '../../utils/systemDataControl';
 
-type SettingsTab = 'general' | 'billing' | 'modules' | 'users' | 'sync' | 'data';
+type SettingsTab = 'general' | 'billing' | 'modules' | 'roles' | 'users' | 'sync' | 'data';
 
 const TABS: { id: SettingsTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'general', label: 'Branding', icon: 'storefront-outline' },
   { id: 'billing', label: 'Billing & Tax', icon: 'cash-outline' },
   { id: 'modules', label: 'Modules', icon: 'apps-outline' },
-  { id: 'users', label: 'Users & Roles', icon: 'people-outline' },
+  { id: 'roles', label: 'Roles & Permissions', icon: 'shield-checkmark-outline' },
+  { id: 'users', label: 'Users & Staff', icon: 'people-outline' },
   { id: 'sync', label: 'Sync & Server', icon: 'cloud-done-outline' },
   { id: 'data', label: 'Data & Backup', icon: 'server-outline' },
+];
+
+type PermItemMeta = {
+  key: keyof RolePermissions;
+  label: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+};
+
+const VISIBILITY_PERMS: PermItemMeta[] = [
+  {
+    key: 'canViewRevenue',
+    label: 'View Revenue & Sales Figures',
+    desc: 'Show gross revenue, net sales, and profit numbers (otherwise masked)',
+    icon: 'cash-outline',
+  },
+  {
+    key: 'canViewCostPrice',
+    label: 'View Recipe Cost & Margins',
+    desc: 'Show raw ingredient purchase costs, BOM costing, and profit margins',
+    icon: 'trending-up-outline',
+  },
+  {
+    key: 'canViewCustomerContacts',
+    label: 'View Customer Phone & CRM',
+    desc: 'Display customer phone numbers, addresses, and loyalty CRM profiles',
+    icon: 'call-outline',
+  },
+  {
+    key: 'canExportReports',
+    label: 'Export CSV & Audit Reports',
+    desc: 'Allow downloading spreadsheets, Z-reports, and audit logs',
+    icon: 'download-outline',
+  },
+];
+
+const MODULE_PERMS: PermItemMeta[] = [
+  { key: 'canAccessPOS', label: 'POS Terminal', desc: 'Billing & order checkout screen', icon: 'calculator-outline' },
+  { key: 'canAccessFloorPlan', label: 'Floor Plan & Command', desc: 'Tables, zones & seating status', icon: 'business-outline' },
+  { key: 'canAccessInvoices', label: 'Invoices & Orders', desc: 'Order history & invoice lookup', icon: 'receipt-outline' },
+  { key: 'canAccessReports', label: 'Financial Reports', desc: 'Sales, tax & shift summaries', icon: 'bar-chart-outline' },
+  { key: 'canAccessInventory', label: 'Inventory & Suppliers', desc: 'Stock levels, POs & vendors', icon: 'cube-outline' },
+  { key: 'canAccessKitchenHandover', label: 'Kitchen Handover & Returns', desc: 'Raw kitchen issue & return console', icon: 'clipboard-outline' },
+  { key: 'canAccessRecipes', label: 'Recipes & Dish Costing', desc: 'BOM recipes & portion sizing', icon: 'restaurant-outline' },
+  { key: 'canAccessDiscounts', label: 'Events & Discounts', desc: 'Promotions, deals & promo rules', icon: 'pricetags-outline' },
+  { key: 'canAccessExpenses', label: 'Live Expenses', desc: 'Petty cash & daily expense entry', icon: 'wallet-outline' },
+  { key: 'canAccessDamages', label: 'Damage Control', desc: 'Breakage, spoilage & waste logs', icon: 'shield-outline' },
+  { key: 'canAccessAssets', label: 'Assets & Capex', desc: 'Equipment & fixed asset register', icon: 'diamond-outline' },
+  { key: 'canAccessStaff', label: 'Staff & Roles', desc: 'Employee accounts & role settings', icon: 'people-outline' },
+];
+
+const AUTHORITY_PERMS: PermItemMeta[] = [
+  {
+    key: 'canApplyCustomDiscount',
+    label: 'Apply Custom Discounts in POS',
+    desc: 'Allow manual percentage or cash discounts on customer bills',
+    icon: 'pricetag-outline',
+  },
+  {
+    key: 'canVoidInvoice',
+    label: 'Void / Cancel Settled Invoices',
+    desc: 'Cancel already paid invoices and record void audit logs',
+    icon: 'ban-outline',
+  },
+  {
+    key: 'canProcessReturns',
+    label: 'Process Sales Returns & Refunds',
+    desc: 'Approve food returns and issue cash/card refunds',
+    icon: 'return-down-back-outline',
+  },
+  {
+    key: 'canStartCloseShift',
+    label: 'Start & Blind-Close Shift Register',
+    desc: 'Open cash register shifts and submit closing cash counts',
+    icon: 'time-outline',
+  },
+  {
+    key: 'canModifyMenuPrices',
+    label: 'Modify Menu Items & Prices',
+    desc: 'Edit dish names, selling prices, variants, and availability',
+    icon: 'create-outline',
+  },
+];
+
+const POS_TERMINAL_PERMS: PermItemMeta[] = [
+  {
+    key: 'posCanDineIn',
+    label: 'Dine-In Table Orders in POS',
+    desc: 'Create, load & manage Dine-In table or Majlis cabin orders inside POS',
+    icon: 'restaurant-outline',
+  },
+  {
+    key: 'posCanTakeaway',
+    label: 'Takeaway Counter Orders in POS',
+    desc: 'Place & process quick counter Takeaway orders inside POS',
+    icon: 'bag-handle-outline',
+  },
+  {
+    key: 'posCanDelivery',
+    label: 'Delivery Orders in POS',
+    desc: 'Create & dispatch phone/rider Delivery orders inside POS',
+    icon: 'bicycle-outline',
+  },
+  {
+    key: 'posCanSendKot',
+    label: 'Send / Hold KOT to Kitchen',
+    desc: 'Dispatch KOT tickets to Kitchen & Juice Bar KDS (Hold Order / F8)',
+    icon: 'paper-plane-outline',
+  },
+  {
+    key: 'posCanSettleBill',
+    label: 'Settle & Pay Bills (Checkout)',
+    desc: 'Collect Cash, Card or Online payment and generate final settled invoice',
+    icon: 'card-outline',
+  },
+  {
+    key: 'posCanPrintUnpaidBill',
+    label: 'Print Unpaid Provisional Bill',
+    desc: 'Print customer check (CHK) & mark Dine-In tables as Billed before payment',
+    icon: 'print-outline',
+  },
+  {
+    key: 'posCanReleaseTable',
+    label: 'Release / Reset Occupied Tables',
+    desc: 'Release occupied tables or reset active table bill without settling',
+    icon: 'refresh-circle-outline',
+  },
+  {
+    key: 'posCanDismissTicket',
+    label: 'Cancel / Dismiss Running KOTs',
+    desc: 'Cancel or remove active kitchen tickets in POS Running Orders modal',
+    icon: 'trash-outline',
+  },
+  {
+    key: 'posCanSplitPayment',
+    label: 'Split / Multi-Method Payments',
+    desc: 'Split a single bill across multiple methods (e.g. Cash + Card + Online)',
+    icon: 'git-branch-outline',
+  },
+  {
+    key: 'posCanManageCustomers',
+    label: 'Register & Edit POS Customers',
+    desc: 'Add new customer profiles or update CRM contact details in POS checkout',
+    icon: 'person-add-outline',
+  },
+];
+
+const ALL_PERMISSION_KEYS: (keyof RolePermissions)[] = [
+  ...VISIBILITY_PERMS.map((p) => p.key),
+  ...MODULE_PERMS.map((p) => p.key),
+  ...AUTHORITY_PERMS.map((p) => p.key),
+  ...POS_TERMINAL_PERMS.map((p) => p.key),
+];
+
+const ROLE_COLOR_OPTIONS = [
+  '#52171B',
+  '#B48214',
+  '#0D9488',
+  '#7C3AED',
+  '#2563EB',
+  '#DC2626',
+  '#059669',
+  '#D97706',
+];
+
+const BASE_ROLE_OPTIONS: { value: BaseRoleType; label: string; hint: string }[] = [
+  { value: 'manager', label: 'Manager Portal', hint: 'Dynamic sidebar & screens controlled by permissions' },
+  { value: 'floor_manager', label: 'Floor Manager', hint: 'Floor command & table coordination portal' },
+  { value: 'waiter', label: 'Order Taker / Waiter', hint: 'Mobile/tablet table ordering & KOT dispatch' },
+  { value: 'kitchen', label: 'Kitchen KDS', hint: 'Main kitchen display & handover console' },
+  { value: 'juicebar', label: 'Juice Bar KDS', hint: 'Beverage & mocktail station KDS' },
+  { value: 'playland', label: 'Playland Hub', hint: 'Kids zone tickets & rides console' },
+  { value: 'custom', label: 'Custom Role', hint: 'Custom role routed through permission-filtered portal' },
+];
+
+const EMPTY_PERMISSIONS: RolePermissions = {
+  canViewRevenue: false,
+  canViewCostPrice: false,
+  canViewCustomerContacts: false,
+  canExportReports: false,
+  canAccessPOS: false,
+  canAccessInvoices: false,
+  canAccessReports: false,
+  canAccessInventory: false,
+  canAccessKitchenHandover: false,
+  canAccessRecipes: false,
+  canAccessDiscounts: false,
+  canAccessStaff: false,
+  canAccessExpenses: false,
+  canAccessFloorPlan: false,
+  canAccessDamages: false,
+  canAccessAssets: false,
+  canApplyCustomDiscount: false,
+  canVoidInvoice: false,
+  canProcessReturns: false,
+  canStartCloseShift: false,
+  canModifyMenuPrices: false,
+  posCanDineIn: false,
+  posCanTakeaway: false,
+  posCanDelivery: false,
+  posCanSendKot: false,
+  posCanSettleBill: false,
+  posCanPrintUnpaidBill: false,
+  posCanReleaseTable: false,
+  posCanDismissTicket: false,
+  posCanSplitPayment: false,
+  posCanManageCustomers: false,
+};
+
+type BooleanModuleKey = {
+  [K in keyof SystemSettings]: SystemSettings[K] extends boolean ? K : never;
+}[keyof SystemSettings];
+
+type NumberModuleKey = {
+  [K in keyof SystemSettings]: SystemSettings[K] extends number ? K : never;
+}[keyof SystemSettings];
+
+interface ModuleToggleItem {
+  key: BooleanModuleKey;
+  label: string;
+  sub: string;
+  isMaster?: boolean;
+}
+
+interface ModuleNumericItem {
+  key: NumberModuleKey;
+  label: string;
+  unit: string;
+}
+
+interface ModuleControlGroup {
+  id: string;
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  toggles: ModuleToggleItem[];
+  numericFields?: ModuleNumericItem[];
+}
+
+const MODULE_CONTROL_GROUPS: ModuleControlGroup[] = [
+  {
+    id: 'pos_channels',
+    title: 'POS Terminal & Order Channels',
+    subtitle: 'Control POS billing screen, order modes, filters & table/payment rules',
+    icon: 'calculator-outline',
+    toggles: [
+      {
+        key: 'enablePosModule',
+        label: 'POS Terminal Module',
+        sub: 'Master switch to show/enable the main POS Billing Terminal in navigation',
+        isMaster: true,
+      },
+      {
+        key: 'enableDineIn',
+        label: 'Dine-In Floor & Tables',
+        sub: 'Enable dine-in tab, table seating, waiter assignment & cabin orders at POS',
+      },
+      {
+        key: 'enableTakeaway',
+        label: 'Takeaway Counter Orders',
+        sub: 'Enable quick takeaway tickets & counter billing tab at POS',
+      },
+      {
+        key: 'enableDelivery',
+        label: 'Delivery & Rider Dispatch',
+        sub: 'Enable delivery tab, phone/address lookup & delivery fee calculation',
+      },
+      {
+        key: 'posShowCuisineFilter',
+        label: 'POS Cuisine / Region Filter Bar',
+        sub: 'Show horizontal cuisine/region quick-filter pills in POS menu catalog',
+      },
+      {
+        key: 'posShowDealsTab',
+        label: 'POS Deals & Combos Quick Filter',
+        sub: 'Highlight Deals & Combo packages category inside the POS terminal',
+      },
+      {
+        key: 'posRequireTableForDineIn',
+        label: 'Require Table Selection for Dine-In',
+        sub: 'Enforce selecting a table or cabin before placing a Dine-In KOT/bill',
+      },
+      {
+        key: 'posRequireCustomerForDelivery',
+        label: 'Require Customer Details for Delivery',
+        sub: 'Require guest name, phone & address before dispatching delivery orders',
+      },
+      {
+        key: 'posAllowSplitPayment',
+        label: 'Allow Split / Multi-Method Payments',
+        sub: 'Permit settling a single invoice across Cash + Card / Online wallet',
+      },
+      {
+        key: 'posEnableTableReleaseConfirm',
+        label: 'Post-Payment Table Decision Prompt',
+        sub: 'Ask cashier whether to release table or keep guests seated after bill payment',
+      },
+    ],
+  },
+  {
+    id: 'floor_qr',
+    title: 'Floor Command, Tables & Digital QR Menu',
+    subtitle: 'Control floor blueprints, table zones, online orders & guest QR menu',
+    icon: 'business-outline',
+    toggles: [
+      {
+        key: 'enableFloorPlanModule',
+        label: 'Floor Command & Table Blueprint',
+        sub: 'Master switch for live floor command, seating maps & table builder screens',
+        isMaster: true,
+      },
+      {
+        key: 'enableDigitalQrMenu',
+        label: 'Customer Digital QR Menu',
+        sub: 'Enable the guest-facing QR menu experience & table self-ordering portal',
+        isMaster: true,
+      },
+      {
+        key: 'enableOnlineOrders',
+        label: 'Online & QR App Orders Command',
+        sub: 'Accept live incoming online/QR orders and show App Orders Command screen',
+      },
+      {
+        key: 'enableMajlisSeating',
+        label: 'Majlis & Private Cabin Zones',
+        sub: 'Include VIP Majlis / Family Cabin seating options across floors & POS',
+      },
+      {
+        key: 'enableCouchSeating',
+        label: 'Lounge & Couch Seating Zones',
+        sub: 'Include couch/sofa lounge seating groups in floor blueprint & POS selector',
+      },
+      {
+        key: 'enableWaiterFloorLock',
+        label: 'Waiter Floor-Restriction Enforcement',
+        sub: 'Restrict Order Takers to tables on their assigned floors/zones',
+      },
+    ],
+  },
+  {
+    id: 'kitchen_recipes',
+    title: 'Kitchen (KDS), Juice Bar & Recipe BOM',
+    subtitle: 'Control kitchen ticket displays, prep timers, stock handover & recipes',
+    icon: 'restaurant-outline',
+    toggles: [
+      {
+        key: 'enableKdsModule',
+        label: 'Kitchen & Juice Bar KDS Displays',
+        sub: 'Master switch for live kitchen KOT routing & preparation displays',
+        isMaster: true,
+      },
+      {
+        key: 'kdsSoundAlerts',
+        label: 'KDS Audio Chime Alerts',
+        sub: 'Play sound notification on Kitchen & Juice Bar screens for new KOTs',
+      },
+      {
+        key: 'kdsAutoRouteBeverages',
+        label: 'Auto-Route Beverages to Juice Bar KDS',
+        sub: 'Separate juices, shakes, mocktails & tea automatically to Juice Bar screen',
+      },
+      {
+        key: 'enableKitchenHandoverModule',
+        label: 'Kitchen Handover & Returns Module',
+        sub: 'Master switch for daily kitchen stock issue & unused return tracking',
+        isMaster: true,
+      },
+      {
+        key: 'enableRecipesBomModule',
+        label: 'Recipe BOM & Dish Costing Module',
+        sub: 'Master switch for ingredient bill-of-materials & dish margin costing screens',
+        isMaster: true,
+      },
+      {
+        key: 'autoDeductRecipeStock',
+        label: 'Auto-Deduct Stock by Recipe BOM',
+        sub: 'Automatically deduct linked raw ingredients when dishes are sold on POS',
+      },
+    ],
+    numericFields: [
+      {
+        key: 'kdsTargetPrepMinutes',
+        label: 'Target Kitchen Prep SLA (Minutes)',
+        unit: 'mins',
+      },
+    ],
+  },
+  {
+    id: 'sales_crm',
+    title: 'Sales, CRM, Promotions & Returns',
+    subtitle: 'Control invoice ledgers, refunds, discount campaigns & caller ID',
+    icon: 'receipt-outline',
+    toggles: [
+      {
+        key: 'enableInvoicesModule',
+        label: 'Invoices & Order History Module',
+        sub: 'Master switch for invoice ledger, order history & bill re-printing screen',
+        isMaster: true,
+      },
+      {
+        key: 'enableReturnsModule',
+        label: 'Sales Returns & Refunds Module',
+        sub: 'Master switch for returning settled items & recording cash/card refunds',
+        isMaster: true,
+      },
+      {
+        key: 'enableDiscountsModule',
+        label: 'Events & Discounts Module',
+        sub: 'Master switch for festival campaigns, bank offers & promo discount rules',
+        isMaster: true,
+      },
+      {
+        key: 'enableCustomerCrmModule',
+        label: 'Customer CRM & Loyalty Directory',
+        sub: 'Master switch for customer database, order history & credit/loyalty profiles',
+        isMaster: true,
+      },
+      {
+        key: 'enableCallDetector',
+        label: 'Incoming Call Detector (Android)',
+        sub: 'Auto-detect caller phone numbers on tablet/phone for instant delivery lookup',
+      },
+      {
+        key: 'enableCustomerFeedbackQr',
+        label: 'Customer Feedback QR Capture',
+        sub: 'Collect guest star ratings & dish reviews via receipt/table QR links',
+      },
+    ],
+  },
+  {
+    id: 'inventory_supply',
+    title: 'Inventory, Suppliers & Damage Control',
+    subtitle: 'Control warehouse stock, vendor purchases, wastage & low-stock rules',
+    icon: 'cube-outline',
+    toggles: [
+      {
+        key: 'enableInventoryModule',
+        label: 'Inventory & Stock Control Module',
+        sub: 'Master switch for stock levels, adjustments, transfers & warehouse ledger',
+        isMaster: true,
+      },
+      {
+        key: 'enableSuppliersModule',
+        label: 'Suppliers & Vendors Module',
+        sub: 'Master switch for supplier profiles, purchase orders & vendor payables',
+        isMaster: true,
+      },
+      {
+        key: 'enableDamagesModule',
+        label: 'Damage, Wastage & Spoilage Control',
+        sub: 'Master switch for kitchen spoilage, broken crockery & waste write-off logs',
+        isMaster: true,
+      },
+      {
+        key: 'blockOutOfStockPosOrders',
+        label: 'Block Out-of-Stock Items in POS',
+        sub: 'Prevent ordering dishes when tracked recipe/inventory stock hits zero',
+      },
+    ],
+    numericFields: [
+      {
+        key: 'lowStockAlertThreshold',
+        label: 'Low Stock Alert Threshold (Units)',
+        unit: 'units',
+      },
+    ],
+  },
+  {
+    id: 'finance_shift',
+    title: 'Finance, Shift Cash, Expenses & Assets',
+    subtitle: 'Control register shifts, P&L reports, analytics, expenses & capex',
+    icon: 'bar-chart-outline',
+    toggles: [
+      {
+        key: 'enableShiftModule',
+        label: 'Live Shift & Cash Register Module',
+        sub: 'Master switch for opening/closing shifts, cash drawers & blind note counts',
+        isMaster: true,
+      },
+      {
+        key: 'requireActiveShiftForPos',
+        label: 'Require Open Shift Before POS Billing',
+        sub: 'Mandate an active cash register shift before settling payments at POS',
+      },
+      {
+        key: 'enableReportsModule',
+        label: 'Financial Reports & Z-Audit Module',
+        sub: 'Master switch for daily/monthly sales, tax, payment breakdown & Z-reports',
+        isMaster: true,
+      },
+      {
+        key: 'enableInsightsModule',
+        label: 'Business Insights & Analytics Module',
+        sub: 'Master switch for top dishes, peak hours, category trends & profit insights',
+        isMaster: true,
+      },
+      {
+        key: 'enableExpensesModule',
+        label: 'Live Expenses & Petty Cash Module',
+        sub: 'Master switch for daily cash-out entries, utility bills & petty expenses',
+        isMaster: true,
+      },
+      {
+        key: 'enableAssetsModule',
+        label: 'Assets & Capex Register Module',
+        sub: 'Master switch for restaurant equipment, furniture & fixed capital assets',
+        isMaster: true,
+      },
+    ],
+  },
+  {
+    id: 'hr_playland',
+    title: 'Staff HR, Attendance, Payroll & Playland',
+    subtitle: 'Control employee HR tabs, shift hours & Playland ticketing hub',
+    icon: 'people-outline',
+    toggles: [
+      {
+        key: 'enableStaffHrModule',
+        label: 'Staff Directory & HR Module',
+        sub: 'Master switch for employee profiles, PINs, floor assignments & HR screen',
+        isMaster: true,
+      },
+      {
+        key: 'enableAttendanceTracking',
+        label: 'Daily Attendance Register (حاضری)',
+        sub: 'Enable staff check-in/out attendance tab & daily presence tracking',
+      },
+      {
+        key: 'enablePayrollModule',
+        label: 'Salary & Monthly Payroll (تنخواہیں)',
+        sub: 'Enable salary calculation, overtime payouts & payroll ledger tab',
+      },
+      {
+        key: 'enablePlayland',
+        label: 'Playland Hub Module',
+        sub: 'Master switch for Playland ticketing, wristband tracking & arcade sessions',
+        isMaster: true,
+      },
+    ],
+    numericFields: [
+      {
+        key: 'standardShiftHours',
+        label: 'Standard Daily Shift Hours',
+        unit: 'hrs',
+      },
+      {
+        key: 'playlandDefaultSessionMins',
+        label: 'Default Playland Session (Minutes)',
+        unit: 'mins',
+      },
+    ],
+  },
 ];
 
 export default function AdminSettingsScreen() {
@@ -60,6 +620,10 @@ export default function AdminSettingsScreen() {
   const updateSettings = useSettingsStore((s) => s.updateSettings);
   const resetSettingsToDefaults = useSettingsStore((s) => s.resetSettingsToDefaults);
 
+  const [draft, setDraft] = useState<SystemSettings>(() => ({ ...settings }));
+  const [isSaving, setIsSaving] = useState(false);
+  const prevSettingsRef = useRef<SystemSettings>(settings);
+
   const staff = useRestaurantStore((s) => s.staff);
   const addStaff = useRestaurantStore((s) => s.addStaff);
   const updateStaff = useRestaurantStore((s) => s.updateStaff);
@@ -71,11 +635,28 @@ export default function AdminSettingsScreen() {
   const customers = useRestaurantStore((s) => s.customers);
   const menuItems = useRestaurantStore((s) => s.menuItems);
   const roles = useRoleStore((s) => s.roles);
+  const addRole = useRoleStore((s) => s.addRole);
+  const updateRole = useRoleStore((s) => s.updateRole);
+  const deleteRole = useRoleStore((s) => s.deleteRole);
+  const setPermission = useRoleStore((s) => s.setPermission);
   const resetToDefaultRoles = useRoleStore((s) => s.resetToDefaultRoles);
   const currentUser = useAuthStore((s) => s.user);
 
   const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null);
   const [serverIpInput, setServerIpInput] = useState('');
+
+  // Role & Permission Control state
+  const [selectedRoleId, setSelectedRoleId] = useState<string>('role-cashier');
+  const [selectedStaffPermId, setSelectedStaffPermId] = useState<string>('st-c1');
+  const [showAllStaffInOverrides, setShowAllStaffInOverrides] = useState<boolean>(false);
+  const [roleModalVisible, setRoleModalVisible] = useState(false);
+  const [editingRole, setEditingRole] = useState<CustomRole | null>(null);
+  const [rName, setRName] = useState('');
+  const [rUrduName, setRUrduName] = useState('');
+  const [rDesc, setRDesc] = useState('');
+  const [rBaseRole, setRBaseRole] = useState<BaseRoleType>('manager');
+  const [rColor, setRColor] = useState('#B48214');
+  const [rCloneFromId, setRCloneFromId] = useState<string>('none');
 
   // User modal state
   const [userModalVisible, setUserModalVisible] = useState(false);
@@ -87,6 +668,7 @@ export default function AdminSettingsScreen() {
   const [uCustomRoleId, setUCustomRoleId] = useState<string>('role-waiter');
   const [uShift, setUShift] = useState<StaffShift>('Morning');
   const [userSearch, setUserSearch] = useState('');
+  const [moduleSearch, setModuleSearch] = useState('');
 
   // Restore modal state
   const [restoreModalVisible, setRestoreModalVisible] = useState(false);
@@ -103,6 +685,54 @@ export default function AdminSettingsScreen() {
   const showToast = (msg: string) => {
     setToastMsg(msg);
     setTimeout(() => setToastMsg((prev) => (prev === msg ? null : prev)), 3000);
+  };
+
+  const areSettingsEqual = (a: SystemSettings, b: SystemSettings) => {
+    const keys = Object.keys(a) as (keyof SystemSettings)[];
+    for (const k of keys) {
+      if (k === 'updatedAt') continue;
+      if (a[k] !== b[k]) return false;
+    }
+    return true;
+  };
+
+  const hasUnsavedChanges = useMemo(
+    () => !areSettingsEqual(draft, settings),
+    [draft, settings]
+  );
+
+  useEffect(() => {
+    if (settings !== prevSettingsRef.current) {
+      if (areSettingsEqual(draft, prevSettingsRef.current)) {
+        setDraft({ ...settings });
+      }
+      prevSettingsRef.current = settings;
+    }
+  }, [settings]);
+
+  const updateDraft = (partial: Partial<SystemSettings>) => {
+    setDraft((prev) => ({ ...prev, ...partial }));
+  };
+
+  const handleSaveSettings = async () => {
+    setIsSaving(true);
+    try {
+      const { updatedAt: _omit, ...cleanDraft } = draft;
+      updateSettings(cleanDraft);
+      const saved = useSettingsStore.getState().settings;
+      prevSettingsRef.current = saved;
+      setDraft({ ...saved });
+      broadcastImmediately();
+      await forceSyncNow();
+      showToast('Settings saved & synced across all devices!');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleDiscardChanges = () => {
+    setDraft({ ...settings });
+    showToast('Unsaved changes discarded');
   };
 
   useEffect(() => {
@@ -132,7 +762,20 @@ export default function AdminSettingsScreen() {
     setUPhone('');
     setUPin('');
     setURole('waiter');
-    setUCustomRoleId(roles[0]?.id || 'role-waiter');
+    const waiterRole = roles.find((r) => r.id === 'role-waiter' || r.baseRole === 'waiter') || roles[0];
+    setUCustomRoleId(waiterRole?.id || 'role-waiter');
+    setUShift('Morning');
+    setUserModalVisible(true);
+  };
+
+  const openAddCashierModal = () => {
+    setEditingStaff(null);
+    setUName('');
+    setUPhone('');
+    setUPin('');
+    setURole('Cashier');
+    const cashierRole = roles.find((r) => r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier') || roles[0];
+    setUCustomRoleId(cashierRole?.id || 'role-cashier');
     setUShift('Morning');
     setUserModalVisible(true);
   };
@@ -143,9 +786,269 @@ export default function AdminSettingsScreen() {
     setUPhone(member.phone || '');
     setUPin(member.pin || '');
     setURole(member.role);
-    setUCustomRoleId(member.customRoleId || '');
+    const matchedRole =
+      roles.find((r) => r.id === member.customRoleId) ||
+      roles.find(
+        (r) =>
+          r.name.toLowerCase() === (member.role || '').toLowerCase() ||
+          r.baseRole === (member.role || '').toLowerCase()
+      );
+    setUCustomRoleId(matchedRole?.id || member.customRoleId || '');
     setUShift(member.shift || 'Morning');
     setUserModalVisible(true);
+  };
+
+  const selectedRole = useMemo(
+    () => roles.find((r) => r.id === selectedRoleId) || roles[0],
+    [roles, selectedRoleId]
+  );
+
+  const countEnabledPerms = (perms?: RolePermissions) =>
+    perms ? ALL_PERMISSION_KEYS.filter((k) => !!perms[k]).length : 0;
+
+  const openAddRoleModal = () => {
+    setEditingRole(null);
+    setRName('');
+    setRUrduName('');
+    setRDesc('');
+    setRBaseRole('manager');
+    setRColor('#B48214');
+    setRCloneFromId('none');
+    setRoleModalVisible(true);
+  };
+
+  const openEditRoleModal = (role: CustomRole) => {
+    setEditingRole(role);
+    setRName(role.name);
+    setRUrduName(role.urduName || '');
+    setRDesc(role.description || '');
+    setRBaseRole(role.baseRole);
+    setRColor(role.badgeColor || '#B48214');
+    setRCloneFromId('none');
+    setRoleModalVisible(true);
+  };
+
+  const handleSaveRoleModal = () => {
+    if (!rName.trim()) {
+      Alert.alert('Validation', 'Role name is required.');
+      return;
+    }
+    if (editingRole) {
+      updateRole(editingRole.id, {
+        name: rName.trim(),
+        urduName: rUrduName.trim() || undefined,
+        description: rDesc.trim() || `Custom permissions for ${rName.trim()}`,
+        baseRole: editingRole.isSystem ? editingRole.baseRole : rBaseRole,
+        badgeColor: rColor,
+      });
+      broadcastImmediately();
+      setRoleModalVisible(false);
+      showToast(`Updated role "${rName.trim()}"`);
+    } else {
+      const sourceRole = rCloneFromId !== 'none' ? roles.find((r) => r.id === rCloneFromId) : null;
+      const initialPerms: RolePermissions = sourceRole
+        ? { ...sourceRole.permissions }
+        : { ...EMPTY_PERMISSIONS };
+      const newId = addRole({
+        name: rName.trim(),
+        urduName: rUrduName.trim() || undefined,
+        description: rDesc.trim() || `Custom permissions configured in System Settings`,
+        badgeColor: rColor,
+        icon: 'shield-checkmark',
+        isSystem: false,
+        baseRole: rBaseRole,
+        permissions: initialPerms,
+      });
+      setSelectedRoleId(newId);
+      broadcastImmediately();
+      setRoleModalVisible(false);
+      showToast(`Created role "${rName.trim()}" — configure permissions below!`);
+    }
+  };
+
+  const handleToggleRolePerm = (roleId: string, key: keyof RolePermissions, nextValue: boolean) => {
+    setPermission(roleId, key, nextValue);
+    broadcastImmediately();
+  };
+
+  const handleBulkRolePerms = (role: CustomRole, grantAll: boolean) => {
+    const updated: RolePermissions = grantAll
+      ? { ...ADMIN_PERMISSIONS }
+      : {
+          ...EMPTY_PERMISSIONS,
+          ...(role.id === 'role-admin' ? { canAccessStaff: true } : {}),
+        };
+    updateRole(role.id, { permissions: updated });
+    broadcastImmediately();
+    showToast(
+      grantAll
+        ? `Granted all permissions to ${role.name}`
+        : `Revoked permissions for ${role.name}`
+    );
+  };
+
+  const handleSaveAndSyncRoles = async () => {
+    broadcastImmediately();
+    const ok = await forceSyncNow();
+    showToast(ok ? 'Role permissions saved & synced across all devices!' : 'Role permissions saved locally & broadcasted');
+  };
+
+  // Per-Cashier & Individual Staff Permission Override Helpers
+  const isCashierStaff = (member: StaffMember) =>
+    member.customRoleId === 'role-cashier' || (member.role || '').trim().toLowerCase() === 'cashier';
+
+  const cashierStaffList = useMemo(
+    () => (staff || []).filter((s) => isCashierStaff(s)),
+    [staff]
+  );
+
+  const staffForOverrideList = useMemo(
+    () => (showAllStaffInOverrides ? staff || [] : cashierStaffList),
+    [staff, cashierStaffList, showAllStaffInOverrides]
+  );
+
+  const selectedOverrideStaff = useMemo(
+    () =>
+      staffForOverrideList.find((s) => s.id === selectedStaffPermId) ||
+      staffForOverrideList[0] ||
+      null,
+    [staffForOverrideList, selectedStaffPermId]
+  );
+
+  const resolveBaseRoleForStaff = (member: StaffMember): CustomRole => {
+    const cashierFallback = roles.find((r) => r.id === 'role-cashier') || roles[0];
+    return (
+      roles.find((r) => r.id === member.customRoleId) ||
+      roles.find(
+        (r) =>
+          r.name.toLowerCase() === (member.role || '').toLowerCase() ||
+          r.baseRole === (member.role || '').toLowerCase()
+      ) ||
+      cashierFallback
+    );
+  };
+
+  const getEffectiveStaffPerms = (member: StaffMember): RolePermissions => {
+    const baseRole = resolveBaseRoleForStaff(member);
+    return {
+      ...EMPTY_PERMISSIONS,
+      ...(baseRole?.permissions || {}),
+      ...(member.permissionOverrides || {}),
+    };
+  };
+
+  const countStaffOverrides = (member: StaffMember): number =>
+    member.permissionOverrides
+      ? ALL_PERMISSION_KEYS.filter((k) => member.permissionOverrides?.[k] !== undefined).length
+      : 0;
+
+  const handleToggleStaffPerm = (
+    member: StaffMember,
+    key: keyof RolePermissions,
+    nextValue: boolean
+  ) => {
+    const baseRole = resolveBaseRoleForStaff(member);
+    const baseVal = Boolean(baseRole?.permissions?.[key]);
+    const nextOverrides: Partial<RolePermissions> = { ...(member.permissionOverrides || {}) };
+    if (nextValue === baseVal) {
+      delete nextOverrides[key];
+    } else {
+      nextOverrides[key] = nextValue;
+    }
+    const hasAny = Object.keys(nextOverrides).length > 0;
+    updateStaff(member.id, {
+      permissionOverrides: hasAny ? nextOverrides : undefined,
+    });
+    broadcastImmediately();
+  };
+
+  const handleApplyCashierPreset = (
+    member: StaffMember,
+    preset: 'full_pos' | 'billing_only' | 'order_only' | 'reset'
+  ) => {
+    if (preset === 'reset') {
+      updateStaff(member.id, { permissionOverrides: undefined });
+      broadcastImmediately();
+      showToast(`Reset ${member.name} to base ${resolveBaseRoleForStaff(member)?.name || 'Cashier'} role defaults`);
+      return;
+    }
+
+    const presetPatch: Partial<RolePermissions> =
+      preset === 'full_pos'
+        ? {
+            canAccessPOS: true,
+            canAccessInvoices: true,
+            canAccessFloorPlan: true,
+            canApplyCustomDiscount: true,
+            canStartCloseShift: true,
+            posCanDineIn: true,
+            posCanTakeaway: true,
+            posCanDelivery: true,
+            posCanSendKot: true,
+            posCanSettleBill: true,
+            posCanPrintUnpaidBill: true,
+            posCanReleaseTable: true,
+            posCanDismissTicket: true,
+            posCanSplitPayment: true,
+            posCanManageCustomers: true,
+          }
+        : preset === 'billing_only'
+          ? {
+              canAccessPOS: true,
+              canAccessInvoices: true,
+              canApplyCustomDiscount: false,
+              canVoidInvoice: false,
+              canProcessReturns: false,
+              posCanDineIn: true,
+              posCanTakeaway: true,
+              posCanDelivery: true,
+              posCanSendKot: true,
+              posCanSettleBill: true,
+              posCanPrintUnpaidBill: true,
+              posCanReleaseTable: false,
+              posCanDismissTicket: false,
+              posCanSplitPayment: true,
+              posCanManageCustomers: true,
+            }
+          : {
+              canAccessPOS: true,
+              canApplyCustomDiscount: false,
+              canStartCloseShift: false,
+              posCanDineIn: true,
+              posCanTakeaway: true,
+              posCanDelivery: true,
+              posCanSendKot: true,
+              posCanSettleBill: false,
+              posCanPrintUnpaidBill: true,
+              posCanReleaseTable: false,
+              posCanDismissTicket: false,
+              posCanSplitPayment: false,
+              posCanManageCustomers: true,
+            };
+
+    const baseRole = resolveBaseRoleForStaff(member);
+    const nextOverrides: Partial<RolePermissions> = { ...(member.permissionOverrides || {}) };
+    (Object.keys(presetPatch) as (keyof RolePermissions)[]).forEach((k) => {
+      const val = Boolean(presetPatch[k]);
+      const baseVal = Boolean(baseRole?.permissions?.[k]);
+      if (val === baseVal) {
+        delete nextOverrides[k];
+      } else {
+        nextOverrides[k] = val;
+      }
+    });
+
+    updateStaff(member.id, {
+      permissionOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+    });
+    broadcastImmediately();
+    const label =
+      preset === 'full_pos'
+        ? 'Full POS Access'
+        : preset === 'billing_only'
+          ? 'Billing Only (No Void/Cancel/Release)'
+          : 'Order Taking Only (No Settlement)';
+    showToast(`Applied "${label}" preset to ${member.name}`);
   };
 
   const handleSaveUser = () => {
@@ -226,6 +1129,54 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  const moduleStats = useMemo(() => {
+    let total = 0;
+    let active = 0;
+    for (const grp of MODULE_CONTROL_GROUPS) {
+      for (const t of grp.toggles) {
+        total += 1;
+        if (draft[t.key]) active += 1;
+      }
+    }
+    return { total, active };
+  }, [draft]);
+
+  const handleBulkGroupModules = (group: ModuleControlGroup, enable: boolean) => {
+    const patch: Partial<SystemSettings> = {};
+    for (const t of group.toggles) {
+      patch[t.key] = enable as any;
+    }
+    updateDraft(patch);
+    showToast(`${enable ? 'Enabled' : 'Disabled'} all options in ${group.title} (Save Changes to apply)`);
+  };
+
+  const handleBulkAllModules = (enable: boolean) => {
+    const patch: Partial<SystemSettings> = {};
+    for (const grp of MODULE_CONTROL_GROUPS) {
+      for (const t of grp.toggles) {
+        patch[t.key] = enable as any;
+      }
+    }
+    updateDraft(patch);
+    showToast(`${enable ? 'Enabled' : 'Disabled'} all module options (Save Changes to apply)`);
+  };
+
+  const handleResetModuleDefaults = () => {
+    const patch: Partial<SystemSettings> = {};
+    for (const grp of MODULE_CONTROL_GROUPS) {
+      for (const t of grp.toggles) {
+        patch[t.key] = DEFAULT_SYSTEM_SETTINGS[t.key] as any;
+      }
+      if (grp.numericFields) {
+        for (const nf of grp.numericFields) {
+          patch[nf.key] = DEFAULT_SYSTEM_SETTINGS[nf.key] as any;
+        }
+      }
+    }
+    updateDraft(patch);
+    showToast('Module options reset to defaults (Save Changes to apply)');
+  };
+
   const askConfirm = (title: string, message: string, onConfirm: () => void) => {
     setConfirmModal({ visible: true, title, message, onConfirm });
   };
@@ -243,37 +1194,223 @@ export default function AdminSettingsScreen() {
       </View>
       <Switch
         value={value}
-        onValueChange={(v) => {
-          onValueChange(v);
-          showToast('Setting updated & synced');
-        }}
+        onValueChange={onValueChange}
         trackColor={{ false: '#D6D3D1', true: '#52171B' }}
         thumbColor={value ? '#D4AF37' : '#F5F5F4'}
       />
     </View>
   );
 
+  const renderSaveFooter = () => (
+    <View style={styles.cardFooterBar}>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.footerStatusText}>
+          {hasUnsavedChanges
+            ? 'You have unsaved changes — save to apply & sync across POS, Tablets & KDS.'
+            : 'All settings are saved and active across your system.'}
+        </Text>
+      </View>
+      <View style={styles.footerActions}>
+        {hasUnsavedChanges && (
+          <TouchableOpacity style={styles.secondaryBtn} onPress={handleDiscardChanges}>
+            <Ionicons name="close-circle-outline" size={16} color="#52171B" />
+            <Text style={styles.secondaryBtnText}>Discard</Text>
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity
+          style={[
+            styles.saveBtn,
+            !hasUnsavedChanges && styles.saveBtnSaved,
+          ]}
+          onPress={handleSaveSettings}
+          disabled={isSaving}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name={hasUnsavedChanges ? 'save-outline' : 'checkmark-circle'}
+            size={16}
+            color={hasUnsavedChanges ? '#140306' : '#065F46'}
+          />
+          <Text
+            style={[
+              styles.saveBtnText,
+              !hasUnsavedChanges && styles.saveBtnTextSaved,
+            ]}
+          >
+            {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
+          </Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+
+  const renderPermissionGrid = (
+    title: string,
+    subtitle: string,
+    icon: keyof typeof Ionicons.glyphMap,
+    items: PermItemMeta[],
+    effectivePerms: RolePermissions,
+    onToggle: (key: keyof RolePermissions, nextValue: boolean) => void,
+    options?: {
+      lockedKeys?: (keyof RolePermissions)[];
+      overrides?: Partial<RolePermissions>;
+    }
+  ) => (
+    <View style={styles.permCategoryCard}>
+      <View style={styles.permCategoryHeader}>
+        <View style={styles.permCategoryIconWrap}>
+          <Ionicons name={icon} size={16} color="#52171B" />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.permCategoryTitle}>{title}</Text>
+          <Text style={styles.rowSub}>{subtitle}</Text>
+        </View>
+      </View>
+
+      <View style={styles.permGridWrap}>
+        {items.map((item) => {
+          const enabled = !!effectivePerms?.[item.key];
+          const isProtected = options?.lockedKeys?.includes(item.key) ?? false;
+          const isOverridden = options?.overrides?.[item.key] !== undefined;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              style={[
+                styles.permItemCard,
+                isCompact && { width: '100%' },
+                enabled && styles.permItemCardActive,
+                isOverridden && styles.permItemCardOverridden,
+                isProtected && { opacity: 0.75 },
+              ]}
+              activeOpacity={0.75}
+              disabled={isProtected}
+              onPress={() => onToggle(item.key, !enabled)}
+            >
+              <View style={styles.permItemIcon}>
+                <Ionicons
+                  name={item.icon}
+                  size={16}
+                  color={enabled ? '#52171B' : '#78716C'}
+                />
+              </View>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <Text style={styles.permItemTitle}>
+                    {item.label}
+                    {isProtected ? ' (Locked)' : ''}
+                  </Text>
+                  {isOverridden && (
+                    <View style={styles.overridePill}>
+                      <Text style={styles.overridePillText}>CUSTOM</Text>
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.permItemDesc}>{item.desc}</Text>
+              </View>
+              <Switch
+                value={enabled}
+                disabled={isProtected}
+                onValueChange={(v) => onToggle(item.key, v)}
+                trackColor={{ false: '#D6D3D1', true: '#52171B' }}
+                thumbColor={enabled ? '#D4AF37' : '#F5F5F4'}
+              />
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+
+  const renderPermissionCategory = (
+    title: string,
+    subtitle: string,
+    icon: keyof typeof Ionicons.glyphMap,
+    items: PermItemMeta[],
+    role: CustomRole
+  ) =>
+    renderPermissionGrid(
+      title,
+      subtitle,
+      icon,
+      items,
+      role.permissions,
+      (key, v) => handleToggleRolePerm(role.id, key, v),
+      { lockedKeys: role.id === 'role-admin' ? ['canAccessStaff'] : [] }
+    );
+
+  const isConnected = syncInfo?.status === 'connected';
+
   return (
     <View style={styles.container}>
-      {/* Top Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.headerTitle}>System Control & Settings</Text>
-          <Text style={styles.headerSub}>
-            Control branding, taxes, modules, users, sync server & full data backups
-          </Text>
+      {/* Executive Command Header Card (matches Dashboard UI) */}
+      <View style={[styles.headerCard, isCompact && styles.headerCardMobile]}>
+        <View style={styles.headerLeft}>
+          <View style={styles.headerLogoCapsule}>
+            <SultanLogo size="xs" variant="circle" />
+          </View>
+          <View style={{ flexShrink: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.headerTitle}>System Control & Settings</Text>
+              <View style={[styles.statusBadge, isConnected ? styles.statusBadgeOnline : styles.statusBadgeOffline]}>
+                <View style={[styles.statusDot, { backgroundColor: isConnected ? '#10B981' : '#D97706' }]} />
+                <Text style={[styles.statusBadgeText, { color: isConnected ? '#065F46' : '#92400E' }]}>
+                  {isConnected ? 'LIVE SYNC' : 'OFFLINE'}
+                </Text>
+              </View>
+              {hasUnsavedChanges && (
+                <View style={styles.unsavedPill}>
+                  <Text style={styles.unsavedPillText}>Unsaved Changes</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.headerSub}>
+              Control branding, taxes, modules, users, sync server & full data backups
+            </Text>
+          </View>
         </View>
-        <TouchableOpacity
-          style={styles.syncPill}
-          onPress={async () => {
-            broadcastImmediately();
-            const ok = await forceSyncNow();
-            showToast(ok ? 'All devices synced!' : 'Broadcast sent to local network');
-          }}
-        >
-          <Ionicons name="sync-outline" size={16} color="#140306" />
-          <Text style={styles.syncPillText}>Sync Now</Text>
-        </TouchableOpacity>
+
+        <View style={styles.headerRight}>
+          {hasUnsavedChanges && (
+            <TouchableOpacity style={styles.headerSecondaryBtn} onPress={handleDiscardChanges}>
+              <Ionicons name="arrow-undo-outline" size={15} color="#52171B" />
+              <Text style={styles.headerSecondaryBtnText}>Discard</Text>
+            </TouchableOpacity>
+          )}
+          <TouchableOpacity
+            style={styles.headerSecondaryBtn}
+            onPress={async () => {
+              broadcastImmediately();
+              const ok = await forceSyncNow();
+              showToast(ok ? 'All devices synced!' : 'Broadcast sent to local network');
+            }}
+          >
+            <Ionicons name="sync-outline" size={15} color="#52171B" />
+            <Text style={styles.headerSecondaryBtnText}>Sync Now</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[
+              styles.saveBtn,
+              !hasUnsavedChanges && styles.saveBtnSaved,
+            ]}
+            onPress={handleSaveSettings}
+            disabled={isSaving}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name={hasUnsavedChanges ? 'save-outline' : 'checkmark-circle'}
+              size={16}
+              color={hasUnsavedChanges ? '#140306' : '#065F46'}
+            />
+            <Text
+              style={[
+                styles.saveBtnText,
+                !hasUnsavedChanges && styles.saveBtnTextSaved,
+              ]}
+            >
+              {isSaving ? 'Saving...' : hasUnsavedChanges ? 'Save Changes' : 'Saved'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {toastMsg && (
@@ -320,8 +1457,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>Restaurant Name</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.restaurantName}
-                  onChangeText={(t) => updateSettings({ restaurantName: t })}
+                  value={draft.restaurantName}
+                  onChangeText={(t) => updateDraft({ restaurantName: t })}
                   placeholder="SULTAN RESTAURANT"
                 />
               </View>
@@ -329,8 +1466,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>Tagline / Subtitle</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.tagline}
-                  onChangeText={(t) => updateSettings({ tagline: t })}
+                  value={draft.tagline}
+                  onChangeText={(t) => updateDraft({ tagline: t })}
                   placeholder="Royal Mughlai & BBQ Dining"
                 />
               </View>
@@ -341,8 +1478,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>Contact Phone</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.phone}
-                  onChangeText={(t) => updateSettings({ phone: t })}
+                  value={draft.phone}
+                  onChangeText={(t) => updateDraft({ phone: t })}
                   placeholder="0300-1234567"
                 />
               </View>
@@ -350,8 +1487,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>NTN / Tax Registration ID</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.ntnOrTaxId}
-                  onChangeText={(t) => updateSettings({ ntnOrTaxId: t })}
+                  value={draft.ntnOrTaxId}
+                  onChangeText={(t) => updateDraft({ ntnOrTaxId: t })}
                   placeholder="8943120-4"
                 />
               </View>
@@ -361,8 +1498,8 @@ export default function AdminSettingsScreen() {
               <Text style={styles.label}>Restaurant Address</Text>
               <TextInput
                 style={styles.input}
-                value={settings.address}
-                onChangeText={(t) => updateSettings({ address: t })}
+                value={draft.address}
+                onChangeText={(t) => updateDraft({ address: t })}
                 placeholder="Food Street, Culinary District, Lahore"
               />
             </View>
@@ -371,8 +1508,8 @@ export default function AdminSettingsScreen() {
               <Text style={styles.label}>Receipt Footer Message</Text>
               <TextInput
                 style={styles.input}
-                value={settings.footerMessage}
-                onChangeText={(t) => updateSettings({ footerMessage: t })}
+                value={draft.footerMessage}
+                onChangeText={(t) => updateDraft({ footerMessage: t })}
                 placeholder="Thank you for dining with Sultan!"
               />
             </View>
@@ -381,15 +1518,16 @@ export default function AdminSettingsScreen() {
             {renderToggleRow(
               'Show Logo on Printed Receipts',
               'Display Sultan crest at the top of thermal & A4 invoices',
-              settings.showLogoOnReceipt,
-              (v) => updateSettings({ showLogoOnReceipt: v })
+              draft.showLogoOnReceipt,
+              (v) => updateDraft({ showLogoOnReceipt: v })
             )}
             {renderToggleRow(
               'Show Feedback QR Code on Receipts',
               'Include scannable dish review & loyalty QR code at receipt bottom',
-              settings.showQrOnReceipt,
-              (v) => updateSettings({ showQrOnReceipt: v })
+              draft.showQrOnReceipt,
+              (v) => updateDraft({ showQrOnReceipt: v })
             )}
+            {renderSaveFooter()}
           </View>
         )}
 
@@ -403,8 +1541,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>Currency Symbol</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.currencySymbol}
-                  onChangeText={(t) => updateSettings({ currencySymbol: t })}
+                  value={draft.currencySymbol}
+                  onChangeText={(t) => updateDraft({ currencySymbol: t })}
                   placeholder="Rs."
                 />
               </View>
@@ -412,8 +1550,8 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.label}>Tax Label (e.g. GST Tax, VAT)</Text>
                 <TextInput
                   style={styles.input}
-                  value={settings.taxLabel}
-                  onChangeText={(t) => updateSettings({ taxLabel: t })}
+                  value={draft.taxLabel}
+                  onChangeText={(t) => updateDraft({ taxLabel: t })}
                   placeholder="GST Tax"
                 />
               </View>
@@ -425,8 +1563,8 @@ export default function AdminSettingsScreen() {
                 <TextInput
                   style={styles.input}
                   keyboardType="numeric"
-                  value={String(settings.taxRatePercent)}
-                  onChangeText={(t) => updateSettings({ taxRatePercent: parseFloat(t) || 0 })}
+                  value={String(draft.taxRatePercent)}
+                  onChangeText={(t) => updateDraft({ taxRatePercent: parseFloat(t) || 0 })}
                   placeholder="16"
                 />
               </View>
@@ -435,8 +1573,8 @@ export default function AdminSettingsScreen() {
                 <TextInput
                   style={styles.input}
                   keyboardType="numeric"
-                  value={String(settings.deliveryFeeDefault)}
-                  onChangeText={(t) => updateSettings({ deliveryFeeDefault: parseFloat(t) || 0 })}
+                  value={String(draft.deliveryFeeDefault)}
+                  onChangeText={(t) => updateDraft({ deliveryFeeDefault: parseFloat(t) || 0 })}
                   placeholder="150"
                 />
               </View>
@@ -446,112 +1584,682 @@ export default function AdminSettingsScreen() {
             {renderToggleRow(
               'Enable Sales Tax (GST)',
               'Automatically apply configured tax rate on POS & table bills',
-              settings.taxEnabled,
-              (v) => updateSettings({ taxEnabled: v })
+              draft.taxEnabled,
+              (v) => updateDraft({ taxEnabled: v })
             )}
             {renderToggleRow(
               'Round Bill Totals',
               'Round final payable amounts to nearest whole currency unit',
-              settings.roundTotals,
-              (v) => updateSettings({ roundTotals: v })
+              draft.roundTotals,
+              (v) => updateDraft({ roundTotals: v })
             )}
             {renderToggleRow(
               'Allow Custom Discounts on POS',
               'Permit cashiers/managers to apply ad-hoc bill discounts',
-              settings.allowCustomDiscount,
-              (v) => updateSettings({ allowCustomDiscount: v })
+              draft.allowCustomDiscount,
+              (v) => updateDraft({ allowCustomDiscount: v })
             )}
             {renderToggleRow(
               'Auto-Print Receipt on Payment',
               'Automatically trigger receipt print dialog when invoice is settled',
-              settings.autoPrintReceiptOnPay,
-              (v) => updateSettings({ autoPrintReceiptOnPay: v })
+              draft.autoPrintReceiptOnPay,
+              (v) => updateDraft({ autoPrintReceiptOnPay: v })
             )}
             {renderToggleRow(
               'Auto-Send Orders to KDS',
               'Dispatch kitchen/bar KOT immediately when order is placed',
-              settings.autoSendKdsOnOrder,
-              (v) => updateSettings({ autoSendKdsOnOrder: v })
+              draft.autoSendKdsOnOrder,
+              (v) => updateDraft({ autoSendKdsOnOrder: v })
             )}
+            {renderSaveFooter()}
           </View>
         )}
 
         {/* 3. MODULES & OPERATIONS */}
         {activeTab === 'modules' && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>System Modules & Operational Controls</Text>
-            {renderToggleRow(
-              'Dine-In Floor & Tables',
-              'Enable table seating, waiter assignment, and floor management',
-              settings.enableDineIn,
-              (v) => updateSettings({ enableDineIn: v })
-            )}
-            {renderToggleRow(
-              'Takeaway Counter Orders',
-              'Enable quick takeaway tickets at POS',
-              settings.enableTakeaway,
-              (v) => updateSettings({ enableTakeaway: v })
-            )}
-            {renderToggleRow(
-              'Delivery & Rider Dispatch',
-              'Enable delivery address, phone lookup, and delivery fee calculation',
-              settings.enableDelivery,
-              (v) => updateSettings({ enableDelivery: v })
-            )}
-            {renderToggleRow(
-              'Playland Hub Module',
-              'Enable Playland ticketing, wristband tracking & arcade sessions',
-              settings.enablePlayland,
-              (v) => updateSettings({ enablePlayland: v })
-            )}
-            {renderToggleRow(
-              'Online & QR App Orders',
-              'Accept live incoming orders from customer digital menu',
-              settings.enableOnlineOrders,
-              (v) => updateSettings({ enableOnlineOrders: v })
-            )}
-            {renderToggleRow(
-              'Incoming Call Detector (Android)',
-              'Auto-detect caller phone numbers for instant delivery CRM lookup',
-              settings.enableCallDetector,
-              (v) => updateSettings({ enableCallDetector: v })
-            )}
-            {renderToggleRow(
-              'KDS Audio Alerts',
-              'Play notification chime on Kitchen & Juice Bar screens for new KOTs',
-              settings.kdsSoundAlerts,
-              (v) => updateSettings({ kdsSoundAlerts: v })
+          <View style={{ gap: 14 }}>
+            {/* Top Modules Command Summary Card */}
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+                      Full System Modules & Option Controls
+                    </Text>
+                    <View style={styles.groupCountPill}>
+                      <Text style={styles.groupCountPillText}>
+                        {moduleStats.active} / {moduleStats.total} Options Active
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rowSub}>
+                    Enable or disable any restaurant module, screen, POS behavior or operational parameter below
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={handleResetModuleDefaults}
+                  >
+                    <Ionicons name="refresh-outline" size={15} color="#52171B" />
+                    <Text style={styles.secondaryBtnText}>Reset Module Defaults</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.primaryBtn}
+                    onPress={() => handleBulkAllModules(true)}
+                  >
+                    <Ionicons name="checkmark-done-outline" size={16} color="#140306" />
+                    <Text style={styles.primaryBtnText}>Enable All Options</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <View style={styles.moduleSearchWrap}>
+                <Ionicons name="search-outline" size={16} color="#78716C" />
+                <TextInput
+                  style={styles.moduleSearchInput}
+                  value={moduleSearch}
+                  onChangeText={setModuleSearch}
+                  placeholder="Search module or option (e.g. POS, KDS, Playland, Payroll, Floor, Tax)..."
+                  placeholderTextColor="#A8A29E"
+                />
+                {Boolean(moduleSearch.trim().length > 0) && (
+                  <TouchableOpacity onPress={() => setModuleSearch('')}>
+                    <Ionicons name="close-circle" size={18} color="#78716C" />
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            {/* 7 Structured Module Control Cards */}
+            {MODULE_CONTROL_GROUPS.map((group) => {
+              const q = moduleSearch.trim().toLowerCase();
+              const groupMatchesTitle =
+                !q ||
+                group.title.toLowerCase().includes(q) ||
+                group.subtitle.toLowerCase().includes(q);
+              const visibleToggles = q && !groupMatchesTitle
+                ? group.toggles.filter(
+                    (t) =>
+                      t.label.toLowerCase().includes(q) ||
+                      t.sub.toLowerCase().includes(q)
+                  )
+                : group.toggles;
+              const visibleNumeric = q && !groupMatchesTitle
+                ? (group.numericFields || []).filter((nf) =>
+                    nf.label.toLowerCase().includes(q)
+                  )
+                : group.numericFields || [];
+
+              if (visibleToggles.length === 0 && visibleNumeric.length === 0) {
+                return null;
+              }
+
+              const activeInGroup = group.toggles.filter((t) => Boolean(draft[t.key])).length;
+
+              return (
+                <View key={group.id} style={styles.card}>
+                  <View style={styles.sectionHeaderRow}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 220 }}>
+                      <View style={styles.permCategoryIconWrap}>
+                        <Ionicons name={group.icon} size={17} color="#52171B" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                          <Text style={[styles.sectionTitle, { marginBottom: 0, fontSize: 15 }]}>
+                            {group.title}
+                          </Text>
+                          <View style={styles.groupCountPill}>
+                            <Text style={styles.groupCountPillText}>
+                              {activeInGroup}/{group.toggles.length} Active
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={styles.rowSub}>{group.subtitle}</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                      <TouchableOpacity
+                        style={styles.groupMiniBtn}
+                        onPress={() => handleBulkGroupModules(group, true)}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={14} color="#065F46" />
+                        <Text style={[styles.groupMiniBtnText, { color: '#065F46' }]}>Enable All</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.groupMiniBtn}
+                        onPress={() => handleBulkGroupModules(group, false)}
+                      >
+                        <Ionicons name="close-circle-outline" size={14} color="#991B1B" />
+                        <Text style={[styles.groupMiniBtnText, { color: '#991B1B' }]}>Disable All</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
+                  <View style={[styles.divider, { marginTop: 4, marginBottom: 6 }]} />
+
+                  {visibleToggles.map((item) => {
+                    const enabled = Boolean(draft[item.key]);
+                    return (
+                      <View key={String(item.key)} style={styles.toggleRow}>
+                        <View style={{ flex: 1, paddingRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <Text style={styles.rowTitle}>{item.label}</Text>
+                            {item.isMaster && (
+                              <View style={styles.coreModulePill}>
+                                <Text style={styles.coreModulePillText}>CORE MODULE</Text>
+                              </View>
+                            )}
+                          </View>
+                          <Text style={styles.rowSub}>{item.sub}</Text>
+                        </View>
+                        <Switch
+                          value={enabled}
+                          onValueChange={(v) => updateDraft({ [item.key]: v } as Partial<SystemSettings>)}
+                          trackColor={{ false: '#D6D3D1', true: '#52171B' }}
+                          thumbColor={enabled ? '#D4AF37' : '#F5F5F4'}
+                        />
+                      </View>
+                    );
+                  })}
+
+                  {visibleNumeric.length > 0 && (
+                    <View style={[styles.grid, isCompact && styles.gridCol, { marginTop: 12, marginBottom: 0 }]}>
+                      {visibleNumeric.map((nf) => (
+                        <View key={String(nf.key)} style={styles.fieldBox}>
+                          <Text style={styles.label}>{nf.label}</Text>
+                          <View style={styles.moduleNumericRow}>
+                            <TextInput
+                              style={[styles.input, { flex: 1 }]}
+                              keyboardType="numeric"
+                              value={String(draft[nf.key] ?? 0)}
+                              onChangeText={(t) =>
+                                updateDraft({ [nf.key]: parseInt(t, 10) || 0 } as Partial<SystemSettings>)
+                              }
+                            />
+                            <View style={styles.moduleNumUnitPill}>
+                              <Text style={styles.moduleNumUnitText}>{nf.unit}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+
+            <View style={styles.card}>{renderSaveFooter()}</View>
+          </View>
+        )}
+
+        {/* 4. ROLES & PERMISSIONS */}
+        {activeTab === 'roles' && (
+          <View style={{ gap: 14 }}>
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.sectionTitle}>Roles & Full Permissions Control</Text>
+                  <Text style={styles.rowSub}>
+                    Select any role or create a new custom role to control every screen, action & data visibility
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={() =>
+                      askConfirm(
+                        'Reset Roles to Defaults',
+                        'Restore default permissions for built-in system roles?',
+                        () => {
+                          resetToDefaultRoles();
+                          broadcastImmediately();
+                          showToast('Default role permissions restored');
+                        }
+                      )
+                    }
+                  >
+                    <Ionicons name="refresh-outline" size={15} color="#52171B" />
+                    <Text style={styles.secondaryBtnText}>Reset Defaults</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={openAddRoleModal}>
+                    <Ionicons name="add-circle-outline" size={16} color="#140306" />
+                    <Text style={styles.primaryBtnText}>Add New Role</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.roleSelectorRow}
+              >
+                {roles.map((role) => {
+                  const isSelected = selectedRole?.id === role.id;
+                  const enabledCount = countEnabledPerms(role.permissions);
+                  return (
+                    <TouchableOpacity
+                      key={role.id}
+                      style={[
+                        styles.roleSelectorCard,
+                        isSelected && styles.roleSelectorCardActive,
+                      ]}
+                      onPress={() => setSelectedRoleId(role.id)}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View
+                          style={[
+                            styles.roleColorDot,
+                            { backgroundColor: role.badgeColor || '#52171B' },
+                          ]}
+                        />
+                        <Text
+                          style={[
+                            styles.roleSelectorName,
+                            isSelected && { color: '#140306' },
+                          ]}
+                        >
+                          {role.name}
+                        </Text>
+                        <View
+                          style={[
+                            styles.roleKindBadge,
+                            role.isSystem ? styles.roleKindSystem : styles.roleKindCustom,
+                          ]}
+                        >
+                          <Text style={styles.roleKindText}>
+                            {role.isSystem ? 'SYSTEM' : 'CUSTOM'}
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={styles.roleSelectorMeta}>
+                        {enabledCount} / {ALL_PERMISSION_KEYS.length} permissions enabled
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {selectedRole && (
+              <View style={styles.card}>
+                <View style={styles.roleBanner}>
+                  <View style={{ flex: 1, minWidth: 220 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <View
+                        style={[
+                          styles.roleColorDot,
+                          { backgroundColor: selectedRole.badgeColor || '#52171B' },
+                        ]}
+                      />
+                      <Text style={styles.roleBannerTitle}>{selectedRole.name}</Text>
+                      {!!selectedRole.urduName && (
+                        <Text style={styles.roleBannerUrdu}>({selectedRole.urduName})</Text>
+                      )}
+                      <View style={styles.rolePortalTag}>
+                        <Text style={styles.rolePortalTagText}>
+                          Portal: {selectedRole.baseRole.replace('_', ' ').toUpperCase()}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={[styles.rowSub, { marginTop: 4 }]}>
+                      {selectedRole.description || 'Custom system access profile'}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => handleBulkRolePerms(selectedRole, true)}
+                    >
+                      <Ionicons name="checkmark-done-outline" size={15} color="#065F46" />
+                      <Text style={[styles.secondaryBtnText, { color: '#065F46' }]}>Grant All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => handleBulkRolePerms(selectedRole, false)}
+                    >
+                      <Ionicons name="close-circle-outline" size={15} color="#B45309" />
+                      <Text style={[styles.secondaryBtnText, { color: '#B45309' }]}>Revoke All</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => openEditRoleModal(selectedRole)}
+                    >
+                      <Ionicons name="create-outline" size={15} color="#52171B" />
+                      <Text style={styles.secondaryBtnText}>Edit Info</Text>
+                    </TouchableOpacity>
+                    {!selectedRole.isSystem && selectedRole.id !== 'role-admin' && (
+                      <TouchableOpacity
+                        style={[styles.secondaryBtn, { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]}
+                        onPress={() =>
+                          askConfirm(
+                            'Delete Role',
+                            `Permanently delete custom role "${selectedRole.name}"?`,
+                            () => {
+                              const ok = deleteRole(selectedRole.id);
+                              if (ok) {
+                                setSelectedRoleId('role-manager');
+                                broadcastImmediately();
+                                showToast(`Deleted role "${selectedRole.name}"`);
+                              }
+                            }
+                          )
+                        }
+                      >
+                        <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                        <Text style={[styles.secondaryBtnText, { color: '#DC2626' }]}>Delete</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                <View style={{ gap: 14, marginTop: 14 }}>
+                  {renderPermissionCategory(
+                    '1. Financial & Sensitive Data Visibility',
+                    'Control whether revenue totals, food cost margins, customer phone numbers, and report exports are visible',
+                    'eye-outline',
+                    VISIBILITY_PERMS,
+                    selectedRole
+                  )}
+
+                  {renderPermissionCategory(
+                    '2. Module & Screen Access (Sidebar & Routes)',
+                    'Enable or restrict which screens and modules this role can open across the system',
+                    'apps-outline',
+                    MODULE_PERMS,
+                    selectedRole
+                  )}
+
+                  {renderPermissionCategory(
+                    '3. Operational & Transaction Authority',
+                    'Critical actions including discounts, invoice voids, refunds, shift closing, and menu pricing',
+                    'flash-outline',
+                    AUTHORITY_PERMS,
+                    selectedRole
+                  )}
+
+                  {renderPermissionCategory(
+                    '4. POS Terminal Action Controls (Order Types, Billing, KOT & Tables)',
+                    'Granular control over Dine-In, Takeaway, Delivery, KOT dispatch, bill settlement, table release & split payments in POS',
+                    'calculator-outline',
+                    POS_TERMINAL_PERMS,
+                    selectedRole
+                  )}
+                </View>
+
+                <View style={styles.cardFooterBar}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.footerStatusText}>
+                      Changes apply automatically to matching staff. Click Save & Sync to push immediately to all devices.
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAndSyncRoles}>
+                    <Ionicons name="cloud-done-outline" size={16} color="#140306" />
+                    <Text style={styles.saveBtnText}>Save & Sync Roles</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
             )}
 
-            <View style={[styles.fieldBoxFull, { marginTop: 12 }]}>
-              <Text style={styles.label}>Low Stock Alert Threshold (Units)</Text>
-              <TextInput
-                style={styles.input}
-                keyboardType="numeric"
-                value={String(settings.lowStockAlertThreshold)}
-                onChangeText={(t) => updateSettings({ lowStockAlertThreshold: parseInt(t, 10) || 0 })}
-              />
+            {/* PER-CASHIER & INDIVIDUAL POS PERMISSION CONTROL */}
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1, minWidth: 240 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>
+                      Per-Cashier & Individual POS Control
+                    </Text>
+                    <View style={styles.groupCountPill}>
+                      <Text style={styles.groupCountPillText}>
+                        {cashierStaffList.length} {cashierStaffList.length === 1 ? 'Cashier' : 'Cashiers'}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.rowSub}>
+                    If multiple cashiers exist, select any cashier individually to customize their POS Terminal actions & module permissions separately
+                  </Text>
+                </View>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={() => setShowAllStaffInOverrides((prev) => !prev)}
+                  >
+                    <Ionicons name="people-outline" size={15} color="#52171B" />
+                    <Text style={styles.secondaryBtnText}>
+                      {showAllStaffInOverrides ? 'Cashiers Only' : `All Staff (${(staff || []).length})`}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.primaryBtn} onPress={openAddCashierModal}>
+                    <Ionicons name="person-add-outline" size={15} color="#140306" />
+                    <Text style={styles.primaryBtnText}>Add New Cashier</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {staffForOverrideList.length === 0 ? (
+                <View style={[styles.roleBanner, { justifyContent: 'center', paddingVertical: 20 }]}>
+                  <Text style={styles.rowSub}>
+                    No Cashiers found yet. Click "Add New Cashier" above to create Cashier accounts.
+                  </Text>
+                </View>
+              ) : (
+                <>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.roleSelectorRow}
+                  >
+                    {staffForOverrideList.map((member) => {
+                      const isSelected = selectedOverrideStaff?.id === member.id;
+                      const overrideCount = countStaffOverrides(member);
+                      const baseRole = resolveBaseRoleForStaff(member);
+                      return (
+                        <TouchableOpacity
+                          key={member.id}
+                          style={[
+                            styles.roleSelectorCard,
+                            isSelected && styles.roleSelectorCardActive,
+                          ]}
+                          onPress={() => setSelectedStaffPermId(member.id)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View
+                              style={[
+                                styles.roleColorDot,
+                                { backgroundColor: baseRole?.badgeColor || '#0D9488' },
+                              ]}
+                            />
+                            <Text
+                              style={[
+                                styles.roleSelectorName,
+                                isSelected && { color: '#140306' },
+                              ]}
+                            >
+                              {member.name}
+                            </Text>
+                            <View
+                              style={[
+                                styles.roleKindBadge,
+                                overrideCount > 0 ? styles.roleKindCustom : styles.roleKindSystem,
+                              ]}
+                            >
+                              <Text style={styles.roleKindText}>
+                                {overrideCount > 0 ? `${overrideCount} CUSTOM` : 'DEFAULT'}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={styles.roleSelectorMeta}>
+                            {baseRole?.name || member.role} • {member.shift} Shift • PIN: {member.pin}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+
+                  {selectedOverrideStaff && (() => {
+                    const effectivePerms = getEffectiveStaffPerms(selectedOverrideStaff);
+                    const baseRole = resolveBaseRoleForStaff(selectedOverrideStaff);
+                    const overrideCount = countStaffOverrides(selectedOverrideStaff);
+                    const posEnabledCount = POS_TERMINAL_PERMS.filter((p) => !!effectivePerms[p.key]).length;
+                    return (
+                      <View style={{ marginTop: 14 }}>
+                        <View style={styles.roleBanner}>
+                          <View style={{ flex: 1, minWidth: 230 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <Text style={styles.roleBannerTitle}>{selectedOverrideStaff.name}</Text>
+                              <View style={styles.rolePortalTag}>
+                                <Text style={styles.rolePortalTagText}>
+                                  {baseRole?.name || selectedOverrideStaff.role} • {selectedOverrideStaff.shift} Shift
+                                </Text>
+                              </View>
+                              <View
+                                style={[
+                                  styles.groupCountPill,
+                                  overrideCount === 0 && { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                                ]}
+                              >
+                                <Text
+                                  style={[
+                                    styles.groupCountPillText,
+                                    overrideCount === 0 && { color: '#065F46' },
+                                  ]}
+                                >
+                                  {overrideCount > 0
+                                    ? `${overrideCount} Individual Overrides Active`
+                                    : `Following ${baseRole?.name || 'Cashier'} Defaults`}
+                                  {' • '}POS {posEnabledCount}/{POS_TERMINAL_PERMS.length}
+                                </Text>
+                              </View>
+                            </View>
+                            <Text style={[styles.rowSub, { marginTop: 4 }]}>
+                              Toggles below apply specifically to {selectedOverrideStaff.name} without affecting other Cashiers.
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.groupMiniBtn}
+                              onPress={() => handleApplyCashierPreset(selectedOverrideStaff, 'full_pos')}
+                            >
+                              <Ionicons name="checkmark-done-outline" size={14} color="#065F46" />
+                              <Text style={[styles.groupMiniBtnText, { color: '#065F46' }]}>Full POS Access</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.groupMiniBtn}
+                              onPress={() => handleApplyCashierPreset(selectedOverrideStaff, 'billing_only')}
+                            >
+                              <Ionicons name="cash-outline" size={14} color="#52171B" />
+                              <Text style={[styles.groupMiniBtnText, { color: '#52171B' }]}>Billing Only</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.groupMiniBtn}
+                              onPress={() => handleApplyCashierPreset(selectedOverrideStaff, 'order_only')}
+                            >
+                              <Ionicons name="receipt-outline" size={14} color="#B45309" />
+                              <Text style={[styles.groupMiniBtnText, { color: '#B45309' }]}>Order Punch Only</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.groupMiniBtn}
+                              onPress={() => handleApplyCashierPreset(selectedOverrideStaff, 'reset')}
+                            >
+                              <Ionicons name="refresh-outline" size={14} color="#44403C" />
+                              <Text style={[styles.groupMiniBtnText, { color: '#44403C' }]}>Reset Default</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+
+                        <View style={{ gap: 14, marginTop: 14 }}>
+                          {renderPermissionGrid(
+                            `POS Terminal Controls for ${selectedOverrideStaff.name}`,
+                            'Allow or restrict specific POS billing buttons, order types, KOT dispatch, table release & split payments',
+                            'calculator-outline',
+                            POS_TERMINAL_PERMS,
+                            effectivePerms,
+                            (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                            { overrides: selectedOverrideStaff.permissionOverrides }
+                          )}
+
+                          {renderPermissionGrid(
+                            `Operational Authority for ${selectedOverrideStaff.name}`,
+                            'Control custom discounts, voiding settled invoices, processing refunds, shift close & menu pricing',
+                            'flash-outline',
+                            AUTHORITY_PERMS,
+                            effectivePerms,
+                            (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                            { overrides: selectedOverrideStaff.permissionOverrides }
+                          )}
+
+                          {renderPermissionGrid(
+                            `Financial Visibility for ${selectedOverrideStaff.name}`,
+                            'Control revenue figures, food costs, customer phone visibility & report exports for this cashier',
+                            'eye-outline',
+                            VISIBILITY_PERMS,
+                            effectivePerms,
+                            (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                            { overrides: selectedOverrideStaff.permissionOverrides }
+                          )}
+
+                          {renderPermissionGrid(
+                            `Module & Screen Access for ${selectedOverrideStaff.name}`,
+                            'Enable or hide individual sidebar modules and screens specifically for this staff member',
+                            'apps-outline',
+                            MODULE_PERMS,
+                            effectivePerms,
+                            (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                            { overrides: selectedOverrideStaff.permissionOverrides }
+                          )}
+                        </View>
+
+                        <View style={styles.cardFooterBar}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.footerStatusText}>
+                              Per-cashier permissions update live and sync across POS counters & tablets.
+                            </Text>
+                          </View>
+                          <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAndSyncRoles}>
+                            <Ionicons name="cloud-done-outline" size={16} color="#140306" />
+                            <Text style={styles.saveBtnText}>Save & Sync Cashier Perms</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })()}
+                </>
+              )}
             </View>
           </View>
         )}
 
-        {/* 4. USERS & ROLES */}
+        {/* 5. USERS & STAFF */}
         {activeTab === 'users' && (
           <View style={styles.card}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.sectionTitle}>Users, Staff & Access Control</Text>
+                <Text style={styles.sectionTitle}>Users & Staff Accounts</Text>
                 <Text style={styles.rowSub}>
                   Logged in as: {currentUser?.name || 'Admin'} ({currentUser?.role || 'admin'})
                 </Text>
               </View>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <TouchableOpacity
                   style={styles.secondaryBtn}
-                  onPress={() => router.push('/admin/staff' as any)}
+                  onPress={() => setActiveTab('roles')}
                 >
                   <Ionicons name="shield-checkmark-outline" size={15} color="#52171B" />
-                  <Text style={styles.secondaryBtnText}>Role Matrix</Text>
+                  <Text style={styles.secondaryBtnText}>Manage Roles & POS</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={openAddCashierModal}
+                >
+                  <Ionicons name="calculator-outline" size={15} color="#52171B" />
+                  <Text style={styles.secondaryBtnText}>+ Add Cashier</Text>
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.primaryBtn} onPress={openAddUserModal}>
                   <Ionicons name="person-add-outline" size={15} color="#140306" />
@@ -569,20 +2277,60 @@ export default function AdminSettingsScreen() {
 
             {filteredStaff.map((member) => {
               const isActive = member.status === 'Active';
+              const assignedRole =
+                roles.find((r) => r.id === member.customRoleId) ||
+                roles.find(
+                  (r) =>
+                    r.name.toLowerCase() === (member.role || '').toLowerCase() ||
+                    r.baseRole === (member.role || '').toLowerCase()
+                );
               return (
                 <View key={member.id} style={styles.userRow}>
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                       <Text style={styles.rowTitle}>{member.name}</Text>
                       <View style={[styles.badge, isActive ? styles.badgeGreen : styles.badgeGray]}>
                         <Text style={styles.badgeText}>{isActive ? 'ACTIVE' : 'DISABLED'}</Text>
                       </View>
+                      {assignedRole && (
+                        <TouchableOpacity
+                          style={[styles.badge, { backgroundColor: '#FAF6EE', borderWidth: 1, borderColor: '#D4AF37' }]}
+                          onPress={() => {
+                            setSelectedRoleId(assignedRole.id);
+                            setActiveTab('roles');
+                          }}
+                        >
+                          <Text style={[styles.badgeText, { color: '#52171B' }]}>
+                            {assignedRole.name} ({countEnabledPerms(assignedRole.permissions)} perms)
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                      {countStaffOverrides(member) > 0 && (
+                        <View style={[styles.badge, { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B' }]}>
+                          <Text style={[styles.badgeText, { color: '#92400E' }]}>
+                            {countStaffOverrides(member)} CUSTOM POS OVERRIDES
+                          </Text>
+                        </View>
+                      )}
                     </View>
                     <Text style={styles.rowSub}>
-                      Role: {member.role.toUpperCase()} • PIN: {member.pin} • Shift: {member.shift}
+                      Role: {(assignedRole?.name || member.role).toUpperCase()} • PIN: {member.pin} • Shift: {member.shift}
                     </Text>
                   </View>
-                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TouchableOpacity
+                      style={styles.staffPermBtn}
+                      onPress={() => {
+                        setSelectedStaffPermId(member.id);
+                        if (!isCashierStaff(member)) {
+                          setShowAllStaffInOverrides(true);
+                        }
+                        setActiveTab('roles');
+                      }}
+                    >
+                      <Ionicons name="key-outline" size={14} color="#52171B" />
+                      <Text style={styles.staffPermBtnText}>POS & Perms</Text>
+                    </TouchableOpacity>
                     <TouchableOpacity
                       style={styles.iconBtn}
                       onPress={() => {
@@ -688,15 +2436,16 @@ export default function AdminSettingsScreen() {
             {renderToggleRow(
               'Auto-Sync Across Devices',
               'Automatically broadcast state changes to tablets & kitchen displays',
-              settings.autoSyncEnabled,
-              (v) => updateSettings({ autoSyncEnabled: v })
+              draft.autoSyncEnabled,
+              (v) => updateDraft({ autoSyncEnabled: v })
             )}
             {renderToggleRow(
               'Cloud Backup Sync',
               'Mirror live operational state to Firebase cloud backup when online',
-              settings.cloudBackupEnabled,
-              (v) => updateSettings({ cloudBackupEnabled: v })
+              draft.cloudBackupEnabled,
+              (v) => updateDraft({ cloudBackupEnabled: v })
             )}
+            {renderSaveFooter()}
           </View>
         )}
 
@@ -844,6 +2593,9 @@ export default function AdminSettingsScreen() {
                       () => {
                         resetToDefaultRoles();
                         resetSettingsToDefaults();
+                        const reset = useSettingsStore.getState().settings;
+                        prevSettingsRef.current = reset;
+                        setDraft({ ...reset });
                         broadcastImmediately();
                         showToast('Roles & settings reset to defaults');
                       }
@@ -905,21 +2657,33 @@ export default function AdminSettingsScreen() {
               keyboardType="numeric"
               placeholder="1234"
             />
-            <Text style={[styles.label, { marginTop: 10 }]}>Role</Text>
+            <Text style={[styles.label, { marginTop: 10 }]}>Assigned Role (System & Custom Roles)</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-              {(['admin', 'manager', 'floor_manager', 'waiter', 'kitchen', 'juicebar', 'playland'] as StaffRole[]).map(
-                (r) => (
+              {roles.map((r) => {
+                const selected = uCustomRoleId
+                  ? uCustomRoleId === r.id
+                  : (uRole || '').toLowerCase() === r.baseRole;
+                return (
                   <TouchableOpacity
-                    key={r}
-                    style={[styles.chip, uRole === r && styles.chipActive]}
-                    onPress={() => setURole(r)}
+                    key={r.id}
+                    style={[styles.chip, selected && styles.chipActive]}
+                    onPress={() => {
+                      setUCustomRoleId(r.id);
+                      const staffRoleValue =
+                        r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier'
+                          ? 'Cashier'
+                          : r.baseRole === 'custom'
+                            ? 'manager'
+                            : r.baseRole;
+                      setURole(staffRoleValue as StaffRole);
+                    }}
                   >
-                    <Text style={[styles.chipText, uRole === r && styles.chipTextActive]}>
-                      {r.replace('_', ' ').toUpperCase()}
+                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                      {r.name}
                     </Text>
                   </TouchableOpacity>
-                )
-              )}
+                );
+              })}
             </View>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
               <TouchableOpacity
@@ -932,6 +2696,123 @@ export default function AdminSettingsScreen() {
                 <Text style={styles.primaryBtnText}>Save User</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Add/Edit Role Modal */}
+      <Modal visible={roleModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 540, maxHeight: '90%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionTitle}>
+                {editingRole ? `Edit Role: ${editingRole.name}` : 'Create New System Role'}
+              </Text>
+              <Text style={styles.label}>Role Name *</Text>
+              <TextInput
+                style={styles.input}
+                value={rName}
+                onChangeText={setRName}
+                placeholder="e.g. Shift Supervisor, Head Cashier"
+              />
+
+              <Text style={[styles.label, { marginTop: 10 }]}>Urdu Title (Optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={rUrduName}
+                onChangeText={setRUrduName}
+                placeholder="e.g. شفٹ سپروائزر"
+              />
+
+              <Text style={[styles.label, { marginTop: 10 }]}>Description</Text>
+              <TextInput
+                style={styles.input}
+                value={rDesc}
+                onChangeText={setRDesc}
+                placeholder="Short summary of what this role handles"
+              />
+
+              {(!editingRole || !editingRole.isSystem) && (
+                <>
+                  <Text style={[styles.label, { marginTop: 12 }]}>Base Portal / Login Destination</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 4 }}>
+                    {BASE_ROLE_OPTIONS.map((opt) => {
+                      const active = rBaseRole === opt.value;
+                      return (
+                        <TouchableOpacity
+                          key={opt.value}
+                          style={[styles.chip, active && styles.chipActive]}
+                          onPress={() => setRBaseRole(opt.value)}
+                        >
+                          <Text style={[styles.chipText, active && styles.chipTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={styles.rowSub}>
+                    {BASE_ROLE_OPTIONS.find((o) => o.value === rBaseRole)?.hint}
+                  </Text>
+                </>
+              )}
+
+              <Text style={[styles.label, { marginTop: 12 }]}>Badge Color</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {ROLE_COLOR_OPTIONS.map((hex) => (
+                  <TouchableOpacity
+                    key={hex}
+                    onPress={() => setRColor(hex)}
+                    style={[
+                      styles.colorSwatch,
+                      { backgroundColor: hex },
+                      rColor === hex && styles.colorSwatchActive,
+                    ]}
+                  />
+                ))}
+              </View>
+
+              {!editingRole && (
+                <>
+                  <Text style={[styles.label, { marginTop: 12 }]}>Start Permissions From</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    <TouchableOpacity
+                      style={[styles.chip, rCloneFromId === 'none' && styles.chipActive]}
+                      onPress={() => setRCloneFromId('none')}
+                    >
+                      <Text style={[styles.chipText, rCloneFromId === 'none' && styles.chipTextActive]}>
+                        Start Blank (0/{ALL_PERMISSION_KEYS.length})
+                      </Text>
+                    </TouchableOpacity>
+                    {roles.map((r) => (
+                      <TouchableOpacity
+                        key={r.id}
+                        style={[styles.chip, rCloneFromId === r.id && styles.chipActive]}
+                        onPress={() => setRCloneFromId(r.id)}
+                      >
+                        <Text style={[styles.chipText, rCloneFromId === r.id && styles.chipTextActive]}>
+                          Copy {r.name}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </>
+              )}
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+                <TouchableOpacity
+                  style={styles.secondaryBtn}
+                  onPress={() => setRoleModalVisible(false)}
+                >
+                  <Text style={styles.secondaryBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.primaryBtn} onPress={handleSaveRoleModal}>
+                  <Text style={styles.primaryBtnText}>
+                    {editingRole ? 'Update Role' : 'Create & Configure Permissions'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -999,42 +2880,139 @@ export default function AdminSettingsScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FAF6EE' },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  headerCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    marginHorizontal: 16,
+    marginTop: 14,
+    marginBottom: 10,
     paddingHorizontal: 18,
     paddingVertical: 14,
-    backgroundColor: '#52171B',
-    borderBottomWidth: 2,
-    borderBottomColor: '#D4AF37',
+    borderWidth: 1.5,
+    borderColor: 'rgba(212, 175, 55, 0.32)',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 12,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 8px 24px rgba(82, 20, 28, 0.06)',
+      } as any,
+    }),
+    elevation: 2,
   },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#D4AF37' },
-  headerSub: { fontSize: 12, color: '#FDE68A', marginTop: 2 },
-  syncPill: {
+  headerCardMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flex: 1,
+    minWidth: 240,
+  },
+  headerLogoCapsule: {
+    padding: 5,
+    borderRadius: 10,
+    backgroundColor: 'rgba(82, 20, 28, 0.06)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.30)',
+  },
+  headerTitle: { fontSize: 18, fontWeight: '900', color: '#1C1917', letterSpacing: -0.2 },
+  headerSub: { fontSize: 12, color: '#78716C', marginTop: 3, fontWeight: '500' },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  statusBadgeOnline: { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+  statusBadgeOffline: { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' },
+  statusDot: { width: 6, height: 6, borderRadius: 3 },
+  statusBadgeText: { fontSize: 10, fontWeight: '800', letterSpacing: 0.4 },
+  unsavedPill: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+    borderWidth: 1,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  unsavedPillText: { fontSize: 10, fontWeight: '800', color: '#92400E' },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  headerSecondaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
   },
-  syncPillText: { fontSize: 12, fontWeight: '800', color: '#140306' },
+  headerSecondaryBtnText: { fontSize: 12, fontWeight: '700', color: '#52171B' },
+  saveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#D4AF37',
+    borderWidth: 1,
+    borderColor: '#B48214',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  saveBtnSaved: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  saveBtnText: { fontSize: 12.5, fontWeight: '800', color: '#140306' },
+  saveBtnTextSaved: { color: '#065F46' },
+  cardFooterBar: {
+    marginTop: 16,
+    paddingTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E7E0D3',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  footerStatusText: { fontSize: 12, color: '#78716C', fontWeight: '500' },
+  footerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   toast: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     backgroundColor: '#140306',
-    paddingHorizontal: 16,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    borderRadius: 10,
+    paddingHorizontal: 14,
     paddingVertical: 8,
   },
   toastText: { color: '#FAF6EE', fontSize: 12.5, fontWeight: '600' },
   tabBarWrap: {
+    marginHorizontal: 16,
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E7E0D3',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
   },
   tabBar: { paddingHorizontal: 12, paddingVertical: 10, gap: 8 },
   tabBtn: {
@@ -1192,4 +3170,233 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: '#52171B', borderColor: '#52171B' },
   chipText: { fontSize: 11, fontWeight: '700', color: '#52171B' },
   chipTextActive: { color: '#D4AF37' },
+  roleSelectorRow: { gap: 10, paddingVertical: 4 },
+  roleSelectorCard: {
+    minWidth: 165,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1.5,
+    borderColor: '#E7E0D3',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 4,
+  },
+  roleSelectorCardActive: {
+    backgroundColor: '#FFFDF7',
+    borderColor: '#D4AF37',
+    borderWidth: 2,
+  },
+  roleColorDot: { width: 10, height: 10, borderRadius: 5 },
+  roleSelectorName: { fontSize: 13.5, fontWeight: '800', color: '#52171B' },
+  roleSelectorMeta: { fontSize: 11, fontWeight: '600', color: '#78716C' },
+  roleKindBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5 },
+  roleKindSystem: { backgroundColor: '#E7E5E4' },
+  roleKindCustom: { backgroundColor: '#FEF3C7' },
+  roleKindText: { fontSize: 9, fontWeight: '800', color: '#44403C' },
+  roleBanner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#FAF6EE',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+  },
+  roleBannerTitle: { fontSize: 17, fontWeight: '900', color: '#52171B' },
+  roleBannerUrdu: { fontSize: 13, fontWeight: '700', color: '#78716C' },
+  rolePortalTag: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  rolePortalTagText: { fontSize: 10, fontWeight: '800', color: '#52171B' },
+  permCategoryCard: {
+    backgroundColor: '#FAF6EE',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+  },
+  permCategoryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  permCategoryIconWrap: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permCategoryTitle: { fontSize: 14, fontWeight: '800', color: '#52171B' },
+  permGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  permItemCard: {
+    width: '49%',
+    minWidth: 260,
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  permItemCardActive: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFDF8',
+  },
+  permItemCardOverridden: {
+    borderColor: '#F59E0B',
+    borderWidth: 1.5,
+    backgroundColor: '#FFFBEB',
+  },
+  overridePill: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  overridePillText: {
+    fontSize: 8.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  staffPermBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  staffPermBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#52171B',
+  },
+  permItemIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#FAF6EE',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  permItemTitle: { fontSize: 13, fontWeight: '700', color: '#1C1917' },
+  permItemDesc: { fontSize: 11, color: '#78716C', marginTop: 1 },
+  colorSwatch: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorSwatchActive: {
+    borderColor: '#140306',
+    transform: [{ scale: 1.12 }],
+  },
+  moduleSearchWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#D6CFC2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  moduleSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#1C1917',
+    paddingVertical: 4,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+      } as any,
+    }),
+  },
+  groupCountPill: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 999,
+  },
+  groupCountPillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  groupMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+  groupMiniBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  coreModulePill: {
+    backgroundColor: '#52171B',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  coreModulePillText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.4,
+  },
+  moduleNumericRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  moduleNumUnitPill: {
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#D6CFC2',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  moduleNumUnitText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#52171B',
+  },
 });

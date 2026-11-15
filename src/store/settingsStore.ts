@@ -28,15 +28,65 @@ export interface SystemSettings {
   roundTotals: boolean;
 
   // 3. Operations & Feature Modules
+  // Group 1 — POS Terminal & Order Channels
+  enablePosModule: boolean;
   enableDineIn: boolean;
   enableTakeaway: boolean;
   enableDelivery: boolean;
-  enablePlayland: boolean;
+  posShowCuisineFilter: boolean;
+  posShowDealsTab: boolean;
+  posRequireTableForDineIn: boolean;
+  posRequireCustomerForDelivery: boolean;
+  posAllowSplitPayment: boolean;
+  posEnableTableReleaseConfirm: boolean;
+
+  // Group 2 — Floor Command, Tables & Digital QR Menu
+  enableFloorPlanModule: boolean;
+  enableDigitalQrMenu: boolean;
   enableOnlineOrders: boolean;
+  enableMajlisSeating: boolean;
+  enableCouchSeating: boolean;
+  enableWaiterFloorLock: boolean;
+
+  // Group 3 — Kitchen (KDS), Juice Bar & Recipe BOM
+  enableKdsModule: boolean;
+  kdsSoundAlerts: boolean;
+  kdsAutoRouteBeverages: boolean;
+  kdsTargetPrepMinutes: number;
+  enableKitchenHandoverModule: boolean;
+  enableRecipesBomModule: boolean;
+  autoDeductRecipeStock: boolean;
+
+  // Group 4 — Sales, CRM, Promotions & Returns
+  enableInvoicesModule: boolean;
+  enableReturnsModule: boolean;
+  enableDiscountsModule: boolean;
+  enableCustomerCrmModule: boolean;
   enableCallDetector: boolean;
   enableCustomerFeedbackQr: boolean;
-  kdsSoundAlerts: boolean;
+
+  // Group 5 — Inventory, Suppliers & Damage Control
+  enableInventoryModule: boolean;
+  enableSuppliersModule: boolean;
+  enableDamagesModule: boolean;
   lowStockAlertThreshold: number;
+  blockOutOfStockPosOrders: boolean;
+
+  // Group 6 — Finance, Shift Cash, Expenses & Assets
+  enableShiftModule: boolean;
+  requireActiveShiftForPos: boolean;
+  enableReportsModule: boolean;
+  enableInsightsModule: boolean;
+  enableExpensesModule: boolean;
+  enableAssetsModule: boolean;
+
+  // Group 7 — Staff HR, Attendance, Payroll & Playland
+  enableStaffHrModule: boolean;
+  enableAttendanceTracking: boolean;
+  enablePayrollModule: boolean;
+  standardShiftHours: number;
+  enablePlayland: boolean;
+  playlandDefaultSessionMins: number;
 
   // 4. Sync & Backup Preferences
   autoSyncEnabled: boolean;
@@ -68,15 +118,65 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   autoSendKdsOnOrder: true,
   roundTotals: true,
 
+  // Group 1 — POS Terminal & Order Channels
+  enablePosModule: true,
   enableDineIn: true,
   enableTakeaway: true,
   enableDelivery: true,
-  enablePlayland: true,
+  posShowCuisineFilter: true,
+  posShowDealsTab: true,
+  posRequireTableForDineIn: true,
+  posRequireCustomerForDelivery: false,
+  posAllowSplitPayment: true,
+  posEnableTableReleaseConfirm: true,
+
+  // Group 2 — Floor Command, Tables & Digital QR Menu
+  enableFloorPlanModule: true,
+  enableDigitalQrMenu: true,
   enableOnlineOrders: true,
+  enableMajlisSeating: true,
+  enableCouchSeating: true,
+  enableWaiterFloorLock: true,
+
+  // Group 3 — Kitchen (KDS), Juice Bar & Recipe BOM
+  enableKdsModule: true,
+  kdsSoundAlerts: true,
+  kdsAutoRouteBeverages: true,
+  kdsTargetPrepMinutes: 20,
+  enableKitchenHandoverModule: true,
+  enableRecipesBomModule: true,
+  autoDeductRecipeStock: true,
+
+  // Group 4 — Sales, CRM, Promotions & Returns
+  enableInvoicesModule: true,
+  enableReturnsModule: true,
+  enableDiscountsModule: true,
+  enableCustomerCrmModule: true,
   enableCallDetector: true,
   enableCustomerFeedbackQr: true,
-  kdsSoundAlerts: true,
+
+  // Group 5 — Inventory, Suppliers & Damage Control
+  enableInventoryModule: true,
+  enableSuppliersModule: true,
+  enableDamagesModule: true,
   lowStockAlertThreshold: 10,
+  blockOutOfStockPosOrders: false,
+
+  // Group 6 — Finance, Shift Cash, Expenses & Assets
+  enableShiftModule: true,
+  requireActiveShiftForPos: false,
+  enableReportsModule: true,
+  enableInsightsModule: true,
+  enableExpensesModule: true,
+  enableAssetsModule: true,
+
+  // Group 7 — Staff HR, Attendance, Payroll & Playland
+  enableStaffHrModule: true,
+  enableAttendanceTracking: true,
+  enablePayrollModule: true,
+  standardShiftHours: 8,
+  enablePlayland: true,
+  playlandDefaultSessionMins: 60,
 
   autoSyncEnabled: true,
   cloudBackupEnabled: true,

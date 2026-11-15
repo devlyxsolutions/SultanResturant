@@ -26,7 +26,7 @@ import {
   EventDiscount 
 } from '../store';
 import { useShiftStore } from '../store/shiftStore';
-import { useRolePermissions } from '../store/roleStore';
+import { useRolePermissions, type RolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
 import { broadcastImmediately } from '../services/syncService';
@@ -143,7 +143,15 @@ export default function POSTerminalScreen({
   const [isFullscreen, setIsFullscreen] = useState(false);
 
   const user = useAuthStore(state => state.user);
-  const { can, canApplyCustomDiscount } = useRolePermissions();
+  const { can, canApplyCustomDiscount, roleName, permissions } = useRolePermissions();
+
+  const requirePosPerm = (permKey: keyof RolePermissions, actionLabel: string): boolean => {
+    if (role === 'admin' || can(permKey)) return true;
+    const msg = `Permission Restricted: Your cashier account (${user?.name || roleName}) is not authorized to ${actionLabel}. Please contact Admin in System Settings.`;
+    if (Platform.OS === 'web') window.alert(msg);
+    else Alert.alert('Permission Restricted', msg);
+    return false;
+  };
 
   // Check if current user is an Order Taker (Waiter or dedicated Order Taker)
   const isOrderTakerRole = useMemo(() => {
@@ -393,6 +401,7 @@ export default function POSTerminalScreen({
 
   const handleClearSelectedTable = () => {
     if (!selectedTableId) return;
+    if (!requirePosPerm('posCanReleaseTable', 'release occupied tables without billing')) return;
     const targetTable = tables.find(t => t.id === selectedTableId);
     const confirmMsg = `Are you sure you want to release ${targetTable ? targetTable.name : 'this table'}? Running bill will be reset.`;
     if (Platform.OS === 'web') {
@@ -544,6 +553,24 @@ export default function POSTerminalScreen({
 
   // Financial Calculations
   const systemSettings = useSettingsStore((s) => s.settings);
+
+  // Auto-select first permitted order type if cashier's default tab is disabled
+  useEffect(() => {
+    const canTakeaway = systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway'));
+    const canDineIn = systemSettings.enableDineIn !== false && (role === 'admin' || can('posCanDineIn'));
+    const canDelivery = systemSettings.enableDelivery !== false && (role === 'admin' || can('posCanDelivery'));
+
+    if (orderType === 'takeaway' && !canTakeaway) {
+      if (canDineIn) setOrderType('dine-in');
+      else if (canDelivery) setOrderType('delivery');
+    } else if (orderType === 'dine-in' && !canDineIn) {
+      if (canTakeaway) setOrderType('takeaway');
+      else if (canDelivery) setOrderType('delivery');
+    } else if (orderType === 'delivery' && !canDelivery) {
+      if (canTakeaway) setOrderType('takeaway');
+      else if (canDineIn) setOrderType('dine-in');
+    }
+  }, [orderType, systemSettings.enableTakeaway, systemSettings.enableDineIn, systemSettings.enableDelivery, role, permissions]);
   const effectiveTaxRate = systemSettings.taxEnabled ? (systemSettings.taxRatePercent || 0) / 100 : 0;
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const discountVal = parseFloat(discountAmount) || 0;
@@ -567,6 +594,7 @@ export default function POSTerminalScreen({
   };
 
   const handleCancelRunningOrder = (ticketId: string) => {
+    if (!requirePosPerm('posCanDismissTicket', 'cancel or dismiss running kitchen orders')) return;
     const confirmMsg = `Are you sure you want to cancel and remove Ticket #${ticketId}?`;
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
@@ -589,6 +617,7 @@ export default function POSTerminalScreen({
   };
 
   const handleClearAllOrphanTickets = () => {
+    if (!requirePosPerm('posCanDismissTicket', 'cancel or purge all running kitchen orders')) return;
     const hasOccupied = (tables || []).some(t => t.status === 'occupied' || t.status === 'billed');
     if ((tickets || []).length === 0 && !hasOccupied) return;
     const confirmMsg = "Are you sure you want to clear all running tickets and release all occupied tables?";
@@ -726,6 +755,7 @@ export default function POSTerminalScreen({
       // F7 or Ctrl+D: Apply Discount Modal
       if (e.key === 'F7' || (e.ctrlKey && (e.key === 'd' || e.key === 'D'))) {
         e.preventDefault();
+        if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
         setDiscountModalVisible(true);
         return;
       }
@@ -781,6 +811,7 @@ export default function POSTerminalScreen({
     remaining,
     searchQuery,
     orderType,
+    permissions,
   ]);
 
   // Recalculate Promo Discount
@@ -811,6 +842,9 @@ export default function POSTerminalScreen({
   }, [cart, selectedEventCampaign, subTotal, menuItems]);
 
   const handleOrderTypeChange = (type: 'takeaway' | 'dine-in' | 'delivery') => {
+    if (type === 'dine-in' && !requirePosPerm('posCanDineIn', 'take Dine-In table orders')) return;
+    if (type === 'takeaway' && !requirePosPerm('posCanTakeaway', 'process Takeaway counter orders')) return;
+    if (type === 'delivery' && !requirePosPerm('posCanDelivery', 'create Delivery orders')) return;
     setOrderType(type);
     if (type === 'dine-in') {
       setSelectedCustomerId('');
@@ -901,6 +935,7 @@ export default function POSTerminalScreen({
   };
 
   const handleSaveNewCustomer = () => {
+    if (!requirePosPerm('posCanManageCustomers', 'register or edit customer profiles')) return;
     if (!customerName || !customerPhone) {
       if (Platform.OS === 'web') window.alert("Name and Phone required");
       else Alert.alert("Error", "Name and Phone required");
@@ -918,6 +953,7 @@ export default function POSTerminalScreen({
   };
 
   const sendToKitchen = () => {
+    if (!requirePosPerm('posCanSendKot', 'dispatch KOT tickets to Kitchen')) return;
     if (cart.length === 0) return;
     if (orderType === 'dine-in' && !selectedTableId) {
       if (Platform.OS === 'web') window.alert("Please assign a dining table first.");
@@ -973,6 +1009,7 @@ export default function POSTerminalScreen({
   };
 
   const openCheckout = () => {
+    if (!requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
     if (cart.length === 0) return;
     if (orderType === 'dine-in' && !selectedTableId) {
       const msg = "Please select a table for Dine-in orders.";
@@ -992,6 +1029,9 @@ export default function POSTerminalScreen({
   };
 
   const handleCreateBillFromTicket = (ticket: typeof tickets[0], autoOpenCheckout = true) => {
+    if (autoOpenCheckout && !requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) {
+      return;
+    }
     setLoadedTicketId(ticket.id);
 
     const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
@@ -1029,6 +1069,7 @@ export default function POSTerminalScreen({
   };
 
   const handleFinalizeOrder = () => {
+    if (!requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
     const totalCollected = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
     const remainingToCollect = total - totalCollected;
 
@@ -1142,13 +1183,16 @@ export default function POSTerminalScreen({
     setSelectedCustomerId('');
     setSelectedTableId('');
 
-    if (wasDineIn) {
+    if (wasDineIn && systemSettings.posEnableTableReleaseConfirm !== false) {
       setTableDecisionModal({
         tableId: targetTableId,
         tableName: targetTableName,
         invoice,
       });
     } else {
+      if (wasDineIn && targetTableId) {
+        settleBill(targetTableId);
+      }
       setGeneratedInvoice(invoice);
     }
   };
@@ -1164,6 +1208,7 @@ export default function POSTerminalScreen({
   };
 
   const handlePrintUnpaidBill = () => {
+    if (!requirePosPerm('posCanPrintUnpaidBill', 'print provisional unpaid bills')) return;
     if (cart.length === 0) {
       const msg = "Please add items to cart before printing bill.";
       if (Platform.OS === 'web') window.alert(msg);
@@ -1768,7 +1813,7 @@ export default function POSTerminalScreen({
               </View>
 
               {/* Region / Cuisine Quick Filter Pills */}
-              {regions.length > 0 && (
+              {regions.length > 0 && systemSettings.posShowCuisineFilter !== false && (
                 <View style={[styles.posRegionFilterRow, isTablet && { paddingHorizontal: 12, paddingVertical: 6, gap: 6 }]}>
                   <View style={[styles.posRegionFilterLead, isTablet && { paddingHorizontal: 7, paddingVertical: 3.5, gap: 4 }]}>
                     <View style={[styles.posRegionLeadIconWrap, isTablet && { width: 16, height: 16 }]}>
@@ -2058,53 +2103,59 @@ export default function POSTerminalScreen({
               <View style={[isTablet && { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginTop: 7 }]}>
                 {/* Order Type Segmented Switcher (Takeaway / Dine-in / Delivery) */}
                 <View style={[styles.orderTypeTabs, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, padding: 3 }]}>
-                  <TouchableOpacity
-                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'takeaway' && styles.orderTypeTabActive]}
-                    onPress={() => handleOrderTypeChange('takeaway')}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="bag-handle" size={12} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
-                      Takeaway
-                    </Text>
-                    {!isMobile && !isTablet && (
-                      <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
-                        <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  {systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway')) && (
+                    <TouchableOpacity
+                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'takeaway' && styles.orderTypeTabActive]}
+                      onPress={() => handleOrderTypeChange('takeaway')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="bag-handle" size={12} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
+                        Takeaway
+                      </Text>
+                      {!isMobile && !isTablet && (
+                        <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
+                          <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )}
 
-                  <TouchableOpacity
-                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'dine-in' && styles.orderTypeTabActive]}
-                    onPress={() => handleOrderTypeChange('dine-in')}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="restaurant" size={12} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
-                      Dine-in
-                    </Text>
-                    {!isMobile && !isTablet && (
-                      <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
-                        <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  {systemSettings.enableDineIn !== false && (role === 'admin' || can('posCanDineIn')) && (
+                    <TouchableOpacity
+                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'dine-in' && styles.orderTypeTabActive]}
+                      onPress={() => handleOrderTypeChange('dine-in')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="restaurant" size={12} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
+                        Dine-in
+                      </Text>
+                      {!isMobile && !isTablet && (
+                        <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
+                          <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )}
 
-                  <TouchableOpacity
-                    style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'delivery' && styles.orderTypeTabActive]}
-                    onPress={() => handleOrderTypeChange('delivery')}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="bicycle" size={12} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                    <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
-                      Delivery
-                    </Text>
-                    {!isMobile && !isTablet && (
-                      <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
-                        <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
+                  {systemSettings.enableDelivery !== false && (role === 'admin' || can('posCanDelivery')) && (
+                    <TouchableOpacity
+                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'delivery' && styles.orderTypeTabActive]}
+                      onPress={() => handleOrderTypeChange('delivery')}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="bicycle" size={12} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
+                        Delivery
+                      </Text>
+                      {!isMobile && !isTablet && (
+                        <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
+                          <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {/* Table or Customer Bar depending on Order Type */}
@@ -2316,8 +2367,13 @@ export default function POSTerminalScreen({
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                           <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Discount-</Text>
                           <TouchableOpacity 
-                            style={[styles.discountBadgePill, isTablet && { paddingHorizontal: 6, paddingVertical: 1 }]}
+                            style={[
+                              styles.discountBadgePill,
+                              isTablet && { paddingHorizontal: 6, paddingVertical: 1 },
+                              role !== 'admin' && !can('canApplyCustomDiscount') && { opacity: 0.5 },
+                            ]}
                             onPress={() => {
+                              if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
                               setCustomDiscountInput(discountAmount);
                               setDiscountModalVisible(true);
                             }}
@@ -2365,7 +2421,7 @@ export default function POSTerminalScreen({
                       style={[
                         styles.proceedPayBtn, 
                         isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                        cart.length === 0 && { opacity: 0.55 }
+                        (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.55 }
                       ]}
                       {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
                       onPress={sendToKitchen}
@@ -2386,7 +2442,7 @@ export default function POSTerminalScreen({
                         style={[
                           styles.proceedPayBtn, 
                           isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                          cart.length === 0 && { opacity: 0.55 }
+                          (cart.length === 0 || (role !== 'admin' && !can('posCanSettleBill'))) && { opacity: 0.55 }
                         ]}
                         {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
                         onPress={openCheckout}
@@ -2394,8 +2450,15 @@ export default function POSTerminalScreen({
                         activeOpacity={0.85}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="card-outline" size={16} color="#FFFFFF" style={{ marginRight: 7 }} />
-                          <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>PROCEED TO PAYMENT</Text>
+                          <Ionicons
+                            name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'card-outline'}
+                            size={16}
+                            color="#FFFFFF"
+                            style={{ marginRight: 7 }}
+                          />
+                          <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>
+                            {role !== 'admin' && !can('posCanSettleBill') ? 'PAYMENT RESTRICTED' : 'PROCEED TO PAYMENT'}
+                          </Text>
                         </View>
                         <View style={styles.btnShortcutBadge}>
                           <Text style={styles.btnShortcutBadgeText}>F9</Text>
@@ -2406,7 +2469,7 @@ export default function POSTerminalScreen({
                         style={[
                           styles.holdOrderBtn, 
                           isTablet && { flex: 1, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                          cart.length === 0 && { opacity: 0.55 }
+                          (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.55 }
                         ]}
                         {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
                         onPress={sendToKitchen}
@@ -2422,7 +2485,7 @@ export default function POSTerminalScreen({
                         </View>
                       </TouchableOpacity>
 
-                      {orderType === 'dine-in' && (
+                      {orderType === 'dine-in' && (role === 'admin' || can('posCanPrintUnpaidBill')) && (
                         <TouchableOpacity 
                           style={[
                             styles.unpaidBillBtn,
@@ -2890,8 +2953,14 @@ export default function POSTerminalScreen({
                   </View>
 
                   <TouchableOpacity 
-                    style={styles.addNewCustBar}
-                    onPress={() => setIsCreatingNewCustomer(true)}
+                    style={[
+                      styles.addNewCustBar,
+                      role !== 'admin' && !can('posCanManageCustomers') && { opacity: 0.5 },
+                    ]}
+                    onPress={() => {
+                      if (!requirePosPerm('posCanManageCustomers', 'register or edit customer profiles')) return;
+                      setIsCreatingNewCustomer(true);
+                    }}
                   >
                     <Ionicons name="person-add" size={14} color="#BE123C" style={{ marginRight: 6 }} />
                     <Text style={styles.addNewCustBarText}>+ Register New Customer</Text>
@@ -2963,7 +3032,32 @@ export default function POSTerminalScreen({
 
               {/* Payment Method & Cash Tendered Input */}
               <View style={{ marginVertical: 12 }}>
-                <Text style={styles.paymentInputSectionLabel}>Payment Method & Cash Tendered:</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <Text style={styles.paymentInputSectionLabel}>Payment Method & Cash Tendered:</Text>
+                  {systemSettings.posAllowSplitPayment !== false && (role === 'admin' || can('posCanSplitPayment')) && payments.length < 3 && (
+                    <TouchableOpacity
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        backgroundColor: '#FAF6EE',
+                        borderWidth: 1,
+                        borderColor: '#D4AF37',
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 8,
+                      }}
+                      onPress={() => {
+                        if (!requirePosPerm('posCanSplitPayment', 'split payments across multiple methods')) return;
+                        const nextType = payments.some((x) => x.type === 'card') ? 'online' : 'card';
+                        setPayments((prev) => [...prev, { type: nextType, amount: Math.max(0, Math.round(remaining)) }]);
+                      }}
+                    >
+                      <Ionicons name="git-branch-outline" size={12} color="#52171B" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#52171B' }}>+ Split Payment</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
                 {payments.map((p, idx) => (
                   <View key={idx} style={{ marginBottom: 10 }}>
                     <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
@@ -3000,6 +3094,15 @@ export default function POSTerminalScreen({
                           </TouchableOpacity>
                         )}
                       </View>
+
+                      {idx > 0 && (
+                        <TouchableOpacity
+                          onPress={() => setPayments((prev) => prev.filter((_, i) => i !== idx))}
+                          style={{ padding: 6 }}
+                        >
+                          <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                        </TouchableOpacity>
+                      )}
                     </View>
 
                     {/* Quick Cash Note Chips */}
@@ -3103,7 +3206,7 @@ export default function POSTerminalScreen({
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.modalHeaderTitle}>Running Orders ({(tickets || []).length})</Text>
-                {(tickets || []).length > 0 && (
+                {(tickets || []).length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
                   <TouchableOpacity
                     style={styles.clearAllTicketsBtn}
                     onPress={handleClearAllOrphanTickets}
@@ -3217,15 +3320,17 @@ export default function POSTerminalScreen({
 
                         {/* Interactive Action Row: Cancel / Load Cart / Create Bill & Settle */}
                         <View style={styles.ticketActionRow}>
-                          <TouchableOpacity
-                            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                            style={styles.ticketCancelBtn}
-                            onPress={() => handleCancelRunningOrder(t.id)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
-                            <Text style={styles.ticketCancelBtnText}>Cancel</Text>
-                          </TouchableOpacity>
+                          {(role === 'admin' || can('posCanDismissTicket')) && (
+                            <TouchableOpacity
+                              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                              style={styles.ticketCancelBtn}
+                              onPress={() => handleCancelRunningOrder(t.id)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
+                              <Text style={styles.ticketCancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                          )}
 
                           <TouchableOpacity
                             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -3239,11 +3344,19 @@ export default function POSTerminalScreen({
 
                           <TouchableOpacity
                             {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                            style={styles.ticketBillBtn}
+                            style={[
+                              styles.ticketBillBtn,
+                              role !== 'admin' && !can('posCanSettleBill') && { opacity: 0.5 },
+                            ]}
                             onPress={() => handleCreateBillFromTicket(t, true)}
                             activeOpacity={0.8}
                           >
-                            <Ionicons name="flash" size={14} color="#FFFFFF" style={{ marginRight: 4 }} />
+                            <Ionicons
+                              name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'flash'}
+                              size={14}
+                              color="#FFFFFF"
+                              style={{ marginRight: 4 }}
+                            />
                             <Text style={styles.ticketBillBtnText}>⚡ Create Bill & Settle</Text>
                           </TouchableOpacity>
                         </View>

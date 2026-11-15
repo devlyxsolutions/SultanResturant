@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useRolePermissions } from '../../store/roleStore';
 import { useSidebarStore } from '../../store/sidebarStore';
+import { useSettingsStore, SystemSettings } from '../../store/settingsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import SultanLogo from '../../components/SultanLogo';
@@ -47,11 +48,33 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Staff & HR / پیرول', route: '/manager/staff', icon: 'people-outline' },
 ];
 
+function isModuleEnabledForManagerRoute(route: string, settings: SystemSettings): boolean {
+  if (route === '/menu' && settings.enableDigitalQrMenu === false) return false;
+  if (route === '/manager/app-orders' && settings.enableOnlineOrders === false) return false;
+  if (route === '/manager/pos' && settings.enablePosModule === false) return false;
+  if ((route === '/manager/floor-plan' || route === '/manager/floors') && settings.enableFloorPlanModule === false) return false;
+  if (route === '/manager/shift' && settings.enableShiftModule === false) return false;
+  if (route === '/manager/invoices' && settings.enableInvoicesModule === false) return false;
+  if (route === '/manager/returns' && settings.enableReturnsModule === false) return false;
+  if (route === '/manager/discounts' && settings.enableDiscountsModule === false) return false;
+  if (route === '/manager/inventory' && settings.enableInventoryModule === false) return false;
+  if (route === '/manager/suppliers' && settings.enableSuppliersModule === false) return false;
+  if (route === '/manager/expenses' && settings.enableExpensesModule === false) return false;
+  if (route === '/manager/reports' && settings.enableReportsModule === false) return false;
+  if (route === '/manager/damages' && settings.enableDamagesModule === false) return false;
+  if (route === '/manager/assets' && settings.enableAssetsModule === false) return false;
+  if ((route === '/manager/kitchen-handover' || route === '/manager/kitchen-returns') && settings.enableKitchenHandoverModule === false) return false;
+  if ((route === '/manager/recipes' || route === '/manager/costing') && settings.enableRecipesBomModule === false) return false;
+  if (route === '/manager/staff' && settings.enableStaffHrModule === false) return false;
+  return true;
+}
+
 export default function ManagerLayout() {
   // Admin and Floor Manager can also open relevant manager screens (e.g. POS, Floor Plan)
   const { ready, user, logout } = useRoleGuard(['manager', 'admin', 'floor_manager', 'Floor Manager']);
   const isActualManager = user?.role !== 'admin';
   const { can, roleName } = useRolePermissions(isActualManager ? undefined : 'manager');
+  const systemSettings = useSettingsStore((s) => s.settings);
   const { width } = useWindowDimensions();
   const router = useRouter();
   const pathname = usePathname();
@@ -153,11 +176,14 @@ export default function ManagerLayout() {
     };
   }, [isCollapsed, setIsCollapsed]);
 
-  // If user is Admin, they see all menu items. If actual manager, filter based on their allowed permissions.
+  // Filter menu items by active system modules and manager role permissions.
   const filteredMenuItems = useMemo(() => {
-    if (!isActualManager) return MANAGER_MENU_ITEMS;
-    return MANAGER_MENU_ITEMS.filter((item) => isManagerRouteAllowed(item.route, can));
-  }, [isActualManager, can]);
+    return MANAGER_MENU_ITEMS.filter((item) => {
+      if (!isModuleEnabledForManagerRoute(item.route, systemSettings)) return false;
+      if (!isActualManager) return true;
+      return isManagerRouteAllowed(item.route, can);
+    });
+  }, [isActualManager, can, systemSettings]);
 
   // Route guard: Only actual Manager is blocked from screens the Admin has not allowed. Admin has full access.
   const blockedRule = isActualManager && !isManagerRouteAllowed(pathname, can)

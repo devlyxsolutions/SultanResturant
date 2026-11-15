@@ -60,6 +60,18 @@ export interface RolePermissions {
   canProcessReturns: boolean; // Authorize cash refunds & sales returns
   canStartCloseShift: boolean; // Open shifts and perform Blind Closing
   canModifyMenuPrices: boolean; // Change dish selling prices & variants
+
+  // 4. Granular POS Terminal Action Controls (Per-Role & Per-Cashier)
+  posCanDineIn: boolean; // Place & manage Dine-In table orders in POS
+  posCanTakeaway: boolean; // Place & manage Takeaway counter orders in POS
+  posCanDelivery: boolean; // Place & manage Delivery orders in POS
+  posCanSendKot: boolean; // Dispatch KOT tickets to Kitchen / Juice Bar from POS
+  posCanSettleBill: boolean; // Settle bills & collect Cash/Card/Online payments (Pay & Print)
+  posCanPrintUnpaidBill: boolean; // Print provisional unpaid check (CHK-...)
+  posCanReleaseTable: boolean; // Release / reset occupied tables without settling
+  posCanDismissTicket: boolean; // Cancel / dismiss running KOT orders in Running Orders modal
+  posCanSplitPayment: boolean; // Use Split Payment (multiple payment methods on one bill)
+  posCanManageCustomers: boolean; // Register or edit customer CRM records in POS
 }
 
 export type BaseRoleType = 'admin' | 'manager' | 'floor_manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | 'custom';
@@ -100,6 +112,16 @@ export const ADMIN_PERMISSIONS: RolePermissions = {
   canProcessReturns: true,
   canStartCloseShift: true,
   canModifyMenuPrices: true,
+  posCanDineIn: true,
+  posCanTakeaway: true,
+  posCanDelivery: true,
+  posCanSendKot: true,
+  posCanSettleBill: true,
+  posCanPrintUnpaidBill: true,
+  posCanReleaseTable: true,
+  posCanDismissTicket: true,
+  posCanSplitPayment: true,
+  posCanManageCustomers: true,
 };
 
 export const DEFAULT_ROLES: CustomRole[] = [
@@ -147,6 +169,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: true,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: true,
+      posCanTakeaway: true,
+      posCanDelivery: true,
+      posCanSendKot: true,
+      posCanSettleBill: true,
+      posCanPrintUnpaidBill: true,
+      posCanReleaseTable: true,
+      posCanDismissTicket: true,
+      posCanSplitPayment: true,
+      posCanManageCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -182,6 +214,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: true,
+      posCanTakeaway: true,
+      posCanDelivery: false,
+      posCanSendKot: true,
+      posCanSettleBill: false,
+      posCanPrintUnpaidBill: true,
+      posCanReleaseTable: true,
+      posCanDismissTicket: false,
+      posCanSplitPayment: false,
+      posCanManageCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -191,9 +233,9 @@ export const DEFAULT_ROLES: CustomRole[] = [
     name: 'Cashier',
     urduName: 'کاؤنٹر کیشیئر',
     description: 'Dedicated POS billing, invoice generation, and shift cash reconciliation.',
-    badgeColor: '#7C3AED',
+    badgeColor: '#0D9488',
     icon: 'calculator',
-    isSystem: false,
+    isSystem: true,
     baseRole: 'manager',
     permissions: {
       canViewRevenue: false, // Blind cash counting — no revenue visibility
@@ -217,6 +259,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: true,
+      posCanTakeaway: true,
+      posCanDelivery: true,
+      posCanSendKot: true,
+      posCanSettleBill: true,
+      posCanPrintUnpaidBill: true,
+      posCanReleaseTable: true,
+      posCanDismissTicket: false,
+      posCanSplitPayment: true,
+      posCanManageCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -252,6 +304,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: false,
       canModifyMenuPrices: false,
+      posCanDineIn: true,
+      posCanTakeaway: false,
+      posCanDelivery: false,
+      posCanSendKot: true,
+      posCanSettleBill: false,
+      posCanPrintUnpaidBill: false,
+      posCanReleaseTable: false,
+      posCanDismissTicket: false,
+      posCanSplitPayment: false,
+      posCanManageCustomers: false,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -287,6 +349,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: false,
+      posCanTakeaway: false,
+      posCanDelivery: false,
+      posCanSendKot: false,
+      posCanSettleBill: false,
+      posCanPrintUnpaidBill: false,
+      posCanReleaseTable: false,
+      posCanDismissTicket: false,
+      posCanSplitPayment: false,
+      posCanManageCustomers: false,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -322,6 +394,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: false,
+      posCanTakeaway: false,
+      posCanDelivery: false,
+      posCanSendKot: false,
+      posCanSettleBill: false,
+      posCanPrintUnpaidBill: false,
+      posCanReleaseTable: false,
+      posCanDismissTicket: false,
+      posCanSplitPayment: false,
+      posCanManageCustomers: false,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -357,6 +439,16 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canProcessReturns: false,
       canStartCloseShift: true,
       canModifyMenuPrices: false,
+      posCanDineIn: false,
+      posCanTakeaway: false,
+      posCanDelivery: false,
+      posCanSendKot: false,
+      posCanSettleBill: false,
+      posCanPrintUnpaidBill: false,
+      posCanReleaseTable: false,
+      posCanDismissTicket: false,
+      posCanSplitPayment: false,
+      posCanManageCustomers: false,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -540,12 +632,36 @@ export const useRoleStore = create<RoleState>()(
     {
       name: 'sultan-roles-permissions-store',
       storage: appStorage,
-      version: 2,
-      // v2: added canAccessFloorPlan / canAccessDamages / canAccessAssets.
+      version: 3,
+      // v3: added granular POS Terminal action controls (posCan*) and made role-cashier a system role.
       // Fill any missing keys on saved roles from the matching system default.
       migrate: (persistedState: any) => {
         const state = persistedState || {};
         const savedRoles: CustomRole[] = Array.isArray(state.roles) ? state.roles : DEFAULT_ROLES;
+        const posFallbacks: Pick<
+          RolePermissions,
+          | 'posCanDineIn'
+          | 'posCanTakeaway'
+          | 'posCanDelivery'
+          | 'posCanSendKot'
+          | 'posCanSettleBill'
+          | 'posCanPrintUnpaidBill'
+          | 'posCanReleaseTable'
+          | 'posCanDismissTicket'
+          | 'posCanSplitPayment'
+          | 'posCanManageCustomers'
+        > = {
+          posCanDineIn: false,
+          posCanTakeaway: false,
+          posCanDelivery: false,
+          posCanSendKot: false,
+          posCanSettleBill: false,
+          posCanPrintUnpaidBill: false,
+          posCanReleaseTable: false,
+          posCanDismissTicket: false,
+          posCanSplitPayment: false,
+          posCanManageCustomers: false,
+        };
         const roles = savedRoles.map((r) => {
           const sysDefault =
             r.id === 'role-admin'
@@ -554,9 +670,22 @@ export const useRoleStore = create<RoleState>()(
                 DEFAULT_ROLES.find((d) => d.baseRole === r.baseRole && d.isSystem);
           const fallback: Partial<RolePermissions> = sysDefault
             ? sysDefault.permissions
-            : { canAccessFloorPlan: false, canAccessDamages: false, canAccessAssets: false };
-          return { ...r, permissions: { ...fallback, ...r.permissions } as RolePermissions };
+            : {
+                canAccessFloorPlan: false,
+                canAccessDamages: false,
+                canAccessAssets: false,
+                ...posFallbacks,
+              };
+          return {
+            ...r,
+            ...(r.id === 'role-cashier' ? { isSystem: true } : {}),
+            permissions: { ...fallback, ...r.permissions } as RolePermissions,
+          };
         });
+        if (!roles.some((r) => r.id === 'role-cashier')) {
+          const cashierDef = DEFAULT_ROLES.find((d) => d.id === 'role-cashier');
+          if (cashierDef) roles.splice(3, 0, cashierDef);
+        }
         return { ...state, roles };
       },
     }
@@ -692,12 +821,22 @@ export function useRolePermissions(targetRoleOverride?: string) {
       DEFAULT_ROLES.find((r) => r.baseRole === resolvedRole.baseRole && r.isSystem);
     return sysDefault ? sysDefault.permissions : DEFAULT_ROLES[3].permissions;
   })();
-  const permissions: RolePermissions = {
-    ...baseDefaults,
-    ...(resolvedRole?.permissions || {}),
-  };
+  const staffOverrides = !resolvedTargetOverride ? activeStaff?.permissionOverrides || {} : {};
+  const hasStaffOverrides = Boolean(
+    !resolvedTargetOverride &&
+      activeStaff?.permissionOverrides &&
+      Object.keys(activeStaff.permissionOverrides).length > 0
+  );
+  const permissions: RolePermissions =
+    (effectiveRole === 'admin' || user?.role === 'admin') && !resolvedTargetOverride && !hasStaffOverrides
+      ? ADMIN_PERMISSIONS
+      : {
+          ...baseDefaults,
+          ...(resolvedRole?.permissions || {}),
+          ...staffOverrides,
+        };
 
-  // Hierarchy: every non-admin role (incl. Manager) works UNDER the Admin role.
+  // Hierarchy: every non-admin role (incl. Manager & Cashier) works UNDER the Admin role.
   // A role can never hold a permission that the Admin role itself does not have.
   const adminRolePerms: RolePermissions = {
     ...ADMIN_PERMISSIONS,
@@ -721,6 +860,8 @@ export function useRolePermissions(targetRoleOverride?: string) {
   return {
     permissions,
     can,
+    activeStaff,
+    hasStaffOverrides,
     roleName: resolvedRole?.name || user?.role || 'Staff',
     roleBadgeColor: resolvedRole?.badgeColor || '#701A26',
     canViewRevenue: can('canViewRevenue'),
@@ -744,5 +885,15 @@ export function useRolePermissions(targetRoleOverride?: string) {
     canProcessReturns: can('canProcessReturns'),
     canStartCloseShift: can('canStartCloseShift'),
     canModifyMenuPrices: can('canModifyMenuPrices'),
+    posCanDineIn: can('posCanDineIn'),
+    posCanTakeaway: can('posCanTakeaway'),
+    posCanDelivery: can('posCanDelivery'),
+    posCanSendKot: can('posCanSendKot'),
+    posCanSettleBill: can('posCanSettleBill'),
+    posCanPrintUnpaidBill: can('posCanPrintUnpaidBill'),
+    posCanReleaseTable: can('posCanReleaseTable'),
+    posCanDismissTicket: can('posCanDismissTicket'),
+    posCanSplitPayment: can('posCanSplitPayment'),
+    posCanManageCustomers: can('posCanManageCustomers'),
   };
 }

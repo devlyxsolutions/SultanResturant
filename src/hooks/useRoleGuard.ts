@@ -29,7 +29,8 @@ export function useRoleGuard(allowed: Exclude<Role, null>[]) {
         r.id === user.role ||
         r.name.toLowerCase() === user.role?.toLowerCase()
     );
-    const baseRole = matchedCustomRole ? matchedCustomRole.baseRole.toLowerCase() : cleanUserRole;
+    const rawBase = matchedCustomRole ? matchedCustomRole.baseRole.toLowerCase() : cleanUserRole;
+    const baseRole = rawBase === 'custom' ? 'manager' : rawBase;
 
     const cleanAllowed = allowed.map((a) => (a || '').toLowerCase().replace(/[\s_-]/g, ''));
     return (
