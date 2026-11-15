@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useDiscountStore } from '../store/discountStore';
 import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
@@ -69,6 +70,7 @@ export default function DiscountsScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { canAddDiscounts, canEditDiscounts, canDeleteDiscounts } = useRolePermissions();
 
   const {
     campaigns,
@@ -192,6 +194,15 @@ export default function DiscountsScreen() {
 
   // Handle Edit Action
   const handleOpenEditor = (campaign?: EventDiscount) => {
+    if (campaign ? !canEditDiscounts : !canAddDiscounts) {
+      Alert.alert(
+        'Access Denied',
+        campaign
+          ? 'You do not have permission to edit discount campaigns.'
+          : 'You do not have permission to add discount campaigns.'
+      );
+      return;
+    }
     if (campaign) {
       setEditingCampaignId(campaign.id);
       setFormData({
@@ -229,6 +240,14 @@ export default function DiscountsScreen() {
   };
 
   const handleSaveCampaign = () => {
+    if (editingCampaignId ? !canEditDiscounts : !canAddDiscounts) {
+      const msg = editingCampaignId
+        ? 'You do not have permission to edit discount campaigns.'
+        : 'You do not have permission to create discount campaigns.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     if (!formData.title.trim()) {
       const msg = 'Please enter a Campaign Event Title (e.g. Weekend BBQ Rush).';
       if (Platform.OS === 'web') window.alert(msg);
@@ -286,7 +305,23 @@ export default function DiscountsScreen() {
     setIsEditorOpen(false);
   };
 
+  const handleToggleStatus = (campaignId: string) => {
+    if (!canEditDiscounts) {
+      const msg = 'You do not have permission to pause or resume discount campaigns.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
+    toggleCampaignStatus(campaignId);
+  };
+
   const handleDeleteCampaign = (campaign: EventDiscount) => {
+    if (!canDeleteDiscounts) {
+      const msg = 'You do not have permission to delete discount campaigns.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     const confirmMsg = `Are you sure you want to delete campaign "${campaign.title}"? Historical sales attribution for this promotion will be removed.`;
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
@@ -405,14 +440,16 @@ export default function DiscountsScreen() {
             <Text style={styles.exportBtnText}>Export CSV</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.createBtn}
-            onPress={() => handleOpenEditor()}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-            <Text style={styles.createBtnText}>Create New Event</Text>
-          </TouchableOpacity>
+          {canAddDiscounts && (
+            <TouchableOpacity
+              style={styles.createBtn}
+              onPress={() => handleOpenEditor()}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.createBtnText}>Create New Event</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -570,14 +607,16 @@ export default function DiscountsScreen() {
                 ? `No event promotions matched "${search}". Try resetting search filter.`
                 : 'No promotional events configured under this view. Click below to launch your first event.'}
             </Text>
-            <TouchableOpacity
-              style={styles.emptyBtn}
-              onPress={() => handleOpenEditor()}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyBtnText}>Create Event Campaign</Text>
-            </TouchableOpacity>
+            {canAddDiscounts && (
+              <TouchableOpacity
+                style={styles.emptyBtn}
+                onPress={() => handleOpenEditor()}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add-circle" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyBtnText}>Create Event Campaign</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <>
@@ -782,33 +821,39 @@ export default function DiscountsScreen() {
                       </TouchableOpacity>
 
                       <View style={styles.cardButtonsRight}>
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => handleOpenEditor(camp)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="pencil" size={16} color={BRAND.ink} />
-                        </TouchableOpacity>
+                        {canEditDiscounts && (
+                          <TouchableOpacity
+                            style={styles.iconActionBtn}
+                            onPress={() => handleOpenEditor(camp)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="pencil" size={16} color={BRAND.ink} />
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => toggleCampaignStatus(camp.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons
-                            name={camp.status === 'paused' ? 'play' : 'pause'}
-                            size={16}
-                            color={camp.status === 'paused' ? BRAND.success : BRAND.warn}
-                          />
-                        </TouchableOpacity>
+                        {canEditDiscounts && (
+                          <TouchableOpacity
+                            style={styles.iconActionBtn}
+                            onPress={() => handleToggleStatus(camp.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons
+                              name={camp.status === 'paused' ? 'play' : 'pause'}
+                              size={16}
+                              color={camp.status === 'paused' ? BRAND.success : BRAND.warn}
+                            />
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={[styles.iconActionBtn, { borderColor: '#FCA5A5' }]}
-                          onPress={() => handleDeleteCampaign(camp)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                        </TouchableOpacity>
+                        {canDeleteDiscounts && (
+                          <TouchableOpacity
+                            style={[styles.iconActionBtn, { borderColor: '#FCA5A5' }]}
+                            onPress={() => handleDeleteCampaign(camp)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </View>

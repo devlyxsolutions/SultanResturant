@@ -24,11 +24,14 @@ import { money } from '../../utils/format';
 import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import PaginationControl from '../../components/PaginationControl';
 import { usePagination } from '../../hooks/usePagination';
+import { useRolePermissions } from '../../store/roleStore';
 
 export default function MenuManagement() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+
+  const { canAddMenu, canEditMenu, canDeleteMenu } = useRolePermissions();
 
   const menuItems = useRestaurantStore(state => state.menuItems) || [];
   const addMenuItem = useRestaurantStore(state => state.addMenuItem);
@@ -324,7 +327,16 @@ export default function MenuManagement() {
   // -------------------------------------------------------------
   // Modal Open Handlers
   // -------------------------------------------------------------
+  const showPermAlert = (msg: string) => {
+    if (Platform.OS === 'web') window.alert(msg);
+    else Alert.alert('Permission Denied', msg);
+  };
+
   const openAddItemModal = (isForDeal = false) => {
+    if (!canAddMenu) {
+      showPermAlert('You do not have permission to add menu dishes or deals.');
+      return;
+    }
     setEditingItem(null);
     setModalTab('basic');
     setItemName('');
@@ -351,6 +363,10 @@ export default function MenuManagement() {
   };
 
   const openEditItemModal = (item: MenuItem) => {
+    if (!canEditMenu) {
+      showPermAlert('You do not have permission to edit menu dishes or deals.');
+      return;
+    }
     setEditingItem(item);
     setModalTab('basic');
     setItemName(item.name);
@@ -616,6 +632,14 @@ export default function MenuManagement() {
   // Save Item Handler (With Auto-Sync to Backend & Mobile App)
   // -------------------------------------------------------------
   const handleSaveItem = async () => {
+    if (editingItem ? !canEditMenu : !canAddMenu) {
+      showPermAlert(
+        editingItem
+          ? 'You do not have permission to edit menu dishes or deals.'
+          : 'You do not have permission to add menu dishes or deals.'
+      );
+      return;
+    }
     const parsedVariants = itemVariants
       .filter(v => v.name.trim() !== '' && !isNaN(parseFloat(v.price)))
       .map(v => ({ name: v.name.trim(), price: parseFloat(v.price) }));
@@ -715,6 +739,10 @@ export default function MenuManagement() {
   };
 
   const handleDeleteItem = async (item: MenuItem) => {
+    if (!canDeleteMenu) {
+      showPermAlert('You do not have permission to delete menu items.');
+      return;
+    }
     const confirmDelete = async () => {
       deleteMenuItem(item.id);
       broadcastImmediately();
@@ -756,6 +784,10 @@ export default function MenuManagement() {
   // Quick Stock Adjustment Handler
   // -------------------------------------------------------------
   const handleApplyStockAdjust = () => {
+    if (!canEditMenu) {
+      showPermAlert('You do not have permission to adjust menu stock.');
+      return;
+    }
     if (!stockAdjustItem) return;
     const val = parseInt(stockDeltaInput, 10);
     if (isNaN(val)) {
@@ -774,6 +806,10 @@ export default function MenuManagement() {
   // Category Management Handlers
   // -------------------------------------------------------------
   const handleSaveInlineCategory = async () => {
+    if (!canAddMenu) {
+      showPermAlert('You do not have permission to add menu categories.');
+      return;
+    }
     const cat = inlineCatInput.trim();
     if (!cat) {
       if (Platform.OS === 'web') window.alert('Please enter a category name');
@@ -810,6 +846,10 @@ export default function MenuManagement() {
   };
 
   const handleAddCategory = async () => {
+    if (!canAddMenu) {
+      showPermAlert('You do not have permission to add menu categories.');
+      return;
+    }
     const catName = newCatName.trim();
     if (!catName) {
       const msg = 'Please enter a category name';
@@ -853,6 +893,10 @@ export default function MenuManagement() {
   };
 
   const handleDeleteCategory = (catName: string) => {
+    if (!canDeleteMenu) {
+      showPermAlert('You do not have permission to delete menu categories.');
+      return;
+    }
     const count = menuItems.filter(i => i.category === catName).length;
     const confirmDelete = () => {
       deleteCategory(catName);
@@ -877,18 +921,34 @@ export default function MenuManagement() {
   // Region Management Handlers (Add, Edit, Delete with Cascading updates)
   // -------------------------------------------------------------
   const openAddRegionModal = () => {
+    if (!canAddMenu) {
+      showPermAlert('You do not have permission to add regions or cuisines.');
+      return;
+    }
     setEditingRegion(null);
     setRegionNameInput('');
     setRegionModalVisible(true);
   };
 
   const openEditRegionModal = (regionName: string) => {
+    if (!canEditMenu) {
+      showPermAlert('You do not have permission to edit regions or cuisines.');
+      return;
+    }
     setEditingRegion(regionName);
     setRegionNameInput(regionName);
     setRegionModalVisible(true);
   };
 
   const handleSaveRegion = () => {
+    if (editingRegion ? !canEditMenu : !canAddMenu) {
+      showPermAlert(
+        editingRegion
+          ? 'You do not have permission to edit regions or cuisines.'
+          : 'You do not have permission to add regions or cuisines.'
+      );
+      return;
+    }
     const trimmed = regionNameInput.trim();
     if (!trimmed) {
       const msg = 'Please enter a region or cuisine name (e.g. Chinese, Continental, etc.).';
@@ -921,6 +981,10 @@ export default function MenuManagement() {
   };
 
   const handleDeleteRegion = (regionName: string) => {
+    if (!canDeleteMenu) {
+      showPermAlert('You do not have permission to delete regions or cuisines.');
+      return;
+    }
     const assignedCount = menuItems.filter(i => i.region === regionName).length;
     const confirmDelete = () => {
       deleteRegion(regionName);
@@ -950,6 +1014,10 @@ export default function MenuManagement() {
   };
 
   const handleFetchRestaurantMenu = async () => {
+    if (!canAddMenu) {
+      showPermAlert('You do not have permission to add or sync default menu items.');
+      return;
+    }
     const doRestore = async () => {
       try {
         setIsSyncingMenu(true);
@@ -1011,49 +1079,53 @@ export default function MenuManagement() {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.addButton, { backgroundColor: '#1E3A8A' }]} 
-            onPress={handleFetchRestaurantMenu}
-            disabled={isSyncingMenu}
-            activeOpacity={0.8}
-          >
-            {isSyncingMenu ? (
-              <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
-            ) : (
-              <Ionicons name="sync-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
-            )}
-            <Text style={[styles.addButtonText, { color: '#FFFFFF' }]}>
-              {isSyncingMenu ? 'Syncing...' : 'Fetch Sultan Menu'}
-            </Text>
-          </TouchableOpacity>
+          {canAddMenu && (
+            <>
+              <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: '#1E3A8A' }]}
+                onPress={handleFetchRestaurantMenu}
+                disabled={isSyncingMenu}
+                activeOpacity={0.8}
+              >
+                {isSyncingMenu ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" style={{ marginRight: 6 }} />
+                ) : (
+                  <Ionicons name="sync-outline" size={17} color="#FFFFFF" style={{ marginRight: 6 }} />
+                )}
+                <Text style={[styles.addButtonText, { color: '#FFFFFF' }]}>
+                  {isSyncingMenu ? 'Syncing...' : 'Fetch Sultan Menu'}
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.addButton, { backgroundColor: BRAND.burgundy }]} 
-            onPress={() => openAddItemModal(true)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="gift-outline" size={17} color={BRAND.gold} style={{ marginRight: 6 }} />
-            <Text style={[styles.addButtonText, { color: BRAND.gold }]}>New Deal / Combo</Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.addButton, { backgroundColor: BRAND.burgundy }]}
+                onPress={() => openAddItemModal(true)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="gift-outline" size={17} color={BRAND.gold} style={{ marginRight: 6 }} />
+                <Text style={[styles.addButtonText, { color: BRAND.gold }]}>New Deal / Combo</Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={() => {
-              if (activeTab === 'categories') {
-                setCatModalVisible(true);
-              } else if (activeTab === 'regions') {
-                openAddRegionModal();
-              } else {
-                openAddItemModal(false);
-              }
-            }}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="add" size={18} color="#4a121a" style={{ marginRight: 4 }} />
-            <Text style={styles.addButtonText}>
-              {activeTab === 'categories' ? 'New Category' : (activeTab === 'regions' ? 'New Region' : 'New Dish')}
-            </Text>
-          </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={() => {
+                  if (activeTab === 'categories') {
+                    setCatModalVisible(true);
+                  } else if (activeTab === 'regions') {
+                    openAddRegionModal();
+                  } else {
+                    openAddItemModal(false);
+                  }
+                }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="add" size={18} color="#4a121a" style={{ marginRight: 4 }} />
+                <Text style={styles.addButtonText}>
+                  {activeTab === 'categories' ? 'New Category' : (activeTab === 'regions' ? 'New Region' : 'New Dish')}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       </View>
 
@@ -1687,21 +1759,23 @@ export default function MenuManagement() {
 
                           {/* Option 4: Stock Pill */}
                           {item.trackStock ? (
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               style={[
-                                styles.stockPill, 
+                                styles.stockPill,
                                 isOut ? styles.stockPillOut : (isLow ? styles.stockPillLow : styles.stockPillIn)
                               ]}
+                              disabled={!canEditMenu}
                               onPress={() => {
+                                if (!canEditMenu) return;
                                 setStockAdjustItem(item);
                                 setStockDeltaInput(item.stockQty?.toString() || '0');
                                 setStockMode('set');
                               }}
                             >
-                              <Ionicons 
-                                name={isOut ? "alert-circle" : (isLow ? "warning-outline" : "checkmark-circle")} 
-                                size={12} 
-                                color={isOut ? BRAND.danger : (isLow ? BRAND.warn : BRAND.success)} 
+                              <Ionicons
+                                name={isOut ? "alert-circle" : (isLow ? "warning-outline" : "checkmark-circle")}
+                                size={12}
+                                color={isOut ? BRAND.danger : (isLow ? BRAND.warn : BRAND.success)}
                               />
                               <Text style={[
                                 styles.stockPillText,
@@ -1709,7 +1783,9 @@ export default function MenuManagement() {
                               ]}>
                                 {isOut ? 'Sold Out' : `Stock: ${item.stockQty} portions`}
                               </Text>
-                              <Ionicons name="create-outline" size={12} color={BRAND.muted} style={{ marginLeft: 4 }} />
+                              {canEditMenu && (
+                                <Ionicons name="create-outline" size={12} color={BRAND.muted} style={{ marginLeft: 4 }} />
+                              )}
                             </TouchableOpacity>
                           ) : (
                             <Text style={styles.untrackedStockText}>Stock Tracking: Off</Text>
@@ -1718,36 +1794,42 @@ export default function MenuManagement() {
                       </View>
 
                       {/* Action buttons */}
-                      <View style={styles.itemCardActions}>
-                        <TouchableOpacity 
-                          style={styles.editBtn} 
-                          onPress={() => openEditItemModal(item)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="pencil" size={14} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                          <Text style={styles.editBtnText}>Edit</Text>
-                        </TouchableOpacity>
+                      {(canEditMenu || canDeleteMenu) && (
+                        <View style={styles.itemCardActions}>
+                          {canEditMenu && (
+                            <TouchableOpacity
+                              style={styles.editBtn}
+                              onPress={() => openEditItemModal(item)}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="pencil" size={14} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+                              <Text style={styles.editBtnText}>Edit</Text>
+                            </TouchableOpacity>
+                          )}
 
-                        {item.trackStock && (
-                          <TouchableOpacity 
-                            style={styles.restockQuickBtn}
-                            onPress={() => adjustMenuItemStock(item.id, 10, 'add')}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="add-circle-outline" size={14} color={BRAND.success} style={{ marginRight: 4 }} />
-                            <Text style={styles.restockQuickBtnText}>+10 Stock</Text>
-                          </TouchableOpacity>
-                        )}
+                          {canEditMenu && item.trackStock && (
+                            <TouchableOpacity
+                              style={styles.restockQuickBtn}
+                              onPress={() => adjustMenuItemStock(item.id, 10, 'add')}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="add-circle-outline" size={14} color={BRAND.success} style={{ marginRight: 4 }} />
+                              <Text style={styles.restockQuickBtnText}>+10 Stock</Text>
+                            </TouchableOpacity>
+                          )}
 
-                        <TouchableOpacity 
-                          style={styles.deleteBtn} 
-                          onPress={() => handleDeleteItem(item)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="trash-outline" size={14} color={BRAND.danger} style={{ marginRight: 4 }} />
-                          <Text style={styles.deleteBtnText}>Delete</Text>
-                        </TouchableOpacity>
-                      </View>
+                          {canDeleteMenu && (
+                            <TouchableOpacity
+                              style={styles.deleteBtn}
+                              onPress={() => handleDeleteItem(item)}
+                              activeOpacity={0.7}
+                            >
+                              <Ionicons name="trash-outline" size={14} color={BRAND.danger} style={{ marginRight: 4 }} />
+                              <Text style={styles.deleteBtnText}>Delete</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      )}
                     </View>
                   );
                 })}
@@ -1860,12 +1942,14 @@ export default function MenuManagement() {
                       <View style={[styles.tableCell, { flex: 1.2 }]}>
                         {item.trackStock ? (
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <TouchableOpacity 
+                            <TouchableOpacity
                               style={[
-                                styles.stockPill, 
+                                styles.stockPill,
                                 isOut ? styles.stockPillOut : (isLow ? styles.stockPillLow : styles.stockPillIn)
                               ]}
+                              disabled={!canEditMenu}
                               onPress={() => {
+                                if (!canEditMenu) return;
                                 setStockAdjustItem(item);
                                 setStockDeltaInput(item.stockQty?.toString() || '0');
                                 setStockMode('set');
@@ -1877,15 +1961,17 @@ export default function MenuManagement() {
                               ]}>
                                 {isOut ? 'Sold Out (0)' : `${item.stockQty} pcs`}
                               </Text>
-                              <Ionicons name="create-outline" size={12} color={BRAND.muted} />
+                              {canEditMenu && <Ionicons name="create-outline" size={12} color={BRAND.muted} />}
                             </TouchableOpacity>
 
-                            <TouchableOpacity 
-                              style={styles.quickAddStockMini}
-                              onPress={() => adjustMenuItemStock(item.id, 10, 'add')}
-                            >
-                              <Text style={styles.quickAddStockMiniText}>+10</Text>
-                            </TouchableOpacity>
+                            {canEditMenu && (
+                              <TouchableOpacity
+                                style={styles.quickAddStockMini}
+                                onPress={() => adjustMenuItemStock(item.id, 10, 'add')}
+                              >
+                                <Text style={styles.quickAddStockMiniText}>+10</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                         ) : (
                           <Text style={{ color: BRAND.muted, fontSize: 12 }}>Untracked</Text>
@@ -1894,18 +1980,22 @@ export default function MenuManagement() {
 
                       {/* Actions */}
                       <View style={[styles.tableCell, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 }]}>
-                        <TouchableOpacity 
-                          style={styles.desktopActionBtn} 
-                          onPress={() => openEditItemModal(item)}
-                        >
-                          <Ionicons name="pencil" size={16} color={BRAND.burgundy} />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]} 
-                          onPress={() => handleDeleteItem(item)}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                        </TouchableOpacity>
+                        {canEditMenu && (
+                          <TouchableOpacity
+                            style={styles.desktopActionBtn}
+                            onPress={() => openEditItemModal(item)}
+                          >
+                            <Ionicons name="pencil" size={16} color={BRAND.burgundy} />
+                          </TouchableOpacity>
+                        )}
+                        {canDeleteMenu && (
+                          <TouchableOpacity
+                            style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]}
+                            onPress={() => handleDeleteItem(item)}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );
@@ -1945,13 +2035,15 @@ export default function MenuManagement() {
                         <Text style={styles.categoryCardCount}>{cat.itemsCount} Dishes listed</Text>
                       </View>
                     </View>
-                    <TouchableOpacity 
-                      style={styles.deleteCategoryBtn}
-                      onPress={() => handleDeleteCategory(cat.name)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name="trash-outline" size={18} color={BRAND.danger} />
-                    </TouchableOpacity>
+                    {canDeleteMenu && (
+                      <TouchableOpacity
+                        style={styles.deleteCategoryBtn}
+                        onPress={() => handleDeleteCategory(cat.name)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name="trash-outline" size={18} color={BRAND.danger} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 ))}
               </View>
@@ -1971,12 +2063,14 @@ export default function MenuManagement() {
                     </Text>
                     <Text style={styles.tableCell}>{cat.itemsCount} Items</Text>
                     <View style={[styles.tableCell, { flex: 1, flexDirection: 'row', justifyContent: 'flex-end' }]}>
-                      <TouchableOpacity 
-                        style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]} 
-                        onPress={() => handleDeleteCategory(cat.name)}
-                      >
-                        <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                      </TouchableOpacity>
+                      {canDeleteMenu && (
+                        <TouchableOpacity
+                          style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]}
+                          onPress={() => handleDeleteCategory(cat.name)}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -2016,21 +2110,25 @@ export default function MenuManagement() {
                         <Ionicons name="restaurant-outline" size={13} color="#1D4ED8" style={{ marginRight: 3 }} />
                         <Text style={[styles.editBtnText, { color: '#1D4ED8' }]}>Dishes</Text>
                       </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.editBtn}
-                        onPress={() => openEditRegionModal(reg.name)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="pencil" size={13} color={BRAND.burgundy} style={{ marginRight: 3 }} />
-                        <Text style={styles.editBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.deleteCategoryBtn}
-                        onPress={() => handleDeleteRegion(reg.name)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                      </TouchableOpacity>
+                      {canEditMenu && (
+                        <TouchableOpacity
+                          style={styles.editBtn}
+                          onPress={() => openEditRegionModal(reg.name)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="pencil" size={13} color={BRAND.burgundy} style={{ marginRight: 3 }} />
+                          <Text style={styles.editBtnText}>Edit</Text>
+                        </TouchableOpacity>
+                      )}
+                      {canDeleteMenu && (
+                        <TouchableOpacity
+                          style={styles.deleteCategoryBtn}
+                          onPress={() => handleDeleteRegion(reg.name)}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -2080,18 +2178,22 @@ export default function MenuManagement() {
                       </TouchableOpacity>
                     </View>
                     <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }]}>
-                      <TouchableOpacity 
-                        style={[styles.desktopActionBtn, { backgroundColor: BRAND.burgundySoft }]} 
-                        onPress={() => openEditRegionModal(reg.name)}
-                      >
-                        <Ionicons name="pencil" size={15} color={BRAND.burgundy} />
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]} 
-                        onPress={() => handleDeleteRegion(reg.name)}
-                      >
-                        <Ionicons name="trash-outline" size={15} color={BRAND.danger} />
-                      </TouchableOpacity>
+                      {canEditMenu && (
+                        <TouchableOpacity
+                          style={[styles.desktopActionBtn, { backgroundColor: BRAND.burgundySoft }]}
+                          onPress={() => openEditRegionModal(reg.name)}
+                        >
+                          <Ionicons name="pencil" size={15} color={BRAND.burgundy} />
+                        </TouchableOpacity>
+                      )}
+                      {canDeleteMenu && (
+                        <TouchableOpacity
+                          style={[styles.desktopActionBtn, { backgroundColor: BRAND.dangerSoft }]}
+                          onPress={() => handleDeleteRegion(reg.name)}
+                        >
+                          <Ionicons name="trash-outline" size={15} color={BRAND.danger} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 ))}
@@ -2215,20 +2317,22 @@ export default function MenuManagement() {
                   {/* Category Selection with Instant Add */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, marginBottom: 6 }}>
                     <Text style={[styles.inputLabel, { marginTop: 0, marginBottom: 0 }]}>Category *</Text>
-                    <TouchableOpacity 
-                      style={styles.quickAddCatBtn}
-                      onPress={() => setShowInlineAddCategory(!showInlineAddCategory)}
-                      activeOpacity={0.7}
-                    >
-                      <Ionicons name={showInlineAddCategory ? "close-circle" : "add-circle"} size={15} color={BRAND.burgundy} />
-                      <Text style={styles.quickAddCatBtnText}>
-                        {showInlineAddCategory ? 'Cancel' : '+ New Category'}
-                      </Text>
-                    </TouchableOpacity>
+                    {canAddMenu && (
+                      <TouchableOpacity
+                        style={styles.quickAddCatBtn}
+                        onPress={() => setShowInlineAddCategory(!showInlineAddCategory)}
+                        activeOpacity={0.7}
+                      >
+                        <Ionicons name={showInlineAddCategory ? "close-circle" : "add-circle"} size={15} color={BRAND.burgundy} />
+                        <Text style={styles.quickAddCatBtnText}>
+                          {showInlineAddCategory ? 'Cancel' : '+ New Category'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                   {/* Inline Category Creation Input */}
-                  {showInlineAddCategory && (
+                  {canAddMenu && showInlineAddCategory && (
                     <View style={styles.inlineAddCatBox}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <TextInput 

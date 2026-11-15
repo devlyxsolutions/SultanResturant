@@ -24,6 +24,8 @@ import {
   RolePermissions,
   BaseRoleType,
   ADMIN_PERMISSIONS,
+  EMPTY_CRUD_PERMISSIONS,
+  FULL_CRUD_PERMISSIONS,
 } from '../../store/roleStore';
 import { useAuthStore } from '../../store/authStore';
 import {
@@ -201,11 +203,181 @@ const POS_TERMINAL_PERMS: PermItemMeta[] = [
   },
 ];
 
+const CRUD_MASTER_PERMS: PermItemMeta[] = [
+  {
+    key: 'canAddRecords',
+    label: 'Master: Allow Add / Create',
+    desc: 'Global Add gate — disabling locks Create/Add controls across all 11 modules',
+    icon: 'add-circle-outline',
+  },
+  {
+    key: 'canEditRecords',
+    label: 'Master: Allow Edit / Update',
+    desc: 'Global Edit gate — disabling locks Edit/Update controls across all 11 modules',
+    icon: 'create-outline',
+  },
+  {
+    key: 'canDeleteRecords',
+    label: 'Master: Allow Delete / Remove',
+    desc: 'Global Delete gate — disabling locks Delete/Remove controls across all 11 modules',
+    icon: 'trash-outline',
+  },
+];
+
+interface CrudModuleRowMeta {
+  id: string;
+  label: string;
+  desc: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  addKey: keyof RolePermissions;
+  editKey: keyof RolePermissions;
+  deleteKey: keyof RolePermissions;
+}
+
+const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
+  {
+    id: 'inventory',
+    label: 'Inventory & Stock SKUs',
+    desc: 'Receive GRN stock, add SKUs, adjust usage, edit items, or delete SKUs',
+    icon: 'cube-outline',
+    addKey: 'canAddInventory',
+    editKey: 'canEditInventory',
+    deleteKey: 'canDeleteInventory',
+  },
+  {
+    id: 'suppliers',
+    label: 'Suppliers & Khata POs',
+    desc: 'Create suppliers/POs, record khata payments/edits, or delete vendors',
+    icon: 'business-outline',
+    addKey: 'canAddSuppliers',
+    editKey: 'canEditSuppliers',
+    deleteKey: 'canDeleteSuppliers',
+  },
+  {
+    id: 'tables',
+    label: 'Floor Plan, Tables & Zones',
+    desc: 'Add tables/cabins/zones/floors, edit seating layouts, or delete units',
+    icon: 'grid-outline',
+    addKey: 'canAddTables',
+    editKey: 'canEditTables',
+    deleteKey: 'canDeleteTables',
+  },
+  {
+    id: 'recipes',
+    label: 'Recipe BOMs & Costing',
+    desc: 'Create or seed recipes, modify BOM ingredients, or delete recipes',
+    icon: 'book-outline',
+    addKey: 'canAddRecipes',
+    editKey: 'canEditRecipes',
+    deleteKey: 'canDeleteRecipes',
+  },
+  {
+    id: 'discounts',
+    label: 'Discounts & Event Deals',
+    desc: 'Launch event promotions, edit/pause deals, or delete campaigns',
+    icon: 'pricetag-outline',
+    addKey: 'canAddDiscounts',
+    editKey: 'canEditDiscounts',
+    deleteKey: 'canDeleteDiscounts',
+  },
+  {
+    id: 'expenses',
+    label: 'Expenses & Shift Cash Out',
+    desc: 'Add shift expenses, edit recorded expenses, or delete expense entries',
+    icon: 'wallet-outline',
+    addKey: 'canAddExpenses',
+    editKey: 'canEditExpenses',
+    deleteKey: 'canDeleteExpenses',
+  },
+  {
+    id: 'damages',
+    label: 'Damage Control & Breakage',
+    desc: 'Report breakage/loss, settle/resolve cases, or delete damage logs',
+    icon: 'warning-outline',
+    addKey: 'canAddDamages',
+    editKey: 'canEditDamages',
+    deleteKey: 'canDeleteDamages',
+  },
+  {
+    id: 'assets',
+    label: 'Capital Assets & Maintenance',
+    desc: 'Register capital assets, log service or edit details, or delete assets',
+    icon: 'hardware-chip-outline',
+    addKey: 'canAddAssets',
+    editKey: 'canEditAssets',
+    deleteKey: 'canDeleteAssets',
+  },
+  {
+    id: 'staff',
+    label: 'Staff & Employees',
+    desc: 'Add new staff/cashiers, edit roles/PINs/details, or remove employees',
+    icon: 'person-add-outline',
+    addKey: 'canAddStaff',
+    editKey: 'canEditStaff',
+    deleteKey: 'canDeleteStaff',
+  },
+  {
+    id: 'menu',
+    label: 'Menu Dishes, Categories & Regions',
+    desc: 'Add dishes/combos/categories, edit menu/stock/prices, or delete items',
+    icon: 'restaurant-outline',
+    addKey: 'canAddMenu',
+    editKey: 'canEditMenu',
+    deleteKey: 'canDeleteMenu',
+  },
+  {
+    id: 'customers',
+    label: 'Customers CRM Directory',
+    desc: 'Register CRM customers, edit profile/loyalty data, or remove customers',
+    icon: 'people-outline',
+    addKey: 'canAddCustomers',
+    editKey: 'canEditCustomers',
+    deleteKey: 'canDeleteCustomers',
+  },
+];
+
+const MODULE_CRUD_ADD_KEYS: (keyof RolePermissions)[] = CRUD_MODULE_ROWS.map((r) => r.addKey);
+const MODULE_CRUD_EDIT_KEYS: (keyof RolePermissions)[] = CRUD_MODULE_ROWS.map((r) => r.editKey);
+const MODULE_CRUD_DELETE_KEYS: (keyof RolePermissions)[] = CRUD_MODULE_ROWS.map((r) => r.deleteKey);
+const MODULE_CRUD_ADD_SET = new Set<keyof RolePermissions>(MODULE_CRUD_ADD_KEYS);
+const MODULE_CRUD_EDIT_SET = new Set<keyof RolePermissions>(MODULE_CRUD_EDIT_KEYS);
+const MODULE_CRUD_DELETE_SET = new Set<keyof RolePermissions>(MODULE_CRUD_DELETE_KEYS);
+const ALL_CRUD_KEYS: (keyof RolePermissions)[] = [
+  ...CRUD_MASTER_PERMS.map((p) => p.key),
+  ...CRUD_MODULE_ROWS.flatMap((r) => [r.addKey, r.editKey, r.deleteKey]),
+];
+
+function buildCrudPresetPatch(preset: 'full' | 'no_delete' | 'read_only'): Partial<RolePermissions> {
+  if (preset === 'full') return { ...FULL_CRUD_PERMISSIONS };
+  if (preset === 'read_only') return { ...EMPTY_CRUD_PERMISSIONS };
+  const patch: Partial<RolePermissions> = {
+    ...FULL_CRUD_PERMISSIONS,
+    canDeleteRecords: false,
+  };
+  MODULE_CRUD_DELETE_KEYS.forEach((k) => {
+    patch[k] = false;
+  });
+  return patch;
+}
+
+function buildCrudColumnPatch(col: 'add' | 'edit' | 'delete', val: boolean): Partial<RolePermissions> {
+  const masterKey: keyof RolePermissions =
+    col === 'add' ? 'canAddRecords' : col === 'edit' ? 'canEditRecords' : 'canDeleteRecords';
+  const keys =
+    col === 'add' ? MODULE_CRUD_ADD_KEYS : col === 'edit' ? MODULE_CRUD_EDIT_KEYS : MODULE_CRUD_DELETE_KEYS;
+  const patch: Partial<RolePermissions> = { [masterKey]: val };
+  keys.forEach((k) => {
+    patch[k] = val;
+  });
+  return patch;
+}
+
 const ALL_PERMISSION_KEYS: (keyof RolePermissions)[] = [
   ...VISIBILITY_PERMS.map((p) => p.key),
   ...MODULE_PERMS.map((p) => p.key),
   ...AUTHORITY_PERMS.map((p) => p.key),
   ...POS_TERMINAL_PERMS.map((p) => p.key),
+  ...ALL_CRUD_KEYS,
 ];
 
 const ROLE_COLOR_OPTIONS = [
@@ -261,6 +433,7 @@ const EMPTY_PERMISSIONS: RolePermissions = {
   posCanDismissTicket: false,
   posCanSplitPayment: false,
   posCanManageCustomers: false,
+  ...EMPTY_CRUD_PERMISSIONS,
 };
 
 type BooleanModuleKey = {
@@ -866,9 +1039,53 @@ export default function AdminSettingsScreen() {
     }
   };
 
+  const getAutoMasterKeyForCrud = (
+    key: keyof RolePermissions
+  ): keyof RolePermissions | null => {
+    if (MODULE_CRUD_ADD_SET.has(key)) return 'canAddRecords';
+    if (MODULE_CRUD_EDIT_SET.has(key)) return 'canEditRecords';
+    if (MODULE_CRUD_DELETE_SET.has(key)) return 'canDeleteRecords';
+    return null;
+  };
+
   const handleToggleRolePerm = (roleId: string, key: keyof RolePermissions, nextValue: boolean) => {
     setPermission(roleId, key, nextValue);
+    if (nextValue) {
+      const masterKey = getAutoMasterKeyForCrud(key);
+      const targetRole = roles.find((r) => r.id === roleId);
+      if (masterKey && targetRole && !targetRole.permissions?.[masterKey]) {
+        setPermission(roleId, masterKey, true);
+      }
+    }
     broadcastImmediately();
+  };
+
+  const handleApplyRoleCrudPreset = (
+    role: CustomRole,
+    preset: 'full' | 'no_delete' | 'read_only'
+  ) => {
+    const patch = buildCrudPresetPatch(preset);
+    updateRole(role.id, { permissions: { ...role.permissions, ...patch } });
+    broadcastImmediately();
+    const label =
+      preset === 'full'
+        ? 'Full CRUD (Add + Edit + Delete)'
+        : preset === 'no_delete'
+          ? 'Add & Edit Only (Delete Locked)'
+          : 'View Only (All CRUD Locked)';
+    showToast(`Applied "${label}" CRUD policy to ${role.name}`);
+  };
+
+  const handleBulkRoleCrudColumn = (
+    role: CustomRole,
+    col: 'add' | 'edit' | 'delete',
+    nextVal: boolean
+  ) => {
+    const patch = buildCrudColumnPatch(col, nextVal);
+    updateRole(role.id, { permissions: { ...role.permissions, ...patch } });
+    broadcastImmediately();
+    const colLabel = col === 'add' ? 'Add' : col === 'edit' ? 'Edit' : 'Delete';
+    showToast(`${nextVal ? 'Enabled' : 'Locked'} all ${colLabel} permissions for ${role.name}`);
   };
 
   const handleBulkRolePerms = (role: CustomRole, grantAll: boolean) => {
@@ -942,24 +1159,309 @@ export default function AdminSettingsScreen() {
       ? ALL_PERMISSION_KEYS.filter((k) => member.permissionOverrides?.[k] !== undefined).length
       : 0;
 
+  const applyStaffPermPatch = (member: StaffMember, patch: Partial<RolePermissions>) => {
+    const baseRole = resolveBaseRoleForStaff(member);
+    const nextOverrides: Partial<RolePermissions> = { ...(member.permissionOverrides || {}) };
+    (Object.keys(patch) as (keyof RolePermissions)[]).forEach((k) => {
+      const val = Boolean(patch[k]);
+      const baseVal = Boolean(baseRole?.permissions?.[k]);
+      if (val === baseVal) {
+        delete nextOverrides[k];
+      } else {
+        nextOverrides[k] = val;
+      }
+    });
+    updateStaff(member.id, {
+      permissionOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
+    });
+    broadcastImmediately();
+  };
+
   const handleToggleStaffPerm = (
     member: StaffMember,
     key: keyof RolePermissions,
     nextValue: boolean
   ) => {
-    const baseRole = resolveBaseRoleForStaff(member);
-    const baseVal = Boolean(baseRole?.permissions?.[key]);
-    const nextOverrides: Partial<RolePermissions> = { ...(member.permissionOverrides || {}) };
-    if (nextValue === baseVal) {
-      delete nextOverrides[key];
-    } else {
-      nextOverrides[key] = nextValue;
+    const patch: Partial<RolePermissions> = { [key]: nextValue };
+    if (nextValue) {
+      const masterKey = getAutoMasterKeyForCrud(key);
+      const effective = getEffectiveStaffPerms(member);
+      if (masterKey && !effective[masterKey]) {
+        patch[masterKey] = true;
+      }
     }
-    const hasAny = Object.keys(nextOverrides).length > 0;
-    updateStaff(member.id, {
-      permissionOverrides: hasAny ? nextOverrides : undefined,
-    });
-    broadcastImmediately();
+    applyStaffPermPatch(member, patch);
+  };
+
+  const handleApplyStaffCrudPreset = (
+    member: StaffMember,
+    preset: 'full' | 'no_delete' | 'read_only'
+  ) => {
+    applyStaffPermPatch(member, buildCrudPresetPatch(preset));
+    const label =
+      preset === 'full'
+        ? 'Full CRUD (Add + Edit + Delete)'
+        : preset === 'no_delete'
+          ? 'Add & Edit Only (Delete Locked)'
+          : 'View Only (All CRUD Locked)';
+    showToast(`Applied "${label}" CRUD policy to ${member.name}`);
+  };
+
+  const handleBulkStaffCrudColumn = (
+    member: StaffMember,
+    col: 'add' | 'edit' | 'delete',
+    nextVal: boolean
+  ) => {
+    applyStaffPermPatch(member, buildCrudColumnPatch(col, nextVal));
+    const colLabel = col === 'add' ? 'Add' : col === 'edit' ? 'Edit' : 'Delete';
+    showToast(`${nextVal ? 'Enabled' : 'Locked'} all ${colLabel} permissions for ${member.name}`);
+  };
+
+  const renderCrudControlMatrix = (
+    title: string,
+    subtitle: string,
+    perms: RolePermissions,
+    onToggleKey: (key: keyof RolePermissions, nextVal: boolean) => void,
+    onApplyPreset: (preset: 'full' | 'no_delete' | 'read_only') => void,
+    onToggleColumn: (col: 'add' | 'edit' | 'delete', nextVal: boolean) => void,
+    options?: {
+      overrides?: Partial<RolePermissions>;
+      adminRolePerms?: RolePermissions;
+    }
+  ) => {
+    const activeCrudCount = ALL_CRUD_KEYS.filter((k) => !!perms[k]).length;
+    const allAddOn = !!perms.canAddRecords && MODULE_CRUD_ADD_KEYS.every((k) => !!perms[k]);
+    const allEditOn = !!perms.canEditRecords && MODULE_CRUD_EDIT_KEYS.every((k) => !!perms[k]);
+    const allDeleteOn = !!perms.canDeleteRecords && MODULE_CRUD_DELETE_KEYS.every((k) => !!perms[k]);
+
+    const masterGateState = {
+      add: !!perms.canAddRecords,
+      edit: !!perms.canEditRecords,
+      delete: !!perms.canDeleteRecords,
+    };
+
+    const renderCrudPill = (
+      kind: 'add' | 'edit' | 'delete',
+      permKey: keyof RolePermissions
+    ) => {
+      const val = !!perms[permKey];
+      const isOverridden = options?.overrides?.[permKey] !== undefined;
+      const lockedByAdmin = Boolean(options?.adminRolePerms && !options.adminRolePerms[permKey]);
+      const lockedByMaster = !masterGateState[kind] && val;
+      const label = kind === 'add' ? 'Add' : kind === 'edit' ? 'Edit' : 'Delete';
+      const iconName: keyof typeof Ionicons.glyphMap =
+        kind === 'add'
+          ? val
+            ? 'add-circle'
+            : 'add-circle-outline'
+          : kind === 'edit'
+            ? val
+              ? 'create'
+              : 'create-outline'
+            : val
+              ? 'trash'
+              : 'trash-outline';
+      const activeStyle =
+        kind === 'add'
+          ? styles.crudPillAddActive
+          : kind === 'edit'
+            ? styles.crudPillEditActive
+            : styles.crudPillDelActive;
+      const activeTextColor =
+        kind === 'add' ? '#15803D' : kind === 'edit' ? '#1D4ED8' : '#B91C1C';
+
+      return (
+        <TouchableOpacity
+          key={permKey}
+          style={[
+            styles.crudPill,
+            val ? activeStyle : styles.crudPillInactive,
+            isOverridden && styles.crudPillOverridden,
+          ]}
+          onPress={() => onToggleKey(permKey, !val)}
+          activeOpacity={0.75}
+        >
+          <Ionicons
+            name={iconName}
+            size={14}
+            color={val ? activeTextColor : '#78716C'}
+          />
+          <View>
+            <Text style={[styles.crudPillText, { color: val ? activeTextColor : '#78716C' }]}>
+              {label}
+              {isOverridden ? ' *' : ''}
+            </Text>
+            {lockedByMaster && (
+              <Text style={styles.crudPillSubHint}>Master Off</Text>
+            )}
+            {!lockedByMaster && lockedByAdmin && (
+              <Text style={styles.crudPillSubHint}>Admin Off</Text>
+            )}
+          </View>
+        </TouchableOpacity>
+      );
+    };
+
+    return (
+      <View style={styles.permCategoryCard}>
+        <View style={styles.permCategoryHeader}>
+          <View style={styles.permCategoryIconWrap}>
+            <Ionicons name="options-outline" size={18} color="#52171B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.permCategoryTitle}>{title}</Text>
+              <View style={styles.groupCountPill}>
+                <Text style={styles.groupCountPillText}>
+                  {activeCrudCount}/{ALL_CRUD_KEYS.length} active
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11.5, color: '#78716C', marginTop: 2 }}>{subtitle}</Text>
+          </View>
+        </View>
+
+        <View style={styles.crudPresetRow}>
+          <TouchableOpacity
+            style={[styles.crudPresetBtn, { borderColor: '#BBF7D0', backgroundColor: '#F0FDF4' }]}
+            onPress={() => onApplyPreset('full')}
+          >
+            <Ionicons name="checkmark-done-circle-outline" size={14} color="#15803D" />
+            <Text style={[styles.crudPresetBtnText, { color: '#15803D' }]}>Full CRUD</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.crudPresetBtn, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}
+            onPress={() => onApplyPreset('no_delete')}
+          >
+            <Ionicons name="shield-half-outline" size={14} color="#1D4ED8" />
+            <Text style={[styles.crudPresetBtnText, { color: '#1D4ED8' }]}>
+              Add & Edit Only (No Delete)
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.crudPresetBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
+            onPress={() => onApplyPreset('read_only')}
+          >
+            <Ionicons name="lock-closed-outline" size={14} color="#B91C1C" />
+            <Text style={[styles.crudPresetBtnText, { color: '#B91C1C' }]}>
+              View Only (Lock All)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.permGridWrap}>
+          {CRUD_MASTER_PERMS.map((item) => {
+            const val = !!perms[item.key];
+            const isOverridden = options?.overrides?.[item.key] !== undefined;
+            const lockedByAdmin = Boolean(options?.adminRolePerms && !options.adminRolePerms[item.key]);
+            return (
+              <View
+                key={item.key}
+                style={[
+                  styles.permItemCard,
+                  val && styles.permItemCardActive,
+                  isOverridden && styles.permItemCardOverridden,
+                ]}
+              >
+                <View style={styles.permItemIcon}>
+                  <Ionicons name={item.icon} size={17} color={val ? '#52171B' : '#78716C'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                    <Text style={[styles.permItemTitle, !val && { color: '#78716C' }]}>
+                      {item.label}
+                    </Text>
+                    {isOverridden && (
+                      <View style={styles.overridePill}>
+                        <Text style={styles.overridePillText}>CUSTOM</Text>
+                      </View>
+                    )}
+                    {lockedByAdmin && (
+                      <View style={[styles.overridePill, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}>
+                        <Text style={[styles.overridePillText, { color: '#991B1B' }]}>ADMIN OFF</Text>
+                      </View>
+                    )}
+                  </View>
+                  <Text style={styles.permItemDesc}>{item.desc}</Text>
+                </View>
+                <Switch
+                  value={val}
+                  onValueChange={(v) => onToggleKey(item.key, v)}
+                  trackColor={{ false: '#D6D3D1', true: '#D4AF37' }}
+                  thumbColor={val ? '#52171B' : '#F5F5F4'}
+                />
+              </View>
+            );
+          })}
+        </View>
+
+        <View style={styles.crudColBulkRow}>
+          <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#52171B', marginRight: 4 }}>
+            Quick Column Toggle:
+          </Text>
+          <TouchableOpacity
+            style={styles.crudColBulkBtn}
+            onPress={() => onToggleColumn('add', !allAddOn)}
+          >
+            <Ionicons
+              name={allAddOn ? 'checkbox' : 'square-outline'}
+              size={14}
+              color="#15803D"
+            />
+            <Text style={[styles.crudColBulkText, { color: '#15803D' }]}>
+              {allAddOn ? 'Lock All Add' : 'Allow All Add'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.crudColBulkBtn}
+            onPress={() => onToggleColumn('edit', !allEditOn)}
+          >
+            <Ionicons
+              name={allEditOn ? 'checkbox' : 'square-outline'}
+              size={14}
+              color="#1D4ED8"
+            />
+            <Text style={[styles.crudColBulkText, { color: '#1D4ED8' }]}>
+              {allEditOn ? 'Lock All Edit' : 'Allow All Edit'}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.crudColBulkBtn}
+            onPress={() => onToggleColumn('delete', !allDeleteOn)}
+          >
+            <Ionicons
+              name={allDeleteOn ? 'checkbox' : 'square-outline'}
+              size={14}
+              color="#B91C1C"
+            />
+            <Text style={[styles.crudColBulkText, { color: '#B91C1C' }]}>
+              {allDeleteOn ? 'Lock All Delete' : 'Allow All Delete'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.crudMatrixWrap}>
+          {CRUD_MODULE_ROWS.map((row) => (
+            <View key={row.id} style={styles.crudMatrixRow}>
+              <View style={styles.crudMatrixLeft}>
+                <View style={styles.permItemIcon}>
+                  <Ionicons name={row.icon} size={16} color="#52171B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.permItemTitle}>{row.label}</Text>
+                  <Text style={styles.permItemDesc}>{row.desc}</Text>
+                </View>
+              </View>
+              <View style={styles.crudMatrixActions}>
+                {renderCrudPill('add', row.addKey)}
+                {renderCrudPill('edit', row.editKey)}
+                {renderCrudPill('delete', row.deleteKey)}
+              </View>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
   };
 
   const handleApplyCashierPreset = (
@@ -1026,22 +1528,7 @@ export default function AdminSettingsScreen() {
               posCanManageCustomers: true,
             };
 
-    const baseRole = resolveBaseRoleForStaff(member);
-    const nextOverrides: Partial<RolePermissions> = { ...(member.permissionOverrides || {}) };
-    (Object.keys(presetPatch) as (keyof RolePermissions)[]).forEach((k) => {
-      const val = Boolean(presetPatch[k]);
-      const baseVal = Boolean(baseRole?.permissions?.[k]);
-      if (val === baseVal) {
-        delete nextOverrides[k];
-      } else {
-        nextOverrides[k] = val;
-      }
-    });
-
-    updateStaff(member.id, {
-      permissionOverrides: Object.keys(nextOverrides).length > 0 ? nextOverrides : undefined,
-    });
-    broadcastImmediately();
+    applyStaffPermPatch(member, presetPatch);
     const label =
       preset === 'full_pos'
         ? 'Full POS Access'
@@ -1989,6 +2476,21 @@ export default function AdminSettingsScreen() {
                     POS_TERMINAL_PERMS,
                     selectedRole
                   )}
+
+                  {renderCrudControlMatrix(
+                    '5. Add, Edit & Delete (CRUD) Control Management',
+                    'Master locks plus module-by-module control over who can Create/Add, Edit/Update, or Delete records',
+                    selectedRole.permissions,
+                    (key, val) => handleToggleRolePerm(selectedRole.id, key, val),
+                    (preset) => handleApplyRoleCrudPreset(selectedRole, preset),
+                    (col, val) => handleBulkRoleCrudColumn(selectedRole, col, val),
+                    {
+                      adminRolePerms:
+                        selectedRole.id !== 'role-admin'
+                          ? roles.find((r) => r.id === 'role-admin')?.permissions
+                          : undefined,
+                    }
+                  )}
                 </View>
 
                 <View style={styles.cardFooterBar}>
@@ -2183,6 +2685,19 @@ export default function AdminSettingsScreen() {
                             effectivePerms,
                             (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
                             { overrides: selectedOverrideStaff.permissionOverrides }
+                          )}
+
+                          {renderCrudControlMatrix(
+                            `Add / Edit / Delete Controls for ${selectedOverrideStaff.name}`,
+                            'Override Master or Module Add, Edit, and Delete rights specifically for this staff member',
+                            effectivePerms,
+                            (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                            (preset) => handleApplyStaffCrudPreset(selectedOverrideStaff, preset),
+                            (col, val) => handleBulkStaffCrudColumn(selectedOverrideStaff, col, val),
+                            {
+                              overrides: selectedOverrideStaff.permissionOverrides,
+                              adminRolePerms: roles.find((r) => r.id === 'role-admin')?.permissions,
+                            }
                           )}
 
                           {renderPermissionGrid(
@@ -3398,5 +3913,122 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
     color: '#52171B',
+  },
+  crudPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 12,
+  },
+  crudPresetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 9,
+    borderWidth: 1,
+  },
+  crudPresetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  crudColBulkRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+  },
+  crudColBulkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+  },
+  crudColBulkText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  crudMatrixWrap: {
+    gap: 8,
+  },
+  crudMatrixRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  crudMatrixLeft: {
+    flex: 1,
+    minWidth: 210,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  crudMatrixActions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+  },
+  crudPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    minWidth: 68,
+  },
+  crudPillAddActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+  },
+  crudPillEditActive: {
+    backgroundColor: '#DBEAFE',
+    borderColor: '#93C5FD',
+  },
+  crudPillDelActive: {
+    backgroundColor: '#FEE2E2',
+    borderColor: '#FCA5A5',
+  },
+  crudPillInactive: {
+    backgroundColor: '#F5F5F4',
+    borderColor: '#E7E5E4',
+  },
+  crudPillOverridden: {
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  crudPillText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  crudPillSubHint: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: '#B45309',
+    marginTop: 1,
   },
 });

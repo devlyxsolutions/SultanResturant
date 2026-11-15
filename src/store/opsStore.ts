@@ -1311,6 +1311,7 @@ type OpsState = OpsData & {
 
   // Expenses
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
+  updateExpense: (id: string, patch: Partial<Omit<Expense, 'id'>>) => void;
   deleteExpense: (id: string) => void;
 
   // Sold-out list
@@ -1523,6 +1524,13 @@ export const useOpsStore = create<OpsState>()(
       addExpense: (expense) => {
         set((state) => ({
           expenses: [{ ...expense, id: uid('ex'), at: expense.at ?? Date.now() }, ...state.expenses],
+        }));
+        notifySync();
+      },
+
+      updateExpense: (id, patch) => {
+        set((state) => ({
+          expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
         }));
         notifySync();
       },

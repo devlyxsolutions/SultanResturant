@@ -30,6 +30,7 @@ import { usePagination } from '../hooks/usePagination';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
 import { formatTime, toWhatsAppNumber } from '../utils/format';
+import { useRolePermissions } from '../store/roleStore';
 
 const CATEGORY_THEMES: Record<
   SupplierCategory,
@@ -52,6 +53,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const { width } = useWindowDimensions();
   const isMobile = width < 850;
   const isSmallMobile = width < 480;
+  const { canAddSuppliers, canEditSuppliers, canDeleteSuppliers } = useRolePermissions();
 
   // Cloud & LAN Live Sync Status
   const { isConnected, lastSyncedAt, forceSyncNow } = useSyncStatus();
@@ -300,6 +302,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   // Actions: Add / Edit Supplier
   // ----------------------------------------------------
   const handleOpenAddSupplier = () => {
+    if (!canAddSuppliers) {
+      const msg = 'You do not have permission to add suppliers.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     setEditingSupplier(null);
     setFormName('');
     setFormCategory('Meat & Poultry');
@@ -321,6 +329,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   };
 
   const handleOpenEditSupplier = (sup: Supplier) => {
+    if (!canEditSuppliers) {
+      const msg = 'You do not have permission to edit suppliers.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     setEditingSupplier(sup);
     setFormName(sup.name);
     setFormCategory(sup.category);
@@ -342,6 +356,14 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   };
 
   const handleSaveSupplier = () => {
+    if (editingSupplier ? !canEditSuppliers : !canAddSuppliers) {
+      const msg = editingSupplier
+        ? 'You do not have permission to edit suppliers.'
+        : 'You do not have permission to add suppliers.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     if (!formName.trim() || !formPhone.trim()) {
       const msg = 'وینڈر کا نام اور فون نمبر درج کرنا لازمی ہے۔';
       if (Platform.OS === 'web') window.alert(msg);
@@ -427,6 +449,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   };
 
   const handleDeleteSupplier = (sup: Supplier) => {
+    if (!canDeleteSuppliers) {
+      const msg = 'You do not have permission to delete suppliers.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     const doDelete = () => {
       deleteSupplier(sup.id);
       if (dossierSupplier?.id === sup.id) {
@@ -451,6 +479,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   // Actions: Quick Payment Modal
   // ----------------------------------------------------
   const handleOpenPayModal = (sup: Supplier) => {
+    if (!canEditSuppliers) {
+      const msg = 'You do not have permission to record supplier payments.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     setPayTargetSupplier(sup);
     setPayAmount(String(sup.currentBalance > 0 ? sup.currentBalance : ''));
     setPayMethod('cash');
@@ -461,6 +495,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   };
 
   const handleSavePayment = () => {
+    if (!canEditSuppliers) {
+      const msg = 'You do not have permission to record supplier payments.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     if (!payTargetSupplier) return;
     const amountNum = parseFloat(payAmount) || 0;
     if (amountNum <= 0) {
@@ -507,6 +547,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   // Actions: New PO Builder Modal
   // ----------------------------------------------------
   const handleOpenPOModal = (sup: Supplier) => {
+    if (!canAddSuppliers && !canEditSuppliers) {
+      const msg = 'You do not have permission to create purchase orders.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     setPOTargetSupplier(sup);
     setPOInvoiceNo(`INV-${Math.floor(1000 + Math.random() * 9000)}`);
     setPOAmountPaid('0');
@@ -558,6 +604,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   }, [poItems, poDiscount, poFreight, poAmountPaid]);
 
   const handleSavePO = () => {
+    if (!canAddSuppliers && !canEditSuppliers) {
+      const msg = 'You do not have permission to create purchase orders.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Permission Denied', msg);
+      return;
+    }
     if (!poTargetSupplier) return;
     if (poItems.length === 0 || poItems.some((i) => !i.name.trim())) {
       const msg = 'براہ کرم تمام آئٹمز کے نام اور تفصیلات درج کریں۔';
@@ -728,15 +780,17 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             <Text style={styles.exportBtnText}>{isSmallMobile ? 'CSV' : 'Export CSV'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={handleOpenAddSupplier}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Register a New Vendor' } as any) : {})}
-          >
-            <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
-            <Text style={styles.addButtonText}>{isSmallMobile ? 'New' : 'Register Supplier'}</Text>
-          </TouchableOpacity>
+          {canAddSuppliers && (
+            <TouchableOpacity
+              style={styles.addButton}
+              onPress={handleOpenAddSupplier}
+              activeOpacity={0.8}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Register a New Vendor' } as any) : {})}
+            >
+              <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
+              <Text style={styles.addButtonText}>{isSmallMobile ? 'New' : 'Register Supplier'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -969,10 +1023,12 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             <Text style={styles.emptySubtext}>
               No vendor records match your active search or filters. Try adjusting criteria or register a new vendor.
             </Text>
-            <TouchableOpacity style={styles.emptyActionBtn} onPress={handleOpenAddSupplier}>
-              <Ionicons name="person-add" size={15} color="#140306" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyActionBtnText}>Register New Supplier</Text>
-            </TouchableOpacity>
+            {canAddSuppliers && (
+              <TouchableOpacity style={styles.emptyActionBtn} onPress={handleOpenAddSupplier}>
+                <Ionicons name="person-add" size={15} color="#140306" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyActionBtnText}>Register New Supplier</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.suppliersList}>
@@ -1065,39 +1121,47 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         <Text style={styles.actionBtnViewText}>Dossier / Khata</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.mobileActionBtnPay}
-                        onPress={() => handleOpenPayModal(sup)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="cash" size={13} color="#15803D" />
-                        <Text style={styles.actionBtnPayText}>Pay</Text>
-                      </TouchableOpacity>
+                      {canEditSuppliers && (
+                        <TouchableOpacity
+                          style={styles.mobileActionBtnPay}
+                          onPress={() => handleOpenPayModal(sup)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="cash" size={13} color="#15803D" />
+                          <Text style={styles.actionBtnPayText}>Pay</Text>
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.mobileActionBtnPO}
-                        onPress={() => handleOpenPOModal(sup)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="cart" size={13} color="#B45309" />
-                        <Text style={styles.actionBtnPOText}>+PO</Text>
-                      </TouchableOpacity>
+                      {(canAddSuppliers || canEditSuppliers) && (
+                        <TouchableOpacity
+                          style={styles.mobileActionBtnPO}
+                          onPress={() => handleOpenPOModal(sup)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="cart" size={13} color="#B45309" />
+                          <Text style={styles.actionBtnPOText}>+PO</Text>
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.actionBtnEdit}
-                        onPress={() => handleOpenEditSupplier(sup)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="pencil" size={13} color="#475569" />
-                      </TouchableOpacity>
+                      {canEditSuppliers && (
+                        <TouchableOpacity
+                          style={styles.actionBtnEdit}
+                          onPress={() => handleOpenEditSupplier(sup)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="pencil" size={13} color="#475569" />
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.actionBtnDelete}
-                        onPress={() => handleDeleteSupplier(sup)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                      </TouchableOpacity>
+                      {canDeleteSuppliers && (
+                        <TouchableOpacity
+                          style={styles.actionBtnDelete}
+                          onPress={() => handleDeleteSupplier(sup)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -1186,46 +1250,54 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     </TouchableOpacity>
 
                     {/* Pay Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnPay}
-                      onPress={() => handleOpenPayModal(sup)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Record Payment to Supplier' } as any) : {})}
-                    >
-                      <Ionicons name="cash" size={13} color="#15803D" />
-                      <Text style={styles.actionBtnPayText}>Pay</Text>
-                    </TouchableOpacity>
+                    {canEditSuppliers && (
+                      <TouchableOpacity
+                        style={styles.actionBtnPay}
+                        onPress={() => handleOpenPayModal(sup)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Record Payment to Supplier' } as any) : {})}
+                      >
+                        <Ionicons name="cash" size={13} color="#15803D" />
+                        <Text style={styles.actionBtnPayText}>Pay</Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* New PO Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnPO}
-                      onPress={() => handleOpenPOModal(sup)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Generate Purchase Order' } as any) : {})}
-                    >
-                      <Ionicons name="cart" size={13} color="#B45309" />
-                      <Text style={styles.actionBtnPOText}>+PO</Text>
-                    </TouchableOpacity>
+                    {(canAddSuppliers || canEditSuppliers) && (
+                      <TouchableOpacity
+                        style={styles.actionBtnPO}
+                        onPress={() => handleOpenPOModal(sup)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Generate Purchase Order' } as any) : {})}
+                      >
+                        <Ionicons name="cart" size={13} color="#B45309" />
+                        <Text style={styles.actionBtnPOText}>+PO</Text>
+                      </TouchableOpacity>
+                    )}
 
                     {/* Edit Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnEdit}
-                      onPress={() => handleOpenEditSupplier(sup)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Edit Vendor Details' } as any) : {})}
-                    >
-                      <Ionicons name="pencil" size={13} color="#475569" />
-                    </TouchableOpacity>
+                    {canEditSuppliers && (
+                      <TouchableOpacity
+                        style={styles.actionBtnEdit}
+                        onPress={() => handleOpenEditSupplier(sup)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Edit Vendor Details' } as any) : {})}
+                      >
+                        <Ionicons name="pencil" size={13} color="#475569" />
+                      </TouchableOpacity>
+                    )}
 
                     {/* Delete Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnDelete}
-                      onPress={() => handleDeleteSupplier(sup)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Vendor' } as any) : {})}
-                    >
-                      <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                    </TouchableOpacity>
+                    {canDeleteSuppliers && (
+                      <TouchableOpacity
+                        style={styles.actionBtnDelete}
+                        onPress={() => handleDeleteSupplier(sup)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Vendor' } as any) : {})}
+                      >
+                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );

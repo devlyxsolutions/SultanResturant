@@ -27,6 +27,7 @@ import {
   useOpsStore,
 } from '../store';
 import { formatDay, money } from '../utils/format';
+import { useRolePermissions } from '../store/roleStore';
 
 const LIGHT = {
   bg: '#F8F9FA',
@@ -88,6 +89,7 @@ export default function AssetsScreen({
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
+  const { canAddAssets, canEditAssets, canDeleteAssets } = useRolePermissions();
   const assets = useOpsStore((s) => s.assets || []);
   const damageRecords = useOpsStore((s) => s.damageRecords || []);
   const addAsset = useOpsStore((s) => s.addAsset);
@@ -185,6 +187,10 @@ export default function AssetsScreen({
   });
 
   const openAddModal = () => {
+    if (!canAddAssets) {
+      alertMsg('Permission Denied', 'You do not have permission to add capital assets.');
+      return;
+    }
     setEditingAsset(null);
     setFormName('');
     setFormUrduName('');
@@ -204,6 +210,10 @@ export default function AssetsScreen({
   };
 
   const openEditModal = (ast: Asset) => {
+    if (!canEditAssets) {
+      alertMsg('Permission Denied', 'You do not have permission to edit capital assets.');
+      return;
+    }
     setEditingAsset(ast);
     setFormName(ast.name);
     setFormUrduName(ast.urduName || '');
@@ -223,6 +233,15 @@ export default function AssetsScreen({
   };
 
   const handleSaveAsset = () => {
+    if (editingAsset ? !canEditAssets : !canAddAssets) {
+      alertMsg(
+        'Permission Denied',
+        editingAsset
+          ? 'You do not have permission to edit capital assets.'
+          : 'You do not have permission to add capital assets.'
+      );
+      return;
+    }
     if (!formName.trim()) {
       alertMsg('Missing Information', 'Please enter the asset name.');
       return;
@@ -285,6 +304,10 @@ export default function AssetsScreen({
   };
 
   const handleDelete = (ast: Asset) => {
+    if (!canDeleteAssets) {
+      alertMsg('Permission Denied', 'You do not have permission to delete capital assets.');
+      return;
+    }
     const confirm = () => {
       deleteAsset(ast.id);
       alertMsg('Asset Removed', `[${ast.assetCode}] ${ast.name} has been removed.`);
@@ -303,6 +326,10 @@ export default function AssetsScreen({
   };
 
   const handleSaveMaintenance = () => {
+    if (!canEditAssets) {
+      alertMsg('Permission Denied', 'You do not have permission to log asset service or maintenance.');
+      return;
+    }
     if (!maintenanceAsset) return;
     const cost = parseFloat(maintCost);
     if (!Number.isFinite(cost) || cost < 0) {
@@ -370,10 +397,12 @@ export default function AssetsScreen({
           </View>
         </View>
 
-        <TouchableOpacity style={styles.addAssetBtn} onPress={openAddModal} activeOpacity={0.85}>
-          <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.addAssetBtnText}>+ Add Capital Asset</Text>
-        </TouchableOpacity>
+        {canAddAssets && (
+          <TouchableOpacity style={styles.addAssetBtn} onPress={openAddModal} activeOpacity={0.85}>
+            <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+            <Text style={styles.addAssetBtnText}>+ Add Capital Asset</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -605,30 +634,36 @@ export default function AssetsScreen({
                           <Text style={styles.actionBtnAuditText}>Audit</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.actionBtnService}
-                          onPress={() => setMaintenanceAsset(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
-                          <Text style={styles.actionBtnServiceText}>Service</Text>
-                        </TouchableOpacity>
+                        {canEditAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnService}
+                            onPress={() => setMaintenanceAsset(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
+                            <Text style={styles.actionBtnServiceText}>Service</Text>
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={styles.actionBtnEditCompact}
-                          onPress={() => openEditModal(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="create-outline" size={13} color="#475569" />
-                        </TouchableOpacity>
+                        {canEditAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnEditCompact}
+                            onPress={() => openEditModal(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="create-outline" size={13} color="#475569" />
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={styles.actionBtnDeleteCompact}
-                          onPress={() => handleDelete(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
-                        </TouchableOpacity>
+                        {canDeleteAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnDeleteCompact}
+                            onPress={() => handleDelete(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );
@@ -730,30 +765,36 @@ export default function AssetsScreen({
                           <Text style={styles.actionBtnAuditText}>Audit</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.actionBtnService}
-                          onPress={() => setMaintenanceAsset(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
-                          <Text style={styles.actionBtnServiceText}>Service</Text>
-                        </TouchableOpacity>
+                        {canEditAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnService}
+                            onPress={() => setMaintenanceAsset(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="build-outline" size={13} color={LIGHT.amber} />
+                            <Text style={styles.actionBtnServiceText}>Service</Text>
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={styles.actionBtnEditCompact}
-                          onPress={() => openEditModal(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="create-outline" size={13} color="#475569" />
-                        </TouchableOpacity>
+                        {canEditAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnEditCompact}
+                            onPress={() => openEditModal(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="create-outline" size={13} color="#475569" />
+                          </TouchableOpacity>
+                        )}
 
-                        <TouchableOpacity
-                          style={styles.actionBtnDeleteCompact}
-                          onPress={() => handleDelete(ast)}
-                          activeOpacity={0.8}
-                        >
-                          <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
-                        </TouchableOpacity>
+                        {canDeleteAssets && (
+                          <TouchableOpacity
+                            style={styles.actionBtnDeleteCompact}
+                            onPress={() => handleDelete(ast)}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="trash-outline" size={13} color={LIGHT.rose} />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </View>
