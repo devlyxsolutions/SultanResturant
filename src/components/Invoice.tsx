@@ -32,8 +32,11 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   const taxLabel = sysSettings.taxLabel || 'GST Tax';
   const taxRate = sysSettings.taxEnabled ? sysSettings.taxRatePercent : 0;
   const currency = sysSettings.currencySymbol || 'Rs.';
+  const showFeedbackQr =
+    sysSettings.showQrOnReceipt !== false &&
+    sysSettings.enableCustomerFeedbackQr !== false;
 
-  const qrCodeDataUrl = sysSettings.showQrOnReceipt
+  const qrCodeDataUrl = showFeedbackQr
     ? (precomputedQrCode || await generateInvoiceQrCode(invoice.id))
     : '';
   const feedbackUrl = getInvoiceFeedbackUrl(invoice.id);
@@ -93,7 +96,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         });
       }
     }
-    if (sysSettings.showQrOnReceipt) {
+    if (showFeedbackQr) {
       text += `\nRate Each Dish & Give Feedback:\n${feedbackUrl}\n`;
     }
     text += `\n${brandFooter}\n`;
@@ -572,7 +575,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 
       <div class="dashed-line"></div>
 
-      ${sysSettings.showQrOnReceipt ? `
+      ${showFeedbackQr ? `
       <div class="qr-section">
         <div class="qr-section-title">SCAN FOR ITEM-WISE FEEDBACK</div>
         ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="Dish Review QR Code" class="qr-code-img" />` : ''}
@@ -622,6 +625,21 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
   const isSmall = width < 420;
   const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
 
+  const sysSettings = useSettingsStore((state) => state.settings);
+  const showFeedbackQr =
+    sysSettings.showQrOnReceipt !== false &&
+    sysSettings.enableCustomerFeedbackQr !== false;
+  const showLogo = sysSettings.showLogoOnReceipt !== false;
+  const brandName = (sysSettings.restaurantName || 'SULTAN RESTAURANT').trim();
+  const brandTagline = (sysSettings.tagline || 'LUXURY DINING & BANQUET').trim();
+  const brandAddress = (sysSettings.address || 'Food Street, Culinary District, Lahore').trim();
+  const brandPhone = (sysSettings.phone || '0300-1234567').trim();
+  const brandNtn = (sysSettings.ntnOrTaxId || '8943120-4').trim();
+  const brandFooter = (sysSettings.footerMessage || 'Thank you for dining with Sultan!').trim();
+  const taxLabel = sysSettings.taxLabel || 'GST Tax';
+  const taxRate = sysSettings.taxEnabled ? sysSettings.taxRatePercent : 0;
+  const currency = sysSettings.currencySymbol || 'Rs.';
+
   const onlineFeedbackUrl = useRestaurantStore((state) => state.onlineFeedbackUrl);
   const setOnlineFeedbackUrl = useRestaurantStore((state) => state.setOnlineFeedbackUrl);
 
@@ -651,6 +669,11 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
   }, [onlineFeedbackUrl, setOnlineFeedbackUrl]);
 
   React.useEffect(() => {
+    if (!showFeedbackQr) {
+      setQrCodeDataUrl('');
+      setActiveFeedbackUrl('');
+      return;
+    }
     let isMounted = true;
     const resolvedUrl = getInvoiceFeedbackUrl(invoice.id, effectiveOnlineUrl);
     setActiveFeedbackUrl(resolvedUrl);
@@ -661,7 +684,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
     return () => {
       isMounted = false;
     };
-  }, [invoice.id, effectiveOnlineUrl]);
+  }, [invoice.id, effectiveOnlineUrl, showFeedbackQr]);
 
   const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleDateString();
   const timeStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -691,11 +714,15 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
       <View nativeID="standard-invoice-receipt" style={styles.container}>
         {/* Header with Big Logo */}
         <View style={styles.header}>
-          <SultanLogo size="md" variant="bare" width={86} height={80} style={{ alignSelf: 'center', marginBottom: 6 }} />
-          <Text style={[styles.brandTitle, isSmall && { fontSize: 17 }]}>SULTAN RESTAURANT</Text>
-          <Text style={styles.brandSub}>LUXURY DINING & BANQUET</Text>
-          <Text style={styles.contactText}>Food Street, Culinary District, Lahore</Text>
-          <Text style={styles.contactText}>Tel: 0300-1234567 • NTN: 8943120-4</Text>
+          {showLogo && (
+            <SultanLogo size="md" variant="bare" width={86} height={80} style={{ alignSelf: 'center', marginBottom: 6 }} />
+          )}
+          <Text style={[styles.brandTitle, isSmall && { fontSize: 17 }]}>{brandName}</Text>
+          {Boolean(brandTagline) && <Text style={styles.brandSub}>{brandTagline}</Text>}
+          {Boolean(brandAddress) && <Text style={styles.contactText}>{brandAddress}</Text>}
+          <Text style={styles.contactText}>
+            Tel: {brandPhone}{brandNtn ? ` • NTN: ${brandNtn}` : ''}
+          </Text>
         </View>
 
         <Text style={styles.dashedLine}>- - - - - - - - - - - - - - - - - - - - - -</Text>
@@ -787,22 +814,22 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
         {/* Totals */}
         <View style={styles.summaryRow}>
           <Text style={styles.summaryKey}>Sub Total:</Text>
-          <Text style={styles.summaryVal}>Rs. {(invoice.subTotal || 0).toLocaleString()}</Text>
+          <Text style={styles.summaryVal}>{currency} {(invoice.subTotal || 0).toLocaleString()}</Text>
         </View>
         {(invoice.discount || 0) > 0 && (
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Discount:</Text>
-            <Text style={styles.summaryVal}>- Rs. {(invoice.discount || 0).toLocaleString()}</Text>
+            <Text style={styles.summaryVal}>- {currency} {(invoice.discount || 0).toLocaleString()}</Text>
           </View>
         )}
         <View style={styles.summaryRow}>
-          <Text style={styles.summaryKey}>GST Tax (16%):</Text>
-          <Text style={styles.summaryVal}>Rs. ${(invoice.tax || 0).toLocaleString()}</Text>
+          <Text style={styles.summaryKey}>{taxLabel} ({taxRate}%):</Text>
+          <Text style={styles.summaryVal}>{currency} {(invoice.tax || 0).toLocaleString()}</Text>
         </View>
         {(invoice.serviceCharge || 0) > 0 && (
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Service Charge:</Text>
-            <Text style={styles.summaryVal}>Rs. ${(invoice.serviceCharge || 0).toLocaleString()}</Text>
+            <Text style={styles.summaryVal}>{currency} {(invoice.serviceCharge || 0).toLocaleString()}</Text>
           </View>
         )}
         {(invoice.notes || invoice.packagingNotes) && (
@@ -818,7 +845,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
         <View style={styles.grandRow}>
           <Text style={styles.grandKey}>NET PAYABLE:</Text>
-          <Text style={styles.grandVal}>Rs. {(invoice.total || 0).toLocaleString()}</Text>
+          <Text style={styles.grandVal}>{currency} {(invoice.total || 0).toLocaleString()}</Text>
         </View>
 
         <Text style={styles.dashedLine}>================================</Text>
@@ -826,7 +853,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
         {isUnpaidBill ? (
           <View style={{ marginVertical: 6, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: 'rgba(239, 68, 68, 0.08)', borderWidth: 1, borderColor: '#EF4444', borderRadius: 8, alignItems: 'center' }}>
             <Text style={{ color: '#EF4444', fontWeight: '900', fontSize: 13, letterSpacing: 0.5 }}>
-              TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()}
+              TOTAL UNPAID DUE: {currency} {(invoice.total || 0).toLocaleString()}
             </Text>
             <Text style={{ color: '#4B5563', fontSize: 10.5, fontWeight: '700', marginTop: 3 }}>
               براۓ مہربانی کیش کاؤنٹر پر ادائیگی فرمائیں
@@ -837,17 +864,17 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
             <React.Fragment key={idx}>
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryKey}>Paid via {p.type.toUpperCase()}:</Text>
-                <Text style={styles.summaryVal}>Rs. {(p.amount || 0).toLocaleString()}</Text>
+                <Text style={styles.summaryVal}>{currency} {(p.amount || 0).toLocaleString()}</Text>
               </View>
               {p.tendered && p.tendered > p.amount ? (
                 <>
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryKey, { color: '#64748B' }]}>Cash Tendered (وصول):</Text>
-                    <Text style={[styles.summaryVal, { color: '#475569' }]}>Rs. {(p.tendered || 0).toLocaleString()}</Text>
+                    <Text style={[styles.summaryVal, { color: '#475569' }]}>{currency} {(p.tendered || 0).toLocaleString()}</Text>
                   </View>
                   <View style={styles.summaryRow}>
                     <Text style={[styles.summaryKey, { color: '#059669', fontWeight: 'bold' }]}>Change Returned (واپس):</Text>
-                    <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>Rs. {(p.change || (p.tendered - p.amount) || 0).toLocaleString()}</Text>
+                    <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>{currency} {(p.change || (p.tendered - p.amount) || 0).toLocaleString()}</Text>
                   </View>
                 </>
               ) : null}
@@ -857,82 +884,86 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
           <>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: '#64748B' }]}>Cash Tendered (وصول):</Text>
-              <Text style={[styles.summaryVal, { color: '#475569' }]}>Rs. {(invoice.tenderedAmount || 0).toLocaleString()}</Text>
+              <Text style={[styles.summaryVal, { color: '#475569' }]}>{currency} {(invoice.tenderedAmount || 0).toLocaleString()}</Text>
             </View>
             <View style={styles.summaryRow}>
               <Text style={[styles.summaryKey, { color: '#059669', fontWeight: 'bold' }]}>Change Returned (واپس):</Text>
-              <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>Rs. {(invoice.changeReturned || 0).toLocaleString()}</Text>
+              <Text style={[styles.summaryVal, { color: '#059669', fontWeight: 'bold' }]}>{currency} {(invoice.changeReturned || 0).toLocaleString()}</Text>
             </View>
           </>
         ) : null}
 
-        <Text style={styles.dashedLine}>- - - - - - - - - - - - - - - - - - - - - -</Text>
+        {showFeedbackQr && (
+          <>
+            <Text style={styles.dashedLine}>- - - - - - - - - - - - - - - - - - - - - -</Text>
 
-        {/* QR Code Section on Receipt */}
-        <View style={styles.qrContainer}>
-          <View style={styles.qrHeader}>
-            <Ionicons name="qr-code" size={16} color="#D5A943" style={{ marginRight: 6 }} />
-            <Text style={styles.qrHeaderText}>SCAN FOR ITEM-WISE FEEDBACK</Text>
-          </View>
-          {qrCodeDataUrl ? (
-            <Image
-              source={{ uri: qrCodeDataUrl }}
-              style={styles.qrImage}
-              resizeMode="contain"
-            />
-          ) : (
-            <View style={styles.qrPlaceholder}>
-              <Ionicons name="qr-code-outline" size={48} color="#D5A943" />
-            </View>
-          )}
+            {/* QR Code Section on Receipt */}
+            <View style={styles.qrContainer}>
+              <View style={styles.qrHeader}>
+                <Ionicons name="qr-code" size={16} color="#D5A943" style={{ marginRight: 6 }} />
+                <Text style={styles.qrHeaderText}>SCAN FOR ITEM-WISE FEEDBACK</Text>
+              </View>
+              {qrCodeDataUrl ? (
+                <Image
+                  source={{ uri: qrCodeDataUrl }}
+                  style={styles.qrImage}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={styles.qrPlaceholder}>
+                  <Ionicons name="qr-code-outline" size={48} color="#D5A943" />
+                </View>
+              )}
 
-          <Text style={styles.qrSubText}>
-            Scan with your mobile camera to rate each dish & earn +50 Loyalty Points!
-          </Text>
-
-          {/* Scannable URL Pill */}
-          <View style={styles.qrUrlPill}>
-            <Ionicons name="globe-outline" size={12} color="#15803D" style={{ marginRight: 4 }} />
-            <Text style={styles.qrUrlPillText} numberOfLines={1}>
-              {activeFeedbackUrl}
-            </Text>
-          </View>
-
-          {/* Quick Domain Settings Button */}
-          <TouchableOpacity
-            style={styles.qrConfigBtn}
-            onPress={() => {
-              setCustomDomainInput(onlineFeedbackUrl || 'http://192.168.1.14:8081');
-              setDomainModalVisible(true);
-            }}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="settings-outline" size={12} color="#475569" style={{ marginRight: 4 }} />
-            <Text style={styles.qrConfigBtnText}>Configure Online / Wi-Fi QR Link</Text>
-          </TouchableOpacity>
-
-          {invoice.feedbackSubmitted || invoice.feedback ? (
-            <View style={styles.feedbackBadge}>
-              <Ionicons name="checkmark-circle" size={14} color="#2E7D32" style={{ marginRight: 4 }} />
-              <Text style={styles.feedbackBadgeText}>
-                Feedback Submitted (⭐ {invoice.feedback?.overallRating || 5}/5)
+              <Text style={styles.qrSubText}>
+                Scan with your mobile camera to rate each dish & earn +50 Loyalty Points!
               </Text>
-            </View>
-          ) : null}
 
-          {/* Direct Interactive Feedback Link */}
-          <TouchableOpacity
-            style={styles.rateDishesBtn}
-            onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(invoice.id)}` as any)}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="star" size={14} color="#4a121a" style={{ marginRight: 6 }} />
-            <Text style={styles.rateDishesBtnText}>Rate Dishes & Leave Feedback</Text>
-          </TouchableOpacity>
-        </View>
+              {/* Scannable URL Pill */}
+              <View style={styles.qrUrlPill}>
+                <Ionicons name="globe-outline" size={12} color="#15803D" style={{ marginRight: 4 }} />
+                <Text style={styles.qrUrlPillText} numberOfLines={1}>
+                  {activeFeedbackUrl}
+                </Text>
+              </View>
+
+              {/* Quick Domain Settings Button */}
+              <TouchableOpacity
+                style={styles.qrConfigBtn}
+                onPress={() => {
+                  setCustomDomainInput(onlineFeedbackUrl || 'http://192.168.1.14:8081');
+                  setDomainModalVisible(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="settings-outline" size={12} color="#475569" style={{ marginRight: 4 }} />
+                <Text style={styles.qrConfigBtnText}>Configure Online / Wi-Fi QR Link</Text>
+              </TouchableOpacity>
+
+              {invoice.feedbackSubmitted || invoice.feedback ? (
+                <View style={styles.feedbackBadge}>
+                  <Ionicons name="checkmark-circle" size={14} color="#2E7D32" style={{ marginRight: 4 }} />
+                  <Text style={styles.feedbackBadgeText}>
+                    Feedback Submitted (⭐ {invoice.feedback?.overallRating || 5}/5)
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Direct Interactive Feedback Link */}
+              <TouchableOpacity
+                style={styles.rateDishesBtn}
+                onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(invoice.id)}` as any)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="star" size={14} color="#4a121a" style={{ marginRight: 6 }} />
+                <Text style={styles.rateDishesBtnText}>Rate Dishes & Leave Feedback</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
 
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Thank you for dining with Sultan!</Text>
+          <Text style={styles.footerText}>{brandFooter}</Text>
           <Text style={styles.footerSub}>We look forward to serving you again.</Text>
           <Text style={styles.footerSub}>Software by Sultan POS System</Text>
         </View>
@@ -946,17 +977,21 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
           activeOpacity={0.8}
         >
           <Ionicons name="print" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.printActionText}>Print Receipt (with QR)</Text>
+          <Text style={styles.printActionText}>
+            {showFeedbackQr ? 'Print Receipt (with QR)' : 'Print Receipt'}
+          </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.feedbackDirectBtn}
-          onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(invoice.id)}` as any)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="chatbubble-ellipses" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
-          <Text style={styles.printActionText}>Feedback Form</Text>
-        </TouchableOpacity>
+        {showFeedbackQr && (
+          <TouchableOpacity
+            style={styles.feedbackDirectBtn}
+            onPress={() => router.push(`/feedback?invoiceId=${encodeURIComponent(invoice.id)}` as any)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="chatbubble-ellipses" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
+            <Text style={styles.printActionText}>Feedback Form</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Domain / Link Configuration Modal */}

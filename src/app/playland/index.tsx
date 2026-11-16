@@ -19,6 +19,7 @@ import {
   PlaylandCustomer,
   useAuthStore,
 } from '../../store';
+import { useSettingsStore } from '../../store/settingsStore';
 
 const WRISTBAND_COLORS = [
   { name: 'Gold', hex: '#D5A943' },
@@ -33,6 +34,7 @@ export default function PlaylandCounterScreen() {
   const isTablet = width >= 900;
 
   const user = useAuthStore((state) => state.user);
+  const systemSettings = useSettingsStore((state) => state.settings);
 
   // Inject sleek and visible scrollbars on Web
   useEffect(() => {
@@ -186,9 +188,10 @@ export default function PlaylandCounterScreen() {
 
       <View style={styles.servicesGrid}>
         {activeRides.map((ride) => {
+          const defaultSessionMins = systemSettings.playlandDefaultSessionMins || 60;
           const variants = ride.variants && ride.variants.length > 0
             ? ride.variants
-            : [{ id: `v-${ride.id}`, name: ride.duration || 'Standard', price: ride.price }];
+            : [{ id: `v-${ride.id}`, name: ride.duration || `${defaultSessionMins} Mins`, durationMinutes: defaultSessionMins, price: ride.price }];
 
           return (
             <View key={ride.id} style={styles.serviceCard}>
@@ -458,6 +461,20 @@ export default function PlaylandCounterScreen() {
       </View>
     </View>
   );
+
+  if (systemSettings.enablePlayland === false) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="lock-closed-outline" size={56} color="#B45309" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#4A121A', textAlign: 'center', marginBottom: 6 }}>
+          Playland Hub Disabled
+        </Text>
+        <Text style={{ fontSize: 13.5, color: '#64748B', textAlign: 'center', maxWidth: 420 }}>
+          The Playland ticketing hub is currently turned off in System Settings. Enable it from Admin Settings to issue tickets.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

@@ -17,6 +17,7 @@ import {
   StaffMember,
   SalaryPayment,
 } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { broadcastImmediately } from '../../services/syncService';
 import SalaryVoucherModal from './SalaryVoucherModal';
 
@@ -28,6 +29,7 @@ export default function PayrollTab({ canViewSalaries = true }: PayrollTabProps) 
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
+  const systemSettings = useSettingsStore((state) => state.settings);
   const staff = useRestaurantStore((state) => state.staff) || [];
   const attendance = useRestaurantStore((state) => state.attendance) || [];
   const salaryPayments = useRestaurantStore((state) => state.salaryPayments) || [];
@@ -86,9 +88,10 @@ export default function PayrollTab({ canViewSalaries = true }: PayrollTabProps) 
 
   // Aggregate monthly payroll stats per staff member
   const staffPayrollRows = useMemo(() => {
+    const stdHours = systemSettings.standardShiftHours || 8;
     return staff.map((member) => {
       const baseSalary = member.monthlySalary || 30000;
-      const hourlyRate = member.hourlyRate || Math.round(baseSalary / 240);
+      const hourlyRate = member.hourlyRate || Math.round(baseSalary / (30 * stdHours));
 
       // Attendance records for this member in selectedMonth
       const monthAttendance = attendance.filter((a) => {

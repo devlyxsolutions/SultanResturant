@@ -15,6 +15,7 @@ import {
 import { useLocalSearchParams, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, ItemFeedback } from '../store/restaurantStore';
+import { useSettingsStore } from '../store/settingsStore';
 import SultanLogo from '../components/SultanLogo';
 
 const POSITIVE_TAGS = [
@@ -41,6 +42,7 @@ export default function CustomerFeedbackScreen() {
   const isMobile = width < 768;
 
   const params = useLocalSearchParams<{ invoiceId?: string }>();
+  const sysSettings = useSettingsStore((state) => state.settings);
   const invoices = useRestaurantStore((state) => state.invoices);
   const addFeedback = useRestaurantStore((state) => state.addFeedback);
 
@@ -244,7 +246,25 @@ export default function CustomerFeedbackScreen() {
           contentContainerStyle={[styles.scrollContent, isMobile && styles.scrollContentMobile]}
           showsVerticalScrollIndicator={false}
         >
-          {isSubmitted ? (
+          {(sysSettings.enableCustomerFeedbackQr === false || sysSettings.showQrOnReceipt === false) ? (
+            <View style={styles.successCard}>
+              <View style={styles.successIconBubble}>
+                <Ionicons name="lock-closed-outline" size={56} color="#991B1B" />
+              </View>
+              <Text style={styles.successTitle}>Feedback Portal Disabled</Text>
+              <Text style={styles.successDesc}>
+                Customer Feedback QR capture is currently turned off in System Settings. Please contact restaurant management if you would like to share a review.
+              </Text>
+              <TouchableOpacity
+                style={styles.backHomeBtn}
+                onPress={() => router.replace('/')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="home-outline" size={18} color="#4A121A" style={{ marginRight: 8 }} />
+                <Text style={styles.backHomeBtnText}>Back to Home</Text>
+              </TouchableOpacity>
+            </View>
+          ) : isSubmitted ? (
             /* Celebration & Reward Voucher Card */
             <View style={styles.successCard}>
               <View style={styles.successIconBubble}>

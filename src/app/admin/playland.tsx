@@ -1,27 +1,28 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Switch,
-  Alert,
-  useWindowDimensions,
-  Platform,
-} from 'react-native';
-import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  usePlaylandStore,
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import SultanLogo from '../../components/SultanLogo';
+import {
   PlaylandRide,
   PlaylandRideVariant,
-  RideCategory,
   PlaylandTicket,
+  RideCategory,
+  usePlaylandStore,
 } from '../../store/playlandStore';
-import SultanLogo from '../../components/SultanLogo';
+import { useSettingsStore } from '../../store/settingsStore';
 
 const CATEGORIES: { label: string; value: RideCategory; icon: keyof typeof Ionicons.glyphMap }[] = [
   { label: 'Jhoolay & Rides', value: 'jhoola', icon: 'color-palette-outline' },
@@ -56,6 +57,8 @@ export default function AdminPlaylandManagement() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
+  const systemSettings = useSettingsStore((state) => state.settings);
+  const defaultSessionMins = systemSettings.playlandDefaultSessionMins || 60;
   const rides = usePlaylandStore((state) => state.rides);
   const tickets = usePlaylandStore((state) => state.tickets);
   const toggleRideStatus = usePlaylandStore((state) => state.toggleRideStatus);
@@ -86,8 +89,7 @@ export default function AdminPlaylandManagement() {
   const [formVariants, setFormVariants] = useState<
     { id: string; name: string; durationMinutes?: number; price: number }[]
   >([
-    { id: 'v1', name: '5 Mins', durationMinutes: 5, price: 200 },
-    { id: 'v2', name: '10 Mins', durationMinutes: 10, price: 350 },
+    { id: 'v1', name: `${defaultSessionMins} Mins`, durationMinutes: defaultSessionMins, price: 300 },
   ]);
 
   // Summary Metrics
@@ -158,8 +160,8 @@ export default function AdminPlaylandManagement() {
     setFormMinAge('3+ yrs');
     setFormColor('#D5A943');
     setFormVariants([
-      { id: `v-${Date.now()}-1`, name: '5 Mins', durationMinutes: 5, price: 200 },
-      { id: `v-${Date.now()}-2`, name: '10 Mins', durationMinutes: 10, price: 350 },
+      { id: `v-${Date.now()}-1`, name: `${defaultSessionMins} Mins`, durationMinutes: defaultSessionMins, price: 300 },
+      { id: `v-${Date.now()}-2`, name: `${defaultSessionMins * 2} Mins`, durationMinutes: defaultSessionMins * 2, price: 500 },
     ]);
     setIsRideModalOpen(true);
   };
@@ -478,8 +480,8 @@ export default function AdminPlaylandManagement() {
                               isRefunded
                                 ? styles.statusRefunded
                                 : ticket.status === 'used'
-                                ? styles.statusUsed
-                                : styles.statusActive,
+                                  ? styles.statusUsed
+                                  : styles.statusActive,
                             ]}
                           >
                             <Text
@@ -488,8 +490,8 @@ export default function AdminPlaylandManagement() {
                                 isRefunded
                                   ? styles.statusRefundedText
                                   : ticket.status === 'used'
-                                  ? styles.statusUsedText
-                                  : styles.statusActiveText,
+                                    ? styles.statusUsedText
+                                    : styles.statusActiveText,
                               ]}
                             >
                               {ticket.status.toUpperCase()}

@@ -784,7 +784,11 @@ export default function AppSidebar({
         onRequestClose={onCloseMobile}
       >
         <View style={styles.modalOverlay}>
-          <Pressable style={styles.modalBackdrop} onPress={onCloseMobile} />
+          <Pressable
+            style={styles.modalBackdrop}
+            onPress={onCloseMobile}
+            {...(Platform.OS === 'web' ? ({ dataSet: { backdrop: 'true' } } as any) : {})}
+          />
           <View
             style={[
               styles.mobileDrawerContainer,
@@ -860,6 +864,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
+    zIndex: 1,
   },
   mobileDrawerContainer: {
     width: 295,
@@ -868,6 +873,7 @@ const styles = StyleSheet.create({
     height: '100%',
     borderRightWidth: 1,
     borderRightColor: 'rgba(212, 175, 55, 0.28)',
+    zIndex: 10,
     ...Platform.select({
       web: {
         backgroundImage: 'linear-gradient(180deg, rgba(56, 10, 17, 0.92) 0%, rgba(26, 4, 8, 0.97) 100%)',

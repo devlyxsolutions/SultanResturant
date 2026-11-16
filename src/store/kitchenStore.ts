@@ -3,6 +3,7 @@ import { persist } from 'zustand/middleware';
 import { appStorage } from './storage';
 import { useOpsStore } from './opsStore';
 import { useRestaurantStore } from './restaurantStore';
+import { useSettingsStore } from './settingsStore';
 import type {
   CashEntry,
   ConsumptionEntry,
@@ -913,6 +914,7 @@ export const useKitchenStore = create<KitchenState>()(
 
       // ---------------- Auto deduction ----------------
       processNewTickets: () => {
+        if (useSettingsStore.getState().settings.autoDeductRecipeStock === false) return;
         const k = get();
         // Oldest handover first: its stock is consumed before a newer handover's stock (FIFO).
         const activeSessions = k.kitchenSessions

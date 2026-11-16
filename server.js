@@ -940,17 +940,55 @@ try {
     }
     if (Array.isArray(serverState.tickets)) {
       const delSet = new Set(serverState.deletedTicketIds);
-      serverState.tickets = serverState.tickets
-        .filter(t => t && t.id && !delSet.has(t.id))
-        .map(t => {
-          if (t && t.status === 'served' && Array.isArray(t.items)) {
-            return {
-              ...t,
-              items: t.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }))
-            };
+      const seenOrderKeys = new Set();
+      const deduplicatedStartupTickets = [];
+      for (const t of serverState.tickets) {
+        if (!t || !t.id || delSet.has(t.id)) continue;
+        const orderKey = t.orderId ? `ord_${t.orderId}` : (t.orderNumber ? `num_${t.orderNumber}` : null);
+        if (orderKey) {
+          if (seenOrderKeys.has(orderKey)) {
+            console.log(`[Sultan Hub Startup] Removed duplicate ticket ${t.id} for order ${orderKey}`);
+            continue;
           }
-          return t;
-        });
+          seenOrderKeys.add(orderKey);
+        }
+        if (t.status === 'served' && Array.isArray(t.items)) {
+          deduplicatedStartupTickets.push({
+            ...t,
+            items: t.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }))
+          });
+        } else {
+          deduplicatedStartupTickets.push(t);
+        }
+      }
+      serverState.tickets = deduplicatedStartupTickets;
+
+      // Reconcile online orders against ticket status on startup
+      if (Array.isArray(serverState.onlineOrders) && Array.isArray(serverState.tickets)) {
+        for (const tk of serverState.tickets) {
+          if (!tk || (!tk.orderId && !tk.orderNumber)) continue;
+          const ord = serverState.onlineOrders.find(o =>
+            (tk.orderId && o.id === tk.orderId) ||
+            (tk.orderNumber && o.orderNumber === tk.orderNumber)
+          );
+          if (!ord) continue;
+
+          const isTicketCooking = tk.status === 'cooking' ||
+            (tk.stationStatuses && (tk.stationStatuses.main === 'cooking' || tk.stationStatuses.juice === 'cooking'));
+          const isTicketReady = tk.status === 'ready' ||
+            (tk.stationStatuses && tk.stationStatuses.main === 'ready' && tk.stationStatuses.juice === 'ready');
+          const isTicketServed = tk.status === 'served' ||
+            (tk.stationStatuses && tk.stationStatuses.main === 'served' && tk.stationStatuses.juice === 'served');
+
+          if (isTicketServed && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+            ord.status = 'SERVED';
+          } else if (isTicketReady && ord.status !== 'READY' && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+            ord.status = 'READY';
+          } else if (isTicketCooking && ord.status === 'CONFIRMED') {
+            ord.status = 'PREPARING';
+          }
+        }
+      }
     }
     const activeTicketTableIds = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
     if (Array.isArray(serverState.tables)) {
@@ -1690,6 +1728,27 @@ async function handleRequest(req, res) {
 
       const orderType = payload.orderType || (payload.tableInfo || payload.tableId ? 'dine_in' : (payload.takeaway ? 'takeaway' : 'delivery'));
 
+      // Rapid de-duplication guard: if identical order arrived within last 6 seconds, return existing order
+      const requestedTableId = payload.tableId || payload.tableInfo?.tableId || (orderType === 'dine_in' ? 'DINE-IN-APP' : undefined);
+      const nowTs = Date.now();
+      const recentDup = (serverState.onlineOrders || []).find(o =>
+        o.customer?.phone === customerPhone &&
+        (!requestedTableId || o.tableId === requestedTableId) &&
+        (nowTs - (o.createdAt || 0)) < 6000
+      );
+      if (recentDup) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          data: recentDup,
+          order: recentDup,
+          ticket: (serverState.tickets || []).find(t => t.orderId === recentDup.id) || null,
+          pendingConfirmation: recentDup.orderType === 'dine_in',
+          message: 'Order already registered.'
+        }));
+        return;
+      }
+
       // Authoritative server-side price calculation
       const dbItems = serverState.menuItems || [];
       let calculatedSubtotal = 0;
@@ -1922,6 +1981,28 @@ async function handleRequest(req, res) {
   if ((url.pathname === '/api/public/orders' || url.pathname === '/api/admin/online-orders' || url.pathname === '/api/orders') && req.method === 'GET') {
     const customerId = url.searchParams.get('customerId');
     const phone = url.searchParams.get('phone');
+
+    // Auto-reconcile orders with live ticket progress
+    const tickets = serverState.tickets || [];
+    for (const ord of (serverState.onlineOrders || [])) {
+      const tk = tickets.find(t => (t.orderId && t.orderId === ord.id) || (t.orderNumber && t.orderNumber === ord.orderNumber));
+      if (!tk) continue;
+      const isCooking = tk.status === 'cooking' ||
+        (tk.stationStatuses && (tk.stationStatuses.main === 'cooking' || tk.stationStatuses.juice === 'cooking'));
+      const isReady = tk.status === 'ready' ||
+        (tk.stationStatuses && tk.stationStatuses.main === 'ready' && tk.stationStatuses.juice === 'ready');
+      const isServed = tk.status === 'served' ||
+        (tk.stationStatuses && tk.stationStatuses.main === 'served' && tk.stationStatuses.juice === 'served');
+
+      if (isServed && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+        ord.status = 'SERVED';
+      } else if (isReady && ord.status !== 'READY' && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+        ord.status = 'READY';
+      } else if (isCooking && ord.status === 'CONFIRMED') {
+        ord.status = 'PREPARING';
+      }
+    }
+
     let orders = serverState.onlineOrders || [];
 
     if (phone) {
@@ -1952,6 +2033,28 @@ async function handleRequest(req, res) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: 'Order not found' }));
       return;
+    }
+
+    // Auto-reconcile single order with live ticket progress
+    const matchingTicket = (serverState.tickets || []).find(tk =>
+      (tk.orderId && tk.orderId === order.id) ||
+      (tk.orderNumber && tk.orderNumber === order.orderNumber)
+    );
+    if (matchingTicket) {
+      const isCooking = matchingTicket.status === 'cooking' ||
+        (matchingTicket.stationStatuses && (matchingTicket.stationStatuses.main === 'cooking' || matchingTicket.stationStatuses.juice === 'cooking'));
+      const isReady = matchingTicket.status === 'ready' ||
+        (matchingTicket.stationStatuses && matchingTicket.stationStatuses.main === 'ready' && matchingTicket.stationStatuses.juice === 'ready');
+      const isServed = matchingTicket.status === 'served' ||
+        (matchingTicket.stationStatuses && matchingTicket.stationStatuses.main === 'served' && matchingTicket.stationStatuses.juice === 'served');
+
+      if (isServed && order.status !== 'SERVED' && order.status !== 'DELIVERED') {
+        order.status = 'SERVED';
+      } else if (isReady && order.status !== 'READY' && order.status !== 'SERVED' && order.status !== 'DELIVERED') {
+        order.status = 'READY';
+      } else if (isCooking && order.status === 'CONFIRMED') {
+        order.status = 'PREPARING';
+      }
     }
 
     res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -1999,17 +2102,17 @@ async function handleRequest(req, res) {
       if (status === 'CONFIRMED') {
         if (!ticket) {
           ticket = {
-            id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
+            id: `KOT-${(order.orderNumber || order.id).replace(/\D/g, '') || Math.floor(1000 + Math.random() * 9000)}`,
             orderId: order.id,
             orderNumber: order.orderNumber,
             tableId: order.tableId || 'DINE-IN-APP',
             tableName: order.tableName || 'Dine-In',
             server: assignedWaiter || order.assignedWaiter || 'Floor Manager Confirmed',
             timePlaced: Date.now(),
-            status: 'cooking',
+            status: 'pending',
             roundNumber: order.roundNumber || 1,
             isAddOn: order.isAddOn || false,
-            stationStatuses: { main: 'cooking', juice: 'cooking' },
+            stationStatuses: { main: 'pending', juice: 'pending' },
             items: (order.items || []).map(it => ({
               id: it.id,
               name: it.name,
@@ -2017,14 +2120,13 @@ async function handleRequest(req, res) {
               qty: it.qty || it.quantity,
               notes: it.notes,
               station: it.station || 'main',
-              itemStatus: 'cooking',
+              itemStatus: 'pending',
               completed: false
             }))
           };
           if (!serverState.tickets) serverState.tickets = [];
           serverState.tickets.unshift(ticket);
         } else {
-          ticket.status = 'cooking';
           if (assignedWaiter) ticket.server = assignedWaiter;
         }
 
@@ -2034,21 +2136,50 @@ async function handleRequest(req, res) {
           if (foundTable) {
             foundTable.status = 'occupied';
             if (assignedWaiter || order.assignedWaiter) foundTable.server = assignedWaiter || order.assignedWaiter;
-            foundTable.billTotal = (foundTable.billTotal || 0) + (order.total || 0);
             if (!foundTable.orders) foundTable.orders = [];
-            foundTable.orders.push(...(order.items || []).map(it => ({
-              id: it.id,
-              name: it.name,
-              price: it.unitPrice || it.price,
-              qty: it.qty || it.quantity,
-              completed: false
-            })));
+            const alreadyHasOrder = foundTable.orders.some(o => o.orderId === order.id);
+            if (!alreadyHasOrder) {
+              foundTable.billTotal = (foundTable.billTotal || 0) + (order.total || 0);
+              foundTable.orders.push(...(order.items || []).map(it => ({
+                id: it.id,
+                orderId: order.id,
+                name: it.name,
+                price: it.unitPrice || it.price,
+                qty: it.qty || it.quantity,
+                completed: false
+              })));
+            }
           }
         }
       } else if (ticket) {
-        if (status === 'PREPARING') ticket.status = 'cooking';
-        else if (status === 'READY' || status === 'READY_FOR_PICKUP') ticket.status = 'ready';
-        else if (status === 'DELIVERED' || status === 'SERVED') ticket.status = 'served';
+        if (status === 'PREPARING') {
+          ticket.status = 'cooking';
+          if (!ticket.stationStatuses) ticket.stationStatuses = { main: 'cooking', juice: 'cooking' };
+          else {
+            if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'cooking';
+            if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'cooking';
+          }
+        } else if (status === 'READY' || status === 'READY_FOR_PICKUP') {
+          ticket.status = 'ready';
+          if (!ticket.stationStatuses) ticket.stationStatuses = { main: 'ready', juice: 'ready' };
+          else {
+            if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'ready';
+            if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'ready';
+          }
+          if (Array.isArray(ticket.items)) {
+            ticket.items = ticket.items.map(it => ({ ...it, completed: true, itemStatus: 'ready' }));
+          }
+        } else if (status === 'DELIVERED' || status === 'SERVED') {
+          ticket.status = 'served';
+          if (!ticket.stationStatuses) ticket.stationStatuses = { main: 'served', juice: 'served' };
+          else {
+            if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'served';
+            if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'served';
+          }
+          if (Array.isArray(ticket.items)) {
+            ticket.items = ticket.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
+          }
+        }
       }
 
       persistState();
@@ -2619,6 +2750,8 @@ function computeStateFingerprint(st) {
       onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
       invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
       menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
+      rolesLen: Array.isArray(st.roles) ? st.roles.length : 0,
+      systemSettingsUpdatedAt: (st.systemSettings && st.systemSettings.updatedAt) || 0,
       lastBillPaidAlert: st.lastBillPaidAlert || null,
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
       pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
@@ -2717,6 +2850,31 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
               });
             }
 
+            // Merge station-level statuses station by station
+            const mergedStationStatuses = {
+              ...(ext.stationStatuses || {}),
+              ...(inc.stationStatuses || {})
+            };
+            for (const st of ['main', 'juice']) {
+              const extStRank = ext.stationStatuses && ext.stationStatuses[st] ? (STATUS_RANK[ext.stationStatuses[st]] ?? 0) : -1;
+              const incStRank = inc.stationStatuses && inc.stationStatuses[st] ? (STATUS_RANK[inc.stationStatuses[st]] ?? 0) : -1;
+              if (extStRank >= 0 || incStRank >= 0) {
+                mergedStationStatuses[st] = extStRank >= incStRank ? ext.stationStatuses[st] : inc.stationStatuses[st];
+              }
+            }
+            chosen.stationStatuses = mergedStationStatuses;
+
+            const activeStVals = Object.values(mergedStationStatuses).filter(Boolean);
+            if (activeStVals.length > 0) {
+              if (activeStVals.every(s => s === 'served')) {
+                chosen.status = 'served';
+              } else if (activeStVals.every(s => s === 'ready' || s === 'served')) {
+                chosen.status = 'ready';
+              } else if (activeStVals.some(s => s === 'cooking')) {
+                chosen.status = 'cooking';
+              }
+            }
+
             if (chosen.status === 'served' && Array.isArray(chosen.items)) {
               chosen.items = chosen.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
             }
@@ -2732,7 +2890,65 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           }
         }
 
-        serverState.tickets = mergedList;
+        // Deduplicate tickets by order key to prevent duplicate KOT cards across client-server sync
+        const seenMergedOrders = new Set();
+        const deduplicatedMerged = [];
+        for (const t of mergedList) {
+          const orderKey = t.orderId ? `ord_${t.orderId}` : (t.orderNumber ? `num_${t.orderNumber}` : null);
+          if (orderKey) {
+            if (seenMergedOrders.has(orderKey)) {
+              continue;
+            }
+            seenMergedOrders.add(orderKey);
+          }
+          deduplicatedMerged.push(t);
+        }
+
+        serverState.tickets = deduplicatedMerged;
+
+        // Auto-synchronize online orders status with ticket cooking/ready/served state
+        if (Array.isArray(serverState.onlineOrders)) {
+          for (const tk of deduplicatedMerged) {
+            if (!tk || (!tk.orderId && !tk.orderNumber)) continue;
+            const ord = serverState.onlineOrders.find(o =>
+              (tk.orderId && o.id === tk.orderId) ||
+              (tk.orderNumber && o.orderNumber === tk.orderNumber)
+            );
+            if (!ord) continue;
+
+            const isTicketCooking = tk.status === 'cooking' ||
+              (tk.stationStatuses && (tk.stationStatuses.main === 'cooking' || tk.stationStatuses.juice === 'cooking'));
+            const isTicketReady = tk.status === 'ready' ||
+              (tk.stationStatuses && tk.stationStatuses.main === 'ready' && tk.stationStatuses.juice === 'ready');
+            const isTicketServed = tk.status === 'served' ||
+              (tk.stationStatuses && tk.stationStatuses.main === 'served' && tk.stationStatuses.juice === 'served');
+
+            let targetStatus = null;
+            if (isTicketServed && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+              targetStatus = 'SERVED';
+            } else if (isTicketReady && ord.status !== 'READY' && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+              targetStatus = 'READY';
+            } else if (isTicketCooking && ord.status === 'CONFIRMED') {
+              targetStatus = 'PREPARING';
+            }
+
+            if (targetStatus && ord.status !== targetStatus) {
+              ord.status = targetStatus;
+              ord.updatedAt = Date.now();
+              console.log(`[Sultan Hub Auto-Sync] Updated order ${ord.orderNumber} status to ${targetStatus} based on ticket ${tk.id}`);
+              broadcastToClients({
+                type: 'ORDER_STATUS_CHANGED',
+                orderId: ord.id,
+                orderNumber: ord.orderNumber,
+                status: targetStatus,
+                riderName: ord.riderName,
+                riderPhone: ord.riderPhone,
+                assignedWaiter: ord.assignedWaiter,
+                timestamp: Date.now()
+              });
+            }
+          }
+        }
         modified = true;
       } else if (key === 'tables') {
         const incomingTables = Array.isArray(partialState.tables) ? partialState.tables : [];
@@ -2844,6 +3060,19 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         if (incomingRegs.length > 0) {
           serverState.regions = Array.from(new Set([...(serverState.regions || []), ...incomingRegs]));
           modified = true;
+        }
+      } else if (key === 'systemSettings') {
+        const incSettings = partialState.systemSettings;
+        if (incSettings && typeof incSettings === 'object') {
+          const currUpdated = (serverState.systemSettings && serverState.systemSettings.updatedAt) || 0;
+          const incUpdated = typeof incSettings.updatedAt === 'number' ? incSettings.updatedAt : 0;
+          if (currUpdated === 0 || incUpdated >= currUpdated) {
+            serverState.systemSettings = {
+              ...(serverState.systemSettings || {}),
+              ...incSettings,
+            };
+            modified = true;
+          }
         }
       } else {
         serverState[key] = partialState[key];
@@ -2974,6 +3203,7 @@ function pushToFirestoreCloud() {
           roles: serverState.roles,
           shifts: serverState.shifts,
           activeShiftId: serverState.activeShiftId,
+          systemSettings: serverState.systemSettings,
         }
       };
       const fields = {};

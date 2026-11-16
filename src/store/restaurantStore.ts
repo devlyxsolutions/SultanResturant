@@ -5,6 +5,7 @@ import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS 
 import { getTableFloor, getTableSeatingType } from '../constants/floors';
 import type { SalesReturn } from '../types/returns';
 import type { RolePermissions } from './roleStore';
+import { useSettingsStore } from './settingsStore';
 import { appStorage } from './storage';
 
 export type Table = {
@@ -119,6 +120,10 @@ export type OnlineOrder = {
   deliveryFee?: number;
   tax?: number;
   total: number;
+  paymentMethod?: string;
+  riderName?: string;
+  riderPhone?: string;
+  estimatedDeliveryMinutes?: number;
   createdAt?: number;
   updatedAt?: number;
 };
@@ -1178,12 +1183,19 @@ export const useRestaurantStore = create<RestaurantState>()(
             apiBase = getActiveServerHttpUrl();
           }
         } catch (_) {}
+        let serverTicket: Ticket | null = null;
         try {
-          await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
+          const res = await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'CONFIRMED', assignedWaiter })
           });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && data.ticket) {
+              serverTicket = data.ticket;
+            }
+          }
         } catch (_) {}
 
         set((state) => {
@@ -1203,20 +1215,24 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
 
           if (order) {
-            const existingTicket = updatedTickets.find(t => t.orderId === order.id || (order.orderNumber && t.orderNumber === order.orderNumber));
+            const existingTicket = updatedTickets.find(t =>
+              (order.id && (t.orderId === order.id || t.id.includes(order.id))) ||
+              (order.orderNumber && (t.orderNumber === order.orderNumber || t.id.includes(order.orderNumber.replace(/\D/g, ''))))
+            );
+
             if (!existingTicket) {
-              const kotTicket: Ticket = {
-                id: `KOT-${Date.now().toString().slice(-4)}`,
+              const kotTicket: Ticket = serverTicket || {
+                id: `KOT-${(order.orderNumber || order.id).replace(/\D/g, '') || Date.now().toString().slice(-4)}`,
                 orderId: order.id,
                 orderNumber: order.orderNumber,
                 tableId: order.tableId || 'DINE-IN-APP',
                 tableName: order.tableName || 'Dine-In',
                 server: assignedWaiter || order.assignedWaiter || 'Floor Manager Confirmed',
                 timePlaced: Date.now(),
-                status: 'cooking',
+                status: 'pending',
                 roundNumber: order.roundNumber || 1,
                 isAddOn: order.isAddOn || false,
-                stationStatuses: { main: 'cooking', juice: 'cooking' },
+                stationStatuses: { main: 'pending', juice: 'pending' },
                 items: (order.items || []).map(it => ({
                   id: it.id,
                   name: it.name,
@@ -1224,16 +1240,26 @@ export const useRestaurantStore = create<RestaurantState>()(
                   qty: it.qty || it.quantity || 1,
                   notes: it.notes,
                   station: (it.station as any) || 'main',
-                  itemStatus: 'cooking',
+                  itemStatus: 'pending',
                   completed: false
                 }))
               };
               updatedTickets.unshift(kotTicket);
+            } else if (serverTicket) {
+              updatedTickets = updatedTickets.map(t => t.id === existingTicket.id ? { ...t, ...serverTicket } : t);
             }
 
             if (order.tableId && order.tableId !== 'DINE-IN-APP') {
               updatedTables = updatedTables.map(t => {
                 if (t.id === order.tableId || t.name.toLowerCase() === (order.tableName || '').toLowerCase()) {
+                  const alreadyHasOrder = (t.orders || []).some(o => (o as any).orderId === order.id);
+                  if (alreadyHasOrder) {
+                    return {
+                      ...t,
+                      status: 'occupied' as const,
+                      server: assignedWaiter || t.server || 'Floor Waiter',
+                    };
+                  }
                   return {
                     ...t,
                     status: 'occupied' as const,
@@ -1243,6 +1269,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                       ...(t.orders || []),
                       ...(order.items || []).map(it => ({
                         id: it.id,
+                        orderId: order.id,
                         name: it.name,
                         price: it.unitPrice || it.price || 0,
                         qty: it.qty || it.quantity || 1,
@@ -1310,6 +1337,9 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       placeOrder: (tableId, serverName, orderItems, isAddOn) => {
+        const sysSettings = useSettingsStore.getState().settings;
+        const autoRouteBev = sysSettings.kdsAutoRouteBeverages !== false;
+        const targetMainPrep = sysSettings.kdsTargetPrepMinutes || 15;
         set((state) => {
           const table = state.tables.find(t => t.id === tableId);
           const existingTickets = state.tickets.filter(t => t.tableId === tableId);
@@ -1319,11 +1349,16 @@ export const useRestaurantStore = create<RestaurantState>()(
           const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
           const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
-          const hasMain = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'main');
-          const hasJuice = orderItems.some(oi => (oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main')) === 'juice');
+          const resolveStation = (item: MenuItem): 'main' | 'juice' => {
+            if (!autoRouteBev) return 'main';
+            return item.station || (item.category === 'Drinks' ? 'juice' : 'main');
+          };
+
+          const hasMain = orderItems.some(oi => resolveStation(oi.item) === 'main');
+          const hasJuice = orderItems.some(oi => resolveStation(oi.item) === 'juice');
 
           const maxPrepTime = Math.max(
-            ...orderItems.map(oi => oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15)),
+            ...orderItems.map(oi => oi.item.prepTimeMin || (resolveStation(oi.item) === 'juice' ? 5 : targetMainPrep)),
             10
           );
 
@@ -1342,17 +1377,20 @@ export const useRestaurantStore = create<RestaurantState>()(
               main: hasMain ? 'pending' : undefined,
               juice: hasJuice ? 'pending' : undefined,
             },
-            items: orderItems.map(oi => ({
-              id: oi.item.id,
-              name: oi.item.name,
-              price: oi.item.price,
-              qty: oi.qty,
-              notes: oi.notes,
-              completed: false,
-              station: oi.item.station || (oi.item.category === 'Drinks' ? 'juice' : 'main'),
-              prepTimeMin: oi.item.prepTimeMin || (oi.item.station === 'juice' || oi.item.category === 'Drinks' ? 5 : 15),
-              itemStatus: 'pending',
-            }))
+            items: orderItems.map(oi => {
+              const st = resolveStation(oi.item);
+              return {
+                id: oi.item.id,
+                name: oi.item.name,
+                price: oi.item.price,
+                qty: oi.qty,
+                notes: oi.notes,
+                completed: false,
+                station: st,
+                prepTimeMin: oi.item.prepTimeMin || (st === 'juice' ? 5 : targetMainPrep),
+                itemStatus: 'pending',
+              };
+            })
           };
 
           const updatedMenuItems = state.menuItems.map(m => {
@@ -1465,6 +1503,29 @@ export const useRestaurantStore = create<RestaurantState>()(
           time: now,
         };
 
+        const targetOrdId = ticket.orderId || ticket.orderNumber;
+        const updatedOnlineOrders = targetOrdId
+          ? (state.onlineOrders || []).map(o => {
+              if (o.id === targetOrdId || o.orderNumber === targetOrdId) {
+                return { ...o, status: 'PREPARING' as const };
+              }
+              return o;
+            })
+          : state.onlineOrders;
+
+        if (targetOrdId) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { getActiveServerHttpUrl } = require('../services/syncService');
+            const baseHttpUrl = getActiveServerHttpUrl();
+            fetch(`${baseHttpUrl}/api/public/orders/${targetOrdId}/status`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'PREPARING' })
+            }).catch(() => {});
+          } catch (_) {}
+        }
+
         notifySync();
         return {
           tickets: state.tickets.map(t => t.id === ticketId ? {
@@ -1474,6 +1535,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             stationStatuses: currentStationStatuses,
             items: updatedItems,
           } : t),
+          onlineOrders: updatedOnlineOrders,
           lastFoodReadyAlert: cookingAlert,
         };
       }),
@@ -2888,25 +2950,60 @@ export const useRestaurantStore = create<RestaurantState>()(
               .map((rt) => {
                 const local = (state.tickets || []).find((lt) => lt && lt.id === rt.id);
                 // Prevent stale remote packets from reverting forward KDS progress (e.g. served/ready/cooking -> pending)
-                if (local && (STATUS_RANK[local.status] ?? 0) > (STATUS_RANK[rt.status] ?? 0)) {
-                  return { ...local, items: Array.isArray(local.items) ? local.items : [] };
+                const localRank = local ? (STATUS_RANK[local.status] ?? 0) : -1;
+                const remoteRank = STATUS_RANK[rt.status] ?? 0;
+
+                // Merge stationStatuses station by station with highest rank
+                const mergedStationStatuses: StationStatusMap = {
+                  ...(local?.stationStatuses || {}),
+                  ...(rt.stationStatuses || {}),
+                };
+                for (const st of ['main', 'juice'] as const) {
+                  const localStRank = local?.stationStatuses?.[st] ? (STATUS_RANK[local.stationStatuses[st]!] ?? 0) : -1;
+                  const remoteStRank = rt.stationStatuses?.[st] ? (STATUS_RANK[rt.stationStatuses[st]!] ?? 0) : -1;
+                  if (localStRank >= 0 || remoteStRank >= 0) {
+                    mergedStationStatuses[st] = localStRank >= remoteStRank
+                      ? local!.stationStatuses![st]!
+                      : rt.stationStatuses![st]!;
+                  }
                 }
+
+                let finalTicket = localRank > remoteRank
+                  ? { ...local!, items: Array.isArray(local!.items) ? local!.items : [] }
+                  : { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
+
+                finalTicket.stationStatuses = mergedStationStatuses;
+
                 // Merge items to preserve item-level 'ready' or 'served' status
-                let finalTicket = { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
                 if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {
                   const itemRank: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
-                  const mergedItems = rt.items.map((remoteItem) => {
-                    const localItem = local.items.find((li) => li.id === remoteItem.id);
-                    if (!localItem) return remoteItem;
-                    const localRank = localItem.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem.completed ? 2 : 0);
-                    const remoteRank = remoteItem.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem.completed ? 2 : 0);
-                    if (localRank > remoteRank) {
-                      return { ...remoteItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
+                  const mergedItems = (finalTicket.items || []).map((curItem) => {
+                    const localItem = local.items.find((li) => li.id === curItem.id);
+                    const remoteItem = rt.items.find((ri) => ri.id === curItem.id);
+                    const lRank = localItem?.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem?.completed ? 2 : 0);
+                    const rRank = remoteItem?.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem?.completed ? 2 : 0);
+                    if (lRank > rRank && localItem) {
+                      return { ...curItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
+                    } else if (remoteItem) {
+                      return { ...curItem, itemStatus: remoteItem.itemStatus, completed: remoteItem.completed, readyAt: remoteItem.readyAt };
                     }
-                    return remoteItem;
+                    return curItem;
                   });
-                  finalTicket = { ...rt, items: mergedItems };
+                  finalTicket.items = mergedItems;
                 }
+
+                // If station statuses indicate served/ready, reflect on overall status
+                const activeStVals = Object.values(mergedStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+                if (activeStVals.length > 0) {
+                  if (activeStVals.every((s) => s === 'served')) {
+                    finalTicket.status = 'served';
+                  } else if (activeStVals.every((s) => s === 'ready' || s === 'served')) {
+                    finalTicket.status = 'ready';
+                  } else if (activeStVals.some((s) => s === 'cooking')) {
+                    finalTicket.status = 'cooking';
+                  }
+                }
+
                 if (finalTicket.status === 'served' && Array.isArray(finalTicket.items)) {
                   finalTicket.items = finalTicket.items.map((it) => ({
                     ...it,
@@ -2919,9 +3016,11 @@ export const useRestaurantStore = create<RestaurantState>()(
 
             // Preserve ALL local tickets not yet on the server that have not been deleted/billed/settled
             const remoteIds = new Set(normalizedRemote.map((rt) => rt.id));
+            const remoteOrderIds = new Set(normalizedRemote.map((rt) => rt.orderId).filter(Boolean));
             const remoteTableMap = new Map((remoteState.tables || []).map((t) => [t.id, t]));
             const freshLocalOnly = (state.tickets || []).filter((lt) => {
               if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id)) return false;
+              if (lt.orderId && remoteOrderIds.has(lt.orderId)) return false;
               const rTable = remoteTableMap.get(lt.tableId);
               if (rTable && rTable.lastSettledAt && lt.timePlaced && lt.timePlaced < rTable.lastSettledAt) {
                 return false;

@@ -22,9 +22,11 @@ import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } fr
 import { useAuthStore } from '../../store/authStore';
 import { useOpsStore } from '../../store/opsStore';
 import { Ticket, useRestaurantStore } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
+  if (useSettingsStore.getState().settings.kdsSoundAlerts === false) return;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -71,6 +73,7 @@ export default function KitchenDisplayScreen() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const tickets = useRestaurantStore((state) => state.tickets);
+  const systemSettings = useSettingsStore((s) => s.settings);
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
@@ -160,74 +163,19 @@ export default function KitchenDisplayScreen() {
 
   // Initial sync & Real-Time WebSocket for Kitchen Display System (KDS)
   useEffect(() => {
-    // Fetch active kitchen tickets and reconcile confirmed app orders
+    // Fetch active kitchen tickets from central sync hub
     const fetchLiveTickets = async () => {
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        // 1. Always fetch tickets from local sync endpoint so offline/LAN KOTs never get skipped
-        try {
-          const res = await fetch(`${baseHttpUrl}/api/sync`);
-          if (res.ok) {
-            const data = await res.json();
-            if (data && Array.isArray(data.tickets)) {
-              useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
-            }
-          }
-        } catch (_) {}
-
-        // 2. Also reconcile online orders that are CONFIRMED / PREPARING / READY
-        const ordersRes = await fetch(`${baseHttpUrl}/api/admin/online-orders`);
-        if (ordersRes.ok) {
-          const ordersData = await ordersRes.json();
-          if (ordersData.success && Array.isArray(ordersData.orders)) {
-            const activeAppOrders = ordersData.orders.filter((o: any) =>
-              o.status === 'CONFIRMED' || o.status === 'PREPARING' || o.status === 'READY'
-            );
-
-            const store = useRestaurantStore.getState();
-            const currentTickets = store.tickets || [];
-            let hasNew = false;
-            const updated = [...currentTickets];
-
-            for (const order of activeAppOrders) {
-              const kotId = `KOT-${(order.orderNumber || '').replace(/\D/g, '') || order.id.slice(-4)}`;
-              const existing = updated.find(t => t.id === kotId || (t as any).orderId === order.id);
-
-              if (!existing) {
-                const isDineIn = order.orderType === 'dine_in';
-                const newT: Ticket = {
-                  id: kotId,
-                  orderId: order.id,
-                  orderNumber: order.orderNumber,
-                  tableId: order.tableId || (isDineIn ? 'app-table' : 'delivery'),
-                  tableName: order.tableName || (isDineIn ? `${order.floor || 'Floor'} Table` : `Delivery: ${order.customer?.name || 'Customer'}`),
-                  server: isDineIn ? (order.assignedWaiter || 'Floor Server') : 'Mobile App Delivery',
-                  timePlaced: order.createdAt || Date.now(),
-                  status: (order.status === 'READY' ? 'ready' : 'cooking') as any,
-                  items: (order.items || []).map((it: any) => ({
-                    id: it.id || `it-${Date.now()}`,
-                    name: it.name || it.menuItem?.name || 'Dish Item',
-                    price: it.unitPrice || it.price || 0,
-                    qty: it.qty || it.quantity || 1,
-                    notes: it.notes || it.specialInstructions,
-                    completed: false,
-                    station: 'main'
-                  }))
-                };
-                updated.unshift(newT);
-                hasNew = true;
-              } else if (order.status === 'READY' && existing.status !== 'ready') {
-                existing.status = 'ready';
-                hasNew = true;
-              }
-            }
-
-            if (hasNew) {
-              store.syncFromServer({ tickets: updated });
-            }
+        // 1. Fetch tickets from local sync endpoint so offline/LAN KOTs never get skipped
+        const res = await fetch(`${baseHttpUrl}/api/sync`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.tickets)) {
+            useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
           }
         }
-      } catch (e) { }
+      } catch (_) {}
     };
 
     fetchLiveTickets();
@@ -327,7 +275,44 @@ export default function KitchenDisplayScreen() {
     }
   }, [tickets]);
 
-  const stationTickets = (tickets || [])
+  // Deduplicate tickets by orderId / orderNumber so the kitchen never sees duplicate cards
+  const uniqueTickets = useMemo(() => {
+    const seenOrderKeys = new Map<string, Ticket>();
+    const withoutOrder: Ticket[] = [];
+
+    for (const t of tickets || []) {
+      if (!t || !t.id) continue;
+      const orderKey = t.orderId
+        ? `oid_${t.orderId}`
+        : (t.orderNumber ? `onum_${t.orderNumber}` : null);
+
+      if (!orderKey) {
+        withoutOrder.push(t);
+        continue;
+      }
+
+      const existing = seenOrderKeys.get(orderKey);
+      if (!existing) {
+        seenOrderKeys.set(orderKey, t);
+      } else {
+        const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
+        const extRank = STATUS_RANK[existing.status] ?? 0;
+        const curRank = STATUS_RANK[t.status] ?? 0;
+        if (curRank > extRank) {
+          seenOrderKeys.set(orderKey, t);
+        } else if (curRank === extRank) {
+          const existingCount = Array.isArray(existing.items) ? existing.items.length : 0;
+          const currentCount = Array.isArray(t.items) ? t.items.length : 0;
+          if (currentCount > existingCount || (t.timePlaced || 0) > (existing.timePlaced || 0)) {
+            seenOrderKeys.set(orderKey, t);
+          }
+        }
+      }
+    }
+    return [...seenOrderKeys.values(), ...withoutOrder];
+  }, [tickets]);
+
+  const stationTickets = uniqueTickets
     .filter((t) => !!t && Array.isArray(t.items))
     .map((t) => {
       const items = Array.isArray(t.items) ? t.items : [];
@@ -361,10 +346,17 @@ export default function KitchenDisplayScreen() {
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
     const baseHttpUrl = getActiveServerHttpUrl();
-    const orderId = (ticket as any).orderId;
+    const orderId = (ticket as any).orderId || ticket.orderNumber;
 
     if (ticket.stationStatus === 'pending') {
       startCookingTicket(ticket.id, stationFilter);
+      if (orderId) {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PREPARING' })
+        }).catch(() => { });
+      }
     } else if (ticket.stationStatus === 'cooking') {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
       if (orderId) {
@@ -391,7 +383,7 @@ export default function KitchenDisplayScreen() {
 
   const renderTicket = (item: typeof stationTickets[0]) => {
     const items = Array.isArray(item.items) ? item.items : [];
-    const defaultPrepTime = 15;
+    const defaultPrepTime = systemSettings.kdsTargetPrepMinutes || 15;
     const maxPrepTimeMin = items.length > 0
       ? Math.max(...items.map((i) => i.prepTimeMin || defaultPrepTime))
       : defaultPrepTime;
@@ -690,6 +682,26 @@ export default function KitchenDisplayScreen() {
       </View>
     );
   };
+
+  if (systemSettings.enableKdsModule === false) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="lock-closed-outline" size={56} color="#D5A943" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 6 }}>
+          Kitchen KDS Module Disabled
+        </Text>
+        <Text style={{ fontSize: 13.5, color: '#9CA3AF', textAlign: 'center', maxWidth: 420, marginBottom: 20 }}>
+          The Kitchen & Juice Bar KDS module has been disabled in System Settings by Admin.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#D5A943', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 }}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        >
+          <Text style={{ fontWeight: '800', color: '#140306' }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

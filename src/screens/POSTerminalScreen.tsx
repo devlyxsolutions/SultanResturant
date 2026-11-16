@@ -26,6 +26,7 @@ import {
   EventDiscount 
 } from '../store';
 import { useShiftStore } from '../store/shiftStore';
+import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions, type RolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
@@ -221,10 +222,12 @@ export default function POSTerminalScreen({
   const clearAllOldTickets = useRestaurantStore(state => state.clearAllOldTickets);
   const tickets = useRestaurantStore(state => state.tickets);
 
-  // Shift Store
+  // Shift, Ops & System Settings Store
+  const systemSettings = useSettingsStore((s) => s.settings);
   const shifts = useShiftStore(state => state.shifts);
   const activeShiftId = useShiftStore(state => state.activeShiftId);
   const activeShift = shifts.find(s => s.id === activeShiftId && s.status === 'open');
+  const soldOutIds = useOpsStore(state => state.unavailableItemIds);
 
   // Menu State
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
@@ -304,6 +307,8 @@ export default function POSTerminalScreen({
       }
       // 2. Seating Type Filter ('tables' | 'couches' | 'majlis')
       const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
       if (tableModalSeatingType !== 'all' && tType !== tableModalSeatingType) {
         return false;
       }
@@ -482,11 +487,14 @@ export default function POSTerminalScreen({
         set.add(m.category);
       }
     });
-    const list = Array.from(set);
+    let list = Array.from(set);
+    if (systemSettings.posShowDealsTab === false) {
+      list = list.filter((c) => !c.toLowerCase().includes('deal'));
+    }
     if (!categorySearchQuery) return list;
     const q = categorySearchQuery.toLowerCase().trim();
     return list.filter(c => c.toLowerCase().includes(q));
-  }, [categories, menuItems, categorySearchQuery]);
+  }, [categories, menuItems, categorySearchQuery, systemSettings.posShowDealsTab]);
 
   // Live dish count map per category
   const categoryCounts = useMemo(() => {
@@ -552,8 +560,6 @@ export default function POSTerminalScreen({
   }, [menuItems, activeCategory, regions]);
 
   // Financial Calculations
-  const systemSettings = useSettingsStore((s) => s.settings);
-
   // Auto-select first permitted order type if cashier's default tab is disabled
   useEffect(() => {
     const canTakeaway = systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway'));
@@ -575,9 +581,12 @@ export default function POSTerminalScreen({
   const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
   const discountVal = parseFloat(discountAmount) || 0;
   const afterDiscount = Math.max(0, subTotal - discountVal);
+  const serviceCharge = systemSettings.serviceChargeEnabled
+    ? afterDiscount * ((systemSettings.serviceChargePercent || 0) / 100)
+    : 0;
   const deliveryCharges = orderType === 'delivery' ? (systemSettings.deliveryFeeDefault ?? 150) : 0;
   const tax = afterDiscount * effectiveTaxRate;
-  const rawTotal = afterDiscount + tax + deliveryCharges;
+  const rawTotal = afterDiscount + tax + serviceCharge + deliveryCharges;
   const total = systemSettings.roundTotals ? Math.round(rawTotal) : rawTotal;
 
   const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -857,8 +866,16 @@ export default function POSTerminalScreen({
     }
   };
 
+  const isPosItemBlocked = (item: MenuItem) => {
+    const isSoldOutFlag = (soldOutIds || []).includes(item.id);
+    const isZeroStock = Boolean(item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0);
+    if (isZeroStock) return true;
+    if (isSoldOutFlag && systemSettings.blockOutOfStockPosOrders) return true;
+    return false;
+  };
+
   const addToCart = (item: MenuItem) => {
-    if (item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0) {
+    if (isPosItemBlocked(item)) {
       const msg = `⚠️ "${item.name}" is currently Sold Out.`;
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Sold Out', msg);
@@ -891,6 +908,13 @@ export default function POSTerminalScreen({
 
   const handleVariantSelect = (variant: { name: string; price: number }) => {
     if (!variantModalItem) return;
+    if (isPosItemBlocked(variantModalItem)) {
+      const msg = `⚠️ "${variantModalItem.name}" is currently Sold Out.`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Sold Out', msg);
+      setVariantModalItem(null);
+      return;
+    }
 
     const variantId = `${variantModalItem.id}-${variant.name}`;
     const variantName = `${variantModalItem.name} (${variant.name})`;
@@ -955,7 +979,7 @@ export default function POSTerminalScreen({
   const sendToKitchen = () => {
     if (!requirePosPerm('posCanSendKot', 'dispatch KOT tickets to Kitchen')) return;
     if (cart.length === 0) return;
-    if (orderType === 'dine-in' && !selectedTableId) {
+    if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
       if (Platform.OS === 'web') window.alert("Please assign a dining table first.");
       return;
     }
@@ -1011,13 +1035,23 @@ export default function POSTerminalScreen({
   const openCheckout = () => {
     if (!requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
     if (cart.length === 0) return;
-    if (orderType === 'dine-in' && !selectedTableId) {
+    if (systemSettings.requireActiveShiftForPos && !activeShift) {
+      const msg = 'An open cash register shift is required before POS billing. Please open a shift first.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Active Shift Required', msg);
+      return;
+    }
+    if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
       const msg = "Please select a table for Dine-in orders.";
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert("Select Table", msg);
       return;
     }
-    if (orderType === 'delivery' && !selectedCustomerId) {
+    if (
+      orderType === 'delivery' &&
+      systemSettings.posRequireCustomerForDelivery !== false &&
+      (!selectedCustomerObj || !selectedCustomerObj.phone)
+    ) {
       const msg = "Please select customer contact and address for delivery orders.";
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert("Customer Contact Required", msg);
@@ -1059,7 +1093,11 @@ export default function POSTerminalScreen({
       setTimeout(() => {
         const ticketSub = ticket.items.reduce((s, it) => s + (it.price * it.qty), 0);
         const ticketTax = ticketSub * effectiveTaxRate;
-        const ticketTotal = systemSettings.roundTotals ? Math.round(ticketSub + ticketTax) : ticketSub + ticketTax;
+        const ticketService = systemSettings.serviceChargeEnabled
+          ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
+          : 0;
+        const rawTicketTotal = ticketSub + ticketTax + ticketService;
+        const ticketTotal = systemSettings.roundTotals ? Math.round(rawTicketTotal) : rawTicketTotal;
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
       }, 150);
@@ -1117,6 +1155,7 @@ export default function POSTerminalScreen({
       subTotal,
       discount: discountVal,
       tax,
+      serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
       total,
       payments: invoicePayments,
       tenderedAmount: totalCollected,
@@ -1145,7 +1184,7 @@ export default function POSTerminalScreen({
       }
     });
 
-    if (unsentKotItems.length > 0) {
+    if (unsentKotItems.length > 0 && systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false) {
       const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
       placeOrder(kotTarget, cashierName, unsentKotItems, loadedCart.length > 0);
     }
@@ -1182,6 +1221,10 @@ export default function POSTerminalScreen({
     setCheckoutModalVisible(false);
     setSelectedCustomerId('');
     setSelectedTableId('');
+
+    if (systemSettings.autoPrintReceiptOnPay) {
+      printInvoiceReceipt(invoice);
+    }
 
     if (wasDineIn && systemSettings.posEnableTableReleaseConfirm !== false) {
       setTableDecisionModal({
@@ -1234,6 +1277,7 @@ export default function POSTerminalScreen({
       subTotal,
       discount: discountVal,
       tax,
+      serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
       total,
       payments: [],
       status: 'unpaid',
@@ -1255,7 +1299,7 @@ export default function POSTerminalScreen({
     }
   };
 
-  // Permission Guard (after all hooks so Rules of Hooks are respected)
+  // Permission & Module Guard (after all hooks so Rules of Hooks are respected)
   if (role !== 'admin' && !can('canAccessPOS')) {
     return (
       <PermissionDeniedScreen
@@ -1264,6 +1308,36 @@ export default function POSTerminalScreen({
         requiredPermission="canAccessPOS"
         backRoute={backRoute}
       />
+    );
+  }
+
+  if (systemSettings.enablePosModule === false) {
+    return (
+      <View style={[styles.fullscreenContainer, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="lock-closed-outline" size={58} color="#B45309" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#4A121A', textAlign: 'center', marginBottom: 6 }}>
+          POS Terminal Module Disabled
+        </Text>
+        <Text style={{ fontSize: 13.5, color: '#64748B', textAlign: 'center', maxWidth: 420, marginBottom: 20 }}>
+          The POS Terminal module is currently turned off in System Settings (Modules Control). Enable it in Settings to resume billing.
+        </Text>
+        <View style={{ flexDirection: 'row', gap: 10 }}>
+          <TouchableOpacity
+            style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
+            onPress={() => router.replace(backRoute as any)}
+          >
+            <Text style={{ fontWeight: '800', color: '#1E293B' }}>Go Back</Text>
+          </TouchableOpacity>
+          {role === 'admin' && (
+            <TouchableOpacity
+              style={{ backgroundColor: '#52141C', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => router.push('/admin/settings' as any)}
+            >
+              <Text style={{ fontWeight: '800', color: '#D4AF37' }}>Open System Settings</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
     );
   }
 
@@ -2366,13 +2440,24 @@ export default function POSTerminalScreen({
                       <View style={styles.mathLine}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                           <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Discount-</Text>
-                          <TouchableOpacity 
+                          <TouchableOpacity
                             style={[
                               styles.discountBadgePill,
                               isTablet && { paddingHorizontal: 6, paddingVertical: 1 },
-                              role !== 'admin' && !can('canApplyCustomDiscount') && { opacity: 0.5 },
+                              ((role !== 'admin' && !can('canApplyCustomDiscount')) ||
+                                (systemSettings.allowCustomDiscount === false &&
+                                  systemSettings.enableDiscountsModule === false)) && { opacity: 0.5 },
                             ]}
                             onPress={() => {
+                              if (
+                                systemSettings.allowCustomDiscount === false &&
+                                systemSettings.enableDiscountsModule === false
+                              ) {
+                                const msg = 'Discounts & promotions are disabled in System Settings.';
+                                if (Platform.OS === 'web') window.alert(msg);
+                                else Alert.alert('Discounts Disabled', msg);
+                                return;
+                              }
                               if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
                               setCustomDiscountInput(discountAmount);
                               setDiscountModalVisible(true);
@@ -2394,6 +2479,17 @@ export default function POSTerminalScreen({
                         </Text>
                         <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>{systemSettings.currencySymbol || 'Rs.'} {tax.toFixed(0)}</Text>
                       </View>
+
+                      {systemSettings.serviceChargeEnabled && serviceCharge > 0 && (
+                        <View style={styles.mathLine}>
+                          <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>
+                            Service ({systemSettings.serviceChargePercent || 0}%)+
+                          </Text>
+                          <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>
+                            {systemSettings.currencySymbol || 'Rs.'} {serviceCharge.toFixed(0)}
+                          </Text>
+                        </View>
+                      )}
 
                       {orderType === 'delivery' && (
                         <View style={styles.mathLine}>
@@ -2699,7 +2795,13 @@ export default function POSTerminalScreen({
                       { id: 'couches', label: '🛋️ Couches' },
                       { id: 'majlis', label: '🕌 Majlis' },
                     ] as const
-                  ).map(st => {
+                  )
+                    .filter((st) => {
+                      if (st.id === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                      if (st.id === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                      return true;
+                    })
+                    .map(st => {
                     const active = tableModalSeatingType === st.id;
                     return (
                       <TouchableOpacity
@@ -3580,49 +3682,53 @@ export default function POSTerminalScreen({
 
               <View style={{ padding: 18 }}>
                 {/* Active Event Campaigns */}
-                <Text style={styles.inputLabel}>Active Promotional Campaigns</Text>
-                {campaigns.filter(c => c.status === 'active').length === 0 ? (
-                  <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginBottom: 12 }}>
-                    No automated event promos currently active.
-                  </Text>
-                ) : (
-                  <View style={{ gap: 6, marginBottom: 14 }}>
-                    {campaigns.filter(c => c.status === 'active').map(camp => {
-                      const isSelected = selectedEventCampaign?.id === camp.id;
-                      return (
-                        <TouchableOpacity
-                          key={camp.id}
-                          style={[styles.promoCampaignCard, isSelected && styles.promoCampaignCardActive]}
-                          onPress={() => {
-                            if (isSelected) {
-                              setSelectedEventCampaign(null);
-                              setDiscountAmount('0');
-                            } else {
-                              setSelectedEventCampaign(camp);
-                            }
-                            setDiscountModalVisible(false);
-                          }}
-                        >
-                          <View style={{ flex: 1 }}>
-                            <Text style={[styles.promoCampaignTitle, isSelected && { color: '#059669' }]}>
-                              {camp.title}
-                            </Text>
-                            <Text style={styles.promoCampaignSub}>
-                              {camp.type === 'percentage' ? `${camp.value}% Off` : `Rs. ${camp.value} Off`}
-                              {camp.minSpend ? ` • Min Order: Rs. ${camp.minSpend}` : ''}
-                            </Text>
-                          </View>
-                          {isSelected && <Ionicons name="checkmark-circle" size={18} color="#059669" />}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
+                {systemSettings.enableDiscountsModule !== false && (
+                  <>
+                    <Text style={styles.inputLabel}>Active Promotional Campaigns</Text>
+                    {campaigns.filter(c => c.status === 'active').length === 0 ? (
+                      <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginBottom: 12 }}>
+                        No automated event promos currently active.
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 6, marginBottom: 14 }}>
+                        {campaigns.filter(c => c.status === 'active').map(camp => {
+                          const isSelected = selectedEventCampaign?.id === camp.id;
+                          return (
+                            <TouchableOpacity
+                              key={camp.id}
+                              style={[styles.promoCampaignCard, isSelected && styles.promoCampaignCardActive]}
+                              onPress={() => {
+                                if (isSelected) {
+                                  setSelectedEventCampaign(null);
+                                  setDiscountAmount('0');
+                                } else {
+                                  setSelectedEventCampaign(camp);
+                                }
+                                setDiscountModalVisible(false);
+                              }}
+                            >
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.promoCampaignTitle, isSelected && { color: '#059669' }]}>
+                                  {camp.title}
+                                </Text>
+                                <Text style={styles.promoCampaignSub}>
+                                  {camp.type === 'percentage' ? `${camp.value}% Off` : `Rs. ${camp.value} Off`}
+                                  {camp.minSpend ? ` • Min Order: Rs. ${camp.minSpend}` : ''}
+                                </Text>
+                              </View>
+                              {isSelected && <Ionicons name="checkmark-circle" size={18} color="#059669" />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
                 )}
 
-                {/* Custom Discount Input (Role Guarded) */}
-                {canApplyCustomDiscount ? (
+                {/* Custom Discount Input (Role + System Settings Guarded) */}
+                {canApplyCustomDiscount && systemSettings.allowCustomDiscount !== false ? (
                   <View style={{ marginTop: 8 }}>
-                    <Text style={styles.inputLabel}>Manual Discount Amount (Rs.)</Text>
+                    <Text style={styles.inputLabel}>Manual Discount Amount ({systemSettings.currencySymbol || 'Rs.'})</Text>
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                       <TextInput
                         style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
@@ -3646,7 +3752,9 @@ export default function POSTerminalScreen({
                 ) : (
                   <View style={{ marginTop: 8, padding: 8, backgroundColor: '#F1F5F9', borderRadius: 8 }}>
                     <Text style={{ fontSize: 10.5, color: '#64748B' }}>
-                      Manual custom discount requires Admin or Manager authorization.
+                      {systemSettings.allowCustomDiscount === false
+                        ? 'Custom discounts are currently disabled in System Settings.'
+                        : 'Manual custom discount requires Admin or Manager authorization.'}
                     </Text>
                   </View>
                 )}

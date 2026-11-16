@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useCallStore, CallRecord } from '../store/callStore';
+import { useSettingsStore } from '../store/settingsStore';
 import {
   getCustomerByPhone,
   createCustomer,
@@ -41,6 +42,7 @@ export default function IncomingCallHost() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
+  const enableCallDetector = useSettingsStore((state) => state.settings.enableCallDetector);
   const activeIncomingCall = useCallStore((state) => state.activeIncomingCall);
   const dismissActiveCall = useCallStore((state) => state.dismissActiveCall);
 
@@ -65,6 +67,7 @@ export default function IncomingCallHost() {
   }, [customer]);
 
   useEffect(() => {
+    if (enableCallDetector === false) return;
     if (activeIncomingCall) {
       setQuickName('');
       setQuickAddress('');
@@ -109,9 +112,9 @@ export default function IncomingCallHost() {
     } else {
       slideAnim.setValue(-120);
     }
-  }, [activeIncomingCall]);
+  }, [activeIncomingCall, enableCallDetector]);
 
-  if (!activeIncomingCall) {
+  if (enableCallDetector === false || !activeIncomingCall) {
     return null;
   }
 

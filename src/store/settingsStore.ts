@@ -216,7 +216,7 @@ export const useSettingsStore = create<SettingsState>()(
         set((state) => {
           const currentUpdated = state.settings.updatedAt || 0;
           const incomingUpdated = typeof incoming.updatedAt === 'number' ? incoming.updatedAt : 0;
-          if (incomingUpdated > 0 && currentUpdated > 0 && incomingUpdated < currentUpdated) {
+          if (currentUpdated > 0 && incomingUpdated < currentUpdated) {
             return state;
           }
           return {

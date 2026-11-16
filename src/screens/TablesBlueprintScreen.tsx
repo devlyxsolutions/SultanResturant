@@ -29,6 +29,7 @@ import {
   sortFloors,
 } from '../constants/floors';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import RoyalDropdown from '../components/RoyalDropdown';
 import {
   generateTableQrCode,
@@ -101,6 +102,7 @@ export default function TablesBlueprintScreen({
     canDeleteTables,
   } = useRolePermissions(role === 'manager' ? 'manager' : undefined);
 
+  const systemSettings = useSettingsStore((s) => s.settings);
   const tables = useRestaurantStore((s) => s.tables);
   const zones = useRestaurantStore((s) => s.zones);
   const dynamicFloors = useRestaurantStore((s) => s.floors);
@@ -308,21 +310,28 @@ export default function TablesBlueprintScreen({
   // ---------- Filtering ----------
   const filteredTables = useMemo(() => {
     return tables.filter((t) => {
+      const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       const tFloor = getTableFloor(t);
       if (floorFilter !== 'all' && tFloor.toLowerCase() !== floorFilter.toLowerCase()) return false;
-      const tType = getTableSeatingType(t);
       if (seatingTypeFilter !== 'all' && tType !== seatingTypeFilter) return false;
       if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
       return true;
     });
-  }, [tables, statusFilter, floorFilter, seatingTypeFilter, search]);
+  }, [tables, statusFilter, floorFilter, seatingTypeFilter, search, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // Scope metrics by active floor
   const scopedTables = useMemo(() => {
-    if (floorFilter === 'all') return tables;
-    return tables.filter((t) => getTableFloor(t).toLowerCase() === floorFilter.toLowerCase());
-  }, [tables, floorFilter]);
+    return tables.filter((t) => {
+      const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
+      if (floorFilter === 'all') return true;
+      return getTableFloor(t).toLowerCase() === floorFilter.toLowerCase();
+    });
+  }, [tables, floorFilter, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // 3-Zone Breakdown & Cabin summary for the selected floor (or entire restaurant)
   const zoneSummary = useMemo(() => {
@@ -1279,7 +1288,11 @@ export default function TablesBlueprintScreen({
                   label="Seating Zone"
                   options={[
                     { label: 'All Zones', value: 'all', icon: 'apps' as const },
-                    ...SEATING_ZONE_TYPES.map((type) => {
+                    ...SEATING_ZONE_TYPES.filter((type) => {
+                      if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                      if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                      return true;
+                    }).map((type) => {
                       const meta = SEATING_ZONES[type];
                       const count = scopedTables.filter((t) => getTableSeatingType(t) === type).length;
                       return {
@@ -1756,7 +1769,11 @@ export default function TablesBlueprintScreen({
             {/* Select Seating Zone Type (Tables, Couches, Majlis Sitting) */}
             <Text style={styles.label}>Seating Zone Type</Text>
             <View style={styles.seatingTypePickerRow}>
-              {SEATING_ZONE_TYPES.map((type) => {
+              {SEATING_ZONE_TYPES.filter((type) => {
+                if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                return true;
+              }).map((type) => {
                 const meta = SEATING_ZONES[type];
                 const active = formSeatingType === type;
                 return (

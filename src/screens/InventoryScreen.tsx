@@ -32,6 +32,7 @@ import { BRAND } from '../constants/brand';
 import { money, formatTime, formatDay, toWhatsAppNumber } from '../utils/format';
 import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
@@ -61,6 +62,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     canDeleteInventory,
   } = useRolePermissions();
 
+  const systemSettings = useSettingsStore((s) => s.settings);
   const inventory = useOpsStore((s) => s.inventory);
   const stockMovements = useOpsStore((s) => s.stockMovements);
   const suppliers = useOpsStore((s) => s.suppliers);
@@ -168,11 +170,14 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     let warningExpiryCount = 0;
     let totalShortageValue = 0;
 
+    const fallbackThresh = systemSettings.lowStockAlertThreshold || 10;
+
     inventory.forEach((item) => {
       const val = (item.stock || 0) * (item.costPerUnit || 0);
       totalValuation += val;
 
-      const level = getStockLevel(item);
+      const effThresh = item.threshold ?? fallbackThresh;
+      const level = getStockLevel({ ...item, threshold: effThresh });
       if (level === 'out') outCount++;
       else if (level === 'low' || level === 'critical') lowCount++;
 
@@ -181,8 +186,8 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       else if (exp.status === 'critical') criticalExpiryCount++;
       else if (exp.status === 'warning') warningExpiryCount++;
 
-      if (item.stock < item.threshold) {
-        const shortage = Math.max(0, item.threshold * 1.5 - item.stock);
+      if (item.stock < effThresh) {
+        const shortage = Math.max(0, effThresh * 1.5 - item.stock);
         totalShortageValue += shortage * (item.costPerUnit || 0);
       }
     });
@@ -197,7 +202,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       warningExpiryCount,
       totalShortageValue,
     };
-  }, [inventory]);
+  }, [inventory, systemSettings.lowStockAlertThreshold]);
 
   // Filtered Raw Materials
   const filteredInventory = useMemo(() => {
@@ -251,9 +256,11 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   // Low Stock & Shortage Reorder Items
   const lowStockItems = useMemo(() => {
+    const fallbackThresh = systemSettings.lowStockAlertThreshold || 10;
     return inventory
       .filter((item) => {
-        const level = getStockLevel(item);
+        const effThresh = item.threshold ?? fallbackThresh;
+        const level = getStockLevel({ ...item, threshold: effThresh });
         const matchSearch =
           !searchQuery ||
           item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -262,12 +269,13 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
         return (level === 'low' || level === 'critical' || level === 'out') && matchSearch;
       })
       .map((item) => {
-        const targetStock = Math.ceil(item.threshold * 1.5);
+        const effThresh = item.threshold ?? fallbackThresh;
+        const targetStock = Math.ceil(effThresh * 1.5);
         const shortage = Math.max(1, targetStock - item.stock);
         const estCost = shortage * (item.costPerUnit || 0);
         return { item, targetStock, shortage, estCost };
       });
-  }, [inventory, searchQuery]);
+  }, [inventory, searchQuery, systemSettings.lowStockAlertThreshold]);
 
   // Inward Receiving Logs (Movements of type 'receive')
   const receivingLogs = useMemo(() => {
@@ -346,7 +354,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setFormLocation(STORAGE_LOCATIONS[0]);
     setFormUnit('kg');
     setFormStock('');
-    setFormThreshold('10');
+    setFormThreshold(String(systemSettings.lowStockAlertThreshold || 10));
     setFormCost('');
     setFormSupplier('');
     setFormSupplierPhone('');
@@ -428,7 +436,9 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       return;
     }
     const stockNum = parseFloat(formStock) || 0;
-    const threshNum = parseFloat(formThreshold) || 5;
+    const defaultThresh = systemSettings.lowStockAlertThreshold || 10;
+    const parsedThresh = parseFloat(formThreshold);
+    const threshNum = Number.isFinite(parsedThresh) && parsedThresh > 0 ? parsedThresh : defaultThresh;
     const costNum = parseFloat(formCost) || 0;
     const expiryDaysNum = parseInt(formExpiryDays, 10);
 
@@ -466,7 +476,8 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     }
 
     const stockNum = parseFloat(formStock) || 0;
-    const threshNum = parseFloat(formThreshold) || 5;
+    const parsedEditThresh = parseFloat(formThreshold);
+    const threshNum = Number.isFinite(parsedEditThresh) && parsedEditThresh > 0 ? parsedEditThresh : (systemSettings.lowStockAlertThreshold || 10);
     const costNum = parseFloat(formCost) || 0;
     const expiryDaysNum = parseInt(formExpiryDays, 10);
 

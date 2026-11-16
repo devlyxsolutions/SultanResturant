@@ -884,7 +884,28 @@ export default function AdminSettingsScreen() {
   }, [settings]);
 
   const updateDraft = (partial: Partial<SystemSettings>) => {
-    setDraft((prev) => ({ ...prev, ...partial }));
+    const normalizedPatch: Partial<SystemSettings> = { ...partial };
+    if ('showQrOnReceipt' in normalizedPatch && !('enableCustomerFeedbackQr' in normalizedPatch)) {
+      normalizedPatch.enableCustomerFeedbackQr = normalizedPatch.showQrOnReceipt;
+    }
+    if ('enableCustomerFeedbackQr' in normalizedPatch && !('showQrOnReceipt' in normalizedPatch)) {
+      normalizedPatch.showQrOnReceipt = normalizedPatch.enableCustomerFeedbackQr;
+    }
+    setDraft((prev) => ({ ...prev, ...normalizedPatch }));
+  };
+
+  const applySettingPatchImmediate = (partial: Partial<SystemSettings>) => {
+    const normalizedPatch: Partial<SystemSettings> = { ...partial };
+    if ('showQrOnReceipt' in normalizedPatch && !('enableCustomerFeedbackQr' in normalizedPatch)) {
+      normalizedPatch.enableCustomerFeedbackQr = normalizedPatch.showQrOnReceipt;
+    }
+    if ('enableCustomerFeedbackQr' in normalizedPatch && !('showQrOnReceipt' in normalizedPatch)) {
+      normalizedPatch.showQrOnReceipt = normalizedPatch.enableCustomerFeedbackQr;
+    }
+    setDraft((prev) => ({ ...prev, ...normalizedPatch }));
+    updateSettings(normalizedPatch);
+    prevSettingsRef.current = useSettingsStore.getState().settings;
+    broadcastImmediately();
   };
 
   const handleSaveSettings = async () => {
@@ -896,7 +917,6 @@ export default function AdminSettingsScreen() {
       prevSettingsRef.current = saved;
       setDraft({ ...saved });
       broadcastImmediately();
-      await forceSyncNow();
       showToast('Settings saved & synced across all devices!');
     } finally {
       setIsSaving(false);
@@ -1633,8 +1653,8 @@ export default function AdminSettingsScreen() {
     for (const t of group.toggles) {
       patch[t.key] = enable as any;
     }
-    updateDraft(patch);
-    showToast(`${enable ? 'Enabled' : 'Disabled'} all options in ${group.title} (Save Changes to apply)`);
+    applySettingPatchImmediate(patch);
+    showToast(`${enable ? 'Enabled' : 'Disabled'} all options in ${group.title} & synced!`);
   };
 
   const handleBulkAllModules = (enable: boolean) => {
@@ -1644,8 +1664,8 @@ export default function AdminSettingsScreen() {
         patch[t.key] = enable as any;
       }
     }
-    updateDraft(patch);
-    showToast(`${enable ? 'Enabled' : 'Disabled'} all module options (Save Changes to apply)`);
+    applySettingPatchImmediate(patch);
+    showToast(`${enable ? 'Enabled' : 'Disabled'} all module options & synced!`);
   };
 
   const handleResetModuleDefaults = () => {
@@ -1660,8 +1680,8 @@ export default function AdminSettingsScreen() {
         }
       }
     }
-    updateDraft(patch);
-    showToast('Module options reset to defaults (Save Changes to apply)');
+    applySettingPatchImmediate(patch);
+    showToast('Module options reset to defaults & synced!');
   };
 
   const askConfirm = (title: string, message: string, onConfirm: () => void) => {
@@ -2006,13 +2026,13 @@ export default function AdminSettingsScreen() {
               'Show Logo on Printed Receipts',
               'Display Sultan crest at the top of thermal & A4 invoices',
               draft.showLogoOnReceipt,
-              (v) => updateDraft({ showLogoOnReceipt: v })
+              (v) => applySettingPatchImmediate({ showLogoOnReceipt: v })
             )}
             {renderToggleRow(
               'Show Feedback QR Code on Receipts',
               'Include scannable dish review & loyalty QR code at receipt bottom',
               draft.showQrOnReceipt,
-              (v) => updateDraft({ showQrOnReceipt: v })
+              (v) => applySettingPatchImmediate({ showQrOnReceipt: v })
             )}
             {renderSaveFooter()}
           </View>
@@ -2056,6 +2076,16 @@ export default function AdminSettingsScreen() {
                 />
               </View>
               <View style={styles.fieldBox}>
+                <Text style={styles.label}>Service Charge (%)</Text>
+                <TextInput
+                  style={styles.input}
+                  keyboardType="numeric"
+                  value={String(draft.serviceChargePercent ?? 0)}
+                  onChangeText={(t) => updateDraft({ serviceChargePercent: parseFloat(t) || 0 })}
+                  placeholder="0"
+                />
+              </View>
+              <View style={styles.fieldBox}>
                 <Text style={styles.label}>Default Delivery Fee</Text>
                 <TextInput
                   style={styles.input}
@@ -2072,31 +2102,43 @@ export default function AdminSettingsScreen() {
               'Enable Sales Tax (GST)',
               'Automatically apply configured tax rate on POS & table bills',
               draft.taxEnabled,
-              (v) => updateDraft({ taxEnabled: v })
+              (v) => applySettingPatchImmediate({ taxEnabled: v })
+            )}
+            {renderToggleRow(
+              'Enable Service Charge',
+              'Apply configured service charge percentage on POS & table bills',
+              draft.serviceChargeEnabled,
+              (v) => applySettingPatchImmediate({ serviceChargeEnabled: v })
             )}
             {renderToggleRow(
               'Round Bill Totals',
               'Round final payable amounts to nearest whole currency unit',
               draft.roundTotals,
-              (v) => updateDraft({ roundTotals: v })
+              (v) => applySettingPatchImmediate({ roundTotals: v })
             )}
             {renderToggleRow(
               'Allow Custom Discounts on POS',
               'Permit cashiers/managers to apply ad-hoc bill discounts',
               draft.allowCustomDiscount,
-              (v) => updateDraft({ allowCustomDiscount: v })
+              (v) => applySettingPatchImmediate({ allowCustomDiscount: v })
+            )}
+            {renderToggleRow(
+              'Require Admin/Manager PIN to Void Invoices',
+              'Prompt for PIN verification before voiding any settled invoice',
+              draft.requirePinForVoid,
+              (v) => applySettingPatchImmediate({ requirePinForVoid: v })
             )}
             {renderToggleRow(
               'Auto-Print Receipt on Payment',
               'Automatically trigger receipt print dialog when invoice is settled',
               draft.autoPrintReceiptOnPay,
-              (v) => updateDraft({ autoPrintReceiptOnPay: v })
+              (v) => applySettingPatchImmediate({ autoPrintReceiptOnPay: v })
             )}
             {renderToggleRow(
               'Auto-Send Orders to KDS',
               'Dispatch kitchen/bar KOT immediately when order is placed',
               draft.autoSendKdsOnOrder,
-              (v) => updateDraft({ autoSendKdsOnOrder: v })
+              (v) => applySettingPatchImmediate({ autoSendKdsOnOrder: v })
             )}
             {renderSaveFooter()}
           </View>
@@ -2244,7 +2286,7 @@ export default function AdminSettingsScreen() {
                         </View>
                         <Switch
                           value={enabled}
-                          onValueChange={(v) => updateDraft({ [item.key]: v } as Partial<SystemSettings>)}
+                          onValueChange={(v) => applySettingPatchImmediate({ [item.key]: v } as Partial<SystemSettings>)}
                           trackColor={{ false: '#D6D3D1', true: '#52171B' }}
                           thumbColor={enabled ? '#D4AF37' : '#F5F5F4'}
                         />
@@ -2952,13 +2994,13 @@ export default function AdminSettingsScreen() {
               'Auto-Sync Across Devices',
               'Automatically broadcast state changes to tablets & kitchen displays',
               draft.autoSyncEnabled,
-              (v) => updateDraft({ autoSyncEnabled: v })
+              (v) => applySettingPatchImmediate({ autoSyncEnabled: v })
             )}
             {renderToggleRow(
               'Cloud Backup Sync',
               'Mirror live operational state to Firebase cloud backup when online',
               draft.cloudBackupEnabled,
-              (v) => updateDraft({ cloudBackupEnabled: v })
+              (v) => applySettingPatchImmediate({ cloudBackupEnabled: v })
             )}
             {renderSaveFooter()}
           </View>

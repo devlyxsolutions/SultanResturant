@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Vibration, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Vibration, Platform, ScrollView } from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { useRestaurantStore, OnlineOrder } from '../store/restaurantStore';
@@ -131,10 +131,18 @@ export function FloorManagerNotificationHost() {
     }
   }, [floorWaiters, selectedWaiter]);
 
+  const lastAlarmTimeRef = useRef<number>(0);
+  const activeOrderId = currentPendingOrder?.id;
+
   // Repeating Alarm Effect: Chimes and vibrates every 6.5s until order is confirmed or rejected!
   useEffect(() => {
-    if (currentPendingOrder && isFloorStaff) {
+    if (activeOrderId && isFloorStaff) {
       const triggerAlarm = () => {
+        const now = Date.now();
+        // Prevent rapid double-chime within 3.5 seconds
+        if (now - lastAlarmTimeRef.current < 3500) return;
+        lastAlarmTimeRef.current = now;
+
         playWebChime();
         if (Platform.OS !== 'web') {
           try {
@@ -163,7 +171,7 @@ export function FloorManagerNotificationHost() {
         alertIntervalRef.current = null;
       }
     }
-  }, [currentPendingOrder, isFloorStaff]);
+  }, [activeOrderId, isFloorStaff]);
 
   if (!isFloorStaff || !currentPendingOrder) {
     return null;
@@ -196,112 +204,127 @@ export function FloorManagerNotificationHost() {
     >
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          {/* Header Badge */}
-          <View style={styles.urgentBadge}>
-            <MaterialCommunityIcons name="bell-ring" size={24} color="#FFF" style={styles.pulseIcon} />
-            <Text style={styles.urgentTitle}>NEW DIGITAL MENU ORDER — REQUIRES CONFIRMATION</Text>
-          </View>
-
-          {/* Subheader Alert Instruction */}
-          <View style={styles.instructionBanner}>
-            <MaterialCommunityIcons name="information" size={18} color="#D97706" />
-            <Text style={styles.instructionText}>
-              Digital Menu order placed by customer. Repeating alarm will stay active until confirmed or rejected.
-            </Text>
-          </View>
-
-          {/* Table & Floor Details */}
-          <View style={styles.infoRow}>
-            <View style={styles.infoBox}>
-              <Text style={styles.label}>FLOOR & TABLE</Text>
-              <Text style={styles.valHighlight}>
-                {currentPendingOrder.floor || 'Ground Floor'} • {currentPendingOrder.tableName || currentPendingOrder.tableId}
-              </Text>
-              {!!currentPendingOrder.seatingType && (
-                <Text style={styles.subtext}>Seating: {currentPendingOrder.seatingType.toUpperCase()}</Text>
-              )}
+          <ScrollView
+            style={styles.cardScroll}
+            contentContainerStyle={styles.cardScrollContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Header Badge */}
+            <View style={styles.urgentBadge}>
+              <MaterialCommunityIcons name="bell-ring" size={24} color="#FFF" style={styles.pulseIcon} />
+              <Text style={styles.urgentTitle}>NEW DIGITAL MENU ORDER — REQUIRES CONFIRMATION</Text>
             </View>
 
-            <View style={styles.infoBox}>
-              <Text style={styles.label}>ORDER #</Text>
-              <Text style={styles.valHighlight}>#{currentPendingOrder.orderNumber}</Text>
-              <Text style={styles.subtext}>
-                {currentPendingOrder.roundNumber && currentPendingOrder.roundNumber > 1
-                  ? `Round ${currentPendingOrder.roundNumber}`
-                  : 'Initial Round'}
+            {/* Subheader Alert Instruction */}
+            <View style={styles.instructionBanner}>
+              <MaterialCommunityIcons name="information" size={18} color="#D97706" />
+              <Text style={styles.instructionText}>
+                Digital Menu order placed by customer. Repeating alarm will stay active until confirmed or rejected.
               </Text>
             </View>
-          </View>
 
-          {/* Customer Details */}
-          <View style={styles.customerBox}>
-            <MaterialCommunityIcons name="account-circle" size={20} color="#D4AF37" />
-            <Text style={styles.customerName}>
-              {currentPendingOrder.customer?.name || 'Customer'}
-            </Text>
-            <Text style={styles.customerPhone}>
-              ({currentPendingOrder.customer?.phone || 'No Phone'})
-            </Text>
-          </View>
+            {/* Table & Floor Details */}
+            <View style={styles.infoRow}>
+              <View style={styles.infoBox}>
+                <Text style={styles.label}>FLOOR & TABLE</Text>
+                <Text style={styles.valHighlight}>
+                  {currentPendingOrder.floor || 'Ground Floor'} • {currentPendingOrder.tableName || currentPendingOrder.tableId}
+                </Text>
+                {!!currentPendingOrder.seatingType && (
+                  <Text style={styles.subtext}>Seating: {currentPendingOrder.seatingType.toUpperCase()}</Text>
+                )}
+              </View>
 
-          {/* Items Summary */}
-          <View style={styles.itemsContainer}>
-            <Text style={styles.itemsHeader}>ORDERED ITEMS ({currentPendingOrder.items.length})</Text>
-            <View style={styles.itemsList}>
-              {currentPendingOrder.items.map((it, idx) => (
-                <View key={idx} style={styles.itemRow}>
-                  <Text style={styles.itemQty}>{it.qty || it.quantity || 1}x</Text>
-                  <Text style={styles.itemName} numberOfLines={1}>{it.name}</Text>
-                  <Text style={styles.itemPrice}>Rs. {((it.unitPrice || it.price || 0) * (it.qty || 1)).toLocaleString()}</Text>
-                </View>
-              ))}
+              <View style={styles.infoBox}>
+                <Text style={styles.label}>ORDER #</Text>
+                <Text style={styles.valHighlight}>#{currentPendingOrder.orderNumber}</Text>
+                <Text style={styles.subtext}>
+                  {currentPendingOrder.roundNumber && currentPendingOrder.roundNumber > 1
+                    ? `Round ${currentPendingOrder.roundNumber}`
+                    : 'Initial Round'}
+                </Text>
+              </View>
             </View>
-            <View style={styles.totalRow}>
-              <Text style={styles.totalLabel}>Grand Total (Incl. GST):</Text>
-              <Text style={styles.totalVal}>Rs. {currentPendingOrder.total.toLocaleString()}</Text>
-            </View>
-          </View>
 
-          {/* Waiter Assignment */}
-          <View style={styles.waiterSection}>
-            <Text style={styles.waiterLabel}>ASSIGN FLOOR WAITER:</Text>
-            <View style={styles.waiterPills}>
-              {floorWaiters.slice(0, 4).map((w) => (
-                <TouchableOpacity
-                  key={w.id}
-                  style={[styles.waiterPill, selectedWaiter === w.name && styles.waiterPillActive]}
-                  onPress={() => setSelectedWaiter(w.name)}
-                >
-                  <Text style={[styles.waiterPillText, selectedWaiter === w.name && styles.waiterPillTextActive]}>
-                    {w.name}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Action Buttons */}
-          <View style={styles.actionsRow}>
-            <TouchableOpacity
-              style={[styles.btn, styles.btnReject]}
-              onPress={handleReject}
-              disabled={isProcessing}
-            >
-              <MaterialCommunityIcons name="close-circle-outline" size={22} color="#EF4444" />
-              <Text style={styles.btnRejectText}>Reject Order</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.btn, styles.btnConfirm]}
-              onPress={handleConfirm}
-              disabled={isProcessing}
-            >
-              <MaterialCommunityIcons name="check-decagram" size={24} color="#FFF" />
-              <Text style={styles.btnConfirmText}>
-                {isProcessing ? 'Confirming...' : 'CONFIRM & SEND KOT'}
+            {/* Customer Details */}
+            <View style={styles.customerBox}>
+              <MaterialCommunityIcons name="account-circle" size={20} color="#D4AF37" />
+              <Text style={styles.customerName}>
+                {currentPendingOrder.customer?.name || 'Customer'}
               </Text>
-            </TouchableOpacity>
-          </View>
+              <Text style={styles.customerPhone}>
+                ({currentPendingOrder.customer?.phone || 'No Phone'})
+              </Text>
+            </View>
+
+            {/* Items Summary */}
+            <View style={styles.itemsContainer}>
+              <Text style={styles.itemsHeader}>ORDERED ITEMS ({currentPendingOrder.items.length})</Text>
+              <ScrollView
+                style={styles.itemsListScroll}
+                contentContainerStyle={styles.itemsListScrollContent}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={true}
+              >
+                {currentPendingOrder.items.map((it, idx) => {
+                  const qty = it.qty || it.quantity || 1;
+                  const price = it.unitPrice || it.price || 0;
+                  return (
+                    <View key={idx} style={styles.itemRow}>
+                      <Text style={styles.itemQty}>{qty}x</Text>
+                      <Text style={styles.itemName} numberOfLines={1}>{it.name}</Text>
+                      <Text style={styles.itemPrice}>Rs. {(price * qty).toLocaleString()}</Text>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+              <View style={styles.totalRow}>
+                <Text style={styles.totalLabel}>Grand Total (Incl. GST):</Text>
+                <Text style={styles.totalVal}>Rs. {(currentPendingOrder.total || 0).toLocaleString()}</Text>
+              </View>
+            </View>
+
+            {/* Waiter Assignment */}
+            <View style={styles.waiterSection}>
+              <Text style={styles.waiterLabel}>ASSIGN FLOOR WAITER:</Text>
+              <View style={styles.waiterPills}>
+                {floorWaiters.slice(0, 4).map((w) => (
+                  <TouchableOpacity
+                    key={w.id}
+                    style={[styles.waiterPill, selectedWaiter === w.name && styles.waiterPillActive]}
+                    onPress={() => setSelectedWaiter(w.name)}
+                  >
+                    <Text style={[styles.waiterPillText, selectedWaiter === w.name && styles.waiterPillTextActive]}>
+                      {w.name}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Action Buttons */}
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={[styles.btn, styles.btnReject]}
+                onPress={handleReject}
+                disabled={isProcessing}
+              >
+                <MaterialCommunityIcons name="close-circle-outline" size={22} color="#EF4444" />
+                <Text style={styles.btnRejectText}>Reject Order</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btn, styles.btnConfirm]}
+                onPress={handleConfirm}
+                disabled={isProcessing}
+              >
+                <MaterialCommunityIcons name="check-decagram" size={24} color="#FFF" />
+                <Text style={styles.btnConfirmText}>
+                  {isProcessing ? 'Confirming...' : 'CONFIRM & SEND KOT'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
         </View>
       </View>
     </Modal>
@@ -319,16 +342,23 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 580,
+    maxHeight: '94%',
     backgroundColor: '#1E1B18',
     borderRadius: 16,
     borderWidth: 2,
     borderColor: '#DC2626',
-    padding: 20,
+    padding: 18,
     shadowColor: '#DC2626',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 16,
     elevation: 12,
+  },
+  cardScroll: {
+    maxHeight: '100%',
+  },
+  cardScrollContent: {
+    paddingBottom: 4,
   },
   urgentBadge: {
     flexDirection: 'row',
@@ -429,9 +459,13 @@ const styles = StyleSheet.create({
     letterSpacing: 0.6,
     marginBottom: 10,
   },
-  itemsList: {
-    gap: 6,
-    maxHeight: 140,
+  itemsListScroll: {
+    maxHeight: 160,
+    overflow: 'hidden',
+  },
+  itemsListScrollContent: {
+    gap: 4,
+    paddingRight: 6,
   },
   itemRow: {
     flexDirection: 'row',
