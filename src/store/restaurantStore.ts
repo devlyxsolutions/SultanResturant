@@ -372,6 +372,7 @@ type RestaurantState = {
   customers: Customer[];
   staff: StaffMember[];
   menuItems: MenuItem[];
+  hasClearedLegacyDummyMenu?: boolean;
   categories: string[];
   regions: string[];
   zones: string[];
@@ -678,6 +679,26 @@ const INITIAL_FEEDBACKS: InvoiceFeedback[] = [
 export const INITIAL_MENU: MenuItem[] = SULTAN_DEFAULT_MENU;
 export const INITIAL_CATEGORIES: string[] = SULTAN_DEFAULT_CATEGORIES;
 export const INITIAL_REGIONS: string[] = SULTAN_DEFAULT_REGIONS;
+
+export const LEGACY_DUMMY_IDS = new Set([
+  'm1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7', 'm8', 'm9', 'm10',
+  'm11', 'm12', 'm13', 'm14', 'm15', 'm16', 'm17', 'm18', 'm19',
+  'deal1', 'deal2', 'm-zain', 'm-shahi-handi', 'm-beef-karahi', 'm-chicken-cheese'
+]);
+export const LEGACY_DUMMY_NAMES = new Set([
+  'sultan seekh kebab', 'desi murgh karahi', 'hummus with warm pita', 'royal turkish kunafa',
+  'fresh mint margarita', 'fajita supreme pizza', 'smoked mutton ribs', 'sultan dum biryani',
+  'grand sultan angus burger', 'cheesy truffle fries', 'choco molten lava cake', 'mango kulfa shake',
+  'sultan special roghni naan', 'mutton shinwari karahi', 'chicken manchurian & egg fried rice',
+  'chicken chowmein classic', 'hot & sour chicken soup', 'grilled chicken alfredo pasta',
+  'crispy fish & chips', 'sultan family feast (4-5 persons)', 'royal couple platter (2 persons)',
+  'zain dish', 'sultan shahi handi', 'beef karahii', 'chicken cheese'
+]);
+export function isLegacyDummyDish(m: any): boolean {
+  if (!m) return true;
+  if (m.id && LEGACY_DUMMY_IDS.has(m.id)) return true;
+  return false;
+}
 
 export const INITIAL_STAFF: StaffMember[] = [
   {
@@ -1169,6 +1190,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       deletedTicketIds: [],
       tickets: [],
       menuItems: INITIAL_MENU,
+      hasClearedLegacyDummyMenu: true,
       categories: INITIAL_CATEGORIES,
       regions: INITIAL_REGIONS,
       zones: INITIAL_FLOORS.map(f => f.name),
@@ -3066,76 +3088,17 @@ export const useRestaurantStore = create<RestaurantState>()(
               return [...localUnsynced, ...remoteList];
             })()
           } : {}),
-          ...(remoteState.menuItems ? {
-            menuItems: (() => {
-              const incoming = Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [];
-
-              // Canonical alias map to eliminate name duplicates (e.g., 'Sultan Kebab' -> 'Sultan Seekh Kebab')
-              const ALIAS_MAP: Record<string, string> = {
-                'sultan kebab': 'sultan seekh kebab',
-                'chicken karahi': 'desi murgh karahi',
-                'hummus & pita': 'hummus with warm pita',
-                'kunafa': 'royal turkish kunafa',
-                'mint margarita': 'fresh mint margarita',
-                'mangoo shake': 'mango kulfa shake',
-                'chicken fajita': 'fajita supreme pizza',
-              };
-
-              const normKey = (name?: string) => {
-                const clean = (name || '').trim().toLowerCase();
-                return ALIAS_MAP[clean] || clean;
-              };
-
-              const resultMap = new Map<string, MenuItem>();
-
-              // 1. Foundation: Always guarantee all 21 default dishes exist
-              for (const def of SULTAN_DEFAULT_MENU) {
-                resultMap.set(normKey(def.name), { ...def });
-              }
-
-              // 2. Local store items (preserve any custom dishes or local edits)
-              for (const loc of (state.menuItems || [])) {
-                if (!loc || !loc.name) continue;
-                const k = normKey(loc.name);
-                const existing = resultMap.get(k);
-                if (existing) {
-                  resultMap.set(k, {
-                    ...existing,
-                    ...loc,
-                    imageUri: loc.imageUri || (loc as any).imageUrl || existing.imageUri,
-                    region: loc.region || existing.region,
-                    category: loc.category || existing.category,
-                    badge: loc.badge || existing.badge,
-                  });
-                } else {
-                  resultMap.set(k, loc);
-                }
-              }
-
-              // 3. Remote incoming items (apply remote overrides or append remote custom dishes)
-              for (const inc of incoming) {
-                if (!inc || !inc.name) continue;
-                const k = normKey(inc.name);
-                const existing = resultMap.get(k);
-                if (existing) {
-                  resultMap.set(k, {
-                    ...existing,
-                    ...inc,
-                    imageUri: inc.imageUri || (inc as any).imageUrl || existing.imageUri,
-                    region: inc.region || existing.region,
-                    category: inc.category || existing.category,
-                    badge: inc.badge || existing.badge,
-                  });
-                } else {
-                  resultMap.set(k, inc);
-                }
-              }
-
-              return Array.from(resultMap.values());
-            })()
+          ...(remoteState.menuItems !== undefined ? {
+            menuItems: (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : []).filter((m) => !isLegacyDummyDish(m))
           } : {}),
           ...(remoteState.categories ? {
-            categories: Array.from(new Set([...(state.categories || SULTAN_DEFAULT_CATEGORIES), ...remoteState.categories]))
+            categories: (() => {
+              const activeItems = remoteState.menuItems !== undefined
+                ? (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
+                : (state.menuItems || []);
+              const usedCats = new Set(activeItems.map((m: any) => m?.category).filter(Boolean));
+              return Array.from(new Set(['All', ...Array.from(usedCats)]));
+            })()
           } : {}),
           ...(remoteState.regions ? {
             regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
@@ -3275,43 +3238,17 @@ export const useRestaurantStore = create<RestaurantState>()(
             state.regions = INITIAL_REGIONS;
           }
 
-          // Reconcile and guarantee menu items on storage rehydration
-          const ALIAS_MAP: Record<string, string> = {
-            'sultan kebab': 'sultan seekh kebab',
-            'chicken karahi': 'desi murgh karahi',
-            'hummus & pita': 'hummus with warm pita',
-            'kunafa': 'royal turkish kunafa',
-            'mint margarita': 'fresh mint margarita',
-            'mangoo shake': 'mango kulfa shake',
-            'chicken fajita': 'fajita supreme pizza',
-          };
-          const normKey = (name?: string) => {
-            const clean = (name || '').trim().toLowerCase();
-            return ALIAS_MAP[clean] || clean;
-          };
-          const menuMap = new Map<string, MenuItem>();
-          for (const def of SULTAN_DEFAULT_MENU) {
-            menuMap.set(normKey(def.name), { ...def });
-          }
-          for (const loc of (state.menuItems || [])) {
-            if (!loc || !loc.name) continue;
-            const k = normKey(loc.name);
-            const existing = menuMap.get(k);
-            if (existing) {
-              menuMap.set(k, {
-                ...existing,
-                ...loc,
-                imageUri: loc.imageUri || (loc as any).imageUrl || existing.imageUri,
-                region: loc.region || existing.region,
-                category: loc.category || existing.category,
-                badge: loc.badge || existing.badge,
-              });
-            } else {
-              menuMap.set(k, loc);
+          // Guarantee real Sultan Restaurant menu items on storage rehydration
+          if (!Array.isArray(state.menuItems) || state.menuItems.length === 0) {
+            state.menuItems = SULTAN_DEFAULT_MENU;
+          } else {
+            state.menuItems = state.menuItems.filter((m) => !isLegacyDummyDish(m));
+            if (state.menuItems.length === 0) {
+              state.menuItems = SULTAN_DEFAULT_MENU;
             }
           }
-          state.menuItems = Array.from(menuMap.values());
-          state.categories = Array.from(new Set([...(state.categories || SULTAN_DEFAULT_CATEGORIES), ...SULTAN_DEFAULT_CATEGORIES]));
+          const activeDishCats = new Set((state.menuItems || []).map((m: any) => m?.category).filter(Boolean));
+          state.categories = Array.from(new Set(['All', ...Array.from(activeDishCats)]));
           state.regions = Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...SULTAN_DEFAULT_REGIONS]));
 
           // Reconcile and guarantee staff members on storage rehydration (ensures Floor Managers exist)

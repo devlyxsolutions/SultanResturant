@@ -114,7 +114,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   deliveryFeeDefault: 150,
   allowCustomDiscount: true,
   requirePinForVoid: false,
-  autoPrintReceiptOnPay: false,
+  autoPrintReceiptOnPay: true,
   autoSendKdsOnOrder: true,
   roundTotals: true,
 

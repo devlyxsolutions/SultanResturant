@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { usePathname, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -13,13 +15,11 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '../store/authStore';
-import { useOpsStore } from '../store/opsStore';
-import { useKitchenStore } from '../store/kitchenStore';
 import { useAlertStore } from '../store/alertStore';
+import { useAuthStore } from '../store/authStore';
+import { useKitchenStore } from '../store/kitchenStore';
+import { useOpsStore } from '../store/opsStore';
 import { buildAlerts, type AlertSeverity, type StockAlert } from '../utils/kitchenForecast';
 
 /**
@@ -102,7 +102,7 @@ function playAlarm(severity: AlertSeverity) {
         sharedAudioCtx = new Ctx();
       }
       if (sharedAudioCtx.state === 'suspended') {
-        sharedAudioCtx.resume().catch(() => {});
+        sharedAudioCtx.resume().catch(() => { });
       }
       const ctx = sharedAudioCtx;
       const freqs = severity === 'critical' ? [880, 660, 880, 660] : [660, 520];
@@ -154,6 +154,7 @@ export default function StockAlarmHost() {
   const bottomOffset = (isMobile ? 76 : 24) + insets.bottom;
   const isPosScreen = Boolean(pathname && (pathname === '/admin/pos' || pathname.endsWith('/pos')));
   const isCustomerMenu = Boolean(pathname && (pathname === '/menu' || pathname.startsWith('/menu')));
+  const isCustomerDisplay = Boolean(pathname && (pathname === '/customer-display' || pathname.includes('customer-display')));
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
@@ -228,10 +229,10 @@ export default function StockAlarmHost() {
     criticalCount > 0
       ? 'critical'
       : activeAlerts.some((a) => a.severity === 'warning')
-      ? 'warning'
-      : activeAlerts.length > 0
-      ? 'info'
-      : null;
+        ? 'warning'
+        : activeAlerts.length > 0
+          ? 'info'
+          : null;
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [toast, setToast] = useState<StockAlert | null>(null);
@@ -328,8 +329,8 @@ export default function StockAlarmHost() {
     return () => loop.stop();
   }, [topSeverity, pulse]);
 
-  // Don't render bell on POS, customer menu, or unauthorized roles
-  if (!enabled || isPosScreen || isCustomerMenu) return null;
+  // Don't render bell on POS, customer menu, customer display, or unauthorized roles
+  if (!enabled || isPosScreen || isCustomerMenu || isCustomerDisplay) return null;
   if (activeAlerts.length === 0 && snoozedAlerts.length === 0 && !panelOpen) return null;
 
   const handleSnoozeOne = (a: StockAlert) => {

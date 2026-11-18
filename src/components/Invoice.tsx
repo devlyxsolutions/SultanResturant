@@ -120,9 +120,13 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 
   const itemsHtml = invoice.items.map(item => `
     <tr>
-      <td class="col-qty" style="width: 14%; vertical-align: top; font-weight: bold;">${item.qty}x</td>
-      <td class="col-item" style="width: 54%; vertical-align: top; word-break: break-word;">${item.name}</td>
-      <td class="col-amount" style="width: 32%; vertical-align: top; text-align: right; font-weight: bold;">${(item.price * item.qty).toLocaleString()}</td>
+      <td class="col-qty">${item.qty}x</td>
+      <td class="col-item">
+        <div style="font-weight: 700;">${item.name}</div>
+        ${(item as any).selectedVariant ? `<div style="font-size: 9.5px; font-weight: normal; color: #222;">Option: ${(item as any).selectedVariant}</div>` : ''}
+        ${item.notes ? `<div style="font-size: 9px; font-style: italic; color: #333;">* ${item.notes}</div>` : ''}
+      </td>
+      <td class="col-amount">${(item.price * item.qty).toLocaleString()}</td>
     </tr>
   `).join('');
 
@@ -172,455 +176,427 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     <head>
       <meta charset="utf-8">
       <title>Receipt #${invoice.id} - Sultan Restaurant</title>
+      <link rel="preconnect" href="https://fonts.googleapis.com">
+      <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+      <link href="https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@700&display=swap" rel="stylesheet">
       <style>
         * {
           box-sizing: border-box;
+          margin: 0;
+          padding: 0;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
         }
 
+        @page {
+          size: 80mm auto;
+          margin: 0mm;
+        }
+
         html, body {
-          margin: 0;
-          padding: 0;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: #ffffff !important;
+          color: #000000 !important;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
+          width: 100% !important;
+          text-rendering: optimizeLegibility !important;
+          -webkit-font-smoothing: antialiased !important;
+        }
+
+        .receipt-container {
+          width: 72mm;
+          max-width: 72mm;
+          margin: 0 auto;
+          padding: 2mm 1mm 4mm 1mm;
+          box-sizing: border-box;
           background: #ffffff;
-          color: #111111;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", Courier, monospace;
         }
 
         .header {
           text-align: center;
+          margin-bottom: 4px;
         }
 
         .logo-img {
+          width: 76px;
+          height: 72px;
           object-fit: contain;
           display: block;
-          margin-left: auto;
-          margin-right: auto;
+          margin: 0 auto 3px auto;
+          filter: grayscale(100%) contrast(300%) brightness(0);
         }
 
         .brand-title {
+          font-size: 19px;
           font-weight: 900;
-          color: #1C1C1E;
-          margin: 0;
+          color: #000000;
+          margin: 1px 0 2px 0;
+          letter-spacing: 0.5px;
           text-align: center;
+          line-height: 1.2;
+        }
+
+        .urdu-slogan {
+          font-family: 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Jameel Noori Nastaleeq', 'Amiri', 'Segoe UI', Tahoma, sans-serif !important;
+          direction: rtl;
+          unicode-bidi: isolate;
+          font-size: 14.5px;
+          font-weight: 700;
+          color: #000000;
+          line-height: 1.5;
+          margin: 2px 0;
+          text-align: center;
+          letter-spacing: 0;
         }
 
         .brand-sub {
-          font-weight: 700;
-          color: #666666;
+          font-size: 10.5px;
+          font-weight: 800;
+          color: #000000;
           text-align: center;
+          margin-top: 1px;
+          letter-spacing: 0.5px;
         }
 
         .contact {
-          color: #555555;
+          font-size: 10px;
+          font-weight: 600;
+          color: #000000;
           text-align: center;
+          margin-top: 1px;
+          line-height: 1.3;
+        }
+
+        .dashed-line {
+          border-top: 1.5px dashed #000000 !important;
+          margin: 4px 0 !important;
+          width: 100%;
+        }
+
+        .double-line {
+          border-top: 2px solid #000000 !important;
+          margin: 5px 0 !important;
+          width: 100%;
         }
 
         .meta-row {
           display: flex;
           justify-content: space-between;
-          font-family: "Courier New", Courier, monospace;
+          font-size: 10.5px;
+          font-weight: 600;
+          line-height: 1.4;
+          margin: 1.5px 0;
+          color: #000000;
         }
 
         .meta-bold {
-          font-weight: bold;
+          font-weight: 800;
           color: #000000;
         }
 
         table {
           width: 100%;
           border-collapse: collapse;
-          font-family: "Courier New", Courier, monospace;
+          table-layout: fixed;
+          margin: 3px 0;
+        }
+
+        table th {
+          font-size: 11px;
+          font-weight: 900;
+          text-transform: uppercase;
+          border-bottom: 1.5px solid #000000;
+          padding: 3px 0;
+          color: #000000;
+        }
+
+        table td {
+          font-size: 11px;
+          font-weight: 600;
+          padding: 2.5px 0;
+          color: #000000;
+          vertical-align: top;
+        }
+
+        .col-qty {
+          width: 14%;
+          font-weight: 800 !important;
+        }
+
+        .col-item {
+          width: 54%;
+          word-break: break-word;
+          font-weight: 700 !important;
+          padding-right: 4px;
+        }
+
+        .col-amount {
+          width: 32%;
+          text-align: right;
+          font-weight: 800 !important;
         }
 
         .summary-row {
           display: flex;
           justify-content: space-between;
-          font-family: "Courier New", Courier, monospace;
+          font-size: 11px;
+          font-weight: 600;
+          margin: 2px 0;
+          color: #000000;
         }
 
         .grand-row {
           display: flex;
           justify-content: space-between;
-          font-family: "Courier New", Courier, monospace;
+          font-size: 16px;
+          font-weight: 900;
+          margin: 4px 0;
+          color: #000000;
         }
 
         .footer {
           text-align: center;
+          margin-top: 6px;
+          padding-top: 5px;
+          border-top: 1.5px dashed #000000;
+          font-size: 10px;
+          font-weight: 600;
+          color: #000000;
         }
 
-        /* ========================================================
-           1. SMALL THERMAL PRINTER (Paper width <= 110mm: 80mm or 58mm)
-           ======================================================== */
-        @media print and (max-width: 110mm) {
-          @page {
-            size: auto;
-            margin: 2mm auto;
-          }
-          body {
-            width: 100% !important;
-            max-width: 80mm !important;
-            padding: 4mm 3mm !important;
-            font-size: 11.5px !important;
-            line-height: 1.35 !important;
-            margin: 0 auto !important;
-          }
-          .logo-img {
-            width: 80px !important;
-            height: 74px !important;
-            margin-bottom: 4px !important;
-          }
-          .brand-title {
-            font-size: 19px !important;
-            letter-spacing: 2px !important;
-          }
-          .brand-sub, .contact {
-            font-size: 9.5px !important;
-            margin-top: 2px !important;
-          }
-          .dashed-line {
-            border-top: 1px dashed #777 !important;
-            margin: 6px 0 !important;
-          }
-          .double-line {
-            border-top: 2px solid #222 !important;
-            margin: 6px 0 !important;
-          }
-          .meta-row {
-            font-size: 11px !important;
-            margin: 2.5px 0 !important;
-          }
-          table {
-            margin: 5px 0 !important;
-          }
-          table th {
-            font-size: 11.5px !important;
-            text-transform: uppercase !important;
-            border-bottom: 1px solid #aaa !important;
-            padding: 4px 0 !important;
-          }
-          table td {
-            font-size: 11.5px !important;
-            padding: 3px 0 !important;
-          }
-          .summary-row {
-            font-size: 11.5px !important;
-            margin: 2.5px 0 !important;
-          }
-          .grand-row {
-            font-size: 15px !important;
-            font-weight: 900 !important;
-            margin: 4px 0 !important;
-          }
-          .footer {
-            margin-top: 12px !important;
-            padding-top: 8px !important;
-            border-top: 1px solid #eee !important;
-            font-size: 10px !important;
-            color: #444 !important;
-          }
-          .qr-section {
-            text-align: center !important;
-            margin: 6px 0 !important;
-            padding: 4px 0 !important;
-          }
-          .qr-section-title {
-            font-size: 10px !important;
-            font-weight: 800 !important;
-            letter-spacing: 1px !important;
-            color: #111 !important;
-            margin-bottom: 3px !important;
-          }
-          .qr-code-img {
-            width: 96px !important;
-            height: 96px !important;
-            display: block !important;
-            margin: 0 auto !important;
-          }
-          .qr-hint {
-            font-size: 8.5px !important;
-            color: #444 !important;
-            margin-top: 3px !important;
-          }
-          .qr-url-text {
-            font-size: 7.5px !important;
-            color: #777 !important;
-            margin-top: 1px !important;
-            word-break: break-all !important;
-          }
+        .qr-section {
+          text-align: center;
+          margin: 5px 0;
+          padding: 3px 0;
         }
 
-        /* ========================================================
-           2. STANDARD A4 / LETTER PRINTER (Paper width > 110mm: EPSON L300, HP, A4)
-           ======================================================== */
-        @media print and (min-width: 111mm) {
-          @page {
-            size: A4 portrait;
-            margin: 10mm 15mm;
-          }
-          body {
-            width: 100% !important;
-            max-width: 180mm !important;
-            margin: 0 auto !important;
-            padding: 4mm 0 !important;
-            font-size: 14.5px !important;
-            line-height: 1.55 !important;
-          }
-          .logo-img {
-            width: 130px !important;
-            height: 120px !important;
-            margin-bottom: 8px !important;
-          }
-          .brand-title {
-            font-size: 28px !important;
-            letter-spacing: 3px !important;
-            margin-bottom: 4px !important;
-          }
-          .brand-sub {
-            font-size: 13px !important;
-            letter-spacing: 2px !important;
-            margin-top: 3px !important;
-          }
-          .contact {
-            font-size: 12.5px !important;
-            margin-top: 4px !important;
-          }
-          .dashed-line {
-            border-top: 1.5px dashed #555 !important;
-            margin: 12px 0 !important;
-          }
-          .double-line {
-            border-top: 2.5px solid #111 !important;
-            margin: 12px 0 !important;
-          }
-          .meta-row {
-            font-size: 14px !important;
-            margin: 5px 0 !important;
-          }
-          table {
-            margin: 14px 0 !important;
-          }
-          table th {
-            font-size: 14px !important;
-            text-transform: uppercase !important;
-            border-bottom: 2px solid #333 !important;
-            padding: 8px 4px !important;
-          }
-          table td {
-            font-size: 14px !important;
-            padding: 7px 4px !important;
-            border-bottom: 1px solid #f0f0f0 !important;
-          }
-          .summary-row {
-            font-size: 14.5px !important;
-            margin: 6px 0 !important;
-          }
-          .grand-row {
-            font-size: 20px !important;
-            font-weight: 900 !important;
-            margin: 10px 0 !important;
-          }
-          .footer {
-            margin-top: 24px !important;
-            padding-top: 14px !important;
-            border-top: 1.5px solid #ddd !important;
-            font-size: 13px !important;
-            color: #444 !important;
-          }
-          .qr-section {
-            text-align: center !important;
-            margin: 14px 0 !important;
-            padding: 8px 0 !important;
-          }
-          .qr-section-title {
-            font-size: 14px !important;
-            font-weight: 800 !important;
-            letter-spacing: 2px !important;
-            color: #111 !important;
-            margin-bottom: 6px !important;
-          }
-          .qr-code-img {
-            width: 130px !important;
-            height: 130px !important;
-            display: block !important;
-            margin: 0 auto !important;
-          }
-          .qr-hint {
-            font-size: 12px !important;
-            color: #333 !important;
-            margin-top: 5px !important;
-          }
-          .qr-url-text {
-            font-size: 10.5px !important;
-            color: #666 !important;
-            margin-top: 2px !important;
-          }
+        .qr-section-title {
+          font-size: 10px;
+          font-weight: 900;
+          letter-spacing: 0.5px;
+          color: #000000;
+          margin-bottom: 3px;
+        }
+
+        .qr-code-img {
+          width: 80px;
+          height: 80px;
+          display: block;
+          margin: 0 auto;
+          image-rendering: pixelated;
+        }
+
+        .qr-hint {
+          font-size: 9px;
+          font-weight: 600;
+          color: #000000;
+          margin-top: 2px;
         }
       </style>
     </head>
     <body>
-      <div class="header">
-        ${sysSettings.showLogoOnReceipt ? `<img src="${SULTAN_LOGO_BASE64}" alt="Logo" class="logo-img" />` : ''}
-        <h1 class="brand-title">${brandName}</h1>
-        <div class="brand-sub">${brandTagline}</div>
-        <div class="contact">${brandAddress}</div>
-        <div class="contact">Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}</div>
-      </div>
+      <div class="receipt-container">
+        <div class="header">
+          ${sysSettings.showLogoOnReceipt !== false ? `<img src="${SULTAN_LOGO_BASE64}" alt="Logo" class="logo-img" />` : ''}
+          <h1 class="brand-title">${brandName}</h1>
+          <div class="urdu-slogan">جہاں ہر مہمان ہے سلطان</div>
+          <div class="brand-sub">${brandTagline}</div>
+          <div class="contact">${brandAddress}</div>
+          <div class="contact">Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}</div>
+        </div>
 
-      <div class="dashed-line"></div>
+        <div class="dashed-line"></div>
 
-      <div class="meta-row">
-        <span>INV: #${invoice.id}</span>
-        <span>${timeStr}</span>
-      </div>
-      <div class="meta-row">
-        <span>Type: ${invoice.orderType.toUpperCase()}</span>
-        <span>Date: ${dateStr}</span>
-      </div>
-      ${invoice.tableName ? `<div class="meta-row"><span>Table: ${invoice.tableName}</span></div>` : ''}
-
-      ${isSameStaff ? `
-        <div class="meta-row"><span>Staff / Cashier: ${cashierName}</span></div>
-      ` : `
         <div class="meta-row">
-          <span>Order Taken By:</span>
-          <span class="meta-bold">${orderCreator}</span>
+          <span>INV: #${invoice.id}</span>
+          <span>${timeStr}</span>
         </div>
         <div class="meta-row">
-          <span>Billed By (Cashier):</span>
-          <span class="meta-bold">${cashierName}</span>
+          <span>Type: ${invoice.orderType.toUpperCase()}</span>
+          <span>Date: ${dateStr}</span>
         </div>
-      `}
+        ${invoice.tableName ? `<div class="meta-row"><span>Table: ${invoice.tableName}</span></div>` : ''}
 
-      ${invoice.customer ? `
-        <div class="meta-row"><span>Guest: ${invoice.customer.name}</span></div>
-        <div class="meta-row"><span>Phone: ${invoice.customer.phone}</span></div>
-        ${invoice.customer.address ? `<div class="meta-row"><span>Address: ${invoice.customer.address}</span></div>` : ''}
-      ` : ''}
-
-      ${isUnpaidBill ? `
-        <div style="border: 2px dashed #b91c1c; background-color: #fff1f2; padding: 6px; margin: 8px 0; text-align: center;">
-          <div style="font-size: 15px; font-weight: 900; color: #b91c1c; letter-spacing: 1px;">
-            *** UNPAID BILL (غیر ادا شدہ بل) ***
+        ${isSameStaff ? `
+          <div class="meta-row"><span>Staff / Cashier: ${cashierName}</span></div>
+        ` : `
+          <div class="meta-row">
+            <span>Order Taken:</span>
+            <span class="meta-bold">${orderCreator}</span>
           </div>
-          <div style="font-size: 11px; font-weight: 800; color: #1e293b; margin-top: 2px;">
-            PROVISIONAL CHECK / ESTIMATE
+          <div class="meta-row">
+            <span>Billed By:</span>
+            <span class="meta-bold">${cashierName}</span>
           </div>
-          <div style="font-size: 9px; color: #64748b; font-weight: 600;">
-            NOT A SETTLED TAX INVOICE • PAYMENT PENDING AT CASHIER
+        `}
+
+        ${invoice.customer ? `
+          <div class="meta-row"><span>Guest: ${invoice.customer.name}</span></div>
+          <div class="meta-row"><span>Phone: ${invoice.customer.phone}</span></div>
+          ${invoice.customer.address ? `<div class="meta-row"><span>Address: ${invoice.customer.address}</span></div>` : ''}
+        ` : ''}
+
+        ${isUnpaidBill ? `
+          <div style="border: 1.5px dashed #000; padding: 4px; margin: 4px 0; text-align: center;">
+            <div style="font-size: 13px; font-weight: 900; color: #000;">
+              *** UNPAID BILL (کچا بل) ***
+            </div>
+            <div style="font-size: 9.5px; font-weight: 800; color: #000; margin-top: 2px;">
+              PROVISIONAL ESTIMATE • PAYMENT PENDING
+            </div>
           </div>
-        </div>
-      ` : ''}
+        ` : ''}
 
-      ${invoice.status === 'voided' ? `
-        <div style="text-align: center; color: #c62828; font-weight: bold; font-size: 12px; margin: 8px 0;">
-          *** BILL VOIDED / CANCELLED ***
-        </div>
-      ` : ''}
+        ${invoice.status === 'voided' ? `
+          <div style="text-align: center; color: #000; font-weight: bold; font-size: 11px; margin: 6px 0;">
+            *** BILL VOIDED / CANCELLED ***
+          </div>
+        ` : ''}
 
-      <div class="dashed-line"></div>
+        <div class="dashed-line"></div>
 
-      <table>
-        <thead>
-          <tr>
-            <th style="width: 14%; text-align: left;">Qty</th>
-            <th style="width: 54%; text-align: left;">Item</th>
-            <th style="width: 32%; text-align: right;">Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${itemsHtml}
-        </tbody>
-      </table>
+        <table>
+          <colgroup>
+            <col style="width: 14%;" />
+            <col style="width: 54%;" />
+            <col style="width: 32%;" />
+          </colgroup>
+          <thead>
+            <tr>
+              <th style="text-align: left;">Qty</th>
+              <th style="text-align: left;">Item</th>
+              <th style="text-align: right;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${itemsHtml}
+          </tbody>
+        </table>
 
-      <div class="dashed-line"></div>
+        <div class="dashed-line"></div>
 
-      <div class="summary-row">
-        <span>Sub Total:</span>
-        <span style="font-weight: bold;">Rs. ${(invoice.subTotal || 0).toLocaleString()}</span>
-      </div>
-      ${(invoice.discount || 0) > 0 ? `
         <div class="summary-row">
-          <span>Discount:</span>
-          <span style="font-weight: bold;">- Rs. ${(invoice.discount || 0).toLocaleString()}</span>
+          <span>Sub Total:</span>
+          <span style="font-weight: 800;">Rs. ${(invoice.subTotal || 0).toLocaleString()}</span>
         </div>
-      ` : ''}
-      <div class="summary-row">
-        <span>${taxLabel} (${taxRate}%):</span>
-        <span style="font-weight: bold;">${currency} ${(invoice.tax || 0).toLocaleString()}</span>
-      </div>
-      ${(invoice.serviceCharge || 0) > 0 ? `
+        ${(invoice.discount || 0) > 0 ? `
+          <div class="summary-row">
+            <span>Discount:</span>
+            <span style="font-weight: 800;">- Rs. ${(invoice.discount || 0).toLocaleString()}</span>
+          </div>
+        ` : ''}
         <div class="summary-row">
-          <span>Service Charge:</span>
-          <span style="font-weight: bold;">${currency} ${(invoice.serviceCharge || 0).toLocaleString()}</span>
+          <span>${taxLabel} (${taxRate}%):</span>
+          <span style="font-weight: 800;">${currency} ${(invoice.tax || 0).toLocaleString()}</span>
         </div>
-      ` : ''}
-      ${(invoice.notes || invoice.packagingNotes) ? `
-        <div class="summary-row" style="font-size: 11px; color: #555; margin-top: 4px;">
-          <span>Special Instructions:</span>
-          <span style="font-style: italic;">${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}</span>
+        ${(invoice.serviceCharge || 0) > 0 ? `
+          <div class="summary-row">
+            <span>Service Charge:</span>
+            <span style="font-weight: 800;">${currency} ${(invoice.serviceCharge || 0).toLocaleString()}</span>
+          </div>
+        ` : ''}
+        ${(invoice.notes || invoice.packagingNotes) ? `
+          <div class="summary-row" style="font-size: 9.5px; color: #000; margin-top: 3px;">
+            <span>Notes:</span>
+            <span style="font-style: italic;">${[invoice.notes, invoice.packagingNotes].filter(Boolean).join(' | ')}</span>
+          </div>
+        ` : ''}
+
+        <div class="double-line"></div>
+
+        <div class="grand-row">
+          <span>NET PAYABLE:</span>
+          <span>Rs. ${(invoice.total || 0).toLocaleString()}</span>
         </div>
-      ` : ''}
 
-      <div class="double-line"></div>
+        <div class="double-line"></div>
 
-      <div class="grand-row">
-        <span>NET PAYABLE:</span>
-        <span>Rs. ${(invoice.total || 0).toLocaleString()}</span>
-      </div>
+        ${paymentsHtml}
 
-      <div class="double-line"></div>
+        <div class="dashed-line"></div>
 
-      ${paymentsHtml}
+        ${showFeedbackQr ? `
+        <div class="qr-section">
+          <div class="qr-section-title">SCAN FOR ITEM-WISE FEEDBACK</div>
+          ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="Dish Review QR Code" class="qr-code-img" />` : ''}
+          <div class="qr-hint">Rate each dish & earn Sultan Loyalty Points!</div>
+        </div>
+        ` : ''}
 
-      <div class="dashed-line"></div>
-
-      ${showFeedbackQr ? `
-      <div class="qr-section">
-        <div class="qr-section-title">SCAN FOR ITEM-WISE FEEDBACK</div>
-        ${qrCodeDataUrl ? `<img src="${qrCodeDataUrl}" alt="Dish Review QR Code" class="qr-code-img" />` : ''}
-        <div class="qr-hint">Rate each dish & earn 50 Sultan Loyalty Points!</div>
-        <div class="qr-url-text">${feedbackUrl}</div>
-      </div>
-      ` : ''}
-
-      <div class="footer">
-        <div style="font-weight: bold; margin-bottom: 2px;">${brandFooter}</div>
-        <div style="color: #666; margin-top: 2px;">We look forward to serving you again.</div>
-        <div style="color: #888; font-size: 85%; margin-top: 3px;">Software by Sultan POS System</div>
+        <div class="footer">
+          <div style="font-weight: 800; margin-bottom: 2px;">${brandFooter}</div>
+          <div class="urdu-slogan" style="font-size: 13.5px; margin: 2px 0;">جہاں ہر مہمان ہے سلطان</div>
+          <div style="color: #000000; font-size: 9px; font-weight: 600; margin-top: 2px;">Software by Sultan POS System</div>
+        </div>
       </div>
     </body>
     </html>
   `;
 
-  let iframe = document.getElementById('receipt-print-frame') as HTMLIFrameElement | null;
-  if (!iframe) {
-    iframe = document.createElement('iframe');
-    iframe.id = 'receipt-print-frame';
-    iframe.style.position = 'fixed';
-    iframe.style.right = '0';
-    iframe.style.bottom = '0';
-    iframe.style.width = '0';
-    iframe.style.height = '0';
-    iframe.style.border = '0';
-    iframe.style.opacity = '0';
-    iframe.style.pointerEvents = 'none';
-    document.body.appendChild(iframe);
+  // Remove existing print iframe to prevent stale cache or frozen dialogs
+  const oldFrame = document.getElementById('receipt-print-frame');
+  if (oldFrame) {
+    try {
+      oldFrame.remove();
+    } catch {}
   }
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'receipt-print-frame';
+  // Position offscreen with realistic thermal width (72mm) so Chromium computes page layout accurately
+  iframe.style.position = 'fixed';
+  iframe.style.top = '-9999px';
+  iframe.style.left = '-9999px';
+  iframe.style.width = '72mm';
+  iframe.style.height = '1200px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
 
   const doc = iframe.contentWindow?.document;
   if (doc) {
     doc.open();
     doc.write(htmlContent);
     doc.close();
-    setTimeout(() => {
-      iframe?.contentWindow?.focus();
-      iframe?.contentWindow?.print();
-    }, 250);
+
+    let isPrinted = false;
+    const triggerPrint = () => {
+      if (isPrinted) return;
+      isPrinted = true;
+      try {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+      } catch (err) {
+        console.warn('Iframe print failed, falling back to popup window', err);
+        const win = window.open('', '_blank', 'width=420,height=750');
+        if (win) {
+          win.document.write(htmlContent);
+          win.document.close();
+          win.focus();
+          win.print();
+        }
+      }
+    };
+
+    if (iframe.contentWindow) {
+      if (iframe.contentWindow.document && (iframe.contentWindow.document as any).fonts) {
+        (iframe.contentWindow.document as any).fonts.ready.then(() => {
+          setTimeout(triggerPrint, 120);
+        }).catch(() => {
+          setTimeout(triggerPrint, 250);
+        });
+      } else {
+        iframe.contentWindow.onload = () => {
+          setTimeout(triggerPrint, 180);
+        };
+      }
+    }
+    // Safety fallback
+    setTimeout(triggerPrint, 450);
   }
 }
 
-export default function InvoiceComponent({ invoice }: InvoiceProps) {
+export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const { width } = useWindowDimensions();
   const isSmall = width < 420;
   const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
@@ -718,6 +694,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
             <SultanLogo size="md" variant="bare" width={86} height={80} style={{ alignSelf: 'center', marginBottom: 6 }} />
           )}
           <Text style={[styles.brandTitle, isSmall && { fontSize: 17 }]}>{brandName}</Text>
+          <Text style={styles.brandUrduSlogan}>جہاں ہر مہمان ہے سلطان</Text>
           {Boolean(brandTagline) && <Text style={styles.brandSub}>{brandTagline}</Text>}
           {Boolean(brandAddress) && <Text style={styles.contactText}>{brandAddress}</Text>}
           <Text style={styles.contactText}>
@@ -964,6 +941,7 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{brandFooter}</Text>
+          <Text style={styles.brandUrduSlogan}>جہاں ہر مہمان ہے سلطان</Text>
           <Text style={styles.footerSub}>We look forward to serving you again.</Text>
           <Text style={styles.footerSub}>Software by Sultan POS System</Text>
         </View>
@@ -973,7 +951,10 @@ export default function InvoiceComponent({ invoice }: InvoiceProps) {
       <View style={styles.actionButtonsContainer}>
         <TouchableOpacity
           style={styles.printActionBtn}
-          onPress={() => printInvoiceReceipt(invoice, qrCodeDataUrl)}
+          onPress={() => {
+            printInvoiceReceipt(invoice, qrCodeDataUrl);
+            if (onClose) onClose();
+          }}
           activeOpacity={0.8}
         >
           <Ionicons name="print" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
@@ -1094,14 +1075,25 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '900',
     color: '#1C1C1E',
-    letterSpacing: 2,
+    letterSpacing: 1,
     textAlign: 'center',
+  },
+  brandUrduSlogan: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1C1C1E',
+    textAlign: 'center',
+    marginVertical: 2,
+    fontFamily: Platform.select({
+      web: "'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Jameel Noori Nastaleeq', 'Amiri', 'Segoe UI', Tahoma, sans-serif",
+      default: undefined,
+    }),
   },
   brandSub: {
     fontSize: 10,
     fontWeight: '700',
     color: '#8E8E93',
-    letterSpacing: 1.5,
+    letterSpacing: 1,
     marginTop: 2,
   },
   contactText: {
@@ -1124,11 +1116,12 @@ const styles = StyleSheet.create({
   },
   metaText: {
     fontSize: 11.5,
-    color: '#333333',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#1C1C1E',
+    fontWeight: '600',
   },
   boldText: {
-    fontWeight: 'bold',
+    fontWeight: '800',
+    color: '#000000',
   },
   voidNotice: {
     fontSize: 12,
@@ -1149,8 +1142,8 @@ const styles = StyleSheet.create({
   },
   colText: {
     fontSize: 11.5,
-    color: '#222222',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#1C1C1E',
+    fontWeight: '600',
   },
   summaryRow: {
     flexDirection: 'row',
@@ -1159,14 +1152,13 @@ const styles = StyleSheet.create({
   },
   summaryKey: {
     fontSize: 11.5,
-    color: '#444444',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    color: '#3A3A3C',
+    fontWeight: '600',
   },
   summaryVal: {
     fontSize: 11.5,
-    fontWeight: 'bold',
-    color: '#222222',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '700',
+    color: '#1C1C1E',
   },
   grandRow: {
     flexDirection: 'row',
@@ -1174,16 +1166,14 @@ const styles = StyleSheet.create({
     marginVertical: 4,
   },
   grandKey: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#111111',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#000000',
   },
   grandVal: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#111111',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#000000',
   },
   qrContainer: {
     alignItems: 'center',
@@ -1225,7 +1215,7 @@ const styles = StyleSheet.create({
     color: '#555555',
     textAlign: 'center',
     marginTop: 6,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
+    fontWeight: '500',
   },
   feedbackBadge: {
     flexDirection: 'row',
@@ -1328,7 +1318,6 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: '#15803D',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   qrConfigBtn: {
     flexDirection: 'row',

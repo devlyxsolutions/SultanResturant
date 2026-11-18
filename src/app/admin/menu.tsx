@@ -112,18 +112,10 @@ export default function MenuManagement() {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
             const fetched = json.data.filter((c: string) => typeof c === 'string' && c.toLowerCase() !== 'all');
-            const current = useRestaurantStore.getState().categories || [];
-            const seen = new Set<string>();
-            const merged: string[] = [];
-            for (const c of [...current, ...fetched]) {
-              const norm = typeof c === 'string' ? c.trim() : '';
-              if (norm && !seen.has(norm.toLowerCase())) {
-                seen.add(norm.toLowerCase());
-                merged.push(norm);
-              }
+            if (fetched.length > 0) {
+              useRestaurantStore.setState({ categories: fetched });
+              break;
             }
-            useRestaurantStore.setState({ categories: merged });
-            break;
           }
         } catch (e) {}
       }
@@ -141,7 +133,7 @@ export default function MenuManagement() {
   const [itemName, setItemName] = useState('');
   const [itemPrice, setItemPrice] = useState('');
   const [itemCostPrice, setItemCostPrice] = useState('');
-  const [itemCategory, setItemCategory] = useState(categories[0] || 'Mains');
+  const [itemCategory, setItemCategory] = useState(categories[0] || 'BBQ');
   const [itemRegion, setItemRegion] = useState('');
   const [itemDescription, setItemDescription] = useState('');
   const [itemBadge, setItemBadge] = useState('');
@@ -296,11 +288,13 @@ export default function MenuManagement() {
 
   // Derived Categories Data
   const categoriesData = useMemo(() => {
-    return categories.map(cat => ({
-      id: cat,
-      name: cat,
-      itemsCount: menuItems.filter(i => i.category === cat).length
-    }));
+    return categories
+      .map(cat => ({
+        id: cat,
+        name: cat,
+        itemsCount: menuItems.filter(i => i.category === cat).length
+      }))
+      .filter(cat => cat.itemsCount > 0);
   }, [categories, menuItems]);
 
   const filteredCategories = useMemo(() => {
@@ -342,7 +336,7 @@ export default function MenuManagement() {
     setItemName('');
     setItemPrice('');
     setItemCostPrice('');
-    setItemCategory(isForDeal ? 'Deals' : (categories[0] || 'Mains'));
+    setItemCategory(isForDeal ? 'Deals' : (categories[0] || 'BBQ'));
     setItemRegion(selectedRegionFilter !== 'All' ? selectedRegionFilter : '');
     setItemDescription('');
     setItemBadge(isForDeal ? 'Family Deal' : '');
@@ -372,7 +366,7 @@ export default function MenuManagement() {
     setItemName(item.name);
     setItemPrice(item.price ? item.price.toString() : '');
     setItemCostPrice(item.costPrice ? item.costPrice.toString() : '');
-    setItemCategory(item.category || (categories[0] || 'Mains'));
+    setItemCategory(item.category || (categories[0] || 'BBQ'));
     setItemRegion(item.region || '');
     setItemDescription(item.description || '');
     setItemBadge(item.badge || '');
@@ -653,7 +647,7 @@ export default function MenuManagement() {
       return;
     }
 
-    const finalCategory = itemCategory || (categories[0] || 'Mains');
+    const finalCategory = itemCategory || (categories[0] || 'BBQ');
     
     let priceNum = parseFloat(itemPrice);
     if (!hasVariants && (isNaN(priceNum) || priceNum <= 0)) {

@@ -36,6 +36,12 @@ import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SultanLogo from '../components/SultanLogo';
 import FullscreenButton from '../components/FullscreenButton';
 import {
+  publishCustomerDisplayState,
+  subscribeToCustomerDisplay,
+  CustomerDisplayState,
+  INITIAL_CFD_STATE,
+} from '../services/customerDisplaySync';
+import {
   getTableFloor,
   getTableSeatingType,
   getFloorMeta,
@@ -221,6 +227,7 @@ export default function POSTerminalScreen({
   const clearTableTickets = useRestaurantStore(state => state.clearTableTickets);
   const clearAllOldTickets = useRestaurantStore(state => state.clearAllOldTickets);
   const tickets = useRestaurantStore(state => state.tickets);
+  const invoices = useRestaurantStore(state => state.invoices) || [];
 
   // Shift, Ops & System Settings Store
   const systemSettings = useSettingsStore((s) => s.settings);
@@ -337,8 +344,17 @@ export default function POSTerminalScreen({
   const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
   const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
   const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
+  const [recentInvoicesModalVisible, setRecentInvoicesModalVisible] = useState(false);
   const searchInputRef = useRef<any>(null);
   const prefilledRef = useRef<string | null>(null);
+
+  // Privacy-safe Recent 8 Invoices for cashier quick reprint
+  const recent8Invoices = useMemo(() => {
+    return [...invoices]
+      .filter((inv) => inv && inv.id && inv.status !== 'voided')
+      .sort((a, b) => (b.timeSettled || b.timePlaced || 0) - (a.timeSettled || a.timePlaced || 0))
+      .slice(0, 8);
+  }, [invoices]);
 
   // Toggle Fullscreen (Browser Kiosk)
   const toggleFullscreen = () => {
@@ -478,10 +494,7 @@ export default function POSTerminalScreen({
   // Categories list for 2-column sidebar (Auto-syncs dynamic categories from catalog)
   const categoryTiles = useMemo(() => {
     const set = new Set<string>();
-    (categories || []).forEach(c => {
-      if (c && c !== 'All' && c !== 'ALL') set.add(c);
-    });
-    // Ensure all unique categories assigned to menu items are visible in POS tiles
+    // Only display categories that actually contain active menu dishes
     (menuItems || []).forEach(m => {
       if (m.category && m.category !== 'All' && m.category !== 'ALL') {
         set.add(m.category);
@@ -654,6 +667,107 @@ export default function POSTerminalScreen({
   const selectedTableObj = tables.find(t => t.id === selectedTableId);
 
   // ------------------------------------------------------------------
+  // DUAL-SCREEN CUSTOMER-FACING DISPLAY (CFD) SYNCHRONIZATION
+  // ------------------------------------------------------------------
+  const isRecentlyPaidRef = useRef(false);
+
+  const getCurrentCfdState = (): CustomerDisplayState => {
+    const hasItems = cart.length > 0;
+    return {
+      isPosActive: true,
+      status: hasItems ? 'active' : 'idle',
+      cart: hasItems ? cart.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+        notes: item.notes,
+        selectedVariant: (item as any).selectedVariant,
+        selectedAddons: (item as any).selectedAddons,
+        subtotal: item.price * item.qty,
+      })) : [],
+      itemCount: hasItems ? cart.reduce((s, i) => s + i.qty, 0) : 0,
+      subTotal: hasItems ? subTotal : 0,
+      discountVal: hasItems ? discountVal : 0,
+      tax: hasItems ? tax : 0,
+      serviceCharge: hasItems ? serviceCharge : 0,
+      deliveryCharges: hasItems ? deliveryCharges : 0,
+      total: hasItems ? total : 0,
+      tenderedAmount: hasItems ? totalPaid : 0,
+      changeDue: hasItems ? changeDue : 0,
+      orderType,
+      tableName: hasItems ? selectedTableObj?.name : '',
+      customerName: hasItems ? selectedCustomerObj?.name : '',
+      cashierName: user?.name || 'Cashier',
+      lastUpdated: Date.now(),
+    };
+  };
+
+  // Mount/Unmount POS lifecycle: tell CFD that Cashier is actively on POS terminal
+  useEffect(() => {
+    publishCustomerDisplayState(getCurrentCfdState());
+
+    return () => {
+      try {
+        publishCustomerDisplayState({
+          ...getCurrentCfdState(),
+          isPosActive: false,
+          status: 'idle',
+        });
+      } catch {}
+    };
+  }, []);
+
+  useEffect(() => {
+    if (cart.length > 0) {
+      isRecentlyPaidRef.current = false;
+    } else if (isRecentlyPaidRef.current) {
+      return;
+    }
+
+    const currentState = getCurrentCfdState();
+    publishCustomerDisplayState(currentState);
+
+    const unsubscribe = subscribeToCustomerDisplay(() => {}, () => getCurrentCfdState());
+    return () => {
+      unsubscribe();
+    };
+  }, [
+    cart,
+    subTotal,
+    discountVal,
+    tax,
+    serviceCharge,
+    deliveryCharges,
+    total,
+    totalPaid,
+    changeDue,
+    orderType,
+    selectedTableObj?.name,
+    selectedCustomerObj?.name,
+    user?.name,
+  ]);
+
+  const handleOpenCustomerDisplay = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const url = '/customer-display';
+      const cfdWindow = window.open(
+        url,
+        'SultanCustomerDisplay',
+        'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no'
+      );
+      if (cfdWindow) {
+        cfdWindow.focus();
+      }
+    } else {
+      Alert.alert(
+        'Dual Screen Customer Display',
+        'Customer Display is designed for Windows dual-monitor POS setups. Please open /customer-display in a browser on the customer-facing monitor.'
+      );
+    }
+  };
+
+  // ------------------------------------------------------------------
   // GLOBAL POS KEYBOARD SHORTCUTS ENGINE
   // ------------------------------------------------------------------
   useEffect(() => {
@@ -784,6 +898,13 @@ export default function POSTerminalScreen({
         if (cart.length > 0) {
           openCheckout();
         }
+        return;
+      }
+
+      // F10 or Ctrl+I: Recent 8 Invoices Modal (Quick Reprint)
+      if (e.key === 'F10' || (e.ctrlKey && (e.key === 'i' || e.key === 'I'))) {
+        e.preventDefault();
+        setRecentInvoicesModalVisible(prev => !prev);
         return;
       }
 
@@ -1214,6 +1335,48 @@ export default function POSTerminalScreen({
       });
     }
 
+    // Broadcast PAID celebration state to Customer-Facing Display before clearing cart
+    isRecentlyPaidRef.current = true;
+    publishCustomerDisplayState({
+      isPosActive: true,
+      status: 'paid',
+      cart: cart.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        qty: item.qty,
+        notes: item.notes,
+        selectedVariant: (item as any).selectedVariant,
+        selectedAddons: (item as any).selectedAddons,
+        subtotal: item.price * item.qty,
+      })),
+      itemCount: cart.reduce((s, i) => s + i.qty, 0),
+      subTotal,
+      discountVal,
+      tax,
+      serviceCharge,
+      deliveryCharges,
+      total,
+      tenderedAmount: totalCollected,
+      changeDue: changeDueAmount,
+      orderType,
+      tableName: targetTableName,
+      customerName: selectedCustomerObj?.name,
+      cashierName: cashierName,
+      invoiceId: invoice.id,
+      lastUpdated: Date.now(),
+    });
+    setTimeout(() => {
+      isRecentlyPaidRef.current = false;
+      publishCustomerDisplayState({
+        ...INITIAL_CFD_STATE,
+        isPosActive: true,
+        status: 'idle',
+        cashierName: cashierName,
+        lastUpdated: Date.now(),
+      });
+    }, 5000);
+
     setCart([]);
     setLoadedCart([]);
     setSelectedEventCampaign(null);
@@ -1222,9 +1385,8 @@ export default function POSTerminalScreen({
     setSelectedCustomerId('');
     setSelectedTableId('');
 
-    if (systemSettings.autoPrintReceiptOnPay) {
-      printInvoiceReceipt(invoice);
-    }
+    // Always trigger receipt slip print immediately on payment
+    printInvoiceReceipt(invoice);
 
     if (wasDineIn && systemSettings.posEnableTableReleaseConfirm !== false) {
       setTableDecisionModal({
@@ -1236,7 +1398,7 @@ export default function POSTerminalScreen({
       if (wasDineIn && targetTableId) {
         settleBill(targetTableId);
       }
-      setGeneratedInvoice(invoice);
+      // Do not open blocking invoice preview modal on completed order (receipt is already sent to print)
     }
   };
 
@@ -1451,6 +1613,37 @@ export default function POSTerminalScreen({
               </View>
             </TouchableOpacity>
           )}
+
+          {/* Dual Screen Customer Display Popout Button */}
+          <TouchableOpacity 
+            style={styles.dualScreenBtn}
+            onPress={handleOpenCustomerDisplay}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Open Dual-Screen Customer Facing Display (کسٹمر ڈسپلے)' } as any) : {})}
+          >
+            <Ionicons name="desktop-outline" size={14} color="#D4AF37" />
+            <Text style={styles.dualScreenBtnText}>
+              {isMobile ? 'CFD' : isTablet ? 'Customer Display' : 'Dual Screen (کسٹمر ڈسپلے)'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Recent 8 Invoices Button (Cashier Quick Reprint & Privacy Safe) */}
+          <TouchableOpacity 
+            style={styles.recentInvoicesCapsuleBtn}
+            onPress={() => setRecentInvoicesModalVisible(true)}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Recent 8 Invoices (آخری 8 بل - ری پرنٹ) [F10]' } as any) : {})}
+          >
+            <Ionicons name="receipt-outline" size={14} color="#D4AF37" />
+            <Text style={styles.recentInvoicesCapsuleText}>
+              {isMobile ? 'Recents' : 'Recent (8)'}
+            </Text>
+            {!isMobile && !isTablet && (
+              <View style={styles.keyInlinePill}>
+                <Text style={styles.keyInlinePillText}>F10</Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
           <FullscreenButton variant={isMobile ? 'compact' : 'pill'} />
 
@@ -3488,7 +3681,6 @@ export default function POSTerminalScreen({
                 onPress={() => {
                   settleBill(tableDecisionModal.tableId);
                   clearTableTickets(tableDecisionModal.tableId);
-                  setGeneratedInvoice(tableDecisionModal.invoice);
                   setTableDecisionModal(null);
                 }}
               >
@@ -3500,7 +3692,6 @@ export default function POSTerminalScreen({
                 onPress={() => {
                   markTableBilled(tableDecisionModal.tableId);
                   clearTableTickets(tableDecisionModal.tableId);
-                  setGeneratedInvoice(tableDecisionModal.invoice);
                   setTableDecisionModal(null);
                 }}
               >
@@ -3568,6 +3759,11 @@ export default function POSTerminalScreen({
               <View style={styles.shortcutItemRow}>
                 <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F9 / Ctrl+Enter</Text></View>
                 <Text style={styles.shortcutDescText}>Proceed to Payment / Checkout</Text>
+              </View>
+
+              <View style={styles.shortcutItemRow}>
+                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F10 / Ctrl+I</Text></View>
+                <Text style={styles.shortcutDescText}>Recent 8 Invoices (Quick Reprint)</Text>
               </View>
 
               <View style={styles.shortcutItemRow}>
@@ -3781,6 +3977,223 @@ export default function POSTerminalScreen({
         </Modal>
       )}
 
+      {/* ========================================================
+          RECENT 8 INVOICES MODAL (CASHIER REPRINT & PRIVACY SAFE)
+          ======================================================== */}
+      {recentInvoicesModalVisible && (
+        <Modal
+          visible={recentInvoicesModalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setRecentInvoicesModalVisible(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalBox, { maxWidth: 680, maxHeight: '88%', padding: 0, overflow: 'hidden' }]}>
+              {/* Header */}
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#260509',
+                paddingHorizontal: 18,
+                paddingVertical: 14,
+                borderBottomWidth: 1.5,
+                borderBottomColor: '#3E0C13',
+              }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(212, 175, 55, 0.15)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderWidth: 1,
+                    borderColor: 'rgba(212, 175, 55, 0.4)',
+                  }}>
+                    <Ionicons name="receipt" size={17} color="#D4AF37" />
+                  </View>
+                  <View>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#D4AF37', letterSpacing: 0.5 }}>
+                      Recent Invoices (آخری 8 انوائسز)
+                    </Text>
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#E5C158' }}>
+                      Quick Receipt Reprint • Privacy Protected
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setRecentInvoicesModalVisible(false)}
+                  style={{
+                    width: 32,
+                    height: 32,
+                    borderRadius: 16,
+                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="close" size={20} color="#FFFFFF" />
+                </TouchableOpacity>
+              </View>
+
+              {/* Invoices List */}
+              <ScrollView style={{ flex: 1, padding: 14, backgroundColor: '#F8FAFC' }}>
+                {recent8Invoices.length === 0 ? (
+                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
+                    <Ionicons name="receipt-outline" size={48} color="#94A3B8" style={{ marginBottom: 10 }} />
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#64748B' }}>
+                      No recent invoices found
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
+                      Settled orders will appear here for fast re-printing.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    {recent8Invoices.map((inv, idx) => {
+                      const invTime = new Date(inv.timeSettled || inv.timePlaced || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      const invDate = new Date(inv.timeSettled || inv.timePlaced || Date.now()).toLocaleDateString();
+                      const totalItemsCount = (inv.items || []).reduce((s, it) => s + (it.qty || 1), 0);
+                      const itemsSummary = (inv.items || []).map(it => `${it.qty}x ${it.name}`).slice(0, 3).join(', ') + ((inv.items || []).length > 3 ? '...' : '');
+
+                      return (
+                        <View
+                          key={inv.id || idx}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            padding: 12,
+                            shadowColor: '#000',
+                            shadowOffset: { width: 0, height: 2 },
+                            shadowOpacity: 0.05,
+                            shadowRadius: 4,
+                            elevation: 2,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                                #{inv.id}
+                              </Text>
+                              <View style={{
+                                backgroundColor: inv.orderType === 'dine-in' ? '#EFF6FF' : inv.orderType === 'delivery' ? '#FEF3C7' : '#F0FDF4',
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: inv.orderType === 'dine-in' ? '#BFDBFE' : inv.orderType === 'delivery' ? '#FDE68A' : '#BBF7D0',
+                              }}>
+                                <Text style={{
+                                  fontSize: 10.5,
+                                  fontWeight: '800',
+                                  color: inv.orderType === 'dine-in' ? '#1D4ED8' : inv.orderType === 'delivery' ? '#B45309' : '#15803D',
+                                  textTransform: 'uppercase',
+                                }}>
+                                  {inv.orderType === 'dine-in' ? `Dine-In • ${inv.tableName || 'Table'}` : inv.orderType}
+                                </Text>
+                              </View>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Ionicons name="time-outline" size={12} color="#64748B" />
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>
+                                {invTime} • {invDate}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Items & Guest info */}
+                          <View style={{ marginBottom: 8 }}>
+                            <Text style={{ fontSize: 12, color: '#334155', fontWeight: '500' }} numberOfLines={1}>
+                              <Text style={{ fontWeight: '700', color: '#0F172A' }}>{totalItemsCount} items:</Text> {itemsSummary}
+                            </Text>
+                            {inv.customer?.name ? (
+                              <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                Guest: {inv.customer.name} {inv.customer.phone ? `(${inv.customer.phone})` : ''}
+                              </Text>
+                            ) : null}
+                          </View>
+
+                          {/* Bottom Row: Total & Action Buttons */}
+                          <View style={{
+                            flexDirection: 'row',
+                            justifyContent: 'space-between',
+                            alignItems: 'center',
+                            borderTopWidth: 1,
+                            borderTopColor: '#F1F5F9',
+                            paddingTop: 8,
+                          }}>
+                            <View>
+                              <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>TOTAL AMOUNT</Text>
+                              <Text style={{ fontSize: 16, fontWeight: '900', color: '#059669' }}>
+                                Rs. {(inv.total || 0).toLocaleString()}
+                              </Text>
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              {/* Preview Slip Button */}
+                              <TouchableOpacity
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 5,
+                                  backgroundColor: '#F1F5F9',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 7,
+                                  borderRadius: 8,
+                                  borderWidth: 1,
+                                  borderColor: '#CBD5E1',
+                                }}
+                                onPress={() => {
+                                  setGeneratedInvoice(inv);
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="eye-outline" size={14} color="#475569" />
+                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
+                                  Preview
+                                </Text>
+                              </TouchableOpacity>
+
+                              {/* Direct Print Button */}
+                              <TouchableOpacity
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 6,
+                                  backgroundColor: '#3E0C13',
+                                  paddingHorizontal: 14,
+                                  paddingVertical: 7,
+                                  borderRadius: 8,
+                                  borderWidth: 1,
+                                  borderColor: '#D4AF37',
+                                }}
+                                onPress={() => {
+                                  printInvoiceReceipt(inv);
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="print" size={15} color="#D4AF37" />
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
+                                  Print Receipt
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
+      )}
+
       {/* Invoice Print Preview Modal */}
       {generatedInvoice && (
         <Modal visible transparent animationType="slide">
@@ -3793,7 +4206,10 @@ export default function POSTerminalScreen({
                 </TouchableOpacity>
               </View>
               <ScrollView style={{ flex: 1, padding: 14 }}>
-                <InvoiceComponent invoice={generatedInvoice} />
+                <InvoiceComponent 
+                  invoice={generatedInvoice} 
+                  onClose={() => setGeneratedInvoice(null)} 
+                />
               </ScrollView>
             </View>
           </View>
@@ -6412,8 +6828,67 @@ const styles = StyleSheet.create({
   },
 
   /* --------------------------------------------------------
-     KEYBOARD SHORTCUT BADGES & CHEAT SHEET MODAL
+     DUAL-SCREEN CFD & KEYBOARD SHORTCUT BADGES
      -------------------------------------------------------- */
+  dualScreenBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
+  },
+  dualScreenBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.3,
+  },
+  recentInvoicesCapsuleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    paddingHorizontal: 11,
+    paddingVertical: 5.5,
+    borderRadius: 20,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+        transition: 'all 0.15s ease',
+      } as any,
+    }),
+  },
+  recentInvoicesCapsuleText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#D4AF37',
+    letterSpacing: 0.3,
+  },
+  recentInvoicesBadge: {
+    backgroundColor: '#D4AF37',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  recentInvoicesBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: '#1F0408',
+  },
   keyboardCapsuleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
