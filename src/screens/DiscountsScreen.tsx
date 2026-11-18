@@ -1,39 +1,37 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  Share,
-  useWindowDimensions,
-  Image,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useDiscountStore } from '../store/discountStore';
-import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
-import RoyalDropdown from '../components/RoyalDropdown';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
+} from 'react-native';
 import PaginationControl from '../components/PaginationControl';
+import RoyalDropdown from '../components/RoyalDropdown';
 import { usePagination } from '../hooks/usePagination';
-import { 
-  EventDiscount, 
-  CampaignFormData, 
-  DiscountScope, 
-  DiscountType, 
-  BannerTheme 
+import { useDiscountStore } from '../store/discountStore';
+import { useRestaurantStore } from '../store/restaurantStore';
+import {
+  BannerTheme,
+  CampaignFormData,
+  DiscountScope,
+  EventDiscount
 } from '../types/discount';
-import { 
-  checkCampaignValidity, 
-  formatTenureDisplay 
+import {
+  checkCampaignValidity,
+  formatTenureDisplay
 } from '../utils/discountCalculator';
 
 const BRAND = {
-  burgundy: '#52171B',
+  burgundy: '#631c21ff',
   burgundyDark: '#3A0F12',
   burgundyLight: '#6B1F24',
   gold: '#D5A943',
@@ -582,240 +580,240 @@ export default function DiscountsScreen() {
         ) : (
           <>
             <View style={styles.campaignsGrid}>
-            {campaignsPagination.paginatedData.map((camp) => {
-              const theme = THEME_COLORS[camp.bannerTheme || 'burgundy'];
-              const validity = checkCampaignValidity(camp);
-              const isLive = validity.isValid;
-              const effectiveStatus = isLive ? 'active' : validity.autoStatus;
+              {campaignsPagination.paginatedData.map((camp) => {
+                const theme = THEME_COLORS[camp.bannerTheme || 'burgundy'];
+                const validity = checkCampaignValidity(camp);
+                const isLive = validity.isValid;
+                const effectiveStatus = isLive ? 'active' : validity.autoStatus;
 
-              return (
-                <View key={camp.id} style={styles.campaignCard}>
-                  {/* Card Banner Header */}
-                  <View style={[styles.cardHeader, { backgroundColor: theme.primary }]}>
-                    <View style={styles.cardHeaderLeft}>
-                      <View style={styles.cardHeaderBadgeRow}>
-                        <View style={styles.codeTag}>
-                          <Ionicons name="ticket" size={12} color="#FFFFFF" />
-                          <Text style={styles.codeTagText}>{camp.code}</Text>
-                        </View>
-                        <View style={styles.scopeTag}>
-                          <Text style={styles.scopeTagText}>
-                            {camp.scope === 'item'
-                              ? 'Dish-Wise'
-                              : camp.scope === 'category'
-                              ? 'Category-Wise'
-                              : 'Store-Wide Bill'}
-                          </Text>
-                        </View>
-                      </View>
-                      <Text style={styles.cardTitle}>{camp.title}</Text>
-                      {camp.urduTitle ? (
-                        <Text style={styles.cardUrduTitle}>{camp.urduTitle}</Text>
-                      ) : null}
-                    </View>
-
-                    <View style={styles.cardHeaderRight}>
-                      {effectiveStatus === 'active' && (
-                        <View style={styles.statusLivePill}>
-                          <View style={styles.statusLiveDot} />
-                          <Text style={styles.statusLiveText}>LIVE NOW</Text>
-                        </View>
-                      )}
-                      {effectiveStatus === 'scheduled' && (
-                        <View style={styles.statusScheduledPill}>
-                          <Ionicons name="calendar" size={12} color="#854D0E" />
-                          <Text style={styles.statusScheduledText}>SCHEDULED</Text>
-                        </View>
-                      )}
-                      {effectiveStatus === 'expired' && (
-                        <View style={styles.statusExpiredPill}>
-                          <Text style={styles.statusExpiredText}>ENDED</Text>
-                        </View>
-                      )}
-                      {effectiveStatus === 'paused' && (
-                        <View style={styles.statusPausedPill}>
-                          <Text style={styles.statusPausedText}>PAUSED</Text>
-                        </View>
-                      )}
-
-                      <View style={styles.cardDiscountBadge}>
-                        <Text style={styles.cardDiscountVal}>
-                          {camp.type === 'percentage' ? `${camp.value}%` : `Rs. ${camp.value}`}
-                        </Text>
-                        <Text style={styles.cardDiscountUnit}>OFF</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* Card Body */}
-                  <View style={styles.cardBody}>
-                    {/* Description */}
-                    <Text style={styles.cardDesc} numberOfLines={2}>
-                      {camp.description || 'Promotional deal for Sultan Restaurant guests.'}
-                    </Text>
-
-                    {/* Target Scope Tags */}
-                    <View style={styles.targetSection}>
-                      <Text style={styles.targetSectionTitle}>
-                        {camp.scope === 'item'
-                          ? `Target Dishes (${camp.targetItemIds.length}):`
-                          : camp.scope === 'category'
-                          ? `Target Categories (${camp.targetCategories.length}):`
-                          : 'Order Scope:'}
-                      </Text>
-
-                      <View style={styles.targetTagsRow}>
-                        {camp.scope === 'item' &&
-                          camp.targetItemIds.map((itemId) => {
-                            const dish = menuItems.find((m) => m.id === itemId);
-                            return (
-                              <View key={itemId} style={styles.dishTag}>
-                                <Ionicons name="restaurant" size={12} color={BRAND.burgundy} />
-                                <Text style={styles.dishTagText}>
-                                  {dish ? dish.name : itemId}
-                                </Text>
-                              </View>
-                            );
-                          })}
-
-                        {camp.scope === 'category' &&
-                          camp.targetCategories.map((cat) => (
-                            <View key={cat} style={styles.categoryTag}>
-                              <Ionicons name="layers" size={12} color={BRAND.goldDark} />
-                              <Text style={styles.categoryTagText}>{cat}</Text>
-                            </View>
-                          ))}
-
-                        {camp.scope === 'order' && (
-                          <View style={styles.orderTag}>
-                            <Ionicons name="cart" size={12} color="#0D47A1" />
-                            <Text style={styles.orderTagText}>
-                              All menu items • Min. Spend Rs. {(camp.minSpend || 0).toLocaleString()}
+                return (
+                  <View key={camp.id} style={styles.campaignCard}>
+                    {/* Card Banner Header */}
+                    <View style={[styles.cardHeader, { backgroundColor: theme.primary }]}>
+                      <View style={styles.cardHeaderLeft}>
+                        <View style={styles.cardHeaderBadgeRow}>
+                          <View style={styles.codeTag}>
+                            <Ionicons name="ticket" size={12} color="#FFFFFF" />
+                            <Text style={styles.codeTagText}>{camp.code}</Text>
+                          </View>
+                          <View style={styles.scopeTag}>
+                            <Text style={styles.scopeTagText}>
+                              {camp.scope === 'item'
+                                ? 'Dish-Wise'
+                                : camp.scope === 'category'
+                                  ? 'Category-Wise'
+                                  : 'Store-Wide Bill'}
                             </Text>
                           </View>
+                        </View>
+                        <Text style={styles.cardTitle}>{camp.title}</Text>
+                        {camp.urduTitle ? (
+                          <Text style={styles.cardUrduTitle}>{camp.urduTitle}</Text>
+                        ) : null}
+                      </View>
+
+                      <View style={styles.cardHeaderRight}>
+                        {effectiveStatus === 'active' && (
+                          <View style={styles.statusLivePill}>
+                            <View style={styles.statusLiveDot} />
+                            <Text style={styles.statusLiveText}>LIVE NOW</Text>
+                          </View>
                         )}
+                        {effectiveStatus === 'scheduled' && (
+                          <View style={styles.statusScheduledPill}>
+                            <Ionicons name="calendar" size={12} color="#854D0E" />
+                            <Text style={styles.statusScheduledText}>SCHEDULED</Text>
+                          </View>
+                        )}
+                        {effectiveStatus === 'expired' && (
+                          <View style={styles.statusExpiredPill}>
+                            <Text style={styles.statusExpiredText}>ENDED</Text>
+                          </View>
+                        )}
+                        {effectiveStatus === 'paused' && (
+                          <View style={styles.statusPausedPill}>
+                            <Text style={styles.statusPausedText}>PAUSED</Text>
+                          </View>
+                        )}
+
+                        <View style={styles.cardDiscountBadge}>
+                          <Text style={styles.cardDiscountVal}>
+                            {camp.type === 'percentage' ? `${camp.value}%` : `Rs. ${camp.value}`}
+                          </Text>
+                          <Text style={styles.cardDiscountUnit}>OFF</Text>
+                        </View>
                       </View>
                     </View>
 
-                    {/* Timing & Tenure Box */}
-                    <View style={styles.timingBox}>
-                      <View style={styles.timingRow}>
-                        <Ionicons name="calendar-outline" size={15} color={BRAND.burgundy} />
-                        <Text style={styles.timingLabel}>Tenure Period:</Text>
-                        <Text style={styles.timingValue}>
-                          {formatTenureDisplay(camp.startDate, camp.endDate)}
+                    {/* Card Body */}
+                    <View style={styles.cardBody}>
+                      {/* Description */}
+                      <Text style={styles.cardDesc} numberOfLines={2}>
+                        {camp.description || 'Promotional deal for Sultan Restaurant guests.'}
+                      </Text>
+
+                      {/* Target Scope Tags */}
+                      <View style={styles.targetSection}>
+                        <Text style={styles.targetSectionTitle}>
+                          {camp.scope === 'item'
+                            ? `Target Dishes (${camp.targetItemIds.length}):`
+                            : camp.scope === 'category'
+                              ? `Target Categories (${camp.targetCategories.length}):`
+                              : 'Order Scope:'}
                         </Text>
+
+                        <View style={styles.targetTagsRow}>
+                          {camp.scope === 'item' &&
+                            camp.targetItemIds.map((itemId) => {
+                              const dish = menuItems.find((m) => m.id === itemId);
+                              return (
+                                <View key={itemId} style={styles.dishTag}>
+                                  <Ionicons name="restaurant" size={12} color={BRAND.burgundy} />
+                                  <Text style={styles.dishTagText}>
+                                    {dish ? dish.name : itemId}
+                                  </Text>
+                                </View>
+                              );
+                            })}
+
+                          {camp.scope === 'category' &&
+                            camp.targetCategories.map((cat) => (
+                              <View key={cat} style={styles.categoryTag}>
+                                <Ionicons name="layers" size={12} color={BRAND.goldDark} />
+                                <Text style={styles.categoryTagText}>{cat}</Text>
+                              </View>
+                            ))}
+
+                          {camp.scope === 'order' && (
+                            <View style={styles.orderTag}>
+                              <Ionicons name="cart" size={12} color="#0D47A1" />
+                              <Text style={styles.orderTagText}>
+                                All menu items • Min. Spend Rs. {(camp.minSpend || 0).toLocaleString()}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
                       </View>
 
-                      <View style={styles.timingRow}>
-                        <Ionicons name="time-outline" size={15} color={BRAND.burgundy} />
-                        <Text style={styles.timingLabel}>Active Hours:</Text>
-                        <Text style={styles.timingValue}>
-                          {camp.allDay
-                            ? 'All Day (24 Hours)'
-                            : `${camp.startTime || '17:00'} - ${camp.endTime || '23:30'}`}
-                        </Text>
-                      </View>
-
-                      <View style={styles.timingRow}>
-                        <Ionicons name="repeat-outline" size={15} color={BRAND.burgundy} />
-                        <Text style={styles.timingLabel}>Active Days:</Text>
-                        <Text style={styles.timingValue}>
-                          {camp.activeDays.length === 7
-                            ? 'Every Day'
-                            : camp.activeDays.map((d) => DAYS_NAMES[d]).join(', ')}
-                        </Text>
-                      </View>
-
-                      {camp.maxDiscountCap ? (
+                      {/* Timing & Tenure Box */}
+                      <View style={styles.timingBox}>
                         <View style={styles.timingRow}>
-                          <Ionicons name="shield-checkmark-outline" size={15} color={BRAND.burgundy} />
-                          <Text style={styles.timingLabel}>Max Discount Cap:</Text>
+                          <Ionicons name="calendar-outline" size={15} color={BRAND.burgundy} />
+                          <Text style={styles.timingLabel}>Tenure Period:</Text>
                           <Text style={styles.timingValue}>
-                            Rs. {camp.maxDiscountCap.toLocaleString()}
+                            {formatTenureDisplay(camp.startDate, camp.endDate)}
                           </Text>
                         </View>
-                      ) : null}
-                    </View>
 
-                    {/* Performance & Sales Summary Strip */}
-                    <View style={styles.salesStrip}>
-                      <View style={styles.salesMetric}>
-                        <Text style={styles.salesMetricLabel}>Redemptions</Text>
-                        <Text style={styles.salesMetricVal}>{camp.redemptionsCount || 0}</Text>
+                        <View style={styles.timingRow}>
+                          <Ionicons name="time-outline" size={15} color={BRAND.burgundy} />
+                          <Text style={styles.timingLabel}>Active Hours:</Text>
+                          <Text style={styles.timingValue}>
+                            {camp.allDay
+                              ? 'All Day (24 Hours)'
+                              : `${camp.startTime || '17:00'} - ${camp.endTime || '23:30'}`}
+                          </Text>
+                        </View>
+
+                        <View style={styles.timingRow}>
+                          <Ionicons name="repeat-outline" size={15} color={BRAND.burgundy} />
+                          <Text style={styles.timingLabel}>Active Days:</Text>
+                          <Text style={styles.timingValue}>
+                            {camp.activeDays.length === 7
+                              ? 'Every Day'
+                              : camp.activeDays.map((d) => DAYS_NAMES[d]).join(', ')}
+                          </Text>
+                        </View>
+
+                        {camp.maxDiscountCap ? (
+                          <View style={styles.timingRow}>
+                            <Ionicons name="shield-checkmark-outline" size={15} color={BRAND.burgundy} />
+                            <Text style={styles.timingLabel}>Max Discount Cap:</Text>
+                            <Text style={styles.timingValue}>
+                              Rs. {camp.maxDiscountCap.toLocaleString()}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
-                      <View style={styles.salesMetricDivider} />
 
-                      <View style={styles.salesMetric}>
-                        <Text style={styles.salesMetricLabel}>Gross Sales</Text>
-                        <Text style={styles.salesMetricVal}>
-                          Rs. {(camp.totalGrossSales || 0).toLocaleString()}
-                        </Text>
+                      {/* Performance & Sales Summary Strip */}
+                      <View style={styles.salesStrip}>
+                        <View style={styles.salesMetric}>
+                          <Text style={styles.salesMetricLabel}>Redemptions</Text>
+                          <Text style={styles.salesMetricVal}>{camp.redemptionsCount || 0}</Text>
+                        </View>
+                        <View style={styles.salesMetricDivider} />
+
+                        <View style={styles.salesMetric}>
+                          <Text style={styles.salesMetricLabel}>Gross Sales</Text>
+                          <Text style={styles.salesMetricVal}>
+                            Rs. {(camp.totalGrossSales || 0).toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.salesMetricDivider} />
+
+                        <View style={styles.salesMetric}>
+                          <Text style={styles.salesMetricLabel}>Discount Given</Text>
+                          <Text style={[styles.salesMetricVal, { color: BRAND.danger }]}>
+                            - Rs. {(camp.totalDiscountGiven || 0).toLocaleString()}
+                          </Text>
+                        </View>
+                        <View style={styles.salesMetricDivider} />
+
+                        <View style={styles.salesMetric}>
+                          <Text style={styles.salesMetricLabel}>Net Revenue</Text>
+                          <Text style={[styles.salesMetricVal, { color: BRAND.success }]}>
+                            Rs. {(camp.netRevenue || 0).toLocaleString()}
+                          </Text>
+                        </View>
                       </View>
-                      <View style={styles.salesMetricDivider} />
 
-                      <View style={styles.salesMetric}>
-                        <Text style={styles.salesMetricLabel}>Discount Given</Text>
-                        <Text style={[styles.salesMetricVal, { color: BRAND.danger }]}>
-                          - Rs. {(camp.totalDiscountGiven || 0).toLocaleString()}
-                        </Text>
-                      </View>
-                      <View style={styles.salesMetricDivider} />
-
-                      <View style={styles.salesMetric}>
-                        <Text style={styles.salesMetricLabel}>Net Revenue</Text>
-                        <Text style={[styles.salesMetricVal, { color: BRAND.success }]}>
-                          Rs. {(camp.netRevenue || 0).toLocaleString()}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Card Actions Footer */}
-                    <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        style={styles.drilldownBtn}
-                        onPress={() => setAnalyticsCampaign(camp)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="bar-chart" size={15} color={BRAND.burgundy} />
-                        <Text style={styles.drilldownBtnText}>Sales Data & Drilldown</Text>
-                      </TouchableOpacity>
-
-                      <View style={styles.cardButtonsRight}>
+                      {/* Card Actions Footer */}
+                      <View style={styles.cardActionsRow}>
                         <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => handleOpenEditor(camp)}
+                          style={styles.drilldownBtn}
+                          onPress={() => setAnalyticsCampaign(camp)}
                           activeOpacity={0.7}
                         >
-                          <Ionicons name="pencil" size={16} color={BRAND.ink} />
+                          <Ionicons name="bar-chart" size={15} color={BRAND.burgundy} />
+                          <Text style={styles.drilldownBtnText}>Sales Data & Drilldown</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.iconActionBtn}
-                          onPress={() => toggleCampaignStatus(camp.id)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons
-                            name={camp.status === 'paused' ? 'play' : 'pause'}
-                            size={16}
-                            color={camp.status === 'paused' ? BRAND.success : BRAND.warn}
-                          />
-                        </TouchableOpacity>
+                        <View style={styles.cardButtonsRight}>
+                          <TouchableOpacity
+                            style={styles.iconActionBtn}
+                            onPress={() => handleOpenEditor(camp)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="pencil" size={16} color={BRAND.ink} />
+                          </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={[styles.iconActionBtn, { borderColor: '#FCA5A5' }]}
-                          onPress={() => handleDeleteCampaign(camp)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                        </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.iconActionBtn}
+                            onPress={() => toggleCampaignStatus(camp.id)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons
+                              name={camp.status === 'paused' ? 'play' : 'pause'}
+                              size={16}
+                              color={camp.status === 'paused' ? BRAND.success : BRAND.warn}
+                            />
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.iconActionBtn, { borderColor: '#FCA5A5' }]}
+                            onPress={() => handleDeleteCampaign(camp)}
+                            activeOpacity={0.7}
+                          >
+                            <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     </View>
                   </View>
-                </View>
-              );
-            })}
-          </View>
+                );
+              })}
+            </View>
 
             {filteredCampaigns.length > 0 && (
               <PaginationControl
@@ -1430,8 +1428,8 @@ export default function DiscountsScreen() {
                       {analyticsCampaign.scope === 'item'
                         ? 'Item-Wise Promo'
                         : analyticsCampaign.scope === 'category'
-                        ? 'Category-Wise Promo'
-                        : 'Store-Wide Promo'}
+                          ? 'Category-Wise Promo'
+                          : 'Store-Wide Promo'}
                     </Text>
                   </View>
 
@@ -1487,56 +1485,56 @@ export default function DiscountsScreen() {
 
                     {analyticsCampaign.topDishes && analyticsCampaign.topDishes.length > 0 ? (
                       <ScrollView horizontal={isMobile} showsHorizontalScrollIndicator={false}>
-                      <View style={[styles.tableContainer, isMobile && { minWidth: 520 }]}>
-                        <View style={styles.tableHeaderRow}>
-                          <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Dish Name</Text>
-                          <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Category</Text>
-                          <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'center' }]}>
-                            Qty Sold
-                          </Text>
-                          <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>
-                            Gross Sales
-                          </Text>
-                          <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>
-                            Discount Subsidized
-                          </Text>
-                        </View>
-
-                        {analyticsCampaign.topDishes.map((td) => (
-                          <View key={td.itemId} style={styles.tableBodyRow}>
-                            <Text style={[styles.tableBodyCell, { flex: 2, fontWeight: '700' }]}>
-                              {td.itemName}
+                        <View style={[styles.tableContainer, isMobile && { minWidth: 520 }]}>
+                          <View style={styles.tableHeaderRow}>
+                            <Text style={[styles.tableHeaderCell, { flex: 2 }]}>Dish Name</Text>
+                            <Text style={[styles.tableHeaderCell, { flex: 1 }]}>Category</Text>
+                            <Text style={[styles.tableHeaderCell, { flex: 1, textAlign: 'center' }]}>
+                              Qty Sold
                             </Text>
-                            <Text style={[styles.tableBodyCell, { flex: 1, color: BRAND.muted }]}>
-                              {td.category}
+                            <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>
+                              Gross Sales
                             </Text>
-                            <Text
-                              style={[
-                                styles.tableBodyCell,
-                                { flex: 1, textAlign: 'center', fontWeight: '700' },
-                              ]}
-                            >
-                              {td.qtySold} portions
-                            </Text>
-                            <Text
-                              style={[
-                                styles.tableBodyCell,
-                                { flex: 1.5, textAlign: 'right', fontWeight: '700' },
-                              ]}
-                            >
-                              Rs. {td.grossSales.toLocaleString()}
-                            </Text>
-                            <Text
-                              style={[
-                                styles.tableBodyCell,
-                                { flex: 1.5, textAlign: 'right', color: BRAND.danger },
-                              ]}
-                            >
-                              - Rs. {td.discountAmount.toLocaleString()}
+                            <Text style={[styles.tableHeaderCell, { flex: 1.5, textAlign: 'right' }]}>
+                              Discount Subsidized
                             </Text>
                           </View>
-                        ))}
-                      </View>
+
+                          {analyticsCampaign.topDishes.map((td) => (
+                            <View key={td.itemId} style={styles.tableBodyRow}>
+                              <Text style={[styles.tableBodyCell, { flex: 2, fontWeight: '700' }]}>
+                                {td.itemName}
+                              </Text>
+                              <Text style={[styles.tableBodyCell, { flex: 1, color: BRAND.muted }]}>
+                                {td.category}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableBodyCell,
+                                  { flex: 1, textAlign: 'center', fontWeight: '700' },
+                                ]}
+                              >
+                                {td.qtySold} portions
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableBodyCell,
+                                  { flex: 1.5, textAlign: 'right', fontWeight: '700' },
+                                ]}
+                              >
+                                Rs. {td.grossSales.toLocaleString()}
+                              </Text>
+                              <Text
+                                style={[
+                                  styles.tableBodyCell,
+                                  { flex: 1.5, textAlign: 'right', color: BRAND.danger },
+                                ]}
+                              >
+                                - Rs. {td.discountAmount.toLocaleString()}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
                       </ScrollView>
                     ) : (
                       <Text style={styles.noDataHint}>
@@ -1552,7 +1550,7 @@ export default function DiscountsScreen() {
                     </Text>
 
                     {analyticsCampaign.recentRedemptions &&
-                    analyticsCampaign.recentRedemptions.length > 0 ? (
+                      analyticsCampaign.recentRedemptions.length > 0 ? (
                       <View style={styles.redemptionsList}>
                         {analyticsCampaign.recentRedemptions.map((red) => (
                           <View key={red.id} style={styles.redemptionCard}>

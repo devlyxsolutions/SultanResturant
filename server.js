@@ -3117,7 +3117,7 @@ if (server80) {
   );
 }
 
-if (server8081 && PORT !== 8081) {
+if (server8081 && PORT !== 8081 && !process.env.SKIP_8081) {
   listenDualStack(
     server8081,
     8081,

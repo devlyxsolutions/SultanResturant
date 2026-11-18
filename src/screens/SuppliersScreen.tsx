@@ -1,34 +1,35 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  Linking,
-  Share,
-  useWindowDimensions,
-  ViewStyle,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  useOpsStore,
-  Supplier,
-  SupplierCategory,
-  SUPPLIER_CATEGORIES,
-  PurchaseOrder,
-  PurchaseOrderItem,
-  SupplierPayment,
-} from '../store/opsStore';
+  Alert,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  ViewStyle,
+} from 'react-native';
 import PaginationControl from '../components/PaginationControl';
+import RoyalDropdown from '../components/RoyalDropdown';
 import { usePagination } from '../hooks/usePagination';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
+import {
+  PurchaseOrder,
+  PurchaseOrderItem,
+  Supplier,
+  SUPPLIER_CATEGORIES,
+  SupplierCategory,
+  SupplierPayment,
+  useOpsStore,
+} from '../store/opsStore';
 import { formatTime, toWhatsAppNumber } from '../utils/format';
 
 const CATEGORY_THEMES: Record<
@@ -109,6 +110,15 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const [formSuppliedItems, setFormSuppliedItems] = useState('');
   const [formCurrentBalance, setFormCurrentBalance] = useState('0');
   const [formNotes, setFormNotes] = useState('');
+
+  const supplierCategoryOptions = useMemo(() => {
+    return SUPPLIER_CATEGORIES.map((cat) => ({
+      label: cat,
+      value: cat,
+      icon: CATEGORY_THEMES[cat]?.icon || 'pricetag-outline',
+      sublabel: CATEGORY_THEMES[cat]?.urdu,
+    }));
+  }, []);
 
   // 3. Quick Payment Voucher Modal
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -205,13 +215,6 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     data: filteredSuppliers,
     initialPageSize: 10,
   });
-
-  // Initials generator
-  const getInitials = (name: string) => {
-    const parts = name.trim().split(' ');
-    if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    return name.slice(0, 2).toUpperCase();
-  };
 
   // ----------------------------------------------------
   // Ledger Statement for Dossier Supplier
@@ -357,11 +360,11 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     const bankDetails =
       formBankName.trim() || formAccountNumber.trim()
         ? {
-            bankName: formBankName.trim(),
-            accountTitle: formAccountTitle.trim() || formName.trim(),
-            accountNumber: formAccountNumber.trim(),
-            iban: formIban.trim() || undefined,
-          }
+          bankName: formBankName.trim(),
+          accountTitle: formAccountTitle.trim() || formName.trim(),
+          accountNumber: formAccountNumber.trim(),
+          iban: formIban.trim() || undefined,
+        }
         : undefined;
 
     const balanceNum = parseFloat(formCurrentBalance) || 0;
@@ -736,6 +739,16 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
           >
             <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
             <Text style={styles.addButtonText}>{isSmallMobile ? 'New' : 'Register Supplier'}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.ledgerHeaderBtn}
+            onPress={() => router.push((backRoute.startsWith('/manager') ? '/manager/supplier-ledger' : '/admin/supplier-ledger') as any)}
+            activeOpacity={0.8}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Open Dedicated Supplier Ledger & Payments' } as any) : {})}
+          >
+            <Ionicons name="book" size={16} color="#FFFFFF" style={{ marginRight: 5 }} />
+            <Text style={styles.ledgerHeaderBtnText}>{isSmallMobile ? 'Khata' : 'Khata Ledger (کھاتہ)'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1516,6 +1529,20 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                   </TouchableOpacity>
 
                   <TouchableOpacity
+                    style={styles.modalFullLedgerBtn}
+                    onPress={() => {
+                      const sup = dossierSupplier;
+                      setDossierSupplier(null);
+                      const route = (backRoute.startsWith('/manager') ? '/manager/supplier-ledger' : '/admin/supplier-ledger');
+                      router.push(`${route}?supplierId=${sup.id}` as any);
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="book-outline" size={15} color="#FFFFFF" style={{ marginRight: 5 }} />
+                    <Text style={styles.modalFullLedgerBtnText}>Full Ledger Page</Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
                     style={styles.modalPOActionBtn}
                     onPress={() => {
                       const sup = dossierSupplier;
@@ -1870,22 +1897,26 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 onChangeText={setFormName}
               />
 
-              <Text style={styles.formLabel}>Food / Supply Category *</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 10 }}>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  {SUPPLIER_CATEGORIES.map((cat) => (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[styles.categorySelectPill, formCategory === cat && styles.categorySelectPillActive]}
-                      onPress={() => setFormCategory(cat)}
-                    >
-                      <Text style={[styles.categorySelectPillText, formCategory === cat && styles.categorySelectPillTextActive]}>
-                        {cat}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </ScrollView>
+              <RoyalDropdown
+                label="Food / Supply Category"
+                required
+                icon={CATEGORY_THEMES[formCategory]?.icon || 'restaurant'}
+                placeholder="Select supply category..."
+                options={supplierCategoryOptions}
+                value={formCategory}
+                onSelect={(cat) => setFormCategory(cat as SupplierCategory)}
+                searchable
+                triggerStyle={{
+                  backgroundColor: '#F8FAFC',
+                  borderColor: '#CBD5E1',
+                  borderWidth: 1,
+                  borderRadius: 8,
+                  paddingHorizontal: 10,
+                  paddingVertical: 8,
+                  minHeight: 40,
+                }}
+                style={{ marginBottom: 10, zIndex: 30 }}
+              />
 
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 <View style={{ flex: 1 }}>
@@ -2238,6 +2269,21 @@ const styles = StyleSheet.create({
   },
   addButtonText: {
     color: '#140306',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  ledgerHeaderBtn: {
+    backgroundColor: '#52141C',
+    borderWidth: 1.5,
+    borderColor: '#D5A943',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  ledgerHeaderBtnText: {
+    color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
   },
@@ -3107,6 +3153,19 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   modalPayActionBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 12.5,
+  },
+  modalFullLedgerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0284C7',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 7,
+  },
+  modalFullLedgerBtnText: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 12.5,

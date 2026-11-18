@@ -147,6 +147,8 @@ export type Expense = {
   method: ExpenseMethod;
   paidBy?: string;
   at: number;
+  sourcePaymentId?: string;
+  sourcePOId?: string;
 };
 
 export type GuestFeedback = {
@@ -1674,6 +1676,7 @@ export const useOpsStore = create<OpsState>()(
                 method: po.paymentMethod === 'online' ? 'online' : 'cash',
                 paidBy: receivedBy || po.receivedBy || 'Admin',
                 at: now,
+                sourcePOId: po.id,
               },
               ...nextExpenses,
             ];
@@ -1792,9 +1795,11 @@ export const useOpsStore = create<OpsState>()(
             }
             return s;
           });
+          const nextExpenses = state.expenses.filter((e) => e.sourcePOId !== id);
           return {
             purchaseOrders: state.purchaseOrders.filter((p) => p.id !== id),
             suppliers: updatedSuppliers,
+            expenses: nextExpenses,
           };
         });
         notifySync();
@@ -1852,6 +1857,7 @@ export const useOpsStore = create<OpsState>()(
                 method: payment.method === 'online' ? 'online' : 'cash',
                 paidBy: payment.paidBy || 'Admin',
                 at: now,
+                sourcePaymentId: payment.id,
               },
               ...nextExpenses,
             ];
@@ -1903,6 +1909,7 @@ export const useOpsStore = create<OpsState>()(
             supplierPayments: state.supplierPayments.filter((p) => p.id !== id),
             suppliers: updatedSuppliers,
             purchaseOrders: updatedPOs,
+            expenses: state.expenses.filter((e) => e.sourcePaymentId !== id),
           };
         });
         notifySync();

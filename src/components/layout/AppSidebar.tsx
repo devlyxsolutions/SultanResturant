@@ -79,6 +79,7 @@ function getCategoryGroups(role: 'admin' | 'manager'): NavCategoryGroup[] {
         routes: [
           '/admin/inventory',
           '/admin/suppliers',
+          '/admin/supplier-ledger',
           '/admin/damages',
         ],
       },
@@ -150,6 +151,7 @@ function getCategoryGroups(role: 'admin' | 'manager'): NavCategoryGroup[] {
       routes: [
         '/manager/inventory',
         '/manager/suppliers',
+        '/manager/supplier-ledger',
         '/manager/damages',
       ],
     },

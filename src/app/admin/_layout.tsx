@@ -36,6 +36,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Financial Reports', route: '/admin/reports', icon: 'bar-chart-outline' },
   { label: 'Inventory & Stock', route: '/admin/inventory', icon: 'cube-outline' },
   { label: 'Suppliers & Vendors', route: '/admin/suppliers', icon: 'bus-outline' },
+  { label: 'Supplier Ledger & Pays', route: '/admin/supplier-ledger', icon: 'book-outline', badge: 'Khata' },
   { label: 'Table Blueprint', route: '/admin/tables', icon: 'grid-outline' },
   { label: 'Customer CRM', route: '/admin/customers', icon: 'person-outline' },
   { label: 'Floor Command', route: '/admin/floors', icon: 'business-outline' },
@@ -69,7 +70,7 @@ export default function AdminLayout() {
     if (isTablet && !isCollapsed) {
       setIsCollapsed(true);
     }
-  }, [pathname, isTablet]);
+  }, [pathname, isTablet, isCollapsed, setIsCollapsed]);
 
   // Auto-collapse sidebar ONLY when user clicks or touches anywhere outside the sidebar
   useEffect(() => {

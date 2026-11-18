@@ -1,28 +1,26 @@
-import { Stack, usePathname, useRouter } from 'expo-router';
-import { 
-  View, 
-  Text, 
-  TouchableOpacity, 
-  StyleSheet, 
-  StatusBar, 
-  Platform,
-  useWindowDimensions,
-  ActivityIndicator
-} from 'react-native';
-import { useState, useMemo, useEffect } from 'react';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRoleGuard } from '../../hooks/useRoleGuard';
-import { useRolePermissions } from '../../store/roleStore';
-import { useSidebarStore } from '../../store/sidebarStore';
-import { useSettingsStore, SystemSettings } from '../../store/settingsStore';
-import SyncStatusBadge from '../../components/SyncStatusBadge';
-import FullscreenButton from '../../components/FullscreenButton';
-import SultanLogo from '../../components/SultanLogo';
+import { Stack, usePathname, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import BottomNav from '../../components/BottomNav';
 import AppSidebar, { NavItem } from '../../components/layout/AppSidebar';
 import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
+import SultanLogo from '../../components/SultanLogo';
+import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { getManagerRouteRule, isManagerRouteAllowed } from '../../constants/managerAccess';
+import { useRoleGuard } from '../../hooks/useRoleGuard';
+import { useRolePermissions } from '../../store/roleStore';
+import { useSidebarStore } from '../../store/sidebarStore';
 
 const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Dashboard', route: '/manager/dashboard', icon: 'grid-outline' },
@@ -36,6 +34,7 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Events & Discounts', route: '/manager/discounts', icon: 'pricetags-outline', badge: 'PROMO' },
   { label: 'Inventory', route: '/manager/inventory', icon: 'cube-outline' },
   { label: 'Suppliers', route: '/manager/suppliers', icon: 'bus-outline' },
+  { label: 'Supplier Ledger', route: '/manager/supplier-ledger', icon: 'book-outline', badge: 'Khata' },
   { label: 'Live Expenses', route: '/manager/expenses', icon: 'wallet-outline' },
   { label: 'Financial Reports', route: '/manager/reports', icon: 'bar-chart-outline' },
   { label: 'Damage Control', route: '/manager/damages', icon: 'shield-outline' },
@@ -48,33 +47,11 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'Staff & HR / پیرول', route: '/manager/staff', icon: 'people-outline' },
 ];
 
-function isModuleEnabledForManagerRoute(route: string, settings: SystemSettings): boolean {
-  if (route === '/menu' && settings.enableDigitalQrMenu === false) return false;
-  if (route === '/manager/app-orders' && settings.enableOnlineOrders === false) return false;
-  if (route === '/manager/pos' && settings.enablePosModule === false) return false;
-  if ((route === '/manager/floor-plan' || route === '/manager/floors') && settings.enableFloorPlanModule === false) return false;
-  if (route === '/manager/shift' && settings.enableShiftModule === false) return false;
-  if (route === '/manager/invoices' && settings.enableInvoicesModule === false) return false;
-  if (route === '/manager/returns' && settings.enableReturnsModule === false) return false;
-  if (route === '/manager/discounts' && settings.enableDiscountsModule === false) return false;
-  if (route === '/manager/inventory' && settings.enableInventoryModule === false) return false;
-  if (route === '/manager/suppliers' && settings.enableSuppliersModule === false) return false;
-  if (route === '/manager/expenses' && settings.enableExpensesModule === false) return false;
-  if (route === '/manager/reports' && settings.enableReportsModule === false) return false;
-  if (route === '/manager/damages' && settings.enableDamagesModule === false) return false;
-  if (route === '/manager/assets' && settings.enableAssetsModule === false) return false;
-  if ((route === '/manager/kitchen-handover' || route === '/manager/kitchen-returns') && settings.enableKitchenHandoverModule === false) return false;
-  if ((route === '/manager/recipes' || route === '/manager/costing') && settings.enableRecipesBomModule === false) return false;
-  if (route === '/manager/staff' && settings.enableStaffHrModule === false) return false;
-  return true;
-}
-
 export default function ManagerLayout() {
-  // Admin and Floor Manager can also open relevant manager screens (e.g. POS, Floor Plan)
-  const { ready, user, logout } = useRoleGuard(['manager', 'admin', 'floor_manager', 'Floor Manager']);
+  // Admin can also open manager screens (e.g. Inventory from the admin dashboard)
+  const { ready, user, logout } = useRoleGuard(['manager', 'admin']);
   const isActualManager = user?.role !== 'admin';
   const { can, roleName } = useRolePermissions(isActualManager ? undefined : 'manager');
-  const systemSettings = useSettingsStore((s) => s.settings);
   const { width } = useWindowDimensions();
   const router = useRouter();
   const pathname = usePathname();
@@ -89,7 +66,7 @@ export default function ManagerLayout() {
     if (isTablet && !isCollapsed) {
       setIsCollapsed(true);
     }
-  }, [pathname, isTablet]);
+  }, [pathname, isTablet, isCollapsed, setIsCollapsed]);
 
   // Auto-collapse sidebar ONLY when user clicks or touches anywhere outside the sidebar
   useEffect(() => {
@@ -138,13 +115,13 @@ export default function ManagerLayout() {
         }
 
         // 3. Fallback container check
-        const sidebarEl = 
+        const sidebarEl =
           document.getElementById('sultan-app-sidebar') ||
           document.querySelector('[data-sidebar="true"]') ||
           document.querySelector('.sultan-desktop-sidebar');
         if (sidebarEl && sidebarEl.contains(target)) return true;
 
-        const toggleBtnEl = 
+        const toggleBtnEl =
           document.getElementById('top-sidebar-toggle-btn') ||
           document.querySelector('[data-toggle-btn="true"]') ||
           document.querySelector('[data-testid="top-sidebar-toggle-btn"]');
@@ -176,14 +153,11 @@ export default function ManagerLayout() {
     };
   }, [isCollapsed, setIsCollapsed]);
 
-  // Filter menu items by active system modules and manager role permissions.
+  // If user is Admin, they see all menu items. If actual manager, filter based on their allowed permissions.
   const filteredMenuItems = useMemo(() => {
-    return MANAGER_MENU_ITEMS.filter((item) => {
-      if (!isModuleEnabledForManagerRoute(item.route, systemSettings)) return false;
-      if (!isActualManager) return true;
-      return isManagerRouteAllowed(item.route, can);
-    });
-  }, [isActualManager, can, systemSettings]);
+    if (!isActualManager) return MANAGER_MENU_ITEMS;
+    return MANAGER_MENU_ITEMS.filter((item) => isManagerRouteAllowed(item.route, can));
+  }, [isActualManager, can]);
 
   // Route guard: Only actual Manager is blocked from screens the Admin has not allowed. Admin has full access.
   const blockedRule = isActualManager && !isManagerRouteAllowed(pathname, can)
@@ -209,11 +183,11 @@ export default function ManagerLayout() {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: '#140306' }} edges={['top', 'bottom']}>
         <StatusBar barStyle="light-content" />
-        <Stack 
-          screenOptions={{ 
+        <Stack
+          screenOptions={{
             headerShown: false,
             contentStyle: { backgroundColor: '#F8FAFC' }
-          }} 
+          }}
         />
       </SafeAreaView>
     );
@@ -343,7 +317,6 @@ export default function ManagerLayout() {
             </View>
 
             <View style={styles.topBarRight}>
-              <FullscreenButton variant={width < 1024 ? 'icon' : 'pill'} />
               <SyncStatusBadge compact={width < 1024} />
 
               {can('canAccessPOS') && (
@@ -373,7 +346,7 @@ export default function ManagerLayout() {
                 )}
               </View>
 
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[styles.logoutBtn, width < 900 && { paddingHorizontal: 8 }]}
                 onPress={logout}
                 activeOpacity={0.7}
@@ -386,7 +359,7 @@ export default function ManagerLayout() {
           </View>
 
           {/* Screen Content */}
-          <View 
+          <View
             style={styles.desktopContent}
             {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
           >
@@ -420,8 +393,8 @@ export default function ManagerLayout() {
       {/* Mobile Top Header */}
       <View style={styles.mobileHeader}>
         <View style={styles.mobileHeaderLeft}>
-          <TouchableOpacity 
-            style={styles.hamburgerBtn} 
+          <TouchableOpacity
+            style={styles.hamburgerBtn}
             onPress={() => setIsDrawerOpen(true)}
             activeOpacity={0.7}
           >
@@ -441,9 +414,8 @@ export default function ManagerLayout() {
         </View>
 
         <View style={styles.mobileHeaderRight}>
-          <FullscreenButton variant="compact" />
           <SyncStatusBadge compact />
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.mobileLogoutBtn}
             onPress={logout}
             activeOpacity={0.7}
@@ -452,9 +424,9 @@ export default function ManagerLayout() {
           </TouchableOpacity>
         </View>
       </View>
-      
+
       {/* Mobile Screen Stack */}
-      <View 
+      <View
         style={styles.mobileContent}
         {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true' } } as any) : {})}
       >

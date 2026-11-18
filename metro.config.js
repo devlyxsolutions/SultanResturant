@@ -39,6 +39,7 @@ try {
         detached: true,
         stdio: 'ignore',
         cwd: __dirname,
+        env: { ...process.env, SKIP_8081: '1' },
       });
       child.unref();
     } catch (_) {}
