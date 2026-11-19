@@ -26,8 +26,7 @@ export default function CustomerDisplayScreen() {
   const isLandscape = width > height;
 
   // Responsive layout scaling across all screen sizes (small dual monitor, laptop, 1080p, 4K, tablet)
-  const topBarHeight = Math.min(Math.max(52, Math.floor(height * 0.08)), 68);
-  const availHeight = Math.max(380, height - topBarHeight);
+  const availHeight = Math.max(380, height);
   const availWidth = width;
 
   // Centerpiece Circle Diameter (dynamic clamping so it never crowds text or touches borders)
@@ -252,82 +251,30 @@ export default function CustomerDisplayScreen() {
       )}
 
       {/* ========================================================
-          1. TOP APP / BRANDING BAR (ROYAL BURGUNDY THEME)
+          FLOATING TIME & FULLSCREEN PILL (TOP-RIGHT ONLY)
           ======================================================== */}
-      <View style={[styles.topBar, { height: topBarHeight, paddingHorizontal: Math.max(14, Math.floor(width * 0.02)) }]}>
-        <View style={styles.brandGroup}>
-          <Image
-            source={require('../../assets/images/sultan-logo.png')}
-            style={[styles.topLogo, { width: Math.min(48, Math.max(34, Math.floor(topBarHeight * 0.72))), height: Math.min(48, Math.max(34, Math.floor(topBarHeight * 0.72))) }]}
-            resizeMode="contain"
-          />
-          <View>
-            <Text style={[styles.brandTitle, { fontSize: Math.min(18, Math.max(13, Math.floor(topBarHeight * 0.28))) }]}>SULTAN RESTAURANT</Text>
-            <Text style={[styles.brandSubtitle, { fontSize: Math.min(12, Math.max(9, Math.floor(topBarHeight * 0.19))) }]}>سلطان ریسٹورنٹ • جہاں ہر مہمان ہے سلطان</Text>
-          </View>
+      <View style={styles.floatingTopBar}>
+        <View style={styles.clockPill}>
+          <Ionicons name="time-outline" size={15} color="#D4AF37" />
+          <Text style={styles.clockTime}>{formattedTime}</Text>
+          <Text style={styles.clockDate}>{formattedDate}</Text>
         </View>
 
-        {/* Center Badge: Table / Order Info */}
-        {isShowingPos && (
-          <View style={styles.orderBadge}>
-            <View style={styles.orderBadgePill}>
-              <Ionicons
-                name={
-                  state.orderType === 'dine-in'
-                    ? 'restaurant'
-                    : state.orderType === 'delivery'
-                    ? 'bicycle'
-                    : 'bag-handle'
-                }
-                size={16}
-                color="#D4AF37"
-              />
-              <Text style={styles.orderBadgeText}>
-                {state.orderType === 'dine-in'
-                  ? `DINE-IN • ${state.tableName || 'Table'}`
-                  : state.orderType === 'delivery'
-                  ? 'HOME DELIVERY'
-                  : 'TAKEAWAY / PARCEL'}
-              </Text>
-            </View>
-            {state.customerName ? (
-              <Text style={styles.customerNameText} numberOfLines={1}>
-                {state.customerName}
-              </Text>
-            ) : null}
-            {state.cashierName ? (
-              <View style={styles.cashierPill}>
-                <Ionicons name="person" size={11} color="#D4AF37" />
-                <Text style={styles.cashierText}>Cashier: {state.cashierName}</Text>
-              </View>
-            ) : null}
-          </View>
+        {Platform.OS === 'web' && (
+          <TouchableOpacity
+            style={styles.fullscreenToggleBtn}
+            onPress={toggleFullscreen}
+            activeOpacity={0.7}
+            accessibilityLabel="Toggle Fullscreen Display"
+            {...(Platform.OS === 'web' ? ({ title: 'Toggle Fullscreen Display' } as any) : {})}
+          >
+            <Ionicons
+              name={isFullscreen ? 'contract-outline' : 'expand-outline'}
+              size={18}
+              color="#D4AF37"
+            />
+          </TouchableOpacity>
         )}
-
-        {/* Right Info: Live Time, Date & Fullscreen Button */}
-        <View style={styles.topRightGroup}>
-          <View style={styles.clockPill}>
-            <Ionicons name="time-outline" size={15} color="#D4AF37" />
-            <Text style={styles.clockTime}>{formattedTime}</Text>
-            <Text style={styles.clockDate}>{formattedDate}</Text>
-          </View>
-
-          {Platform.OS === 'web' && (
-            <TouchableOpacity
-              style={styles.fullscreenToggleBtn}
-              onPress={toggleFullscreen}
-              activeOpacity={0.7}
-              accessibilityLabel="Toggle Fullscreen Display"
-              {...(Platform.OS === 'web' ? ({ title: 'Toggle Fullscreen Display' } as any) : {})}
-            >
-              <Ionicons
-                name={isFullscreen ? 'contract-outline' : 'expand-outline'}
-                size={18}
-                color="#D4AF37"
-              />
-            </TouchableOpacity>
-          )}
-        </View>
       </View>
 
       {/* ========================================================
@@ -402,6 +349,7 @@ export default function CustomerDisplayScreen() {
             styles.activeWorkspace,
             {
               padding: Math.min(16, Math.max(8, Math.floor(width * 0.015))),
+              paddingTop: Math.max(58, Math.floor(height * 0.08)),
               gap: Math.min(16, Math.max(8, Math.floor(width * 0.015))),
             },
             !isLandscape && { flexDirection: 'column' },
@@ -863,7 +811,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#160205', // Royal Burgundy Obsidian Theme
   },
 
-  // 1. Top Bar
+  // 1. Floating Time (Top-Right Only)
+  floatingTopBar: {
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    zIndex: 100,
+  },
   topBar: {
     height: 74,
     backgroundColor: '#1F0408',
