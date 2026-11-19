@@ -32,22 +32,22 @@ export default function CustomerDisplayScreen() {
 
   // Centerpiece Circle Diameter (dynamic clamping so it never crowds text or touches borders)
   const circleSize = Math.min(
-    Math.max(190, Math.floor(availHeight * (isLandscape ? 0.42 : 0.34))),
-    Math.floor(availWidth * (isLandscape ? 0.38 : 0.72)),
-    380
+    Math.max(180, Math.floor(availHeight * (isLandscape ? 0.38 : 0.30))),
+    Math.floor(availWidth * (isLandscape ? 0.35 : 0.65)),
+    340
   );
   const logoImageSize = Math.floor(circleSize * 0.63);
   const logoHolderSize = Math.floor(circleSize * 0.68);
   const rippleRingSize = Math.floor(circleSize * 0.90);
 
-  // Dynamic Typography & Spacing for Idle Mode:
-  const urduFontSize = Math.min(Math.max(26, Math.floor(availHeight * (isLandscape ? 0.054 : 0.042))), 44);
-  const urduLineHeight = Math.floor(urduFontSize * 1.38);
-  const englishFontSize = Math.min(Math.max(13, Math.floor(availHeight * 0.026)), 20);
-  const subtitleFontSize = Math.min(Math.max(10, Math.floor(availHeight * 0.018)), 13);
-  const spacingBetween = Math.min(Math.max(4, Math.floor(availHeight * 0.014)), 12);
-  const pillPaddingV = Math.min(Math.max(3, Math.floor(availHeight * 0.007)), 6);
-  const pillPaddingH = Math.min(Math.max(12, Math.floor(availWidth * 0.014)), 18);
+  // Dynamic Typography & Spacing for Idle Mode (Generous vertical separation so rows never merge):
+  const urduFontSize = Math.min(Math.max(26, Math.floor(availHeight * (isLandscape ? 0.050 : 0.038))), 42);
+  const urduLineHeight = Math.floor(urduFontSize * 1.85); // Nastaliq requires generous height for descenders
+  const englishFontSize = Math.min(Math.max(13, Math.floor(availHeight * 0.024)), 18);
+  const subtitleFontSize = Math.min(Math.max(10, Math.floor(availHeight * 0.017)), 13);
+  const spacingBetween = Math.min(Math.max(10, Math.floor(availHeight * 0.020)), 22);
+  const pillPaddingV = Math.min(Math.max(4, Math.floor(availHeight * 0.008)), 7);
+  const pillPaddingH = Math.min(Math.max(14, Math.floor(availWidth * 0.016)), 20);
 
   // Responsive POS Cart (Active Mode):
   const grandTotalFontSize = Math.min(Math.max(32, Math.floor(availWidth * (isLandscape ? 0.038 : 0.065))), 52);
@@ -243,6 +243,10 @@ export default function CustomerDisplayScreen() {
             font-family: 'Noto Nastaliq Urdu', 'Urdu Typesetting', 'Jameel Noori Nastaleeq', 'Amiri', 'Segoe UI', Tahoma, serif !important;
             direction: rtl;
             unicode-bidi: isolate;
+            display: block;
+            overflow: visible !important;
+            line-height: 1.85 !important;
+            padding-bottom: 8px !important;
           }
         `}</style>
       )}
@@ -742,7 +746,7 @@ export default function CustomerDisplayScreen() {
                 {
                   paddingVertical: pillPaddingV,
                   paddingHorizontal: pillPaddingH,
-                  marginBottom: spacingBetween,
+                  marginBottom: Math.max(12, Math.floor(spacingBetween * 0.9)),
                 },
               ]}
             >
@@ -770,7 +774,8 @@ export default function CustomerDisplayScreen() {
                 {
                   fontSize: urduFontSize,
                   lineHeight: urduLineHeight,
-                  marginBottom: Math.max(2, Math.floor(spacingBetween * 0.6)),
+                  paddingBottom: Math.max(8, Math.floor(urduFontSize * 0.22)),
+                  marginBottom: Math.max(14, Math.floor(spacingBetween * 1.0)),
                 },
               ]}
               {...(Platform.OS === 'web' ? ({ className: 'cfd-urdu-slogan' } as any) : {})}
@@ -784,7 +789,8 @@ export default function CustomerDisplayScreen() {
                 styles.idleEnglishTitle,
                 {
                   fontSize: englishFontSize,
-                  marginBottom: Math.max(4, Math.floor(spacingBetween * 0.7)),
+                  lineHeight: Math.floor(englishFontSize * 1.4),
+                  marginBottom: Math.max(12, Math.floor(spacingBetween * 0.85)),
                 },
               ]}
             >
@@ -796,7 +802,7 @@ export default function CustomerDisplayScreen() {
               style={[
                 styles.brandSubtitleRow,
                 {
-                  marginTop: Math.max(2, Math.floor(spacingBetween * 0.3)),
+                  marginTop: Math.max(6, Math.floor(spacingBetween * 0.4)),
                 },
               ]}
             >
