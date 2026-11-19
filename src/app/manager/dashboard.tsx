@@ -53,7 +53,7 @@ export default function ManagerDashboard() {
   const togglePermission = useRoleStore(state => state.togglePermission);
 
   // Evaluate role permissions based on logged-in user or manager preview
-  const { can, canViewRevenue } = useRolePermissions(user?.role === 'admin' ? 'manager' : undefined);
+  const { can, canViewRevenue } = useRolePermissions();
   
   const invoices = useRestaurantStore(state => state.invoices);
   const tickets = useRestaurantStore(state => state.tickets);
@@ -117,11 +117,11 @@ export default function ManagerDashboard() {
       }
     });
 
-    const total = (cash + card + online) || 1;
+    const sum = cash + card + online;
     return {
-      cash: { amount: cash, pct: Math.round((cash / total) * 100) || 60 },
-      card: { amount: card, pct: Math.round((card / total) * 100) || 30 },
-      online: { amount: online, pct: Math.round((online / total) * 100) || 10 },
+      cash: { amount: cash, pct: sum > 0 ? Math.round((cash / sum) * 100) : 0 },
+      card: { amount: card, pct: sum > 0 ? Math.round((card / sum) * 100) : 0 },
+      online: { amount: online, pct: sum > 0 ? Math.round((online / sum) * 100) : 0 },
     };
   }, [todaysInvoices]);
 
@@ -481,93 +481,6 @@ export default function ManagerDashboard() {
         </View>
       )}
 
-      {/* Admin Quick Visibility Test Bar */}
-      {user?.role === 'admin' && (
-        <View style={styles.adminNoticePill}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, flexWrap: 'wrap' }}>
-            <View style={styles.adminNoticeIconCircle}>
-              <Ionicons name="shield-checkmark" size={15} color="#D4AF37" />
-            </View>
-            <View style={{ flex: 1, minWidth: 200 }}>
-              <Text style={styles.adminNoticeTitle}>
-                Admin Mode: Manager Access Policy Preview
-              </Text>
-              <Text style={styles.adminNoticeSub}>
-                Invoices: <Text style={{ fontWeight: '800', color: can('canAccessInvoices') ? '#059669' : '#DC2626' }}>{can('canAccessInvoices') ? 'Allowed' : 'Blocked'}</Text> • Reports: <Text style={{ fontWeight: '800', color: can('canAccessReports') ? '#059669' : '#DC2626' }}>{can('canAccessReports') ? 'Allowed' : 'Blocked'}</Text> • Revenue: <Text style={{ fontWeight: '800', color: canViewRevenue ? '#059669' : '#DC2626' }}>{canViewRevenue ? 'Visible' : 'Masked'}</Text>
-              </Text>
-            </View>
-          </View>
-
-          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            <TouchableOpacity
-              style={[
-                styles.adminNoticeBtn,
-                can('canAccessInvoices') ? styles.adminNoticeBtnMask : styles.adminNoticeBtnShow,
-              ]}
-              onPress={() => {
-                togglePermission('role-manager', 'canAccessInvoices');
-                broadcastImmediately();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={can('canAccessInvoices') ? 'receipt-outline' : 'lock-closed'}
-                size={13}
-                color="#FFFFFF"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.adminNoticeBtnText}>
-                {can('canAccessInvoices') ? 'Invoices: On' : 'Invoices: Off'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.adminNoticeBtn,
-                can('canAccessReports') ? styles.adminNoticeBtnMask : styles.adminNoticeBtnShow,
-              ]}
-              onPress={() => {
-                togglePermission('role-manager', 'canAccessReports');
-                broadcastImmediately();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={can('canAccessReports') ? 'bar-chart-outline' : 'lock-closed'}
-                size={13}
-                color="#FFFFFF"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.adminNoticeBtnText}>
-                {can('canAccessReports') ? 'Reports: On' : 'Reports: Off'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.adminNoticeBtn,
-                canViewRevenue ? styles.adminNoticeBtnMask : styles.adminNoticeBtnShow,
-              ]}
-              onPress={() => {
-                togglePermission('role-manager', 'canViewRevenue');
-                broadcastImmediately();
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons
-                name={canViewRevenue ? 'eye-off' : 'eye'}
-                size={13}
-                color="#FFFFFF"
-                style={{ marginRight: 4 }}
-              />
-              <Text style={styles.adminNoticeBtnText}>
-                {canViewRevenue ? 'Revenue: Visible' : 'Revenue: Masked'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
-
       {/* 2. Core KPI Cards (4 Jewel-Toned Cards from Baithak) */}
       <View style={styles.kpiGrid}>
         {/* Card 1: Shift Revenue (Royal Maroon) */}
@@ -597,15 +510,8 @@ export default function ManagerDashboard() {
 
           {isRefreshing ? (
             <View style={styles.skeletonValueDark} {...({ dataSet: { skeleton: 'box' } } as any)} />
-          ) : canViewRevenue && can('canAccessReports') ? (
-            <Text style={styles.kpiMainValueJewel}>Rs. {shiftSales.toLocaleString()}</Text>
           ) : (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 4 }}>
-              <Text style={[styles.kpiMainValueJewel, { letterSpacing: 2, color: 'rgba(255,255,255,0.4)' }]}>••••••</Text>
-              <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.25)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FCA5A5' }}>RESTRICTED</Text>
-              </View>
-            </View>
+            <Text style={styles.kpiMainValueJewel}>Rs. {shiftSales.toLocaleString()}</Text>
           )}
 
           <View style={styles.frostedChipRow}>
@@ -621,7 +527,7 @@ export default function ManagerDashboard() {
 
           <View style={styles.kpiFooterJewel}>
             <Text style={styles.kpiSubtextJewel}>
-              {canViewRevenue && can('canAccessReports') ? `${todaysInvoices.length} settled tickets` : 'Revenue hidden by role policy'}
+              {`${todaysInvoices.length} settled tickets`}
             </Text>
             {can('canAccessInvoices') && (
               <TouchableOpacity onPress={() => router.push('/manager/invoices')}>
@@ -808,19 +714,6 @@ export default function ManagerDashboard() {
             )}
           </View>
 
-          {!can('canAccessReports') || !canViewRevenue ? (
-            <View style={{ paddingVertical: 44, paddingHorizontal: 16, alignItems: 'center', justifyContent: 'center' }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(112, 26, 38, 0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
-                <Ionicons name="bar-chart-outline" size={20} color={BRAND.burgundy} />
-              </View>
-              <Text style={{ fontSize: 14, fontWeight: '700', color: BRAND.textPrimary, marginBottom: 4 }}>
-                Financial Reports Restricted
-              </Text>
-              <Text style={{ fontSize: 12, color: BRAND.textMuted, textAlign: 'center', maxWidth: 300 }}>
-                Hourly PKR sales volume and turnover reporting are disabled for this role by Admin policy.
-              </Text>
-            </View>
-          ) : (
             <View style={styles.barChartContainer}>
               <View style={styles.chartBarsRow}>
                 {hourlyData.map((slot, idx) => (
@@ -861,7 +754,6 @@ export default function ManagerDashboard() {
                 ))}
               </View>
             </View>
-          )}
         </View>
 
         {/* Floor Quick Overview */}
@@ -937,7 +829,7 @@ export default function ManagerDashboard() {
                 </View>
                 <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
                   <Text style={styles.revenueText}>
-                    {canViewRevenue && can('canAccessReports') ? `Rs. ${dish.revenue.toLocaleString()}` : '••••'}
+                    Rs. {dish.revenue.toLocaleString()}
                   </Text>
                 </View>
               </View>
@@ -995,7 +887,7 @@ export default function ManagerDashboard() {
                   </View>
                   <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
                     <Text style={styles.invoiceTotalText}>
-                      {canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : 'Rs. ••••'}
+                      Rs. {(inv.total || 0).toLocaleString()}
                     </Text>
                   </View>
                 </View>

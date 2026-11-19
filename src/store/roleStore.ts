@@ -447,7 +447,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canExportReports: false,
       canAccessPOS: true,
       canAccessInvoices: true,
-      canAccessReports: false,
+      canAccessReports: true,
       canAccessInventory: false,
       canAccessKitchenHandover: false,
       canAccessRecipes: false,
@@ -493,7 +493,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
     isSystem: true,
     baseRole: 'manager',
     permissions: {
-      canViewRevenue: false, // Blind cash counting — no revenue visibility
+      canViewRevenue: true, // Visible revenue & shift sales
       canViewCostPrice: false,
       canViewCustomerContacts: false,
       canExportReports: false,
