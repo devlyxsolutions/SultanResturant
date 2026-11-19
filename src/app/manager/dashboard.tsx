@@ -510,24 +510,31 @@ export default function ManagerDashboard() {
 
           {isRefreshing ? (
             <View style={styles.skeletonValueDark} {...({ dataSet: { skeleton: 'box' } } as any)} />
-          ) : (
+          ) : canViewRevenue ? (
             <Text style={styles.kpiMainValueJewel}>Rs. {shiftSales.toLocaleString()}</Text>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginVertical: 4 }}>
+              <Text style={[styles.kpiMainValueJewel, { letterSpacing: 2, color: 'rgba(255,255,255,0.4)' }]}>••••••</Text>
+              <View style={{ backgroundColor: 'rgba(239, 68, 68, 0.25)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FCA5A5' }}>RESTRICTED</Text>
+              </View>
+            </View>
           )}
 
           <View style={styles.frostedChipRow}>
             <View style={styles.frostedChip}>
               <Ionicons name="cash-outline" size={11} color="#F3D179" />
-              <Text style={styles.frostedChipText}>Cash: Rs. {paymentMetrics.cash.amount.toLocaleString()} ({paymentMetrics.cash.pct}%)</Text>
+              <Text style={styles.frostedChipText}>Cash: {canViewRevenue ? `Rs. ${paymentMetrics.cash.amount.toLocaleString()} (${paymentMetrics.cash.pct}%)` : '••••••'}</Text>
             </View>
             <View style={styles.frostedChip}>
               <Ionicons name="card-outline" size={11} color="#93C5FD" />
-              <Text style={styles.frostedChipText}>Card: Rs. {paymentMetrics.card.amount.toLocaleString()} ({paymentMetrics.card.pct}%)</Text>
+              <Text style={styles.frostedChipText}>Card: {canViewRevenue ? `Rs. ${paymentMetrics.card.amount.toLocaleString()} (${paymentMetrics.card.pct}%)` : '••••••'}</Text>
             </View>
           </View>
 
           <View style={styles.kpiFooterJewel}>
             <Text style={styles.kpiSubtextJewel}>
-              {`${todaysInvoices.length} settled tickets`}
+              {canViewRevenue ? `${todaysInvoices.length} settled tickets` : 'Revenue hidden by role policy'}
             </Text>
             {can('canAccessInvoices') && (
               <TouchableOpacity onPress={() => router.push('/manager/invoices')}>
@@ -725,7 +732,7 @@ export default function ManagerDashboard() {
                   >
                     {activeHourlyMetric === idx && (
                       <View style={styles.barTooltip}>
-                        <Text style={styles.tooltipAmt}>Rs. {slot.sales.toLocaleString()}</Text>
+                        <Text style={styles.tooltipAmt}>{canViewRevenue ? `Rs. ${slot.sales.toLocaleString()}` : '••••••'}</Text>
                       </View>
                     )}
                     <View style={styles.barTrack}>
@@ -829,7 +836,7 @@ export default function ManagerDashboard() {
                 </View>
                 <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
                   <Text style={styles.revenueText}>
-                    Rs. {dish.revenue.toLocaleString()}
+                    {canViewRevenue ? `Rs. ${dish.revenue.toLocaleString()}` : '••••••'}
                   </Text>
                 </View>
               </View>
@@ -887,7 +894,7 @@ export default function ManagerDashboard() {
                   </View>
                   <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
                     <Text style={styles.invoiceTotalText}>
-                      Rs. {(inv.total || 0).toLocaleString()}
+                      {canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : '••••••'}
                     </Text>
                   </View>
                 </View>
