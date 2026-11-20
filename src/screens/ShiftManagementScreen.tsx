@@ -448,6 +448,8 @@ export default function ShiftManagementScreen() {
                     value={newOpeningFloat}
                     onChangeText={setNewOpeningFloat}
                     keyboardType="numeric"
+                    showSoftInputOnFocus={false}
+                    {...({ inputMode: 'none' } as any)}
                     placeholder="5000"
                     placeholderTextColor="#94A3B8"
                   />
@@ -612,6 +614,8 @@ export default function ShiftManagementScreen() {
                         value={countedCashInput}
                         onChangeText={setCountedCashInput}
                         keyboardType="numeric"
+                        showSoftInputOnFocus={false}
+                        {...({ inputMode: 'none' } as any)}
                         placeholder="0"
                         placeholderTextColor="#94A3B8"
                       />
@@ -714,14 +718,38 @@ export default function ShiftManagementScreen() {
                             <View style={[styles.miniBadge, { backgroundColor: item.color }]}>
                               <Text style={styles.miniBadgeText}>₨. {item.label}</Text>
                             </View>
-                            <TextInput
-                              style={styles.miniDenomInput}
-                              value={denominations[item.key as keyof CashDenominations] ? String(denominations[item.key as keyof CashDenominations]) : ''}
-                              onChangeText={(t) => handleUpdateDenomination(item.key as keyof CashDenominations, t)}
-                              keyboardType="numeric"
-                              placeholder="0"
-                              placeholderTextColor="#94A3B8"
-                            />
+                            <View style={styles.denomStepperRow}>
+                              <TouchableOpacity
+                                style={styles.denomStepperBtn}
+                                onPress={() => {
+                                  const curr = denominations[item.key as keyof CashDenominations] || 0;
+                                  handleUpdateDenomination(item.key as keyof CashDenominations, String(Math.max(0, curr - 1)));
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="remove" size={13} color="#475569" />
+                              </TouchableOpacity>
+                              <TextInput
+                                style={styles.miniDenomInput}
+                                value={denominations[item.key as keyof CashDenominations] ? String(denominations[item.key as keyof CashDenominations]) : ''}
+                                onChangeText={(t) => handleUpdateDenomination(item.key as keyof CashDenominations, t)}
+                                keyboardType="numeric"
+                                showSoftInputOnFocus={false}
+                                {...({ inputMode: 'numeric' } as any)}
+                                placeholder="0"
+                                placeholderTextColor="#94A3B8"
+                              />
+                              <TouchableOpacity
+                                style={styles.denomStepperBtn}
+                                onPress={() => {
+                                  const curr = denominations[item.key as keyof CashDenominations] || 0;
+                                  handleUpdateDenomination(item.key as keyof CashDenominations, String(curr + 1));
+                                }}
+                                activeOpacity={0.7}
+                              >
+                                <Ionicons name="add" size={13} color="#475569" />
+                              </TouchableOpacity>
+                            </View>
                           </View>
                         ))}
                       </View>
@@ -1583,16 +1611,34 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '800',
   },
+  denomStepperRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  denomStepperBtn: {
+    width: 28,
+    height: 32,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   miniDenomInput: {
     flex: 1,
+    minWidth: 40,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#CBD5E1',
     borderRadius: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 6,
     paddingVertical: 4,
     fontSize: 14,
     fontWeight: '700',
+    textAlign: 'center',
   },
   denomCalcSum: {
     fontSize: 12,

@@ -3394,6 +3394,8 @@ export default function POSTerminalScreen({
                             activePaymentIndex === idx && { borderColor: '#52171B', backgroundColor: '#FFFBEB' }
                           ]}
                           keyboardType="numeric"
+                          showSoftInputOnFocus={false}
+                          {...({ inputMode: 'none' } as any)}
                           placeholder="Amount received..."
                           placeholderTextColor="#94A3B8"
                           value={p.amount > 0 ? p.amount.toString() : ''}
@@ -3527,6 +3529,7 @@ export default function POSTerminalScreen({
                   exactAmount={Math.round(total)}
                   quickAmounts={[500, 1000, 5000]}
                   compact={width < 860}
+                  replaceOnFirstInput={true}
                 />
               </View>
             )}

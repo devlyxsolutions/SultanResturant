@@ -33,15 +33,23 @@ export function getStableDeviceId(): string {
   if (cachedDeviceId) return cachedDeviceId;
   try {
     if (typeof window !== 'undefined' && window.localStorage) {
+      let tabId = '';
+      try {
+        tabId = window.sessionStorage?.getItem('@sultan_tab_id') || '';
+        if (!tabId) {
+          tabId = Math.random().toString(36).substring(2, 6);
+          window.sessionStorage?.setItem('@sultan_tab_id', tabId);
+        }
+      } catch {}
       const stored = window.localStorage.getItem(STORAGE_KEY_DEVICE_ID);
       if (stored && stored.length > 5) {
-        cachedDeviceId = stored;
-        return stored;
+        cachedDeviceId = tabId ? `${stored}_${tabId}` : stored;
+        return cachedDeviceId;
       }
       const created = `dev_${Platform.OS}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
       window.localStorage.setItem(STORAGE_KEY_DEVICE_ID, created);
-      cachedDeviceId = created;
-      return created;
+      cachedDeviceId = tabId ? `${created}_${tabId}` : created;
+      return cachedDeviceId;
     }
   } catch {}
   cachedDeviceId = `dev_${Platform.OS}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
@@ -803,7 +811,16 @@ function connectWebSocket(forceReconnect = false) {
         // Ignore messages sent by this same device
         if (data.senderId === DEVICE_ID) return;
 
-        if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
+        if (data.type === 'FORCE_LOGOUT_DEVICE') {
+          if (data.revokedDeviceIds && data.revokedDeviceIds[DEVICE_ID]) {
+            useRestaurantStore.setState((s) => ({
+              revokedDeviceIds: {
+                ...(s.revokedDeviceIds || {}),
+                ...data.revokedDeviceIds,
+              },
+            }));
+          }
+        } else if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
             isLanConnected = true;
             if (data.state.lastUpdated) {

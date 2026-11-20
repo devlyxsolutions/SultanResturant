@@ -4242,6 +4242,10 @@ function computeStateFingerprint(st) {
       lastBillPaidAlert: st.lastBillPaidAlert || null,
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
       pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
+      activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
+      revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
+      shiftsCount: Array.isArray(st.shifts) ? st.shifts.length : 0,
+      activeShiftId: st.activeShiftId || null,
     });
   } catch (_) {
     return String(Date.now());
@@ -4537,6 +4541,19 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             modified = true;
           }
         }
+      } else if (key === 'revokedDeviceIds') {
+        if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {
+          serverState.revokedDeviceIds = {
+            ...(serverState.revokedDeviceIds || {}),
+            ...partialState.revokedDeviceIds,
+          };
+          modified = true;
+        }
+      } else if (key === 'activeStaffSessions') {
+        if (Array.isArray(partialState.activeStaffSessions)) {
+          serverState.activeStaffSessions = partialState.activeStaffSessions;
+          modified = true;
+        }
       } else {
         serverState[key] = partialState[key];
         modified = true;
@@ -4575,6 +4592,13 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     serverState.lastUpdated = Date.now();
     persistState();
     console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
+    if (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0) {
+      broadcastToClients({
+        type: 'FORCE_LOGOUT_DEVICE',
+        revokedDeviceIds: serverState.revokedDeviceIds,
+        timestamp: Date.now()
+      });
+    }
     broadcastToClients({
       type: 'SERVER_BROADCAST',
       state: serverState,

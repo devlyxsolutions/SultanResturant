@@ -18,6 +18,7 @@ export interface TouchNumericKeypadProps {
   exactAmount?: number;
   style?: any;
   compact?: boolean;
+  replaceOnFirstInput?: boolean;
 }
 
 const BRAND = {
@@ -49,12 +50,30 @@ function TouchNumericKeypadComponent({
   exactAmount,
   style,
   compact = false,
+  replaceOnFirstInput = false,
 }: TouchNumericKeypadProps) {
+  const [hasUserEdited, setHasUserEdited] = React.useState(false);
+
+  React.useEffect(() => {
+    setHasUserEdited(false);
+  }, [exactAmount]);
   const { width } = useWindowDimensions();
   const isSmallScreen = width < 500;
 
   const handleDigitPress = (digit: string) => {
     const raw = (value || '').trim();
+    if (replaceOnFirstInput && !hasUserEdited && raw && raw !== '0') {
+      setHasUserEdited(true);
+      if (digit === '.') {
+        onChangeText(allowDecimals ? '0.' : '0');
+      } else if (digit === '00') {
+        onChangeText('0');
+      } else {
+        onChangeText(digit);
+      }
+      return;
+    }
+    setHasUserEdited(true);
     if (raw === '0' && digit !== '.') {
       onChangeText(digit);
       return;
