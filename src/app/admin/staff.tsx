@@ -69,7 +69,7 @@ export default function StaffManagementScreen({
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
-  const { can } = useRolePermissions();
+  const { can, canAddStaff, canEditStaff, canDeleteStaff } = useRolePermissions();
   const canViewSensitiveSalaries = role === 'admin' || can('canViewRevenue');
 
   const staff = useRestaurantStore((state) => state.staff) || [];
@@ -199,6 +199,10 @@ export default function StaffManagementScreen({
 
   // Staff Modal Actions
   const openAddModal = () => {
+    if (!canAddStaff) {
+      Alert.alert('Access Denied', 'You do not have permission to add staff members.');
+      return;
+    }
     setEditingStaff(null);
     setFormName('');
     setFormPhone('');
@@ -222,6 +226,10 @@ export default function StaffManagementScreen({
   };
 
   const openEditModal = (member: StaffMember) => {
+    if (!canEditStaff) {
+      Alert.alert('Access Denied', 'You do not have permission to edit staff members.');
+      return;
+    }
     setEditingStaff(member);
     setFormName(member.name);
     setFormPhone(member.phone || '');
@@ -256,6 +264,15 @@ export default function StaffManagementScreen({
   };
 
   const handleSaveStaff = () => {
+    if (editingStaff ? !canEditStaff : !canAddStaff) {
+      Alert.alert(
+        'Access Denied',
+        editingStaff
+          ? 'You do not have permission to edit staff members.'
+          : 'You do not have permission to add staff members.'
+      );
+      return;
+    }
     if (!formName.trim()) {
       setFormError('Please enter an employee name');
       return;
@@ -303,6 +320,10 @@ export default function StaffManagementScreen({
   };
 
   const handleDeleteStaff = (member: StaffMember) => {
+    if (!canDeleteStaff) {
+      Alert.alert('Access Denied', 'You do not have permission to delete staff members.');
+      return;
+    }
     const confirmMessage = `Are you sure you want to remove "${member.name}" (${member.role})?`;
     if (Platform.OS === 'web') {
       if (typeof window !== 'undefined' && window.confirm(confirmMessage)) {
@@ -356,10 +377,12 @@ export default function StaffManagementScreen({
         </View>
 
         <View style={styles.headerRight}>
-          <TouchableOpacity style={styles.addButton} onPress={openAddModal} activeOpacity={0.8}>
-            <Ionicons name="person-add" size={16} color="#FFFFFF" />
-            <Text style={styles.addButtonText}>{isMobile ? 'Add' : 'Add Employee'}</Text>
-          </TouchableOpacity>
+          {canAddStaff && (
+            <TouchableOpacity style={styles.addButton} onPress={openAddModal} activeOpacity={0.8}>
+              <Ionicons name="person-add" size={16} color="#FFFFFF" />
+              <Text style={styles.addButtonText}>{isMobile ? 'Add' : 'Add Employee'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -615,20 +638,24 @@ export default function StaffManagementScreen({
                             <Text style={[styles.mobileActionText, { color: '#7C3AED' }]}>Payroll</Text>
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity
-                          style={styles.mobileActionBtn}
-                          onPress={() => openEditModal(member)}
-                        >
-                          <Ionicons name="create-outline" size={17} color="#007AFF" />
-                          <Text style={[styles.mobileActionText, { color: '#007AFF' }]}>Edit</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.mobileActionBtn}
-                          onPress={() => handleDeleteStaff(member)}
-                        >
-                          <Ionicons name="trash-outline" size={17} color="#FF3B30" />
-                          <Text style={[styles.mobileActionText, { color: '#FF3B30' }]}>Remove</Text>
-                        </TouchableOpacity>
+                        {canEditStaff && (
+                          <TouchableOpacity
+                            style={styles.mobileActionBtn}
+                            onPress={() => openEditModal(member)}
+                          >
+                            <Ionicons name="create-outline" size={17} color="#007AFF" />
+                            <Text style={[styles.mobileActionText, { color: '#007AFF' }]}>Edit</Text>
+                          </TouchableOpacity>
+                        )}
+                        {canDeleteStaff && (
+                          <TouchableOpacity
+                            style={styles.mobileActionBtn}
+                            onPress={() => handleDeleteStaff(member)}
+                          >
+                            <Ionicons name="trash-outline" size={17} color="#FF3B30" />
+                            <Text style={[styles.mobileActionText, { color: '#FF3B30' }]}>Remove</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );
@@ -734,12 +761,16 @@ export default function StaffManagementScreen({
                             <Ionicons name="card-outline" size={17} color="#7C3AED" />
                           </TouchableOpacity>
                         )}
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(member)}>
-                          <Ionicons name="create-outline" size={19} color="#007AFF" />
-                        </TouchableOpacity>
-                        <TouchableOpacity style={styles.actionBtn} onPress={() => handleDeleteStaff(member)}>
-                          <Ionicons name="trash-outline" size={19} color="#FF3B30" />
-                        </TouchableOpacity>
+                        {canEditStaff && (
+                          <TouchableOpacity style={styles.actionBtn} onPress={() => openEditModal(member)}>
+                            <Ionicons name="create-outline" size={19} color="#007AFF" />
+                          </TouchableOpacity>
+                        )}
+                        {canDeleteStaff && (
+                          <TouchableOpacity style={styles.actionBtn} onPress={() => handleDeleteStaff(member)}>
+                            <Ionicons name="trash-outline" size={19} color="#FF3B30" />
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   );

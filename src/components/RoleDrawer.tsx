@@ -7,7 +7,8 @@ import {
   Modal, 
   ScrollView, 
   useWindowDimensions, 
-  Pressable 
+  Pressable,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
@@ -52,7 +53,11 @@ export default function RoleDrawer({ isOpen, onClose, items, roleName }: RoleDra
       onRequestClose={onClose}
     >
       <View style={styles.overlay}>
-        <Pressable style={styles.backdrop} onPress={onClose} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={onClose}
+          {...(Platform.OS === 'web' ? ({ dataSet: { backdrop: 'true' } } as any) : {})}
+        />
         
         <View style={[styles.drawer, { width: drawerWidth }]}>
           <View style={styles.drawerHeader}>
@@ -102,10 +107,12 @@ const styles = StyleSheet.create({
   backdrop: {
     ...(StyleSheet.absoluteFill as any),
     backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 1,
   },
   drawer: {
     height: '100%',
     backgroundColor: '#FFFFFF',
+    zIndex: 10,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },
     shadowOpacity: 0.2,

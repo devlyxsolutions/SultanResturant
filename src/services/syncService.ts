@@ -769,6 +769,23 @@ function connectWebSocket(forceReconnect = false) {
             }
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           }
+        } else if (data.type === 'ORDER_STATUS_CHANGED') {
+          const { orderId, orderNumber, status, riderName, riderPhone, assignedWaiter } = data;
+          useRestaurantStore.setState((s) => ({
+            onlineOrders: (s.onlineOrders || []).map((o) => {
+              if ((orderId && o.id === orderId) || (orderNumber && o.orderNumber === orderNumber)) {
+                return {
+                  ...o,
+                  status: status || o.status,
+                  riderName: riderName || o.riderName,
+                  riderPhone: riderPhone || o.riderPhone,
+                  assignedWaiter: assignedWaiter || o.assignedWaiter,
+                  updatedAt: Date.now(),
+                };
+              }
+              return o;
+            }),
+          }));
         }
       } catch (err) {
         console.warn('[SyncService] Failed to parse message:', err);
@@ -1032,6 +1049,7 @@ export async function initSyncService() {
 
   const triggerDebouncedBroadcast = () => {
     if (isApplyingRemoteUpdate || !hasReceivedInitialSync) return;
+    if (useSettingsStore.getState().settings.autoSyncEnabled === false) return;
     if (debounceMutationTimer) clearTimeout(debounceMutationTimer);
     debounceMutationTimer = setTimeout(() => {
       broadcastLocalState();

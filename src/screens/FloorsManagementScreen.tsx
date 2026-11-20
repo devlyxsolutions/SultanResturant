@@ -14,6 +14,7 @@ import {
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, Floor } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
 import { getFloorMeta, getTableFloor, getTableSeatingType } from '../constants/floors';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
@@ -65,6 +66,12 @@ export default function FloorsManagementScreen({
   const isMobile = width < 768;
   const columns = width < 700 ? 1 : width < 1200 ? 2 : 3;
 
+  const {
+    canAddTables,
+    canEditTables,
+    canDeleteTables,
+  } = useRolePermissions(role === 'manager' ? 'manager' : undefined);
+
   const floors = useRestaurantStore((s) => s.floors) || [];
   const tables = useRestaurantStore((s) => s.tables) || [];
   const addFloor = useRestaurantStore((s) => s.addFloor);
@@ -106,6 +113,9 @@ export default function FloorsManagementScreen({
 
   // ---------- Modal Helpers ----------
   const openAddModal = () => {
+    if (!canAddTables) {
+      return notify('Permission Denied', 'You do not have permission to add floors.');
+    }
     setEditingFloor(null);
     setFormName('');
     setFormShortCode('');
@@ -117,6 +127,9 @@ export default function FloorsManagementScreen({
   };
 
   const openEditModal = (floor: Floor) => {
+    if (!canEditTables) {
+      return notify('Permission Denied', 'You do not have permission to edit floors.');
+    }
     setEditingFloor(floor);
     setFormName(floor.name);
     setFormShortCode(floor.shortCode || floor.name.slice(0, 2).toUpperCase());
@@ -128,6 +141,9 @@ export default function FloorsManagementScreen({
   };
 
   const handleSaveFloor = () => {
+    if (editingFloor ? !canEditTables : !canAddTables) {
+      return notify('Permission Denied', 'You do not have permission to save floor changes.');
+    }
     const name = formName.trim();
     if (!name) return notify('Missing name', 'Please enter a floor name.');
 
@@ -165,6 +181,9 @@ export default function FloorsManagementScreen({
   };
 
   const handleDeleteFloor = (floor: Floor) => {
+    if (!canDeleteTables) {
+      return notify('Permission Denied', 'You do not have permission to delete floors.');
+    }
     const floorTables = tables.filter((t) => getTableFloor(t).toLowerCase() === floor.name.toLowerCase());
     const busy = floorTables.filter((t) => t.status === 'occupied' || t.status === 'billed');
 
@@ -179,6 +198,10 @@ export default function FloorsManagementScreen({
   };
 
   const confirmDeleteFloor = (deleteTablesTogether: boolean) => {
+    if (!canDeleteTables) {
+      setDeleteTarget(null);
+      return notify('Permission Denied', 'You do not have permission to delete floors.');
+    }
     if (!deleteTarget) return;
     deleteFloor(deleteTarget.id, deleteTablesTogether);
     const deletedName = deleteTarget.name;
@@ -212,10 +235,12 @@ export default function FloorsManagementScreen({
             {!isMobile && <Text style={[styles.actionBtnText, { color: '#D5A943' }]}>Tables & Cabins</Text>}
           </TouchableOpacity>
 
-          <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={openAddModal}>
-            <Ionicons name="add" size={18} color="#fff" />
-            <Text style={styles.actionBtnText}>+ Add Floor</Text>
-          </TouchableOpacity>
+          {canAddTables && (
+            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary]} onPress={openAddModal}>
+              <Ionicons name="add" size={18} color="#fff" />
+              <Text style={styles.actionBtnText}>+ Add Floor</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -311,20 +336,26 @@ export default function FloorsManagementScreen({
                     </View>
 
                     {/* Actions */}
-                    <View style={styles.cardHeaderButtons}>
-                      <TouchableOpacity
-                        style={[styles.iconButton, { backgroundColor: '#F2F2F7' }]}
-                        onPress={() => openEditModal(floor)}
-                      >
-                        <Ionicons name="create-outline" size={17} color="#2471A3" />
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.iconButton, { backgroundColor: '#FDEDEC' }]}
-                        onPress={() => handleDeleteFloor(floor)}
-                      >
-                        <Ionicons name="trash-outline" size={17} color="#D64541" />
-                      </TouchableOpacity>
-                    </View>
+                    {(canEditTables || canDeleteTables) && (
+                      <View style={styles.cardHeaderButtons}>
+                        {canEditTables && (
+                          <TouchableOpacity
+                            style={[styles.iconButton, { backgroundColor: '#F2F2F7' }]}
+                            onPress={() => openEditModal(floor)}
+                          >
+                            <Ionicons name="create-outline" size={17} color="#2471A3" />
+                          </TouchableOpacity>
+                        )}
+                        {canDeleteTables && (
+                          <TouchableOpacity
+                            style={[styles.iconButton, { backgroundColor: '#FDEDEC' }]}
+                            onPress={() => handleDeleteFloor(floor)}
+                          >
+                            <Ionicons name="trash-outline" size={17} color="#D64541" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
 
                   {/* Blurb */}

@@ -207,10 +207,10 @@ export default function RootLayout() {
           }
 
           /* 2. UNIVERSAL HOVER: Every Button, Card, Tile, Chip, Box, Row */
-          [role="button"],
-          button,
-          a,
-          [tabindex="0"],
+          [role="button"]:not([data-backdrop="true"]),
+          button:not([data-backdrop="true"]),
+          a:not([data-backdrop="true"]),
+          [tabindex="0"]:not([data-backdrop="true"]),
           [data-card],
           [data-hover],
           [data-interactive],
@@ -230,10 +230,10 @@ export default function RootLayout() {
           }
 
           /* Smooth hover lift + shadow + gold accent rim */
-          [role="button"]:hover,
-          button:hover,
-          a:hover,
-          [tabindex="0"]:hover,
+          [role="button"]:not([data-backdrop="true"]):hover,
+          button:not([data-backdrop="true"]):hover,
+          a:not([data-backdrop="true"]):hover,
+          [tabindex="0"]:not([data-backdrop="true"]):hover,
           [data-card]:hover,
           [data-hover]:hover,
           [data-interactive]:hover,
@@ -253,10 +253,10 @@ export default function RootLayout() {
           }
 
           /* Micro-scale feedback on click / tap */
-          [role="button"]:active,
-          button:active,
-          a:active,
-          [tabindex="0"]:active,
+          [role="button"]:not([data-backdrop="true"]):active,
+          button:not([data-backdrop="true"]):active,
+          a:not([data-backdrop="true"]):active,
+          [tabindex="0"]:not([data-backdrop="true"]):active,
           [data-card]:active,
           [data-hover]:active,
           [data-interactive]:active,

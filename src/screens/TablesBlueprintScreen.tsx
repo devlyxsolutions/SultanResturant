@@ -29,6 +29,7 @@ import {
   sortFloors,
 } from '../constants/floors';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import RoyalDropdown from '../components/RoyalDropdown';
 import {
   generateTableQrCode,
@@ -93,8 +94,15 @@ export default function TablesBlueprintScreen({
   const isSmallMobile = width < 420;
   const columns = width < 380 ? 1 : width < 720 ? 2 : width < 1100 ? 3 : width < 1400 ? 4 : 5;
 
-  const { can, canViewRevenue } = useRolePermissions(role === 'manager' ? 'manager' : undefined);
+  const {
+    can,
+    canViewRevenue,
+    canAddTables,
+    canEditTables,
+    canDeleteTables,
+  } = useRolePermissions(role === 'manager' ? 'manager' : undefined);
 
+  const systemSettings = useSettingsStore((s) => s.settings);
   const tables = useRestaurantStore((s) => s.tables);
   const zones = useRestaurantStore((s) => s.zones);
   const dynamicFloors = useRestaurantStore((s) => s.floors);
@@ -224,6 +232,10 @@ export default function TablesBlueprintScreen({
   }, []);
 
   const handlePopulateDefault5Floors = () => {
+    if (!canAddTables) {
+      Alert.alert('Access Denied', 'You do not have permission to add tables.');
+      return;
+    }
     const msg = 'Auto-generate standard Sultan 5-Floor seating layout (Ground, 1st, 2nd Banquet, 3rd VIP Lounge, and Rooftop BBQ)? Existing tables will be preserved.';
     const doPopulate = () => {
       let created = 0;
@@ -298,21 +310,28 @@ export default function TablesBlueprintScreen({
   // ---------- Filtering ----------
   const filteredTables = useMemo(() => {
     return tables.filter((t) => {
+      const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
       if (statusFilter !== 'all' && t.status !== statusFilter) return false;
       const tFloor = getTableFloor(t);
       if (floorFilter !== 'all' && tFloor.toLowerCase() !== floorFilter.toLowerCase()) return false;
-      const tType = getTableSeatingType(t);
       if (seatingTypeFilter !== 'all' && tType !== seatingTypeFilter) return false;
       if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) return false;
       return true;
     });
-  }, [tables, statusFilter, floorFilter, seatingTypeFilter, search]);
+  }, [tables, statusFilter, floorFilter, seatingTypeFilter, search, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // Scope metrics by active floor
   const scopedTables = useMemo(() => {
-    if (floorFilter === 'all') return tables;
-    return tables.filter((t) => getTableFloor(t).toLowerCase() === floorFilter.toLowerCase());
-  }, [tables, floorFilter]);
+    return tables.filter((t) => {
+      const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
+      if (floorFilter === 'all') return true;
+      return getTableFloor(t).toLowerCase() === floorFilter.toLowerCase();
+    });
+  }, [tables, floorFilter, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // 3-Zone Breakdown & Cabin summary for the selected floor (or entire restaurant)
   const zoneSummary = useMemo(() => {
@@ -346,6 +365,9 @@ export default function TablesBlueprintScreen({
 
   // ---------- Table & Cabin CRUD ----------
   const openAddTableModal = (defaultFloor?: string, defaultType?: SeatingZoneType) => {
+    if (!canAddTables) {
+      return notify('Permission Denied', 'You do not have permission to add tables or seating units.');
+    }
     setEditingTable(null);
     const chosenFloor = defaultFloor || (floorFilter !== 'all' ? floorFilter : '1st Floor');
     const chosenType = defaultType || (seatingTypeFilter !== 'all' ? seatingTypeFilter : 'majlis');
@@ -372,6 +394,9 @@ export default function TablesBlueprintScreen({
   };
 
   const openEditTableModal = (table: Table) => {
+    if (!canEditTables) {
+      return notify('Permission Denied', 'You do not have permission to edit tables.');
+    }
     setActionTableId(null);
     setEditingTable(table);
     setFormFloor(getTableFloor(table));
@@ -382,6 +407,9 @@ export default function TablesBlueprintScreen({
   };
 
   const handleSaveTable = () => {
+    if (editingTable ? !canEditTables : !canAddTables) {
+      return notify('Permission Denied', 'You do not have permission to save table changes.');
+    }
     const seatsNum = parseInt(formSeats, 10);
     if (!formName.trim() || !formFloor.trim()) {
       return notify('Missing info', 'Please enter a name/number and select a floor.');
@@ -417,6 +445,9 @@ export default function TablesBlueprintScreen({
   };
 
   const handleDeleteTable = (table: Table) => {
+    if (!canDeleteTables) {
+      return notify('Permission Denied', 'You do not have permission to delete tables.');
+    }
     if (table.status !== 'available') {
       return notify('Cannot delete', `${table.name} is currently ${table.status}. Free the table first.`);
     }
@@ -913,9 +944,13 @@ export default function TablesBlueprintScreen({
               {t.status === 'reserved' && !res && (
                 <ActionRow icon="lock-open-outline" label="Mark available" color="#1E9E5A" onPress={() => { updateTable(t.id, { status: 'available', reservationId: undefined }); setActionTableId(null); }} />
               )}
-              <View style={styles.sheetDivider} />
-              <ActionRow icon="pencil" label="Edit table details" color="#636366" onPress={() => openEditTableModal(t)} />
-              <ActionRow icon="trash-outline" label="Delete table" color="#D64541" onPress={() => handleDeleteTable(t)} />
+              {(canEditTables || canDeleteTables) && <View style={styles.sheetDivider} />}
+              {canEditTables && (
+                <ActionRow icon="pencil" label="Edit table details" color="#636366" onPress={() => openEditTableModal(t)} />
+              )}
+              {canDeleteTables && (
+                <ActionRow icon="trash-outline" label="Delete table" color="#D64541" onPress={() => handleDeleteTable(t)} />
+              )}
             </>
           )}
         </ScrollView>
@@ -1037,13 +1072,15 @@ export default function TablesBlueprintScreen({
               <Ionicons name="qr-code-outline" size={15} color="#FFE082" />
               <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
-              onPress={handlePopulateDefault5Floors}
-            >
-              <Ionicons name="sparkles" size={15} color="#fff" />
-              <Text style={styles.headerBtnText}>⚡ 5-Floor Auto</Text>
-            </TouchableOpacity>
+            {canAddTables && (
+              <TouchableOpacity
+                style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
+                onPress={handlePopulateDefault5Floors}
+              >
+                <Ionicons name="sparkles" size={15} color="#fff" />
+                <Text style={styles.headerBtnText}>⚡ 5-Floor Auto</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
               {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -1060,30 +1097,34 @@ export default function TablesBlueprintScreen({
               <Ionicons name="calendar-outline" size={15} color={STATUS_META.reserved.color} />
               <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Booking</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'majlis')}
-            >
-              <SeatingTypeIcon type="majlis" size={15} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Cabin</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'couches')}
-            >
-              <SeatingTypeIcon type="couches" size={15} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Couch</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'tables')}
-            >
-              <SeatingTypeIcon type="tables" size={15} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Table</Text>
-            </TouchableOpacity>
+            {canAddTables && (
+              <>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'majlis')}
+                >
+                  <SeatingTypeIcon type="majlis" size={15} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Cabin</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'couches')}
+                >
+                  <SeatingTypeIcon type="couches" size={15} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Couch</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'tables')}
+                >
+                  <SeatingTypeIcon type="tables" size={15} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Table</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </ScrollView>
         ) : (
           <View style={styles.headerActions}>
@@ -1094,13 +1135,15 @@ export default function TablesBlueprintScreen({
               <Ionicons name="qr-code-outline" size={16} color="#FFE082" />
               <Text style={[styles.headerBtnText, { color: '#FFF' }]}>Table QRs & Standees</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
-              onPress={handlePopulateDefault5Floors}
-            >
-              <Ionicons name="sparkles" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
-            </TouchableOpacity>
+            {canAddTables && (
+              <TouchableOpacity
+                style={[styles.headerBtn, { backgroundColor: '#B8860B' }]}
+                onPress={handlePopulateDefault5Floors}
+              >
+                <Ionicons name="sparkles" size={16} color="#fff" />
+                <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={[styles.headerBtn, { backgroundColor: '#34495E' }]}
               {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
@@ -1117,30 +1160,34 @@ export default function TablesBlueprintScreen({
               <Ionicons name="calendar-outline" size={16} color={STATUS_META.reserved.color} />
               <Text style={[styles.headerBtnText, { color: STATUS_META.reserved.color }]}>Reservation</Text>
             </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'majlis')}
-            >
-              <SeatingTypeIcon type="majlis" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Cabin</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'couches')}
-            >
-              <SeatingTypeIcon type="couches" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Couch</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-              onPress={() => openAddTableModal(undefined, 'tables')}
-            >
-              <SeatingTypeIcon type="tables" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>+ Table</Text>
-            </TouchableOpacity>
+            {canAddTables && (
+              <>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#4a121a' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'majlis')}
+                >
+                  <SeatingTypeIcon type="majlis" size={16} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Cabin</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#E65100' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'couches')}
+                >
+                  <SeatingTypeIcon type="couches" size={16} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Couch</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.headerBtn, { backgroundColor: '#1976D2' }]}
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  onPress={() => openAddTableModal(undefined, 'tables')}
+                >
+                  <SeatingTypeIcon type="tables" size={16} color="#fff" />
+                  <Text style={styles.headerBtnText}>+ Table</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         )}
       </View>
@@ -1241,7 +1288,11 @@ export default function TablesBlueprintScreen({
                   label="Seating Zone"
                   options={[
                     { label: 'All Zones', value: 'all', icon: 'apps' as const },
-                    ...SEATING_ZONE_TYPES.map((type) => {
+                    ...SEATING_ZONE_TYPES.filter((type) => {
+                      if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                      if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                      return true;
+                    }).map((type) => {
                       const meta = SEATING_ZONES[type];
                       const count = scopedTables.filter((t) => getTableSeatingType(t) === type).length;
                       return {
@@ -1359,13 +1410,15 @@ export default function TablesBlueprintScreen({
                 <View style={[styles.emptyState, { width: '100%' }]}>
                   <Ionicons name="search-outline" size={40} color="#C7C7CC" />
                   <Text style={styles.emptyText}>No tables match this filter.</Text>
-                  <TouchableOpacity
-                    style={[styles.headerBtn, { marginTop: 8 }]}
-                    onPress={() => openAddTableModal()}
-                  >
-                    <Ionicons name="add" size={16} color="#fff" />
-                    <Text style={styles.headerBtnText}>Add Unit Now</Text>
-                  </TouchableOpacity>
+                  {canAddTables && (
+                    <TouchableOpacity
+                      style={[styles.headerBtn, { marginTop: 8 }]}
+                      onPress={() => openAddTableModal()}
+                    >
+                      <Ionicons name="add" size={16} color="#fff" />
+                      <Text style={styles.headerBtnText}>Add Unit Now</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               )}
             </View>
@@ -1536,13 +1589,15 @@ export default function TablesBlueprintScreen({
                             {tableItems.length} Tables • {tableItems.reduce((s, t) => s + t.seats, 0)} Seats
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          style={[styles.tinyAddBtn, { backgroundColor: '#1976D2' }]}
-                          onPress={() => openAddTableModal(floorName, 'tables')}
-                        >
-                          <Ionicons name="add" size={13} color="#fff" />
-                          <Text style={styles.tinyAddBtnText}>Add</Text>
-                        </TouchableOpacity>
+                        {canAddTables && (
+                          <TouchableOpacity
+                            style={[styles.tinyAddBtn, { backgroundColor: '#1976D2' }]}
+                            onPress={() => openAddTableModal(floorName, 'tables')}
+                          >
+                            <Ionicons name="add" size={13} color="#fff" />
+                            <Text style={styles.tinyAddBtnText}>Add</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={styles.unitPillsRow}>
                         {tableItems.map((tbl) => (
@@ -1574,13 +1629,15 @@ export default function TablesBlueprintScreen({
                             {couchItems.length} Couches • {couchItems.reduce((s, t) => s + t.seats, 0)} Seats
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          style={[styles.tinyAddBtn, { backgroundColor: '#E65100' }]}
-                          onPress={() => openAddTableModal(floorName, 'couches')}
-                        >
-                          <Ionicons name="add" size={13} color="#fff" />
-                          <Text style={styles.tinyAddBtnText}>Add</Text>
-                        </TouchableOpacity>
+                        {canAddTables && (
+                          <TouchableOpacity
+                            style={[styles.tinyAddBtn, { backgroundColor: '#E65100' }]}
+                            onPress={() => openAddTableModal(floorName, 'couches')}
+                          >
+                            <Ionicons name="add" size={13} color="#fff" />
+                            <Text style={styles.tinyAddBtnText}>Add</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                       <View style={styles.unitPillsRow}>
                         {couchItems.map((couch) => (
@@ -1612,13 +1669,15 @@ export default function TablesBlueprintScreen({
                             {majlisItems.length} Cabins • {majlisItems.reduce((s, t) => s + t.seats, 0)} Guests Sitting Capacity
                           </Text>
                         </View>
-                        <TouchableOpacity
-                          style={[styles.tinyAddBtn, { backgroundColor: '#4a121a' }]}
-                          onPress={() => openAddTableModal(floorName, 'majlis')}
-                        >
-                          <Ionicons name="add" size={13} color="#fff" />
-                          <Text style={styles.tinyAddBtnText}>Add Cabin</Text>
-                        </TouchableOpacity>
+                        {canAddTables && (
+                          <TouchableOpacity
+                            style={[styles.tinyAddBtn, { backgroundColor: '#4a121a' }]}
+                            onPress={() => openAddTableModal(floorName, 'majlis')}
+                          >
+                            <Ionicons name="add" size={13} color="#fff" />
+                            <Text style={styles.tinyAddBtnText}>Add Cabin</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
 
                       {/* Detailed Cabins List */}
@@ -1710,7 +1769,11 @@ export default function TablesBlueprintScreen({
             {/* Select Seating Zone Type (Tables, Couches, Majlis Sitting) */}
             <Text style={styles.label}>Seating Zone Type</Text>
             <View style={styles.seatingTypePickerRow}>
-              {SEATING_ZONE_TYPES.map((type) => {
+              {SEATING_ZONE_TYPES.filter((type) => {
+                if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                return true;
+              }).map((type) => {
                 const meta = SEATING_ZONES[type];
                 const active = formSeatingType === type;
                 return (

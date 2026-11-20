@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useAuthStore } from '../store/authStore';
+import { useRolePermissions } from '../store/roleStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
 import {
@@ -55,6 +56,12 @@ export default function ShiftManagementScreen() {
   const shifts = useShiftStore((s) => s.shifts) || [];
   const activeShiftId = useShiftStore((s) => s.activeShiftId);
   const openShift = useShiftStore((s) => s.openShift);
+
+  const { can, canViewRevenue } = useRolePermissions();
+  const [adminPrivacyPreview, setAdminPrivacyPreview] = useState(false);
+
+  // Cashier Privacy is strictly enforced for Cashier, Manager, and Staff (Blind Cash Audit)
+  const isCashierPrivacy = user?.role !== 'admin' || !canViewRevenue || adminPrivacyPreview;
   const closeShiftBlind = useShiftStore((s) => s.closeShiftBlind);
   const auditShift = useShiftStore((s) => s.auditShift);
 
@@ -276,6 +283,26 @@ export default function ShiftManagementScreen() {
         </View>
 
         <View style={styles.headerRight}>
+          {user?.role === 'admin' && (
+            <TouchableOpacity
+              style={[
+                styles.privacyToggleBtn,
+                adminPrivacyPreview ? styles.privacyToggleBtnActive : undefined,
+              ]}
+              onPress={() => setAdminPrivacyPreview(!adminPrivacyPreview)}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name={adminPrivacyPreview ? 'eye-off' : 'eye'}
+                size={14}
+                color={adminPrivacyPreview ? '#DC2626' : '#059669'}
+              />
+              <Text style={[styles.privacyToggleText, adminPrivacyPreview && { color: '#DC2626' }]}>
+                {adminPrivacyPreview ? 'Cashier Blind View' : 'Admin Audit View'}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           <FullscreenButton variant={isMobile ? 'compact' : 'pill'} />
 
           {activeShift && (
@@ -457,23 +484,31 @@ export default function ShiftManagementScreen() {
 
                   <View style={styles.heroShiftMainRow}>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.heroLabel}>Expected Cash in Drawer (متوقع کیش)</Text>
+                      <Text style={styles.heroLabel}>
+                        {isCashierPrivacy
+                          ? 'Blind Shift Cash Drawer (بلائنڈ کیش آڈٹ محفوظ ہے)'
+                          : 'Expected Cash in Drawer (متوقع کیش)'}
+                      </Text>
                       <Text style={styles.heroExpectedAmount}>
-                        Rs. {shiftFinancials.expectedCash.toLocaleString()}
+                        {isCashierPrivacy ? '••••••••' : `Rs. ${shiftFinancials.expectedCash.toLocaleString()}`}
                       </Text>
                       <Text style={styles.heroFormulaText}>
-                        Float: Rs. {activeShift.openingFloat.toLocaleString()} + Cash: Rs. {shiftFinancials.cashSales.toLocaleString()} - Payouts: Rs. {shiftFinancials.cashPayouts.toLocaleString()}
+                        {isCashierPrivacy
+                          ? 'Cashier Privacy Protected • Draz mein mojood physical cash count kar ke darj karein.'
+                          : `Float: Rs. ${activeShift.openingFloat.toLocaleString()} + Cash: Rs. ${shiftFinancials.cashSales.toLocaleString()} - Payouts: Rs. ${shiftFinancials.cashPayouts.toLocaleString()}`}
                       </Text>
                     </View>
 
-                    <TouchableOpacity
-                      style={styles.heroReportBtn}
-                      onPress={() => openReport('X-Report', activeShift)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="receipt-outline" size={16} color="#D5A943" />
-                      <Text style={styles.heroReportBtnText}>Mid-Shift X-Report</Text>
-                    </TouchableOpacity>
+                    {!isCashierPrivacy && (
+                      <TouchableOpacity
+                        style={styles.heroReportBtn}
+                        onPress={() => openReport('X-Report', activeShift)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="receipt-outline" size={16} color="#D5A943" />
+                        <Text style={styles.heroReportBtnText}>Mid-Shift X-Report</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -483,7 +518,9 @@ export default function ShiftManagementScreen() {
                     <View style={[styles.metricIconWrap, { backgroundColor: '#ECFDF5' }]}>
                       <Ionicons name="cash" size={18} color="#059669" />
                     </View>
-                    <Text style={styles.metricValue}>Rs. {shiftFinancials.cashSales.toLocaleString()}</Text>
+                    <Text style={styles.metricValue}>
+                      {isCashierPrivacy ? '••••••••' : `Rs. ${shiftFinancials.cashSales.toLocaleString()}`}
+                    </Text>
                     <Text style={styles.metricLabel}>Cash Sales (نقد)</Text>
                   </View>
 
@@ -492,7 +529,9 @@ export default function ShiftManagementScreen() {
                       <Ionicons name="card" size={18} color="#2563EB" />
                     </View>
                     <Text style={styles.metricValue}>
-                      Rs. {(shiftFinancials.cardSales + shiftFinancials.onlineSales).toLocaleString()}
+                      {isCashierPrivacy
+                        ? '••••••••'
+                        : `Rs. ${(shiftFinancials.cardSales + shiftFinancials.onlineSales).toLocaleString()}`}
                     </Text>
                     <Text style={styles.metricLabel}>Card & Digital (آن لائن)</Text>
                   </View>
@@ -509,7 +548,9 @@ export default function ShiftManagementScreen() {
                     <View style={[styles.metricIconWrap, { backgroundColor: '#FEE2E2' }]}>
                       <Ionicons name="wallet" size={18} color="#DC2626" />
                     </View>
-                    <Text style={styles.metricValue}>Rs. {shiftFinancials.cashPayouts.toLocaleString()}</Text>
+                    <Text style={styles.metricValue}>
+                      {isCashierPrivacy ? '••••••••' : `Rs. ${shiftFinancials.cashPayouts.toLocaleString()}`}
+                    </Text>
                     <Text style={styles.metricLabel}>Expenses / Payouts</Text>
                   </View>
                 </View>
@@ -529,7 +570,7 @@ export default function ShiftManagementScreen() {
                   {/* Counted Cash Input */}
                   <Text style={styles.fieldLabel}>Enter Actual Cash Counted in Drawer (گنتی شدہ رقم)</Text>
                   <View style={styles.countInputRow}>
-                    <View style={styles.countInputWrap}>
+                    <View style={[styles.countInputWrap, isCashierPrivacy && { flex: 1 }]}>
                       <Text style={styles.floatCurrencyPrefix}>Rs.</Text>
                       <TextInput
                         style={styles.countTextInput}
@@ -541,19 +582,21 @@ export default function ShiftManagementScreen() {
                       />
                     </View>
 
-                    {/* Exact Match Button for Instant Fast Entry */}
-                    <TouchableOpacity
-                      style={styles.matchBtn}
-                      onPress={() => setCountedCashInput(String(shiftFinancials.expectedCash))}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="flash" size={14} color="#D5A943" />
-                      <Text style={styles.matchBtnText}>Exact Match (Rs. {shiftFinancials.expectedCash.toLocaleString()})</Text>
-                    </TouchableOpacity>
+                    {/* Exact Match Button - STRICTLY HIDDEN FOR CASHIER PRIVACY */}
+                    {!isCashierPrivacy && (
+                      <TouchableOpacity
+                        style={styles.matchBtn}
+                        onPress={() => setCountedCashInput(String(shiftFinancials.expectedCash))}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="flash" size={14} color="#D5A943" />
+                        <Text style={styles.matchBtnText}>Exact Match (Rs. {shiftFinancials.expectedCash.toLocaleString()})</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
-                  {/* Realtime Difference Indicator */}
-                  {difference !== null && (
+                  {/* Realtime Difference Indicator (ADMIN/AUDITOR ONLY - strictly hidden from cashier to prevent reverse calculation) */}
+                  {!isCashierPrivacy && difference !== null && (
                     <View
                       style={[
                         styles.diffBanner,
@@ -576,6 +619,16 @@ export default function ShiftManagementScreen() {
                           : difference < 0
                           ? `⚠️ Cash Shortage: -Rs. ${Math.abs(difference).toLocaleString()} (کمی ہے)`
                           : `ℹ️ Cash Extra: +Rs. ${difference.toLocaleString()} (اضافی ہے)`}
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Cashier Blind Privacy Reassurance Notice */}
+                  {isCashierPrivacy && (
+                    <View style={styles.cashierPrivacyNotice}>
+                      <Ionicons name="shield-checkmark" size={16} color="#059669" />
+                      <Text style={styles.cashierPrivacyNoticeText}>
+                        Blind Cash Count Active: Physical draz ginti darj karein. System shift seal kar ke secure audit record banaye ga.
                       </Text>
                     </View>
                   )}
@@ -910,6 +963,45 @@ export default function ShiftManagementScreen() {
 }
 
 const styles = StyleSheet.create({
+  privacyToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  privacyToggleBtnActive: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  privacyToggleText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  cashierPrivacyNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    marginTop: 8,
+  },
+  cashierPrivacyNoticeText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#065F46',
+    lineHeight: 17,
+  },
   container: {
     flex: 1,
     backgroundColor: '#F8F9FA',

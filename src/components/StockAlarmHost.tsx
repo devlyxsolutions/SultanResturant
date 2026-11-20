@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { usePathname, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Animated,
   Easing,
@@ -13,13 +15,11 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
-import { usePathname, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore } from '../store/authStore';
-import { useOpsStore } from '../store/opsStore';
-import { useKitchenStore } from '../store/kitchenStore';
 import { useAlertStore } from '../store/alertStore';
+import { useAuthStore } from '../store/authStore';
+import { useKitchenStore } from '../store/kitchenStore';
+import { useOpsStore } from '../store/opsStore';
 import { buildAlerts, type AlertSeverity, type StockAlert } from '../utils/kitchenForecast';
 
 /**
@@ -102,7 +102,7 @@ function playAlarm(severity: AlertSeverity) {
         sharedAudioCtx = new Ctx();
       }
       if (sharedAudioCtx.state === 'suspended') {
-        sharedAudioCtx.resume().catch(() => {});
+        sharedAudioCtx.resume().catch(() => { });
       }
       const ctx = sharedAudioCtx;
       const freqs = severity === 'critical' ? [880, 660, 880, 660] : [660, 520];
@@ -154,6 +154,7 @@ export default function StockAlarmHost() {
   const bottomOffset = (isMobile ? 76 : 24) + insets.bottom;
   const isPosScreen = Boolean(pathname && (pathname === '/admin/pos' || pathname.endsWith('/pos')));
   const isCustomerMenu = Boolean(pathname && (pathname === '/menu' || pathname.startsWith('/menu')));
+  const isCustomerDisplay = Boolean(pathname && (pathname === '/customer-display' || pathname.includes('customer-display')));
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
@@ -228,14 +229,15 @@ export default function StockAlarmHost() {
     criticalCount > 0
       ? 'critical'
       : activeAlerts.some((a) => a.severity === 'warning')
-      ? 'warning'
-      : activeAlerts.length > 0
-      ? 'info'
-      : null;
+        ? 'warning'
+        : activeAlerts.length > 0
+          ? 'info'
+          : null;
 
   const [panelOpen, setPanelOpen] = useState(false);
   const [toast, setToast] = useState<StockAlert | null>(null);
   const [selectedTab, setSelectedTab] = useState<TabType>('all');
+  const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
 
   // Filtered items based on selected tab
   const displayedAlerts = useMemo(() => {
@@ -291,6 +293,12 @@ export default function StockAlarmHost() {
   }, [toast]);
 
   useEffect(() => {
+    if (!snoozeFeedback) return;
+    const t = setTimeout(() => setSnoozeFeedback(null), 3500);
+    return () => clearTimeout(t);
+  }, [snoozeFeedback]);
+
+  useEffect(() => {
     prune();
   }, [now, prune]);
 
@@ -321,16 +329,52 @@ export default function StockAlarmHost() {
     return () => loop.stop();
   }, [topSeverity, pulse]);
 
-  // Don't render bell on POS, customer menu, or unauthorized roles
-  if (!enabled || isPosScreen || isCustomerMenu) return null;
+  // Don't render bell on POS, customer menu, customer display, or unauthorized roles
+  if (!enabled || isPosScreen || isCustomerMenu || isCustomerDisplay) return null;
   if (activeAlerts.length === 0 && snoozedAlerts.length === 0 && !panelOpen) return null;
 
-  const snoozeAll = () => {
+  const handleSnoozeOne = (a: StockAlert) => {
+    const remainingActive = activeAlerts.length - 1;
+    snooze([a.id], SNOOZE_MIN);
+    setNow(Date.now());
+    if (toast?.id === a.id) setToast(null);
+    setSnoozeFeedback(`Snoozed "${a.title}" for ${SNOOZE_MIN}m — moved to Snoozed tab`);
+    if (selectedTab === 'urgent' && criticalCount <= 1) {
+      setSelectedTab(remainingActive > 0 ? 'all' : 'snoozed');
+    } else if (selectedTab === 'expiry' && expiryCount <= 1) {
+      setSelectedTab(remainingActive > 0 ? 'all' : 'snoozed');
+    } else if (selectedTab === 'stock' && stockCount <= 1) {
+      setSelectedTab(remainingActive > 0 ? 'all' : 'snoozed');
+    }
+  };
+
+  const handleSnoozeAll = () => {
+    if (activeAlerts.length === 0) return;
+    const count = activeAlerts.length;
     snooze(
       activeAlerts.map((a) => a.id),
       SNOOZE_MIN
     );
+    setNow(Date.now());
     setToast(null);
+    setSelectedTab('snoozed');
+    setSnoozeFeedback(`All ${count} active alarms snoozed for ${SNOOZE_MIN} minutes`);
+  };
+
+  const handleUnsnoozeOne = (a: StockAlert) => {
+    unsnooze(a.id);
+    setNow(Date.now());
+    setSnoozeFeedback(`Resumed "${a.title}" — moved back to Active`);
+    if (snoozedAlerts.length <= 1 && selectedTab === 'snoozed') {
+      setSelectedTab('all');
+    }
+  };
+
+  const handleUnsnoozeAll = () => {
+    unsnoozeAll();
+    setNow(Date.now());
+    setSelectedTab('all');
+    setSnoozeFeedback('All snoozed alarms resumed');
   };
 
   const openFix = (a: StockAlert) => {
@@ -350,6 +394,7 @@ export default function StockAlarmHost() {
           activeOpacity={0.92}
           onPress={() => {
             setToast(null);
+            setNow(Date.now());
             setPanelOpen(true);
           }}
           style={[
@@ -403,7 +448,10 @@ export default function StockAlarmHost() {
       >
         <TouchableOpacity
           style={[styles.fab, { backgroundColor: sevColor }]}
-          onPress={() => setPanelOpen(true)}
+          onPress={() => {
+            setNow(Date.now());
+            setPanelOpen(true);
+          }}
           activeOpacity={0.88}
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         >
@@ -430,12 +478,6 @@ export default function StockAlarmHost() {
         onRequestClose={() => setPanelOpen(false)}
       >
         <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setPanelOpen(false)}
-          />
-
           <View style={[styles.panelContainer, isMobile && styles.panelContainerMobile]}>
             {/* Top Gold Laser Accent Line */}
             <View style={styles.topGoldLaserLine} />
@@ -499,7 +541,7 @@ export default function StockAlarmHost() {
               {activeAlerts.length > 0 && (
                 <TouchableOpacity
                   style={styles.snoozeAllBtn}
-                  onPress={snoozeAll}
+                  onPress={handleSnoozeAll}
                   activeOpacity={0.85}
                 >
                   <Ionicons name="time-outline" size={16} color={ROYAL.gold} />
@@ -521,70 +563,84 @@ export default function StockAlarmHost() {
                 </Text>
               </TouchableOpacity>
 
-              {criticalCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.tabBtn, selectedTab === 'urgent' && styles.tabBtnActiveUrgent]}
-                  onPress={() => setSelectedTab('urgent')}
+              <TouchableOpacity
+                style={[styles.tabBtn, selectedTab === 'urgent' && styles.tabBtnActiveUrgent]}
+                onPress={() => setSelectedTab('urgent')}
+              >
+                <View
+                  style={[
+                    styles.tabDotUrgent,
+                    criticalCount === 0 && { opacity: 0.4 },
+                  ]}
+                />
+                <Text
+                  style={[
+                    styles.tabBtnText,
+                    selectedTab === 'urgent' && styles.tabBtnTextUrgent,
+                  ]}
                 >
-                  <View style={styles.tabDotUrgent} />
-                  <Text
-                    style={[
-                      styles.tabBtnText,
-                      selectedTab === 'urgent' && styles.tabBtnTextUrgent,
-                    ]}
-                  >
-                    Urgent ({criticalCount})
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  Urgent ({criticalCount})
+                </Text>
+              </TouchableOpacity>
 
-              {expiryCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.tabBtn, selectedTab === 'expiry' && styles.tabBtnActive]}
-                  onPress={() => setSelectedTab('expiry')}
+              <TouchableOpacity
+                style={[styles.tabBtn, selectedTab === 'expiry' && styles.tabBtnActive]}
+                onPress={() => setSelectedTab('expiry')}
+              >
+                <Text
+                  style={[styles.tabBtnText, selectedTab === 'expiry' && styles.tabBtnTextActive]}
                 >
-                  <Text
-                    style={[styles.tabBtnText, selectedTab === 'expiry' && styles.tabBtnTextActive]}
-                  >
-                    Expiry ({expiryCount})
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  Expiry ({expiryCount})
+                </Text>
+              </TouchableOpacity>
 
-              {stockCount > 0 && (
-                <TouchableOpacity
-                  style={[styles.tabBtn, selectedTab === 'stock' && styles.tabBtnActive]}
-                  onPress={() => setSelectedTab('stock')}
+              <TouchableOpacity
+                style={[styles.tabBtn, selectedTab === 'stock' && styles.tabBtnActive]}
+                onPress={() => setSelectedTab('stock')}
+              >
+                <Text
+                  style={[styles.tabBtnText, selectedTab === 'stock' && styles.tabBtnTextActive]}
                 >
-                  <Text
-                    style={[styles.tabBtnText, selectedTab === 'stock' && styles.tabBtnTextActive]}
-                  >
-                    Stock ({stockCount})
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  Stock ({stockCount})
+                </Text>
+              </TouchableOpacity>
 
-              {snoozedAlerts.length > 0 && (
-                <TouchableOpacity
-                  style={[styles.tabBtn, selectedTab === 'snoozed' && styles.tabBtnActive]}
-                  onPress={() => setSelectedTab('snoozed')}
+              <TouchableOpacity
+                style={[styles.tabBtn, selectedTab === 'snoozed' && styles.tabBtnActive]}
+                onPress={() => setSelectedTab('snoozed')}
+              >
+                <Ionicons
+                  name="moon-outline"
+                  size={12}
+                  color={selectedTab === 'snoozed' ? ROYAL.gold : 'rgba(255,255,255,0.5)'}
+                />
+                <Text
+                  style={[
+                    styles.tabBtnText,
+                    selectedTab === 'snoozed' && styles.tabBtnTextActive,
+                  ]}
                 >
-                  <Ionicons
-                    name="moon-outline"
-                    size={12}
-                    color={selectedTab === 'snoozed' ? ROYAL.gold : 'rgba(255,255,255,0.5)'}
-                  />
-                  <Text
-                    style={[
-                      styles.tabBtnText,
-                      selectedTab === 'snoozed' && styles.tabBtnTextActive,
-                    ]}
-                  >
-                    Snoozed ({snoozedAlerts.length})
-                  </Text>
-                </TouchableOpacity>
-              )}
+                  Snoozed ({snoozedAlerts.length})
+                </Text>
+              </TouchableOpacity>
             </View>
+
+            {/* In-Modal Snooze / Resume Confirmation Banner */}
+            {snoozeFeedback && (
+              <View style={styles.feedbackBanner}>
+                <Ionicons name="checkmark-circle" size={17} color={ROYAL.emerald} />
+                <Text style={styles.feedbackText} numberOfLines={2}>
+                  {snoozeFeedback}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => setSnoozeFeedback(null)}
+                  style={styles.feedbackCloseBtn}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="close" size={15} color={ROYAL.goldLight} />
+                </TouchableOpacity>
+              </View>
+            )}
 
             {/* List of Alerts */}
             <ScrollView
@@ -665,7 +721,7 @@ export default function StockAlarmHost() {
                           {isItemSnoozed ? (
                             <TouchableOpacity
                               style={styles.unsnoozeBtn}
-                              onPress={() => unsnooze(a.id)}
+                              onPress={() => handleUnsnoozeOne(a)}
                               activeOpacity={0.85}
                             >
                               <Ionicons name="play-outline" size={14} color="#10B981" />
@@ -684,7 +740,7 @@ export default function StockAlarmHost() {
 
                               <TouchableOpacity
                                 style={styles.snoozeBtn}
-                                onPress={() => snooze([a.id], SNOOZE_MIN)}
+                                onPress={() => handleSnoozeOne(a)}
                                 activeOpacity={0.85}
                               >
                                 <Ionicons name="time-outline" size={14} color={ROYAL.gold} />
@@ -703,7 +759,7 @@ export default function StockAlarmHost() {
               {selectedTab === 'snoozed' && snoozedAlerts.length > 0 && (
                 <TouchableOpacity
                   style={styles.unsnoozeAllBtn}
-                  onPress={unsnoozeAll}
+                  onPress={handleUnsnoozeAll}
                   activeOpacity={0.85}
                 >
                   <Ionicons name="refresh-outline" size={16} color="#10B981" />
@@ -845,6 +901,7 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(213, 169, 67, 0.35)',
     overflow: 'hidden',
     position: 'relative',
+    zIndex: 10,
     ...Platform.select({
       web: {
         boxShadow:
@@ -1021,13 +1078,38 @@ const styles = StyleSheet.create({
   filterTabsRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
     paddingHorizontal: 16,
     paddingVertical: 10,
     backgroundColor: 'rgba(25, 4, 9, 0.95)',
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(213, 169, 67, 0.14)',
     gap: 8,
-    overflow: 'hidden',
+  },
+  feedbackBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  feedbackText: {
+    flex: 1,
+    color: '#D1FAE5',
+    fontSize: 12,
+    fontWeight: '700',
+    lineHeight: 17,
+  },
+  feedbackCloseBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(213, 169, 67, 0.14)',
   },
   tabBtn: {
     flexDirection: 'row',

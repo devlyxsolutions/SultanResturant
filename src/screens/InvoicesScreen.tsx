@@ -21,6 +21,7 @@ import SultanLogo from '../components/SultanLogo';
 import { printInvoiceReceipt } from '../components/Invoice';
 import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
@@ -66,8 +67,10 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     return { minWidth: 140 };
   }, [isSmallMobile, isMobile]);
 
+  const systemSettings = useSettingsStore((state) => state.settings);
   const rawInvoices = useRestaurantStore((state) => state.invoices);
   const invoices = useMemo(() => rawInvoices || [], [rawInvoices]);
+  const staff = useRestaurantStore((state) => state.staff) || [];
   const voidInvoice = useRestaurantStore((state) => state.voidInvoice);
 
   // Filter States
@@ -87,6 +90,8 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
   const [invoiceToVoid, setInvoiceToVoid] = useState<Invoice | null>(null);
   const [voidReason, setVoidReason] = useState('');
   const [customVoidReason, setCustomVoidReason] = useState('');
+  const [voidPinInput, setVoidPinInput] = useState('');
+  const [voidPinError, setVoidPinError] = useState('');
 
   // Date Boundaries
   const dateRanges = useMemo(() => {
@@ -233,11 +238,38 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     setInvoiceToVoid(invoice);
     setVoidReason('Wrong order punched');
     setCustomVoidReason('');
+    setVoidPinInput('');
+    setVoidPinError('');
     setVoidModalVisible(true);
   };
 
   const handleConfirmVoid = () => {
     if (!invoiceToVoid) return;
+    if (systemSettings.requirePinForVoid) {
+      const enteredPin = voidPinInput.trim();
+      if (!enteredPin) {
+        setVoidPinError('Admin / Manager PIN is required to void an invoice.');
+        return;
+      }
+      const currentStaff = staff.find(
+        (s) =>
+          (user?.staffId && s.id === user.staffId) ||
+          (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
+      );
+      const adminOrManagerWithPin = staff.filter(
+        (s) =>
+          (s.role?.toLowerCase() === 'admin' || s.role?.toLowerCase() === 'manager') &&
+          Boolean(s.pin?.trim())
+      );
+      const isValidPin =
+        Boolean(currentStaff?.pin && currentStaff.pin.trim() === enteredPin) ||
+        adminOrManagerWithPin.some((s) => s.pin!.trim() === enteredPin) ||
+        (adminOrManagerWithPin.length === 0 && enteredPin === '1234');
+      if (!isValidPin) {
+        setVoidPinError('Invalid Admin or Manager PIN.');
+        return;
+      }
+    }
     const finalReason = voidReason === 'Other' ? (customVoidReason || 'Voided by authorized manager') : voidReason;
 
     voidInvoice(invoiceToVoid.id, finalReason, userRole === 'admin' ? 'Admin' : 'Manager');
@@ -788,7 +820,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                           </Text>
                         </TouchableOpacity>
 
-                        {!isVoided && !isRefunded && canProcessReturns && (
+                        {!isVoided && !isRefunded && canProcessReturns && systemSettings.enableReturnsModule !== false && (
                           <TouchableOpacity
                             style={styles.actionBtnReturn}
                             onPress={() => {
@@ -977,7 +1009,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                       </TouchableOpacity>
 
                       {/* Return Button */}
-                      {!isVoided && !isRefunded && canProcessReturns && (
+                      {!isVoided && !isRefunded && canProcessReturns && systemSettings.enableReturnsModule !== false && (
                         <TouchableOpacity
                           style={styles.actionBtnReturn}
                           onPress={() => {
@@ -1399,7 +1431,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                     <Text style={[styles.modalPrintBtnText, isSmallMobile && { fontSize: 13 }]}>Print / Share Receipt</Text>
                   </TouchableOpacity>
 
-                  {selectedInvoice.status !== 'voided' && selectedInvoice.status !== 'refunded' && canProcessReturns && (
+                  {selectedInvoice.status !== 'voided' && selectedInvoice.status !== 'refunded' && canProcessReturns && systemSettings.enableReturnsModule !== false && (
                     <TouchableOpacity
                       style={[styles.modalReturnBtn, isSmallMobile && { paddingVertical: 10, paddingHorizontal: 12 }]}
                       onPress={() => {
@@ -1480,6 +1512,31 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 value={customVoidReason}
                 onChangeText={setCustomVoidReason}
               />
+            )}
+
+            {systemSettings.requirePinForVoid && (
+              <View style={{ marginTop: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#4a121a', marginBottom: 4 }}>
+                  Admin / Manager PIN Required *
+                </Text>
+                <TextInput
+                  style={[styles.customReasonInput, { marginTop: 0 }]}
+                  placeholder="Enter Admin or Manager PIN"
+                  placeholderTextColor="#8E8E93"
+                  secureTextEntry
+                  keyboardType="numeric"
+                  value={voidPinInput}
+                  onChangeText={(t) => {
+                    setVoidPinInput(t);
+                    if (voidPinError) setVoidPinError('');
+                  }}
+                />
+                {Boolean(voidPinError) && (
+                  <Text style={{ fontSize: 11.5, color: '#DC2626', fontWeight: '600', marginTop: 4 }}>
+                    {voidPinError}
+                  </Text>
+                )}
+              </View>
             )}
 
             <View style={styles.voidActionRow}>

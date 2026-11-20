@@ -33,13 +33,21 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
-  const { can, canViewRevenue } = useRolePermissions();
+  const {
+    can,
+    canViewRevenue,
+    canAddExpenses,
+    canEditExpenses,
+    canDeleteExpenses,
+  } = useRolePermissions();
 
   const invoices = useRestaurantStore((s) => s.invoices);
   const expenses = useOpsStore((s) => s.expenses);
   const addExpense = useOpsStore((s) => s.addExpense);
+  const updateExpense = useOpsStore((s) => s.updateExpense);
   const deleteExpense = useOpsStore((s) => s.deleteExpense);
 
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
@@ -72,12 +80,56 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
     initialPageSize: 10,
   });
 
+  const handleStartEdit = (exp: (typeof expenses)[number]) => {
+    if (!canEditExpenses) {
+      const err = 'You do not have permission to edit expenses.';
+      if (Platform.OS === 'web') window.alert(err);
+      else Alert.alert('Permission Denied', err);
+      return;
+    }
+    setEditingExpenseId(exp.id);
+    setCategory(exp.category);
+    setAmount(String(exp.amount));
+    setNote(exp.note || '');
+    setMethod(exp.method);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingExpenseId(null);
+    setCategory(EXPENSE_CATEGORIES[0]);
+    setAmount('');
+    setNote('');
+    setMethod('cash');
+  };
+
   const handleAdd = () => {
+    if (editingExpenseId ? !canEditExpenses : !canAddExpenses) {
+      const err = editingExpenseId
+        ? 'You do not have permission to edit expenses.'
+        : 'You do not have permission to add expenses.';
+      if (Platform.OS === 'web') window.alert(err);
+      else Alert.alert('Permission Denied', err);
+      return;
+    }
     const num = parseFloat(amount);
     if (!Number.isFinite(num) || num <= 0) {
       const err = 'Please enter a valid expense amount.';
       if (Platform.OS === 'web') window.alert(err);
       else Alert.alert('Invalid Amount', err);
+      return;
+    }
+
+    if (editingExpenseId) {
+      updateExpense(editingExpenseId, {
+        category,
+        amount: num,
+        note: note.trim() || undefined,
+        method,
+      });
+      handleCancelEdit();
+      const msg = `Expense updated to Rs. ${num.toLocaleString()} (${category}).`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Updated', msg);
       return;
     }
 
@@ -97,13 +149,23 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   };
 
   const handleDelete = (id: string) => {
+    if (!canDeleteExpenses) {
+      const err = 'You do not have permission to delete expenses.';
+      if (Platform.OS === 'web') window.alert(err);
+      else Alert.alert('Permission Denied', err);
+      return;
+    }
+    const performDelete = () => {
+      deleteExpense(id);
+      if (editingExpenseId === id) handleCancelEdit();
+    };
     const confirm = 'Delete this expense entry?';
     if (Platform.OS === 'web') {
-      if (window.confirm(confirm)) deleteExpense(id);
+      if (window.confirm(confirm)) performDelete();
     } else {
       Alert.alert('Delete Expense', confirm, [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => deleteExpense(id) },
+        { text: 'Delete', style: 'destructive', onPress: performDelete },
       ]);
     }
   };
@@ -228,80 +290,99 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
         </View>
       </View>
 
-      {/* Record New Expense Card */}
-      <View
-        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-        style={styles.entryCard}
-      >
-        <Text style={styles.cardTitle}>Record Cash / Online Expense</Text>
-
-        <RoyalDropdown
-          label="Expense Category"
-          placeholder="Select expense category..."
-          options={EXPENSE_CATEGORIES}
-          value={category}
-          onSelect={(cat) => setCategory(cat)}
-          icon="wallet-outline"
-          searchable
-          style={{ marginBottom: 14 }}
-        />
-
-        <View style={styles.amountRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.inputLabel}>Amount (PKR)</Text>
-            <TextInput
-              style={styles.amountInput}
-              placeholder="e.g. 3500"
-              placeholderTextColor={BRAND.muted}
-              keyboardType="numeric"
-              value={amount}
-              onChangeText={setAmount}
-            />
+      {/* Record / Edit Expense Card */}
+      {(canAddExpenses || (editingExpenseId !== null && canEditExpenses)) ? (
+        <View
+          {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+          style={styles.entryCard}
+        >
+          <View style={styles.entryHeaderRow}>
+            <Text style={styles.cardTitle}>
+              {editingExpenseId ? 'Edit Recorded Expense' : 'Record Cash / Online Expense'}
+            </Text>
+            {editingExpenseId !== null && (
+              <TouchableOpacity style={styles.cancelEditBtn} onPress={handleCancelEdit}>
+                <Ionicons name="close-circle-outline" size={15} color={BRAND.burgundy} />
+                <Text style={styles.cancelEditBtnText}>Cancel Edit</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
-          <View style={{ width: 140 }}>
-            <Text style={styles.inputLabel}>Payment Method</Text>
-            <View style={styles.methodToggle}>
-              <TouchableOpacity
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                style={[styles.methodBtn, method === 'cash' && styles.methodBtnActive]}
-                onPress={() => setMethod('cash')}
-              >
-                <Text style={[styles.methodBtnText, method === 'cash' && styles.methodBtnTextActive]}>
-                  Cash
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                style={[styles.methodBtn, method === 'online' && styles.methodBtnActive]}
-                onPress={() => setMethod('online')}
-              >
-                <Text style={[styles.methodBtnText, method === 'online' && styles.methodBtnTextActive]}>
-                  Online
-                </Text>
-              </TouchableOpacity>
+          <RoyalDropdown
+            label="Expense Category"
+            placeholder="Select expense category..."
+            options={EXPENSE_CATEGORIES}
+            value={category}
+            onSelect={(cat) => setCategory(cat)}
+            icon="wallet-outline"
+            searchable
+            style={{ marginBottom: 14 }}
+          />
+
+          <View style={styles.amountRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.inputLabel}>Amount (PKR)</Text>
+              <TextInput
+                style={styles.amountInput}
+                placeholder="e.g. 3500"
+                placeholderTextColor={BRAND.muted}
+                keyboardType="numeric"
+                value={amount}
+                onChangeText={setAmount}
+              />
+            </View>
+
+            <View style={{ width: 140 }}>
+              <Text style={styles.inputLabel}>Payment Method</Text>
+              <View style={styles.methodToggle}>
+                <TouchableOpacity
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  style={[styles.methodBtn, method === 'cash' && styles.methodBtnActive]}
+                  onPress={() => setMethod('cash')}
+                >
+                  <Text style={[styles.methodBtnText, method === 'cash' && styles.methodBtnTextActive]}>
+                    Cash
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                  style={[styles.methodBtn, method === 'online' && styles.methodBtnActive]}
+                  onPress={() => setMethod('online')}
+                >
+                  <Text style={[styles.methodBtnText, method === 'online' && styles.methodBtnTextActive]}>
+                    Online
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
+
+          <Text style={styles.inputLabel}>Description / Supplier / Voucher Note</Text>
+          <TextInput
+            style={styles.noteInput}
+            placeholder="e.g. 5kg Boneless Chicken from wholesale meat supplier..."
+            placeholderTextColor={BRAND.muted}
+            value={note}
+            onChangeText={setNote}
+          />
+
+          <TouchableOpacity
+            style={styles.submitBtn}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+            onPress={handleAdd}
+          >
+            <Ionicons
+              name={editingExpenseId ? 'checkmark-circle-outline' : 'add-circle-outline'}
+              size={18}
+              color="#fff"
+              style={{ marginRight: 6 }}
+            />
+            <Text style={styles.submitBtnText}>
+              {editingExpenseId ? 'Save Expense Changes' : 'Add Expense to Shift Ledger'}
+            </Text>
+          </TouchableOpacity>
         </View>
-
-        <Text style={styles.inputLabel}>Description / Supplier / Voucher Note</Text>
-        <TextInput
-          style={styles.noteInput}
-          placeholder="e.g. 5kg Boneless Chicken from wholesale meat supplier..."
-          placeholderTextColor={BRAND.muted}
-          value={note}
-          onChangeText={setNote}
-        />
-
-        <TouchableOpacity
-          style={styles.submitBtn}
-          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-          onPress={handleAdd}
-        >
-          <Ionicons name="add-circle-outline" size={18} color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.submitBtnText}>Add Expense to Shift Ledger</Text>
-        </TouchableOpacity>
-      </View>
+      ) : null}
 
       {/* Expense History Header */}
       <View style={styles.historyHeader}>
@@ -360,9 +441,20 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
                   Paid via {exp.method.toUpperCase()} • Recorded by {exp.paidBy || 'Staff'} at {formatTime(exp.at)}
                 </Text>
               </View>
-              <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(exp.id)}>
-                <Ionicons name="trash-outline" size={16} color="#D32F2F" />
-              </TouchableOpacity>
+              {(canEditExpenses || canDeleteExpenses) && (
+                <View style={styles.rowActions}>
+                  {canEditExpenses && (
+                    <TouchableOpacity style={styles.editBtn} onPress={() => handleStartEdit(exp)}>
+                      <Ionicons name="pencil-outline" size={16} color={BRAND.burgundy} />
+                    </TouchableOpacity>
+                  )}
+                  {canDeleteExpenses && (
+                    <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(exp.id)}>
+                      <Ionicons name="trash-outline" size={16} color="#D32F2F" />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              )}
             </View>
           ))}
 
@@ -691,11 +783,49 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginTop: 4,
   },
+  rowActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  editBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: BRAND.burgundySoft,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   delBtn: {
     width: 36,
     height: 36,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  entryHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginBottom: 4,
+  },
+  cancelEditBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: BRAND.burgundySoft,
+    marginBottom: 10,
+  },
+  cancelEditBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: BRAND.burgundy,
   },
   emptyCard: {
     padding: 36,

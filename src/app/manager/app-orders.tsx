@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { BRAND } from '../../constants/brand';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 
 export interface AppOrder {
@@ -77,7 +78,8 @@ export default function AppManagerOrdersScreen() {
   const [lastAlertTime, setLastAlertTime] = useState<number>(0);
 
   const staff = useRestaurantStore(state => state.staff) || [];
-  const waiters = staff.filter(s => s.role.toLowerCase() === 'waiter');
+  const waiters = staff.filter(s => (s.role || '').toLowerCase() === 'waiter');
+  const systemSettings = useSettingsStore(state => state.settings);
 
   const getBaseUrl = () => getActiveServerHttpUrl();
 
@@ -266,6 +268,20 @@ export default function AppManagerOrdersScreen() {
         return { bg: '#75757520', text: '#424242', border: '#757575', label: status };
     }
   };
+
+  if (systemSettings.enableOnlineOrders === false) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 24 }]}>
+        <Ionicons name="cloud-offline-outline" size={64} color="#D5A943" style={{ marginBottom: 16 }} />
+        <Text style={{ color: '#FFF', fontSize: 18, fontWeight: '800', textAlign: 'center' }}>
+          Online & App Orders Module Disabled
+        </Text>
+        <Text style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginTop: 8, maxWidth: 440, lineHeight: 18 }}>
+          Online, takeaway & guest table QR ordering is currently turned OFF in System Settings Control Unit.
+        </Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -456,19 +472,22 @@ export default function AppManagerOrdersScreen() {
 
                 {/* Items Summary */}
                 <View style={styles.itemsSummary}>
-                  {order.items.map((it, idx) => (
-                    <View key={`${it.id}-${idx}`} style={styles.itemRow}>
-                      <Text style={styles.itemQty}>{it.qty}x</Text>
-                      <Text style={styles.itemName}>{it.name}</Text>
-                      <Text style={styles.itemPrice}>Rs. {it.totalPrice.toLocaleString()}</Text>
-                    </View>
-                  ))}
+                  {(order.items || []).map((it, idx) => {
+                    const linePrice = it.totalPrice ?? ((it.unitPrice || (it as any).price || 0) * (it.qty || (it as any).quantity || 1));
+                    return (
+                      <View key={`${it.id || idx}-${idx}`} style={styles.itemRow}>
+                        <Text style={styles.itemQty}>{it.qty || (it as any).quantity || 1}x</Text>
+                        <Text style={styles.itemName}>{it.name}</Text>
+                        <Text style={styles.itemPrice}>Rs. {Number(linePrice || 0).toLocaleString()}</Text>
+                      </View>
+                    );
+                  })}
                   <View style={styles.billDivider} />
                   <View style={styles.totalRow}>
                     <Text style={styles.totalLabel}>
-                      Total Bill ({order.paymentMethod.replace(/_/g, ' ').toUpperCase()})
+                      Total Bill ({String(order.paymentMethod || 'cash').replace(/_/g, ' ').toUpperCase()})
                     </Text>
-                    <Text style={styles.grandTotalValue}>Rs. {order.total.toLocaleString()}</Text>
+                    <Text style={styles.grandTotalValue}>Rs. {Number(order.total || 0).toLocaleString()}</Text>
                   </View>
                 </View>
 
@@ -575,7 +594,7 @@ export default function AppManagerOrdersScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>🛵 Dispatch Order to Delivery Rider</Text>
             <Text style={styles.modalSub}>
-              Order #{selectedOrder?.orderNumber} • Destination: {selectedOrder?.customer.address}
+              Order #{selectedOrder?.orderNumber} • Destination: {selectedOrder?.customer?.address || 'Delivery Address'}
             </Text>
 
             <Text style={styles.inputLabel}>Rider Name:</Text>
@@ -625,7 +644,7 @@ export default function AppManagerOrdersScreen() {
           <View style={styles.modalCard}>
             <Text style={styles.modalTitle}>🍽️ Assign Server to Table</Text>
             <Text style={styles.modalSub}>
-              Destination: {selectedOrder?.tableName} ({selectedOrder?.floor || 'Dining Hall'})
+              Destination: {selectedOrder?.tableName || 'Table'} ({selectedOrder?.floor || 'Dining Hall'})
             </Text>
 
             <Text style={styles.inputLabel}>Select Staff / Waiter:</Text>
@@ -679,20 +698,23 @@ export default function AppManagerOrdersScreen() {
             <Text style={styles.modalTitle}>📄 Order #{selectedOrder?.orderNumber} Audit</Text>
             <ScrollView style={{ maxHeight: 350, marginVertical: 10 }}>
               <Text style={styles.detailSectionTitle}>Customer & Ordering Type:</Text>
-              <Text style={styles.detailLine}>Customer: {selectedOrder?.customer.name}</Text>
-              <Text style={styles.detailLine}>Phone: {selectedOrder?.customer.phone}</Text>
-              <Text style={styles.detailLine}>Type: {selectedOrder?.orderType?.toUpperCase()}</Text>
-              <Text style={styles.detailLine}>Target Table / Address: {selectedOrder?.tableName || selectedOrder?.customer.address}</Text>
+              <Text style={styles.detailLine}>Customer: {selectedOrder?.customer?.name || 'Customer'}</Text>
+              <Text style={styles.detailLine}>Phone: {selectedOrder?.customer?.phone || 'N/A'}</Text>
+              <Text style={styles.detailLine}>Type: {String(selectedOrder?.orderType || 'dine_in').toUpperCase()}</Text>
+              <Text style={styles.detailLine}>Target Table / Address: {selectedOrder?.tableName || selectedOrder?.customer?.address || 'N/A'}</Text>
               <Text style={styles.detailLine}>Placed At: {selectedOrder?.createdAt ? new Date(selectedOrder.createdAt).toLocaleTimeString() : 'N/A'}</Text>
               
               <Text style={[styles.detailSectionTitle, { marginTop: 15 }]}>Ordered Dishes:</Text>
-              {selectedOrder?.items.map((it, idx) => (
-                <View key={idx} style={styles.detailItemRow}>
-                  <Text style={styles.detailItemQty}>{it.qty}x</Text>
-                  <Text style={styles.detailItemName}>{it.name} {it.notes ? `(${it.notes})` : ''}</Text>
-                  <Text style={styles.detailItemPrice}>Rs. {it.totalPrice}</Text>
-                </View>
-              ))}
+              {(selectedOrder?.items || []).map((it, idx) => {
+                const lineTotal = it.totalPrice ?? ((it.unitPrice || (it as any).price || 0) * (it.qty || (it as any).quantity || 1));
+                return (
+                  <View key={idx} style={styles.detailItemRow}>
+                    <Text style={styles.detailItemQty}>{it.qty || (it as any).quantity || 1}x</Text>
+                    <Text style={styles.detailItemName}>{it.name} {it.notes ? `(${it.notes})` : ''}</Text>
+                    <Text style={styles.detailItemPrice}>Rs. {Number(lineTotal || 0).toLocaleString()}</Text>
+                  </View>
+                );
+              })}
             </ScrollView>
 
             <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setModalAction(null)}>

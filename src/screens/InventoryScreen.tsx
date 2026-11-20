@@ -32,6 +32,7 @@ import { BRAND } from '../constants/brand';
 import { money, formatTime, formatDay, toWhatsAppNumber } from '../utils/format';
 import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
@@ -54,8 +55,14 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
-  const { can } = useRolePermissions();
+  const {
+    can,
+    canAddInventory,
+    canEditInventory,
+    canDeleteInventory,
+  } = useRolePermissions();
 
+  const systemSettings = useSettingsStore((s) => s.settings);
   const inventory = useOpsStore((s) => s.inventory);
   const stockMovements = useOpsStore((s) => s.stockMovements);
   const suppliers = useOpsStore((s) => s.suppliers);
@@ -163,11 +170,14 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     let warningExpiryCount = 0;
     let totalShortageValue = 0;
 
+    const fallbackThresh = systemSettings.lowStockAlertThreshold || 10;
+
     inventory.forEach((item) => {
       const val = (item.stock || 0) * (item.costPerUnit || 0);
       totalValuation += val;
 
-      const level = getStockLevel(item);
+      const effThresh = item.threshold ?? fallbackThresh;
+      const level = getStockLevel({ ...item, threshold: effThresh });
       if (level === 'out') outCount++;
       else if (level === 'low' || level === 'critical') lowCount++;
 
@@ -176,8 +186,8 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       else if (exp.status === 'critical') criticalExpiryCount++;
       else if (exp.status === 'warning') warningExpiryCount++;
 
-      if (item.stock < item.threshold) {
-        const shortage = Math.max(0, item.threshold * 1.5 - item.stock);
+      if (item.stock < effThresh) {
+        const shortage = Math.max(0, effThresh * 1.5 - item.stock);
         totalShortageValue += shortage * (item.costPerUnit || 0);
       }
     });
@@ -192,7 +202,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       warningExpiryCount,
       totalShortageValue,
     };
-  }, [inventory]);
+  }, [inventory, systemSettings.lowStockAlertThreshold]);
 
   // Filtered Raw Materials
   const filteredInventory = useMemo(() => {
@@ -246,9 +256,11 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   // Low Stock & Shortage Reorder Items
   const lowStockItems = useMemo(() => {
+    const fallbackThresh = systemSettings.lowStockAlertThreshold || 10;
     return inventory
       .filter((item) => {
-        const level = getStockLevel(item);
+        const effThresh = item.threshold ?? fallbackThresh;
+        const level = getStockLevel({ ...item, threshold: effThresh });
         const matchSearch =
           !searchQuery ||
           item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -257,12 +269,13 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
         return (level === 'low' || level === 'critical' || level === 'out') && matchSearch;
       })
       .map((item) => {
-        const targetStock = Math.ceil(item.threshold * 1.5);
+        const effThresh = item.threshold ?? fallbackThresh;
+        const targetStock = Math.ceil(effThresh * 1.5);
         const shortage = Math.max(1, targetStock - item.stock);
         const estCost = shortage * (item.costPerUnit || 0);
         return { item, targetStock, shortage, estCost };
       });
-  }, [inventory, searchQuery]);
+  }, [inventory, searchQuery, systemSettings.lowStockAlertThreshold]);
 
   // Inward Receiving Logs (Movements of type 'receive')
   const receivingLogs = useMemo(() => {
@@ -329,6 +342,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   // ---------------- Handlers ----------------
 
   const handleOpenAdd = () => {
+    if (!canAddInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to add inventory items.');
+      return;
+    }
     const nextCodeNum = inventory.length + 1;
     setFormItemCode(`SKU-RM-${String(nextCodeNum).padStart(3, '0')}`);
     setFormName('');
@@ -337,7 +354,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setFormLocation(STORAGE_LOCATIONS[0]);
     setFormUnit('kg');
     setFormStock('');
-    setFormThreshold('10');
+    setFormThreshold(String(systemSettings.lowStockAlertThreshold || 10));
     setFormCost('');
     setFormSupplier('');
     setFormSupplierPhone('');
@@ -348,6 +365,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleOpenEdit = (item: InventoryItem) => {
+    if (!canEditInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to edit inventory items.');
+      return;
+    }
     setSelectedItem(item);
     setFormItemCode(item.itemCode || '');
     setFormName(item.name);
@@ -372,6 +393,11 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleOpenMovement = (item: InventoryItem, defaultType: StockMovementType = 'receive') => {
+    const allowed = defaultType === 'receive' ? canAddInventory || canEditInventory : canEditInventory;
+    if (!allowed) {
+      alertMsg('Permission Denied', 'You do not have permission to adjust inventory stock.');
+      return;
+    }
     setSelectedItem(item);
     setMovementType(defaultType);
     setMovementQty('');
@@ -380,6 +406,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleOpenReceiveModal = (presetItem?: InventoryItem) => {
+    if (!canAddInventory && !canEditInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to receive inventory stock.');
+      return;
+    }
     const item = presetItem || inventory[0];
     if (item) {
       setRecItemId(item.id);
@@ -397,12 +427,18 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleSaveAdd = () => {
+    if (!canAddInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to add inventory items.');
+      return;
+    }
     if (!formName.trim()) {
       alertMsg('Missing Name', 'Please enter the item name.');
       return;
     }
     const stockNum = parseFloat(formStock) || 0;
-    const threshNum = parseFloat(formThreshold) || 5;
+    const defaultThresh = systemSettings.lowStockAlertThreshold || 10;
+    const parsedThresh = parseFloat(formThreshold);
+    const threshNum = Number.isFinite(parsedThresh) && parsedThresh > 0 ? parsedThresh : defaultThresh;
     const costNum = parseFloat(formCost) || 0;
     const expiryDaysNum = parseInt(formExpiryDays, 10);
 
@@ -429,6 +465,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleSaveEdit = () => {
+    if (!canEditInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to edit inventory items.');
+      return;
+    }
     if (!selectedItem) return;
     if (!formName.trim()) {
       alertMsg('Missing Name', 'Please enter the item name.');
@@ -436,7 +476,8 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     }
 
     const stockNum = parseFloat(formStock) || 0;
-    const threshNum = parseFloat(formThreshold) || 5;
+    const parsedEditThresh = parseFloat(formThreshold);
+    const threshNum = Number.isFinite(parsedEditThresh) && parsedEditThresh > 0 ? parsedEditThresh : (systemSettings.lowStockAlertThreshold || 10);
     const costNum = parseFloat(formCost) || 0;
     const expiryDaysNum = parseInt(formExpiryDays, 10);
 
@@ -463,6 +504,11 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleSaveMovement = () => {
+    const allowed = movementType === 'receive' ? canAddInventory || canEditInventory : canEditInventory;
+    if (!allowed) {
+      alertMsg('Permission Denied', 'You do not have permission to adjust inventory stock.');
+      return;
+    }
     if (!selectedItem) return;
     const qtyNum = parseFloat(movementQty);
     if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
@@ -494,6 +540,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   // Submit Goods Receiving & Invoicing
   const handleSaveReceive = () => {
+    if (!canAddInventory && !canEditInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to receive inventory stock.');
+      return;
+    }
     const item = inventory.find((i) => i.id === recItemId);
     if (!item) {
       alertMsg('Select Item', 'Please select an item to receive.');
@@ -552,6 +602,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   // Dispose Expired / Spoiled Batch as Wastage
   const handleDisposeWastage = (item: InventoryItem) => {
+    if (!canEditInventory && !canDeleteInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to dispose inventory wastage.');
+      return;
+    }
     const confirmMsg = `Dispose entire or partial stock of "${item.name}" (${item.stock} ${item.unit}) as Spoilage / Wastage?`;
     const executeDispose = () => {
       recordStockMovement(
@@ -605,6 +659,10 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
   };
 
   const handleDelete = (item: InventoryItem) => {
+    if (!canDeleteInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to delete inventory items.');
+      return;
+    }
     const confirmText = `Are you sure you want to delete "${item.name}" from inventory?`;
     const executeDelete = () => {
       deleteInventoryItem(item.id);
@@ -623,6 +681,10 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
   };
 
   const handleAdjustDishStock = (dish: MenuItem, delta: number) => {
+    if (!canEditInventory) {
+      alertMsg('Permission Denied', 'You do not have permission to adjust inventory stock.');
+      return;
+    }
     const current = dish.stockQty || 0;
     const next = Math.max(0, current + delta);
     updateMenuItem(dish.id, {
@@ -789,19 +851,23 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>Suppliers</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: BRAND.success }]}
-            onPress={() => handleOpenReceiveModal()}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="receipt-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
-            <Text style={styles.addBtnText}>+ Receive (GRN)</Text>
-          </TouchableOpacity>
+          {(canAddInventory || canEditInventory) && (
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: BRAND.success }]}
+              onPress={() => handleOpenReceiveModal()}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="receipt-outline" size={15} color="#FFFFFF" style={{ marginRight: 4 }} />
+              <Text style={styles.addBtnText}>+ Receive (GRN)</Text>
+            </TouchableOpacity>
+          )}
 
-          <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
-            <Ionicons name="add" size={18} color="#FFFFFF" />
-            <Text style={styles.addBtnText}>+ Add SKU</Text>
-          </TouchableOpacity>
+          {canAddInventory && (
+            <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd} activeOpacity={0.85}>
+              <Ionicons name="add" size={18} color="#FFFFFF" />
+              <Text style={styles.addBtnText}>+ Add SKU</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </View>
 
@@ -1173,10 +1239,12 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               <Ionicons name="cube-outline" size={48} color={BRAND.muted} />
               <Text style={styles.emptyTitle}>No Inventory Items Found</Text>
               <Text style={styles.emptyDesc}>Try adjusting your search query or add a new ingredient.</Text>
-              <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
-                <Ionicons name="add" size={18} color="#FFF" />
-                <Text style={styles.addBtnText}>Add First Item</Text>
-              </TouchableOpacity>
+              {canAddInventory && (
+                <TouchableOpacity style={styles.addBtn} onPress={handleOpenAdd}>
+                  <Ionicons name="add" size={18} color="#FFF" />
+                  <Text style={styles.addBtnText}>Add First Item</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <>
@@ -1305,45 +1373,55 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
                     {/* Action Buttons */}
                     <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        style={styles.quickMovementBtn}
-                        onPress={() => handleOpenReceiveModal(item)}
-                      >
-                        <Ionicons name="arrow-down-circle" size={16} color={BRAND.success} />
-                        <Text style={[styles.quickMovementBtnText, { color: BRAND.success }]}>Receive</Text>
-                      </TouchableOpacity>
+                      {(canAddInventory || canEditInventory) && (
+                        <TouchableOpacity
+                          style={styles.quickMovementBtn}
+                          onPress={() => handleOpenReceiveModal(item)}
+                        >
+                          <Ionicons name="arrow-down-circle" size={16} color={BRAND.success} />
+                          <Text style={[styles.quickMovementBtnText, { color: BRAND.success }]}>Receive</Text>
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.quickUsageBtn}
-                        onPress={() => handleOpenMovement(item, 'usage')}
-                      >
-                        <Ionicons name="restaurant" size={15} color={BRAND.info} />
-                        <Text style={styles.quickUsageBtnText}>Usage (-)</Text>
-                      </TouchableOpacity>
+                      {canEditInventory && (
+                        <TouchableOpacity
+                          style={styles.quickUsageBtn}
+                          onPress={() => handleOpenMovement(item, 'usage')}
+                        >
+                          <Ionicons name="restaurant" size={15} color={BRAND.info} />
+                          <Text style={styles.quickUsageBtnText}>Usage (-)</Text>
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={[styles.iconActionBtn, { backgroundColor: '#F3F4F6' }]}
-                        onPress={() => handleOpenMovement(item, 'adjust')}
-                        accessibilityLabel="Adjust Stock"
-                      >
-                        <Ionicons name="options-outline" size={16} color={BRAND.ink} />
-                      </TouchableOpacity>
+                      {canEditInventory && (
+                        <TouchableOpacity
+                          style={[styles.iconActionBtn, { backgroundColor: '#F3F4F6' }]}
+                          onPress={() => handleOpenMovement(item, 'adjust')}
+                          accessibilityLabel="Adjust Stock"
+                        >
+                          <Ionicons name="options-outline" size={16} color={BRAND.ink} />
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.iconActionBtn}
-                        onPress={() => handleOpenEdit(item)}
-                        accessibilityLabel="Edit Item"
-                      >
-                        <Ionicons name="pencil-outline" size={16} color={BRAND.ink} />
-                      </TouchableOpacity>
+                      {canEditInventory && (
+                        <TouchableOpacity
+                          style={styles.iconActionBtn}
+                          onPress={() => handleOpenEdit(item)}
+                          accessibilityLabel="Edit Item"
+                        >
+                          <Ionicons name="pencil-outline" size={16} color={BRAND.ink} />
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={[styles.iconActionBtn, { backgroundColor: BRAND.dangerSoft }]}
-                        onPress={() => handleDelete(item)}
-                        accessibilityLabel="Delete Item"
-                      >
-                        <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
-                      </TouchableOpacity>
+                      {canDeleteInventory && (
+                        <TouchableOpacity
+                          style={[styles.iconActionBtn, { backgroundColor: BRAND.dangerSoft }]}
+                          onPress={() => handleDelete(item)}
+                          accessibilityLabel="Delete Item"
+                        >
+                          <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -1376,13 +1454,15 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 Log vendor deliveries, inward invoice numbers, batch shelf-life, and print Goods Receipt Notes (GRN).
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.addBtn, { backgroundColor: BRAND.success }]}
-              onPress={() => handleOpenReceiveModal()}
-            >
-              <Ionicons name="add" size={18} color="#FFF" />
-              <Text style={styles.addBtnText}>Receive New Stock</Text>
-            </TouchableOpacity>
+            {(canAddInventory || canEditInventory) && (
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: BRAND.success }]}
+                onPress={() => handleOpenReceiveModal()}
+              >
+                <Ionicons name="add" size={18} color="#FFF" />
+                <Text style={styles.addBtnText}>Receive New Stock</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {receivingLogs.length === 0 ? (
@@ -1646,21 +1726,25 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
                     {/* Expiry Actions */}
                     <View style={styles.cardActionsRow}>
-                      <TouchableOpacity
-                        style={[styles.quickUsageBtn, { backgroundColor: '#EDE9FE', borderColor: '#8B5CF6' }]}
-                        onPress={() => handleOpenMovement(item, 'usage')}
-                      >
-                        <Ionicons name="restaurant" size={15} color="#6D28D9" />
-                        <Text style={[styles.quickUsageBtnText, { color: '#6D28D9' }]}>Use Immediately</Text>
-                      </TouchableOpacity>
+                      {canEditInventory && (
+                        <TouchableOpacity
+                          style={[styles.quickUsageBtn, { backgroundColor: '#EDE9FE', borderColor: '#8B5CF6' }]}
+                          onPress={() => handleOpenMovement(item, 'usage')}
+                        >
+                          <Ionicons name="restaurant" size={15} color="#6D28D9" />
+                          <Text style={[styles.quickUsageBtnText, { color: '#6D28D9' }]}>Use Immediately</Text>
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={[styles.quickMovementBtn, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
-                        onPress={() => handleDisposeWastage(item)}
-                      >
-                        <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                        <Text style={[styles.quickMovementBtnText, { color: '#DC2626' }]}>Dispose as Wastage</Text>
-                      </TouchableOpacity>
+                      {(canEditInventory || canDeleteInventory) && (
+                        <TouchableOpacity
+                          style={[styles.quickMovementBtn, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
+                          onPress={() => handleDisposeWastage(item)}
+                        >
+                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                          <Text style={[styles.quickMovementBtnText, { color: '#DC2626' }]}>Dispose as Wastage</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -1795,13 +1879,15 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                           <Text style={styles.reorderWaBtnText}>WhatsApp Reorder</Text>
                         </TouchableOpacity>
 
-                        <TouchableOpacity
-                          style={styles.reorderReceiveBtn}
-                          onPress={() => handleOpenReceiveModal(item)}
-                        >
-                          <Ionicons name="add-circle-outline" size={15} color="#FFF" style={{ marginRight: 4 }} />
-                          <Text style={styles.reorderReceiveBtnText}>Receive Now</Text>
-                        </TouchableOpacity>
+                        {(canAddInventory || canEditInventory) && (
+                          <TouchableOpacity
+                            style={styles.reorderReceiveBtn}
+                            onPress={() => handleOpenReceiveModal(item)}
+                          >
+                            <Ionicons name="add-circle-outline" size={15} color="#FFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.reorderReceiveBtnText}>Receive Now</Text>
+                          </TouchableOpacity>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -1976,28 +2062,30 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                       </Text>
                     </View>
 
-                    <View style={styles.stepperRow}>
-                      <TouchableOpacity
-                        style={styles.stepperBtn}
-                        onPress={() => handleAdjustDishStock(dish, -1)}
-                      >
-                        <Ionicons name="remove" size={18} color={BRAND.ink} />
-                      </TouchableOpacity>
+                    {canEditInventory && (
+                      <View style={styles.stepperRow}>
+                        <TouchableOpacity
+                          style={styles.stepperBtn}
+                          onPress={() => handleAdjustDishStock(dish, -1)}
+                        >
+                          <Ionicons name="remove" size={18} color={BRAND.ink} />
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.stepperBtn, { backgroundColor: BRAND.burgundy }]}
-                        onPress={() => handleAdjustDishStock(dish, 1)}
-                      >
-                        <Ionicons name="add" size={18} color="#FFF" />
-                      </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.stepperBtn, { backgroundColor: BRAND.burgundy }]}
+                          onPress={() => handleAdjustDishStock(dish, 1)}
+                        >
+                          <Ionicons name="add" size={18} color="#FFF" />
+                        </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={[styles.stepperBtn, { backgroundColor: BRAND.goldSoft }]}
-                        onPress={() => handleAdjustDishStock(dish, 5)}
-                      >
-                        <Text style={{ fontWeight: '800', color: BRAND.burgundy, fontSize: 13 }}>+5</Text>
-                      </TouchableOpacity>
-                    </View>
+                        <TouchableOpacity
+                          style={[styles.stepperBtn, { backgroundColor: BRAND.goldSoft }]}
+                          onPress={() => handleAdjustDishStock(dish, 5)}
+                        >
+                          <Text style={{ fontWeight: '800', color: BRAND.burgundy, fontSize: 13 }}>+5</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
                   </View>
                 </View>
               );

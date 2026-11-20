@@ -19,39 +19,7 @@ import { printInvoiceReceipt } from '../../components/Invoice';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
 
-function playFloorAttentionChime() {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    try {
-      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-      if (AudioCtx) {
-        const ctx = new AudioCtx();
-        const now = ctx.currentTime;
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, now);
-        osc1.frequency.exponentialRampToValueAtTime(1320, now + 0.15);
-        gain1.gain.setValueAtTime(0.35, now);
-        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.45);
-
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(1760, now + 0.18);
-        gain2.gain.setValueAtTime(0.25, now + 0.18);
-        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.18);
-        osc2.stop(now + 0.65);
-      }
-    } catch (_) {}
-  }
-}
+// Note: Pending digital menu order audio & modal popups are handled universally by FloorManagerNotificationHost in root _layout.tsx.
 
 export default function FloorManagerScreen() {
   const router = useRouter();
@@ -412,17 +380,6 @@ export default function FloorManagerScreen() {
     });
   }, [onlineOrders, selectedFloor, tables]);
 
-  // Urgent recurring chime while pending digital menu orders await confirmation
-  useEffect(() => {
-    if (pendingFloorOrders.length === 0) return;
-
-    playFloorAttentionChime();
-    const intervalId = setInterval(() => {
-      playFloorAttentionChime();
-    }, 3800);
-
-    return () => clearInterval(intervalId);
-  }, [pendingFloorOrders.length]);
 
   // Floor KPIs
   const kpis = useMemo(() => {
@@ -1515,70 +1472,7 @@ export default function FloorManagerScreen() {
         </Modal>
       )}
 
-      {/* 10. URGENT POPUP MODAL: NEW DIGITAL MENU ORDER PENDING CONFIRMATION */}
-      {pendingFloorOrders.length > 0 && (
-        <Modal transparent animationType="fade" visible={pendingFloorOrders.length > 0}>
-          <View style={styles.modalBackdrop}>
-            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 500) : 500, borderColor: '#EF4444', borderWidth: 2, maxHeight: height - 40 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <MaterialCommunityIcons name="bell-ring" size={24} color="#EF4444" />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.modalTitle, { color: '#EF4444', fontSize: isSmallMobile ? 14 : 16 }]}>
-                    🚨 NEW DIGITAL MENU ORDER
-                  </Text>
-                  <Text style={styles.modalSubtitle} numberOfLines={1}>Requires Confirmation to Dispatch KOT</Text>
-                </View>
-              </View>
 
-              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={{ fontSize: isSmallMobile ? 16 : 18, fontWeight: '800', color: '#B45309' }}>
-                    {pendingFloorOrders[0].tableName || pendingFloorOrders[0].tableId}
-                  </Text>
-                  <Text style={{ fontSize: isSmallMobile ? 13 : 14, fontWeight: '700', color: '#059669' }}>
-                    Rs. {Number(pendingFloorOrders[0].total || 0).toLocaleString()}
-                  </Text>
-                </View>
-                <Text style={{ color: '#334155', fontSize: 13, marginBottom: 4 }} numberOfLines={1}>
-                  Customer: <Text style={{ fontWeight: '700' }}>{pendingFloorOrders[0].customer?.name || 'Guest'}</Text>
-                  {pendingFloorOrders[0].customer?.phone ? ` • ${pendingFloorOrders[0].customer.phone}` : ''}
-                </Text>
-                <Text style={{ color: '#64748B', fontSize: 11 }} numberOfLines={1}>
-                  Floor: {selectedFloor} • Placed {new Date(pendingFloorOrders[0].createdAt || Date.now()).toLocaleTimeString()}
-                </Text>
-              </View>
-
-              <ScrollView style={{ maxHeight: Math.min(height * 0.35, 180), marginBottom: 14 }} showsVerticalScrollIndicator={false}>
-                {pendingFloorOrders[0].items?.map((it, idx) => (
-                  <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
-                    <Text style={{ color: '#0F172A', fontSize: 13, flex: 1 }} numberOfLines={1}>
-                      {it.qty || 1}x {it.name}
-                    </Text>
-                    <Text style={{ color: '#B45309', fontSize: 13, fontWeight: '600' }}>
-                      Rs. {(Number(it.price || 0) * Number(it.qty || 1)).toLocaleString()}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-
-              <View style={styles.modalActions}>
-                <TouchableOpacity
-                  style={[styles.modalBtnCancel, { flex: 1 }]}
-                  onPress={() => rejectOnlineOrder(pendingFloorOrders[0].id, 'Declined by Floor Manager')}
-                >
-                  <Text style={styles.modalBtnCancelText}>✕ Reject</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.modalBtnSave, { flex: 2, backgroundColor: '#059669' }]}
-                  onPress={() => confirmOnlineOrder(pendingFloorOrders[0].id, floorWaiters[0]?.name || user?.name || 'Floor Manager')}
-                >
-                  <Text style={[styles.modalBtnSaveText, { fontWeight: '800' }]}>✓ Confirm KOT</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
     </View>
   );
 }

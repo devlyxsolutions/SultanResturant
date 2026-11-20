@@ -106,7 +106,12 @@ export default function DamageControlScreen({
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
-  const { can } = useRolePermissions();
+  const {
+    can,
+    canAddDamages,
+    canEditDamages,
+    canDeleteDamages,
+  } = useRolePermissions();
 
   const damageRecords = useOpsStore((s) => s.damageRecords || []);
   const assets = useOpsStore((s) => s.assets || []);
@@ -273,6 +278,10 @@ export default function DamageControlScreen({
   });
 
   const openReportModal = (preset?: typeof QUICK_PRESETS[0]) => {
+    if (!canAddDamages) {
+      alertMsg('Permission Denied', 'You do not have permission to report damage incidents.');
+      return;
+    }
     setSelectedAssetId(null);
     setSelectedAssetCode(null);
     setEntryMode('asset');
@@ -300,6 +309,10 @@ export default function DamageControlScreen({
   };
 
   const handleSaveReport = () => {
+    if (!canAddDamages) {
+      alertMsg('Permission Denied', 'You do not have permission to report damage incidents.');
+      return;
+    }
     if (!formItemName.trim()) {
       alertMsg('Missing Information', 'Please select or enter the damaged item name.');
       return;
@@ -347,6 +360,10 @@ export default function DamageControlScreen({
   };
 
   const openResolveModal = (record: DamageRecord) => {
+    if (!canEditDamages) {
+      alertMsg('Permission Denied', 'You do not have permission to edit or resolve damage records.');
+      return;
+    }
     setResolvingRecord(record);
     setSettleAction(record.actionTaken);
     setSettleStatus(record.status);
@@ -355,6 +372,10 @@ export default function DamageControlScreen({
   };
 
   const handleSaveResolution = () => {
+    if (!canEditDamages) {
+      alertMsg('Permission Denied', 'You do not have permission to edit or resolve damage records.');
+      return;
+    }
     if (!resolvingRecord) return;
     const recovered = parseFloat(settleAmount) || 0;
 
@@ -373,6 +394,10 @@ export default function DamageControlScreen({
   };
 
   const handleDelete = (record: DamageRecord) => {
+    if (!canDeleteDamages) {
+      alertMsg('Permission Denied', 'You do not have permission to delete damage records.');
+      return;
+    }
     const confirm = () => {
       deleteDamageRecord(record.id);
       alertMsg('Incident Deleted', `[${record.incidentCode}] record removed.`);
@@ -395,12 +420,12 @@ export default function DamageControlScreen({
     else Alert.alert(title, msg);
   }
 
-  if (user?.role !== 'admin' && !can('canAccessInventory')) {
+  if (user?.role !== 'admin' && !can('canAccessDamages') && !can('canAccessInventory')) {
     return (
       <PermissionDeniedScreen
         moduleName="Damage & Breakage Control"
         urduModuleName="نقصان اور ٹوٹ پھوٹ کا کنٹرول"
-        requiredPermission="canAccessInventory"
+        requiredPermission="canAccessDamages"
         backRoute={backRoute}
       />
     );
@@ -433,15 +458,17 @@ export default function DamageControlScreen({
           </View>
         </View>
 
-        <TouchableOpacity
-          style={[styles.reportBtn, isMobile && { width: '100%', justifyContent: 'center' }]}
-          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-          onPress={() => openReportModal()}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="alert-circle" size={18} color="#FFFFFF" />
-          <Text style={styles.reportBtnText}>+ Report Breakage</Text>
-        </TouchableOpacity>
+        {canAddDamages && (
+          <TouchableOpacity
+            style={[styles.reportBtn, isMobile && { width: '100%', justifyContent: 'center' }]}
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+            onPress={() => openReportModal()}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="alert-circle" size={18} color="#FFFFFF" />
+            <Text style={styles.reportBtnText}>+ Report Breakage</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -754,22 +781,26 @@ export default function DamageControlScreen({
                       <Text style={styles.actionBtnOutlineText}>Breakage Slip</Text>
                     </TouchableOpacity>
 
-                    <TouchableOpacity
-                      style={styles.actionBtnOutline}
-                      onPress={() => openResolveModal(rec)}
-                    >
-                      <Ionicons name="checkbox-outline" size={14} color={LIGHT.emerald} />
-                      <Text style={[styles.actionBtnOutlineText, { color: LIGHT.emerald }]}>
-                        Settle / Resolve
-                      </Text>
-                    </TouchableOpacity>
+                    {canEditDamages && (
+                      <TouchableOpacity
+                        style={styles.actionBtnOutline}
+                        onPress={() => openResolveModal(rec)}
+                      >
+                        <Ionicons name="checkbox-outline" size={14} color={LIGHT.emerald} />
+                        <Text style={[styles.actionBtnOutlineText, { color: LIGHT.emerald }]}>
+                          Settle / Resolve
+                        </Text>
+                      </TouchableOpacity>
+                    )}
 
-                    <TouchableOpacity
-                      style={styles.actionBtnDanger}
-                      onPress={() => handleDelete(rec)}
-                    >
-                      <Ionicons name="trash-outline" size={14} color={LIGHT.rose} />
-                    </TouchableOpacity>
+                    {canDeleteDamages && (
+                      <TouchableOpacity
+                        style={styles.actionBtnDanger}
+                        onPress={() => handleDelete(rec)}
+                      >
+                        <Ionicons name="trash-outline" size={14} color={LIGHT.rose} />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );

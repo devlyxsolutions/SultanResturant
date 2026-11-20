@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useRestaurantStore, useAuthStore } from '../../store';
 import { Ticket } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import {
   sortFloors,
   getFloorMeta,
@@ -76,6 +77,7 @@ export default function OrderTakerScreen() {
   const clearFoodReadyAlert = useRestaurantStore((state) => state.clearFoodReadyAlert);
 
   const user = useAuthStore((state) => state.user);
+  const systemSettings = useSettingsStore((state) => state.settings);
 
   // 1. Reactively lookup active staff member so floor assignment changes by Admin reflect immediately
   const currentStaff = staff.find(
@@ -97,6 +99,7 @@ export default function OrderTakerScreen() {
       : ['All Floors'];
 
   const isAllFloors =
+    systemSettings.enableWaiterFloorLock === false ||
     assignedZonesList.includes('All Floors') ||
     assignedZonesList.length === 0;
 
@@ -269,9 +272,12 @@ export default function OrderTakerScreen() {
       ? selectedFloor
       : 'All';
 
-  // 3. Scoped tables by Floor authorization & selected floor tab
+  // 3. Scoped tables by Floor authorization, seating zone toggles & selected floor tab
   const scopedByFloorTables = useMemo(() => {
     return tables.filter((t) => {
+      const tType = getTableSeatingType(t);
+      if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+      if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
       const tableFloor = getTableFloor(t);
       if (!isAllFloors && !authorizedFloors.some((af) => af.toLowerCase() === tableFloor.toLowerCase())) {
         return false;
@@ -281,7 +287,7 @@ export default function OrderTakerScreen() {
       }
       return true;
     });
-  }, [tables, isAllFloors, authorizedFloors, activeFloor]);
+  }, [tables, isAllFloors, authorizedFloors, activeFloor, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // 4. Zone Breakdown Summary (how many Tables, Couches, Majlis Cabins on this floor)
   const zoneSummary = useMemo(() => {
@@ -1059,7 +1065,11 @@ export default function OrderTakerScreen() {
             </View>
           </TouchableOpacity>
 
-          {SEATING_ZONE_TYPES.map((type) => {
+          {SEATING_ZONE_TYPES.filter((type) => {
+            if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+            if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+            return true;
+          }).map((type) => {
             const meta = SEATING_ZONES[type];
             const isActive = seatingTypeFilter === type;
             const count = scopedByFloorTables.filter((t) => getTableSeatingType(t) === type).length;

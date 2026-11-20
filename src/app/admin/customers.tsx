@@ -25,6 +25,7 @@ import { getBaseFeedbackUrl } from '../../utils/qrCode';
 import { printInvoiceReceipt } from '../../components/Invoice';
 import PaginationControl from '../../components/PaginationControl';
 import { usePagination } from '../../hooks/usePagination';
+import { useRolePermissions } from '../../store/roleStore';
 
 /**
  * Normalizes phone numbers to standard international format (e.g. 03001234567 -> 923001234567)
@@ -45,6 +46,8 @@ export default function AdminCustomers() {
   const { width } = useWindowDimensions();
   const isMobile = width < 850;
   const isSmallMobile = width < 480;
+
+  const { canAddCustomers, canEditCustomers, canDeleteCustomers } = useRolePermissions();
 
   const customers = useRestaurantStore((state) => state.customers);
   const invoices = useRestaurantStore((state) => state.invoices);
@@ -202,7 +205,16 @@ export default function AdminCustomers() {
   };
 
   // Add / Edit Handlers
+  const showPermAlert = (msg: string) => {
+    if (Platform.OS === 'web') window.alert(msg);
+    else Alert.alert('Permission Denied', msg);
+  };
+
   const openAddModal = () => {
+    if (!canAddCustomers) {
+      showPermAlert('You do not have permission to add customers.');
+      return;
+    }
     setEditingCustomer(null);
     setFormName('');
     setFormPhone('');
@@ -215,6 +227,10 @@ export default function AdminCustomers() {
   };
 
   const openEditModal = (cust: Customer) => {
+    if (!canEditCustomers) {
+      showPermAlert('You do not have permission to edit customers.');
+      return;
+    }
     setEditingCustomer(cust);
     setFormName(cust.name);
     setFormPhone(cust.phone);
@@ -227,6 +243,14 @@ export default function AdminCustomers() {
   };
 
   const handleSaveCustomer = () => {
+    if (editingCustomer ? !canEditCustomers : !canAddCustomers) {
+      showPermAlert(
+        editingCustomer
+          ? 'You do not have permission to edit customers.'
+          : 'You do not have permission to add customers.'
+      );
+      return;
+    }
     if (!formName.trim() || !formPhone.trim()) {
       const msg = 'Customer name and mobile number are required.';
       if (Platform.OS === 'web') window.alert(msg);
@@ -277,6 +301,10 @@ export default function AdminCustomers() {
   };
 
   const handleDelete = (cust: Customer) => {
+    if (!canDeleteCustomers) {
+      showPermAlert('You do not have permission to delete customers.');
+      return;
+    }
     const doDelete = () => {
       deleteCustomer(cust.id);
       if (dossierCustomer?.id === cust.id) {
@@ -428,15 +456,17 @@ export default function AdminCustomers() {
             <Text style={styles.exportBtnText}>{isSmallMobile ? 'Export' : 'Export CSV'}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.addButton, isSmallMobile && { flex: 1 }]}
-            onPress={openAddModal}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Register a New Customer Record' } as any) : {})}
-          >
-            <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
-            <Text style={styles.addButtonText}>{isSmallMobile ? 'New Customer' : 'Register New Customer'}</Text>
-          </TouchableOpacity>
+          {canAddCustomers && (
+            <TouchableOpacity
+              style={[styles.addButton, isSmallMobile && { flex: 1 }]}
+              onPress={openAddModal}
+              activeOpacity={0.8}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Register a New Customer Record' } as any) : {})}
+            >
+              <Ionicons name="person-add" size={16} color="#140306" style={{ marginRight: 6 }} />
+              <Text style={styles.addButtonText}>{isSmallMobile ? 'New Customer' : 'Register New Customer'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -613,10 +643,12 @@ export default function AdminCustomers() {
             <Text style={styles.emptySubtext}>
               No guests match your search criteria. Try a different query or register a new customer.
             </Text>
-            <TouchableOpacity style={styles.emptyActionBtn} onPress={openAddModal}>
-              <Ionicons name="person-add" size={15} color="#140306" style={{ marginRight: 6 }} />
-              <Text style={styles.emptyActionBtnText}>Register Customer</Text>
-            </TouchableOpacity>
+            {canAddCustomers && (
+              <TouchableOpacity style={styles.emptyActionBtn} onPress={openAddModal}>
+                <Ionicons name="person-add" size={15} color="#140306" style={{ marginRight: 6 }} />
+                <Text style={styles.emptyActionBtnText}>Register Customer</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
           <View style={styles.customersList}>
@@ -724,21 +756,25 @@ export default function AdminCustomers() {
                         <Text style={styles.actionBtnWhatsAppText}>WhatsApp</Text>
                       </TouchableOpacity>
 
-                      <TouchableOpacity
-                        style={styles.actionBtnEdit}
-                        onPress={() => openEditModal(cust)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="pencil" size={13} color="#475569" />
-                      </TouchableOpacity>
+                      {canEditCustomers && (
+                        <TouchableOpacity
+                          style={styles.actionBtnEdit}
+                          onPress={() => openEditModal(cust)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="pencil" size={13} color="#475569" />
+                        </TouchableOpacity>
+                      )}
 
-                      <TouchableOpacity
-                        style={styles.actionBtnDelete}
-                        onPress={() => handleDelete(cust)}
-                        activeOpacity={0.8}
-                      >
-                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                      </TouchableOpacity>
+                      {canDeleteCustomers && (
+                        <TouchableOpacity
+                          style={styles.actionBtnDelete}
+                          onPress={() => handleDelete(cust)}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -845,24 +881,28 @@ export default function AdminCustomers() {
                     </TouchableOpacity>
 
                     {/* Edit Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnEdit}
-                      onPress={() => openEditModal(cust)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Edit Customer Profile' } as any) : {})}
-                    >
-                      <Ionicons name="pencil" size={13} color="#475569" />
-                    </TouchableOpacity>
+                    {canEditCustomers && (
+                      <TouchableOpacity
+                        style={styles.actionBtnEdit}
+                        onPress={() => openEditModal(cust)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Edit Customer Profile' } as any) : {})}
+                      >
+                        <Ionicons name="pencil" size={13} color="#475569" />
+                      </TouchableOpacity>
+                    )}
 
                     {/* Delete Button */}
-                    <TouchableOpacity
-                      style={styles.actionBtnDelete}
-                      onPress={() => handleDelete(cust)}
-                      activeOpacity={0.75}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Customer' } as any) : {})}
-                    >
-                      <Ionicons name="trash-outline" size={13} color="#EF4444" />
-                    </TouchableOpacity>
+                    {canDeleteCustomers && (
+                      <TouchableOpacity
+                        style={styles.actionBtnDelete}
+                        onPress={() => handleDelete(cust)}
+                        activeOpacity={0.75}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Customer' } as any) : {})}
+                      >
+                        <Ionicons name="trash-outline" size={13} color="#EF4444" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );
@@ -1225,16 +1265,18 @@ export default function AdminCustomers() {
                     <Text style={styles.callBtnText}>Call Customer</Text>
                   </TouchableOpacity>
 
-                  <TouchableOpacity
-                    style={styles.editBtn}
-                    onPress={() => {
-                      setDossierCustomer(null);
-                      openEditModal(dossierCustomer);
-                    }}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="pencil" size={15} color="#475569" />
-                  </TouchableOpacity>
+                  {canEditCustomers && (
+                    <TouchableOpacity
+                      style={styles.editBtn}
+                      onPress={() => {
+                        setDossierCustomer(null);
+                        openEditModal(dossierCustomer);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="pencil" size={15} color="#475569" />
+                    </TouchableOpacity>
+                  )}
                 </View>
               </>
             )}

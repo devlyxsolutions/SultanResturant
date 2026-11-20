@@ -17,13 +17,15 @@ import { useRouter } from 'expo-router';
 import { useRestaurantStore, Ticket } from '../../store/restaurantStore';
 import { useAuthStore } from '../../store/authStore';
 import { useOpsStore } from '../../store/opsStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
+  if (useSettingsStore.getState().settings.kdsSoundAlerts === false) return;
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
@@ -70,6 +72,7 @@ export default function KitchenDisplayScreen() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const tickets = useRestaurantStore((state) => state.tickets);
+  const systemSettings = useSettingsStore((s) => s.settings);
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
   const updateTicketStatus = useRestaurantStore((state) => state.updateTicketStatus);
@@ -214,7 +217,44 @@ export default function KitchenDisplayScreen() {
     }
   }, [tickets]);
 
-  const stationTickets = (tickets || [])
+  // Deduplicate tickets by orderId / orderNumber so the beverage station never sees duplicate cards
+  const uniqueTickets = useMemo(() => {
+    const seenOrderKeys = new Map<string, Ticket>();
+    const withoutOrder: Ticket[] = [];
+
+    for (const t of tickets || []) {
+      if (!t || !t.id) continue;
+      const orderKey = t.orderId
+        ? `oid_${t.orderId}`
+        : (t.orderNumber ? `onum_${t.orderNumber}` : null);
+
+      if (!orderKey) {
+        withoutOrder.push(t);
+        continue;
+      }
+
+      const existing = seenOrderKeys.get(orderKey);
+      if (!existing) {
+        seenOrderKeys.set(orderKey, t);
+      } else {
+        const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
+        const extRank = STATUS_RANK[existing.status] ?? 0;
+        const curRank = STATUS_RANK[t.status] ?? 0;
+        if (curRank > extRank) {
+          seenOrderKeys.set(orderKey, t);
+        } else if (curRank === extRank) {
+          const existingCount = Array.isArray(existing.items) ? existing.items.length : 0;
+          const currentCount = Array.isArray(t.items) ? t.items.length : 0;
+          if (currentCount > existingCount || (t.timePlaced || 0) > (existing.timePlaced || 0)) {
+            seenOrderKeys.set(orderKey, t);
+          }
+        }
+      }
+    }
+    return [...seenOrderKeys.values(), ...withoutOrder];
+  }, [tickets]);
+
+  const stationTickets = uniqueTickets
     .filter((t) => !!t && Array.isArray(t.items))
     .map((t) => {
       const items = Array.isArray(t.items) ? t.items : [];
@@ -247,12 +287,36 @@ export default function KitchenDisplayScreen() {
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
+    const baseHttpUrl = getActiveServerHttpUrl();
+    const orderId = (ticket as any).orderId || ticket.orderNumber;
+
     if (ticket.stationStatus === 'pending') {
       startCookingTicket(ticket.id, stationFilter);
+      if (orderId) {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'PREPARING' })
+        }).catch(() => { });
+      }
     } else if (ticket.stationStatus === 'cooking') {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
+      if (orderId) {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'READY' })
+        }).catch(() => { });
+      }
     } else if (ticket.stationStatus === 'ready') {
       bumpTicket(ticket.id, stationFilter);
+      if (orderId) {
+        fetch(`${baseHttpUrl}/api/public/orders/${orderId}/status`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'SERVED' })
+        }).catch(() => { });
+      }
     } else {
       updateTicketStatus(ticket.id, 'ready', stationFilter);
     }
@@ -560,6 +624,26 @@ export default function KitchenDisplayScreen() {
       </View>
     );
   };
+
+  if (systemSettings.enableKdsModule === false) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="lock-closed-outline" size={56} color="#FF9500" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 6 }}>
+          Juice Bar KDS Module Disabled
+        </Text>
+        <Text style={{ fontSize: 13.5, color: '#9CA3AF', textAlign: 'center', maxWidth: 420, marginBottom: 20 }}>
+          The Kitchen & Juice Bar KDS module has been disabled in System Settings by Admin.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#FF9500', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 }}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        >
+          <Text style={{ fontWeight: '800', color: '#140306' }}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>

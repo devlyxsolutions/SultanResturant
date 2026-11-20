@@ -995,16 +995,16 @@ export default function AdminDashboard() {
           <View style={styles.frostedChipRow}>
             <View style={styles.frostedChip}>
               <Ionicons name="cash-outline" size={11} color="#F3D179" />
-              <Text style={styles.frostedChipText}>Cash: Rs. {paymentMetrics.cash.amount.toLocaleString()} ({paymentMetrics.cash.pct}%)</Text>
+              <Text style={styles.frostedChipText}>Cash: {canViewRevenue ? `Rs. ${paymentMetrics.cash.amount.toLocaleString()} (${paymentMetrics.cash.pct}%)` : '••••••'}</Text>
             </View>
             <View style={styles.frostedChip}>
               <Ionicons name="card-outline" size={11} color="#93C5FD" />
-              <Text style={styles.frostedChipText}>Card: Rs. {paymentMetrics.card.amount.toLocaleString()} ({paymentMetrics.card.pct}%)</Text>
+              <Text style={styles.frostedChipText}>Card: {canViewRevenue ? `Rs. ${paymentMetrics.card.amount.toLocaleString()} (${paymentMetrics.card.pct}%)` : '••••••'}</Text>
             </View>
             {paymentMetrics.online.amount > 0 && (
               <View style={styles.frostedChip}>
                 <Ionicons name="globe-outline" size={11} color="#A7F3D0" />
-                <Text style={styles.frostedChipText}>Online: Rs. {paymentMetrics.online.amount.toLocaleString()}</Text>
+                <Text style={styles.frostedChipText}>Online: {canViewRevenue ? `Rs. ${paymentMetrics.online.amount.toLocaleString()}` : '••••••'}</Text>
               </View>
             )}
           </View>
@@ -1037,7 +1037,7 @@ export default function AdminDashboard() {
             <View style={styles.kpiTitleGroup}>
               <Text style={styles.kpiJewelLabel}>ORDER TRAFFIC & CHANNELS</Text>
               <View style={styles.jewelPillAmber}>
-                <Text style={styles.jewelPillAmberText}>AOV: Rs. {aov.toLocaleString()}</Text>
+                <Text style={styles.jewelPillAmberText}>{canViewRevenue ? `AOV: Rs. ${aov.toLocaleString()}` : 'AOV: ••••••'}</Text>
               </View>
             </View>
             <View style={[styles.kpiIconBoxJewel, { backgroundColor: 'rgba(245, 158, 11, 0.2)' }]}>
@@ -1068,7 +1068,7 @@ export default function AdminDashboard() {
           </View>
 
           <View style={styles.kpiFooterJewel}>
-            <Text style={styles.kpiSubtextJewel}>Average check Rs. {aov.toLocaleString()} per table</Text>
+            <Text style={styles.kpiSubtextJewel}>{canViewRevenue ? `Average check Rs. ${aov.toLocaleString()} per table` : 'Average check hidden by role policy'}</Text>
             <TouchableOpacity onPress={() => router.push('/admin/pos')}>
               <Text style={styles.kpiLinkGold}>Open POS Terminal →</Text>
             </TouchableOpacity>
@@ -1231,7 +1231,7 @@ export default function AdminDashboard() {
                   {/* Tooltip on Click / Select */}
                   {activeHourlyMetric === idx && (
                     <View style={styles.barTooltip}>
-                      <Text style={styles.tooltipAmt}>Rs. {slot.sales.toLocaleString()}</Text>
+                      <Text style={styles.tooltipAmt}>{canViewRevenue ? `Rs. ${slot.sales.toLocaleString()}` : '••••••'}</Text>
                       <Text style={styles.tooltipOrders}>{slot.orders} orders</Text>
                     </View>
                   )}
@@ -1338,17 +1338,17 @@ export default function AdminDashboard() {
           <View style={styles.paymentPillRow}>
             <View style={[styles.paymentPill, { backgroundColor: BRAND.emeraldLight }]}>
               <Text style={[styles.paymentPillTitle, { color: BRAND.emeraldDark }]}>Cash ({paymentMetrics.cash.pct}%)</Text>
-              <Text style={styles.paymentPillAmt}>Rs. {paymentMetrics.cash.amount.toLocaleString()}</Text>
+              <Text style={styles.paymentPillAmt}>{canViewRevenue ? `Rs. ${paymentMetrics.cash.amount.toLocaleString()}` : '••••••'}</Text>
             </View>
 
             <View style={[styles.paymentPill, { backgroundColor: BRAND.indigoLight }]}>
               <Text style={[styles.paymentPillTitle, { color: BRAND.indigo }]}>Card ({paymentMetrics.card.pct}%)</Text>
-              <Text style={styles.paymentPillAmt}>Rs. {paymentMetrics.card.amount.toLocaleString()}</Text>
+              <Text style={styles.paymentPillAmt}>{canViewRevenue ? `Rs. ${paymentMetrics.card.amount.toLocaleString()}` : '••••••'}</Text>
             </View>
 
             <View style={[styles.paymentPill, { backgroundColor: BRAND.purpleLight }]}>
               <Text style={[styles.paymentPillTitle, { color: BRAND.purple }]}>Online ({paymentMetrics.online.pct}%)</Text>
-              <Text style={styles.paymentPillAmt}>Rs. {paymentMetrics.online.amount.toLocaleString()}</Text>
+              <Text style={styles.paymentPillAmt}>{canViewRevenue ? `Rs. ${paymentMetrics.online.amount.toLocaleString()}` : '••••••'}</Text>
             </View>
           </View>
         </View>
@@ -1725,7 +1725,7 @@ export default function AdminDashboard() {
                 </View>
 
                 <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
-                  <Text style={styles.revenueText}>Rs. {dish.revenue.toLocaleString()}</Text>
+                  <Text style={styles.revenueText}>{canViewRevenue ? `Rs. ${dish.revenue.toLocaleString()}` : '••••••'}</Text>
                 </View>
 
                 <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
@@ -1786,7 +1786,7 @@ export default function AdminDashboard() {
                 </View>
 
                 <View style={{ flex: 1.5, alignItems: 'flex-end' }}>
-                  <Text style={styles.invoiceTotalText}>Rs. {(inv.total || 0).toLocaleString()}</Text>
+                  <Text style={styles.invoiceTotalText}>{canViewRevenue ? `Rs. ${(inv.total || 0).toLocaleString()}` : '••••••'}</Text>
                 </View>
 
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>

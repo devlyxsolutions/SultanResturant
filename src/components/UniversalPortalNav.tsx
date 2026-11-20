@@ -409,6 +409,7 @@ export default function UniversalPortalNav({
           <Pressable
             style={styles.sidebarBackdrop}
             onPress={() => setSidebarOpen(false)}
+            {...(Platform.OS === 'web' ? ({ dataSet: { backdrop: 'true' } } as any) : {})}
           />
 
           {/* The Sidebar Drawer */}
@@ -776,6 +777,7 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    zIndex: 1,
   },
   sidebarDrawer: {
     backgroundColor: '#FFFFFF',
@@ -785,7 +787,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.35,
     shadowRadius: 15,
     elevation: 16,
-    zIndex: 1000,
+    zIndex: 10,
   },
   sidebarDrawerMobile: {
     width: '82%',

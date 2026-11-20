@@ -26,6 +26,7 @@ import FullscreenButton from '../../components/FullscreenButton';
 import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import { useOpsStore } from '../../store/opsStore';
 import { MenuItem, OnlineOrder, Ticket, useRestaurantStore } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 // ==========================================
 // TYPES & STORAGE KEYS
@@ -413,8 +414,10 @@ export default function CustomerMenuScreen() {
   const categories = useRestaurantStore((state) => state.categories);
   const storeRegions = useRestaurantStore((state) => state.regions);
   const tables = useRestaurantStore((state) => state.tables);
+  const onlineOrders = useRestaurantStore((state) => state.onlineOrders) || [];
   const syncFromServer = useRestaurantStore((state) => state.syncFromServer);
   const unavailableIds = useOpsStore((state) => state.unavailableItemIds) || [];
+  const systemSettings = useSettingsStore((s) => s.settings);
 
   // Order Mode & Active Table
   const [orderMode, setOrderMode] = useState<'dine_in' | 'delivery'>(
@@ -458,6 +461,7 @@ export default function CustomerMenuScreen() {
     'cash_on_delivery' | 'card' | 'jazzcash' | 'easypaisa'
   >('cash_on_delivery');
   const [submittingOrder, setSubmittingOrder] = useState(false);
+  const isSubmittingOrderRef = useRef(false);
 
   // Order History List
   const [orderHistory, setOrderHistory] = useState<CustomerOrderHistory[]>([]);
@@ -515,13 +519,187 @@ export default function CustomerMenuScreen() {
         const rawOrders = await AsyncStorage.getItem(STORAGE_KEY_ORDERS);
         if (rawOrders) {
           const parsedOrders = JSON.parse(rawOrders);
-          if (Array.isArray(parsedOrders)) setOrderHistory(parsedOrders);
+          if (Array.isArray(parsedOrders)) {
+            setOrderHistory(parsedOrders);
+            // If the latest order is still active, track it by default
+            const latest = parsedOrders[0];
+            if (latest && latest.status !== 'DELIVERED' && latest.status !== 'SERVED' && latest.status !== 'CANCELLED') {
+              setActiveTrackingOrder(latest);
+            }
+          }
         }
       } catch {
         // storage ignored safely
       }
     })();
   }, []);
+
+  // Real-time synchronization of active order status from store (WebSocket sync)
+  useEffect(() => {
+    if (!onlineOrders || onlineOrders.length === 0) return;
+
+    const ORDER_STATUS_RANK: Record<string, number> = {
+      PENDING: 1,
+      CONFIRMED: 2,
+      PREPARING: 3,
+      READY: 4,
+      READY_FOR_PICKUP: 4,
+      OUT_FOR_DELIVERY: 4,
+      SERVED: 5,
+      DELIVERED: 5,
+      CANCELLED: 99,
+    };
+
+    if (activeTrackingOrder) {
+      const match = onlineOrders.find(
+        (o) => o.id === activeTrackingOrder.id || o.orderNumber === activeTrackingOrder.orderNumber
+      );
+      if (match) {
+        const curRank = ORDER_STATUS_RANK[activeTrackingOrder.status] ?? 0;
+        const matchRank = ORDER_STATUS_RANK[match.status] ?? 0;
+
+        // ONLY advance forward! Never revert backwards from e.g. PREPARING to CONFIRMED
+        if (matchRank > curRank || match.status === 'CANCELLED') {
+          setActiveTrackingOrder((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: match.status as any,
+                  estimatedDeliveryMinutes: match.estimatedDeliveryMinutes ?? prev.estimatedDeliveryMinutes,
+                  riderName: match.riderName || prev.riderName,
+                  riderPhone: match.riderPhone || prev.riderPhone,
+                  assignedWaiter: match.assignedWaiter || prev.assignedWaiter,
+                }
+              : null
+          );
+          if (match.status === 'CONFIRMED' || match.status === 'PREPARING' || match.status === 'READY' || match.status === 'SERVED') {
+            playChime('status_update');
+          }
+        }
+      }
+    }
+
+    setOrderHistory((prevHistory) => {
+      let changed = false;
+      const updated = prevHistory.map((item) => {
+        const match = onlineOrders.find(
+          (o) => o.id === item.id || o.orderNumber === item.orderNumber
+        );
+        if (match) {
+          const itemRank = ORDER_STATUS_RANK[item.status] ?? 0;
+          const matchRank = ORDER_STATUS_RANK[match.status] ?? 0;
+          if (matchRank > itemRank || match.status === 'CANCELLED') {
+            changed = true;
+            return {
+              ...item,
+              status: match.status as any,
+              estimatedDeliveryMinutes: match.estimatedDeliveryMinutes ?? item.estimatedDeliveryMinutes,
+              riderName: match.riderName || item.riderName,
+              riderPhone: match.riderPhone || item.riderPhone,
+              assignedWaiter: match.assignedWaiter || item.assignedWaiter,
+            };
+          }
+        }
+        return item;
+      });
+      if (changed) {
+        AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated)).catch(() => {});
+        return updated;
+      }
+      return prevHistory;
+    });
+  }, [onlineOrders, activeTrackingOrder?.id, activeTrackingOrder?.status]);
+
+  // Active HTTP Polling when tracking an unresolved order (direct fallback for external guest browsers)
+  useEffect(() => {
+    if (!activeTrackingOrder) return;
+    const currentStatus = activeTrackingOrder.status;
+    if (currentStatus === 'DELIVERED' || currentStatus === 'SERVED' || currentStatus === 'CANCELLED') return;
+
+    const ORDER_STATUS_RANK: Record<string, number> = {
+      PENDING: 1,
+      CONFIRMED: 2,
+      PREPARING: 3,
+      READY: 4,
+      READY_FOR_PICKUP: 4,
+      OUT_FOR_DELIVERY: 4,
+      SERVED: 5,
+      DELIVERED: 5,
+      CANCELLED: 99,
+    };
+
+    const orderQueryId = activeTrackingOrder.id || activeTrackingOrder.orderNumber;
+    let isCancelled = false;
+
+    const pollOrderStatus = async () => {
+      try {
+        const res = await fetch(`${getBaseUrl()}/api/public/orders/${orderQueryId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverOrder = data.order || data.data;
+        if (!serverOrder || isCancelled) return;
+
+        const curRank = ORDER_STATUS_RANK[currentStatus] ?? 0;
+        const serverRank = ORDER_STATUS_RANK[serverOrder.status] ?? 0;
+
+        // Only update if server order is more advanced (or cancelled), preventing flickering
+        if (serverRank > curRank || serverOrder.status === 'CANCELLED') {
+          setActiveTrackingOrder((prev) => {
+            if (!prev) return null;
+            return {
+              ...prev,
+              status: serverOrder.status,
+              estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? prev.estimatedDeliveryMinutes,
+              riderName: serverOrder.riderName || prev.riderName,
+              riderPhone: serverOrder.riderPhone || prev.riderPhone,
+              assignedWaiter: serverOrder.assignedWaiter || prev.assignedWaiter,
+            };
+          });
+
+          // Sync into store as well so store never lags behind polling
+          useRestaurantStore.setState((s) => ({
+            onlineOrders: (s.onlineOrders || []).map((o) =>
+              (o.id === serverOrder.id || o.orderNumber === serverOrder.orderNumber)
+                ? { ...o, status: serverOrder.status }
+                : o
+            ),
+          }));
+
+          if (serverOrder.status === 'CONFIRMED' || serverOrder.status === 'PREPARING' || serverOrder.status === 'READY' || serverOrder.status === 'SERVED') {
+            playChime('status_update');
+          }
+
+          setOrderHistory((prevHistory) => {
+            const updated = prevHistory.map((item) => {
+              if (item.id === serverOrder.id || item.orderNumber === serverOrder.orderNumber) {
+                return {
+                  ...item,
+                  status: serverOrder.status,
+                  estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? item.estimatedDeliveryMinutes,
+                  riderName: serverOrder.riderName || item.riderName,
+                  riderPhone: serverOrder.riderPhone || item.riderPhone,
+                  assignedWaiter: serverOrder.assignedWaiter || item.assignedWaiter,
+                };
+              }
+              return item;
+            });
+            AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated)).catch(() => {});
+            return updated;
+          });
+        }
+      } catch {
+        // silent polling catch
+      }
+    };
+
+    pollOrderStatus();
+    const interval = setInterval(pollOrderStatus, 2500);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [activeTrackingOrder?.id, activeTrackingOrder?.orderNumber, activeTrackingOrder?.status]);
 
   // Audio Chime
   const playChime = (type: 'order_placed' | 'status_update') => {
@@ -1013,6 +1191,14 @@ export default function CustomerMenuScreen() {
 
   // Order Submission
   const handlePlaceOrder = async () => {
+    if (isSubmittingOrderRef.current || submittingOrder) return;
+
+    if (systemSettings.enableOnlineOrders === false) {
+      const msg = 'Online & QR ordering is currently paused. Please call a waiter or place your order at the counter.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Online Ordering Paused', msg);
+      return;
+    }
     if (cart.length === 0) return;
     if (!customerName.trim() || !customerPhone.trim()) {
       const msg = 'Please enter your Name and Phone Number to confirm your order.';
@@ -1028,6 +1214,7 @@ export default function CustomerMenuScreen() {
       return;
     }
 
+    isSubmittingOrderRef.current = true;
     setSubmittingOrder(true);
 
     try {
@@ -1130,6 +1317,7 @@ export default function CustomerMenuScreen() {
               phone: customerPhone.trim(),
               address: deliveryAddress.trim(),
             },
+            paymentMethod: paymentMethod || 'pay_at_counter',
             items: cart.map((c) => ({
               id: c.item.id,
               name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
@@ -1137,6 +1325,7 @@ export default function CustomerMenuScreen() {
               price: c.unitPrice,
               qty: c.qty,
               quantity: c.qty,
+              totalPrice: c.unitPrice * c.qty,
               notes: c.notes,
               station: c.item.station || 'main',
             })),
@@ -1246,6 +1435,7 @@ export default function CustomerMenuScreen() {
               phone: customerPhone.trim(),
               address: deliveryAddress.trim(),
             },
+            paymentMethod: paymentMethod || 'pay_at_counter',
             items: cart.map((c) => ({
               id: c.item.id,
               name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
@@ -1253,6 +1443,7 @@ export default function CustomerMenuScreen() {
               price: c.unitPrice,
               qty: c.qty,
               quantity: c.qty,
+              totalPrice: c.unitPrice * c.qty,
               notes: c.notes,
               station: c.item.station || 'main',
             })),
@@ -1311,6 +1502,9 @@ export default function CustomerMenuScreen() {
       else Alert.alert('Error', e.message || 'Failed to place order');
     } finally {
       setSubmittingOrder(false);
+      setTimeout(() => {
+        isSubmittingOrderRef.current = false;
+      }, 1500);
     }
   };
 
@@ -1740,6 +1934,27 @@ export default function CustomerMenuScreen() {
       </TouchableOpacity>
     );
   };
+
+  if (systemSettings.enableDigitalQrMenu === false) {
+    return (
+      <SafeAreaView style={[styles.safeContainer, { alignItems: 'center', justifyContent: 'center', padding: 24 }]} edges={['top']}>
+        <StatusBar barStyle="light-content" />
+        <Ionicons name="qr-code-outline" size={58} color="#D4AF37" style={{ marginBottom: 14 }} />
+        <Text style={{ fontSize: 21, fontWeight: '900', color: '#FFFFFF', textAlign: 'center', marginBottom: 8 }}>
+          Digital QR Menu Offline
+        </Text>
+        <Text style={{ fontSize: 13.5, color: '#CBD5E1', textAlign: 'center', maxWidth: 420, marginBottom: 22 }}>
+          Customer Digital QR Menu is currently disabled in System Settings. Please ask your waiter for assistance.
+        </Text>
+        <TouchableOpacity
+          style={{ backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 11, borderRadius: 10 }}
+          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+        >
+          <Text style={{ fontWeight: '800', color: '#140306' }}>Go Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.safeContainer} edges={['top']}>

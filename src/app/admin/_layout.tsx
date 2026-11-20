@@ -344,7 +344,7 @@ export default function AdminLayout() {
               <SyncStatusBadge compact={width < 1024} />
 
               {/* Fast POS Shortcut - Glowing Sultan Gold */}
-              {can('canAccessPOS') && (
+              {can('canAccessPOS') && systemSettings.enablePosModule !== false && (
                 <TouchableOpacity
                   style={[styles.headerPosBtn, isTablet && { paddingHorizontal: 10, paddingVertical: 6 }]}
                   onPress={() => router.push('/admin/pos')}

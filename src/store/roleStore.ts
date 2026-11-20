@@ -72,7 +72,223 @@ export interface RolePermissions {
   posCanDismissTicket: boolean; // Cancel / dismiss running KOT orders in Running Orders modal
   posCanSplitPayment: boolean; // Use Split Payment (multiple payment methods on one bill)
   posCanManageCustomers: boolean; // Register or edit customer CRM records in POS
+
+  // 5. Granular Add / Edit / Delete (CRUD) Control Management (Master + Per-Module)
+  canAddRecords: boolean; // Master switch for creating/adding records across modules
+  canEditRecords: boolean; // Master switch for editing/updating records across modules
+  canDeleteRecords: boolean; // Master switch for deleting/removing records across modules
+  canAddInventory: boolean;
+  canEditInventory: boolean;
+  canDeleteInventory: boolean;
+  canAddSuppliers: boolean;
+  canEditSuppliers: boolean;
+  canDeleteSuppliers: boolean;
+  canAddTables: boolean;
+  canEditTables: boolean;
+  canDeleteTables: boolean;
+  canAddRecipes: boolean;
+  canEditRecipes: boolean;
+  canDeleteRecipes: boolean;
+  canAddDiscounts: boolean;
+  canEditDiscounts: boolean;
+  canDeleteDiscounts: boolean;
+  canAddExpenses: boolean;
+  canEditExpenses: boolean;
+  canDeleteExpenses: boolean;
+  canAddDamages: boolean;
+  canEditDamages: boolean;
+  canDeleteDamages: boolean;
+  canAddAssets: boolean;
+  canEditAssets: boolean;
+  canDeleteAssets: boolean;
+  canAddStaff: boolean;
+  canEditStaff: boolean;
+  canDeleteStaff: boolean;
+  canAddMenu: boolean;
+  canEditMenu: boolean;
+  canDeleteMenu: boolean;
+  canAddCustomers: boolean;
+  canEditCustomers: boolean;
+  canDeleteCustomers: boolean;
 }
+
+export const CRUD_ADD_KEYS: (keyof RolePermissions)[] = [
+  'canAddRecords',
+  'canAddInventory',
+  'canAddSuppliers',
+  'canAddTables',
+  'canAddRecipes',
+  'canAddDiscounts',
+  'canAddExpenses',
+  'canAddDamages',
+  'canAddAssets',
+  'canAddStaff',
+  'canAddMenu',
+  'canAddCustomers',
+];
+
+export const CRUD_EDIT_KEYS: (keyof RolePermissions)[] = [
+  'canEditRecords',
+  'canEditInventory',
+  'canEditSuppliers',
+  'canEditTables',
+  'canEditRecipes',
+  'canEditDiscounts',
+  'canEditExpenses',
+  'canEditDamages',
+  'canEditAssets',
+  'canEditStaff',
+  'canEditMenu',
+  'canEditCustomers',
+];
+
+export const CRUD_DELETE_KEYS: (keyof RolePermissions)[] = [
+  'canDeleteRecords',
+  'canDeleteInventory',
+  'canDeleteSuppliers',
+  'canDeleteTables',
+  'canDeleteRecipes',
+  'canDeleteDiscounts',
+  'canDeleteExpenses',
+  'canDeleteDamages',
+  'canDeleteAssets',
+  'canDeleteStaff',
+  'canDeleteMenu',
+  'canDeleteCustomers',
+];
+
+const CRUD_MODULE_ADD_SET = new Set<keyof RolePermissions>(
+  CRUD_ADD_KEYS.filter((k) => k !== 'canAddRecords')
+);
+const CRUD_MODULE_EDIT_SET = new Set<keyof RolePermissions>(
+  CRUD_EDIT_KEYS.filter((k) => k !== 'canEditRecords')
+);
+const CRUD_MODULE_DELETE_SET = new Set<keyof RolePermissions>(
+  CRUD_DELETE_KEYS.filter((k) => k !== 'canDeleteRecords')
+);
+const CRUD_ALL_KEY_SET = new Set<keyof RolePermissions>([
+  ...CRUD_ADD_KEYS,
+  ...CRUD_EDIT_KEYS,
+  ...CRUD_DELETE_KEYS,
+]);
+
+export type CrudPermissionsSlice = Pick<
+  RolePermissions,
+  | 'canAddRecords'
+  | 'canEditRecords'
+  | 'canDeleteRecords'
+  | 'canAddInventory'
+  | 'canEditInventory'
+  | 'canDeleteInventory'
+  | 'canAddSuppliers'
+  | 'canEditSuppliers'
+  | 'canDeleteSuppliers'
+  | 'canAddTables'
+  | 'canEditTables'
+  | 'canDeleteTables'
+  | 'canAddRecipes'
+  | 'canEditRecipes'
+  | 'canDeleteRecipes'
+  | 'canAddDiscounts'
+  | 'canEditDiscounts'
+  | 'canDeleteDiscounts'
+  | 'canAddExpenses'
+  | 'canEditExpenses'
+  | 'canDeleteExpenses'
+  | 'canAddDamages'
+  | 'canEditDamages'
+  | 'canDeleteDamages'
+  | 'canAddAssets'
+  | 'canEditAssets'
+  | 'canDeleteAssets'
+  | 'canAddStaff'
+  | 'canEditStaff'
+  | 'canDeleteStaff'
+  | 'canAddMenu'
+  | 'canEditMenu'
+  | 'canDeleteMenu'
+  | 'canAddCustomers'
+  | 'canEditCustomers'
+  | 'canDeleteCustomers'
+>;
+
+export const EMPTY_CRUD_PERMISSIONS: CrudPermissionsSlice = {
+  canAddRecords: false,
+  canEditRecords: false,
+  canDeleteRecords: false,
+  canAddInventory: false,
+  canEditInventory: false,
+  canDeleteInventory: false,
+  canAddSuppliers: false,
+  canEditSuppliers: false,
+  canDeleteSuppliers: false,
+  canAddTables: false,
+  canEditTables: false,
+  canDeleteTables: false,
+  canAddRecipes: false,
+  canEditRecipes: false,
+  canDeleteRecipes: false,
+  canAddDiscounts: false,
+  canEditDiscounts: false,
+  canDeleteDiscounts: false,
+  canAddExpenses: false,
+  canEditExpenses: false,
+  canDeleteExpenses: false,
+  canAddDamages: false,
+  canEditDamages: false,
+  canDeleteDamages: false,
+  canAddAssets: false,
+  canEditAssets: false,
+  canDeleteAssets: false,
+  canAddStaff: false,
+  canEditStaff: false,
+  canDeleteStaff: false,
+  canAddMenu: false,
+  canEditMenu: false,
+  canDeleteMenu: false,
+  canAddCustomers: false,
+  canEditCustomers: false,
+  canDeleteCustomers: false,
+};
+
+export const FULL_CRUD_PERMISSIONS: CrudPermissionsSlice = {
+  canAddRecords: true,
+  canEditRecords: true,
+  canDeleteRecords: true,
+  canAddInventory: true,
+  canEditInventory: true,
+  canDeleteInventory: true,
+  canAddSuppliers: true,
+  canEditSuppliers: true,
+  canDeleteSuppliers: true,
+  canAddTables: true,
+  canEditTables: true,
+  canDeleteTables: true,
+  canAddRecipes: true,
+  canEditRecipes: true,
+  canDeleteRecipes: true,
+  canAddDiscounts: true,
+  canEditDiscounts: true,
+  canDeleteDiscounts: true,
+  canAddExpenses: true,
+  canEditExpenses: true,
+  canDeleteExpenses: true,
+  canAddDamages: true,
+  canEditDamages: true,
+  canDeleteDamages: true,
+  canAddAssets: true,
+  canEditAssets: true,
+  canDeleteAssets: true,
+  canAddStaff: true,
+  canEditStaff: true,
+  canDeleteStaff: true,
+  canAddMenu: true,
+  canEditMenu: true,
+  canDeleteMenu: true,
+  canAddCustomers: true,
+  canEditCustomers: true,
+  canDeleteCustomers: true,
+};
 
 export type BaseRoleType = 'admin' | 'manager' | 'floor_manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | 'custom';
 
@@ -122,6 +338,7 @@ export const ADMIN_PERMISSIONS: RolePermissions = {
   posCanDismissTicket: true,
   posCanSplitPayment: true,
   posCanManageCustomers: true,
+  ...FULL_CRUD_PERMISSIONS,
 };
 
 export const DEFAULT_ROLES: CustomRole[] = [
@@ -179,6 +396,37 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: true,
       posCanSplitPayment: true,
       posCanManageCustomers: true,
+      ...EMPTY_CRUD_PERMISSIONS,
+      canAddRecords: true,
+      canEditRecords: true,
+      canDeleteRecords: true,
+      canAddInventory: true,
+      canEditInventory: true,
+      canDeleteInventory: true,
+      canAddSuppliers: true,
+      canEditSuppliers: true,
+      canDeleteSuppliers: true,
+      canAddTables: true,
+      canEditTables: true,
+      canDeleteTables: true,
+      canAddRecipes: true,
+      canEditRecipes: true,
+      canDeleteRecipes: true,
+      canAddDiscounts: true,
+      canEditDiscounts: true,
+      canDeleteDiscounts: true,
+      canAddExpenses: true,
+      canEditExpenses: true,
+      canDeleteExpenses: true,
+      canAddDamages: true,
+      canEditDamages: true,
+      canDeleteDamages: true,
+      canAddAssets: true,
+      canEditAssets: true,
+      canDeleteAssets: true,
+      canAddCustomers: true,
+      canEditCustomers: true,
+      canDeleteCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -199,7 +447,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canExportReports: false,
       canAccessPOS: true,
       canAccessInvoices: true,
-      canAccessReports: false,
+      canAccessReports: true,
       canAccessInventory: false,
       canAccessKitchenHandover: false,
       canAccessRecipes: false,
@@ -224,6 +472,13 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: true,
+      ...EMPTY_CRUD_PERMISSIONS,
+      canAddRecords: true,
+      canEditRecords: true,
+      canAddTables: true,
+      canEditTables: true,
+      canAddCustomers: true,
+      canEditCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -238,7 +493,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
     isSystem: true,
     baseRole: 'manager',
     permissions: {
-      canViewRevenue: false, // Blind cash counting — no revenue visibility
+      canViewRevenue: true, // Visible revenue & shift sales
       canViewCostPrice: false,
       canViewCustomerContacts: false,
       canExportReports: false,
@@ -269,6 +524,11 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: true,
       posCanManageCustomers: true,
+      ...EMPTY_CRUD_PERMISSIONS,
+      canAddRecords: true,
+      canEditRecords: true,
+      canAddCustomers: true,
+      canEditCustomers: true,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -314,6 +574,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
+      ...EMPTY_CRUD_PERMISSIONS,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -359,6 +620,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
+      ...EMPTY_CRUD_PERMISSIONS,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -404,6 +666,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
+      ...EMPTY_CRUD_PERMISSIONS,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -449,6 +712,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
+      ...EMPTY_CRUD_PERMISSIONS,
     },
     createdAt: 1700000000000,
     updatedAt: 1700000000000,
@@ -632,8 +896,8 @@ export const useRoleStore = create<RoleState>()(
     {
       name: 'sultan-roles-permissions-store',
       storage: appStorage,
-      version: 3,
-      // v3: added granular POS Terminal action controls (posCan*) and made role-cashier a system role.
+      version: 4,
+      // v4: added granular Add/Edit/Delete (CRUD) control management keys across master & 11 modules.
       // Fill any missing keys on saved roles from the matching system default.
       migrate: (persistedState: any) => {
         const state = persistedState || {};
@@ -675,6 +939,7 @@ export const useRoleStore = create<RoleState>()(
                 canAccessDamages: false,
                 canAccessAssets: false,
                 ...posFallbacks,
+                ...EMPTY_CRUD_PERMISSIONS,
               };
           return {
             ...r,
@@ -827,14 +1092,11 @@ export function useRolePermissions(targetRoleOverride?: string) {
       activeStaff?.permissionOverrides &&
       Object.keys(activeStaff.permissionOverrides).length > 0
   );
-  const permissions: RolePermissions =
-    (effectiveRole === 'admin' || user?.role === 'admin') && !resolvedTargetOverride && !hasStaffOverrides
-      ? ADMIN_PERMISSIONS
-      : {
-          ...baseDefaults,
-          ...(resolvedRole?.permissions || {}),
-          ...staffOverrides,
-        };
+  const permissions: RolePermissions = {
+    ...baseDefaults,
+    ...(resolvedRole?.permissions || {}),
+    ...staffOverrides,
+  };
 
   // Hierarchy: every non-admin role (incl. Manager & Cashier) works UNDER the Admin role.
   // A role can never hold a permission that the Admin role itself does not have.
@@ -844,17 +1106,28 @@ export function useRolePermissions(targetRoleOverride?: string) {
   };
   const isEvaluatingAdminRole = resolvedRole?.id === 'role-admin';
 
-  const can = (perm: keyof RolePermissions): boolean => {
-    // If Admin is logged in and no specific target role is being inspected, Admin has full rights
-    if (!resolvedTargetOverride && (effectiveRole === 'admin' || user?.role === 'admin')) {
-      return true;
-    }
+  const rawCan = (perm: keyof RolePermissions): boolean => {
     // Root safety: Admin can ALWAYS access Staff & Roles so they can never lock themselves out
     if (perm === 'canAccessStaff' && (effectiveRole === 'admin' || user?.role === 'admin')) {
       return true;
     }
+    // Non-CRUD permissions stay unlocked for a logged-in Admin unless inspecting a subordinate role
+    if (
+      !resolvedTargetOverride &&
+      (effectiveRole === 'admin' || user?.role === 'admin') &&
+      !CRUD_ALL_KEY_SET.has(perm)
+    ) {
+      return true;
+    }
     if (isEvaluatingAdminRole) return !!permissions[perm];
     return !!permissions[perm] && !!adminRolePerms[perm];
+  };
+
+  const can = (perm: keyof RolePermissions): boolean => {
+    if (CRUD_MODULE_ADD_SET.has(perm)) return rawCan('canAddRecords') && rawCan(perm);
+    if (CRUD_MODULE_EDIT_SET.has(perm)) return rawCan('canEditRecords') && rawCan(perm);
+    if (CRUD_MODULE_DELETE_SET.has(perm)) return rawCan('canDeleteRecords') && rawCan(perm);
+    return rawCan(perm);
   };
 
   return {
@@ -895,5 +1168,41 @@ export function useRolePermissions(targetRoleOverride?: string) {
     posCanDismissTicket: can('posCanDismissTicket'),
     posCanSplitPayment: can('posCanSplitPayment'),
     posCanManageCustomers: can('posCanManageCustomers'),
+    canAddRecords: can('canAddRecords'),
+    canEditRecords: can('canEditRecords'),
+    canDeleteRecords: can('canDeleteRecords'),
+    canAddInventory: can('canAddInventory'),
+    canEditInventory: can('canEditInventory'),
+    canDeleteInventory: can('canDeleteInventory'),
+    canAddSuppliers: can('canAddSuppliers'),
+    canEditSuppliers: can('canEditSuppliers'),
+    canDeleteSuppliers: can('canDeleteSuppliers'),
+    canAddTables: can('canAddTables'),
+    canEditTables: can('canEditTables'),
+    canDeleteTables: can('canDeleteTables'),
+    canAddRecipes: can('canAddRecipes'),
+    canEditRecipes: can('canEditRecipes'),
+    canDeleteRecipes: can('canDeleteRecipes'),
+    canAddDiscounts: can('canAddDiscounts'),
+    canEditDiscounts: can('canEditDiscounts'),
+    canDeleteDiscounts: can('canDeleteDiscounts'),
+    canAddExpenses: can('canAddExpenses'),
+    canEditExpenses: can('canEditExpenses'),
+    canDeleteExpenses: can('canDeleteExpenses'),
+    canAddDamages: can('canAddDamages'),
+    canEditDamages: can('canEditDamages'),
+    canDeleteDamages: can('canDeleteDamages'),
+    canAddAssets: can('canAddAssets'),
+    canEditAssets: can('canEditAssets'),
+    canDeleteAssets: can('canDeleteAssets'),
+    canAddStaff: can('canAddStaff'),
+    canEditStaff: can('canEditStaff'),
+    canDeleteStaff: can('canDeleteStaff'),
+    canAddMenu: can('canAddMenu'),
+    canEditMenu: can('canEditMenu'),
+    canDeleteMenu: can('canDeleteMenu'),
+    canAddCustomers: can('canAddCustomers'),
+    canEditCustomers: can('canEditCustomers'),
+    canDeleteCustomers: can('canDeleteCustomers'),
   };
 }

@@ -19,6 +19,7 @@ import { seedKitchenStarter } from '../store/kitchenSeed';
 import { useKitchenStore } from '../store/kitchenStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
 import type { Recipe, RecipeIngredient, RecipeUnit } from '../types/kitchen';
 import {
   computeRecipeCost,
@@ -60,6 +61,7 @@ const INGREDIENT_ROLES: { id: NonNullable<RecipeIngredient['role']>; label: stri
 export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { canAddRecipes, canEditRecipes, canDeleteRecipes } = useRolePermissions();
 
   const { inventory } = useOpsStore();
   const { menuItems, categories } = useRestaurantStore();
@@ -160,6 +162,15 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
   // Open recipe editor
   const handleOpenEditor = (recipeToEdit?: Recipe | null) => {
     if (!activeDish) return;
+    if (recipeToEdit ? !canEditRecipes : !canAddRecipes) {
+      Alert.alert(
+        'Permission Denied',
+        recipeToEdit
+          ? 'You do not have permission to edit recipes.'
+          : 'You do not have permission to create new recipes.'
+      );
+      return;
+    }
     if (recipeToEdit) {
       setEditingRecipe(recipeToEdit);
       setDraftYield(String(recipeToEdit.yieldPortions || 1));
@@ -244,6 +255,15 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
   // Save recipe
   const handleSaveRecipe = () => {
     if (!activeDish) return;
+    if (editingRecipe ? !canEditRecipes : !canAddRecipes) {
+      Alert.alert(
+        'Permission Denied',
+        editingRecipe
+          ? 'You do not have permission to edit recipes.'
+          : 'You do not have permission to create recipes.'
+      );
+      return;
+    }
     if (draftIngredients.length === 0) {
       Alert.alert('Validation', 'A recipe must contain at least 1 ingredient.');
       return;
@@ -272,6 +292,10 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
 
   // Delete recipe
   const handleDeleteRecipe = () => {
+    if (!canDeleteRecipes) {
+      Alert.alert('Permission Denied', 'You do not have permission to delete recipes.');
+      return;
+    }
     if (!currentRecipe) return;
     Alert.alert(
       'Delete Recipe',
@@ -291,6 +315,10 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
 
   // Copy recipe to other variants
   const handleCopyToVariant = (targetVariant: string) => {
+    if (!canAddRecipes && !canEditRecipes) {
+      Alert.alert('Permission Denied', 'You do not have permission to copy or create recipes.');
+      return;
+    }
     if (!activeDish || !currentRecipe) return;
     saveRecipe({
       menuItemId: activeDish.id,
@@ -322,21 +350,23 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
         <View style={[styles.leftPane, isMobile && styles.leftPaneMobile]}>
           <View style={styles.paneHeader}>
             <Text style={styles.paneTitle}>Menu Dishes ({filteredMenuItems.length})</Text>
-            <TouchableOpacity
-              style={styles.seedBtn}
-              onPress={() => {
-                const res = seedKitchenStarter();
-                Alert.alert(
-                  res.recipesAdded > 0 ? 'Recipes Seeded' : 'Notice',
-                  res.recipesAdded > 0
-                    ? `Successfully seeded ${res.recipesAdded} Sultan recipes and ${res.ingredientsAdded} ingredients with precise gram weights!`
-                    : 'All starter recipes already exist in the database.'
-                );
-              }}
-            >
-              <Ionicons name="sparkles" size={13} color={BRAND.goldDark} />
-              <Text style={styles.seedBtnText}>Seed Default BOM</Text>
-            </TouchableOpacity>
+            {canAddRecipes && (
+              <TouchableOpacity
+                style={styles.seedBtn}
+                onPress={() => {
+                  const res = seedKitchenStarter();
+                  Alert.alert(
+                    res.recipesAdded > 0 ? 'Recipes Seeded' : 'Notice',
+                    res.recipesAdded > 0
+                      ? `Successfully seeded ${res.recipesAdded} Sultan recipes and ${res.ingredientsAdded} ingredients with precise gram weights!`
+                      : 'All starter recipes already exist in the database.'
+                  );
+                }}
+              >
+                <Ionicons name="sparkles" size={13} color={BRAND.goldDark} />
+                <Text style={styles.seedBtnText}>Seed Default BOM</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Search & Categories */}
@@ -546,7 +576,7 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                   </View>
 
                   <View style={{ flexDirection: 'row', gap: 8 }}>
-                    {currentRecipe && (
+                    {currentRecipe && canDeleteRecipes && (
                       <TouchableOpacity
                         style={styles.deleteRecipeBtn}
                         onPress={handleDeleteRecipe}
@@ -555,16 +585,18 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                         <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
                       </TouchableOpacity>
                     )}
-                    <TouchableOpacity
-                      style={styles.primaryActionBtn}
-                      onPress={() => handleOpenEditor(currentRecipe)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name={currentRecipe ? 'create-outline' : 'add-outline'} size={18} color="#FFFFFF" />
-                      <Text style={styles.primaryActionText}>
-                        {currentRecipe ? 'Edit Recipe (BOM)' : 'Create Recipe (BOM)'}
-                      </Text>
-                    </TouchableOpacity>
+                    {(currentRecipe ? canEditRecipes : canAddRecipes) && (
+                      <TouchableOpacity
+                        style={styles.primaryActionBtn}
+                        onPress={() => handleOpenEditor(currentRecipe)}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name={currentRecipe ? 'create-outline' : 'add-outline'} size={18} color="#FFFFFF" />
+                        <Text style={styles.primaryActionText}>
+                          {currentRecipe ? 'Edit Recipe (BOM)' : 'Create Recipe (BOM)'}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
 
@@ -603,7 +635,8 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                       </Text>
                     </View>
                     {/* If another variant has a recipe, allow 1-tap copy */}
-                    {activeDish.variants &&
+                    {(canAddRecipes || canEditRecipes) &&
+                      activeDish.variants &&
                       activeDish.variants.some((v) => v.name !== currentVariantName && findRecipe(recipes, activeDish.id, v.name)) && (
                         <TouchableOpacity
                           style={styles.copyBtn}
@@ -680,15 +713,17 @@ export default function RecipeManagerScreen({ backRoute = '/admin/dashboard' }: 
                           Batch Yield: {currentRecipe.yieldPortions} portion(s) • Wastage & Spices calibrated
                         </Text>
                       </View>
-                      <TouchableOpacity
-                        style={styles.addIngSmallBtn}
-                        onPress={() => {
-                          handleOpenEditor(currentRecipe);
-                        }}
-                      >
-                        <Ionicons name="pencil" size={14} color={BRAND.burgundy} />
-                        <Text style={styles.addIngSmallBtnText}>Modify Ingredients</Text>
-                      </TouchableOpacity>
+                      {canEditRecipes && (
+                        <TouchableOpacity
+                          style={styles.addIngSmallBtn}
+                          onPress={() => {
+                            handleOpenEditor(currentRecipe);
+                          }}
+                        >
+                          <Ionicons name="pencil" size={14} color={BRAND.burgundy} />
+                          <Text style={styles.addIngSmallBtnText}>Modify Ingredients</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
 
                     {/* Interactive Batch Scaling Selector */}
