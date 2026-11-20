@@ -39,10 +39,10 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
   const totalQty = items.reduce((sum, item) => sum + (item?.qty || 1), 0);
   const itemsHtml = items.map(item => `
     <tr>
-      <td style="width: 18%; font-size: 15px; font-weight: 900; vertical-align: top; padding: 5px 0; border-bottom: 1px dashed #999;">${item?.qty || 1}x</td>
-      <td style="width: 82%; font-size: 14px; vertical-align: top; padding: 5px 0; border-bottom: 1px dashed #999;">
-        <div style="font-weight: 900; color: #000;">${item?.name || ''}</div>
-        ${item?.notes ? `<div style="font-size: 11px; font-weight: 700; color: #000; margin-top: 2px;">* ${item.notes}</div>` : ''}
+      <td style="width: 22%; font-size: 22px; font-weight: 900; vertical-align: top; padding: 6px 2px; border-bottom: 1px dashed #777; color: #000;">${item?.qty || 1}x</td>
+      <td style="width: 78%; font-size: 17px; vertical-align: top; padding: 6px 2px; border-bottom: 1px dashed #777;">
+        <div style="font-weight: 900; color: #000; line-height: 1.25; font-size: 17px;">${item?.name || ''}</div>
+        ${item?.notes ? `<div style="font-size: 12px; font-weight: 800; color: #000; background: #f0f0f0; border-left: 3px solid #000; padding: 2px 6px; margin-top: 3px; border-radius: 2px;">* ${item.notes}</div>` : ''}
       </td>
     </tr>
   `).join('');
@@ -55,14 +55,17 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
       <title>${stationTitle} #${ticket.id} - Sultan Restaurant</title>
       <style>
         @page {
-          size: 80mm auto;
-          margin: 0;
+          size: auto;
+          margin: 0mm;
         }
         @media print {
           html, body {
-            width: 80mm !important;
-            margin: 0 auto !important;
-            padding: 0 !important;
+            width: 72mm !important;
+            max-width: 72mm !important;
+            margin: 0 !important;
+            padding: 2mm 1mm 4mm 1mm !important;
+            background: #fff !important;
+            color: #000 !important;
           }
         }
         * {
@@ -72,50 +75,53 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
         }
         body {
           margin: 0 auto;
-          padding: 4mm 3mm 8mm 3mm;
-          width: 78mm;
-          max-width: 80mm;
-          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", Courier, monospace;
+          padding: 2mm 1mm 4mm 1mm;
+          width: 72mm;
+          max-width: 72mm;
+          font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           color: #000;
           background: #fff;
-          font-size: 12px;
+          font-size: 13px;
         }
         .header {
           text-align: center;
-          margin-bottom: 6px;
+          margin-bottom: 4px;
         }
         .logo-img {
           width: 44px;
-          height: 40px;
+          height: 38px;
           object-fit: contain;
-          margin: 0 auto 3px auto;
+          margin: 0 auto 2px auto;
           display: block;
         }
         .logo-title {
-          font-size: 17px;
+          font-size: 20px;
           font-weight: 900;
-          letter-spacing: 1.5px;
+          letter-spacing: 1.2px;
           margin: 0;
           color: #000;
         }
         .logo-sub {
           display: inline-block;
-          font-size: 11px;
+          font-size: 12px;
           font-weight: 900;
           color: #000;
-          border: 1.5px solid #000;
-          padding: 2px 8px;
+          border: 2px solid #000;
+          padding: 2px 10px;
           letter-spacing: 1px;
-          margin-top: 4px;
+          margin-top: 3px;
+          border-radius: 3px;
         }
         .table-banner {
           text-align: center;
-          font-size: 17px;
+          font-size: 22px;
           font-weight: 900;
-          padding: 4px 0;
-          border-top: 2px solid #000;
-          border-bottom: 2px solid #000;
+          padding: 6px 4px;
+          background: #000;
+          color: #fff;
+          border-radius: 4px;
           margin: 6px 0;
+          letter-spacing: 1.5px;
         }
         .divider {
           border-top: 2px solid #000;

@@ -146,16 +146,51 @@ function processNextPrintJob() {
   if (!next) return;
 
   isProcessingQueue = true;
-  printOrderSlip(next.ticket, {
-    stationLabel: next.stationLabel,
-    onAfterPrint: () => {
-      next.onComplete?.(next.ticket.id);
-      // Short thermal cut/feed cooldown before dispatching the next slip
-      setTimeout(() => {
-        isProcessingQueue = false;
-        processNextPrintJob();
-      }, 350);
-    },
+
+  // 1. Try Direct Server Thermal Print (Zero browser dialogs, instant ESC/POS)
+  const tryDirectPrint = async (): Promise<boolean> => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        const origin = window.location.origin;
+        const res = await fetch(`${origin}/api/print/kot`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            ticket: next.ticket,
+            station: next.station,
+          }),
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            next.onComplete?.(next.ticket.id);
+            setTimeout(() => {
+              isProcessingQueue = false;
+              processNextPrintJob();
+            }, 300);
+            return true;
+          }
+        }
+      } catch (_) {}
+    }
+    return false;
+  };
+
+  tryDirectPrint().then((directSuccess) => {
+    if (directSuccess) return;
+
+    // 2. Fallback to Browser Print Preview if server print endpoint is unreachable
+    printOrderSlip(next.ticket, {
+      stationLabel: next.stationLabel,
+      onAfterPrint: () => {
+        next.onComplete?.(next.ticket.id);
+        // Short thermal cut/feed cooldown before dispatching the next slip
+        setTimeout(() => {
+          isProcessingQueue = false;
+          processNextPrintJob();
+        }, 350);
+      },
+    });
   });
 }
 

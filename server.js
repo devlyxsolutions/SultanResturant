@@ -7,6 +7,12 @@ const WebSocketServer = WebSocket.Server;
 
 const PORT = process.env.PORT || 5050;
 const DATA_FILE = path.join(__dirname, 'server-data.json');
+let printerHelper = null;
+try {
+  printerHelper = require('./printerHelper');
+} catch (e) {
+  console.warn('[Sultan Hub] printerHelper load error:', e.message);
+}
 
 // Preset visual fallbacks for rich mobile display
 const PRESET_VISUALS = {
@@ -4026,6 +4032,33 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify({ success: true, timestamp: Date.now(), state: serverState }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.1 Direct Thermal Printer Raw ESC/POS KOT Dispatch (Instant Silent Print)
+  if (url.pathname === '/api/print/kot' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      if (!data || !data.ticket) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing ticket payload' }));
+        return;
+      }
+      if (printerHelper && typeof printerHelper.printTicketDirect === 'function') {
+        const printResult = await printerHelper.printTicketDirect(data.ticket, {
+          station: data.station || 'main',
+          printerName: data.printerName || 'POS-80',
+        });
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(printResult));
+      } else {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Printer helper not available' }));
+      }
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }
     return;

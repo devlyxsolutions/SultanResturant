@@ -549,7 +549,21 @@ export default function KitchenDisplayScreen() {
             </View>
             <TouchableOpacity
               style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-              onPress={() => setPrintingTicket(item)}
+              onPress={async () => {
+                try {
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  const res = await fetch(`${origin}/api/print/kot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticket: item, station: stationFilter }),
+                  });
+                  if (res.ok) {
+                    setLastAutoPrintedTicket(item.id);
+                    return;
+                  }
+                } catch (_) {}
+                setPrintingTicket(item);
+              }}
             >
               <Ionicons name="print-outline" size={12} color="#fff" />
               <Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>PRINT</Text>
@@ -1058,14 +1072,27 @@ export default function KitchenDisplayScreen() {
 
             {printingTicket && <OrderSlip ticket={printingTicket} />}
 
-            <TouchableOpacity style={styles.printBtnAction} onPress={() => {
+            <TouchableOpacity style={styles.printBtnAction} onPress={async () => {
               if (printingTicket) {
+                try {
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  const res = await fetch(`${origin}/api/print/kot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticket: printingTicket, station: stationFilter }),
+                  });
+                  if (res.ok) {
+                    setLastAutoPrintedTicket(printingTicket.id);
+                    setPrintingTicket(null);
+                    return;
+                  }
+                } catch (_) {}
                 printOrderSlip(printingTicket, { stationLabel: 'MAIN KITCHEN KOT' });
               } else if (typeof window !== 'undefined') {
                 window.print();
               }
             }}>
-              <Text style={styles.printBtnText}>Print Slip</Text>
+              <Text style={styles.printBtnText}>Print Slip (Direct Thermal)</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
