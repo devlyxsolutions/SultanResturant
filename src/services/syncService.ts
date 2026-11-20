@@ -828,6 +828,13 @@ function connectWebSocket(forceReconnect = false) {
             }
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
           }
+        } else if (data.type === 'COOKING_STARTED_ALERT') {
+          if (data.lastFoodReadyAlert) {
+            useRestaurantStore.setState((s) => ({
+              lastFoodReadyAlert: data.lastFoodReadyAlert,
+              tickets: s.tickets.map((t) => (t.id === data.ticketId && data.ticket ? { ...t, ...data.ticket } : t)),
+            }));
+          }
         } else if (data.type === 'ORDER_STATUS_CHANGED') {
           const { orderId, orderNumber, status, riderName, riderPhone, assignedWaiter } = data;
           useRestaurantStore.setState((s) => ({

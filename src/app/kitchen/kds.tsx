@@ -444,6 +444,23 @@ export default function KitchenDisplayScreen() {
     broadcastImmediately();
   };
 
+  // 30-Second Auto-Start Cooking for pending tickets
+  const autoStartedCookingIdsRef = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    for (const ticket of stationTickets) {
+      if (ticket.stationStatus === 'pending') {
+        const placedAt = ticket.timePlaced || now;
+        const elapsedSec = (now - placedAt) / 1000;
+        if (elapsedSec >= 30 && !autoStartedCookingIdsRef.current.has(ticket.id)) {
+          autoStartedCookingIdsRef.current.add(ticket.id);
+          console.log(`[KDS Auto-Cooking] 30 seconds elapsed for ticket #${ticket.id}. Starting cooking automatically!`);
+          handleTicketAction(ticket);
+        }
+      }
+    }
+  }, [now, stationTickets]);
+
   const renderTicket = (item: typeof stationTickets[0]) => {
     const items = Array.isArray(item.items) ? item.items : [];
     const defaultPrepTime = systemSettings.kdsTargetPrepMinutes || 15;
@@ -456,6 +473,10 @@ export default function KitchenDisplayScreen() {
     const isReady = item.stationStatus === 'ready';
     const isServed = item.stationStatus === 'served';
     const isAddOn = !!item.isAddOn;
+
+    // 30-Second Auto-Start countdown for pending orders
+    const pendingElapsedSeconds = isPending ? Math.max(0, Math.floor((now - (item.timePlaced || now)) / 1000)) : 0;
+    const autoStartSecondsLeft = Math.max(0, 30 - pendingElapsedSeconds);
 
     // Countdown calculations
     const startTime = item.cookingStartedAt || item.timePlaced || now;
@@ -501,7 +522,9 @@ export default function KitchenDisplayScreen() {
               {isPending && (
                 <View style={[styles.addOnTag, { backgroundColor: '#78350F' }]}>
                   <Ionicons name="time" size={11} color="#FDE68A" />
-                  <Text style={[styles.addOnTagText, { color: '#FDE68A' }]}>QUEUED</Text>
+                  <Text style={[styles.addOnTagText, { color: '#FDE68A', fontWeight: '800' }]}>
+                    AUTO COOK IN {autoStartSecondsLeft}s
+                  </Text>
                 </View>
               )}
               {isAddOn && (
@@ -707,7 +730,9 @@ export default function KitchenDisplayScreen() {
           >
             <Ionicons name="flame" size={20} color="#000" />
             <Text style={[styles.bumpButtonText, { color: '#000', fontWeight: '900' }]}>
-              START COOKING (NOTIFY WAITER)
+              {autoStartSecondsLeft > 0
+                ? `START COOKING (AUTO IN ${autoStartSecondsLeft}s)`
+                : 'STARTING COOKING...'}
             </Text>
           </TouchableOpacity>
         ) : isCooking ? (

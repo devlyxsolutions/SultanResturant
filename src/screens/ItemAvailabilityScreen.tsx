@@ -1,22 +1,22 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  useWindowDimensions,
-  Platform,
-  Alert,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRestaurantStore, MenuItem } from '../store/restaurantStore';
-import { useOpsStore } from '../store/opsStore';
-import { BRAND } from '../constants/brand';
-import { money } from '../utils/format';
+import { useState } from 'react';
+import {
+  Alert,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import RoyalDropdown from '../components/RoyalDropdown';
+import { BRAND } from '../constants/brand';
+import { useOpsStore } from '../store/opsStore';
+import { MenuItem, useRestaurantStore } from '../store/restaurantStore';
+import { money } from '../utils/format';
 
 export default function ItemAvailabilityScreen({ backRoute = '/kitchen/kds' }: { backRoute?: string }) {
   const router = useRouter();

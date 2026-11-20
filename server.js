@@ -2625,6 +2625,110 @@ function persistState() {
   }, 400);
 }
 
+// -------------------------------------------------------------
+// AUTO-START COOKING ENGINE (30 Seconds Auto-Start for KDS Orders)
+// -------------------------------------------------------------
+const autoStartedServerTicketIds = new Set();
+
+setInterval(() => {
+  if (!Array.isArray(serverState.tickets) || serverState.tickets.length === 0) return;
+  const now = Date.now();
+  let stateModified = false;
+
+  for (const ticket of serverState.tickets) {
+    if (!ticket || !ticket.id) continue;
+    // Check if ticket is pending and has passed 30 seconds since timePlaced
+    if (ticket.status === 'pending') {
+      const placedAt = ticket.timePlaced || now;
+      const elapsedMs = now - placedAt;
+
+      if (elapsedMs >= 30000 && !autoStartedServerTicketIds.has(ticket.id)) {
+        autoStartedServerTicketIds.add(ticket.id);
+        ticket.status = 'cooking';
+        ticket.cookingStartedAt = now;
+
+        if (!ticket.stationStatuses) {
+          ticket.stationStatuses = { main: 'cooking', juice: 'cooking' };
+        } else {
+          if (ticket.stationStatuses.main === 'pending' || !ticket.stationStatuses.main) {
+            ticket.stationStatuses.main = 'cooking';
+          }
+          if (ticket.stationStatuses.juice === 'pending' || !ticket.stationStatuses.juice) {
+            ticket.stationStatuses.juice = 'cooking';
+          }
+        }
+
+        if (Array.isArray(ticket.items)) {
+          ticket.items = ticket.items.map(it => ({
+            ...it,
+            itemStatus: (it.itemStatus === 'ready' || it.itemStatus === 'served') ? it.itemStatus : 'cooking'
+          }));
+        }
+
+        stateModified = true;
+        console.log(`[Sultan Hub Auto-Cooking] Ticket #${ticket.id} (${ticket.tableName || 'Takeaway'}) auto-transitioned to COOKING after 30s.`);
+
+        const stationLabel = 'Kitchen';
+        const cookingAlert = {
+          id: `cook_${ticket.id}_all_${now}`,
+          ticketId: ticket.id,
+          tableId: ticket.tableId,
+          tableName: ticket.tableName,
+          server: ticket.server,
+          station: 'all',
+          stationLabel,
+          itemsSummary: 'Cooking started! (Timer: 15 mins)',
+          type: 'cooking_started',
+          estimatedMinutes: 15,
+          time: now,
+        };
+        serverState.lastFoodReadyAlert = cookingAlert;
+
+        // Auto-synchronize linked online order
+        const targetOrdId = ticket.orderId || ticket.orderNumber;
+        if (targetOrdId && Array.isArray(serverState.onlineOrders)) {
+          const ord = serverState.onlineOrders.find(o => o.id === targetOrdId || o.orderNumber === targetOrdId);
+          if (ord && (ord.status === 'CONFIRMED' || ord.status === 'PENDING')) {
+            ord.status = 'PREPARING';
+            ord.updatedAt = now;
+            broadcastToClients({
+              type: 'ORDER_STATUS_CHANGED',
+              orderId: ord.id,
+              orderNumber: ord.orderNumber,
+              status: 'PREPARING',
+              riderName: ord.riderName,
+              riderPhone: ord.riderPhone,
+              assignedWaiter: ord.assignedWaiter,
+              timestamp: now,
+            });
+          }
+        }
+
+        broadcastToClients({
+          type: 'COOKING_STARTED_ALERT',
+          ticketId: ticket.id,
+          ticket,
+          lastFoodReadyAlert: cookingAlert,
+          timestamp: now,
+        });
+      }
+    }
+  }
+
+  if (stateModified) {
+    persistState();
+    broadcastToClients({
+      type: 'SERVER_BROADCAST',
+      state: {
+        tickets: serverState.tickets,
+        lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+        onlineOrders: serverState.onlineOrders,
+      },
+      timestamp: now,
+    });
+  }
+}, 3000);
+
 // Simple in-memory rate limiter for public endpoints
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const MAX_REQUESTS_PER_WINDOW = 200;

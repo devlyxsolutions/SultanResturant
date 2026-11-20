@@ -165,8 +165,15 @@ export default function WaiterNotificationHost() {
       if (serverName && currentUserName && (serverName.trim().toLowerCase() === currentUserName || currentUserName.includes(serverName.trim().toLowerCase()) || serverName.trim().toLowerCase().includes(currentUserName))) {
         return true;
       }
-      // 2. Admins, Cashiers, Managers or users assigned to All Floors get all alerts
-      if (isAllFloors || user?.role === 'admin' || user?.role === 'manager' || user?.role === 'cashier') {
+      // 2. Admins, Cashiers, Managers, Floor Managers or users assigned to All Floors get all alerts
+      const userRole = (user?.role || '').toLowerCase();
+      if (
+        isAllFloors ||
+        userRole === 'admin' ||
+        userRole.includes('manager') ||
+        userRole === 'cashier' ||
+        userRole.includes('floor')
+      ) {
         return true;
       }
       // 3. Fallback table zone/floor authorization
@@ -238,8 +245,16 @@ export default function WaiterNotificationHost() {
       Notification.permission === 'granted'
     ) {
       try {
-        new Notification(`Food Ready: ${lastFoodReadyAlert.tableName}`, {
-          body: `${lastFoodReadyAlert.stationLabel}: ${lastFoodReadyAlert.itemsSummary}`,
+        const isCook = lastFoodReadyAlert.type === 'cooking_started';
+        const isReadyItem = lastFoodReadyAlert.type === 'item_ready';
+        const notifTitle = isCook
+          ? `${lastFoodReadyAlert.stationLabel}: Cooking Started!`
+          : isReadyItem
+          ? `Fast Serve: ${lastFoodReadyAlert.tableName}`
+          : `Food Ready: ${lastFoodReadyAlert.tableName}`;
+
+        new Notification(notifTitle, {
+          body: `${lastFoodReadyAlert.tableName} • ${lastFoodReadyAlert.itemsSummary}`,
           icon: '/favicon.ico',
         });
       } catch {}
