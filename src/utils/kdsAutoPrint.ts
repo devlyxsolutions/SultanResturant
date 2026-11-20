@@ -147,7 +147,7 @@ function processNextPrintJob() {
 
   isProcessingQueue = true;
 
-  // 1. Try Direct Server Thermal Print (Zero browser dialogs, instant ESC/POS)
+  // 1. Direct Server Thermal Print (Zero browser dialogs, instant ESC/POS)
   const tryDirectPrint = async (): Promise<boolean> => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
@@ -163,34 +163,31 @@ function processNextPrintJob() {
         if (res.ok) {
           const data = await res.json();
           if (data && data.success) {
-            next.onComplete?.(next.ticket.id);
-            setTimeout(() => {
-              isProcessingQueue = false;
-              processNextPrintJob();
-            }, 300);
             return true;
           }
         }
-      } catch (_) {}
+      } catch (e) {
+        console.warn('[KDS AutoPrint] Direct thermal print error:', e);
+      }
     }
     return false;
   };
 
   tryDirectPrint().then((directSuccess) => {
-    if (directSuccess) return;
+    // Notify UI of print job completion
+    next.onComplete?.(next.ticket.id);
 
-    // 2. Fallback to Browser Print Preview if server print endpoint is unreachable
-    printOrderSlip(next.ticket, {
-      stationLabel: next.stationLabel,
-      onAfterPrint: () => {
-        next.onComplete?.(next.ticket.id);
-        // Short thermal cut/feed cooldown before dispatching the next slip
-        setTimeout(() => {
-          isProcessingQueue = false;
-          processNextPrintJob();
-        }, 350);
-      },
-    });
+    // CRITICAL: NEVER call printOrderSlip() or window.print() in automated queue!
+    // In web browsers, window.print() opens a blocking Print Preview modal that halts the KDS screen.
+    if (!directSuccess) {
+      console.warn(`[KDS AutoPrint] Direct print unavailable for ticket ${next.ticket.id} (${next.station})`);
+    }
+
+    // Cooldown before processing next queued slip
+    setTimeout(() => {
+      isProcessingQueue = false;
+      processNextPrintJob();
+    }, 300);
   });
 }
 
@@ -264,6 +261,17 @@ export function printKdsTestSlip(station: KdsStation) {
       },
     ],
   };
+
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    fetch(`${window.location.origin}/api/print/kot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket: testTicket, station }),
+    }).catch(() => {
+      printOrderSlip(testTicket, { stationLabel });
+    });
+    return;
+  }
 
   printOrderSlip(testTicket, { stationLabel });
 }

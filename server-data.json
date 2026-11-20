@@ -726,6 +726,81 @@
   ],
   "tickets": [
     {
+      "id": "KOT-SYNC-AUTO-99",
+      "status": "pending",
+      "tableName": "T-03",
+      "items": [
+        {
+          "id": "m1",
+          "name": "Mutton Karahi",
+          "qty": 1,
+          "price": 2500
+        }
+      ]
+    },
+    {
+      "id": "KOT-4110",
+      "tableId": "takeaway",
+      "tableName": "Takeaway",
+      "server": "Junaid Ahsan (Admin)",
+      "timePlaced": 1795179385668,
+      "estimatedPrepTime": 20,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "slt-app-stuffed-peri-bite",
+          "name": "Stuffed Peri Bite",
+          "price": 999,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
+      "id": "KOT-1372",
+      "tableId": "takeaway",
+      "tableName": "Takeaway",
+      "server": "Junaid Ahsan (POS)",
+      "timePlaced": 1795179070604,
+      "estimatedPrepTime": 20,
+      "status": "pending",
+      "isAddOn": false,
+      "roundNumber": 1,
+      "stationStatuses": {
+        "main": "pending"
+      },
+      "items": [
+        {
+          "id": "slt-app-loaded-hummus",
+          "name": "Loaded Hummus",
+          "price": 1150,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        },
+        {
+          "id": "slt-app-stuffed-peri-bite",
+          "name": "Stuffed Peri Bite",
+          "price": 999,
+          "qty": 1,
+          "completed": false,
+          "station": "main",
+          "prepTimeMin": 20,
+          "itemStatus": "pending"
+        }
+      ]
+    },
+    {
       "id": "KOT-4764",
       "tableId": "takeaway",
       "tableName": "Takeaway",
@@ -3552,6 +3627,39 @@
     }
   ],
   "invoices": [
+    {
+      "orderType": "takeaway",
+      "server": "Junaid Ahsan (Admin)",
+      "orderTakenBy": "Junaid Ahsan (Admin)",
+      "cashier": "Junaid Ahsan (Admin)",
+      "items": [
+        {
+          "id": "slt-app-stuffed-peri-bite",
+          "name": "Stuffed Peri Bite",
+          "price": 999,
+          "qty": 1,
+          "completed": false,
+          "station": "main"
+        }
+      ],
+      "subTotal": 999,
+      "discount": 0,
+      "tax": 0,
+      "total": 999,
+      "payments": [
+        {
+          "type": "cash",
+          "amount": 999,
+          "tendered": 3322,
+          "change": 2323
+        }
+      ],
+      "tenderedAmount": 3322,
+      "changeReturned": 2323,
+      "id": "INV-56425",
+      "timePlaced": 1795179385667,
+      "timeSettled": 1795179385667
+    },
     {
       "orderType": "takeaway",
       "server": "Junaid Ahsan (Admin)",
@@ -11478,33 +11586,22 @@
   ],
   "activeStaffSessions": [
     {
-      "sessionId": "sess_mwoynhm2_wlifm",
+      "sessionId": "sess_mwoxuwmm_4x711",
       "staffId": "st1",
       "staffName": "Junaid Ahsan",
       "role": "admin",
-      "deviceId": "dev_web_mwoyn91n_jcy3w_7v84",
+      "deviceId": "dev_web_mwox4wf7_f0dpt_83sb",
       "deviceName": "Edge on Windows",
       "platform": "web",
-      "loginTime": 1795178035946,
-      "lastActiveTime": 1795178035946
-    },
-    {
-      "sessionId": "sess_mwoywom8_akfc1",
-      "staffId": "st3",
-      "staffName": "Chef Omar",
-      "role": "kitchen",
-      "deviceId": "dev_web_mwoxutps_z3jgb_5he9",
-      "deviceName": "Edge on Windows",
-      "platform": "web",
-      "loginTime": 1795178464928,
-      "lastActiveTime": 1795178464928
+      "loginTime": 1795176702383,
+      "lastActiveTime": 1795176702383
     }
   ],
   "revokedDeviceIds": {
     "dev_web_mwox4wf7_f0dpt_83sb": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
       "staffName": "Junaid Ahsan",
-      "timestamp": 1795178035946
+      "timestamp": 1795178035946,
+      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
     }
   },
   "lastBillPaidAlert": null,
@@ -13371,6 +13468,126 @@
   ],
   "recipes": [
     {
+      "packagingCost": 25,
+      "menuItemName": "Chicken Karahi",
+      "prepNotes": "Fresh chicken cooked in pure oil/ghee, fresh tomatoes, ginger and green chillies.",
+      "menuItemId": "m2",
+      "ingredients": [
+        {
+          "wastagePct": 3,
+          "unit": "g",
+          "qty": 750,
+          "name": "Chicken (Boneless)",
+          "inventoryItemId": "inv1",
+          "tasteAdjustPct": 0,
+          "role": "main"
+        },
+        {
+          "unit": "ml",
+          "tasteAdjustPct": 0,
+          "inventoryItemId": "inv5",
+          "wastagePct": 2,
+          "role": "oil",
+          "name": "Cooking Oil (Canola 16L)",
+          "qty": 150
+        },
+        {
+          "tasteAdjustPct": 0,
+          "unit": "g",
+          "inventoryItemId": "inv8",
+          "role": "base",
+          "name": "Tomatoes (Tamatar)",
+          "wastagePct": 5,
+          "qty": 250
+        },
+        {
+          "tasteAdjustPct": 0,
+          "unit": "g",
+          "wastagePct": 2,
+          "qty": 100,
+          "inventoryItemId": "inv6",
+          "name": "Yogurt (Fresh Dahi)",
+          "role": "base"
+        }
+      ],
+      "updatedAt": 1792940869642,
+      "yieldPortions": 1,
+      "version": 1,
+      "prepTimeMin": 20,
+      "id": "rc-1"
+    },
+    {
+      "prepNotes": "Tender minced mutton grilled on open hardwood charcoal with royal spices.",
+      "menuItemName": "Sultan Kebab",
+      "ingredients": [
+        {
+          "unit": "g",
+          "inventoryItemId": "inv2",
+          "wastagePct": 4,
+          "name": "Mutton (Mix Cut)",
+          "role": "main",
+          "tasteAdjustPct": 0,
+          "qty": 450
+        },
+        {
+          "qty": 80,
+          "wastagePct": 6,
+          "tasteAdjustPct": 0,
+          "name": "Onions (Piaz)",
+          "inventoryItemId": "inv7",
+          "role": "base",
+          "unit": "g"
+        },
+        {
+          "wastagePct": 0,
+          "inventoryItemId": "inv13",
+          "qty": 350,
+          "tasteAdjustPct": 0,
+          "role": "main",
+          "name": "Charcoal BBQ (Hardwood)",
+          "unit": "g"
+        }
+      ],
+      "updatedAt": 1792940869642,
+      "yieldPortions": 1,
+      "menuItemId": "m1",
+      "prepTimeMin": 15,
+      "version": 1,
+      "id": "rc-2",
+      "packagingCost": 20
+    },
+    {
+      "version": 1,
+      "prepTimeMin": 8,
+      "id": "rc-3",
+      "menuItemName": "Hummus & Pita",
+      "updatedAt": 1792940869642,
+      "ingredients": [
+        {
+          "unit": "g",
+          "name": "Wheat Flour (Fine Atta)",
+          "role": "main",
+          "wastagePct": 2,
+          "qty": 140,
+          "inventoryItemId": "inv4",
+          "tasteAdjustPct": 0
+        },
+        {
+          "tasteAdjustPct": 0,
+          "wastagePct": 0,
+          "unit": "ml",
+          "qty": 40,
+          "inventoryItemId": "inv5",
+          "name": "Cooking Oil (Canola 16L)",
+          "role": "oil"
+        }
+      ],
+      "packagingCost": 15,
+      "yieldPortions": 1,
+      "prepNotes": "Creamy chickpea hummus served with two fresh tandoor baked pita breads.",
+      "menuItemId": "m3"
+    },
+    {
       "id": "rc-4",
       "updatedAt": 1792940869642,
       "prepNotes": "Aged basmati rice layered with aromatic chicken masala and saffron essence.",
@@ -13662,6 +13879,45 @@
     }
   ],
   "kitchenConsumption": [
+    {
+      "id": "ce-KOT-4110-1795179385668-slt-app-stuffed-peri-bite",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-4110",
+      "menuItemId": "slt-app-stuffed-peri-bite",
+      "menuItemName": "Stuffed Peri Bite",
+      "qty": 1,
+      "at": 1795179385668,
+      "revenue": 999,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-1372-1795179070604-slt-app-loaded-hummus",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-1372",
+      "menuItemId": "slt-app-loaded-hummus",
+      "menuItemName": "Loaded Hummus",
+      "qty": 1,
+      "at": 1795179070604,
+      "revenue": 1150,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
+    {
+      "id": "ce-KOT-1372-1795179070604-slt-app-stuffed-peri-bite",
+      "sessionId": "ks-active-evening",
+      "ticketId": "KOT-1372",
+      "menuItemId": "slt-app-stuffed-peri-bite",
+      "menuItemName": "Stuffed Peri Bite",
+      "qty": 1,
+      "at": 1795179070604,
+      "revenue": 999,
+      "cost": 0,
+      "usage": [],
+      "missingRecipe": true
+    },
     {
       "id": "ce-KOT-4764-1795177846833-slt-sal-russian",
       "sessionId": "ks-active-evening",
@@ -19094,48 +19350,48 @@
     }
   ],
   "kitchenSettings": {
-    "overheadPct": 12,
-    "priceRounding": 10,
-    "alarmSound": true,
-    "openingHour": 11,
-    "ingredientDefaults": {},
-    "targetMarginPct": 65,
-    "shiftLowPct": 25,
     "shiftCriticalPct": 10,
-    "varianceTolerancePct": 3,
-    "categoryTemplates": {},
-    "closingHour": 23,
+    "par": {},
+    "priceRounding": 10,
+    "shiftLowPct": 25,
     "runwayAlertMin": 90,
-    "par": {}
+    "openingHour": 11,
+    "varianceTolerancePct": 3,
+    "ingredientDefaults": {},
+    "categoryTemplates": {},
+    "alarmSound": true,
+    "overheadPct": 12,
+    "closingHour": 23,
+    "targetMarginPct": 65
   },
   "shifts": [
     {
-      "openingFloat": 8000,
-      "shiftType": "Evening",
       "id": "SH-20261120-02",
+      "shiftType": "Evening",
       "registerId": "Counter #1 (Main Dining)",
-      "openedAt": 1795174200000,
       "cashierId": "st2",
       "cashierName": "Ali Khan",
+      "openedAt": 1795174200000,
+      "openedBy": "Junaid Ahsan (Admin)",
+      "openingFloat": 8000,
       "openingNotes": "Dinner rush shift. Rs. 8,000 float given to drawer.",
-      "status": "open",
-      "openedBy": "Junaid Ahsan (Admin)"
+      "status": "open"
     },
     {
-      "systemCardSales": 18400,
-      "status": "closed",
-      "expectedCashInDrawer": 48650,
       "id": "SH-20261120-01",
-      "auditedAt": 1795173300000,
-      "closedBy": "Sara Ahmed (Cashier)",
-      "isApproved": true,
-      "settledOrdersCount": 22,
       "shiftType": "Morning",
-      "actualCountedCash": 48650,
-      "cashPayouts": 0,
-      "systemCashSales": 43650,
-      "cardSlipsCount": 9,
+      "registerId": "Counter #1 (Main Dining)",
+      "cashierId": "st4",
+      "cashierName": "Sara Ahmed",
+      "openedAt": 1795147200000,
       "openedBy": "Ali Khan (Manager)",
+      "openingFloat": 5000,
+      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
+      "status": "closed",
+      "closedAt": 1795172400000,
+      "closedBy": "Sara Ahmed (Cashier)",
+      "closedRole": "Cashier",
+      "actualCountedCash": 48650,
       "denominations": {
         "d5000": 6,
         "d1000": 14,
@@ -19146,22 +19402,22 @@
         "d10": 0,
         "coins": 0
       },
-      "varianceType": "balanced",
-      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "cardSlipsCount": 9,
       "cardSlipsTotal": 18400,
-      "openingFloat": 5000,
-      "cashVariance": 0,
-      "closedAt": 1795172400000,
-      "closedRole": "Cashier",
-      "auditedBy": "Ali Khan (Manager)",
-      "openedAt": 1795147200000,
-      "systemOnlineSales": 4200,
       "cashierNotes": "Closing count completed blindly. 9 card slips stapled with settlement roll.",
+      "systemCashSales": 43650,
+      "systemCardSales": 18400,
+      "systemOnlineSales": 4200,
       "systemTotalSales": 66250,
-      "registerId": "Counter #1 (Main Dining)",
-      "cashierId": "st4",
-      "openingNotes": "Morning float issued: Rs. 5,000 in petty change.",
-      "cashierName": "Sara Ahmed"
+      "settledOrdersCount": 22,
+      "cashPayouts": 0,
+      "expectedCashInDrawer": 48650,
+      "cashVariance": 0,
+      "varianceType": "balanced",
+      "auditedBy": "Ali Khan (Manager)",
+      "auditedAt": 1795173300000,
+      "auditNotes": "Reconciled 100% exact. Drawer balanced with zero shortage.",
+      "isApproved": true
     },
     {
       "id": "SH-20261118-02",
@@ -20215,7 +20471,7 @@
       "badgeColor": "#D97706"
     }
   ],
-  "lastUpdated": 1795178909532,
+  "lastUpdated": 1795180100230,
   "deletedTicketIds": [
     "KOT-1042",
     "KOT-5647",

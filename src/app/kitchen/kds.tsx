@@ -266,6 +266,8 @@ export default function KitchenDisplayScreen() {
               return t;
             });
             useRestaurantStore.getState().syncFromServer({ tickets: updated });
+          } else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId) {
+            setLastAutoPrintedTicket(msg.ticketId);
           }
         } catch (e) { }
       };

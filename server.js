@@ -2533,6 +2533,73 @@ try {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
 }
 
+// -------------------------------------------------------------
+// CENTRAL THERMAL PRINT ENGINE (Zero-Dialog Background ESC/POS)
+// -------------------------------------------------------------
+const serverAutoPrintedTicketIds = new Set();
+// Pre-populate with startup tickets so rebooting server does not reprint historical tickets
+if (Array.isArray(serverState.tickets)) {
+  for (const t of serverState.tickets) {
+    if (t && t.id) serverAutoPrintedTicketIds.add(String(t.id));
+  }
+}
+
+let isAutoPrintingTicket = false;
+const serverPrintQueue = [];
+
+function queueAutoPrintTicket(ticket, station = 'all') {
+  if (!ticket || !ticket.id) return;
+  const tId = String(ticket.id);
+  if (serverAutoPrintedTicketIds.has(tId)) return;
+  serverAutoPrintedTicketIds.add(tId);
+
+  // Keep set bounded to last 1000 IDs
+  if (serverAutoPrintedTicketIds.size > 1000) {
+    const firstKey = serverAutoPrintedTicketIds.values().next().value;
+    serverAutoPrintedTicketIds.delete(firstKey);
+  }
+
+  if (!printerHelper || typeof printerHelper.printTicketDirect !== 'function') {
+    return;
+  }
+
+  serverPrintQueue.push({ ticket, station });
+  processServerPrintQueue();
+}
+
+function processServerPrintQueue() {
+  if (isAutoPrintingTicket) return;
+  const job = serverPrintQueue.shift();
+  if (!job) return;
+
+  isAutoPrintingTicket = true;
+  console.log(`[Sultan Hub Auto-Print] Background ESC/POS printing KOT #${job.ticket.id} (${job.ticket.tableName || 'Takeaway'}) to POS-80...`);
+
+  printerHelper.printTicketDirect(job.ticket, {
+    station: job.station || 'all',
+    printerName: 'POS-80',
+  })
+    .then((result) => {
+      console.log(`[Sultan Hub Auto-Print] Direct KOT #${job.ticket.id} printed successfully to POS-80.`);
+      broadcastToClients({
+        type: 'TICKET_AUTO_PRINTED',
+        ticketId: job.ticket.id,
+        station: job.station,
+        printer: 'POS-80',
+        timestamp: Date.now(),
+      });
+    })
+    .catch((err) => {
+      console.warn(`[Sultan Hub Auto-Print] Print error for #${job.ticket.id}:`, err.message);
+    })
+    .finally(() => {
+      setTimeout(() => {
+        isAutoPrintingTicket = false;
+        processServerPrintQueue();
+      }, 250);
+    });
+}
+
 // Crash-safe atomic debounced file save + daily backup
 const BACKUP_DIR = path.join(__dirname, 'backups');
 let saveTimer = null;
@@ -3408,6 +3475,7 @@ async function handleRequest(req, res) {
         };
         if (!serverState.tickets) serverState.tickets = [];
         serverState.tickets.unshift(kotTicket);
+        if (kotTicket) queueAutoPrintTicket(kotTicket, 'all');
       }
 
       // Update customer total orders & spent in appUsers and customers
@@ -3619,6 +3687,7 @@ async function handleRequest(req, res) {
           };
           if (!serverState.tickets) serverState.tickets = [];
           serverState.tickets.unshift(ticket);
+          if (ticket) queueAutoPrintTicket(ticket, 'all');
         } else {
           if (assignedWaiter) ticket.server = assignedWaiter;
         }
@@ -4039,6 +4108,9 @@ async function handleRequest(req, res) {
 
   // 8.1 Direct Thermal Printer Raw ESC/POS KOT Dispatch (Instant Silent Print)
   if (url.pathname === '/api/print/kot' && req.method === 'POST') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     try {
       const data = await readRequestBody(req);
       if (!data || !data.ticket) {
@@ -4046,9 +4118,13 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ error: 'Missing ticket payload' }));
         return;
       }
+      console.log(`[Sultan Hub] HTTP POST /api/print/kot for ticket #${data.ticket.id} (${data.station || 'all'})`);
+      if (data.ticket.id) {
+        serverAutoPrintedTicketIds.add(String(data.ticket.id));
+      }
       if (printerHelper && typeof printerHelper.printTicketDirect === 'function') {
         const printResult = await printerHelper.printTicketDirect(data.ticket, {
-          station: data.station || 'main',
+          station: data.station || 'all',
           printerName: data.printerName || 'POS-80',
         });
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -4058,6 +4134,7 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ error: 'Printer helper not available' }));
       }
     } catch (err) {
+      console.warn('[Sultan Hub] /api/print/kot error:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -4429,6 +4506,15 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         }
 
         serverState.tickets = deduplicatedMerged;
+
+        // Auto-print newly placed incoming tickets to POS-80 thermal printer
+        for (const inc of incomingTickets) {
+          if (!inc || !inc.id) continue;
+          if (deletedSet.has(inc.id)) continue;
+          if ((inc.status === 'pending' || inc.isAddOn) && Array.isArray(inc.items) && inc.items.length > 0) {
+            queueAutoPrintTicket(inc, 'all');
+          }
+        }
 
         // Auto-synchronize online orders status with ticket cooking/ready/served state
         if (Array.isArray(serverState.onlineOrders)) {

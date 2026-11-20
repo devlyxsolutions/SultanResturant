@@ -8,7 +8,7 @@ const DEFAULT_THERMAL_PRINTER = 'POS-80';
 /**
  * Format a ticket into ESC/POS binary buffer for 80mm thermal printers
  */
-function buildEscPosKotBuffer(ticket, station = 'main') {
+function buildEscPosKotBuffer(ticket, station = 'all') {
   const esc = '\x1b';
   const gs = '\x1d';
 
@@ -23,7 +23,9 @@ function buildEscPosKotBuffer(ticket, station = 'main') {
   parts.push(Buffer.from('SULTAN RESTAURANT\n', 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x10', 'ascii')); // Double height
-  const stationTitle = station === 'juice' ? 'JUICE BAR KOT' : 'MAIN KITCHEN KOT';
+  let stationTitle = 'KITCHEN KOT';
+  if (station === 'juice') stationTitle = 'JUICE BAR KOT';
+  else if (station === 'main') stationTitle = 'MAIN KITCHEN KOT';
   parts.push(Buffer.from(stationTitle + '\n', 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
@@ -35,8 +37,8 @@ function buildEscPosKotBuffer(ticket, station = 'main') {
 
   parts.push(Buffer.from('------------------------------------------\n', 'ascii'));
 
-  // Table / Order Type (Huge, centered)
-  parts.push(Buffer.from(esc + '!\x38', 'ascii')); // Huge bold double size
+  // Table / Order Type (Huge bold double size)
+  parts.push(Buffer.from(esc + '!\x38', 'ascii'));
   const tableText = (ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
   parts.push(Buffer.from(`[ ${tableText} ]\n`, 'ascii'));
 
@@ -55,8 +57,16 @@ function buildEscPosKotBuffer(ticket, station = 'main') {
   const kotId = ticket.id || 'N/A';
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
   const items = Array.isArray(ticket.items) ? ticket.items : [];
-  const filteredItems = items.filter(i => (i?.station || 'main') === station);
-  const activeItems = filteredItems.length > 0 ? filteredItems : items;
+
+  let activeItems = items;
+  if (station === 'main') {
+    const mainOnly = items.filter(i => (i?.station || 'main') === 'main');
+    activeItems = mainOnly.length > 0 ? mainOnly : items;
+  } else if (station === 'juice') {
+    const juiceOnly = items.filter(i => i?.station === 'juice');
+    activeItems = juiceOnly.length > 0 ? juiceOnly : items;
+  }
+
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(21) + `Time: ${dateStr}\n`, 'ascii'));
@@ -69,7 +79,8 @@ function buildEscPosKotBuffer(ticket, station = 'main') {
 
   for (const item of activeItems) {
     const qtyStr = `${item.qty || 1}x`.padEnd(6);
-    const nameStr = (item.name || '').substring(0, 36);
+    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [JUICE]' : '';
+    const nameStr = ((item.name || '') + stationBadge).substring(0, 36);
 
     // Print item with double height/bold
     parts.push(Buffer.from(esc + '!\x10', 'ascii')); // Double height
@@ -103,7 +114,7 @@ function buildEscPosKotBuffer(ticket, station = 'main') {
 function printTicketDirect(ticket, options = {}) {
   return new Promise((resolve, reject) => {
     const printerName = options.printerName || DEFAULT_THERMAL_PRINTER;
-    const station = options.station || 'main';
+    const station = options.station || 'all';
 
     if (!fs.existsSync(RAW_PRINTER_EXE)) {
       return reject(new Error(`RawPrinter binary not found at ${RAW_PRINTER_EXE}`));
