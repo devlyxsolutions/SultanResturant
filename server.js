@@ -2626,9 +2626,14 @@ function persistState() {
 }
 
 // -------------------------------------------------------------
-// AUTO-START COOKING ENGINE (30 Seconds Auto-Start for KDS Orders)
+// CENTRAL AUTO-FLOW ENGINE FOR KDS ORDERS
+// 1. Pending -> Cooking after 30 seconds
+// 2. Cooking -> Ready when preparation timer expires
+// 3. Ready -> Served (Dispatched) after 1.5 minutes (90 seconds)
 // -------------------------------------------------------------
 const autoStartedServerTicketIds = new Set();
+const autoReadyServerTicketIds = new Set();
+const autoDispatchedServerTicketIds = new Set();
 
 setInterval(() => {
   if (!Array.isArray(serverState.tickets) || serverState.tickets.length === 0) return;
@@ -2637,7 +2642,8 @@ setInterval(() => {
 
   for (const ticket of serverState.tickets) {
     if (!ticket || !ticket.id) continue;
-    // Check if ticket is pending and has passed 30 seconds since timePlaced
+
+    // 1. Pending -> Cooking after 30s
     if (ticket.status === 'pending') {
       const placedAt = ticket.timePlaced || now;
       const elapsedMs = now - placedAt;
@@ -2709,6 +2715,146 @@ setInterval(() => {
           ticketId: ticket.id,
           ticket,
           lastFoodReadyAlert: cookingAlert,
+          timestamp: now,
+        });
+      }
+    }
+
+    // 2. Cooking -> Ready when preparation timer expires
+    else if (ticket.status === 'cooking') {
+      const items = Array.isArray(ticket.items) ? ticket.items : [];
+      const prepMins = items.length > 0
+        ? Math.max(...items.map(i => i.prepTimeMin || 15))
+        : (ticket.estimatedPrepTime || 15);
+      const allowedMs = prepMins * 60 * 1000;
+      const startTime = ticket.cookingStartedAt || ticket.timePlaced || now;
+      const elapsedMs = now - startTime;
+
+      if (elapsedMs >= allowedMs && !autoReadyServerTicketIds.has(ticket.id)) {
+        autoReadyServerTicketIds.add(ticket.id);
+        ticket.status = 'ready';
+        ticket.readyAt = now;
+
+        if (!ticket.stationStatuses) {
+          ticket.stationStatuses = { main: 'ready', juice: 'ready' };
+        } else {
+          if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'ready';
+          if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'ready';
+        }
+
+        if (Array.isArray(ticket.items)) {
+          ticket.items = ticket.items.map(it => ({
+            ...it,
+            itemStatus: 'ready',
+            completed: true,
+            readyAt: it.readyAt || now,
+          }));
+        }
+
+        stateModified = true;
+        console.log(`[Sultan Hub Auto-Ready] Ticket #${ticket.id} (${ticket.tableName || 'Takeaway'}) prep timer (${prepMins}m) expired. Auto-transitioned to READY.`);
+
+        const stationItems = (Array.isArray(ticket.items) ? ticket.items : []).map(i => `${i.qty || 1}x ${i.name}`).join(', ');
+        const readyAlert = {
+          id: `ready_${ticket.id}_all_${now}`,
+          ticketId: ticket.id,
+          tableId: ticket.tableId,
+          tableName: ticket.tableName,
+          server: ticket.server,
+          station: 'all',
+          stationLabel: 'Kitchen',
+          itemsSummary: stationItems || 'Order Ready for Pickup',
+          type: 'ready',
+          time: now,
+        };
+        serverState.lastFoodReadyAlert = readyAlert;
+
+        // Auto-synchronize linked online order
+        const targetOrdId = ticket.orderId || ticket.orderNumber;
+        if (targetOrdId && Array.isArray(serverState.onlineOrders)) {
+          const ord = serverState.onlineOrders.find(o => o.id === targetOrdId || o.orderNumber === targetOrdId);
+          if (ord && (ord.status === 'PREPARING' || ord.status === 'CONFIRMED')) {
+            ord.status = 'READY';
+            ord.updatedAt = now;
+            broadcastToClients({
+              type: 'ORDER_STATUS_CHANGED',
+              orderId: ord.id,
+              orderNumber: ord.orderNumber,
+              status: 'READY',
+              riderName: ord.riderName,
+              riderPhone: ord.riderPhone,
+              assignedWaiter: ord.assignedWaiter,
+              timestamp: now,
+            });
+          }
+        }
+
+        broadcastToClients({
+          type: 'FOOD_READY_ALERT',
+          ticketId: ticket.id,
+          ticket,
+          lastFoodReadyAlert: readyAlert,
+          timestamp: now,
+        });
+      }
+    }
+
+    // 3. Ready -> Served (Dispatched) after 1.5 minutes (90 seconds)
+    else if (ticket.status === 'ready') {
+      const items = Array.isArray(ticket.items) ? ticket.items : [];
+      const readyAt = ticket.readyAt || Math.max(0, ...items.map(i => i.readyAt || 0)) || ticket.timePlaced || now;
+      const elapsedReadyMs = now - readyAt;
+
+      if (elapsedReadyMs >= 90000 && !autoDispatchedServerTicketIds.has(ticket.id)) {
+        autoDispatchedServerTicketIds.add(ticket.id);
+        ticket.status = 'served';
+
+        if (!ticket.stationStatuses) {
+          ticket.stationStatuses = { main: 'served', juice: 'served' };
+        } else {
+          if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'served';
+          if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'served';
+        }
+
+        if (Array.isArray(ticket.items)) {
+          ticket.items = ticket.items.map(it => ({
+            ...it,
+            itemStatus: 'served',
+            completed: true,
+          }));
+        }
+
+        if (serverState.lastFoodReadyAlert && serverState.lastFoodReadyAlert.ticketId === ticket.id) {
+          serverState.lastFoodReadyAlert = null;
+        }
+
+        stateModified = true;
+        console.log(`[Sultan Hub Auto-Dispatch] Ticket #${ticket.id} (${ticket.tableName || 'Takeaway'}) 1.5 mins elapsed since ready. Auto-dispatched (SERVED).`);
+
+        // Auto-synchronize linked online order
+        const targetOrdId = ticket.orderId || ticket.orderNumber;
+        if (targetOrdId && Array.isArray(serverState.onlineOrders)) {
+          const ord = serverState.onlineOrders.find(o => o.id === targetOrdId || o.orderNumber === targetOrdId);
+          if (ord && ord.status === 'READY') {
+            ord.status = 'SERVED';
+            ord.updatedAt = now;
+            broadcastToClients({
+              type: 'ORDER_STATUS_CHANGED',
+              orderId: ord.id,
+              orderNumber: ord.orderNumber,
+              status: 'SERVED',
+              riderName: ord.riderName,
+              riderPhone: ord.riderPhone,
+              assignedWaiter: ord.assignedWaiter,
+              timestamp: now,
+            });
+          }
+        }
+
+        broadcastToClients({
+          type: 'TICKET_DISPATCHED',
+          ticketId: ticket.id,
+          ticket,
           timestamp: now,
         });
       }

@@ -137,6 +137,7 @@ export type Ticket = {
   server: string;
   timePlaced: number;
   cookingStartedAt?: number;
+  readyAt?: number;
   estimatedPrepTime?: number;
   status: 'pending' | 'cooking' | 'ready' | 'served';
   items: OrderItem[];
@@ -1778,7 +1779,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               ...t,
               items: updatedItems,
               stationStatuses: currentStationStatuses,
-              status: overallStatus
+              status: overallStatus,
+              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt
             };
           }
           return t;
@@ -1959,7 +1961,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               completed: status === 'ready' || status === 'served',
               readyAt: status === 'ready' ? (i.readyAt || Date.now()) : i.readyAt,
             })),
-            stationStatuses: fallbackStationStatuses
+            stationStatuses: fallbackStationStatuses,
+            readyAt: status === 'ready' ? (t.readyAt || Date.now()) : t.readyAt
           };
         });
 

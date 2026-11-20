@@ -444,17 +444,56 @@ export default function KitchenDisplayScreen() {
     broadcastImmediately();
   };
 
-  // 30-Second Auto-Start Cooking for pending tickets
+  // Automated Phase Transitions for KDS orders:
+  // 1. Pending -> Cooking after 30 seconds
+  // 2. Cooking -> Ready when preparation timer expires
+  // 3. Ready -> Served (Dispatched) after 1.5 minutes (90 seconds)
   const autoStartedCookingIdsRef = useRef<Set<string>>(new Set());
+  const autoMarkedReadyIdsRef = useRef<Set<string>>(new Set());
+  const autoDispatchedIdsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     for (const ticket of stationTickets) {
+      if (!ticket || !ticket.id) continue;
+
+      // 1. Pending -> Cooking after 30s
       if (ticket.stationStatus === 'pending') {
         const placedAt = ticket.timePlaced || now;
         const elapsedSec = (now - placedAt) / 1000;
         if (elapsedSec >= 30 && !autoStartedCookingIdsRef.current.has(ticket.id)) {
           autoStartedCookingIdsRef.current.add(ticket.id);
           console.log(`[KDS Auto-Cooking] 30 seconds elapsed for ticket #${ticket.id}. Starting cooking automatically!`);
+          handleTicketAction(ticket);
+        }
+      }
+
+      // 2. Cooking -> Ready when prep timer expires (remainingSeconds <= 0)
+      else if (ticket.stationStatus === 'cooking') {
+        const items = Array.isArray(ticket.items) ? ticket.items : [];
+        const defaultPrepTime = systemSettings.kdsTargetPrepMinutes || 15;
+        const maxPrepTimeMin = items.length > 0
+          ? Math.max(...items.map((i) => i.prepTimeMin || defaultPrepTime))
+          : defaultPrepTime;
+        const totalAllowedSeconds = maxPrepTimeMin * 60;
+        const startTime = ticket.cookingStartedAt || ticket.timePlaced || now;
+        const elapsedSeconds = Math.max(0, Math.floor((now - startTime) / 1000));
+
+        if (elapsedSeconds >= totalAllowedSeconds && !autoMarkedReadyIdsRef.current.has(ticket.id)) {
+          autoMarkedReadyIdsRef.current.add(ticket.id);
+          console.log(`[KDS Auto-Ready] Prep time (${maxPrepTimeMin}m) elapsed for ticket #${ticket.id}. Marking all ready automatically!`);
+          handleTicketAction(ticket);
+        }
+      }
+
+      // 3. Ready -> Dispatched after 1.5 minutes (90 seconds)
+      else if (ticket.stationStatus === 'ready') {
+        const items = Array.isArray(ticket.items) ? ticket.items : [];
+        const readyStartTime = ticket.readyAt || Math.max(0, ...items.map(i => i.readyAt || 0)) || ticket.timePlaced || now;
+        const readyElapsedSec = Math.max(0, Math.floor((now - readyStartTime) / 1000));
+
+        if (readyElapsedSec >= 90 && !autoDispatchedIdsRef.current.has(ticket.id)) {
+          autoDispatchedIdsRef.current.add(ticket.id);
+          console.log(`[KDS Auto-Dispatch] 1.5 minutes (90s) elapsed since ready for ticket #${ticket.id}. Auto-dispatching!`);
           handleTicketAction(ticket);
         }
       }
@@ -474,9 +513,14 @@ export default function KitchenDisplayScreen() {
     const isServed = item.stationStatus === 'served';
     const isAddOn = !!item.isAddOn;
 
-    // 30-Second Auto-Start countdown for pending orders
+    // 1. 30-Second Auto-Start countdown for pending orders
     const pendingElapsedSeconds = isPending ? Math.max(0, Math.floor((now - (item.timePlaced || now)) / 1000)) : 0;
     const autoStartSecondsLeft = Math.max(0, 30 - pendingElapsedSeconds);
+
+    // 2. 1.5-Minute (90s) Auto-Dispatch countdown for ready orders
+    const readyStartTime = item.readyAt || Math.max(0, ...items.map(i => i.readyAt || 0)) || item.timePlaced || now;
+    const readyElapsedSeconds = isReady ? Math.max(0, Math.floor((now - readyStartTime) / 1000)) : 0;
+    const autoDispatchSecondsLeft = Math.max(0, 90 - readyElapsedSeconds);
 
     // Countdown calculations
     const startTime = item.cookingStartedAt || item.timePlaced || now;
@@ -534,8 +578,11 @@ export default function KitchenDisplayScreen() {
                 </View>
               )}
               {isReady && (
-                <View style={styles.readyTag}>
-                  <Text style={styles.readyTagText}>READY</Text>
+                <View style={[styles.readyTag, { backgroundColor: '#0284C7' }]}>
+                  <Ionicons name="time" size={11} color="#fff" />
+                  <Text style={[styles.readyTagText, { color: '#fff', fontWeight: '800' }]}>
+                    READY (AUTO DISPATCH IN ${autoDispatchSecondsLeft}s)
+                  </Text>
                 </View>
               )}
               {isServed && (
@@ -745,7 +792,7 @@ export default function KitchenDisplayScreen() {
             activeOpacity={0.8}
           >
             <Ionicons
-              name={allItemsCompleted ? 'notifications' : 'chevron-forward-circle'}
+              name={allItemsCompleted ? 'notifications' : 'checkmark-circle-outline'}
               size={18}
               color={allItemsCompleted ? '#000' : '#888'}
             />
@@ -755,7 +802,9 @@ export default function KitchenDisplayScreen() {
                 allItemsCompleted ? styles.bumpTextReady : null,
               ]}
             >
-              {allItemsCompleted ? 'NOTIFY SERVER (READY)' : 'MARK ALL READY'}
+              {remainingSeconds > 0
+                ? `MARK ALL READY (AUTO IN ${Math.floor(remainingSeconds / 60)}m ${(remainingSeconds % 60).toString().padStart(2, '0')}s)`
+                : 'MARKING ALL READY...'}
             </Text>
           </TouchableOpacity>
         ) : isReady ? (
@@ -766,7 +815,9 @@ export default function KitchenDisplayScreen() {
           >
             <Ionicons name="checkmark-done-circle" size={18} color="#fff" />
             <Text style={[styles.bumpButtonText, styles.bumpTextWhite]}>
-              MARK ALL DISPATCHED
+              {autoDispatchSecondsLeft > 0
+                ? `MARK ALL DISPATCHED (AUTO IN ${autoDispatchSecondsLeft}s)`
+                : 'DISPATCHING...'}
             </Text>
           </TouchableOpacity>
         ) : (
