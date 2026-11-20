@@ -25,6 +25,7 @@ import { Ticket, useRestaurantStore } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
   enqueueKdsAutoPrint,
+  markKdsTicketPrinted,
   getKdsAutoPrintEnabled,
   printKdsTestSlip,
   seedExistingKdsTicketsAsPrinted,
@@ -232,6 +233,7 @@ export default function KitchenDisplayScreen() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
+            if (msg.ticket.id) seenTicketIdsRef.current.add(msg.ticket.id);
             const currentTickets = useRestaurantStore.getState().tickets || [];
             if (!currentTickets.some((t: Ticket) => t.id === msg.ticket.id)) {
               useRestaurantStore.getState().syncFromServer({
@@ -268,6 +270,8 @@ export default function KitchenDisplayScreen() {
             useRestaurantStore.getState().syncFromServer({ tickets: updated });
           } else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId) {
             setLastAutoPrintedTicket(msg.ticketId);
+            seenTicketIdsRef.current.add(msg.ticketId);
+            markKdsTicketPrinted('main', { id: msg.ticketId } as any);
           }
         } catch (e) { }
       };
@@ -627,7 +631,7 @@ export default function KitchenDisplayScreen() {
                   const res = await fetch(`${origin}/api/print/kot`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ticket: item, station: stationFilter }),
+                    body: JSON.stringify({ ticket: item, station: stationFilter, forceReprint: true }),
                   });
                   if (res.ok) {
                     setLastAutoPrintedTicket(item.id);
@@ -1157,7 +1161,7 @@ export default function KitchenDisplayScreen() {
                   const res = await fetch(`${origin}/api/print/kot`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ ticket: printingTicket, station: stationFilter }),
+                    body: JSON.stringify({ ticket: printingTicket, station: stationFilter, forceReprint: true }),
                   });
                   if (res.ok) {
                     setLastAutoPrintedTicket(printingTicket.id);

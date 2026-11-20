@@ -9,6 +9,7 @@ const PRINTED_REGISTRY_KEY = 'sultan_kds_printed_tickets_v1';
 const REGISTRY_TTL_MS = 18 * 60 * 60 * 1000; // 18 hours
 
 type PrintQueueJob = {
+  forceReprint?: boolean;
   ticket: Ticket;
   station: KdsStation;
   stationLabel: string;
@@ -158,6 +159,7 @@ function processNextPrintJob() {
           body: JSON.stringify({
             ticket: next.ticket,
             station: next.station,
+            forceReprint: !!next.forceReprint,
           }),
         });
         if (res.ok) {
@@ -229,6 +231,7 @@ export function enqueueKdsAutoPrint(
     ticket: filteredTicket,
     station,
     stationLabel,
+    forceReprint: !!options?.forceReprint,
     onComplete: options?.onPrinted,
   });
 

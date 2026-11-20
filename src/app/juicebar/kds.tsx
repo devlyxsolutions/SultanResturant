@@ -24,6 +24,7 @@ import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 import {
   enqueueKdsAutoPrint,
+  markKdsTicketPrinted,
   getKdsAutoPrintEnabled,
   printKdsTestSlip,
   seedExistingKdsTicketsAsPrinted,
@@ -237,6 +238,7 @@ export default function KitchenDisplayScreen() {
         try {
           const msg = JSON.parse(event.data);
           if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
+            if (msg.ticket.id) seenTicketIdsRef.current.add(msg.ticket.id);
             const currentTickets = useRestaurantStore.getState().tickets || [];
             if (!currentTickets.some((t: Ticket) => t.id === msg.ticket.id)) {
               useRestaurantStore.getState().syncFromServer({
@@ -261,6 +263,11 @@ export default function KitchenDisplayScreen() {
                 });
               }
             }
+          }
+        else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId) {
+            setLastAutoPrintedTicket(msg.ticketId);
+            seenTicketIdsRef.current.add(msg.ticketId);
+            markKdsTicketPrinted('juice', { id: msg.ticketId } as any);
           }
         } catch {
           // Ignore malformed ws messages
@@ -547,7 +554,24 @@ export default function KitchenDisplayScreen() {
             </View>
             <TouchableOpacity 
               style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6, flexDirection: 'row', alignItems: 'center', gap: 4 }}
-              onPress={() => setPrintingTicket(item)}
+              onPress={async () => {
+                try {
+                  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                  const res = await fetch(`${origin}/api/print/kot`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ticket: item, station: 'juice', forceReprint: true }),
+                  });
+                  if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.success) {
+                      setLastAutoPrintedTicket(item.id);
+                      return;
+                    }
+                  }
+                } catch (_) {}
+                setPrintingTicket(item);
+              }}
             >
               <Ionicons name="print-outline" size={12} color="#fff" />
               <Text style={{ fontSize: 10, color: '#fff', fontWeight: 'bold' }}>PRINT</Text>

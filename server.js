@@ -4368,9 +4368,20 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ error: 'Missing ticket payload' }));
         return;
       }
-      console.log(`[Sultan Hub] HTTP POST /api/print/kot for ticket #${data.ticket.id} (${data.station || 'all'})`);
-      if (data.ticket.id) {
-        serverAutoPrintedTicketIds.add(String(data.ticket.id));
+      const tId = String(data.ticket.id || (data.ticket.orderId ? `ord-${data.ticket.orderId}` : '') || '');
+      const isForceReprint = !!data.forceReprint;
+
+      // Deduplication Guard: Never print 2 duplicate slips for the same ticket
+      if (!isForceReprint && tId && serverAutoPrintedTicketIds.has(tId)) {
+        console.log(`[Sultan Hub] Direct KOT print skipped for #${tId} (already printed on POS-80).`);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true, skipped: true, reason: 'Already printed', ticketId: tId }));
+        return;
+      }
+
+      console.log(`[Sultan Hub] ${isForceReprint ? '[Manual Reprint]' : '[KDS Print]'} HTTP POST /api/print/kot for ticket #${tId} (${data.station || 'all'})`);
+      if (tId) {
+        serverAutoPrintedTicketIds.add(tId);
       }
       if (printerHelper && typeof printerHelper.printTicketDirect === 'function') {
         const printResult = await printerHelper.printTicketDirect(data.ticket, {
