@@ -600,9 +600,9 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 label="Order Type"
                 options={[
                   { label: 'All Orders', value: 'all' },
-                  { label: '🍽️ Dine-In', value: 'dine-in' },
-                  { label: '🛍️ Takeaway', value: 'takeaway' },
-                  { label: '🛵 Delivery', value: 'delivery' },
+                  { label: 'Dine-In', value: 'dine-in' },
+                  { label: 'Takeaway', value: 'takeaway' },
+                  { label: 'Delivery', value: 'delivery' },
                 ]}
                 value={orderTypeFilter}
                 onSelect={(val) => setOrderTypeFilter(val as any)}
@@ -615,9 +615,9 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 label="Payment Method"
                 options={[
                   { label: 'All Payments', value: 'all' },
-                  { label: '💵 Cash', value: 'cash' },
-                  { label: '💳 Card', value: 'card' },
-                  { label: '📱 Online', value: 'online' },
+                  { label: 'Cash', value: 'cash' },
+                  { label: 'Card', value: 'card' },
+                  { label: 'Online', value: 'online' },
                 ]}
                 value={paymentFilter}
                 onSelect={(val) => setPaymentFilter(val as any)}
@@ -630,9 +630,9 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 label="Invoice Status"
                 options={[
                   { label: 'All Statuses', value: 'all' },
-                  { label: '✅ Settled', value: 'settled' },
-                  { label: '↩️ Refunded', value: 'refunded' },
-                  { label: '❌ Voided', value: 'voided' },
+                  { label: 'Settled', value: 'settled' },
+                  { label: 'Refunded', value: 'refunded' },
+                  { label: 'Voided', value: 'voided' },
                 ]}
                 value={statusFilter}
                 onSelect={(val) => setStatusFilter(val as any)}
@@ -778,11 +778,11 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                       {/* Middle Row: Date, Items Count, Staff */}
                       <View style={styles.mobileCardMidRow}>
                         <Text style={styles.mobileMetaText}>
-                          🕒 {formatDateTime(inv.timeSettled || inv.timePlaced)} • 🍽️ {itemsCount} items
+                          {formatDateTime(inv.timeSettled || inv.timePlaced)} • {itemsCount} items
                         </Text>
                         <Text style={styles.mobileMetaSubText} numberOfLines={1}>
                           Server: {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')} • Cashier: {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
-                          {inv.customer ? ` • 👤 ${inv.customer.name}` : ''}
+                          {inv.customer ? ` • ${inv.customer.name}` : ''}
                         </Text>
                       </View>
 
@@ -937,7 +937,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                         </Text>
                         {inv.customer && (
                           <Text style={styles.rowCustomerText} numberOfLines={1}>
-                            👤 {inv.customer.name} ({inv.customer.phone})
+                            {inv.customer.name} ({inv.customer.phone})
                           </Text>
                         )}
                       </View>

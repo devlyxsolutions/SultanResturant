@@ -20,6 +20,7 @@ import { useAlertStore } from '../store/alertStore';
 import { useAuthStore } from '../store/authStore';
 import { useKitchenStore } from '../store/kitchenStore';
 import { useOpsStore } from '../store/opsStore';
+import { useRolePermissions } from '../store/roleStore';
 import { buildAlerts, type AlertSeverity, type StockAlert } from '../utils/kitchenForecast';
 
 /**
@@ -158,7 +159,23 @@ export default function StockAlarmHost() {
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
-  const enabled = role === 'admin' || role === 'manager' || role === 'kitchen';
+  const { roleName, activeStaff, canAccessInventory, canAccessKitchenHandover } = useRolePermissions();
+
+  // Cashiers handle billing/shifts only — never show low-stock alerts or play stock alarm beeps for them
+  const isCashier =
+    (roleName || '').toLowerCase().includes('cashier') ||
+    (activeStaff?.role || '').toLowerCase().includes('cashier') ||
+    (activeStaff?.customRoleId || user?.customRoleId || '').toLowerCase() === 'role-cashier' ||
+    (role || '').toLowerCase() === 'cashier';
+
+  const isStockRelevantRole =
+    !isCashier &&
+    (role === 'admin' ||
+      role === 'kitchen' ||
+      (role === 'manager' && (canAccessInventory || canAccessKitchenHandover)));
+
+  const isSuppressedScreen = isPosScreen || isCustomerMenu || isCustomerDisplay;
+  const enabled = isStockRelevantRole && !isSuppressedScreen;
 
   const sessions = useKitchenStore((s) => s.kitchenSessions);
   const consumption = useKitchenStore((s) => s.kitchenConsumption);
@@ -177,10 +194,16 @@ export default function StockAlarmHost() {
   // Time-based cadence for expiry & runway checks (every 30 seconds)
   const [now, setNow] = useState(() => Date.now());
   const [readyForAlerts, setReadyForAlerts] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
+  const [toast, setToast] = useState<StockAlert | null>(null);
+  const [selectedTab, setSelectedTab] = useState<TabType>('all');
+  const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (!enabled) {
       setReadyForAlerts(false);
+      setToast(null);
+      setPanelOpen(false);
       return;
     }
     const timer = setTimeout(() => setReadyForAlerts(true), 250);
@@ -188,9 +211,10 @@ export default function StockAlarmHost() {
   }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) return;
     const t = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(t);
-  }, []);
+  }, [enabled]);
 
   // 1. Build alerts with stable derivation (deferred 250ms after login so navigation is instantaneous)
   const allAlerts = useMemo(() => {
@@ -233,11 +257,6 @@ export default function StockAlarmHost() {
         : activeAlerts.length > 0
           ? 'info'
           : null;
-
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [toast, setToast] = useState<StockAlert | null>(null);
-  const [selectedTab, setSelectedTab] = useState<TabType>('all');
-  const [snoozeFeedback, setSnoozeFeedback] = useState<string | null>(null);
 
   // Filtered items based on selected tab
   const displayedAlerts = useMemo(() => {

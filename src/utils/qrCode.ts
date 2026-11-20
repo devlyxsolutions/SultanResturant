@@ -319,7 +319,7 @@ export function printTableStandeeHtml(
             1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
             3. Choose Dishes • 4. Direct Sent to Kitchen!
           </div>
-          <div class="wifi-pill">📶 Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
+          <div class="wifi-pill">Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
         </div>
       </div>
     </body>
@@ -391,7 +391,7 @@ export function printAllTablesStandeesHtml(
               1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
               3. Choose Dishes • 4. Direct Sent to Kitchen!
             </div>
-            <div class="wifi-pill">📶 Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
+            <div class="wifi-pill">Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
           </div>
         </div>
       </div>

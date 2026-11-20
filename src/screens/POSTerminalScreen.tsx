@@ -83,27 +83,27 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
 const getCuisineMeta = (name: string) => {
   const lower = name.toLowerCase();
   if (lower.includes('pakistan') || lower.includes('desi') || lower.includes('karahi') || lower.includes('bbq')) {
-    return { icon: 'flame', emoji: '🇵🇰', color: '#16A34A' };
+    return { icon: 'flame', color: '#16A34A' };
   }
   if (lower.includes('chinese') || lower.includes('asian')) {
-    return { icon: 'restaurant', emoji: '🥢', color: '#DC2626' };
+    return { icon: 'restaurant', color: '#DC2626' };
   }
   if (lower.includes('continental') || lower.includes('steak')) {
-    return { icon: 'wine', emoji: '🥩', color: '#9333EA' };
+    return { icon: 'wine', color: '#9333EA' };
   }
   if (lower.includes('arabic') || lower.includes('middle') || lower.includes('mandi')) {
-    return { icon: 'moon', emoji: '🧆', color: '#D97706' };
+    return { icon: 'moon', color: '#D97706' };
   }
   if (lower.includes('turkish') || lower.includes('kebab')) {
-    return { icon: 'sparkles', emoji: '🥙', color: '#E11D48' };
+    return { icon: 'sparkles', color: '#E11D48' };
   }
   if (lower.includes('fast') || lower.includes('burger')) {
-    return { icon: 'fast-food', emoji: '🍔', color: '#EA580C' };
+    return { icon: 'fast-food', color: '#EA580C' };
   }
   if (lower.includes('italian') || lower.includes('pizza') || lower.includes('pasta')) {
-    return { icon: 'pizza', emoji: '🍕', color: '#059669' };
+    return { icon: 'pizza', color: '#059669' };
   }
-  return { icon: 'earth', emoji: '🍽️', color: '#B45309' };
+  return { icon: 'earth', color: '#B45309' };
 };
 
 interface POSTerminalScreenProps {
@@ -544,7 +544,7 @@ export default function POSTerminalScreen({
       }
 
       if (activeCategory === 'ALL' || activeCategory === 'All') return true;
-      if (activeCategory === '🎁 Deals & Combos' || activeCategory === 'Deals') {
+      if (activeCategory === 'Deals & Combos' || activeCategory === 'Deals') {
         return Boolean(item.isDeal || (item.category && item.category.toLowerCase() === 'deals'));
       }
       return (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
@@ -557,7 +557,7 @@ export default function POSTerminalScreen({
     (menuItems || []).forEach(item => {
       const matchesCategory = 
         activeCategory === 'ALL' || activeCategory === 'All' ? true :
-        (activeCategory === '🎁 Deals & Combos' || activeCategory === 'Deals') ? Boolean(item.isDeal || (item.category && item.category.toLowerCase() === 'deals')) :
+        (activeCategory === 'Deals & Combos' || activeCategory === 'Deals') ? Boolean(item.isDeal || (item.category && item.category.toLowerCase() === 'deals')) :
         (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
 
       if (!matchesCategory) return;
@@ -997,7 +997,7 @@ export default function POSTerminalScreen({
 
   const addToCart = (item: MenuItem) => {
     if (isPosItemBlocked(item)) {
-      const msg = `⚠️ "${item.name}" is currently Sold Out.`;
+      const msg = `"${item.name}" is currently Sold Out.`;
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Sold Out', msg);
       return;
@@ -1030,7 +1030,7 @@ export default function POSTerminalScreen({
   const handleVariantSelect = (variant: { name: string; price: number }) => {
     if (!variantModalItem) return;
     if (isPosItemBlocked(variantModalItem)) {
-      const msg = `⚠️ "${variantModalItem.name}" is currently Sold Out.`;
+      const msg = `"${variantModalItem.name}" is currently Sold Out.`;
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Sold Out', msg);
       setVariantModalItem(null);
@@ -1453,7 +1453,7 @@ export default function POSTerminalScreen({
     broadcastImmediately();
     printInvoiceReceipt(unpaidInvoice);
 
-    const alertMsg = `✅ Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTableName}!\nTable status updated to Billed.`;
+    const alertMsg = `Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTableName}!\nTable status updated to Billed.`;
     if (Platform.OS === 'web') {
       window.alert(alertMsg);
     } else {
@@ -2146,7 +2146,7 @@ export default function POSTerminalScreen({
                           onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
                           activeOpacity={0.75}
                         >
-                          <Text style={[styles.posRegionEmoji, isTablet && { fontSize: 11 }]}>{meta.emoji}</Text>
+                          <Ionicons name={meta.icon as any} size={isTablet ? 12 : 14} color={isSelected ? '#FFFFFF' : meta.color} />
                           <Text style={[
                             styles.posRegionChipText,
                             isTablet && { fontSize: 11 },
@@ -2984,9 +2984,9 @@ export default function POSTerminalScreen({
                   {(
                     [
                       { id: 'all', label: 'All Units' },
-                      { id: 'tables', label: '🍽️ Tables' },
-                      { id: 'couches', label: '🛋️ Couches' },
-                      { id: 'majlis', label: '🕌 Majlis' },
+                      { id: 'tables', label: 'Tables' },
+                      { id: 'couches', label: 'Couches' },
+                      { id: 'majlis', label: 'Majlis' },
                     ] as const
                   )
                     .filter((st) => {
@@ -3015,8 +3015,8 @@ export default function POSTerminalScreen({
                   {(
                     [
                       { id: 'all', label: 'All' },
-                      { id: 'available', label: '🟢 Free' },
-                      { id: 'occupied', label: '🔴 Busy' },
+                      { id: 'available', label: 'Free' },
+                      { id: 'occupied', label: 'Busy' },
                     ] as const
                   ).map(st => {
                     const active = tableModalStatus === st.id;
@@ -3317,7 +3317,7 @@ export default function POSTerminalScreen({
                 <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                   <Ionicons name="flash" size={17} color="#D4AF37" style={{ marginRight: 6 }} />
                   <Text style={styles.fullPaymentBtnText}>
-                    ⚡ FULL PAYMENT (Exact Rs. {Math.round(total).toLocaleString()})
+                    FULL PAYMENT (Exact Rs. {Math.round(total).toLocaleString()})
                   </Text>
                 </View>
                 <View style={styles.keyInlinePill}>
@@ -3652,7 +3652,7 @@ export default function POSTerminalScreen({
                               color="#FFFFFF"
                               style={{ marginRight: 4 }}
                             />
-                            <Text style={styles.ticketBillBtnText}>⚡ Create Bill & Settle</Text>
+                            <Text style={styles.ticketBillBtnText}>Create Bill & Settle</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -3780,7 +3780,7 @@ export default function POSTerminalScreen({
 
               <View style={styles.shortcutItemRow}>
                 <View style={[styles.keyBadge, { backgroundColor: '#35080E', borderColor: '#D4AF37' }]}><Text style={[styles.keyBadgeText, { color: '#D4AF37' }]}>F10</Text></View>
-                <Text style={styles.shortcutDescText}>⚡ Full Payment (Fill exact bill amount)</Text>
+                <Text style={styles.shortcutDescText}>Full Payment (Fill exact bill amount)</Text>
               </View>
 
               <View style={styles.shortcutItemRow}>

@@ -921,7 +921,7 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
                 <View style={styles.feedbackBadge}>
                   <Ionicons name="checkmark-circle" size={14} color="#2E7D32" style={{ marginRight: 4 }} />
                   <Text style={styles.feedbackBadgeText}>
-                    Feedback Submitted (⭐ {invoice.feedback?.overallRating || 5}/5)
+                    Feedback Submitted ({invoice.feedback?.overallRating || 5}/5)
                   </Text>
                 </View>
               ) : null}

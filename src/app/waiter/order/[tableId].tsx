@@ -35,18 +35,18 @@ import { printInvoiceReceipt } from '../../../components/Invoice';
 import { BRAND } from '../../../constants/brand';
 
 const NOTE_PRESETS = [
-  '🌶️ Less Spicy',
-  '🔥 Extra Spicy',
-  '🧅 No Onion',
-  '🍟 Extra Crispy',
-  '🥗 Starter First',
-  '⚡ Jaldi / Rush',
-  '🧂 Low Salt',
-  '🥡 Pack To-Go',
-  '☕ Less Sugar',
-  '🧊 Extra Ice',
-  '🧀 Extra Cheese',
-  '🥣 Extra Raita',
+  'Less Spicy',
+  'Extra Spicy',
+  'No Onion',
+  'Extra Crispy',
+  'Starter First',
+  'Jaldi / Rush',
+  'Low Salt',
+  'Pack To-Go',
+  'Less Sugar',
+  'Extra Ice',
+  'Extra Cheese',
+  'Extra Raita',
 ];
 
 function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
@@ -69,17 +69,17 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
 
 function getCuisineMeta(cuisineName: string) {
   const c = (cuisineName || '').toLowerCase();
-  if (c.includes('pakistan') || c.includes('desi')) return { emoji: '🍛', icon: 'flame' as const };
-  if (c.includes('chine') || c.includes('asian')) return { emoji: '🥢', icon: 'restaurant' as const };
-  if (c.includes('continen') || c.includes('steak')) return { emoji: '🥩', icon: 'nutrition' as const };
-  if (c.includes('arab') || c.includes('mandi') || c.includes('kabsa')) return { emoji: '🍢', icon: 'bonfire' as const };
-  if (c.includes('turk')) return { emoji: '🥙', icon: 'flame' as const };
-  if (c.includes('fast') || c.includes('burger')) return { emoji: '🍔', icon: 'fast-food' as const };
-  if (c.includes('ital') || c.includes('pizza') || c.includes('pasta')) return { emoji: '🍕', icon: 'pizza' as const };
-  if (c.includes('bbq') || c.includes('grill')) return { emoji: '🔥', icon: 'flame' as const };
-  if (c.includes('bever') || c.includes('drink') || c.includes('juice')) return { emoji: '🍹', icon: 'wine' as const };
-  if (c.includes('sweet') || c.includes('dessert')) return { emoji: '🍨', icon: 'ice-cream' as const };
-  return { emoji: '🍽️', icon: 'restaurant' as const };
+  if (c.includes('pakistan') || c.includes('desi')) return { icon: 'flame' as const };
+  if (c.includes('chine') || c.includes('asian')) return { icon: 'restaurant' as const };
+  if (c.includes('continen') || c.includes('steak')) return { icon: 'nutrition' as const };
+  if (c.includes('arab') || c.includes('mandi') || c.includes('kabsa')) return { icon: 'bonfire' as const };
+  if (c.includes('turk')) return { icon: 'flame' as const };
+  if (c.includes('fast') || c.includes('burger')) return { icon: 'fast-food' as const };
+  if (c.includes('ital') || c.includes('pizza') || c.includes('pasta')) return { icon: 'pizza' as const };
+  if (c.includes('bbq') || c.includes('grill')) return { icon: 'flame' as const };
+  if (c.includes('bever') || c.includes('drink') || c.includes('juice')) return { icon: 'wine' as const };
+  if (c.includes('sweet') || c.includes('dessert')) return { icon: 'ice-cream' as const };
+  return { icon: 'restaurant' as const };
 }
 
 export default function TableOrderScreen() {
@@ -141,7 +141,7 @@ export default function TableOrderScreen() {
   // Support takeaway / express counter or table
   const isTakeaway = tableId === 'takeaway';
   const table = tables.find(t => t.id === tableId);
-  const tableName = isTakeaway ? '🛍️ Takeaway / Counter' : (table ? table.name : `Table ${tableId}`);
+  const tableName = isTakeaway ? 'Takeaway / Counter' : (table ? table.name : `Table ${tableId}`);
   const seatingType = table ? getTableSeatingType(table) : 'tables';
   const floorName = isTakeaway ? 'Express Counter' : (table ? getTableFloor(table) : 'Ground Floor');
   const floorMeta = getFloorMeta(floorName, dynamicFloors);
@@ -446,7 +446,7 @@ export default function TableOrderScreen() {
     const kotItems = newCart.map(c => ({
       item: c.item,
       qty: c.qty,
-      notes: [c.notes, isRushOrder ? '⚡ RUSH / JALDI' : ''].filter(Boolean).join(' • ') || undefined,
+      notes: [c.notes, isRushOrder ? 'RUSH / JALDI' : ''].filter(Boolean).join(' • ') || undefined,
     }));
 
     // Place order via store
@@ -678,7 +678,7 @@ export default function TableOrderScreen() {
           {/* Subtitle Row with Seating type, Guest Pax, Floor */}
           <View style={styles.topBarSubtitleRow}>
             <Text style={styles.topBarSubtitleType}>
-              {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch Lounge' : isTakeaway ? '🛍️ Parcel Counter' : '🍽️ Dining Table'}
+              {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch Lounge' : isTakeaway ? 'Parcel Counter' : 'Dining Table'}
             </Text>
             <Text style={styles.topBarDot}>•</Text>
             
@@ -1090,7 +1090,7 @@ export default function TableOrderScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.stationPillText, activeStation === 'deals' && styles.stationPillTextActive]}>
-                    ⭐ Deals
+                    Deals
                   </Text>
                 </TouchableOpacity>
 
@@ -1100,7 +1100,7 @@ export default function TableOrderScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.stationPillText, activeStation === 'main' && styles.stationPillTextActive]}>
-                    🍳 Kitchen KDS
+                    Kitchen KDS
                   </Text>
                 </TouchableOpacity>
 
@@ -1110,7 +1110,7 @@ export default function TableOrderScreen() {
                   activeOpacity={0.8}
                 >
                   <Text style={[styles.stationPillText, activeStation === 'juice' && styles.stationPillTextActive]}>
-                    🍹 Juice Bar
+                    Juice Bar
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1178,7 +1178,7 @@ export default function TableOrderScreen() {
                         onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
                         activeOpacity={0.75}
                       >
-                        <Text style={styles.posRegionEmoji}>{meta.emoji}</Text>
+                        <Ionicons name={meta.icon} size={13} color={isSelected ? '#FFFFFF' : '#52141C'} />
                         <Text style={[
                           styles.posRegionChipText,
                           isSelected && styles.posRegionChipTextActive,
@@ -1484,10 +1484,10 @@ export default function TableOrderScreen() {
                       <View style={{ flex: 1.8 }}>
                         <Text style={styles.ticketItemName} numberOfLines={1}>{item.name}</Text>
                         {item.notes ? (
-                          <Text style={styles.ticketItemNote} numberOfLines={1}>📝 {item.notes}</Text>
+                          <Text style={styles.ticketItemNote} numberOfLines={1}>{item.notes}</Text>
                         ) : null}
                         <Text style={styles.ticketItemMeta}>
-                          {item.station === 'juice' ? '🍹 Bar' : '🍳 Main'} • {Math.max(0, Math.floor((now - item.timePlaced) / 60000))}m ago
+                          {item.station === 'juice' ? 'Bar' : 'Main'} • {Math.max(0, Math.floor((now - item.timePlaced) / 60000))}m ago
                         </Text>
                       </View>
 
@@ -1678,7 +1678,7 @@ export default function TableOrderScreen() {
                 >
                   <Ionicons name="flash" size={15} color={isRushOrder ? '#D4AF37' : '#94A3B8'} />
                   <Text style={[styles.rushOrderToggleText, isRushOrder && styles.rushOrderToggleTextActive]}>
-                    {isRushOrder ? '⚡ VIP RUSH PRIORITY' : 'Mark as Rush Order (Jaldi)'}
+                    {isRushOrder ? 'VIP RUSH PRIORITY' : 'Mark as Rush Order (Jaldi)'}
                   </Text>
                 </TouchableOpacity>
               )}
@@ -1825,7 +1825,7 @@ export default function TableOrderScreen() {
           <View style={[styles.modalCard, { maxWidth: 460, maxHeight: '80%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>🔀 Move Table Order</Text>
+                <Text style={styles.modalTitle}>Move Table Order</Text>
                 <Text style={styles.modalSubtitle}>From: {tableName}</Text>
               </View>
               <TouchableOpacity onPress={() => setTransferModalVisible(false)}>
@@ -1909,7 +1909,7 @@ export default function TableOrderScreen() {
           <View style={[styles.modalCard, { maxWidth: 440, maxHeight: '85%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>🧾 Running Bill Slip</Text>
+                <Text style={styles.modalTitle}>Running Bill Slip</Text>
                 <Text style={styles.modalSubtitle}>{tableName}</Text>
               </View>
               <TouchableOpacity onPress={() => setBillSlipModalVisible(false)}>

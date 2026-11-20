@@ -806,7 +806,7 @@ export default function ManagerDashboard() {
           {...({ dataSet: { card: 'interactive', stagger: 'table-1' } } as any)}
         >
           <View style={styles.tableHeaderSection}>
-            <Text style={styles.sectionTitle}>🏆 Top Moving Dishes This Shift</Text>
+            <Text style={styles.sectionTitle}>Top Moving Dishes This Shift</Text>
             {can('canAccessPOS') && (
               <TouchableOpacity onPress={() => router.push('/manager/pos')}>
                 <Text style={styles.tableActionLink}>Menu POS</Text>
@@ -850,7 +850,7 @@ export default function ManagerDashboard() {
           {...({ dataSet: { card: 'interactive', stagger: 'table-2' } } as any)}
         >
           <View style={styles.tableHeaderSection}>
-            <Text style={styles.sectionTitle}>🧾 Recent Settled Orders</Text>
+            <Text style={styles.sectionTitle}>Recent Settled Orders</Text>
             {can('canAccessInvoices') && (
               <TouchableOpacity onPress={() => router.push('/manager/invoices')}>
                 <Text style={styles.tableActionLink}>All Orders</Text>

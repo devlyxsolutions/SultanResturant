@@ -460,7 +460,7 @@ export default function OrderTakerScreen() {
                       { color: isMajlis ? '#8A5D00' : zoneMeta.color },
                     ]}
                   >
-                    {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch Lounge' : '🍽️ Dining Table'}
+                    {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch Lounge' : 'Dining Table'}
                   </Text>
                 </View>
                 <Text style={styles.dot}>•</Text>
@@ -504,10 +504,10 @@ export default function OrderTakerScreen() {
               <Ionicons name="people" size={13} color={isMajlis ? '#4a121a' : '#555'} />
               <Text style={[styles.capacityText, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
                 {isMajlis
-                  ? `🕌 Capacity: ${item.seats} Guests (Family Cabin)`
+                  ? `Capacity: ${item.seats} Guests (Family Cabin)`
                   : isCouch
-                  ? `🛋️ Seating: ${item.seats} Guests (Lounge)`
-                  : `🍽️ Seating: ${item.seats} Guests`}
+                  ? `Seating: ${item.seats} Guests (Lounge)`
+                  : `Seating: ${item.seats} Guests`}
               </Text>
             </View>
 
@@ -1126,10 +1126,10 @@ export default function OrderTakerScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={[styles.billPaidAlertTitle, { color: '#15803D' }]}>
-                🔔 Dish Ready: {lastFoodReadyAlert.tableName}!
+                Dish Ready: {lastFoodReadyAlert.tableName}!
               </Text>
               <Text style={[styles.billPaidAlertDesc, { color: '#166534' }]}>
-                {lastFoodReadyAlert.station === 'juice' ? '🍹 Juice Bar' : '🍳 Kitchen'} marked{' '}
+                {lastFoodReadyAlert.station === 'juice' ? 'Juice Bar' : 'Kitchen'} marked{' '}
                 <Text style={{ fontWeight: '700' }}>
                   {lastFoodReadyAlert.singleItemName || lastFoodReadyAlert.itemsSummary}
                 </Text>{' '}
@@ -1165,7 +1165,7 @@ export default function OrderTakerScreen() {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.billPaidAlertTitle}>
-                🔔 Bill Paid: {lastBillPaidAlert.tableName}!
+                Bill Paid: {lastBillPaidAlert.tableName}!
               </Text>
               <Text style={styles.billPaidAlertDesc}>
                 Bill settled at Cashier counter. Guests are still seated — tap Release below when vacated.

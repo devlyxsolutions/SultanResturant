@@ -95,7 +95,7 @@ interface AutoCategorySliderProps {
   isDesktop: boolean;
   isTablet: boolean;
   screenWidth: number;
-  getEmoji: (cat: string) => string;
+  getIcon: (cat: string) => keyof typeof Ionicons.glyphMap;
   getUrdu: (cat: string) => string;
 }
 
@@ -107,7 +107,7 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
   isDesktop,
   isTablet,
   screenWidth,
-  getEmoji,
+  getIcon,
   getUrdu,
 }) => {
   const scrollRef = useRef<any>(null);
@@ -264,7 +264,7 @@ const AutoCategorySlider: React.FC<AutoCategorySliderProps> = ({
       <View style={styles.catGalleryHeader}>
         <View style={styles.catGalleryHeaderLeft}>
           <View style={styles.catGalleryBadgeIcon}>
-            <Text style={styles.catGalleryEmoji}>{getEmoji(category)}</Text>
+            <Ionicons name={getIcon(category)} size={20} color="#D4AF37" />
           </View>
           <View style={{ flex: 1 }}>
             <View style={styles.catGalleryTitleRow}>
@@ -737,47 +737,47 @@ export default function CustomerMenuScreen() {
     return getActiveServerHttpUrl();
   };
 
-  // Helper: Category Emoji & Urud Titles
-  const getCategoryEmoji = (cat: string) => {
+  // Helper: Category Icons & Urdu Titles
+  const getCategoryIcon = (cat: string): keyof typeof Ionicons.glyphMap => {
     const lower = cat.toLowerCase();
-    if (lower === 'all') return '👑';
-    if (lower.includes('karahi') || lower.includes('handi')) return '🥘';
+    if (lower === 'all') return 'grid-outline';
+    if (lower.includes('karahi') || lower.includes('handi')) return 'flame-outline';
     if (
       lower.includes('bbq') ||
       lower.includes('kabab') ||
       lower.includes('grill') ||
       lower.includes('tikka')
     )
-      return '🍢';
+      return 'bonfire-outline';
     if (lower.includes('biryani') || lower.includes('rice') || lower.includes('pulao'))
-      return '🍚';
-    if (lower.includes('mains') || lower.includes('curry')) return '🍲';
+      return 'restaurant-outline';
+    if (lower.includes('mains') || lower.includes('curry')) return 'restaurant-outline';
     if (
       lower.includes('appetizer') ||
       lower.includes('starter') ||
       lower.includes('soup') ||
       lower.includes('roll')
     )
-      return '🥟';
+      return 'cafe-outline';
     if (lower.includes('naan') || lower.includes('roti') || lower.includes('bread'))
-      return '🫓';
+      return 'nutrition-outline';
     if (
       lower.includes('dessert') ||
       lower.includes('sweet') ||
       lower.includes('kunafa') ||
       lower.includes('kheer')
     )
-      return '🍨';
+      return 'ice-cream-outline';
     if (
       lower.includes('drink') ||
       lower.includes('beverage') ||
       lower.includes('juice') ||
       lower.includes('shake')
     )
-      return '🍹';
+      return 'wine-outline';
     if (lower.includes('deal') || lower.includes('combo') || lower.includes('family'))
-      return '🎁';
-    return '🍽️';
+      return 'pricetags-outline';
+    return 'restaurant-outline';
   };
 
   const getCategoryUrduOrTagline = (cat: string) => {
@@ -840,27 +840,27 @@ export default function CustomerMenuScreen() {
       lower.includes('karahi') ||
       lower.includes('bbq')
     ) {
-      return { icon: 'flame', emoji: '🇵🇰', color: '#16A34A' };
+      return { icon: 'flame', color: '#16A34A' };
     }
     if (lower.includes('chinese') || lower.includes('asian')) {
-      return { icon: 'restaurant', emoji: '🥢', color: '#DC2626' };
+      return { icon: 'restaurant', color: '#DC2626' };
     }
     if (lower.includes('continental') || lower.includes('steak')) {
-      return { icon: 'wine', emoji: '🥩', color: '#9333EA' };
+      return { icon: 'wine', color: '#9333EA' };
     }
     if (lower.includes('arabic') || lower.includes('middle') || lower.includes('mandi')) {
-      return { icon: 'moon', emoji: '🧆', color: '#D97706' };
+      return { icon: 'moon', color: '#D97706' };
     }
     if (lower.includes('turkish') || lower.includes('kebab')) {
-      return { icon: 'sparkles', emoji: '🥙', color: '#E11D48' };
+      return { icon: 'sparkles', color: '#E11D48' };
     }
     if (lower.includes('fast') || lower.includes('burger')) {
-      return { icon: 'fast-food', emoji: '🍔', color: '#EA580C' };
+      return { icon: 'fast-food', color: '#EA580C' };
     }
     if (lower.includes('italian') || lower.includes('pizza') || lower.includes('pasta')) {
-      return { icon: 'pizza', emoji: '🍕', color: '#059669' };
+      return { icon: 'pizza', color: '#059669' };
     }
-    return { icon: 'earth', emoji: '🍽️', color: '#B45309' };
+    return { icon: 'earth', color: '#B45309' };
   };
 
   // Categories & Regions Lists
@@ -1544,7 +1544,7 @@ export default function CustomerMenuScreen() {
         return {
           step: 4,
           percent: '90%',
-          label: 'Out for Delivery 🛵',
+          label: 'Out for Delivery',
           desc: 'Rider is on the way',
         };
       case 'DELIVERED':
@@ -1552,7 +1552,7 @@ export default function CustomerMenuScreen() {
         return {
           step: 5,
           percent: '100%',
-          label: 'Delivered / Served 🎉',
+          label: 'Delivered / Served',
           desc: 'Enjoy your Sultan meal!',
         };
       case 'CANCELLED':
@@ -2280,9 +2280,7 @@ export default function CustomerMenuScreen() {
 
                   <View style={styles.focusedCatBannerInfo}>
                     <View style={styles.focusedCatBannerIconBox}>
-                      <Text style={styles.focusedCatBannerEmoji}>
-                        {getCategoryEmoji(activeCat)}
-                      </Text>
+                      <Ionicons name={getCategoryIcon(activeCat)} size={22} color="#D4AF37" />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.focusedCatBannerTitle}>{activeCat}</Text>
@@ -2327,7 +2325,7 @@ export default function CustomerMenuScreen() {
                       isDesktop={isDesktop}
                       isTablet={isTablet}
                       screenWidth={width}
-                      getEmoji={getCategoryEmoji}
+                      getIcon={getCategoryIcon}
                       getUrdu={getCategoryUrduOrTagline}
                     />
                   ))}
@@ -2708,7 +2706,7 @@ export default function CustomerMenuScreen() {
                         <Text style={styles.checkoutItemSub}>{c.portionLabel}</Text>
                       ) : null}
                       {c.notes ? (
-                        <Text style={styles.checkoutItemNotes}>📝 {c.notes}</Text>
+                        <Text style={styles.checkoutItemNotes}>{c.notes}</Text>
                       ) : null}
                       <Text style={styles.checkoutItemPrice}>
                         Rs. {(c.unitPrice * c.qty).toLocaleString()}
@@ -2769,10 +2767,10 @@ export default function CustomerMenuScreen() {
                 <Text style={styles.sectionLabel}>Payment Preference:</Text>
                 <View style={styles.optionsWrap}>
                   {[
-                    { id: 'cash_on_delivery', label: '💵 Cash on Serving/Delivery' },
-                    { id: 'card', label: '💳 Credit/Debit Card' },
-                    { id: 'jazzcash', label: '📱 JazzCash' },
-                    { id: 'easypaisa', label: '📲 EasyPaisa' },
+                    { id: 'cash_on_delivery', label: 'Cash on Serving/Delivery' },
+                    { id: 'card', label: 'Credit/Debit Card' },
+                    { id: 'jazzcash', label: 'JazzCash' },
+                    { id: 'easypaisa', label: 'EasyPaisa' },
                   ].map((p) => (
                     <TouchableOpacity
                       key={p.id}
@@ -3084,7 +3082,7 @@ export default function CustomerMenuScreen() {
           <View style={[styles.customizerModalCard, { maxHeight: '86%' }]}>
             <View style={styles.modalHeaderRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.customizerModalTitle}>📋 Past Orders</Text>
+                <Text style={styles.customizerModalTitle}>Past Orders</Text>
                 <Text style={styles.customizerModalCat}>
                   {orderHistory.length} orders recorded
                 </Text>

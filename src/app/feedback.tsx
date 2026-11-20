@@ -19,21 +19,21 @@ import { useSettingsStore } from '../store/settingsStore';
 import SultanLogo from '../components/SultanLogo';
 
 const POSITIVE_TAGS = [
-  'Delicious 😋',
-  'Authentic Taste 👑',
-  'Served Hot 🔥',
-  'Juicy & Fresh 🥩',
-  'Generous Portion 🍲',
-  'Quick Service ⚡',
+  'Delicious',
+  'Authentic Taste',
+  'Served Hot',
+  'Juicy & Fresh',
+  'Generous Portion',
+  'Quick Service',
 ];
 
 const CONSTRUCTIVE_TAGS = [
-  'Too Spicy 🌶️',
-  'Too Salty 🧂',
-  'Too Oily 🍳',
-  'Served Lukewarm ❄️',
-  'Small Portion 📉',
-  'Slow ⏱️',
+  'Too Spicy',
+  'Too Salty',
+  'Too Oily',
+  'Served Lukewarm',
+  'Small Portion',
+  'Slow',
 ];
 
 export default function CustomerFeedbackScreen() {
@@ -82,7 +82,7 @@ export default function CustomerFeedbackScreen() {
     return (
       itemReviews[key] || {
         rating: 5,
-        tags: ['Delicious 😋'],
+        tags: ['Delicious'],
         comment: '',
       }
     );
@@ -178,7 +178,7 @@ export default function CustomerFeedbackScreen() {
   };
 
   const handleShareVoucher = () => {
-    const text = `🎉 Sultan Restaurant 10% Royal Reward Voucher: ${voucherCode}\nThank you for dining with us! Present this code for 10% off your next meal.`;
+    const text = `Sultan Restaurant 10% Royal Reward Voucher: ${voucherCode}\nThank you for dining with us! Present this code for 10% off your next meal.`;
     if (Platform.OS === 'web') {
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
       Linking.openURL(url);
@@ -211,14 +211,14 @@ export default function CustomerFeedbackScreen() {
         ))}
         <Text style={styles.starLabel}>
           {value === 5
-            ? 'Exceptional 👑'
+            ? 'Exceptional'
             : value === 4
-            ? 'Very Good 👍'
+            ? 'Very Good'
             : value === 3
-            ? 'Average 😐'
+            ? 'Average'
             : value === 2
-            ? 'Needs Improvement 👎'
-            : 'Unsatisfactory ⚠️'}
+            ? 'Needs Improvement'
+            : 'Unsatisfactory'}
         </Text>
       </View>
     );

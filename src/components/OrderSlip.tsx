@@ -8,21 +8,41 @@ type OrderSlipProps = {
   ticket: Ticket;
 };
 
-/**
- * Universal print helper for Kitchen / JuiceBar Order Slips.
- */
-export function printOrderSlip(ticket: Ticket) {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-  if (!ticket) return;
+export type PrintOrderSlipOptions = {
+  stationLabel?: string;
+  onAfterPrint?: () => void;
+};
 
-  const date = new Date(ticket.timePlaced || Date.now()).toLocaleString();
+/**
+ * Universal print helper for Kitchen / JuiceBar 80mm Thermal KOT Slips.
+ * Supports silent kiosk printing and sequential queue callbacks via `onAfterPrint`.
+ */
+export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    options?.onAfterPrint?.();
+    return;
+  }
+  if (!ticket) {
+    options?.onAfterPrint?.();
+    return;
+  }
+
+  const stationTitle = options?.stationLabel || 'KITCHEN KOT';
+  const date = new Date(ticket.timePlaced || Date.now()).toLocaleString('en-PK', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    day: '2-digit',
+    month: 'short',
+  });
   const items = Array.isArray(ticket.items) ? ticket.items : [];
+  const totalQty = items.reduce((sum, item) => sum + (item?.qty || 1), 0);
   const itemsHtml = items.map(item => `
     <tr>
-      <td style="width: 16%; font-size: 13px; font-weight: bold; vertical-align: top; padding: 4px 0;">${item?.qty || 1}x</td>
-      <td style="width: 84%; font-size: 13px; vertical-align: top; padding: 4px 0;">
-        <div style="font-weight: bold;">${item?.name || ''}</div>
-        ${item?.notes ? `<div style="font-size: 10px; font-style: italic; color: #666; margin-top: 1px;">Note: ${item.notes}</div>` : ''}
+      <td style="width: 18%; font-size: 15px; font-weight: 900; vertical-align: top; padding: 5px 0; border-bottom: 1px dashed #999;">${item?.qty || 1}x</td>
+      <td style="width: 82%; font-size: 14px; vertical-align: top; padding: 5px 0; border-bottom: 1px dashed #999;">
+        <div style="font-weight: 900; color: #000;">${item?.name || ''}</div>
+        ${item?.notes ? `<div style="font-size: 11px; font-weight: 700; color: #000; margin-top: 2px;">* ${item.notes}</div>` : ''}
       </td>
     </tr>
   `).join('');
@@ -32,7 +52,7 @@ export function printOrderSlip(ticket: Ticket) {
     <html>
     <head>
       <meta charset="utf-8">
-      <title>Kitchen Ticket #${ticket.id} - Sultan Restaurant</title>
+      <title>${stationTitle} #${ticket.id} - Sultan Restaurant</title>
       <style>
         @page {
           size: 80mm auto;
@@ -52,51 +72,64 @@ export function printOrderSlip(ticket: Ticket) {
         }
         body {
           margin: 0 auto;
-          padding: 6mm 4mm;
+          padding: 4mm 3mm 8mm 3mm;
           width: 78mm;
           max-width: 80mm;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Courier New", Courier, monospace;
           color: #000;
           background: #fff;
-          font-size: 11px;
+          font-size: 12px;
         }
         .header {
           text-align: center;
           margin-bottom: 6px;
         }
         .logo-img {
-          width: 50px;
-          height: 46px;
+          width: 44px;
+          height: 40px;
           object-fit: contain;
-          margin: 0 auto 4px auto;
+          margin: 0 auto 3px auto;
           display: block;
         }
         .logo-title {
-          font-size: 16px;
+          font-size: 17px;
           font-weight: 900;
-          letter-spacing: 2px;
+          letter-spacing: 1.5px;
           margin: 0;
-          color: #111;
+          color: #000;
         }
         .logo-sub {
+          display: inline-block;
           font-size: 11px;
-          font-weight: 700;
-          color: #555;
+          font-weight: 900;
+          color: #000;
+          border: 1.5px solid #000;
+          padding: 2px 8px;
           letter-spacing: 1px;
-          margin-top: 2px;
+          margin-top: 4px;
+        }
+        .table-banner {
+          text-align: center;
+          font-size: 17px;
+          font-weight: 900;
+          padding: 4px 0;
+          border-top: 2px solid #000;
+          border-bottom: 2px solid #000;
+          margin: 6px 0;
         }
         .divider {
           border-top: 2px solid #000;
           margin: 6px 0;
         }
         .divider-dashed {
-          border-top: 1px dashed #666;
+          border-top: 1px dashed #000;
           margin: 6px 0;
         }
         .meta-row {
           display: flex;
           justify-content: space-between;
           font-size: 11px;
+          font-weight: 700;
           margin: 2px 0;
           font-family: "Courier New", Courier, monospace;
         }
@@ -108,34 +141,39 @@ export function printOrderSlip(ticket: Ticket) {
         }
         th {
           font-size: 11px;
+          font-weight: 900;
           text-transform: uppercase;
-          border-bottom: 1px solid #000;
+          border-bottom: 2px solid #000;
           padding: 4px 0;
+        }
+        .footer {
+          text-align: center;
+          font-size: 11px;
+          font-weight: 700;
+          margin-top: 6px;
         }
       </style>
     </head>
     <body>
       <div class="header">
         <img src="${SULTAN_LOGO_BASE64}" alt="Sultan Logo" class="logo-img" />
-        <h2 class="logo-title">KITCHEN SLIP</h2>
-        <div class="logo-sub">${ticket.isAddOn ? 'ADD-ON ORDER' : 'NEW ORDER'}</div>
+        <h2 class="logo-title">${stationTitle}</h2>
+        <div class="logo-sub">${ticket.isAddOn ? `ADD-ON ROUND #${ticket.roundNumber || 2}` : 'NEW ORDER'}</div>
       </div>
-      <div class="divider"></div>
+      <div class="table-banner">${ticket.tableName || 'Counter'}</div>
       <div class="meta-row">
-        <span>Ticket #: ${ticket.id}</span>
+        <span>KOT: ${ticket.id}</span>
         <span>${date}</span>
       </div>
-      <div class="meta-row" style="font-size: 13px; font-weight: bold;">
-        <span>Table: ${ticket.tableName}</span>
-        <span>Server: ${ticket.server}</span>
+      <div class="meta-row">
+        <span>Server: ${ticket.server || 'Staff'}</span>
+        <span>Total Qty: ${totalQty}</span>
       </div>
-      ${ticket.isAddOn ? `<div class="meta-row"><span>Round #: ${ticket.roundNumber}</span></div>` : ''}
-      <div class="divider-dashed"></div>
       <table>
         <thead>
           <tr>
-            <th style="width: 16%; text-align: left;">Qty</th>
-            <th style="width: 84%; text-align: left;">Item</th>
+            <th style="width: 18%; text-align: left;">Qty</th>
+            <th style="width: 82%; text-align: left;">Item</th>
           </tr>
         </thead>
         <tbody>
@@ -143,6 +181,7 @@ export function printOrderSlip(ticket: Ticket) {
         </tbody>
       </table>
       <div class="divider"></div>
+      <div class="footer">SULTAN RESTAURANT • AUTO KOT</div>
     </body>
     </html>
   `;
@@ -162,15 +201,38 @@ export function printOrderSlip(ticket: Ticket) {
     document.body.appendChild(iframe);
   }
 
+  let finished = false;
+  const finishOnce = () => {
+    if (finished) return;
+    finished = true;
+    options?.onAfterPrint?.();
+  };
+
   const doc = iframe.contentWindow?.document;
   if (doc) {
     doc.open();
     doc.write(htmlContent);
     doc.close();
     setTimeout(() => {
-      iframe?.contentWindow?.focus();
-      iframe?.contentWindow?.print();
-    }, 250);
+      try {
+        const win = iframe?.contentWindow;
+        if (!win) {
+          finishOnce();
+          return;
+        }
+        const fallbackTimer = setTimeout(finishOnce, 1800);
+        win.onafterprint = () => {
+          clearTimeout(fallbackTimer);
+          finishOnce();
+        };
+        win.focus();
+        win.print();
+      } catch {
+        finishOnce();
+      }
+    }, 220);
+  } else {
+    finishOnce();
   }
 }
 

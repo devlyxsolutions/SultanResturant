@@ -21,7 +21,14 @@ import { useSettingsStore } from '../../store/settingsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
-import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
+import {
+  enqueueKdsAutoPrint,
+  getKdsAutoPrintEnabled,
+  printKdsTestSlip,
+  seedExistingKdsTicketsAsPrinted,
+  setKdsAutoPrintEnabled,
+} from '../../utils/kdsAutoPrint';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -92,6 +99,18 @@ export default function KitchenDisplayScreen() {
   } | null>(null);
 
   const [printingTicket, setPrintingTicket] = useState<Ticket | null>(null);
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(() => getKdsAutoPrintEnabled('juice'));
+  const autoPrintRef = useRef<boolean>(autoPrintEnabled);
+  const [lastAutoPrintedTicket, setLastAutoPrintedTicket] = useState<string | null>(null);
+
+  const toggleAutoPrint = () => {
+    setAutoPrintEnabled((prev) => {
+      const next = !prev;
+      autoPrintRef.current = next;
+      setKdsAutoPrintEnabled('juice', next);
+      return next;
+    });
+  };
 
   // Juice Bar Handover & Inventory Modal state
   const [showInventoryModal, setShowInventoryModal] = useState(false);
@@ -159,9 +178,24 @@ export default function KitchenDisplayScreen() {
     }
   };
 
-  // Track seen tickets to trigger notification on newly incoming tickets
+  // Track seen tickets to trigger notification & hands-free auto-print on newly incoming tickets
   const seenTicketIdsRef = useRef<Set<string>>(new Set((tickets || []).filter((t) => !!t && !!t.id).map((t) => t.id)));
   const isInitialMount = useRef(true);
+  const mountedAtRef = useRef<number>(Date.now());
+  const initialSyncDoneRef = useRef(false);
+
+  // Seed already-cached tickets on mount so reopening Juice Bar KDS never reprints old orders
+  useEffect(() => {
+    seedExistingKdsTicketsAsPrinted('juice', tickets || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-clear last printed badge after 6 seconds
+  useEffect(() => {
+    if (!lastAutoPrintedTicket) return;
+    const t = setTimeout(() => setLastAutoPrintedTicket(null), 6000);
+    return () => clearTimeout(t);
+  }, [lastAutoPrintedTicket]);
 
   // Live ticking clock (1s) so KOT countdown timer and elapsed-time colors refresh in real-time
   useEffect(() => {
@@ -169,7 +203,82 @@ export default function KitchenDisplayScreen() {
     return () => clearInterval(id);
   }, []);
 
-  // Watch for new tickets arriving (from waiter device / server sync)
+  // Real-time sync poll + WebSocket listener for instant Juice Bar KOT alert & auto-print
+  useEffect(() => {
+    const fetchLiveTickets = async () => {
+      try {
+        const baseHttpUrl = getActiveServerHttpUrl();
+        const res = await fetch(`${baseHttpUrl}/api/sync`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && Array.isArray(data.tickets)) {
+            if (!initialSyncDoneRef.current) {
+              initialSyncDoneRef.current = true;
+              const historical = (data.tickets as Ticket[]).filter(
+                (t) => t && t.id && (t.timePlaced || 0) < mountedAtRef.current - 60000
+              );
+              historical.forEach((t) => seenTicketIdsRef.current.add(t.id));
+              seedExistingKdsTicketsAsPrinted('juice', historical);
+            }
+            useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
+          }
+        }
+      } catch (_) {}
+    };
+
+    fetchLiveTickets();
+    const pollInterval = setInterval(fetchLiveTickets, 3500);
+
+    const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
+    let socket: WebSocket | null = null;
+    try {
+      socket = new WebSocket(wsUrl);
+      socket.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
+            const currentTickets = useRestaurantStore.getState().tickets || [];
+            if (!currentTickets.some((t: Ticket) => t.id === msg.ticket.id)) {
+              useRestaurantStore.getState().syncFromServer({
+                tickets: [msg.ticket, ...currentTickets],
+              });
+              const stationItems = (msg.ticket.items || []).filter(
+                (it: any) => (it?.station || 'main') === 'juice'
+              );
+              if (stationItems.length > 0) {
+                playKitchenChime(!!msg.ticket.isAddOn);
+                setLatestAlert({
+                  id: msg.ticket.id,
+                  tableName: msg.ticket.tableName,
+                  isAddOn: !!msg.ticket.isAddOn,
+                  roundNumber: msg.ticket.roundNumber,
+                  itemCount: stationItems.reduce((s: number, it: any) => s + (it.qty || 1), 0),
+                  server: msg.ticket.server,
+                });
+                enqueueKdsAutoPrint(msg.ticket, 'juice', {
+                  enabled: autoPrintRef.current,
+                  onPrinted: (id) => setLastAutoPrintedTicket(id),
+                });
+              }
+            }
+          }
+        } catch {
+          // Ignore malformed ws messages
+        }
+      };
+    } catch {
+      // Ignore ws init errors
+    }
+
+    return () => {
+      clearInterval(pollInterval);
+      if (socket) {
+        try { socket.close(); } catch { }
+      }
+    };
+  }, []);
+
+  // Watch for new tickets arriving (from waiter device / server sync) & auto-print
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -190,7 +299,15 @@ export default function KitchenDisplayScreen() {
     });
 
     if (newlyAdded.length > 0) {
-      const newest = newlyAdded[newlyAdded.length - 1];
+      const ordered = [...newlyAdded].sort((a, b) => (a.timePlaced || 0) - (b.timePlaced || 0));
+      ordered.forEach((t) => {
+        enqueueKdsAutoPrint(t, 'juice', {
+          enabled: autoPrintRef.current,
+          onPrinted: (id) => setLastAutoPrintedTicket(id),
+        });
+      });
+
+      const newest = ordered[ordered.length - 1];
       const isAddOn = !!newest.isAddOn;
 
       playKitchenChime(isAddOn);
@@ -572,7 +689,7 @@ export default function KitchenDisplayScreen() {
           >
             <Ionicons name="wine" size={20} color="#000" />
             <Text style={[styles.bumpButtonText, { color: '#000', fontWeight: '900' }]}>
-              🍹 START PREPARING (NOTIFY WAITER)
+              START PREPARING (NOTIFY WAITER)
             </Text>
           </TouchableOpacity>
         ) : isCooking ? (
@@ -668,6 +785,17 @@ export default function KitchenDisplayScreen() {
 
           {isMobile && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                style={[styles.autoPrintBtn, autoPrintEnabled && styles.autoPrintBtnActive]}
+                onPress={toggleAutoPrint}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="print"
+                  size={15}
+                  color={autoPrintEnabled ? '#34D399' : '#94A3B8'}
+                />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.inventoryNavBtn}
                 onPress={() => setShowInventoryModal(true)}
@@ -767,6 +895,51 @@ export default function KitchenDisplayScreen() {
         {!isMobile && (
           <View style={styles.navRightActions}>
             <TouchableOpacity
+              style={[styles.autoPrintBtn, autoPrintEnabled && styles.autoPrintBtnActive]}
+              onPress={toggleAutoPrint}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Automatically print every incoming Juice Bar KOT to the connected printer' } as any)
+                : {})}
+            >
+              <View
+                style={[
+                  styles.autoPrintDot,
+                  { backgroundColor: autoPrintEnabled ? '#34D399' : '#64748B' },
+                ]}
+              />
+              <Ionicons
+                name="print"
+                size={15}
+                color={autoPrintEnabled ? '#34D399' : '#94A3B8'}
+              />
+              <Text
+                style={[
+                  styles.autoPrintBtnText,
+                  autoPrintEnabled && styles.autoPrintBtnTextActive,
+                ]}
+              >
+                {lastAutoPrintedTicket
+                  ? `Printed ${lastAutoPrintedTicket}`
+                  : autoPrintEnabled
+                    ? 'Auto-Print: ON'
+                    : 'Auto-Print: OFF'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.testPrintBtn}
+              onPress={() => printKdsTestSlip('juice')}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Send a test 80mm KOT slip to the connected printer' } as any)
+                : {})}
+            >
+              <Ionicons name="receipt-outline" size={15} color="#FF9500" />
+              <Text style={styles.testPrintBtnText}>Test Print</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.inventoryNavBtn}
               onPress={() => setShowInventoryModal(true)}
               activeOpacity={0.75}
@@ -808,7 +981,7 @@ export default function KitchenDisplayScreen() {
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={styles.alertHeading}>
-                {latestAlert.isAddOn ? '⚡ ADD-ON ORDER RECEIVED!' : '🔔 NEW KOT TICKET!'}
+                {latestAlert.isAddOn ? 'ADD-ON ORDER RECEIVED!' : 'NEW KOT TICKET!'}
               </Text>
               {latestAlert.isAddOn && (
                 <View style={styles.alertRoundPill}>
@@ -875,7 +1048,7 @@ export default function KitchenDisplayScreen() {
             
             <TouchableOpacity style={styles.printBtnAction} onPress={() => {
                 if (printingTicket) {
-                  printOrderSlip(printingTicket);
+                  printOrderSlip(printingTicket, { stationLabel: 'JUICE BAR KOT' });
                 } else if (typeof window !== 'undefined') {
                   window.print();
                 }
@@ -1022,7 +1195,7 @@ export default function KitchenDisplayScreen() {
                           <Text style={styles.invCategoryTagText}>{item.category}</Text>
                         </View>
                         {item.location ? (
-                          <Text style={styles.invLocationText}>📍 {item.location}</Text>
+                          <Text style={styles.invLocationText}>{item.location}</Text>
                         ) : null}
                         <Text style={styles.invThresholdText}>Min threshold: {item.threshold} {item.unit}</Text>
                       </View>
@@ -1178,6 +1351,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  autoPrintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#26262E',
+    borderWidth: 1,
+    borderColor: '#3A3A48',
+  },
+  autoPrintBtnActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderColor: 'rgba(52, 211, 153, 0.55)',
+  },
+  autoPrintDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  autoPrintBtnText: {
+    color: '#94A3B8',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  autoPrintBtnTextActive: {
+    color: '#34D399',
+  },
+  testPrintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#26262E',
+    borderWidth: 1,
+    borderColor: '#3A3A48',
+  },
+  testPrintBtnText: {
+    color: '#FF9500',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   inventoryNavBtn: {
     flexDirection: 'row',

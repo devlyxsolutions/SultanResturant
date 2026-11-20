@@ -276,7 +276,7 @@ export default function ShiftManagementScreen() {
             <Text style={styles.headerTitle}>Shift & Cash Drawer  •  کیش و شفٹ</Text>
             <Text style={styles.headerSubtitle}>
               {activeShift
-                ? `🟢 Active: ${activeShift.id} • Cashier: ${activeShift.cashierName}`
+                ? `Active: ${activeShift.id} • Cashier: ${activeShift.cashierName}`
                 : 'No shift active • نیا شفٹ شروع کریں'}
             </Text>
           </View>
@@ -615,10 +615,10 @@ export default function ShiftManagementScreen() {
                         ]}
                       >
                         {difference === 0
-                          ? '✅ Cash is 100% Balanced! (بیلنس برابر ہے)'
+                          ? 'Cash is 100% Balanced! (بیلنس برابر ہے)'
                           : difference < 0
-                          ? `⚠️ Cash Shortage: -Rs. ${Math.abs(difference).toLocaleString()} (کمی ہے)`
-                          : `ℹ️ Cash Extra: +Rs. ${difference.toLocaleString()} (اضافی ہے)`}
+                          ? `Cash Shortage: -Rs. ${Math.abs(difference).toLocaleString()} (کمی ہے)`
+                          : `Cash Extra: +Rs. ${difference.toLocaleString()} (اضافی ہے)`}
                       </Text>
                     </View>
                   )}

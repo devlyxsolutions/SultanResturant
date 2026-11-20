@@ -225,7 +225,7 @@ export default function AttendanceTab() {
     markAttendance(recordsToSave);
     broadcastImmediately();
 
-    setSaveSuccessMsg(`✨ Attendance saved & synced for ${formattedDateTitle}!`);
+    setSaveSuccessMsg(`Attendance saved & synced for ${formattedDateTitle}!`);
     setTimeout(() => setSaveSuccessMsg(null), 4000);
   };
 

@@ -1,0 +1,234 @@
+import { Platform } from 'react-native';
+import { printOrderSlip } from '../components/OrderSlip';
+import { Ticket } from '../store/restaurantStore';
+
+export type KdsStation = 'main' | 'juice';
+
+const AUTO_PRINT_KEY_PREFIX = 'sultan_kds_autoprint_v1_';
+const PRINTED_REGISTRY_KEY = 'sultan_kds_printed_tickets_v1';
+const REGISTRY_TTL_MS = 18 * 60 * 60 * 1000; // 18 hours
+
+type PrintQueueJob = {
+  ticket: Ticket;
+  station: KdsStation;
+  stationLabel: string;
+  onComplete?: (ticketId: string) => void;
+};
+
+const printQueue: PrintQueueJob[] = [];
+let isProcessingQueue = false;
+const inMemoryPrintedKeys = new Set<string>();
+
+function readPrintedRegistry(): Record<string, number> {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
+    return {};
+  }
+  try {
+    const raw = window.localStorage.getItem(PRINTED_REGISTRY_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const now = Date.now();
+    const pruned: Record<string, number> = {};
+    for (const [key, ts] of Object.entries(parsed)) {
+      if (typeof ts === 'number' && now - ts < REGISTRY_TTL_MS) {
+        pruned[key] = ts;
+      }
+    }
+    return pruned;
+  } catch {
+    return {};
+  }
+}
+
+function writePrintedRegistry(registry: Record<string, number>) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(PRINTED_REGISTRY_KEY, JSON.stringify(registry));
+  } catch {
+    // Ignore storage quota issues
+  }
+}
+
+function buildTicketPrintKeys(station: KdsStation, ticket: Ticket): string[] {
+  const keys: string[] = [];
+  if (ticket.id) {
+    keys.push(`${station}:id:${ticket.id}`);
+  }
+  if (ticket.orderId) {
+    keys.push(`${station}:oid:${ticket.orderId}:r${ticket.roundNumber || 1}`);
+  } else if (ticket.orderNumber) {
+    keys.push(`${station}:onum:${ticket.orderNumber}:r${ticket.roundNumber || 1}`);
+  }
+  return keys;
+}
+
+export function isKdsTicketPrinted(station: KdsStation, ticket: Ticket): boolean {
+  const keys = buildTicketPrintKeys(station, ticket);
+  if (keys.length === 0) return false;
+  for (const k of keys) {
+    if (inMemoryPrintedKeys.has(k)) return true;
+  }
+  const registry = readPrintedRegistry();
+  for (const k of keys) {
+    if (registry[k]) {
+      inMemoryPrintedKeys.add(k);
+      return true;
+    }
+  }
+  return false;
+}
+
+export function markKdsTicketPrinted(station: KdsStation, ticket: Ticket) {
+  const keys = buildTicketPrintKeys(station, ticket);
+  if (keys.length === 0) return;
+  const now = Date.now();
+  const registry = readPrintedRegistry();
+  for (const k of keys) {
+    inMemoryPrintedKeys.add(k);
+    registry[k] = now;
+  }
+  writePrintedRegistry(registry);
+}
+
+/**
+ * Mark existing tickets on initial KDS mount as already seen/printed so opening or
+ * refreshing the KDS screen does not reprint old historical orders.
+ */
+export function seedExistingKdsTicketsAsPrinted(station: KdsStation, tickets: Ticket[]) {
+  if (!Array.isArray(tickets) || tickets.length === 0) return;
+  const now = Date.now();
+  const registry = readPrintedRegistry();
+  let changed = false;
+  for (const t of tickets) {
+    if (!t || !t.id) continue;
+    const keys = buildTicketPrintKeys(station, t);
+    for (const k of keys) {
+      if (!inMemoryPrintedKeys.has(k)) {
+        inMemoryPrintedKeys.add(k);
+      }
+      if (!registry[k]) {
+        registry[k] = now;
+        changed = true;
+      }
+    }
+  }
+  if (changed) {
+    writePrintedRegistry(registry);
+  }
+}
+
+export function getKdsAutoPrintEnabled(station: KdsStation): boolean {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) {
+    return true;
+  }
+  try {
+    const val = window.localStorage.getItem(`${AUTO_PRINT_KEY_PREFIX}${station}`);
+    if (val === null) return true; // Enabled by default so hands-free KDS printers work immediately
+    return val === 'true';
+  } catch {
+    return true;
+  }
+}
+
+export function setKdsAutoPrintEnabled(station: KdsStation, enabled: boolean) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.localStorage) return;
+  try {
+    window.localStorage.setItem(`${AUTO_PRINT_KEY_PREFIX}${station}`, enabled ? 'true' : 'false');
+  } catch {
+    // Ignore storage issues
+  }
+}
+
+function processNextPrintJob() {
+  if (isProcessingQueue) return;
+  const next = printQueue.shift();
+  if (!next) return;
+
+  isProcessingQueue = true;
+  printOrderSlip(next.ticket, {
+    stationLabel: next.stationLabel,
+    onAfterPrint: () => {
+      next.onComplete?.(next.ticket.id);
+      // Short thermal cut/feed cooldown before dispatching the next slip
+      setTimeout(() => {
+        isProcessingQueue = false;
+        processNextPrintJob();
+      }, 350);
+    },
+  });
+}
+
+/**
+ * Enqueue a newly arrived ticket for automatic station-filtered KOT thermal printing.
+ * Returns true if queued, false if skipped (disabled, already printed, or no items for station).
+ */
+export function enqueueKdsAutoPrint(
+  ticket: Ticket,
+  station: KdsStation,
+  options?: {
+    enabled?: boolean;
+    forceReprint?: boolean;
+    onPrinted?: (ticketId: string) => void;
+  }
+): boolean {
+  if (!ticket || !ticket.id) return false;
+
+  const autoEnabled = options?.enabled ?? getKdsAutoPrintEnabled(station);
+  if (!options?.forceReprint && !autoEnabled) return false;
+
+  const allItems = Array.isArray(ticket.items) ? ticket.items : [];
+  const stationItems = allItems.filter((i) => (i?.station || 'main') === station);
+  if (stationItems.length === 0) return false;
+
+  if (!options?.forceReprint && isKdsTicketPrinted(station, ticket)) {
+    return false;
+  }
+
+  markKdsTicketPrinted(station, ticket);
+
+  const stationLabel = station === 'juice' ? 'JUICE BAR KOT' : 'MAIN KITCHEN KOT';
+  const filteredTicket: Ticket = {
+    ...ticket,
+    items: stationItems,
+  };
+
+  printQueue.push({
+    ticket: filteredTicket,
+    station,
+    stationLabel,
+    onComplete: options?.onPrinted,
+  });
+
+  processNextPrintJob();
+  return true;
+}
+
+/**
+ * Prints a clean 80mm Test KOT Slip to verify the connected kitchen/juicebar printer.
+ */
+export function printKdsTestSlip(station: KdsStation) {
+  const stationLabel = station === 'juice' ? 'JUICE BAR KOT' : 'MAIN KITCHEN KOT';
+  const testTicket: Ticket = {
+    id: `TEST-${Date.now().toString().slice(-4)}`,
+    tableId: 'TEST',
+    tableName: 'PRINTER TEST SLIP',
+    server: 'KDS Auto-Print Check',
+    status: 'pending',
+    timePlaced: Date.now(),
+    items: [
+      {
+        id: 'test-1',
+        name: station === 'juice' ? 'Fresh Mint Margarita (Test)' : 'Chicken Karahi Full (Test)',
+        qty: 1,
+        price: 0,
+        completed: false,
+        itemStatus: 'pending',
+        station,
+        notes: 'Connected printer verified — Auto-Print Ready',
+      },
+    ],
+  };
+
+  printOrderSlip(testTicket, { stationLabel });
+}

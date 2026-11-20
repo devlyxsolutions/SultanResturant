@@ -897,7 +897,7 @@ export default function StaffManagementScreen({
                       >
                         <Text style={[styles.formPillText, isSelected && styles.formPillTextActive]}>
                           {formatRoleName(r.name)}
-                          {!r.permissions?.canViewRevenue ? ' 🔒' : ''}
+                          {!r.permissions?.canViewRevenue ? ' (Restricted)' : ''}
                         </Text>
                       </TouchableOpacity>
                     );

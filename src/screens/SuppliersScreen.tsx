@@ -671,16 +671,16 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const handleShareLedgerWhatsApp = () => {
     if (!dossierSupplier) return;
     const phone = toWhatsAppNumber(dossierSupplier.whatsapp || dossierSupplier.phone || '');
-    let msg = `👑 *سلطان ریسٹورنٹ اینڈ بار بی کیو (کھاتہ اسٹیٹمنٹ)*\n`;
+    let msg = `*سلطان ریسٹورنٹ اینڈ بار بی کیو (کھاتہ اسٹیٹمنٹ)*\n`;
     msg += `------------------------------------------\n`;
     msg += `وینڈر: *${dossierSupplier.name}*\n`;
     msg += `رابطہ: ${dossierSupplier.contactPerson || 'N/A'} (${dossierSupplier.phone})\n`;
     msg += `تاریخ: ${new Date().toLocaleDateString('en-PK')}\n\n`;
-    msg += `📊 *مالی پوزیشن (Balance Summary):*\n`;
+    msg += `*مالی پوزیشن (Balance Summary):*\n`;
     msg += `• کل لائف ٹائم خریداری: Rs. ${(dossierSupplier.totalPurchases || 0).toLocaleString()}\n`;
     msg += `• *کل واجب الادا نیٹ بقایا: Rs. ${(dossierSupplier.currentBalance || 0).toLocaleString()}*\n`;
     msg += `------------------------------------------\n`;
-    msg += `📜 *حالیہ ٹرانزیکشنز:*\n`;
+    msg += `*حالیہ ٹرانزیکشنز:*\n`;
 
     dossierLedger.slice(0, 5).forEach((e) => {
       const d = new Date(e.date).toLocaleDateString('en-PK', { day: '2-digit', month: 'short' });
@@ -737,7 +737,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   return (
     <View style={styles.container}>
-      {/* 👑 TOP HEADER */}
+      {/* TOP HEADER */}
       <View style={[styles.header, isMobile && styles.headerMobile]}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
@@ -1101,7 +1101,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                           Rs. {(sup.currentBalance || 0).toLocaleString()}
                         </Text>
                         <Text style={styles.mobileBalanceSubText}>
-                          {hasBalance ? 'Pending Due' : 'All Clear ✅'}
+                          {hasBalance ? 'Pending Due' : 'All Clear'}
                         </Text>
                       </View>
                     </View>
@@ -1116,7 +1116,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         <Text style={styles.termsBadgeText}>{sup.paymentTerms}</Text>
                       </View>
                       <Text style={styles.mobileOrdersText}>
-                        📦 {poCount} POs • Rs. {(sup.totalPurchases || 0).toLocaleString()}
+                        {poCount} POs • Rs. {(sup.totalPurchases || 0).toLocaleString()}
                       </Text>
                     </View>
 
@@ -1205,7 +1205,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         </View>
                         {sup.contactPerson ? (
                           <Text style={styles.rowContactPerson} numberOfLines={1}>
-                            👤 {sup.contactPerson}
+                            {sup.contactPerson}
                           </Text>
                         ) : null}
                       </View>
@@ -1232,7 +1232,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                       Rs. {(sup.currentBalance || 0).toLocaleString()}
                     </Text>
                     <Text style={styles.rowBalanceSubText}>
-                      {hasBalance ? 'Pending Due (واجب الادا)' : 'All Cleared ✅'}
+                      {hasBalance ? 'Pending Due (واجب الادا)' : 'All Cleared'}
                     </Text>
                   </View>
 
@@ -1361,7 +1361,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         </View>
                       </View>
                       <Text style={styles.dossierPhone}>
-                        📞 {dossierSupplier.phone} {dossierSupplier.contactPerson ? `• 👤 ${dossierSupplier.contactPerson}` : ''} • 🏙️ {dossierSupplier.city || 'Lahore'}
+                        {dossierSupplier.phone} {dossierSupplier.contactPerson ? `• ${dossierSupplier.contactPerson}` : ''} • {dossierSupplier.city || 'Lahore'}
                       </Text>
                     </View>
                   </View>
@@ -1695,9 +1695,9 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
               <Text style={styles.formLabel}>Payment Method (ادائیگی کا طریقہ)</Text>
               <View style={styles.methodSelectRow}>
                 {[
-                  { key: 'cash', label: '💵 Cash Counter' },
-                  { key: 'online', label: '🏦 Bank Transfer' },
-                  { key: 'cheque', label: '📝 Cheque' },
+                  { key: 'cash', label: 'Cash Counter' },
+                  { key: 'online', label: 'Bank Transfer' },
+                  { key: 'cheque', label: 'Cheque' },
                 ].map((m) => (
                   <TouchableOpacity
                     key={m.key}
@@ -2194,7 +2194,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 style={styles.modalShareWhatsAppBtn}
                 onPress={() => {
                   if (!voucherPayment) return;
-                  const text = `👑 *SULTAN RESTAURANT - PAYMENT VOUCHER*\nVoucher: VCH-${voucherPayment.id.slice(-6).toUpperCase()}\nVendor: ${voucherPayment.supplierName}\nAmount Paid: Rs. ${voucherPayment.amount.toLocaleString()}\nMethod: ${voucherPayment.method.toUpperCase()}\nDate: ${new Date(voucherPayment.paidAt).toLocaleDateString()}\nStatus: Settled ✅`;
+                  const text = `*SULTAN RESTAURANT - PAYMENT VOUCHER*\nVoucher: VCH-${voucherPayment.id.slice(-6).toUpperCase()}\nVendor: ${voucherPayment.supplierName}\nAmount Paid: Rs. ${voucherPayment.amount.toLocaleString()}\nMethod: ${voucherPayment.method.toUpperCase()}\nDate: ${new Date(voucherPayment.paidAt).toLocaleDateString()}\nStatus: Settled`;
                   Share.share({ message: text, title: 'Payment Voucher' });
                 }}
               >

@@ -348,7 +348,7 @@ export function SvgHourlyVelocityChart({
         </View>
         {peakRev > 0 && (
           <View style={styles.peakBadge}>
-            <Text style={styles.peakBadgeLabel}>⚡ Peak Rush: </Text>
+            <Text style={styles.peakBadgeLabel}>Peak Rush: </Text>
             <Text style={styles.peakBadgeVal}>
               {peakHour.toString().padStart(2, '0')}:00 ({money(peakRev)})
             </Text>

@@ -728,7 +728,7 @@ export default function MenuManagement() {
       }
     } catch (e) {}
 
-    setSaveSuccessMsg(`✨ Dish "${itemPayload.name}" saved & synced to Mobile App!`);
+    setSaveSuccessMsg(`Dish "${itemPayload.name}" saved & synced to Mobile App!`);
     setTimeout(() => setSaveSuccessMsg(null), 5000);
   };
 
@@ -1708,7 +1708,7 @@ export default function MenuManagement() {
                               </View>
                             ) : null}
                             <Text style={styles.stationText}>
-                              {item.station === 'juice' ? '🍹 Juice Bar' : '🍳 Main Kitchen'}
+                              {item.station === 'juice' ? 'Juice Bar' : 'Main Kitchen'}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FFF8E7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#FDE68A' }}>
                               <Ionicons name="timer-outline" size={11} color="#B45309" />
@@ -1890,10 +1890,10 @@ export default function MenuManagement() {
                         </View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2, flexWrap: 'wrap' }}>
                           <Text style={styles.stationTextSmall}>
-                            {item.station === 'juice' ? '🍹 Juice' : '🍳 Kitchen'}
+                            {item.station === 'juice' ? 'Juice' : 'Kitchen'}
                           </Text>
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>
-                            ⏱️ {item.prepTimeMin || (item.station === 'juice' ? 5 : 15)}m
+                            {item.prepTimeMin || (item.station === 'juice' ? 5 : 15)}m
                           </Text>
                         </View>
                       </View>
@@ -2256,7 +2256,7 @@ export default function MenuManagement() {
               >
                 <Ionicons name="gift-outline" size={15} color={modalTab === 'combo' ? BRAND.burgundy : BRAND.muted} />
                 <Text style={[styles.modalSubTabText, modalTab === 'combo' && styles.modalSubTabTextActive]}>
-                  4. Combo / Deal {itemIsDeal && '✨'}
+                  4. Combo / Deal {itemIsDeal ? '(Active)' : ''}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2348,7 +2348,7 @@ export default function MenuManagement() {
                         </TouchableOpacity>
                       </View>
                       <Text style={styles.inlineAddCatHint}>
-                        ✨ Adds category instantly and auto-selects it for this dish without page reload!
+                        Adds category instantly and auto-selects it for this dish without page reload!
                       </Text>
                     </View>
                   )}
@@ -2559,7 +2559,7 @@ export default function MenuManagement() {
                             }}
                           >
                             <Text style={[styles.dropdownItemText, itemRegion === reg && styles.dropdownItemTextActive]}>
-                              🌍 {reg}
+                              {reg}
                             </Text>
                           </TouchableOpacity>
                         ))}
@@ -2636,7 +2636,7 @@ export default function MenuManagement() {
                           itemPrepTime === mins && styles.badgeOptionPillTextActive,
                           { fontSize: 11 }
                         ]}>
-                          ⏱️ {mins} min
+                          {mins} min
                         </Text>
                       </TouchableOpacity>
                     ))}
@@ -2837,8 +2837,8 @@ export default function MenuManagement() {
                             </Text>
                             <Text style={styles.marginAnalysisDesc}>
                               {isHigh 
-                                ? '✨ Healthy margin! High profitability per portion sold.' 
-                                : (isMid ? '👍 Balanced margin covering standard restaurant overhead.' : '⚠️ Low profit margin. Consider adjusting cost or price.')}
+                                ? 'Healthy margin! High profitability per portion sold.'
+                                : (isMid ? 'Balanced margin covering standard restaurant overhead.' : 'Low profit margin. Consider adjusting cost or price.')}
                             </Text>
                           </View>
                         </View>

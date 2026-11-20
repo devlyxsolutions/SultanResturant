@@ -23,6 +23,13 @@ import { useAuthStore } from '../../store/authStore';
 import { useOpsStore } from '../../store/opsStore';
 import { Ticket, useRestaurantStore } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import {
+  enqueueKdsAutoPrint,
+  getKdsAutoPrintEnabled,
+  printKdsTestSlip,
+  seedExistingKdsTicketsAsPrinted,
+  setKdsAutoPrintEnabled,
+} from '../../utils/kdsAutoPrint';
 
 // Dual-Tone Audio Chime using Web Audio API
 function playKitchenChime(isAddOn: boolean = false) {
@@ -93,6 +100,18 @@ export default function KitchenDisplayScreen() {
   } | null>(null);
 
   const [printingTicket, setPrintingTicket] = useState<Ticket | null>(null);
+  const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(() => getKdsAutoPrintEnabled('main'));
+  const autoPrintRef = useRef<boolean>(autoPrintEnabled);
+  const [lastAutoPrintedTicket, setLastAutoPrintedTicket] = useState<string | null>(null);
+
+  const toggleAutoPrint = () => {
+    setAutoPrintEnabled((prev) => {
+      const next = !prev;
+      autoPrintRef.current = next;
+      setKdsAutoPrintEnabled('main', next);
+      return next;
+    });
+  };
 
   // Kitchen Inventory Modal state
   const [showInventoryModal, setShowInventoryModal] = useState(false);
@@ -151,9 +170,24 @@ export default function KitchenDisplayScreen() {
     }
   };
 
-  // Track seen tickets to trigger notification on newly incoming tickets
+  // Track seen tickets to trigger notification & hands-free auto-print on newly incoming tickets
   const seenTicketIdsRef = useRef<Set<string>>(new Set((tickets || []).filter((t) => !!t && !!t.id).map((t) => t.id)));
   const isInitialMount = useRef(true);
+  const mountedAtRef = useRef<number>(Date.now());
+  const initialSyncDoneRef = useRef(false);
+
+  // Seed already-cached tickets as printed on initial mount so reopening KDS never reprints old orders
+  useEffect(() => {
+    seedExistingKdsTicketsAsPrinted('main', tickets || []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Auto-clear last printed badge after 6 seconds
+  useEffect(() => {
+    if (!lastAutoPrintedTicket) return;
+    const t = setTimeout(() => setLastAutoPrintedTicket(null), 6000);
+    return () => clearTimeout(t);
+  }, [lastAutoPrintedTicket]);
 
   // Live ticking clock (1s) so KOT countdown timer and elapsed-time colors refresh in real-time
   useEffect(() => {
@@ -172,6 +206,14 @@ export default function KitchenDisplayScreen() {
         if (res.ok) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets)) {
+            if (!initialSyncDoneRef.current) {
+              initialSyncDoneRef.current = true;
+              const historical = (data.tickets as Ticket[]).filter(
+                (t) => t && t.id && (t.timePlaced || 0) < mountedAtRef.current - 60000
+              );
+              historical.forEach((t) => seenTicketIdsRef.current.add(t.id));
+              seedExistingKdsTicketsAsPrinted('main', historical);
+            }
             useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
           }
         }
@@ -181,7 +223,7 @@ export default function KitchenDisplayScreen() {
     fetchLiveTickets();
     const pollInterval = setInterval(fetchLiveTickets, 3500);
 
-    // 2. Direct real-time WebSocket stream for instant KOT Chime & Alert Banner
+    // 2. Direct real-time WebSocket stream for instant KOT Chime, Alert Banner & Auto-Print
     const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
     let socket: WebSocket | null = null;
     try {
@@ -195,14 +237,24 @@ export default function KitchenDisplayScreen() {
               useRestaurantStore.getState().syncFromServer({
                 tickets: [msg.ticket, ...currentTickets]
               });
-              playKitchenChime(false);
-              setLatestAlert({
-                id: msg.ticket.id,
-                tableName: msg.ticket.tableName,
-                isAddOn: false,
-                itemCount: (msg.ticket.items || []).reduce((s: number, it: any) => s + (it.qty || 1), 0),
-                server: msg.ticket.server
-              });
+              const stationItems = (msg.ticket.items || []).filter(
+                (it: any) => (it?.station || 'main') === 'main'
+              );
+              if (stationItems.length > 0) {
+                playKitchenChime(!!msg.ticket.isAddOn);
+                setLatestAlert({
+                  id: msg.ticket.id,
+                  tableName: msg.ticket.tableName,
+                  isAddOn: !!msg.ticket.isAddOn,
+                  roundNumber: msg.ticket.roundNumber,
+                  itemCount: stationItems.reduce((s: number, it: any) => s + (it.qty || 1), 0),
+                  server: msg.ticket.server
+                });
+                enqueueKdsAutoPrint(msg.ticket, 'main', {
+                  enabled: autoPrintRef.current,
+                  onPrinted: (id) => setLastAutoPrintedTicket(id),
+                });
+              }
             }
           } else if (msg.type === 'ORDER_STATUS_CHANGED') {
             const currentTickets = useRestaurantStore.getState().tickets || [];
@@ -227,7 +279,7 @@ export default function KitchenDisplayScreen() {
     };
   }, []);
 
-  // Watch for new tickets arriving in local store to trigger audio chime
+  // Watch for new tickets arriving in local store to trigger audio chime & hands-free auto-print
   useEffect(() => {
     if (isInitialMount.current) {
       isInitialMount.current = false;
@@ -248,7 +300,16 @@ export default function KitchenDisplayScreen() {
     });
 
     if (newlyAdded.length > 0) {
-      const newest = newlyAdded[newlyAdded.length - 1];
+      // Queue ALL newly arrived tickets sequentially (oldest first) so rapid rush orders never drop a slip
+      const ordered = [...newlyAdded].sort((a, b) => (a.timePlaced || 0) - (b.timePlaced || 0));
+      ordered.forEach((t) => {
+        enqueueKdsAutoPrint(t, 'main', {
+          enabled: autoPrintRef.current,
+          onPrinted: (id) => setLastAutoPrintedTicket(id),
+        });
+      });
+
+      const newest = ordered[ordered.length - 1];
       const isAddOn = !!newest.isAddOn;
 
       playKitchenChime(isAddOn);
@@ -630,7 +691,7 @@ export default function KitchenDisplayScreen() {
           >
             <Ionicons name="flame" size={20} color="#000" />
             <Text style={[styles.bumpButtonText, { color: '#000', fontWeight: '900' }]}>
-              🔥 START COOKING (NOTIFY WAITER)
+              START COOKING (NOTIFY WAITER)
             </Text>
           </TouchableOpacity>
         ) : isCooking ? (
@@ -726,6 +787,17 @@ export default function KitchenDisplayScreen() {
 
           {isMobile && (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <TouchableOpacity
+                style={[styles.autoPrintBtn, autoPrintEnabled && styles.autoPrintBtnActive]}
+                onPress={toggleAutoPrint}
+                activeOpacity={0.75}
+              >
+                <Ionicons
+                  name="print"
+                  size={15}
+                  color={autoPrintEnabled ? '#34D399' : '#94A3B8'}
+                />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.inventoryNavBtn}
                 onPress={() => setShowInventoryModal(true)}
@@ -825,6 +897,51 @@ export default function KitchenDisplayScreen() {
         {!isMobile && (
           <View style={styles.navRightActions}>
             <TouchableOpacity
+              style={[styles.autoPrintBtn, autoPrintEnabled && styles.autoPrintBtnActive]}
+              onPress={toggleAutoPrint}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Automatically print every incoming KOT to the connected kitchen printer' } as any)
+                : {})}
+            >
+              <View
+                style={[
+                  styles.autoPrintDot,
+                  { backgroundColor: autoPrintEnabled ? '#34D399' : '#64748B' },
+                ]}
+              />
+              <Ionicons
+                name="print"
+                size={15}
+                color={autoPrintEnabled ? '#34D399' : '#94A3B8'}
+              />
+              <Text
+                style={[
+                  styles.autoPrintBtnText,
+                  autoPrintEnabled && styles.autoPrintBtnTextActive,
+                ]}
+              >
+                {lastAutoPrintedTicket
+                  ? `Printed ${lastAutoPrintedTicket}`
+                  : autoPrintEnabled
+                    ? 'Auto-Print: ON'
+                    : 'Auto-Print: OFF'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.testPrintBtn}
+              onPress={() => printKdsTestSlip('main')}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Send a test 80mm KOT slip to the connected printer' } as any)
+                : {})}
+            >
+              <Ionicons name="receipt-outline" size={15} color="#D5A943" />
+              <Text style={styles.testPrintBtnText}>Test Print</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
               style={styles.inventoryNavBtn}
               onPress={() => setShowInventoryModal(true)}
               activeOpacity={0.75}
@@ -866,7 +983,7 @@ export default function KitchenDisplayScreen() {
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text style={styles.alertHeading}>
-                {latestAlert.isAddOn ? '⚡ ADD-ON ORDER RECEIVED!' : '🔔 NEW KOT TICKET!'}
+                {latestAlert.isAddOn ? 'ADD-ON ORDER RECEIVED!' : 'NEW KOT TICKET!'}
               </Text>
               {latestAlert.isAddOn && (
                 <View style={styles.alertRoundPill}>
@@ -943,7 +1060,7 @@ export default function KitchenDisplayScreen() {
 
             <TouchableOpacity style={styles.printBtnAction} onPress={() => {
               if (printingTicket) {
-                printOrderSlip(printingTicket);
+                printOrderSlip(printingTicket, { stationLabel: 'MAIN KITCHEN KOT' });
               } else if (typeof window !== 'undefined') {
                 window.print();
               }
@@ -1090,7 +1207,7 @@ export default function KitchenDisplayScreen() {
                           <Text style={styles.invCategoryTagText}>{item.category}</Text>
                         </View>
                         {item.location ? (
-                          <Text style={styles.invLocationText}>📍 {item.location}</Text>
+                          <Text style={styles.invLocationText}>{item.location}</Text>
                         ) : null}
                         <Text style={styles.invThresholdText}>Min threshold: {item.threshold} {item.unit}</Text>
                       </View>
@@ -1246,6 +1363,50 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  autoPrintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#26262E',
+    borderWidth: 1,
+    borderColor: '#3A3A48',
+  },
+  autoPrintBtnActive: {
+    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    borderColor: 'rgba(52, 211, 153, 0.55)',
+  },
+  autoPrintDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  autoPrintBtnText: {
+    color: '#94A3B8',
+    fontSize: 12.5,
+    fontWeight: '700',
+  },
+  autoPrintBtnTextActive: {
+    color: '#34D399',
+  },
+  testPrintBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#26262E',
+    borderWidth: 1,
+    borderColor: '#3A3A48',
+  },
+  testPrintBtnText: {
+    color: '#D5A943',
+    fontSize: 12.5,
+    fontWeight: '700',
   },
   inventoryNavBtn: {
     flexDirection: 'row',

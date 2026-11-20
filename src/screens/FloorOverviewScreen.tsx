@@ -315,7 +315,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                 </View>
               </View>
               <Text style={[styles.tileZone, { color: zoneMeta.color }]}>
-                {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch' : '🍽️ Table'} • {floorName}
+                {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch' : 'Table'} • {floorName}
               </Text>
               <View style={styles.tileFooter}>
                 <Text style={[styles.tileSeats, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
@@ -326,7 +326,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                   {stopwatchStr && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, gap: 3 }}>
                       <Ionicons name="stopwatch-outline" size={12} color="#B45309" />
-                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#B45309' }}>⏱️ {stopwatchStr}</Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#B45309' }}>{stopwatchStr}</Text>
                     </View>
                   )}
                   {t.billTotal !== undefined && t.billTotal > 0 && (

@@ -176,7 +176,7 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
         issueSession(res.id, user?.name || selectedBartender);
       }
 
-      setSuccessBanner(`✅ Juice Bar ${selectedShift.toUpperCase()} shift handover submitted successfully!`);
+      setSuccessBanner(`Juice Bar ${selectedShift.toUpperCase()} shift handover submitted successfully!`);
       setHandoverNote('');
       setTimeout(() => {
         setSuccessBanner(null);
@@ -261,7 +261,7 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
 
         {/* Shift Configuration Card */}
         <View style={styles.card}>
-          <Text style={styles.cardHeaderTitle}>🍹 Active Juice Bar Shift & Staff</Text>
+          <Text style={styles.cardHeaderTitle}>Active Juice Bar Shift & Staff</Text>
           <View style={styles.shiftSelectorRow}>
             {(['morning', 'afternoon', 'evening', 'night'] as ShiftKind[]).map((sk) => {
               const meta = SHIFT_KIND_META[sk];
@@ -339,7 +339,7 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
         {/* Inventory Table / Cards */}
         <View style={styles.card}>
           <View style={styles.inventoryHeaderRow}>
-            <Text style={styles.cardHeaderTitle}>📦 Juice Bar Live Stock ({juiceInventory.length})</Text>
+            <Text style={styles.cardHeaderTitle}>Juice Bar Live Stock ({juiceInventory.length})</Text>
             <Text style={styles.inventorySubHint}>Tap "Log Waste" to write off damaged fruit/milk</Text>
           </View>
 
@@ -375,7 +375,7 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
                       <View style={styles.itemMetaRow}>
                         <Text style={styles.itemCategoryBadge}>{item.category}</Text>
                         <Text style={styles.itemLocationText}>
-                          📍 {item.location || 'Juice Corner'}
+                          {item.location || 'Juice Corner'}
                         </Text>
                         <Text style={styles.itemThresholdText}>
                           Min Alert: {item.threshold} {item.unit}
@@ -420,7 +420,7 @@ export default function JuiceHandoverScreen({ backRoute = '/juicebar/kds' }: { b
 
         {/* Handover Notes & Submission */}
         <View style={[styles.card, { marginBottom: 40 }]}>
-          <Text style={styles.cardHeaderTitle}>📝 Shift Handover Notes for Incoming Staff</Text>
+          <Text style={styles.cardHeaderTitle}>Shift Handover Notes for Incoming Staff</Text>
           <Text style={styles.inputSubLabel}>
             Leave operational notes, prep instructions, or stock notices for the next shift:
           </Text>

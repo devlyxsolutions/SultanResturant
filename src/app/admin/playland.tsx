@@ -971,7 +971,7 @@ export default function AdminPlaylandManagement() {
 
                   <View style={styles.slipDivider} />
                   <Text style={styles.slipFooterNotice}>
-                    ⚠️ Please wear wristband at all times. Non-refundable. Valid on date of issue only.
+                    Please wear wristband at all times. Non-refundable. Valid on date of issue only.
                   </Text>
                 </View>
 

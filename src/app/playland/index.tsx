@@ -182,7 +182,7 @@ export default function PlaylandCounterScreen() {
   const renderServicesSection = () => (
     <>
       <View style={styles.sectionHeadingBox}>
-        <Text style={styles.sectionHeading}>🎡 Services & Jhooley</Text>
+        <Text style={styles.sectionHeading}>Services & Jhooley</Text>
         <Text style={styles.sectionSub}>Click any duration to add directly to the ticket bill</Text>
       </View>
 
@@ -273,7 +273,7 @@ export default function PlaylandCounterScreen() {
         <View style={{ flex: 1.3 }}>
           <TextInput
             style={styles.cleanInput}
-            placeholder="👶 Child Name (e.g. Ayan / Zain)"
+            placeholder="Child Name (e.g. Ayan / Zain)"
             value={childName}
             onChangeText={(t) => {
               setChildName(t);
@@ -285,7 +285,7 @@ export default function PlaylandCounterScreen() {
         <View style={{ width: 75 }}>
           <TextInput
             style={styles.cleanInput}
-            placeholder="🎂 Age"
+            placeholder="Age"
             value={childAge}
             onChangeText={setChildAge}
             placeholderTextColor="#9CA3AF"
@@ -297,7 +297,7 @@ export default function PlaylandCounterScreen() {
         <View style={{ flex: 1.2 }}>
           <TextInput
             style={styles.cleanInput}
-            placeholder="📱 Parent Phone (0300-1234567)"
+            placeholder="Parent Phone (0300-1234567)"
             keyboardType="phone-pad"
             value={parentPhone}
             onChangeText={(t) => {
@@ -432,7 +432,7 @@ export default function PlaylandCounterScreen() {
               onPress={() => setPaymentMethod(mode)}
             >
               <Text style={[styles.payMethodText, paymentMethod === mode && styles.payMethodTextActive]}>
-                {mode === 'cash' ? '💵 Cash' : mode === 'card' ? '💳 Card' : '📲 Online'}
+                {mode === 'cash' ? 'Cash' : mode === 'card' ? 'Card' : 'Online'}
               </Text>
             </TouchableOpacity>
           ))}
@@ -481,7 +481,7 @@ export default function PlaylandCounterScreen() {
       {/* Top Banner / Stats Bar (Light & Clean) */}
       <View style={styles.topBanner}>
         <View style={styles.bannerLeft}>
-          <Text style={styles.bannerTitle}>🎪 Ticketing Counter</Text>
+          <Text style={styles.bannerTitle}>Ticketing Counter</Text>
           <Text style={styles.bannerSub}>Fast & easy customer billing for Sultan Playland</Text>
         </View>
 
@@ -624,7 +624,7 @@ export default function PlaylandCounterScreen() {
 
                 <View style={styles.thermalDivider} />
                 <Text style={styles.thermalFooterNote}>
-                  ⚠️ Please wear wristband at all times. Valid for today only at Sultan Basement Playland.
+                  Please wear wristband at all times. Valid for today only at Sultan Basement Playland.
                 </Text>
               </View>
 

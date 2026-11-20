@@ -69,7 +69,7 @@ export default function SalaryVoucherModal({
               {/* Royal Crest Header */}
               <View style={styles.royalHeader}>
                 <View style={styles.crownCircle}>
-                  <Text style={{ fontSize: 24 }}>👑</Text>
+                  <Ionicons name="ribbon" size={24} color="#D4AF37" />
                 </View>
                 <Text style={styles.restaurantName}>SULTAN RESTAURANT</Text>
                 <Text style={styles.restaurantSub}>LUXURY DINING & BANQUET HALL</Text>

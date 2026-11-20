@@ -1224,10 +1224,10 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   {st === 'all'
                     ? 'All Stock Levels'
                     : st === 'ok'
-                    ? '🟢 In Stock (Safe)'
+                    ? 'In Stock (Safe)'
                     : st === 'low'
-                    ? '🟠 Low Stock Warning'
-                    : '🔴 Out of Stock'}
+                    ? 'Low Stock Warning'
+                    : 'Out of Stock'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1637,12 +1637,12 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   {ef === 'all'
                     ? 'All Dated Batches'
                     : ef === 'expired'
-                    ? '🔴 Expired Only'
+                    ? 'Expired Only'
                     : ef === 'critical'
-                    ? '🟠 Urgent (3d)'
+                    ? 'Urgent (3d)'
                     : ef === 'warning'
-                    ? '🟡 Within 7 Days'
-                    : '🟢 Fresh'}
+                    ? 'Within 7 Days'
+                    : 'Fresh'}
                 </Text>
               </TouchableOpacity>
             ))}
@@ -1915,12 +1915,12 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   {mType === 'all'
                     ? 'All Logs'
                     : mType === 'receive'
-                    ? '📥 Inward Deliveries'
+                    ? 'Inward Deliveries'
                     : mType === 'usage'
-                    ? '🍳 Kitchen Usage'
+                    ? 'Kitchen Usage'
                     : mType === 'wastage'
-                    ? '🗑️ Spoilage / Wastage'
-                    : '⚖️ Physical Adjustments'}
+                    ? 'Spoilage / Wastage'
+                    : 'Physical Adjustments'}
                 </Text>
               </TouchableOpacity>
             ))}

@@ -156,7 +156,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
     const totalDueAll = suppliers.reduce((sum, s) => sum + (s.currentBalance || 0), 0);
     const list: DropdownOption<string>[] = [
       {
-        label: '⭐ All Suppliers (Consolidated Khata)',
+        label: 'All Suppliers (Consolidated Khata)',
         value: 'all',
         icon: 'layers-outline',
         badge: totalDueAll > 0 ? `Net Due: Rs. ${totalDueAll.toLocaleString()}` : 'Cleared',
@@ -510,7 +510,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   // WhatsApp Statement Share
   const handleShareWhatsAppStatement = () => {
     const targetSup = selectedSupplier;
-    let msg = `👑 *SULTAN RESTAURANT & BAR B Q - VENDOR STATEMENT*\n`;
+    let msg = `*SULTAN RESTAURANT & BAR B Q - VENDOR STATEMENT*\n`;
     msg += `تاریخ: ${new Date().toLocaleDateString('en-PK')}\n`;
     msg += `--------------------------------------\n`;
 
@@ -530,9 +530,9 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
         recent.forEach((item) => {
           const dateStr = new Date(item.date).toLocaleDateString('en-PK');
           if (item.type === 'bill') {
-            msg += `📄 ${dateStr} | بل #${item.docNumber} | +Rs. ${item.debit.toLocaleString()}\n`;
+            msg += `${dateStr} | بل #${item.docNumber} | +Rs. ${item.debit.toLocaleString()}\n`;
           } else {
-            msg += `💳 ${dateStr} | واؤچر #${item.docNumber} (${item.subtitle}) | -Rs. ${item.credit.toLocaleString()}\n`;
+            msg += `${dateStr} | واؤچر #${item.docNumber} (${item.subtitle}) | -Rs. ${item.credit.toLocaleString()}\n`;
           }
         });
       }
@@ -889,12 +889,12 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
 
               <View style={styles.dossierContactRow}>
                 <Text style={styles.dossierContactText}>
-                  👤 {selectedSupplier.contactPerson || 'Vendor'} • 📞 {selectedSupplier.phone} • 📍 {selectedSupplier.city || 'Lahore'}
+                  {selectedSupplier.contactPerson || 'Vendor'} • {selectedSupplier.phone} • {selectedSupplier.city || 'Lahore'}
                 </Text>
 
                 {selectedSupplier.bankDetails && selectedSupplier.bankDetails.bankName && (
                   <Text style={styles.dossierBankText}>
-                    🏦 {selectedSupplier.bankDetails.bankName} | A/C: {selectedSupplier.bankDetails.accountNumber} ({selectedSupplier.bankDetails.accountTitle})
+                    {selectedSupplier.bankDetails.bankName} | A/C: {selectedSupplier.bankDetails.accountNumber} ({selectedSupplier.bankDetails.accountTitle})
                   </Text>
                 )}
               </View>
@@ -1764,7 +1764,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                 style={styles.modalShareWhatsAppBtn}
                 onPress={() => {
                   if (!voucherPayment) return;
-                  const text = `👑 *SULTAN RESTAURANT - PAYMENT VOUCHER*\nVoucher: VCH-${voucherPayment.id.slice(-6).toUpperCase()}\nVendor: ${voucherPayment.supplierName}\nAmount Paid: Rs. ${voucherPayment.amount.toLocaleString()}\nMethod: ${voucherPayment.method.toUpperCase()}\nDate: ${new Date(voucherPayment.paidAt).toLocaleDateString()}\nStatus: Settled ✅`;
+                  const text = `*SULTAN RESTAURANT - PAYMENT VOUCHER*\nVoucher: VCH-${voucherPayment.id.slice(-6).toUpperCase()}\nVendor: ${voucherPayment.supplierName}\nAmount Paid: Rs. ${voucherPayment.amount.toLocaleString()}\nMethod: ${voucherPayment.method.toUpperCase()}\nDate: ${new Date(voucherPayment.paidAt).toLocaleDateString()}\nStatus: Settled`;
                   Share.share({ message: text, title: 'Payment Voucher' });
                 }}
               >

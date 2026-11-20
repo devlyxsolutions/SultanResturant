@@ -4127,7 +4127,7 @@ async function handleRequest(req, res) {
 </head>
 <body>
   <div class="loader"></div>
-  <h1>👑 Sultan Restaurant POS</h1>
+  <h1>Sultan Restaurant POS</h1>
   <p>Loading application resources, please wait a moment...</p>
 </body>
 </html>`);
@@ -4768,13 +4768,13 @@ listenDualStack(
   PORT,
   () => {
     console.log(`=================================================`);
-    console.log(`🏰 SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
-    console.log(`📡 Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
-    console.log(`👤 Auth API: http://localhost:${PORT}/api/auth/login`);
-    console.log(`📊 Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
-    console.log(`🌐 Public Menu: http://localhost:${PORT}/api/public/menu`);
-    console.log(`📦 Online Orders: http://localhost:${PORT}/api/public/orders`);
-    console.log(`⚡ WebSocket URL: ws://localhost:${PORT}`);
+    console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
+    console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
+    console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
+    console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+    console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
+    console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
+    console.log(`WebSocket URL: ws://localhost:${PORT}`);
     console.log(`=================================================`);
   },
   (err) => {
@@ -4786,7 +4786,7 @@ listenDualStack(
   server5000,
   5000,
   () => {
-    console.log(`📡 Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+    console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
   },
   (err) => {
     console.log('[Sultan Hub] Port 5000 listener:', err.message);
@@ -4798,7 +4798,7 @@ if (server80) {
     server80,
     80,
     () => {
-      console.log(`🌐 Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+      console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
     },
     (err) => {
       console.log('[Sultan Hub] Port 80 listener:', err.message);
@@ -4811,7 +4811,7 @@ if (server8081 && PORT !== 8081 && !process.env.SKIP_8081) {
     server8081,
     8081,
     () => {
-      console.log(`⚡ Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
+      console.log(`Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
     },
     (err) => {
       console.log('[Sultan Hub] Port 8081 in use (e.g. by Metro bundler) — primary hub active on 5050 & 5000');

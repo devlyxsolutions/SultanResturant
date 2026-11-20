@@ -298,7 +298,7 @@ export default function IncomingCallHost() {
                     <View style={styles.lastOrderBox}>
                       <View style={styles.lastOrderHeader}>
                         <Text style={styles.lastOrderTitle}>
-                          📋 Last Order #{lastOrder.invoiceId}
+                          Last Order #{lastOrder.invoiceId}
                         </Text>
                         <Text style={styles.lastOrderAmount}>
                           Rs. {lastOrder.total.toLocaleString()}

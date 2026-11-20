@@ -249,19 +249,19 @@ export default function AppManagerOrdersScreen() {
   const getStatusBadgeStyle = (status: string) => {
     switch (status) {
       case 'PENDING':
-        return { bg: '#FF980020', text: '#E65100', border: '#FF9800', label: '⏳ New Pending' };
+        return { bg: '#FF980020', text: '#E65100', border: '#FF9800', label: 'New Pending' };
       case 'CONFIRMED':
         return { bg: '#2196F320', text: '#1565C0', border: '#2196F3', label: '✓ Confirmed' };
       case 'PREPARING':
-        return { bg: '#9C27B020', text: '#7B1FA2', border: '#9C27B0', label: '🍳 Cooking in Kitchen' };
+        return { bg: '#9C27B020', text: '#7B1FA2', border: '#9C27B0', label: 'Cooking in Kitchen' };
       case 'READY':
       case 'READY_FOR_PICKUP':
-        return { bg: '#00968820', text: '#00796B', border: '#009688', label: '✨ Ready for Handover' };
+        return { bg: '#00968820', text: '#00796B', border: '#009688', label: 'Ready for Handover' };
       case 'OUT_FOR_DELIVERY':
-        return { bg: '#3F51B520', text: '#283593', border: '#3F51B5', label: '🛵 Rider On the Way' };
+        return { bg: '#3F51B520', text: '#283593', border: '#3F51B5', label: 'Rider On the Way' };
       case 'DELIVERED':
       case 'SERVED':
-        return { bg: '#4CAF5020', text: '#2E7D32', border: '#4CAF50', label: '🎉 Completed / Served' };
+        return { bg: '#4CAF5020', text: '#2E7D32', border: '#4CAF50', label: 'Completed / Served' };
       case 'CANCELLED':
         return { bg: '#F4433620', text: '#C62828', border: '#F44336', label: '✕ Cancelled' };
       default:
@@ -289,7 +289,7 @@ export default function AppManagerOrdersScreen() {
       <View style={styles.headerCard}>
         <View style={styles.headerTitleRow}>
           <View style={{ flex: 1, minWidth: 220 }}>
-            <Text style={styles.headerTitle}>⚡ Sultan App Orders Command Center</Text>
+            <Text style={styles.headerTitle}>Sultan App Orders Command Center</Text>
             <Text style={styles.headerSubtitle}>
               Real-time synchronization with Customer Mobile App & In-Restaurant Table QR
             </Text>
@@ -311,7 +311,7 @@ export default function AppManagerOrdersScreen() {
             onPress={() => setStatusFilter(statusFilter === 'PENDING' ? 'ALL' : 'PENDING')}
           >
             <Text style={styles.kpiNumber}>{stats.pending}</Text>
-            <Text style={styles.kpiLabel}>⚠️ Action Needed</Text>
+            <Text style={styles.kpiLabel}>Action Needed</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -319,7 +319,7 @@ export default function AppManagerOrdersScreen() {
             onPress={() => setStatusFilter(statusFilter === 'PREPARING' ? 'ALL' : 'PREPARING')}
           >
             <Text style={[styles.kpiNumber, { color: '#9C27B0' }]}>{stats.preparing}</Text>
-            <Text style={styles.kpiLabel}>🍳 Kitchen Cooking</Text>
+            <Text style={styles.kpiLabel}>Kitchen Cooking</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -327,7 +327,7 @@ export default function AppManagerOrdersScreen() {
             onPress={() => setStatusFilter(statusFilter === 'READY' ? 'ALL' : 'READY')}
           >
             <Text style={[styles.kpiNumber, { color: '#009688' }]}>{stats.ready}</Text>
-            <Text style={styles.kpiLabel}>📦 Ready for Handover</Text>
+            <Text style={styles.kpiLabel}>Ready for Handover</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -335,7 +335,7 @@ export default function AppManagerOrdersScreen() {
             onPress={() => setTypeFilter(typeFilter === 'dine_in' ? 'ALL' : 'dine_in')}
           >
             <Text style={[styles.kpiNumber, { color: '#1976D2' }]}>{stats.dineIn}</Text>
-            <Text style={styles.kpiLabel}>🏛️ In-Restaurant</Text>
+            <Text style={styles.kpiLabel}>In-Restaurant</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
@@ -343,7 +343,7 @@ export default function AppManagerOrdersScreen() {
             onPress={() => setTypeFilter(typeFilter === 'delivery' ? 'ALL' : 'delivery')}
           >
             <Text style={[styles.kpiNumber, { color: '#E65100' }]}>{stats.delivery}</Text>
-            <Text style={styles.kpiLabel}>🛵 Home Delivery</Text>
+            <Text style={styles.kpiLabel}>Home Delivery</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -592,7 +592,7 @@ export default function AppManagerOrdersScreen() {
       <Modal visible={modalAction === 'RIDER'} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>🛵 Dispatch Order to Delivery Rider</Text>
+            <Text style={styles.modalTitle}>Dispatch Order to Delivery Rider</Text>
             <Text style={styles.modalSub}>
               Order #{selectedOrder?.orderNumber} • Destination: {selectedOrder?.customer?.address || 'Delivery Address'}
             </Text>
@@ -631,7 +631,7 @@ export default function AppManagerOrdersScreen() {
                   }
                 }}
               >
-                <Text style={styles.modalConfirmText}>Confirm Dispatch 🛵</Text>
+                <Text style={styles.modalConfirmText}>Confirm Dispatch</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -642,7 +642,7 @@ export default function AppManagerOrdersScreen() {
       <Modal visible={modalAction === 'WAITER'} transparent animationType="fade">
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>🍽️ Assign Server to Table</Text>
+            <Text style={styles.modalTitle}>Assign Server to Table</Text>
             <Text style={styles.modalSub}>
               Destination: {selectedOrder?.tableName || 'Table'} ({selectedOrder?.floor || 'Dining Hall'})
             </Text>
@@ -656,7 +656,7 @@ export default function AppManagerOrdersScreen() {
                   onPress={() => setWaiterInput(w.name)}
                 >
                   <Text style={[styles.staffSelectText, waiterInput === w.name && styles.staffSelectTextActive]}>
-                    👤 {w.name} ({w.assignedZone || 'All Floors'})
+                    {w.name} ({w.assignedZone || 'All Floors'})
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -665,7 +665,7 @@ export default function AppManagerOrdersScreen() {
                 onPress={() => setWaiterInput('Counter Staff')}
               >
                 <Text style={[styles.staffSelectText, waiterInput === 'Counter Staff' && styles.staffSelectTextActive]}>
-                  👤 Counter Staff / Self Pickup
+                  Counter Staff / Self Pickup
                 </Text>
               </TouchableOpacity>
             </ScrollView>
@@ -695,7 +695,7 @@ export default function AppManagerOrdersScreen() {
       <Modal visible={modalAction === 'DETAILS'} transparent animationType="slide">
         <View style={styles.modalOverlay}>
           <View style={[styles.modalCard, { maxWidth: 600 }]}>
-            <Text style={styles.modalTitle}>📄 Order #{selectedOrder?.orderNumber} Audit</Text>
+            <Text style={styles.modalTitle}>Order #{selectedOrder?.orderNumber} Audit</Text>
             <ScrollView style={{ maxHeight: 350, marginVertical: 10 }}>
               <Text style={styles.detailSectionTitle}>Customer & Ordering Type:</Text>
               <Text style={styles.detailLine}>Customer: {selectedOrder?.customer?.name || 'Customer'}</Text>

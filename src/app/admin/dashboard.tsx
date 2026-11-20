@@ -1449,14 +1449,14 @@ export default function AdminDashboard() {
                     onPress={() => setRegionGraphMode('donut')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.chartToggleText, regionGraphMode === 'donut' && styles.chartToggleTextActive]}>🍩 Donut</Text>
+                    <Text style={[styles.chartToggleText, regionGraphMode === 'donut' && styles.chartToggleTextActive]}>Donut</Text>
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={[styles.chartToggleBtn, regionGraphMode === 'bar' && styles.chartToggleBtnActive]}
                     onPress={() => setRegionGraphMode('bar')}
                     activeOpacity={0.7}
                   >
-                    <Text style={[styles.chartToggleText, regionGraphMode === 'bar' && styles.chartToggleTextActive]}>📊 Bars</Text>
+                    <Text style={[styles.chartToggleText, regionGraphMode === 'bar' && styles.chartToggleTextActive]}>Bars</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1631,7 +1631,7 @@ export default function AdminDashboard() {
                         <View style={styles.leaderboardMainRow}>
                           <View style={[styles.leaderboardMedalBadge, { backgroundColor: medalBg, borderColor: medalBorder }]}>
                             <Text style={[styles.leaderboardMedalText, { color: medalColor }]}>
-                              {isGold ? '🥇' : isSilver ? '🥈' : isBronze ? '🥉' : `#${dish.rank}`}
+                              #{dish.rank}
                             </Text>
                           </View>
                           <View style={styles.leaderboardInfoCol}>
@@ -1689,7 +1689,7 @@ export default function AdminDashboard() {
         >
           <View style={styles.tableHeaderSection}>
             <View>
-              <Text style={styles.sectionTitle}>🏆 Top Dishes & Menu Leaders</Text>
+              <Text style={styles.sectionTitle}>Top Dishes & Menu Leaders</Text>
               <Text style={styles.sectionSubtitle}>Top revenue generating items sold today</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/admin/menu')}>
@@ -1731,7 +1731,7 @@ export default function AdminDashboard() {
                 <View style={{ flex: 1.2, alignItems: 'flex-end' }}>
                   <View style={[styles.statusTag, { backgroundColor: i === 0 ? '#FEF3C7' : '#F1F5F9' }]}>
                     <Text style={[styles.statusTagText, { color: i === 0 ? '#B45309' : '#475569' }]}>
-                      {i === 0 ? '🔥 Top 1' : 'Active'}
+                      {i === 0 ? 'Top 1' : 'Active'}
                     </Text>
                   </View>
                 </View>
@@ -1747,7 +1747,7 @@ export default function AdminDashboard() {
         >
           <View style={styles.tableHeaderSection}>
             <View>
-              <Text style={styles.sectionTitle}>🧾 Live Settled Invoices Audit</Text>
+              <Text style={styles.sectionTitle}>Live Settled Invoices Audit</Text>
               <Text style={styles.sectionSubtitle}>Recent customer receipts, server logs & payments</Text>
             </View>
             <TouchableOpacity onPress={() => router.push('/admin/invoices')}>

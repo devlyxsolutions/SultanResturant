@@ -179,8 +179,8 @@ export const POPULAR_BADGES = [
   'Signature',
   'Family Deal',
   'Couple Deal',
-  'Spicy 🌶️',
-  'Vegetarian 🥬',
+  'Spicy',
+  'Vegetarian',
   'Discount 20%',
   'Limited Time',
   'New'

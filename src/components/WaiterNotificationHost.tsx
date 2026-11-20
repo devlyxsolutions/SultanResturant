@@ -238,7 +238,7 @@ export default function WaiterNotificationHost() {
       Notification.permission === 'granted'
     ) {
       try {
-        new Notification(`🔔 Food Ready: ${lastFoodReadyAlert.tableName}`, {
+        new Notification(`Food Ready: ${lastFoodReadyAlert.tableName}`, {
           body: `${lastFoodReadyAlert.stationLabel}: ${lastFoodReadyAlert.itemsSummary}`,
           icon: '/favicon.ico',
         });
@@ -256,7 +256,7 @@ export default function WaiterNotificationHost() {
       title = `${lastFoodReadyAlert.stationLabel}: Cooking Started!`;
       badge = 'COOKING STARTED';
     } else if (isItemReady) {
-      title = `🔥 Fast Serve: ${lastFoodReadyAlert.tableName}`;
+      title = `Fast Serve: ${lastFoodReadyAlert.tableName}`;
       badge = 'ITEM READY - SERVE NOW';
     }
 

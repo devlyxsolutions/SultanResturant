@@ -343,16 +343,16 @@ export default function AdminCustomers() {
 
     switch (templateKey) {
       case 'loyalty':
-        return `Assalam-o-Alaikum ${cust.name}! 🌟\n\nThank you for dining with Sultan Restaurant. Your VIP status is *${tier}* with *${points} Sultan Loyalty Points*.\n\nWe hope you enjoyed our royal cuisine and look forward to welcoming you back soon!\n\n👑 *Sultan Restaurant* - Luxury Dining & Banquet`;
+        return `Assalam-o-Alaikum ${cust.name}!\n\nThank you for dining with Sultan Restaurant. Your VIP status is *${tier}* with *${points} Sultan Loyalty Points*.\n\nWe hope you enjoyed our royal cuisine and look forward to welcoming you back soon!\n\n*Sultan Restaurant* - Luxury Dining & Banquet`;
 
       case 'voucher':
-        return `Assalam-o-Alaikum ${cust.name}! 🎁\n\nAs a valued Sultan guest, we are thrilled to offer you an exclusive *10% Royal Discount* on your next visit!\n\n🎟️ Use Voucher Code: *SULTAN-VIP10*\nShow this code when placing your dine-in or takeaway order. Valid this week.\n\n👑 *Sultan Restaurant*`;
+        return `Assalam-o-Alaikum ${cust.name}!\n\nAs a valued Sultan guest, we are thrilled to offer you an exclusive *10% Royal Discount* on your next visit!\n\nUse Voucher Code: *SULTAN-VIP10*\nShow this code when placing your dine-in or takeaway order. Valid this week.\n\n*Sultan Restaurant*`;
 
       case 'feedback':
-        return `Assalam-o-Alaikum ${cust.name}! ⭐\n\nWe value your opinion! Please take a quick moment to rate each dish from your recent visit:\n👉 ${feedbackUrl}\n\nGiving feedback automatically credits *+50 Loyalty Points* to your account!\n\n👑 *Sultan Restaurant*`;
+        return `Assalam-o-Alaikum ${cust.name}!\n\nWe value your opinion! Please take a quick moment to rate each dish from your recent visit:\n${feedbackUrl}\n\nGiving feedback automatically credits *+50 Loyalty Points* to your account!\n\n*Sultan Restaurant*`;
 
       case 'missyou':
-        return `Assalam-o-Alaikum ${cust.name}! 🍽️\n\nWe haven't seen you at Sultan Restaurant recently and miss serving you! Your favorite dishes are waiting for you.\n\nVisit us this weekend and enjoy a complimentary dessert on bills over Rs. 3,000.\n\n👑 *Sultan Restaurant* - Food Street, Lahore`;
+        return `Assalam-o-Alaikum ${cust.name}!\n\nWe haven't seen you at Sultan Restaurant recently and miss serving you! Your favorite dishes are waiting for you.\n\nVisit us this weekend and enjoy a complimentary dessert on bills over Rs. 3,000.\n\n*Sultan Restaurant* - Food Street, Lahore`;
 
       case 'custom':
       default:
@@ -527,7 +527,7 @@ export default function AdminCustomers() {
             <View>
               <Text style={[styles.kpiLabel, { color: '#991B1B' }]}>Guest Feedback</Text>
               <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
-                ⭐ {avgRating} ({feedbacks.length})
+                {avgRating}/5 ({feedbacks.length})
               </Text>
               <Text style={[styles.kpiSub, { color: '#991B1B' }]}>Item ratings & comments</Text>
             </View>
@@ -607,7 +607,7 @@ export default function AdminCustomers() {
                   <Text
                     style={[styles.tierTabText, isSelected && styles.tierTabTextSelected]}
                   >
-                    {tier === 'VIP' ? '👑 VIP' : tier === 'Gold' ? '🥇 Gold' : tier === 'Silver' ? '🥈 Silver' : tier} ({count})
+                    {tier === 'VIP' ? 'VIP' : tier === 'Gold' ? 'Gold' : tier === 'Silver' ? 'Silver' : tier} ({count})
                   </Text>
                 </TouchableOpacity>
               );
@@ -955,11 +955,11 @@ export default function AdminCustomers() {
             <Text style={styles.fieldSectionTitle}>Choose Message Template:</Text>
             <View style={styles.templateOptionsRow}>
               {[
-                { key: 'loyalty', label: '🌟 Loyalty Thanks' },
-                { key: 'voucher', label: '🎁 10% VIP Voucher' },
-                { key: 'feedback', label: '⭐ Dish Feedback QR' },
-                { key: 'missyou', label: '🍽️ We Miss You' },
-                { key: 'custom', label: '✏️ Custom' },
+                { key: 'loyalty', label: 'Loyalty Thanks' },
+                { key: 'voucher', label: '10% VIP Voucher' },
+                { key: 'feedback', label: 'Dish Feedback QR' },
+                { key: 'missyou', label: 'We Miss You' },
+                { key: 'custom', label: 'Custom' },
               ].map((tmpl) => (
                 <TouchableOpacity
                   key={tmpl.key}
@@ -1039,7 +1039,7 @@ export default function AdminCustomers() {
                         </View>
                       </View>
                       <Text style={styles.dossierPhone}>
-                        📞 {dossierCustomer.phone} {dossierCustomer.email ? `• ✉️ ${dossierCustomer.email}` : ''}
+                        {dossierCustomer.phone} {dossierCustomer.email ? `• ${dossierCustomer.email}` : ''}
                       </Text>
                     </View>
                   </View>
@@ -1079,7 +1079,7 @@ export default function AdminCustomers() {
                   <View style={styles.dossierKpiBox}>
                     <Text style={styles.dossierKpiLabel}>Loyalty Points</Text>
                     <Text style={[styles.dossierKpiVal, { color: '#B45309' }]}>
-                      ✨ {dossierCustomer.loyaltyPoints || 50}
+                      {dossierCustomer.loyaltyPoints || 50} pts
                     </Text>
                   </View>
                 </View>
@@ -1178,7 +1178,7 @@ export default function AdminCustomers() {
                           <View key={fb.id} style={styles.dossierFeedbackCard}>
                             <View style={styles.dossierFeedbackHeader}>
                               <Text style={styles.dossierFeedbackScore}>
-                                ⭐ {fb.overallRating}/5 Rating
+                                {fb.overallRating}/5 Rating
                               </Text>
                               <Text style={styles.dossierOrderDate}>
                                 Bill #{fb.invoiceId} • {new Date(fb.createdAt).toLocaleDateString()}
@@ -1197,7 +1197,7 @@ export default function AdminCustomers() {
                                 {fb.items.map((it, idx) => (
                                   <View key={idx} style={styles.dishFeedbackRow}>
                                     <Text style={styles.dishFeedbackName}>
-                                      {it.itemName}: ⭐ {it.rating}/5
+                                      {it.itemName}: {it.rating}/5
                                     </Text>
                                     {it.tags && it.tags.length > 0 && (
                                       <Text style={styles.dishFeedbackTags}>

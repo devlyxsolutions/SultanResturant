@@ -713,7 +713,7 @@ export default function TablesBlueprintScreen({
                   <Text style={styles.tileName} numberOfLines={1}>{table.name}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={[styles.tileTypeBadge, { color: zoneMeta.color }]}>
-                      {isMajlis ? '🕌 Majlis Cabin' : isCouch ? '🛋️ Couch' : '🍽️ Table'}
+                      {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch' : 'Table'}
                     </Text>
                     <Text style={styles.tileDot}>•</Text>
                     <Text style={styles.tileFloorTag} numberOfLines={1}>{floorName}</Text>
@@ -791,7 +791,7 @@ export default function TablesBlueprintScreen({
                       }}>
                         <Ionicons name="stopwatch-outline" size={11} color={tableOccupiedElapsed.color} />
                         <Text style={{ fontSize: 10, fontWeight: '900', color: tableOccupiedElapsed.color }}>
-                          ⏱️ {tableOccupiedElapsed.text}
+                          {tableOccupiedElapsed.text}
                         </Text>
                       </View>
                     )}
@@ -1078,7 +1078,7 @@ export default function TablesBlueprintScreen({
                 onPress={handlePopulateDefault5Floors}
               >
                 <Ionicons name="sparkles" size={15} color="#fff" />
-                <Text style={styles.headerBtnText}>⚡ 5-Floor Auto</Text>
+                <Text style={styles.headerBtnText}>5-Floor Auto</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1087,7 +1087,7 @@ export default function TablesBlueprintScreen({
               onPress={() => router.push(floorsRoute as any)}
             >
               <Ionicons name="layers-outline" size={15} color="#fff" />
-              <Text style={styles.headerBtnText}>🏛️ Floors</Text>
+              <Text style={styles.headerBtnText}>Floors</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.headerBtn, styles.headerBtnGhost]}
@@ -1141,7 +1141,7 @@ export default function TablesBlueprintScreen({
                 onPress={handlePopulateDefault5Floors}
               >
                 <Ionicons name="sparkles" size={16} color="#fff" />
-                <Text style={styles.headerBtnText}>⚡ 5-Floor Auto-Gen</Text>
+                <Text style={styles.headerBtnText}>5-Floor Auto-Gen</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
@@ -1150,7 +1150,7 @@ export default function TablesBlueprintScreen({
               onPress={() => router.push(floorsRoute as any)}
             >
               <Ionicons name="layers-outline" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>🏛️ Manage Floors</Text>
+              <Text style={styles.headerBtnText}>Manage Floors</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.headerBtn, styles.headerBtnGhost]}
@@ -1385,7 +1385,7 @@ export default function TablesBlueprintScreen({
               {zoneSummary.majlis.cabins.length > 0 && (
                 <View style={styles.cabinsTagsContainer}>
                   <RoyalDropdown
-                    label="🕌 Sultan Arabian Majlis Cabins (Private Sitting)"
+                    label="Sultan Arabian Majlis Cabins (Private Sitting)"
                     placeholder="Select Majlis cabin to view or manage..."
                     options={zoneSummary.majlis.cabins.map((cabin) => ({
                       label: `${cabin.name} (${cabin.seats} Guests)`,
@@ -1844,7 +1844,7 @@ export default function TablesBlueprintScreen({
 
             {formSeatingType === 'majlis' && (
               <Text style={styles.helperText}>
-                🕌 Traditional Arabian floor seating private cabin. Specify guest capacity for this cabin.
+                Traditional Arabian floor seating private cabin. Specify guest capacity for this cabin.
               </Text>
             )}
 
@@ -2170,7 +2170,7 @@ export default function TablesBlueprintScreen({
                     Scan with Phone Camera to View Menu & Order
                   </Text>
                   <Text style={{ fontSize: 10, color: '#666', marginTop: 2 }}>
-                    📶 Guest Wi-Fi: Sultan-Guest | Key: sultan123
+                    Guest Wi-Fi: Sultan-Guest | Key: sultan123
                   </Text>
                 </View>
 
@@ -2267,7 +2267,7 @@ export default function TablesBlueprintScreen({
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
               <View>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: '#1C1C1E' }}>
-                  🏛️ Batch Table QR Standees
+                  Batch Table QR Standees
                 </Text>
                 <Text style={{ fontSize: 12, color: '#666' }}>
                   Print acrylic tent cards for all tables on {floorFilter === 'all' ? 'All Floors' : floorFilter}

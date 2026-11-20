@@ -1,6 +1,6 @@
 /**
  * ==============================================================================
- * 👑 SULTAN RESTAURANT & BASEMENT PLAYLAND
+ * SULTAN RESTAURANT & BASEMENT PLAYLAND
  * Comprehensive Master Test Suite: Functional & Non-Functional Testing
  * ==============================================================================
  * Execution Command: npm test OR node scripts/test-suite.js
@@ -50,13 +50,13 @@ function runTest(suiteCategory, testId, testName, testFn) {
     testFn();
     const diff = process.hrtime(startTime);
     const durationMs = (diff[0] * 1000 + diff[1] / 1e6).toFixed(2);
-    console.log(`  ✅ [PASS] ${testId}: ${testName} (${durationMs}ms)`);
+    console.log(`  [PASS] ${testId}: ${testName} (${durationMs}ms)`);
     passedTests++;
     testResults.push({ category: suiteCategory, id: testId, name: testName, status: 'PASS', durationMs });
   } catch (err) {
     const diff = process.hrtime(startTime);
     const durationMs = (diff[0] * 1000 + diff[1] / 1e6).toFixed(2);
-    console.error(`  ❌ [FAIL] ${testId}: ${testName} (${durationMs}ms)`);
+    console.error(`  [FAIL] ${testId}: ${testName} (${durationMs}ms)`);
     console.error(`     Error: ${err.message}`);
     failedTests++;
     testResults.push({ category: suiteCategory, id: testId, name: testName, status: 'FAIL', error: err.message, durationMs });
@@ -66,7 +66,7 @@ function runTest(suiteCategory, testId, testName, testFn) {
 const suiteStartTime = Date.now();
 
 console.log('\n================================================================');
-console.log('👑 SULTAN RESTAURANT - MASTER AUTOMATED TEST RUNNER');
+console.log('SULTAN RESTAURANT - MASTER AUTOMATED TEST RUNNER');
 console.log('   Executing BOTH Functional & Non-Functional Suites');
 console.log('================================================================\n');
 
@@ -76,7 +76,7 @@ console.log('================================================================\n'
 // =================================================================
 // #################################################################
 console.log('================================================================');
-console.log('📦 PART 1: FUNCTIONAL TEST SUITES');
+console.log('PART 1: FUNCTIONAL TEST SUITES');
 console.log('================================================================\n');
 
 // -----------------------------------------------------------------
@@ -750,7 +750,7 @@ runTest('Functional', 'TC-WST-001', 'Kitchen Scrap & Spoilage Valuation Write-of
 // =================================================================
 // #################################################################
 console.log('\n================================================================');
-console.log('⚡ PART 2: NON-FUNCTIONAL TEST SUITES (PERFORMANCE, LOAD,');
+console.log('PART 2: NON-FUNCTIONAL TEST SUITES (PERFORMANCE, LOAD,');
 console.log('   CONCURRENCY, SECURITY, RELIABILITY & INTEGRITY)');
 console.log('================================================================\n');
 
@@ -1277,7 +1277,7 @@ const functionalCount = testResults.filter(r => r.category === 'Functional').len
 const nonFunctionalCount = testResults.filter(r => r.category === 'Non-Functional').length;
 
 console.log('\n================================================================');
-console.log('🏁 SULTAN RESTAURANT - COMPLETE TEST EXECUTION SUMMARY');
+console.log('SULTAN RESTAURANT - COMPLETE TEST EXECUTION SUMMARY');
 console.log('================================================================');
 console.log(`TOTAL TESTS EXECUTED:     ${totalTests}`);
 console.log(`  - Functional Tests:     ${functionalCount}`);
@@ -1285,7 +1285,7 @@ console.log(`  - Non-Functional Tests: ${nonFunctionalCount}`);
 console.log(`PASSED:                   ${passedTests} (100.0%)`);
 console.log(`FAILED:                   ${failedTests}`);
 console.log(`TOTAL EXECUTION TIME:     ${totalDuration}ms`);
-console.log('FINAL SYSTEM STATUS:      STABLE, VERIFIED & PRODUCTION READY 👑');
+console.log('FINAL SYSTEM STATUS:      STABLE, VERIFIED & PRODUCTION READY');
 console.log('================================================================\n');
 
 // -----------------------------------------------------------------
@@ -1300,7 +1300,7 @@ try {
       <td style="font-family:monospace; font-weight:700; color:#38bdf8;">${t.id}</td>
       <td style="font-weight:600; color:#f1f5f9;">${t.name}</td>
       <td style="font-family:monospace; color:#94a3b8;">${t.durationMs}ms</td>
-      <td><span class="badge badge-pass">✅ PASS</span></td>
+      <td><span class="badge badge-pass">PASS</span></td>
     </tr>
   `).join('\n');
 
@@ -1309,7 +1309,7 @@ try {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>👑 Sultan Restaurant & Playland - Master QA Test Suite Report</title>
+  <title>Sultan Restaurant & Playland - Master QA Test Suite Report</title>
   <style>
     :root {
       --bg: #090d16;
@@ -1420,7 +1420,7 @@ try {
 <body>
   <div class="container">
     <div class="header">
-      <div class="title">👑 Sultan Restaurant & Basement Playland</div>
+      <div class="title">Sultan Restaurant & Basement Playland</div>
       <div class="subtitle">Complete Automated QA Execution Matrix: Functional & Non-Functional Suites | Generated: ${nowStr} (PKT)</div>
       <div class="kpi-grid">
         <div class="kpi-card">
@@ -1448,9 +1448,9 @@ try {
 
     <div class="filter-bar">
       <button class="filter-btn active" onclick="filterCategory('all', this)">All Tests (${totalTests})</button>
-      <button class="filter-btn" onclick="filterCategory('functional', this)">📦 Functional (${functionalCount})</button>
-      <button class="filter-btn" onclick="filterCategory('non-functional', this)">⚡ Non-Functional (${nonFunctionalCount})</button>
-      <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search by Test ID, Name, Keyword..." onkeyup="searchTests()">
+      <button class="filter-btn" onclick="filterCategory('functional', this)">Functional (${functionalCount})</button>
+      <button class="filter-btn" onclick="filterCategory('non-functional', this)">Non-Functional (${nonFunctionalCount})</button>
+      <input type="text" id="searchInput" class="search-box" placeholder="Search by Test ID, Name, Keyword..." onkeyup="searchTests()">
     </div>
 
     <div class="table-container">
@@ -1517,7 +1517,7 @@ try {
   const rootPath = path.join(__dirname, '..', 'SULTAN_RESTAURANT_TEST_CASES.html');
   fs.writeFileSync(publicPath, htmlContent, 'utf8');
   fs.writeFileSync(rootPath, htmlContent, 'utf8');
-  console.log(`📄 Test Report HTML Generated: ${publicPath}`);
+  console.log(`Test Report HTML Generated: ${publicPath}`);
 } catch (e) {
   console.warn(`HTML Report generation notice: ${e.message}`);
 }

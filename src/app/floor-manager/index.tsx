@@ -344,7 +344,7 @@ export default function FloorManagerScreen() {
     broadcastImmediately();
     printInvoiceReceipt(unpaidInvoice);
 
-    const alertMsg = `✅ Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTable.name}!\nTable marked as BILLED / PAYING.`;
+    const alertMsg = `Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTable.name}!\nTable marked as BILLED / PAYING.`;
     if (Platform.OS === 'web') window.alert(alertMsg);
     else Alert.alert("Bill Printed", alertMsg);
   };
@@ -608,7 +608,7 @@ export default function FloorManagerScreen() {
           {(kdsMetrics.cookingCount > 0 || kdsMetrics.readyCount > 0) && (
             <View style={[styles.kdsLiveBadge, kdsMetrics.readyCount > 0 ? styles.kdsBadgeReady : styles.kdsBadgeCooking]}>
               <Text style={styles.kdsBadgeText}>
-                {kdsMetrics.readyCount > 0 ? `🔔 ${kdsMetrics.readyCount}` : `🔥 ${kdsMetrics.cookingCount}`}
+                {kdsMetrics.readyCount > 0 ? `${kdsMetrics.readyCount} Ready` : `${kdsMetrics.cookingCount} Cooking`}
               </Text>
             </View>
           )}
@@ -830,9 +830,9 @@ export default function FloorManagerScreen() {
                 >
                   <Text style={[styles.filterPillText, isActive && styles.filterPillTextActive]}>
                     {fKey === 'all' && 'All KOTs'}
-                    {fKey === 'cooking' && '🔥 Cooking'}
-                    {fKey === 'ready' && '🔔 Ready'}
-                    {fKey === 'pending' && '⏳ Queue'}
+                    {fKey === 'cooking' && 'Cooking'}
+                    {fKey === 'ready' && 'Ready'}
+                    {fKey === 'pending' && 'Queue'}
                   </Text>
                   <View style={[styles.filterBadge, isActive && styles.filterBadgeActiveKds]}>
                     <Text style={[styles.filterBadgeText, isActive && styles.filterBadgeTextActive]}>
@@ -1227,7 +1227,7 @@ export default function FloorManagerScreen() {
                                     : styles.itemTextQueue,
                                 ]}
                               >
-                                {itemReady ? '🔔 READY' : itemCooking ? '🔥 COOKING' : '⏳ QUEUED'}
+                                {itemReady ? 'READY' : itemCooking ? 'COOKING' : 'QUEUED'}
                               </Text>
                             </View>
                           </View>
