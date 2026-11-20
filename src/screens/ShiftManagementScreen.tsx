@@ -27,6 +27,7 @@ import {
 } from '../store/shiftStore';
 import { broadcastImmediately } from '../services/syncService';
 import FullscreenButton from '../components/FullscreenButton';
+import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
 
 const REGISTER_OPTIONS = [
   'Counter #1 (Main Dining)',
@@ -79,6 +80,8 @@ export default function ShiftManagementScreen() {
 
   // Form State: Close Shift
   const [countedCashInput, setCountedCashInput] = useState('');
+  const [showCountKeypad, setShowCountKeypad] = useState(true);
+  const [showFloatKeypad, setShowFloatKeypad] = useState(false);
   const [showDenominations, setShowDenominations] = useState(false);
   const [denominations, setDenominations] = useState<CashDenominations>(INITIAL_DENOMINATIONS);
   const [cashierNotes, setCashierNotes] = useState('');
@@ -425,7 +428,19 @@ export default function ShiftManagementScreen() {
                 </ScrollView>
 
                 {/* 3. Opening Float with 1-Tap Quick Amount Buttons */}
-                <Text style={styles.fieldLabel}>Opening Float in Drawer (دراز میں ابتدائی رقم)</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={styles.fieldLabel}>Opening Float in Drawer (دراز میں ابتدائی رقم)</Text>
+                  <TouchableOpacity
+                    style={[styles.keypadToggleChip, showFloatKeypad && styles.keypadToggleChipActive]}
+                    onPress={() => setShowFloatKeypad(!showFloatKeypad)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="keypad" size={13} color={showFloatKeypad ? '#52171B' : '#64748B'} />
+                    <Text style={[styles.keypadToggleChipText, showFloatKeypad && styles.keypadToggleChipTextActive]}>
+                      {showFloatKeypad ? 'Touch Keypad (آن)' : 'Touch Keypad'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
                 <View style={styles.floatInputContainer}>
                   <Text style={styles.floatCurrencyPrefix}>Rs.</Text>
                   <TextInput
@@ -437,6 +452,14 @@ export default function ShiftManagementScreen() {
                     placeholderTextColor="#94A3B8"
                   />
                 </View>
+                {showFloatKeypad && (
+                  <TouchNumericKeypad
+                    value={newOpeningFloat}
+                    onChangeText={setNewOpeningFloat}
+                    quickAmounts={[1000, 2000, 5000, 10000]}
+                    style={{ marginTop: 8, marginBottom: 8 }}
+                  />
+                )}
 
                 {/* Quick Float Shortcuts */}
                 <View style={styles.quickAmountRow}>
@@ -568,7 +591,19 @@ export default function ShiftManagementScreen() {
                   </View>
 
                   {/* Counted Cash Input */}
-                  <Text style={styles.fieldLabel}>Enter Actual Cash Counted in Drawer (گنتی شدہ رقم)</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={styles.fieldLabel}>Enter Actual Cash Counted in Drawer (گنتی شدہ رقم)</Text>
+                    <TouchableOpacity
+                      style={[styles.keypadToggleChip, showCountKeypad && styles.keypadToggleChipActive]}
+                      onPress={() => setShowCountKeypad(!showCountKeypad)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="keypad" size={13} color={showCountKeypad ? '#52171B' : '#64748B'} />
+                      <Text style={[styles.keypadToggleChipText, showCountKeypad && styles.keypadToggleChipTextActive]}>
+                        {showCountKeypad ? 'Touch Keypad (آن)' : 'Touch Keypad'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
                   <View style={styles.countInputRow}>
                     <View style={[styles.countInputWrap, isCashierPrivacy && { flex: 1 }]}>
                       <Text style={styles.floatCurrencyPrefix}>Rs.</Text>
@@ -594,6 +629,17 @@ export default function ShiftManagementScreen() {
                       </TouchableOpacity>
                     )}
                   </View>
+
+                  {/* Responsive Non-Blocking Touch Number Keypad */}
+                  {showCountKeypad && (
+                    <TouchNumericKeypad
+                      value={countedCashInput}
+                      onChangeText={setCountedCashInput}
+                      quickAmounts={[500, 1000, 5000, 10000]}
+                      exactAmount={!isCashierPrivacy ? shiftFinancials.expectedCash : undefined}
+                      style={{ marginTop: 8, marginBottom: 8 }}
+                    />
+                  )}
 
                   {/* Realtime Difference Indicator (ADMIN/AUDITOR ONLY - strictly hidden from cashier to prevent reverse calculation) */}
                   {!isCashierPrivacy && difference !== null && (
@@ -963,6 +1009,29 @@ export default function ShiftManagementScreen() {
 }
 
 const styles = StyleSheet.create({
+  keypadToggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  keypadToggleChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  keypadToggleChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  keypadToggleChipTextActive: {
+    color: '#92400E',
+  },
   privacyToggleBtn: {
     flexDirection: 'row',
     alignItems: 'center',
