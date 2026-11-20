@@ -2894,7 +2894,7 @@ export default function AdminSettingsScreen() {
               {activeStaffSessions.length > 0 && (
                 <View style={styles.activeSessionsContainer}>
                   <Text style={styles.activeSessionsHeader}>
-                    🔴 Live Active Terminals (فی الوقت لاگ ان ڈیوائسز):
+                    Live Active Terminals (فی الوقت لاگ ان ڈیوائسز):
                   </Text>
                   <View style={{ gap: 6, marginTop: 6 }}>
                     {activeStaffSessions.map((sess) => (
@@ -2973,7 +2973,7 @@ export default function AdminSettingsScreen() {
                             {activeDevCount > 0 && (
                               <View style={[styles.badge, { backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' }]}>
                                 <Text style={[styles.badgeText, { color: '#065F46' }]}>
-                                  🟢 ${activeDevCount} ACTIVE
+                                  {activeDevCount} ACTIVE
                                 </Text>
                               </View>
                             )}
