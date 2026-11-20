@@ -13,6 +13,7 @@ export interface User {
   customRoleId?: string;
   assignedZone?: string;
   assignedZones?: string[];
+  sessionId?: string;
 }
 
 interface AuthState {
@@ -23,7 +24,7 @@ interface AuthState {
   login: (
     name: string,
     role: Role,
-    meta?: { staffId?: string; customRoleId?: string; assignedZone?: string; assignedZones?: string[] }
+    meta?: { staffId?: string; customRoleId?: string; assignedZone?: string; assignedZones?: string[]; sessionId?: string }
   ) => void;
   updateUserZones: (assignedZone?: string, assignedZones?: string[]) => void;
   logout: () => void;
@@ -46,6 +47,7 @@ export const useAuthStore = create<AuthState>()(
             customRoleId: meta?.customRoleId,
             assignedZone: meta?.assignedZone,
             assignedZones: meta?.assignedZones,
+            sessionId: meta?.sessionId,
           },
           isAuthenticated: true,
           hasHydrated: true,

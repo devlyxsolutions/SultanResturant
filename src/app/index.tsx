@@ -29,6 +29,8 @@ import SultanLogo from '../components/SultanLogo';
 import FullscreenButton from '../components/FullscreenButton';
 import SyncStatusBadge from '../components/SyncStatusBadge';
 import { Ionicons } from '@expo/vector-icons';
+import { useSettingsStore } from '../store/settingsStore';
+import { getStableDeviceId, getDeviceFriendlyName, broadcastImmediately } from '../services/syncService';
 
 // Session-wide splash skip flag for instant navigation after initial launch
 let hasSeenSplashSession = false;
@@ -70,6 +72,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
   const staff = useRestaurantStore((state) => state.staff) || [];
   const allRoles = useRoleStore((state) => state.roles);
+  const systemSettings = useSettingsStore((state) => state.settings);
 
   const { width, height } = useWindowDimensions();
 
@@ -220,11 +223,30 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
 
     const dest = getRoleHome(resolvedRole, memberCustomRole?.baseRole);
     setErrorMessage('');
+
+    const sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+    const maxDevices = member.maxConcurrentDevices ?? systemSettings?.defaultMaxDevicesPerStaff ?? 1;
+
+    useRestaurantStore.getState().registerStaffSession(
+      {
+        sessionId,
+        staffId: member.id,
+        staffName: member.name,
+        role: String(resolvedRole),
+        deviceId: getStableDeviceId(),
+        deviceName: getDeviceFriendlyName(),
+        platform: Platform.OS,
+      },
+      maxDevices
+    );
+    broadcastImmediately();
+
     login(member.name, resolvedRole, {
       staffId: member.id,
       customRoleId: memberCustomRole?.id || member.customRoleId,
       assignedZone: member.assignedZone,
       assignedZones: member.assignedZones,
+      sessionId,
     });
     router.replace(dest as Href);
   };
@@ -344,10 +366,31 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         }
         const dest = getRoleHome(mappedRole);
         setErrorMessage('');
+        const sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+        const defaultMax = systemSettings?.defaultMaxDevicesPerStaff ?? 1;
+        const uDisplayName = enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1);
+
+        useRestaurantStore.getState().registerStaffSession(
+          {
+            sessionId,
+            staffId: mappedRole,
+            staffName: uDisplayName,
+            role: String(mappedRole),
+            deviceId: getStableDeviceId(),
+            deviceName: getDeviceFriendlyName(),
+            platform: Platform.OS,
+          },
+          defaultMax
+        );
+        broadcastImmediately();
+
         login(
-          enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1),
+          uDisplayName,
           mappedRole,
-          isCashierKeyword ? { customRoleId: 'role-cashier' } : undefined
+          {
+            ...(isCashierKeyword ? { customRoleId: 'role-cashier' } : {}),
+            sessionId,
+          }
         );
         router.replace(dest as Href);
         return;

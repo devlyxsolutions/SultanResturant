@@ -114,6 +114,7 @@ export default function StaffManagementScreen({
   const [formShift, setFormShift] = useState<StaffShift>('Morning');
   const [formStatus, setFormStatus] = useState<StaffStatus>('Active');
   const [formPin, setFormPin] = useState('');
+  const [formMaxDevices, setFormMaxDevices] = useState<number>(1);
   const [formAssignedZones, setFormAssignedZones] = useState<string[]>(['Ground Floor']);
   const [formCnic, setFormCnic] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
@@ -212,6 +213,7 @@ export default function StaffManagementScreen({
     setFormShift('Morning');
     setFormStatus('Active');
     setFormPin(Math.floor(1000 + Math.random() * 9000).toString());
+    setFormMaxDevices(1);
     setFormAssignedZones(['Ground Floor']);
     setFormCnic('');
     setFormDesignation('Order Taker');
@@ -244,6 +246,7 @@ export default function StaffManagementScreen({
     setFormShift(member.shift);
     setFormStatus(member.status);
     setFormPin(member.pin);
+    setFormMaxDevices(member.maxConcurrentDevices ?? 1);
     const initialZones =
       member.assignedZones && member.assignedZones.length > 0
         ? member.assignedZones
@@ -304,6 +307,7 @@ export default function StaffManagementScreen({
       emergencyContact: formEmergencyContact.trim() || undefined,
       address: formAddress.trim() || undefined,
       bankAccountDetails: formBankDetails.trim() || undefined,
+      maxConcurrentDevices: formMaxDevices,
     };
 
     if (editingStaff) {
@@ -898,6 +902,42 @@ export default function StaffManagementScreen({
                         <Text style={[styles.formPillText, isSelected && styles.formPillTextActive]}>
                           {formatRoleName(r.name)}
                           {!r.permissions?.canViewRevenue ? ' (Restricted)' : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Concurrent Device Limit */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Max Concurrent Devices (ایک وقت میں بیک وقت لاگ ان کی حد)</Text>
+                <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
+                  اگر ڈیوائسز اس حد سے بڑھیں تو پرانی ڈیوائس خود بخود لاگ آؤٹ ہو جائے گی (ڈیفالٹ: 1)
+                </Text>
+                <View style={styles.pillsRow}>
+                  {[
+                    { val: 1, label: '1 Device (Default)' },
+                    { val: 2, label: '2 Devices' },
+                    { val: 3, label: '3 Devices' },
+                    { val: 5, label: '5 Devices' },
+                    { val: 999, label: 'Unlimited (لا محدود)' },
+                  ].map((opt) => {
+                    const isSelected = formMaxDevices === opt.val;
+                    return (
+                      <TouchableOpacity
+                        key={opt.val}
+                        style={[
+                          styles.formPill,
+                          isSelected && {
+                            backgroundColor: BRAND.burgundy,
+                            borderColor: BRAND.burgundy,
+                          },
+                        ]}
+                        onPress={() => setFormMaxDevices(opt.val)}
+                      >
+                        <Text style={[styles.formPillText, isSelected && styles.formPillTextActive]}>
+                          {opt.label}
                         </Text>
                       </TouchableOpacity>
                     );

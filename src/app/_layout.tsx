@@ -10,6 +10,7 @@ import StockAlarmHost from '../components/StockAlarmHost';
 import IncomingCallHost from '../components/IncomingCallHost';
 import WaiterNotificationHost from '../components/WaiterNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
+import SessionSecurityHost from '../components/SessionSecurityHost';
 
 // Ignore benign web font loading timeouts in Expo LogBox
 LogBox.ignoreLogs([
@@ -359,6 +360,8 @@ export default function RootLayout() {
       <WaiterNotificationHost />
       {/* Floor Manager Urgent Digital Menu Order Repeating Notification Host */}
       <FloorManagerNotificationHost />
+      {/* Multi-Device Security & Concurrent Session Kick Host */}
+      <SessionSecurityHost />
     </>
   );
 }

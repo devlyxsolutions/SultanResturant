@@ -35,6 +35,7 @@ import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SultanLogo from '../components/SultanLogo';
 import FullscreenButton from '../components/FullscreenButton';
+import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
 import {
   publishCustomerDisplayState,
   subscribeToCustomerDisplay,
@@ -273,6 +274,8 @@ export default function POSTerminalScreen({
   const [selectedEventCampaign, setSelectedEventCampaign] = useState<EventDiscount | null>(null);
   const [discountAmount, setDiscountAmount] = useState('0');
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
+  const [activePaymentIndex, setActivePaymentIndex] = useState<number>(0);
+  const [showCheckoutKeypad, setShowCheckoutKeypad] = useState<boolean>(true);
 
   const dynamicFloors = useRestaurantStore(state => state.floors);
 
@@ -3293,15 +3296,29 @@ export default function POSTerminalScreen({
           ======================================================== */}
       <Modal visible={checkoutModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 540 }]}>
+          <View style={[styles.modalBox, { maxWidth: width >= 860 ? 840 : 540, maxHeight: '92%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderTitle}>Settle & Pay Bill</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.modalHeaderTitle}>Settle & Pay Bill • بل وصولی</Text>
+                <TouchableOpacity
+                  style={[styles.keypadToggleChip, showCheckoutKeypad && styles.keypadToggleChipActive]}
+                  onPress={() => setShowCheckoutKeypad(!showCheckoutKeypad)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="keypad" size={13} color={showCheckoutKeypad ? '#52171B' : '#64748B'} />
+                  <Text style={[styles.keypadToggleChipText, showCheckoutKeypad && styles.keypadToggleChipTextActive]}>
+                    {showCheckoutKeypad ? 'Touch Keypad (آن)' : 'Touch Keypad'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity onPress={() => setCheckoutModalVisible(false)}>
                 <Ionicons name="close" size={22} color="#1E293B" />
               </TouchableOpacity>
             </View>
 
-            <View style={{ padding: 18 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18 }}>
+              <View style={width >= 860 ? { flexDirection: 'row', gap: 18, alignItems: 'flex-start' } : undefined}>
+                <View style={width >= 860 ? { flex: 1.1 } : undefined}>
               <View style={styles.checkoutTotalCard}>
                 <Text style={styles.checkoutTotalCardLabel}>TOTAL AMOUNT DUE (کل بل رقم)</Text>
                 <Text style={styles.checkoutTotalCardVal}>Rs. {total.toFixed(2)}</Text>
@@ -3372,12 +3389,16 @@ export default function POSTerminalScreen({
 
                       <View style={{ flex: 1, position: 'relative' }}>
                         <TextInput 
-                          style={styles.payAmountInput}
+                          style={[
+                            styles.payAmountInput,
+                            activePaymentIndex === idx && { borderColor: '#52171B', backgroundColor: '#FFFBEB' }
+                          ]}
                           keyboardType="numeric"
                           placeholder="Amount received..."
                           placeholderTextColor="#94A3B8"
                           value={p.amount > 0 ? p.amount.toString() : ''}
                           onChangeText={v => updatePayment(idx, 'amount', v)}
+                          onFocus={() => setActivePaymentIndex(idx)}
                         />
                         {p.amount > 0 && (
                           <TouchableOpacity 
@@ -3488,9 +3509,32 @@ export default function POSTerminalScreen({
                 </Text>
               </TouchableOpacity>
             </View>
+
+            {/* Right Column (or Inline on small screens): Non-blocking Touch Keypad */}
+            {showCheckoutKeypad && (
+              <View style={width >= 860 ? { width: 330, marginTop: 0 } : { marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#52171B' }}>
+                    Touch Numpad • {((payments[activePaymentIndex] || payments[0])?.type || 'cash').toUpperCase()}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    Tender Cash Keypad
+                  </Text>
+                </View>
+                <TouchNumericKeypad
+                  value={(payments[activePaymentIndex] || payments[0])?.amount > 0 ? String((payments[activePaymentIndex] || payments[0]).amount) : ''}
+                  onChangeText={(val) => updatePayment(activePaymentIndex, 'amount', val)}
+                  exactAmount={Math.round(total)}
+                  quickAmounts={[500, 1000, 5000]}
+                  compact={width < 860}
+                />
+              </View>
+            )}
           </View>
-        </View>
-      </Modal>
+        </ScrollView>
+      </View>
+    </View>
+  </Modal>
 
       {/* ========================================================
           MODAL: RUNNING ORDERS / KITCHEN TICKETS
@@ -5765,6 +5809,29 @@ const styles = StyleSheet.create({
   /* --------------------------------------------------------
      MODALS (FROSTED GLASS SURFACES)
      -------------------------------------------------------- */
+  keypadToggleChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  keypadToggleChipActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#FDE68A',
+  },
+  keypadToggleChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+  },
+  keypadToggleChipTextActive: {
+    color: '#92400E',
+  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(15, 23, 42, 0.65)',
