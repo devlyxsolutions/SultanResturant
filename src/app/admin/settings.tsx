@@ -801,6 +801,8 @@ export default function AdminSettingsScreen() {
   const addStaff = useRestaurantStore((s) => s.addStaff);
   const updateStaff = useRestaurantStore((s) => s.updateStaff);
   const deleteStaff = useRestaurantStore((s) => s.deleteStaff);
+  const activeStaffSessions = useRestaurantStore((s) => s.activeStaffSessions) || [];
+  const terminateStaffSession = useRestaurantStore((s) => s.terminateStaffSession);
 
   const tables = useRestaurantStore((s) => s.tables);
   const tickets = useRestaurantStore((s) => s.tickets);
@@ -833,6 +835,7 @@ export default function AdminSettingsScreen() {
 
   // User modal state
   const [userModalVisible, setUserModalVisible] = useState(false);
+  const [uMaxDevices, setUMaxDevices] = useState<number>(1);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [uName, setUName] = useState('');
   const [uPhone, setUPhone] = useState('');
@@ -1575,6 +1578,7 @@ export default function AdminSettingsScreen() {
         role: uRole,
         customRoleId: uCustomRoleId || undefined,
         shift: uShift,
+        maxConcurrentDevices: uMaxDevices,
       });
       showToast(`Updated user "${uName.trim()}"`);
     } else {
@@ -1587,6 +1591,7 @@ export default function AdminSettingsScreen() {
         status: 'Active',
         shift: uShift,
         joinedDate: new Date().toISOString().split('T')[0],
+        maxConcurrentDevices: uMaxDevices,
       });
       showToast(`Added user "${uName.trim()}"`);
     }
@@ -2825,6 +2830,110 @@ export default function AdminSettingsScreen() {
               </View>
             </View>
 
+            {/* Concurrent Device & Login Security Panel */}
+            <View style={styles.deviceSecurityCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                  <View style={styles.deviceSecurityIconBox}>
+                    <Ionicons name="phone-portrait-outline" size={18} color="#D5A943" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.deviceSecurityTitle}>
+                      Staff Multi-Device & Concurrent Session Limit (ڈیوائس لاگ ان کنٹرول)
+                    </Text>
+                    <Text style={styles.deviceSecuritySubtitle}>
+                      ایک اکاؤنٹ سے بیک وقت لاگ ان کی حد۔ نئی ڈیوائس لاگ ان ہونے پر پچھلی ڈیوائس خود بخود لاگ آؤٹ ہو جاتی ہے۔
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.badge, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1 }]}>
+                  <Text style={[styles.badgeText, { color: '#065F46' }]}>
+                    {activeStaffSessions.length} Terminals Active
+                  </Text>
+                </View>
+              </View>
+
+              {/* Global Default Setting */}
+              <View style={styles.deviceLimitRow}>
+                <Text style={styles.deviceLimitLabel}>
+                  Default Device Limit (تمام ملازمین اور رولز کے لیے ڈیفالٹ حد):
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
+                  {[
+                    { val: 1, label: '1 Device (Default)' },
+                    { val: 2, label: '2 Devices' },
+                    { val: 3, label: '3 Devices' },
+                    { val: 5, label: '5 Devices' },
+                    { val: 999, label: 'Unlimited (لا محدود)' },
+                  ].map((opt) => {
+                    const isSelected = (draft.defaultMaxDevicesPerStaff ?? 1) === opt.val;
+                    return (
+                      <TouchableOpacity
+                        key={opt.val}
+                        style={[styles.devicePill, isSelected && styles.devicePillActive]}
+                        onPress={() => {
+                          applySettingPatchImmediate({ defaultMaxDevicesPerStaff: opt.val });
+                          showToast(`Default device limit set to: ${opt.label}`);
+                        }}
+                      >
+                        <Ionicons
+                          name={isSelected ? 'checkmark-circle' : 'radio-button-off'}
+                          size={13}
+                          color={isSelected ? '#52171B' : '#64748B'}
+                        />
+                        <Text style={[styles.devicePillText, isSelected && styles.devicePillTextActive]}>
+                          {opt.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Live Connected Sessions Monitor */}
+              {activeStaffSessions.length > 0 && (
+                <View style={styles.activeSessionsContainer}>
+                  <Text style={styles.activeSessionsHeader}>
+                    🔴 Live Active Terminals (فی الوقت لاگ ان ڈیوائسز):
+                  </Text>
+                  <View style={{ gap: 6, marginTop: 6 }}>
+                    {activeStaffSessions.map((sess) => (
+                      <View key={sess.sessionId} style={styles.activeSessionItem}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={styles.activeSessionStaffName}>{sess.staffName}</Text>
+                            <View style={[styles.badge, styles.badgeGray, { paddingHorizontal: 6, paddingVertical: 1 }]}>
+                              <Text style={[styles.badgeText, { fontSize: 10 }]}>{sess.role}</Text>
+                            </View>
+                          </View>
+                          <Text style={styles.activeSessionMeta}>
+                            Terminal: {sess.deviceName || 'Device'} • Platform: {sess.platform} • Logged in: {new Date(sess.loginTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.kickBtn}
+                          onPress={() => {
+                            askConfirm(
+                              'Terminate Device',
+                              `Kick "${sess.staffName}" from ${sess.deviceName || 'this device'}? The device will be logged out instantly.`,
+                              () => {
+                                terminateStaffSession(sess.sessionId, 'Admin نے سیشن کک کر دیا');
+                                broadcastImmediately();
+                                showToast(`Terminated session on ${sess.deviceName || 'device'}`);
+                              }
+                            );
+                          }}
+                        >
+                          <Ionicons name="exit-outline" size={13} color="#DC2626" />
+                          <Text style={styles.kickBtnText}>Kick / Logout</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+
             <TextInput
               style={[styles.input, { marginBottom: 12 }]}
               placeholder="Search users by name, role or phone..."
@@ -2849,6 +2958,28 @@ export default function AdminSettingsScreen() {
                       <View style={[styles.badge, isActive ? styles.badgeGreen : styles.badgeGray]}>
                         <Text style={styles.badgeText}>{isActive ? 'ACTIVE' : 'DISABLED'}</Text>
                       </View>
+                      {(() => {
+                        const activeDevCount = activeStaffSessions.filter(
+                          (s) => (s.staffId && s.staffId === member.id) || (s.staffName && s.staffName.toLowerCase() === member.name.toLowerCase())
+                        ).length;
+                        return (
+                          <>
+                            <View style={[styles.badge, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }]}>
+                              <Ionicons name="phone-portrait-outline" size={11} color="#52171B" />
+                              <Text style={[styles.badgeText, { color: '#334155' }]}>
+                                {member.maxConcurrentDevices ? `${member.maxConcurrentDevices} Dev Limit` : `Limit: Default (${draft.defaultMaxDevicesPerStaff ?? 1})`}
+                              </Text>
+                            </View>
+                            {activeDevCount > 0 && (
+                              <View style={[styles.badge, { backgroundColor: '#ECFDF5', borderWidth: 1, borderColor: '#A7F3D0' }]}>
+                                <Text style={[styles.badgeText, { color: '#065F46' }]}>
+                                  🟢 ${activeDevCount} ACTIVE
+                                </Text>
+                              </View>
+                            )}
+                          </>
+                        );
+                      })()}
                       {assignedRole && (
                         <TouchableOpacity
                           style={[styles.badge, { backgroundColor: '#FAF6EE', borderWidth: 1, borderColor: '#D4AF37' }]}
@@ -3214,6 +3345,35 @@ export default function AdminSettingsScreen() {
               keyboardType="numeric"
               placeholder="1234"
             />
+            <Text style={[styles.label, { marginTop: 10 }]}>
+              Max Concurrent Devices (ایک وقت میں بیک وقت لاگ ان کی حد)
+            </Text>
+            <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
+              اگر ڈیوائسز اس حد سے بڑھیں تو پرانی ڈیوائس خود بخود لاگ آؤٹ ہو جائے گی (ڈیفالٹ: 1)
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+              {[
+                { val: 1, label: '1 Device (Default)' },
+                { val: 2, label: '2 Devices' },
+                { val: 3, label: '3 Devices' },
+                { val: 5, label: '5 Devices' },
+                { val: 999, label: 'Unlimited (لا محدود)' },
+              ].map((opt) => {
+                const selected = uMaxDevices === opt.val;
+                return (
+                  <TouchableOpacity
+                    key={opt.val}
+                    style={[styles.chip, selected && styles.chipActive]}
+                    onPress={() => setUMaxDevices(opt.val)}
+                  >
+                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
             <Text style={[styles.label, { marginTop: 10 }]}>Assigned Role (System & Custom Roles)</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
               {roles.map((r) => {
@@ -3436,6 +3596,120 @@ export default function AdminSettingsScreen() {
 }
 
 const styles = StyleSheet.create({
+  deviceSecurityCard: {
+    backgroundColor: '#FAF5FF',
+    borderWidth: 1.5,
+    borderColor: '#E9D5FF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16,
+  },
+  deviceSecurityIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#52171B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deviceSecurityTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  deviceSecuritySubtitle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+    lineHeight: 15,
+  },
+  deviceLimitRow: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 4,
+  },
+  deviceLimitLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  devicePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  devicePillActive: {
+    borderColor: '#52171B',
+    backgroundColor: '#FDF2F8',
+  },
+  devicePillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  devicePillTextActive: {
+    color: '#52171B',
+    fontWeight: '800',
+  },
+  activeSessionsContainer: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 10,
+    marginTop: 10,
+  },
+  activeSessionsHeader: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  activeSessionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 8,
+    gap: 8,
+  },
+  activeSessionStaffName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  activeSessionMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  kickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  kickBtnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
   container: { flex: 1, backgroundColor: '#FAF6EE' },
   headerCard: {
     backgroundColor: '#FFFFFF',

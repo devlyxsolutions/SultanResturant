@@ -2370,7 +2370,9 @@ const INITIAL_STATE = {
     }
   ],
   assets: [],
-  damageRecords: []
+  damageRecords: [],
+  activeStaffSessions: [],
+  revokedDeviceIds: {}
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -2420,6 +2422,8 @@ try {
     if (!Array.isArray(serverState.serviceRequests)) serverState.serviceRequests = [];
     if (!Array.isArray(serverState.reservations)) serverState.reservations = INITIAL_STATE.reservations || [];
     if (!Array.isArray(serverState.playlandTickets)) serverState.playlandTickets = [];
+    if (!Array.isArray(serverState.activeStaffSessions)) serverState.activeStaffSessions = [];
+    if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') serverState.revokedDeviceIds = {};
     if (!Array.isArray(serverState.playlandRides) || serverState.playlandRides.length === 0) {
       serverState.playlandRides = DEFAULT_PLAYLAND_RIDES;
     }
@@ -4250,7 +4254,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update

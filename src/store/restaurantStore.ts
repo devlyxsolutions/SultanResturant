@@ -335,6 +335,20 @@ export type StaffMember = {
   emergencyContact?: string;
   address?: string;
   bankAccountDetails?: string;
+  /** Maximum concurrent devices allowed for this staff member (default: 1). */
+  maxConcurrentDevices?: number;
+};
+
+export type StaffSession = {
+  sessionId: string;
+  staffId: string;
+  staffName: string;
+  role: string;
+  deviceId: string;
+  deviceName?: string;
+  platform: string;
+  loginTime: number;
+  lastActiveTime: number;
 };
 
 export type Reservation = {
@@ -451,6 +465,14 @@ type RestaurantState = {
   deleteSalaryPayment: (id: string) => void;
   onlineFeedbackUrl?: string;
   setOnlineFeedbackUrl: (url: string) => void;
+  activeStaffSessions: StaffSession[];
+  revokedDeviceIds?: Record<string, { staffName: string; timestamp: number; reason: string }>;
+  registerStaffSession: (
+    session: Omit<StaffSession, 'loginTime' | 'lastActiveTime'>,
+    maxAllowed?: number
+  ) => { kickedCount: number; kickedSessions: StaffSession[] };
+  terminateStaffSession: (sessionId: string, reason?: string) => void;
+  clearStaffSessions: (staffId?: string) => void;
   syncFromServer: (remoteState: Partial<RestaurantState>) => void;
 };
 
@@ -710,6 +732,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Morning',
     joinedDate: '2025-01-15',
+    maxConcurrentDevices: 1,
     cnic: '35201-8472910-1',
     designation: 'General Director / Admin',
     monthlySalary: 120000,
@@ -727,6 +750,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Morning',
     joinedDate: '2025-02-01',
+    maxConcurrentDevices: 1,
     cnic: '35202-1928374-3',
     designation: 'Restaurant Operations Manager',
     monthlySalary: 75000,
@@ -744,6 +768,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Evening',
     joinedDate: '2025-03-10',
+    maxConcurrentDevices: 1,
     cnic: '35201-9281734-5',
     designation: 'Executive Head Chef',
     monthlySalary: 65000,
@@ -761,6 +786,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Evening',
     joinedDate: '2025-04-05',
+    maxConcurrentDevices: 1,
     assignedZone: 'Ground Floor',
     assignedZones: ['Ground Floor'],
     cnic: '35202-5463728-2',
@@ -780,6 +806,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'On Leave',
     shift: 'Night',
     joinedDate: '2025-05-12',
+    maxConcurrentDevices: 1,
     assignedZone: '1st Floor',
     assignedZones: ['1st Floor'],
     cnic: '35201-3829104-9',
@@ -799,6 +826,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Evening',
     joinedDate: '2025-06-01',
+    maxConcurrentDevices: 1,
     cnic: '35202-9988771-7',
     designation: 'Playland Attendant & Supervisor',
     monthlySalary: 28000,
@@ -816,6 +844,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Morning',
     joinedDate: '2025-06-15',
+    maxConcurrentDevices: 1,
     cnic: '35201-1122334-5',
     designation: 'Juice & Mocktail Barista',
     monthlySalary: 35000,
@@ -833,6 +862,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Morning',
     joinedDate: '2025-02-15',
+    maxConcurrentDevices: 1,
     assignedZone: 'Ground Floor',
     assignedZones: ['Ground Floor'],
     cnic: '35201-7788990-1',
@@ -852,6 +882,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Evening',
     joinedDate: '2025-03-01',
+    maxConcurrentDevices: 1,
     assignedZone: '1st Floor',
     assignedZones: ['1st Floor'],
     cnic: '35202-3344556-3',
@@ -872,6 +903,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Morning',
     joinedDate: '2025-03-15',
+    maxConcurrentDevices: 1,
     cnic: '35202-4455667-1',
     designation: 'Senior Counter Cashier',
     monthlySalary: 45000,
@@ -890,6 +922,7 @@ export const INITIAL_STAFF: StaffMember[] = [
     status: 'Active',
     shift: 'Evening',
     joinedDate: '2025-04-01',
+    maxConcurrentDevices: 1,
     cnic: '35201-6677889-5',
     designation: 'Evening Shift Cashier',
     monthlySalary: 40000,
@@ -1182,6 +1215,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       customers: INITIAL_CUSTOMERS,
       feedbacks: INITIAL_FEEDBACKS,
       staff: INITIAL_STAFF,
+      activeStaffSessions: [],
+      revokedDeviceIds: {},
       attendance: INITIAL_ATTENDANCE,
       salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
@@ -2885,6 +2920,95 @@ export const useRestaurantStore = create<RestaurantState>()(
         staff: (state.staff || []).filter(s => s.id !== id)
       })),
 
+      registerStaffSession: (sessionData, maxAllowed = 1) => {
+        const now = Date.now();
+        const maxDevices = Math.max(1, maxAllowed);
+        const currentSessions = (get().activeStaffSessions || []).filter(
+          (s) => s && now - (s.lastActiveTime || s.loginTime || 0) < 24 * 60 * 60 * 1000
+        );
+
+        const normStaffId = (sessionData.staffId || '').toLowerCase().trim();
+        const normStaffName = (sessionData.staffName || '').toLowerCase().trim();
+
+        const isMatch = (s: StaffSession) =>
+          (s.staffId && s.staffId.toLowerCase().trim() === normStaffId) ||
+          (s.staffName && s.staffName.toLowerCase().trim() === normStaffName);
+
+        const matchingSessions = currentSessions.filter(isMatch);
+        let otherDeviceSessions = matchingSessions.filter((s) => s.deviceId !== sessionData.deviceId);
+
+        const kickedSessions: StaffSession[] = [];
+        const newRevoked: Record<string, { staffName: string; timestamp: number; reason: string }> = {
+          ...(get().revokedDeviceIds || {}),
+        };
+
+        // Clean up revoked older than 1 hour
+        for (const devId in newRevoked) {
+          if (now - newRevoked[devId].timestamp > 60 * 60 * 1000) {
+            delete newRevoked[devId];
+          }
+        }
+
+        // Check if other device sessions + 1 (new session) exceeds maxDevices limit
+        const excess = otherDeviceSessions.length + 1 - maxDevices;
+        if (excess > 0) {
+          otherDeviceSessions.sort((a, b) => (a.loginTime || 0) - (b.loginTime || 0));
+          const toKick = otherDeviceSessions.slice(0, excess);
+          for (const kicked of toKick) {
+            kickedSessions.push(kicked);
+            newRevoked[kicked.deviceId] = {
+              staffName: kicked.staffName,
+              timestamp: now,
+              reason: `Doosri device (${sessionData.deviceName || 'New Device'}) par login kiya gaya hai`,
+            };
+          }
+          otherDeviceSessions = otherDeviceSessions.slice(excess);
+        }
+
+        const newSession: StaffSession = {
+          ...sessionData,
+          loginTime: now,
+          lastActiveTime: now,
+        };
+
+        const nonMatchingSessions = currentSessions.filter((s) => !isMatch(s));
+        const updatedSessions = [...nonMatchingSessions, ...otherDeviceSessions, newSession];
+
+        set({
+          activeStaffSessions: updatedSessions,
+          revokedDeviceIds: newRevoked,
+        });
+
+        return { kickedCount: kickedSessions.length, kickedSessions };
+      },
+
+      terminateStaffSession: (sessionId, reason) => {
+        const now = Date.now();
+        const sessionToTerminate = (get().activeStaffSessions || []).find((s) => s.sessionId === sessionId);
+        const newRevoked = { ...(get().revokedDeviceIds || {}) };
+        if (sessionToTerminate) {
+          newRevoked[sessionToTerminate.deviceId] = {
+            staffName: sessionToTerminate.staffName,
+            timestamp: now,
+            reason: reason || 'Admin ne session terminate kar diya hai',
+          };
+        }
+        set((s) => ({
+          activeStaffSessions: (s.activeStaffSessions || []).filter((sess) => sess.sessionId !== sessionId),
+          revokedDeviceIds: newRevoked,
+        }));
+      },
+
+      clearStaffSessions: (staffId) => {
+        if (!staffId) {
+          set({ activeStaffSessions: [] });
+        } else {
+          set((s) => ({
+            activeStaffSessions: (s.activeStaffSessions || []).filter((sess) => sess.staffId !== staffId),
+          }));
+        }
+      },
+
       markAttendance: (recordOrList) => set((state) => {
         const recordsToSave = Array.isArray(recordOrList) ? recordOrList : [recordOrList];
         const existingAttendance = [...(state.attendance || [])];
@@ -3127,6 +3251,13 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
           ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
           ...(remoteState.feedbacks ? { feedbacks: remoteState.feedbacks } : {}),
+          ...(Array.isArray(remoteState.activeStaffSessions) ? { activeStaffSessions: remoteState.activeStaffSessions } : {}),
+          ...(remoteState.revokedDeviceIds ? {
+            revokedDeviceIds: {
+              ...(state.revokedDeviceIds || {}),
+              ...remoteState.revokedDeviceIds,
+            }
+          } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? {
             lastBillPaidAlert: (() => {
               const incoming = remoteState.lastBillPaidAlert;

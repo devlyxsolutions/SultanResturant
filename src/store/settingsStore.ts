@@ -88,6 +88,10 @@ export interface SystemSettings {
   enablePlayland: boolean;
   playlandDefaultSessionMins: number;
 
+  // Group 8 — Staff Multi-Device & Concurrent Session Security
+  defaultMaxDevicesPerStaff: number; // default: 1 (single device per account)
+  autoKickPreviousDevice: boolean;    // default: true (auto logout earlier device)
+
   // 4. Sync & Backup Preferences
   autoSyncEnabled: boolean;
   cloudBackupEnabled: boolean;
@@ -177,6 +181,9 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   standardShiftHours: 8,
   enablePlayland: true,
   playlandDefaultSessionMins: 60,
+
+  defaultMaxDevicesPerStaff: 1,
+  autoKickPreviousDevice: true,
 
   autoSyncEnabled: true,
   cloudBackupEnabled: true,

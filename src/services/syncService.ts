@@ -26,7 +26,49 @@ export interface SyncInfo {
 
 const SERVER_PORT = 5050;
 const STORAGE_KEY_SERVER_IP = '@sultan_server_ip';
-export const DEVICE_ID = `dev_${Platform.OS}_${Math.random().toString(36).substring(2, 8)}`;
+const STORAGE_KEY_DEVICE_ID = '@sultan_device_id';
+let cachedDeviceId: string | null = null;
+
+export function getStableDeviceId(): string {
+  if (cachedDeviceId) return cachedDeviceId;
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const stored = window.localStorage.getItem(STORAGE_KEY_DEVICE_ID);
+      if (stored && stored.length > 5) {
+        cachedDeviceId = stored;
+        return stored;
+      }
+      const created = `dev_${Platform.OS}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+      window.localStorage.setItem(STORAGE_KEY_DEVICE_ID, created);
+      cachedDeviceId = created;
+      return created;
+    }
+  } catch {}
+  cachedDeviceId = `dev_${Platform.OS}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
+  return cachedDeviceId;
+}
+
+export function getDeviceFriendlyName(): string {
+  if (Platform.OS === 'web' && typeof navigator !== 'undefined') {
+    const ua = navigator.userAgent || '';
+    let browser = 'Browser';
+    if (ua.includes('Edg/')) browser = 'Edge';
+    else if (ua.includes('Chrome/')) browser = 'Chrome';
+    else if (ua.includes('Safari/') && !ua.includes('Chrome')) browser = 'Safari';
+    else if (ua.includes('Firefox/')) browser = 'Firefox';
+
+    let os = 'PC';
+    if (ua.includes('Windows')) os = 'Windows';
+    else if (ua.includes('Macintosh') || ua.includes('Mac OS')) os = 'Mac';
+    else if (ua.includes('Android')) os = 'Android';
+    else if (ua.includes('iPhone') || ua.includes('iPad')) os = 'iOS';
+
+    return `${browser} on ${os}`;
+  }
+  return `${Platform.OS.toUpperCase()} Terminal`;
+}
+
+export const DEVICE_ID = getStableDeviceId();
 
 const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_state.json`;
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
@@ -876,6 +918,8 @@ function broadcastLocalState(force = false) {
       shifts: shiftState.shifts,
       activeShiftId: shiftState.activeShiftId,
       systemSettings: useSettingsStore.getState().settings,
+      activeStaffSessions: state.activeStaffSessions || [],
+      revokedDeviceIds: state.revokedDeviceIds || {},
       ...opsState,
       ...kitchenState,
     },
