@@ -26,6 +26,7 @@ export const MANAGER_ROUTE_RULES: Record<string, ManagerRouteRule> = {
   '/manager/discounts': { requires: ['canAccessDiscounts'], moduleName: 'Events & Discounts', urduModuleName: 'ایونٹس اور ڈسکاؤنٹس' },
   '/manager/inventory': { requires: ['canAccessInventory'], moduleName: 'Inventory', urduModuleName: 'انوینٹری' },
   '/manager/suppliers': { requires: ['canAccessInventory'], moduleName: 'Suppliers', urduModuleName: 'سپلائرز' },
+  '/manager/supplier-ledger': { requires: ['canAccessInventory'], moduleName: 'Supplier Ledger', urduModuleName: 'سپلائر کھاتہ' },
   '/manager/expenses': { requires: ['canAccessExpenses'], moduleName: 'Live Expenses', urduModuleName: 'اخراجات' },
   '/manager/reports': { requires: ['canAccessReports', 'canViewRevenue'], moduleName: 'Financial Reports', urduModuleName: 'مالیاتی رپورٹس' },
   '/manager/damages': { requires: ['canAccessDamages'], moduleName: 'Damage Control', urduModuleName: 'ڈیمیج کنٹرول' },

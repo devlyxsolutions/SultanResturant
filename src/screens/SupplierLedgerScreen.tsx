@@ -30,6 +30,7 @@ import RoyalDropdown, { DropdownOption } from '../components/RoyalDropdown';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
 import { formatTime, toWhatsAppNumber } from '../utils/format';
+import { useRolePermissions } from '../store/roleStore';
 
 const CATEGORY_THEMES: Record<
   SupplierCategory,
@@ -74,6 +75,9 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   const { width } = useWindowDimensions();
   const isMobile = width < 850;
   const isSmallMobile = width < 480;
+
+  // Role CRUD Permissions (Suppliers & Khata POs)
+  const { canAddSuppliers, canEditSuppliers, canDeleteSuppliers } = useRolePermissions();
 
   // Cloud & LAN Live Sync Status
   const { isConnected, lastSyncedAt, forceSyncNow } = useSyncStatus();
@@ -416,6 +420,10 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   };
 
   const handleConfirmPayment = () => {
+    if (!canEditSuppliers) {
+      Alert.alert('Permission Denied', 'You do not have permission to record supplier payments.');
+      return;
+    }
     const amountNum = parseFloat(payAmount);
     if (isNaN(amountNum) || amountNum <= 0) {
       Alert.alert('Invalid Amount', 'Please enter a valid payment amount greater than zero.');
@@ -480,6 +488,10 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   };
 
   const handleDeletePayment = (payment: SupplierPayment) => {
+    if (!canDeleteSuppliers) {
+      Alert.alert('Permission Denied', 'You do not have permission to delete or revert supplier payments.');
+      return;
+    }
     confirmAction(
       'Revert Payment (ادائیگی ریورس کریں)',
       `Are you sure you want to revert voucher VCH-${payment.id.slice(-6).toUpperCase()} of Rs. ${payment.amount.toLocaleString()} paid to ${payment.supplierName}?\n\nThis will restore the pending balance in the Khata.`,
@@ -489,6 +501,10 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   };
 
   const handleDeletePO = (po: PurchaseOrder) => {
+    if (!canDeleteSuppliers) {
+      Alert.alert('Permission Denied', 'You do not have permission to delete purchase bills.');
+      return;
+    }
     if ((po.amountPaid || 0) > 0) {
       const msg = `This bill has Rs. ${(po.amountPaid || 0).toLocaleString()} recorded in payments.\n\nPlease delete or revert the associated payment vouchers first from the 'Payments' tab before deleting this bill.`;
       if (Platform.OS === 'web') {
@@ -601,6 +617,10 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
   }, [billItems, billFreight, billDiscount, billAmountPaid]);
 
   const handleSavePurchaseBill = () => {
+    if (!canAddSuppliers) {
+      Alert.alert('Permission Denied', 'You do not have permission to create supplier purchase bills.');
+      return;
+    }
     const sup = suppliers.find((s) => s.id === billSupplierId);
     if (!sup) {
       Alert.alert('Vendor Required', 'Please select a vendor for this procurement bill.');
@@ -686,36 +706,40 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
           </TouchableOpacity>
 
           {/* New PO / Bill Button */}
-          <TouchableOpacity
-            style={styles.headerSecBtn}
-            onPress={() => {
-              setBillSupplierId(selectedSupplierId !== 'all' ? selectedSupplierId : suppliers[0]?.id || '');
-              setBillInvoiceNo('');
-              setBillItems([{ name: '', category: 'Raw Materials', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 500, totalCost: 5000 }]);
-              setBillFreight('0');
-              setBillDiscount('0');
-              setBillAmountPaid('0');
-              setBillNotes('');
-              setIsNewBillModalOpen(true);
-            }}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-          >
-            <Ionicons name="document-text-outline" size={16} color="#FFFFFF" />
-            <Text style={styles.headerSecBtnText}>+ New Purchase Bill</Text>
-          </TouchableOpacity>
+          {canAddSuppliers && (
+            <TouchableOpacity
+              style={styles.headerSecBtn}
+              onPress={() => {
+                setBillSupplierId(selectedSupplierId !== 'all' ? selectedSupplierId : suppliers[0]?.id || '');
+                setBillInvoiceNo('');
+                setBillItems([{ name: '', category: 'Raw Materials', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 500, totalCost: 5000 }]);
+                setBillFreight('0');
+                setBillDiscount('0');
+                setBillAmountPaid('0');
+                setBillNotes('');
+                setIsNewBillModalOpen(true);
+              }}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+            >
+              <Ionicons name="document-text-outline" size={16} color="#FFFFFF" />
+              <Text style={styles.headerSecBtnText}>+ New Purchase Bill</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Quick Pay Button */}
-          <TouchableOpacity
-            style={styles.headerPriBtn}
-            onPress={() => {
-              const targetId = selectedSupplierId !== 'all' ? selectedSupplierId : suppliers[0]?.id || '';
-              openPayModalForSupplier(targetId);
-            }}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-          >
-            <Ionicons name="cash-outline" size={17} color="#52141C" />
-            <Text style={styles.headerPriBtnText}>Record Payment (ادائیگی)</Text>
-          </TouchableOpacity>
+          {canEditSuppliers && (
+            <TouchableOpacity
+              style={styles.headerPriBtn}
+              onPress={() => {
+                const targetId = selectedSupplierId !== 'all' ? selectedSupplierId : suppliers[0]?.id || '';
+                openPayModalForSupplier(targetId);
+              }}
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+            >
+              <Ionicons name="cash-outline" size={17} color="#52141C" />
+              <Text style={styles.headerPriBtnText}>Record Payment (ادائیگی)</Text>
+            </TouchableOpacity>
+          )}
 
           {/* Print / Export Button */}
           <TouchableOpacity
@@ -1159,13 +1183,15 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                             <Ionicons name="receipt-outline" size={16} color="#15803D" />
                           </TouchableOpacity>
 
-                          <TouchableOpacity
-                            style={styles.actionIconBtn}
-                            onPress={() => handleDeletePayment(entry.rawPayment!)}
-                            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Revert Payment' } as any) : {})}
-                          >
-                            <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                          </TouchableOpacity>
+                          {canDeleteSuppliers && (
+                            <TouchableOpacity
+                              style={styles.actionIconBtn}
+                              onPress={() => handleDeletePayment(entry.rawPayment!)}
+                              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Revert Payment' } as any) : {})}
+                            >
+                              <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                            </TouchableOpacity>
+                          )}
                         </>
                       ) : null}
                     </View>
@@ -1235,7 +1261,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                       </View>
                     </View>
                     <View style={{ width: 110, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
-                      {!isPaid && (
+                      {!isPaid && canEditSuppliers && (
                         <TouchableOpacity
                           style={styles.paySmallBtn}
                           onPress={() => openPayModalForSupplier(po.supplierId, po.id, po.balanceDue)}
@@ -1251,13 +1277,15 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                       >
                         <Ionicons name="eye-outline" size={16} color="#0284C7" />
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionIconBtn}
-                        onPress={() => handleDeletePO(po)}
-                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Bill' } as any) : {})}
-                      >
-                        <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                      </TouchableOpacity>
+                      {canDeleteSuppliers && (
+                        <TouchableOpacity
+                          style={styles.actionIconBtn}
+                          onPress={() => handleDeletePO(po)}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Delete Bill' } as any) : {})}
+                        >
+                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 );
@@ -1333,13 +1361,15 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                     >
                       <Ionicons name="print-outline" size={16} color="#15803D" />
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionIconBtn}
-                      onPress={() => handleDeletePayment(pay)}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Revert Voucher' } as any) : {})}
-                    >
-                      <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                    </TouchableOpacity>
+                    {canDeleteSuppliers && (
+                      <TouchableOpacity
+                        style={styles.actionIconBtn}
+                        onPress={() => handleDeletePayment(pay)}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Revert Voucher' } as any) : {})}
+                      >
+                        <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               ))

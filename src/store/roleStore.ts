@@ -719,10 +719,95 @@ export const DEFAULT_ROLES: CustomRole[] = [
   },
 ];
 
+const POS_DEFAULT_FALSE: Pick<
+  RolePermissions,
+  | 'posCanDineIn'
+  | 'posCanTakeaway'
+  | 'posCanDelivery'
+  | 'posCanSendKot'
+  | 'posCanSettleBill'
+  | 'posCanPrintUnpaidBill'
+  | 'posCanReleaseTable'
+  | 'posCanDismissTicket'
+  | 'posCanSplitPayment'
+  | 'posCanManageCustomers'
+> = {
+  posCanDineIn: false,
+  posCanTakeaway: false,
+  posCanDelivery: false,
+  posCanSendKot: false,
+  posCanSettleBill: false,
+  posCanPrintUnpaidBill: false,
+  posCanReleaseTable: false,
+  posCanDismissTicket: false,
+  posCanSplitPayment: false,
+  posCanManageCustomers: false,
+};
+
+export function normalizeRole(r: CustomRole): CustomRole {
+  const sysDefault =
+    r.id === 'role-admin'
+      ? { permissions: ADMIN_PERMISSIONS }
+      : DEFAULT_ROLES.find((d) => d.id === r.id) ||
+        DEFAULT_ROLES.find((d) => d.baseRole === r.baseRole && d.isSystem);
+  const fallback: Partial<RolePermissions> = sysDefault
+    ? sysDefault.permissions
+    : {
+        canViewRevenue: false,
+        canViewCostPrice: false,
+        canViewCustomerContacts: false,
+        canExportReports: false,
+        canAccessPOS: false,
+        canAccessInvoices: false,
+        canAccessReports: false,
+        canAccessInventory: false,
+        canAccessKitchenHandover: false,
+        canAccessRecipes: false,
+        canAccessDiscounts: false,
+        canAccessStaff: false,
+        canAccessExpenses: false,
+        canAccessFloorPlan: false,
+        canAccessDamages: false,
+        canAccessAssets: false,
+        canApplyCustomDiscount: false,
+        canVoidInvoice: false,
+        canProcessReturns: false,
+        canStartCloseShift: false,
+        canModifyMenuPrices: false,
+        ...POS_DEFAULT_FALSE,
+        ...EMPTY_CRUD_PERMISSIONS,
+      };
+
+  const mergedPerms: RolePermissions = {
+    ...(fallback as RolePermissions),
+    ...(r.permissions || {}),
+    ...(r.id === 'role-admin' ? { canAccessStaff: true } : {}),
+  };
+
+  return {
+    ...r,
+    ...(r.id === 'role-cashier' ? { isSystem: true } : {}),
+    permissions: mergedPerms,
+  };
+}
+
+export function normalizeRolesList(list: CustomRole[]): CustomRole[] {
+  const normalized = (Array.isArray(list) ? list : DEFAULT_ROLES)
+    .filter((r) => r && typeof r === 'object' && r.id)
+    .map(normalizeRole);
+
+  if (!normalized.some((r) => r.id === 'role-cashier')) {
+    const cashierDef = DEFAULT_ROLES.find((d) => d.id === 'role-cashier');
+    if (cashierDef) normalized.splice(Math.min(3, normalized.length), 0, { ...cashierDef });
+  }
+  return normalized.length > 0 ? normalized : DEFAULT_ROLES.map(normalizeRole);
+}
+
 interface RoleState {
   roles: CustomRole[];
   addRole: (role: Omit<CustomRole, 'id' | 'createdAt' | 'updatedAt'>) => string;
   updateRole: (id: string, updates: Partial<CustomRole>) => void;
+  updateRolePermissions: (roleId: string, patch: Partial<RolePermissions>) => void;
   deleteRole: (id: string) => boolean;
   togglePermission: (roleId: string, permissionKey: keyof RolePermissions) => void;
   setPermission: (roleId: string, permissionKey: keyof RolePermissions, value: boolean) => void;
@@ -765,7 +850,7 @@ export const useRoleStore = create<RoleState>()(
               r.name.toLowerCase() === normId;
             if (!isTarget) return r;
 
-            return {
+            return normalizeRole({
               ...r,
               ...updates,
               permissions: updates.permissions
@@ -777,7 +862,34 @@ export const useRoleStore = create<RoleState>()(
                   }
                 : r.permissions,
               updatedAt: Date.now(),
-            };
+            });
+          }),
+        }));
+        notifySync();
+      },
+
+      updateRolePermissions: (roleId, patch) => {
+        const normId = roleId.toLowerCase().trim();
+        set((state) => ({
+          roles: state.roles.map((r) => {
+            const isTarget =
+              r.id === roleId ||
+              r.id === `role-${normId}` ||
+              r.name.toLowerCase() === normId;
+            if (!isTarget) return r;
+
+            const safePatch = { ...patch };
+            if (r.id === 'role-admin') {
+              safePatch.canAccessStaff = true;
+            }
+            return normalizeRole({
+              ...r,
+              permissions: {
+                ...r.permissions,
+                ...safePatch,
+              },
+              updatedAt: Date.now(),
+            });
           }),
         }));
         notifySync();
@@ -874,7 +986,16 @@ export const useRoleStore = create<RoleState>()(
       },
 
       resetToDefaultRoles: () => {
-        set({ roles: DEFAULT_ROLES });
+        const now = Date.now();
+        set({
+          roles: DEFAULT_ROLES.map((r) =>
+            normalizeRole({
+              ...r,
+              permissions: { ...r.permissions },
+              updatedAt: now,
+            })
+          ),
+        });
         notifySync();
       },
 
@@ -884,74 +1005,41 @@ export const useRoleStore = create<RoleState>()(
         if (!Array.isArray(incoming) || incoming.length === 0) return;
 
         set((current) => {
+          const normalizedIncoming = normalizeRolesList(incoming);
+          const now = Date.now();
+          const currentMap = new Map(current.roles.map((r) => [r.id, r]));
+
+          // Protect very recent (<8s) in-flight local edits from being rolled back by a stale server echo
+          const merged = normalizedIncoming.map((incRole) => {
+            const localRole = currentMap.get(incRole.id);
+            if (
+              localRole &&
+              (localRole.updatedAt || 0) > (incRole.updatedAt || 0) &&
+              now - (localRole.updatedAt || 0) < 8000
+            ) {
+              return localRole;
+            }
+            return incRole;
+          });
+
           try {
-            if (JSON.stringify(current.roles) === JSON.stringify(incoming)) {
+            if (JSON.stringify(current.roles) === JSON.stringify(merged)) {
               return current;
             }
           } catch {}
-          return { roles: incoming };
+          return { roles: merged };
         });
       },
     }),
     {
       name: 'sultan-roles-permissions-store',
       storage: appStorage,
-      version: 4,
-      // v4: added granular Add/Edit/Delete (CRUD) control management keys across master & 11 modules.
-      // Fill any missing keys on saved roles from the matching system default.
+      version: 5,
+      // v5: always normalize roles with complete POS + CRUD permission keys and sync-safe timestamps.
       migrate: (persistedState: any) => {
         const state = persistedState || {};
         const savedRoles: CustomRole[] = Array.isArray(state.roles) ? state.roles : DEFAULT_ROLES;
-        const posFallbacks: Pick<
-          RolePermissions,
-          | 'posCanDineIn'
-          | 'posCanTakeaway'
-          | 'posCanDelivery'
-          | 'posCanSendKot'
-          | 'posCanSettleBill'
-          | 'posCanPrintUnpaidBill'
-          | 'posCanReleaseTable'
-          | 'posCanDismissTicket'
-          | 'posCanSplitPayment'
-          | 'posCanManageCustomers'
-        > = {
-          posCanDineIn: false,
-          posCanTakeaway: false,
-          posCanDelivery: false,
-          posCanSendKot: false,
-          posCanSettleBill: false,
-          posCanPrintUnpaidBill: false,
-          posCanReleaseTable: false,
-          posCanDismissTicket: false,
-          posCanSplitPayment: false,
-          posCanManageCustomers: false,
-        };
-        const roles = savedRoles.map((r) => {
-          const sysDefault =
-            r.id === 'role-admin'
-              ? { permissions: ADMIN_PERMISSIONS }
-              : DEFAULT_ROLES.find((d) => d.id === r.id) ||
-                DEFAULT_ROLES.find((d) => d.baseRole === r.baseRole && d.isSystem);
-          const fallback: Partial<RolePermissions> = sysDefault
-            ? sysDefault.permissions
-            : {
-                canAccessFloorPlan: false,
-                canAccessDamages: false,
-                canAccessAssets: false,
-                ...posFallbacks,
-                ...EMPTY_CRUD_PERMISSIONS,
-              };
-          return {
-            ...r,
-            ...(r.id === 'role-cashier' ? { isSystem: true } : {}),
-            permissions: { ...fallback, ...r.permissions } as RolePermissions,
-          };
-        });
-        if (!roles.some((r) => r.id === 'role-cashier')) {
-          const cashierDef = DEFAULT_ROLES.find((d) => d.id === 'role-cashier');
-          if (cashierDef) roles.splice(3, 0, cashierDef);
-        }
-        return { ...state, roles };
+        return { ...state, roles: normalizeRolesList(savedRoles) };
       },
     }
   )

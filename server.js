@@ -2575,6 +2575,159 @@ try {
 }
 
 // -------------------------------------------------------------
+// CANONICAL ROLE PERMISSIONS NORMALIZER & SAFE MERGE
+// Ensures legacy roles in server-data.json / older APKs always
+// receive full POS + CRUD permission keys and never roll back newer edits.
+// -------------------------------------------------------------
+const SERVER_EMPTY_CRUD_PERMS = {
+  canAddRecords: false, canEditRecords: false, canDeleteRecords: false,
+  canAddInventory: false, canEditInventory: false, canDeleteInventory: false,
+  canAddSuppliers: false, canEditSuppliers: false, canDeleteSuppliers: false,
+  canAddTables: false, canEditTables: false, canDeleteTables: false,
+  canAddRecipes: false, canEditRecipes: false, canDeleteRecipes: false,
+  canAddDiscounts: false, canEditDiscounts: false, canDeleteDiscounts: false,
+  canAddExpenses: false, canEditExpenses: false, canDeleteExpenses: false,
+  canAddDamages: false, canEditDamages: false, canDeleteDamages: false,
+  canAddAssets: false, canEditAssets: false, canDeleteAssets: false,
+  canAddStaff: false, canEditStaff: false, canDeleteStaff: false,
+  canAddMenu: false, canEditMenu: false, canDeleteMenu: false,
+  canAddCustomers: false, canEditCustomers: false, canDeleteCustomers: false,
+};
+
+const SERVER_FULL_CRUD_PERMS = Object.keys(SERVER_EMPTY_CRUD_PERMS).reduce((acc, k) => {
+  acc[k] = true;
+  return acc;
+}, {});
+
+const SERVER_EMPTY_POS_PERMS = {
+  posCanDineIn: false, posCanTakeaway: false, posCanDelivery: false,
+  posCanSendKot: false, posCanSettleBill: false, posCanPrintUnpaidBill: false,
+  posCanReleaseTable: false, posCanDismissTicket: false, posCanSplitPayment: false,
+  posCanManageCustomers: false,
+};
+
+const SERVER_FULL_POS_PERMS = Object.keys(SERVER_EMPTY_POS_PERMS).reduce((acc, k) => {
+  acc[k] = true;
+  return acc;
+}, {});
+
+function getServerRoleDefaultPermissions(role) {
+  const id = String(role?.id || '').toLowerCase();
+  const base = String(role?.baseRole || '').toLowerCase();
+  if (id === 'role-admin' || base === 'admin') {
+    return {
+      canViewRevenue: true, canViewCostPrice: true, canViewCustomerContacts: true, canExportReports: true,
+      canAccessPOS: true, canAccessInvoices: true, canAccessReports: true, canAccessInventory: true,
+      canAccessKitchenHandover: true, canAccessRecipes: true, canAccessDiscounts: true, canAccessStaff: true,
+      canAccessExpenses: true, canAccessFloorPlan: true, canAccessDamages: true, canAccessAssets: true,
+      canApplyCustomDiscount: true, canVoidInvoice: true, canProcessReturns: true, canStartCloseShift: true,
+      canModifyMenuPrices: true,
+      ...SERVER_FULL_POS_PERMS,
+      ...SERVER_FULL_CRUD_PERMS,
+    };
+  }
+  if (id === 'role-manager') {
+    return {
+      ...SERVER_FULL_POS_PERMS,
+      ...SERVER_EMPTY_CRUD_PERMS,
+      canAddRecords: true, canEditRecords: true, canDeleteRecords: true,
+      canAddInventory: true, canEditInventory: true, canDeleteInventory: true,
+      canAddSuppliers: true, canEditSuppliers: true, canDeleteSuppliers: true,
+      canAddTables: true, canEditTables: true, canDeleteTables: true,
+      canAddRecipes: true, canEditRecipes: true, canDeleteRecipes: true,
+      canAddDiscounts: true, canEditDiscounts: true, canDeleteDiscounts: true,
+      canAddExpenses: true, canEditExpenses: true, canDeleteExpenses: true,
+      canAddDamages: true, canEditDamages: true, canDeleteDamages: true,
+      canAddAssets: true, canEditAssets: true, canDeleteAssets: true,
+      canAddCustomers: true, canEditCustomers: true, canDeleteCustomers: true,
+    };
+  }
+  if (id === 'role-floor-manager' || base === 'floor_manager') {
+    return {
+      ...SERVER_EMPTY_POS_PERMS,
+      posCanDineIn: true, posCanTakeaway: true, posCanSendKot: true,
+      posCanPrintUnpaidBill: true, posCanReleaseTable: true, posCanManageCustomers: true,
+      ...SERVER_EMPTY_CRUD_PERMS,
+      canAddRecords: true, canEditRecords: true,
+      canAddTables: true, canEditTables: true,
+      canAddCustomers: true, canEditCustomers: true,
+    };
+  }
+  if (id === 'role-cashier' || String(role?.name || '').toLowerCase() === 'cashier') {
+    return {
+      ...SERVER_FULL_POS_PERMS,
+      posCanDismissTicket: false,
+      ...SERVER_EMPTY_CRUD_PERMS,
+      canAddRecords: true, canEditRecords: true,
+      canAddCustomers: true, canEditCustomers: true,
+    };
+  }
+  if (id === 'role-waiter' || base === 'waiter') {
+    return {
+      ...SERVER_EMPTY_POS_PERMS,
+      posCanDineIn: true, posCanSendKot: true,
+      ...SERVER_EMPTY_CRUD_PERMS,
+    };
+  }
+  return {
+    ...SERVER_EMPTY_POS_PERMS,
+    ...SERVER_EMPTY_CRUD_PERMS,
+  };
+}
+
+function normalizeServerRole(role) {
+  if (!role || typeof role !== 'object') return role;
+  const defaults = getServerRoleDefaultPermissions(role);
+  const perms = {
+    ...defaults,
+    ...(role.permissions || {}),
+  };
+  if (role.id === 'role-admin') {
+    perms.canAccessStaff = true;
+  }
+  return {
+    ...role,
+    ...(role.id === 'role-cashier' ? { isSystem: true } : {}),
+    permissions: perms,
+  };
+}
+
+function mergeServerRolesSafely(existingRoles, incomingRoles) {
+  const extList = Array.isArray(existingRoles) ? existingRoles.map(normalizeServerRole) : [];
+  const incList = Array.isArray(incomingRoles) ? incomingRoles.map(normalizeServerRole) : [];
+  if (incList.length === 0) return extList;
+  if (extList.length === 0) return incList;
+
+  const extMaxTs = extList.reduce((m, r) => Math.max(m, Number(r?.updatedAt) || 0), 0);
+  const incMaxTs = incList.reduce((m, r) => Math.max(m, Number(r?.updatedAt) || 0), 0);
+
+  // If incoming payload is strictly older than our saved roles (e.g. stale mobile APK reconnecting), preserve existing
+  if (extMaxTs > 0 && incMaxTs > 0 && incMaxTs < extMaxTs) {
+    return extList;
+  }
+
+  const extMap = new Map(extList.filter(r => r && r.id).map(r => [r.id, r]));
+  return incList.map((incRole) => {
+    const extRole = extMap.get(incRole.id);
+    if (!extRole) return incRole;
+    const extTs = Number(extRole.updatedAt) || 0;
+    const incTs = Number(incRole.updatedAt) || 0;
+    if (extTs > incTs) {
+      return extRole;
+    }
+    return incRole;
+  });
+}
+
+// Normalize saved roles on startup so every role has complete POS + CRUD permission keys
+if (Array.isArray(serverState.roles) && serverState.roles.length > 0) {
+  serverState.roles = serverState.roles.map(normalizeServerRole);
+  try {
+    fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
+  } catch (_) {}
+}
+
+// -------------------------------------------------------------
 // CENTRAL DUAL-STATION THERMAL PRINT ENGINE + REMOTE PRINT AGENT HUB
 // Strict Isolation:
 //   - 'main'  -> Main Kitchen Thermal Printer ONLY (default: local POS-80)
@@ -5256,7 +5409,36 @@ function computeStateFingerprint(st) {
       onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
       invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
       menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
-      rolesLen: Array.isArray(st.roles) ? st.roles.length : 0,
+      categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
+      zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
+      customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
+      inventoryLen: Array.isArray(st.inventory) ? st.inventory.length : 0,
+      suppliersLen: Array.isArray(st.suppliers) ? st.suppliers.length : 0,
+      recipesLen: Array.isArray(st.recipes) ? st.recipes.length : 0,
+      expensesLen: Array.isArray(st.expenses) ? st.expenses.length : 0,
+      assetsLen: Array.isArray(st.assets) ? st.assets.length : 0,
+      damagesLen: Array.isArray(st.damageRecords) ? st.damageRecords.length : 0,
+      rolesState: Array.isArray(st.roles)
+        ? st.roles.map(r => ({
+            id: r?.id || '',
+            name: r?.name || '',
+            baseRole: r?.baseRole || '',
+            updatedAt: r?.updatedAt || 0,
+            permissions: r?.permissions || {},
+          }))
+        : [],
+      staffState: Array.isArray(st.staff)
+        ? st.staff.map(s => ({
+            id: s?.id || '',
+            name: s?.name || '',
+            role: s?.role || '',
+            customRoleId: s?.customRoleId || '',
+            status: s?.status || '',
+            pin: s?.pin || '',
+            maxDevices: s?.maxConcurrentDevices || 0,
+            permissionOverrides: s?.permissionOverrides || null,
+          }))
+        : [],
       systemSettingsUpdatedAt: (st.systemSettings && st.systemSettings.updatedAt) || 0,
       lastBillPaidAlert: st.lastBillPaidAlert || null,
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
@@ -5586,6 +5768,11 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             };
             modified = true;
           }
+        }
+      } else if (key === 'roles') {
+        if (Array.isArray(partialState.roles) && partialState.roles.length > 0) {
+          serverState.roles = mergeServerRolesSafely(serverState.roles, partialState.roles);
+          modified = true;
         }
       } else if (key === 'revokedDeviceIds') {
         if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {

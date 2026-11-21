@@ -20,6 +20,8 @@ import { useSettingsStore, SystemSettings, DEFAULT_SYSTEM_SETTINGS } from '../..
 import { useRestaurantStore, StaffMember, StaffRole, StaffShift } from '../../store/restaurantStore';
 import {
   useRoleStore,
+  useRolePermissions,
+  normalizeRole,
   CustomRole,
   RolePermissions,
   BaseRoleType,
@@ -46,13 +48,14 @@ import {
   resetAllOperationalData,
 } from '../../utils/systemDataControl';
 
-type SettingsTab = 'general' | 'billing' | 'modules' | 'roles' | 'users' | 'sync' | 'data';
+type SettingsTab = 'general' | 'billing' | 'modules' | 'crud' | 'roles' | 'users' | 'sync' | 'data';
 
 const TABS: { id: SettingsTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'general', label: 'Branding', icon: 'storefront-outline' },
   { id: 'billing', label: 'Billing & Tax', icon: 'cash-outline' },
   { id: 'modules', label: 'Modules', icon: 'apps-outline' },
-  { id: 'roles', label: 'Roles & Permissions', icon: 'shield-checkmark-outline' },
+  { id: 'crud', label: 'CRUD Permissions', icon: 'key-outline' },
+  { id: 'roles', label: 'Roles & Access', icon: 'shield-checkmark-outline' },
   { id: 'users', label: 'Users & Staff', icon: 'people-outline' },
   { id: 'sync', label: 'Sync & Server', icon: 'cloud-done-outline' },
   { id: 'data', label: 'Data & Backup', icon: 'server-outline' },
@@ -229,6 +232,8 @@ interface CrudModuleRowMeta {
   label: string;
   desc: string;
   icon: keyof typeof Ionicons.glyphMap;
+  viewKey?: keyof RolePermissions;
+  sharedViewKey?: boolean;
   addKey: keyof RolePermissions;
   editKey: keyof RolePermissions;
   deleteKey: keyof RolePermissions;
@@ -240,6 +245,8 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Inventory & Stock SKUs',
     desc: 'Receive GRN stock, add SKUs, adjust usage, edit items, or delete SKUs',
     icon: 'cube-outline',
+    viewKey: 'canAccessInventory',
+    sharedViewKey: true,
     addKey: 'canAddInventory',
     editKey: 'canEditInventory',
     deleteKey: 'canDeleteInventory',
@@ -249,6 +256,8 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Suppliers & Khata POs',
     desc: 'Create suppliers/POs, record khata payments/edits, or delete vendors',
     icon: 'business-outline',
+    viewKey: 'canAccessInventory',
+    sharedViewKey: true,
     addKey: 'canAddSuppliers',
     editKey: 'canEditSuppliers',
     deleteKey: 'canDeleteSuppliers',
@@ -258,6 +267,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Floor Plan, Tables & Zones',
     desc: 'Add tables/cabins/zones/floors, edit seating layouts, or delete units',
     icon: 'grid-outline',
+    viewKey: 'canAccessFloorPlan',
     addKey: 'canAddTables',
     editKey: 'canEditTables',
     deleteKey: 'canDeleteTables',
@@ -267,6 +277,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Recipe BOMs & Costing',
     desc: 'Create or seed recipes, modify BOM ingredients, or delete recipes',
     icon: 'book-outline',
+    viewKey: 'canAccessRecipes',
     addKey: 'canAddRecipes',
     editKey: 'canEditRecipes',
     deleteKey: 'canDeleteRecipes',
@@ -276,6 +287,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Discounts & Event Deals',
     desc: 'Launch event promotions, edit/pause deals, or delete campaigns',
     icon: 'pricetag-outline',
+    viewKey: 'canAccessDiscounts',
     addKey: 'canAddDiscounts',
     editKey: 'canEditDiscounts',
     deleteKey: 'canDeleteDiscounts',
@@ -285,6 +297,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Expenses & Shift Cash Out',
     desc: 'Add shift expenses, edit recorded expenses, or delete expense entries',
     icon: 'wallet-outline',
+    viewKey: 'canAccessExpenses',
     addKey: 'canAddExpenses',
     editKey: 'canEditExpenses',
     deleteKey: 'canDeleteExpenses',
@@ -294,6 +307,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Damage Control & Breakage',
     desc: 'Report breakage/loss, settle/resolve cases, or delete damage logs',
     icon: 'warning-outline',
+    viewKey: 'canAccessDamages',
     addKey: 'canAddDamages',
     editKey: 'canEditDamages',
     deleteKey: 'canDeleteDamages',
@@ -303,6 +317,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Capital Assets & Maintenance',
     desc: 'Register capital assets, log service or edit details, or delete assets',
     icon: 'hardware-chip-outline',
+    viewKey: 'canAccessAssets',
     addKey: 'canAddAssets',
     editKey: 'canEditAssets',
     deleteKey: 'canDeleteAssets',
@@ -312,6 +327,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
     label: 'Staff & Employees',
     desc: 'Add new staff/cashiers, edit roles/PINs/details, or remove employees',
     icon: 'person-add-outline',
+    viewKey: 'canAccessStaff',
     addKey: 'canAddStaff',
     editKey: 'canEditStaff',
     deleteKey: 'canDeleteStaff',
@@ -809,19 +825,22 @@ export default function AdminSettingsScreen() {
   const invoices = useRestaurantStore((s) => s.invoices);
   const customers = useRestaurantStore((s) => s.customers);
   const menuItems = useRestaurantStore((s) => s.menuItems);
-  const roles = useRoleStore((s) => s.roles);
+  const rawRoles = useRoleStore((s) => s.roles);
+  const roles = useMemo(() => (rawRoles || []).map(normalizeRole), [rawRoles]);
   const addRole = useRoleStore((s) => s.addRole);
   const updateRole = useRoleStore((s) => s.updateRole);
+  const updateRolePermissions = useRoleStore((s) => s.updateRolePermissions);
   const deleteRole = useRoleStore((s) => s.deleteRole);
-  const setPermission = useRoleStore((s) => s.setPermission);
   const resetToDefaultRoles = useRoleStore((s) => s.resetToDefaultRoles);
   const currentUser = useAuthStore((s) => s.user);
+  const { canAddStaff, canEditStaff, canDeleteStaff } = useRolePermissions();
 
   const [syncInfo, setSyncInfo] = useState<SyncInfo | null>(null);
   const [serverIpInput, setServerIpInput] = useState('');
 
   // Role & Permission Control state
-  const [selectedRoleId, setSelectedRoleId] = useState<string>('role-cashier');
+  const [selectedRoleId, setSelectedRoleId] = useState<string>('role-manager');
+  const [crudScope, setCrudScope] = useState<'role' | 'staff'>('role');
   const [selectedStaffPermId, setSelectedStaffPermId] = useState<string>('st-c1');
   const [showAllStaffInOverrides, setShowAllStaffInOverrides] = useState<boolean>(false);
   const [roleModalVisible, setRoleModalVisible] = useState(false);
@@ -1071,16 +1090,70 @@ export default function AdminSettingsScreen() {
     return null;
   };
 
-  const handleToggleRolePerm = (roleId: string, key: keyof RolePermissions, nextValue: boolean) => {
-    setPermission(roleId, key, nextValue);
+  const buildAtomicPermTogglePatch = (
+    key: keyof RolePermissions,
+    nextValue: boolean,
+    currentPerms: RolePermissions,
+    isAdminRole = false
+  ): Partial<RolePermissions> => {
+    const patch: Partial<RolePermissions> = { [key]: nextValue };
+
     if (nextValue) {
       const masterKey = getAutoMasterKeyForCrud(key);
-      const targetRole = roles.find((r) => r.id === roleId);
-      if (masterKey && targetRole && !targetRole.permissions?.[masterKey]) {
-        setPermission(roleId, masterKey, true);
+      if (masterKey && !currentPerms?.[masterKey]) {
+        patch[masterKey] = true;
+      }
+      const owningRow = CRUD_MODULE_ROWS.find(
+        (r) => r.addKey === key || r.editKey === key || r.deleteKey === key
+      );
+      if (owningRow?.viewKey && !currentPerms?.[owningRow.viewKey]) {
+        patch[owningRow.viewKey] = true;
+      }
+    } else {
+      // Turning off a dedicated (non-shared) module View switch also locks its Add/Edit/Delete pills
+      const owningRow = CRUD_MODULE_ROWS.find((r) => r.viewKey === key && !r.sharedViewKey);
+      if (owningRow) {
+        patch[owningRow.addKey] = false;
+        patch[owningRow.editKey] = false;
+        patch[owningRow.deleteKey] = false;
       }
     }
+
+    if (isAdminRole) {
+      patch.canAccessStaff = true;
+    }
+    return patch;
+  };
+
+  const handleToggleRolePerm = (roleId: string, key: keyof RolePermissions, nextValue: boolean) => {
+    const targetRole = roles.find((r) => r.id === roleId);
+    if (!targetRole) return;
+    if (roleId === 'role-admin' && key === 'canAccessStaff' && !nextValue) {
+      showToast('Admin Staff & Roles access stays enabled to prevent lockout');
+      return;
+    }
+    const patch = buildAtomicPermTogglePatch(key, nextValue, targetRole.permissions, roleId === 'role-admin');
+    updateRolePermissions(roleId, patch);
     broadcastImmediately();
+  };
+
+  const handleToggleRoleCrudRow = (role: CustomRole, row: CrudModuleRowMeta, enableAll: boolean) => {
+    const patch: Partial<RolePermissions> = {
+      [row.addKey]: enableAll,
+      [row.editKey]: enableAll,
+      [row.deleteKey]: enableAll,
+    };
+    if (enableAll) {
+      patch.canAddRecords = true;
+      patch.canEditRecords = true;
+      patch.canDeleteRecords = true;
+      if (row.viewKey) {
+        patch[row.viewKey] = true;
+      }
+    }
+    updateRolePermissions(role.id, patch);
+    broadcastImmediately();
+    showToast(`${enableAll ? 'Granted full CRUD' : 'Locked Add/Edit/Delete'} on ${row.label} for ${role.name}`);
   };
 
   const handleApplyRoleCrudPreset = (
@@ -1088,14 +1161,21 @@ export default function AdminSettingsScreen() {
     preset: 'full' | 'no_delete' | 'read_only'
   ) => {
     const patch = buildCrudPresetPatch(preset);
-    updateRole(role.id, { permissions: { ...role.permissions, ...patch } });
+    if (preset === 'full' || preset === 'no_delete') {
+      CRUD_MODULE_ROWS.forEach((row) => {
+        if (row.viewKey) {
+          patch[row.viewKey] = true;
+        }
+      });
+    }
+    updateRolePermissions(role.id, patch);
     broadcastImmediately();
     const label =
       preset === 'full'
-        ? 'Full CRUD (Add + Edit + Delete)'
+        ? 'Full CRUD (View + Add + Edit + Delete)'
         : preset === 'no_delete'
-          ? 'Add & Edit Only (Delete Locked)'
-          : 'View Only (All CRUD Locked)';
+          ? 'View, Add & Edit Only (Delete Locked)'
+          : 'View Only (All Add/Edit/Delete Locked)';
     showToast(`Applied "${label}" CRUD policy to ${role.name}`);
   };
 
@@ -1105,7 +1185,7 @@ export default function AdminSettingsScreen() {
     nextVal: boolean
   ) => {
     const patch = buildCrudColumnPatch(col, nextVal);
-    updateRole(role.id, { permissions: { ...role.permissions, ...patch } });
+    updateRolePermissions(role.id, patch);
     broadcastImmediately();
     const colLabel = col === 'add' ? 'Add' : col === 'edit' ? 'Edit' : 'Delete';
     showToast(`${nextVal ? 'Enabled' : 'Locked'} all ${colLabel} permissions for ${role.name}`);
@@ -1205,28 +1285,52 @@ export default function AdminSettingsScreen() {
     key: keyof RolePermissions,
     nextValue: boolean
   ) => {
-    const patch: Partial<RolePermissions> = { [key]: nextValue };
-    if (nextValue) {
-      const masterKey = getAutoMasterKeyForCrud(key);
-      const effective = getEffectiveStaffPerms(member);
-      if (masterKey && !effective[masterKey]) {
-        patch[masterKey] = true;
+    const effective = getEffectiveStaffPerms(member);
+    const patch = buildAtomicPermTogglePatch(key, nextValue, effective, false);
+    applyStaffPermPatch(member, patch);
+  };
+
+  const handleToggleStaffCrudRow = (
+    member: StaffMember,
+    row: CrudModuleRowMeta,
+    enableAll: boolean
+  ) => {
+    const patch: Partial<RolePermissions> = {
+      [row.addKey]: enableAll,
+      [row.editKey]: enableAll,
+      [row.deleteKey]: enableAll,
+    };
+    if (enableAll) {
+      patch.canAddRecords = true;
+      patch.canEditRecords = true;
+      patch.canDeleteRecords = true;
+      if (row.viewKey) {
+        patch[row.viewKey] = true;
       }
     }
     applyStaffPermPatch(member, patch);
+    showToast(`${enableAll ? 'Granted full CRUD' : 'Locked Add/Edit/Delete'} on ${row.label} for ${member.name}`);
   };
 
   const handleApplyStaffCrudPreset = (
     member: StaffMember,
     preset: 'full' | 'no_delete' | 'read_only'
   ) => {
-    applyStaffPermPatch(member, buildCrudPresetPatch(preset));
+    const patch = buildCrudPresetPatch(preset);
+    if (preset === 'full' || preset === 'no_delete') {
+      CRUD_MODULE_ROWS.forEach((row) => {
+        if (row.viewKey) {
+          patch[row.viewKey] = true;
+        }
+      });
+    }
+    applyStaffPermPatch(member, patch);
     const label =
       preset === 'full'
-        ? 'Full CRUD (Add + Edit + Delete)'
+        ? 'Full CRUD (View + Add + Edit + Delete)'
         : preset === 'no_delete'
-          ? 'Add & Edit Only (Delete Locked)'
-          : 'View Only (All CRUD Locked)';
+          ? 'View, Add & Edit Only (Delete Locked)'
+          : 'View Only (All Add/Edit/Delete Locked)';
     showToast(`Applied "${label}" CRUD policy to ${member.name}`);
   };
 
@@ -1250,6 +1354,8 @@ export default function AdminSettingsScreen() {
     options?: {
       overrides?: Partial<RolePermissions>;
       adminRolePerms?: RolePermissions;
+      isAdminRole?: boolean;
+      onToggleRow?: (row: CrudModuleRowMeta, enableAll: boolean) => void;
     }
   ) => {
     const activeCrudCount = ALL_CRUD_KEYS.filter((k) => !!perms[k]).length;
@@ -1263,14 +1369,52 @@ export default function AdminSettingsScreen() {
       delete: !!perms.canDeleteRecords,
     };
 
+    const renderViewPill = (row: CrudModuleRowMeta) => {
+      if (!row.viewKey) {
+        return (
+          <View key={`${row.id}-view`} style={[styles.crudPill, styles.crudPillViewAlways]}>
+            <Ionicons name="eye" size={14} color="#52171B" />
+            <Text style={[styles.crudPillText, { color: '#52171B' }]}>View</Text>
+          </View>
+        );
+      }
+      const val = !!perms[row.viewKey];
+      const isProtected = Boolean(options?.isAdminRole && row.viewKey === 'canAccessStaff');
+      const isOverridden = options?.overrides?.[row.viewKey] !== undefined;
+      return (
+        <TouchableOpacity
+          key={`${row.id}-view`}
+          style={[
+            styles.crudPill,
+            val ? styles.crudPillViewActive : styles.crudPillInactive,
+            isOverridden && styles.crudPillOverridden,
+            isProtected && { opacity: 0.75 },
+          ]}
+          disabled={isProtected}
+          onPress={() => onToggleKey(row.viewKey!, !val)}
+          activeOpacity={0.75}
+        >
+          <Ionicons name={val ? 'eye' : 'eye-off-outline'} size={14} color={val ? '#92400E' : '#78716C'} />
+          <View>
+            <Text style={[styles.crudPillText, { color: val ? '#92400E' : '#78716C' }]}>
+              View{isOverridden ? ' *' : ''}
+            </Text>
+            {isProtected && <Text style={styles.crudPillSubHint}>Locked</Text>}
+          </View>
+        </TouchableOpacity>
+      );
+    };
+
     const renderCrudPill = (
       kind: 'add' | 'edit' | 'delete',
-      permKey: keyof RolePermissions
+      permKey: keyof RolePermissions,
+      rowViewKey?: keyof RolePermissions
     ) => {
       const val = !!perms[permKey];
       const isOverridden = options?.overrides?.[permKey] !== undefined;
       const lockedByAdmin = Boolean(options?.adminRolePerms && !options.adminRolePerms[permKey]);
       const lockedByMaster = !masterGateState[kind] && val;
+      const moduleHidden = Boolean(rowViewKey && !perms[rowViewKey] && val);
       const label = kind === 'add' ? 'Add' : kind === 'edit' ? 'Edit' : 'Delete';
       const iconName: keyof typeof Ionicons.glyphMap =
         kind === 'add'
@@ -1319,6 +1463,9 @@ export default function AdminSettingsScreen() {
             )}
             {!lockedByMaster && lockedByAdmin && (
               <Text style={styles.crudPillSubHint}>Admin Off</Text>
+            )}
+            {!lockedByMaster && !lockedByAdmin && moduleHidden && (
+              <Text style={styles.crudPillSubHint}>View Off</Text>
             )}
           </View>
         </TouchableOpacity>
@@ -1464,24 +1611,39 @@ export default function AdminSettingsScreen() {
         </View>
 
         <View style={styles.crudMatrixWrap}>
-          {CRUD_MODULE_ROWS.map((row) => (
-            <View key={row.id} style={styles.crudMatrixRow}>
-              <View style={styles.crudMatrixLeft}>
-                <View style={styles.permItemIcon}>
-                  <Ionicons name={row.icon} size={16} color="#52171B" />
+          {CRUD_MODULE_ROWS.map((row) => {
+            const rowFullOn = !!perms[row.addKey] && !!perms[row.editKey] && !!perms[row.deleteKey];
+            return (
+              <View key={row.id} style={styles.crudMatrixRow}>
+                <View style={styles.crudMatrixLeft}>
+                  <View style={styles.permItemIcon}>
+                    <Ionicons name={row.icon} size={16} color="#52171B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.permItemTitle}>{row.label}</Text>
+                    <Text style={styles.permItemDesc}>{row.desc}</Text>
+                  </View>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.permItemTitle}>{row.label}</Text>
-                  <Text style={styles.permItemDesc}>{row.desc}</Text>
+                <View style={styles.crudMatrixActions}>
+                  {renderViewPill(row)}
+                  {renderCrudPill('add', row.addKey, row.viewKey)}
+                  {renderCrudPill('edit', row.editKey, row.viewKey)}
+                  {renderCrudPill('delete', row.deleteKey, row.viewKey)}
+                  {options?.onToggleRow && (
+                    <TouchableOpacity
+                      style={[styles.crudRowToggleBtn, rowFullOn && styles.crudRowToggleBtnActive]}
+                      onPress={() => options.onToggleRow!(row, !rowFullOn)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.crudRowToggleText, rowFullOn && { color: '#52171B' }]}>
+                        {rowFullOn ? 'Lock' : 'All'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
-              <View style={styles.crudMatrixActions}>
-                {renderCrudPill('add', row.addKey)}
-                {renderCrudPill('edit', row.editKey)}
-                {renderCrudPill('delete', row.deleteKey)}
-              </View>
-            </View>
-          ))}
+            );
+          })}
         </View>
       </View>
     );
@@ -1562,6 +1724,10 @@ export default function AdminSettingsScreen() {
   };
 
   const handleSaveUser = () => {
+    if (editingStaff ? !canEditStaff : !canAddStaff) {
+      Alert.alert('Permission Denied', `You do not have permission to ${editingStaff ? 'edit' : 'add'} staff accounts.`);
+      return;
+    }
     if (!uName.trim()) {
       Alert.alert('Validation', 'Staff name is required.');
       return;
@@ -2329,6 +2495,333 @@ export default function AdminSettingsScreen() {
           </View>
         )}
 
+        {/* 3.5 DEDICATED CRUD PERMISSIONS COMMAND CENTER */}
+        {activeTab === 'crud' && (
+          <View style={{ gap: 14 }}>
+            {/* Top All-Roles CRUD Summary Overview Table */}
+            <View style={styles.card}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flex: 1, minWidth: 230 }}>
+                  <Text style={[styles.sectionTitle, { marginBottom: 2 }]}>
+                    Role-Wise CRUD Permissions (View / Add / Edit / Delete)
+                  </Text>
+                  <Text style={styles.rowSub}>
+                    Har role ke liye module-by-module View (Read), Add (Create), Edit (Update) aur Delete permissions yahan se control karein — sab devices par live sync hota hai
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity style={styles.secondaryBtn} onPress={openAddRoleModal}>
+                    <Ionicons name="add-circle-outline" size={15} color="#52171B" />
+                    <Text style={styles.secondaryBtnText}>+ Add Role</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAndSyncRoles}>
+                    <Ionicons name="cloud-done-outline" size={15} color="#140306" />
+                    <Text style={styles.saveBtnText}>Save & Sync All</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {/* Scope Switcher: Manage by Role vs Individual Staff/Cashier */}
+              <View style={styles.crudScopeBar}>
+                <TouchableOpacity
+                  style={[styles.crudScopeBtn, crudScope === 'role' && styles.crudScopeBtnActive]}
+                  onPress={() => setCrudScope('role')}
+                >
+                  <Ionicons
+                    name="shield-checkmark-outline"
+                    size={15}
+                    color={crudScope === 'role' ? '#140306' : '#52171B'}
+                  />
+                  <Text
+                    style={[
+                      styles.crudScopeBtnText,
+                      crudScope === 'role' && { color: '#140306' },
+                    ]}
+                  >
+                    By Role ({roles.length} Roles)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.crudScopeBtn, crudScope === 'staff' && styles.crudScopeBtnActive]}
+                  onPress={() => {
+                    setCrudScope('staff');
+                    setShowAllStaffInOverrides(true);
+                  }}
+                >
+                  <Ionicons
+                    name="people-outline"
+                    size={15}
+                    color={crudScope === 'staff' ? '#140306' : '#52171B'}
+                  />
+                  <Text
+                    style={[
+                      styles.crudScopeBtnText,
+                      crudScope === 'staff' && { color: '#140306' },
+                    ]}
+                  >
+                    Individual Staff Overrides ({(staff || []).length})
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {crudScope === 'role' && (
+                <View style={{ gap: 8, marginTop: 10 }}>
+                  {roles.map((role) => {
+                    const isSelected = selectedRole?.id === role.id;
+                    const p = role.permissions;
+                    const addCnt = p.canAddRecords
+                      ? MODULE_CRUD_ADD_KEYS.filter((k) => !!p[k]).length
+                      : 0;
+                    const editCnt = p.canEditRecords
+                      ? MODULE_CRUD_EDIT_KEYS.filter((k) => !!p[k]).length
+                      : 0;
+                    const delCnt = p.canDeleteRecords
+                      ? MODULE_CRUD_DELETE_KEYS.filter((k) => !!p[k]).length
+                      : 0;
+                    const totalMod = CRUD_MODULE_ROWS.length;
+                    const policyLabel =
+                      addCnt === totalMod && editCnt === totalMod && delCnt === totalMod
+                        ? 'FULL CRUD'
+                        : addCnt === 0 && editCnt === 0 && delCnt === 0
+                          ? 'VIEW ONLY'
+                          : delCnt === 0
+                            ? 'NO DELETE'
+                            : 'CUSTOM';
+                    const policyBg =
+                      policyLabel === 'FULL CRUD'
+                        ? '#DCFCE7'
+                        : policyLabel === 'VIEW ONLY'
+                          ? '#F5F5F4'
+                          : policyLabel === 'NO DELETE'
+                            ? '#DBEAFE'
+                            : '#FEF3C7';
+                    const policyColor =
+                      policyLabel === 'FULL CRUD'
+                        ? '#15803D'
+                        : policyLabel === 'VIEW ONLY'
+                          ? '#57534E'
+                          : policyLabel === 'NO DELETE'
+                            ? '#1D4ED8'
+                            : '#92400E';
+
+                    return (
+                      <TouchableOpacity
+                        key={role.id}
+                        style={[
+                          styles.crudOverviewRow,
+                          isSelected && styles.crudOverviewRowActive,
+                        ]}
+                        onPress={() => setSelectedRoleId(role.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, minWidth: 160 }}>
+                          <View
+                            style={[
+                              styles.roleColorDot,
+                              { backgroundColor: role.badgeColor || '#52171B' },
+                            ]}
+                          />
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                              <Text style={styles.rowTitle}>{role.name}</Text>
+                              {!!role.urduName && (
+                                <Text style={{ fontSize: 11, color: '#78716C', fontWeight: '600' }}>
+                                  ({role.urduName})
+                                </Text>
+                              )}
+                            </View>
+                            <Text style={{ fontSize: 10.5, color: '#78716C' }}>
+                              Portal: {role.baseRole.replace('_', ' ').toUpperCase()}
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <View style={[styles.crudMiniPill, { backgroundColor: addCnt > 0 ? '#DCFCE7' : '#F5F5F4' }]}>
+                            <Text style={[styles.crudMiniPillText, { color: addCnt > 0 ? '#15803D' : '#78716C' }]}>
+                              Add {addCnt}/{totalMod}
+                            </Text>
+                          </View>
+                          <View style={[styles.crudMiniPill, { backgroundColor: editCnt > 0 ? '#DBEAFE' : '#F5F5F4' }]}>
+                            <Text style={[styles.crudMiniPillText, { color: editCnt > 0 ? '#1D4ED8' : '#78716C' }]}>
+                              Edit {editCnt}/{totalMod}
+                            </Text>
+                          </View>
+                          <View style={[styles.crudMiniPill, { backgroundColor: delCnt > 0 ? '#FEE2E2' : '#F5F5F4' }]}>
+                            <Text style={[styles.crudMiniPillText, { color: delCnt > 0 ? '#B91C1C' : '#78716C' }]}>
+                              Del {delCnt}/{totalMod}
+                            </Text>
+                          </View>
+                          <View style={[styles.crudMiniPill, { backgroundColor: policyBg }]}>
+                            <Text style={[styles.crudMiniPillText, { color: policyColor }]}>
+                              {policyLabel}
+                            </Text>
+                          </View>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+
+              {crudScope === 'staff' && (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={[styles.roleSelectorRow, { marginTop: 10 }]}
+                >
+                  {(staff || []).map((member) => {
+                    const isSelected = selectedOverrideStaff?.id === member.id;
+                    const overrideCount = countStaffOverrides(member);
+                    const baseRole = resolveBaseRoleForStaff(member);
+                    return (
+                      <TouchableOpacity
+                        key={member.id}
+                        style={[
+                          styles.roleSelectorCard,
+                          isSelected && styles.roleSelectorCardActive,
+                        ]}
+                        onPress={() => setSelectedStaffPermId(member.id)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View
+                            style={[
+                              styles.roleColorDot,
+                              { backgroundColor: baseRole?.badgeColor || '#0D9488' },
+                            ]}
+                          />
+                          <Text style={styles.roleSelectorName}>{member.name}</Text>
+                        </View>
+                        <Text style={styles.roleSelectorMeta}>
+                          {baseRole?.name || member.role} • {overrideCount > 0 ? `${overrideCount} custom` : 'Role default'}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Selected Role CRUD Matrix Card */}
+            {crudScope === 'role' && selectedRole && (
+              <View style={styles.card}>
+                <View style={[styles.roleBanner, { marginBottom: 14 }]}>
+                  <View style={{ flex: 1, minWidth: 220 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <View
+                        style={[
+                          styles.roleColorDot,
+                          { backgroundColor: selectedRole.badgeColor || '#52171B' },
+                        ]}
+                      />
+                      <Text style={styles.roleBannerTitle}>
+                        Editing CRUD for: {selectedRole.name}
+                      </Text>
+                      {!!selectedRole.urduName && (
+                        <Text style={styles.roleBannerUrdu}>({selectedRole.urduName})</Text>
+                      )}
+                    </View>
+                    <Text style={[styles.rowSub, { marginTop: 3 }]}>
+                      Add/Edit/Delete ON karne par us module ki View access aur Master gate khud ON ho jate hain — koi conflict nahi hoga.
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.secondaryBtn}
+                    onPress={() => setActiveTab('roles')}
+                  >
+                    <Ionicons name="shield-outline" size={14} color="#52171B" />
+                    <Text style={styles.secondaryBtnText}>All Role Controls</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {renderCrudControlMatrix(
+                  `${selectedRole.name} — Module-by-Module CRUD Matrix`,
+                  'View (Read) • Add (Create) • Edit (Update) • Delete (Remove) across all 11 operational modules',
+                  selectedRole.permissions,
+                  (key, val) => handleToggleRolePerm(selectedRole.id, key, val),
+                  (preset) => handleApplyRoleCrudPreset(selectedRole, preset),
+                  (col, val) => handleBulkRoleCrudColumn(selectedRole, col, val),
+                  {
+                    isAdminRole: selectedRole.id === 'role-admin',
+                    adminRolePerms:
+                      selectedRole.id !== 'role-admin'
+                        ? roles.find((r) => r.id === 'role-admin')?.permissions
+                        : undefined,
+                    onToggleRow: (row, enableAll) => handleToggleRoleCrudRow(selectedRole, row, enableAll),
+                  }
+                )}
+
+                <View style={styles.cardFooterBar}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.footerStatusText}>
+                      All CRUD toggles auto-save locally & push live to POS, Manager, Waiter & KDS terminals.
+                    </Text>
+                  </View>
+                  <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAndSyncRoles}>
+                    <Ionicons name="cloud-done-outline" size={16} color="#140306" />
+                    <Text style={styles.saveBtnText}>Save & Sync CRUD Permissions</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* Selected Staff Individual CRUD Matrix Card */}
+            {crudScope === 'staff' && selectedOverrideStaff && (() => {
+              const effectivePerms = getEffectiveStaffPerms(selectedOverrideStaff);
+              const baseRole = resolveBaseRoleForStaff(selectedOverrideStaff);
+              return (
+                <View style={styles.card}>
+                  <View style={[styles.roleBanner, { marginBottom: 14 }]}>
+                    <View style={{ flex: 1, minWidth: 220 }}>
+                      <Text style={styles.roleBannerTitle}>
+                        Individual CRUD Override: {selectedOverrideStaff.name}
+                      </Text>
+                      <Text style={[styles.rowSub, { marginTop: 3 }]}>
+                        Base Role: {baseRole?.name || selectedOverrideStaff.role} • Sirf is staff member ke liye custom CRUD rules set karein.
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={() => handleApplyCashierPreset(selectedOverrideStaff, 'reset')}
+                    >
+                      <Ionicons name="refresh-outline" size={14} color="#52171B" />
+                      <Text style={styles.secondaryBtnText}>Reset to Role Default</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {renderCrudControlMatrix(
+                    `${selectedOverrideStaff.name} — Individual CRUD Overrides`,
+                    'Custom toggles marked with * override the base role defaults for this person only',
+                    effectivePerms,
+                    (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
+                    (preset) => handleApplyStaffCrudPreset(selectedOverrideStaff, preset),
+                    (col, val) => handleBulkStaffCrudColumn(selectedOverrideStaff, col, val),
+                    {
+                      overrides: selectedOverrideStaff.permissionOverrides,
+                      adminRolePerms: roles.find((r) => r.id === 'role-admin')?.permissions,
+                      onToggleRow: (row, enableAll) =>
+                        handleToggleStaffCrudRow(selectedOverrideStaff, row, enableAll),
+                    }
+                  )}
+
+                  <View style={styles.cardFooterBar}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.footerStatusText}>
+                        Individual CRUD overrides apply immediately and sync across all connected devices.
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={styles.saveBtn} onPress={handleSaveAndSyncRoles}>
+                      <Ionicons name="cloud-done-outline" size={16} color="#140306" />
+                      <Text style={styles.saveBtnText}>Save & Sync Staff CRUD</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })()}
+          </View>
+        )}
+
         {/* 4. ROLES & PERMISSIONS */}
         {activeTab === 'roles' && (
           <View style={{ gap: 14 }}>
@@ -2526,16 +3019,18 @@ export default function AdminSettingsScreen() {
 
                   {renderCrudControlMatrix(
                     '5. Add, Edit & Delete (CRUD) Control Management',
-                    'Master locks plus module-by-module control over who can Create/Add, Edit/Update, or Delete records',
+                    'Master locks plus module-by-module control over who can View, Create/Add, Edit/Update, or Delete records',
                     selectedRole.permissions,
                     (key, val) => handleToggleRolePerm(selectedRole.id, key, val),
                     (preset) => handleApplyRoleCrudPreset(selectedRole, preset),
                     (col, val) => handleBulkRoleCrudColumn(selectedRole, col, val),
                     {
+                      isAdminRole: selectedRole.id === 'role-admin',
                       adminRolePerms:
                         selectedRole.id !== 'role-admin'
                           ? roles.find((r) => r.id === 'role-admin')?.permissions
                           : undefined,
+                      onToggleRow: (row, enableAll) => handleToggleRoleCrudRow(selectedRole, row, enableAll),
                     }
                   )}
                 </View>
@@ -2736,7 +3231,7 @@ export default function AdminSettingsScreen() {
 
                           {renderCrudControlMatrix(
                             `Add / Edit / Delete Controls for ${selectedOverrideStaff.name}`,
-                            'Override Master or Module Add, Edit, and Delete rights specifically for this staff member',
+                            'Override Master or Module View, Add, Edit, and Delete rights specifically for this staff member',
                             effectivePerms,
                             (key, val) => handleToggleStaffPerm(selectedOverrideStaff, key, val),
                             (preset) => handleApplyStaffCrudPreset(selectedOverrideStaff, preset),
@@ -2744,6 +3239,8 @@ export default function AdminSettingsScreen() {
                             {
                               overrides: selectedOverrideStaff.permissionOverrides,
                               adminRolePerms: roles.find((r) => r.id === 'role-admin')?.permissions,
+                              onToggleRow: (row, enableAll) =>
+                                handleToggleStaffCrudRow(selectedOverrideStaff, row, enableAll),
                             }
                           )}
 
@@ -2811,22 +3308,26 @@ export default function AdminSettingsScreen() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 <TouchableOpacity
                   style={styles.secondaryBtn}
-                  onPress={() => setActiveTab('roles')}
+                  onPress={() => setActiveTab('crud')}
                 >
-                  <Ionicons name="shield-checkmark-outline" size={15} color="#52171B" />
-                  <Text style={styles.secondaryBtnText}>Manage Roles & POS</Text>
+                  <Ionicons name="key-outline" size={15} color="#52171B" />
+                  <Text style={styles.secondaryBtnText}>CRUD Permissions</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={openAddCashierModal}
-                >
-                  <Ionicons name="calculator-outline" size={15} color="#52171B" />
-                  <Text style={styles.secondaryBtnText}>+ Add Cashier</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.primaryBtn} onPress={openAddUserModal}>
-                  <Ionicons name="person-add-outline" size={15} color="#140306" />
-                  <Text style={styles.primaryBtnText}>Add User</Text>
-                </TouchableOpacity>
+                {canAddStaff && (
+                  <>
+                    <TouchableOpacity
+                      style={styles.secondaryBtn}
+                      onPress={openAddCashierModal}
+                    >
+                      <Ionicons name="calculator-outline" size={15} color="#52171B" />
+                      <Text style={styles.secondaryBtnText}>+ Add Cashier</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.primaryBtn} onPress={openAddUserModal}>
+                      <Ionicons name="person-add-outline" size={15} color="#140306" />
+                      <Text style={styles.primaryBtnText}>Add User</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
               </View>
             </View>
 
@@ -3019,41 +3520,47 @@ export default function AdminSettingsScreen() {
                       <Ionicons name="key-outline" size={14} color="#52171B" />
                       <Text style={styles.staffPermBtnText}>POS & Perms</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      onPress={() => {
-                        updateStaff(member.id, {
-                          status: isActive ? 'Inactive' : 'Active',
-                        });
-                        broadcastImmediately();
-                        showToast(`${member.name} ${isActive ? 'disabled' : 'activated'}`);
-                      }}
-                    >
-                      <Ionicons
-                        name={isActive ? 'pause-circle-outline' : 'play-circle-outline'}
-                        size={18}
-                        color="#52171B"
-                      />
-                    </TouchableOpacity>
-                    <TouchableOpacity style={styles.iconBtn} onPress={() => openEditUserModal(member)}>
-                      <Ionicons name="create-outline" size={18} color="#B48214" />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.iconBtn}
-                      onPress={() =>
-                        askConfirm(
-                          'Delete User',
-                          `Remove "${member.name}" from staff?`,
-                          () => {
-                            deleteStaff(member.id);
+                    {canEditStaff && (
+                      <>
+                        <TouchableOpacity
+                          style={styles.iconBtn}
+                          onPress={() => {
+                            updateStaff(member.id, {
+                              status: isActive ? 'Inactive' : 'Active',
+                            });
                             broadcastImmediately();
-                            showToast(`Removed ${member.name}`);
-                          }
-                        )
-                      }
-                    >
-                      <Ionicons name="trash-outline" size={18} color="#DC2626" />
-                    </TouchableOpacity>
+                            showToast(`${member.name} ${isActive ? 'disabled' : 'activated'}`);
+                          }}
+                        >
+                          <Ionicons
+                            name={isActive ? 'pause-circle-outline' : 'play-circle-outline'}
+                            size={18}
+                            color="#52171B"
+                          />
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.iconBtn} onPress={() => openEditUserModal(member)}>
+                          <Ionicons name="create-outline" size={18} color="#B48214" />
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    {canDeleteStaff && (
+                      <TouchableOpacity
+                        style={styles.iconBtn}
+                        onPress={() =>
+                          askConfirm(
+                            'Delete User',
+                            `Remove "${member.name}" from staff?`,
+                            () => {
+                              deleteStaff(member.id);
+                              broadcastImmediately();
+                              showToast(`Removed ${member.name}`);
+                            }
+                          )
+                        }
+                      >
+                        <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </View>
               );
@@ -4321,6 +4828,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#DCFCE7',
     borderColor: '#86EFAC',
   },
+  crudPillViewActive: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#F59E0B',
+  },
+  crudPillViewAlways: {
+    backgroundColor: '#FAF6EE',
+    borderColor: '#D4AF37',
+    opacity: 0.85,
+  },
   crudPillEditActive: {
     backgroundColor: '#DBEAFE',
     borderColor: '#93C5FD',
@@ -4346,5 +4862,77 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#B45309',
     marginTop: 1,
+  },
+  crudRowToggleBtn: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D6CFC2',
+    backgroundColor: '#FAF6EE',
+    minWidth: 44,
+    alignItems: 'center',
+  },
+  crudRowToggleBtnActive: {
+    borderColor: '#D4AF37',
+    backgroundColor: '#FFFBEB',
+  },
+  crudRowToggleText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#78716C',
+  },
+  crudScopeBar: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 6,
+  },
+  crudScopeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1,
+    borderColor: '#E7E0D3',
+  },
+  crudScopeBtnActive: {
+    backgroundColor: '#D4AF37',
+    borderColor: '#B48214',
+  },
+  crudScopeBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#52171B',
+  },
+  crudOverviewRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: '#FAF6EE',
+    borderWidth: 1.5,
+    borderColor: '#E7E0D3',
+    borderRadius: 11,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  crudOverviewRowActive: {
+    backgroundColor: '#FFFDF7',
+    borderColor: '#D4AF37',
+    borderWidth: 2,
+  },
+  crudMiniPill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  crudMiniPillText: {
+    fontSize: 10.5,
+    fontWeight: '800',
   },
 });
