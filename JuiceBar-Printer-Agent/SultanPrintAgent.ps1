@@ -13,6 +13,7 @@ param(
     [switch]$Diagnose,
     [switch]$Minimized,
     [switch]$ForceGdi,
+    [switch]$NoAutoStart,
     [string]$Server = "",
     [string]$Station = "",
     [string]$Printer = ""
@@ -583,10 +584,11 @@ function Invoke-StationPrint {
 function Read-AgentConfig {
     param([string]$ConfigPath)
     $cfg = @{
-        Server  = "http://192.168.1.10:5050"
-        Station = "juice"
-        Printer = "AUTO"
-        Mode    = "AUTO"
+        Server    = "http://192.168.1.10:5050"
+        Station   = "juice"
+        Printer   = "AUTO"
+        Mode      = "AUTO"
+        AutoStart = $true
     }
     if (Test-Path $ConfigPath) {
         try {
@@ -602,6 +604,7 @@ function Read-AgentConfig {
                 elseif ($k -eq "STATION") { $cfg.Station = $v.ToLowerInvariant() }
                 elseif ($k -eq "PRINTER" -or $k -eq "PRINTER_NAME") { $cfg.Printer = $v }
                 elseif ($k -eq "MODE" -or $k -eq "PRINT_MODE") { $cfg.Mode = $v.ToUpperInvariant() }
+                elseif ($k -eq "AUTOSTART" -or $k -eq "AUTO_START") { $cfg.AutoStart = ($v -notmatch '^(false|0|no|off)$') }
             }
         } catch {}
     }
@@ -609,15 +612,100 @@ function Read-AgentConfig {
 }
 
 function Save-AgentConfig {
-    param([string]$ConfigPath, [string]$ServerUrl, [string]$Station, [string]$Printer, [string]$PrintMode)
+    param(
+        [string]$ConfigPath,
+        [string]$ServerUrl,
+        [string]$Station,
+        [string]$Printer,
+        [string]$PrintMode,
+        [bool]$AutoStart = $true
+    )
     $lines = @(
-        "# Sultan Restaurant Dedicated Station Thermal Print Agent Config (v3.0)"
+        "# Sultan Restaurant Dedicated Station Thermal Print Agent Config (v3.1)"
         "SERVER=$($ServerUrl.TrimEnd('/'))"
         "STATION=$Station"
         "PRINTER=$Printer"
         "MODE=$PrintMode"
+        "AUTOSTART=$(if ($AutoStart) { 'true' } else { 'false' })"
     )
     Set-Content -Path $ConfigPath -Value $lines -Encoding ASCII
+}
+
+function Get-PermanentInstallDir {
+    param([string]$Station)
+    $root = if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { $env:USERPROFILE }
+    return (Join-Path (Join-Path $root "SultanRestaurant") "PrintAgent-$Station")
+}
+
+function Get-AutoStartValueName {
+    param([string]$Station)
+    $lbl = if ($Station -eq "juice") { "JuiceBar" } else { "Kitchen" }
+    return "Sultan-$lbl-Printer"
+}
+
+function Sync-PermanentInstall {
+    param(
+        [string]$Station,
+        [string]$ServerUrl,
+        [string]$Printer,
+        [string]$PrintMode,
+        [bool]$AutoStart
+    )
+    $permDir = Get-PermanentInstallDir -Station $Station
+    if (-not (Test-Path $permDir)) {
+        New-Item -ItemType Directory -Path $permDir -Force | Out-Null
+    }
+
+    $currentScript = Join-Path $script:BaseDir "SultanPrintAgent.ps1"
+    $permScript = Join-Path $permDir "SultanPrintAgent.ps1"
+    $permConfig = Join-Path $permDir "agent-config.txt"
+
+    if ((Test-Path $currentScript) -and ($currentScript -ine $permScript)) {
+        Copy-Item -Path $currentScript -Destination $permScript -Force
+        try { Unblock-File -Path $permScript -ErrorAction SilentlyContinue } catch {}
+    }
+
+    Save-AgentConfig -ConfigPath $permConfig -ServerUrl $ServerUrl -Station $Station -Printer $Printer -PrintMode $PrintMode -AutoStart $AutoStart
+    return @{ Dir = $permDir; Script = $permScript; Config = $permConfig }
+}
+
+function Set-WindowsBootAutoStart {
+    param(
+        [string]$Station,
+        [bool]$Enable,
+        [string]$TargetScriptPath = "",
+        [string]$WorkingDir = ""
+    )
+    $valName = Get-AutoStartValueName -Station $Station
+    $startupDir = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\Startup"
+    $shortcutPath = Join-Path $startupDir "$valName.lnk"
+
+    if (-not $Enable) {
+        try { if (Test-Path $shortcutPath) { Remove-Item -Path $shortcutPath -Force -ErrorAction SilentlyContinue } } catch {}
+        return @{ Success = $true; Method = "Disabled" }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TargetScriptPath)) {
+        $TargetScriptPath = Join-Path $script:BaseDir "SultanPrintAgent.ps1"
+    }
+    if ([string]::IsNullOrWhiteSpace($WorkingDir)) {
+        $WorkingDir = Split-Path -Parent $TargetScriptPath
+    }
+
+    try {
+        if (-not (Test-Path $startupDir)) { New-Item -ItemType Directory -Path $startupDir -Force | Out-Null }
+        $ws = New-Object -ComObject WScript.Shell
+        $s = $ws.CreateShortcut($shortcutPath)
+        $s.TargetPath = "powershell.exe"
+        $s.Arguments = "-STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$TargetScriptPath`" -Minimized"
+        $s.WorkingDirectory = $WorkingDir
+        $s.WindowStyle = 7
+        $s.Description = "Sultan Restaurant Dedicated Station Thermal Print Agent"
+        $s.Save()
+        return @{ Success = $true; Method = "Windows-Startup"; Target = $shortcutPath }
+    } catch {
+        return @{ Success = $false; Error = $_.Exception.Message }
+    }
 }
 
 function Get-ServerUrlCandidates {
@@ -664,10 +752,11 @@ function Send-HttpPostJson {
 $configPath = Join-Path $script:BaseDir "agent-config.txt"
 $loadedCfg = Read-AgentConfig -ConfigPath $configPath
 
-$effServer  = if (-not [string]::IsNullOrWhiteSpace($Server))  { $Server.Trim().TrimEnd("/") } else { $loadedCfg.Server }
-$effStation = if (-not [string]::IsNullOrWhiteSpace($Station)) { $Station.Trim().ToLowerInvariant() } else { $loadedCfg.Station }
-$effPrinter = if (-not [string]::IsNullOrWhiteSpace($Printer)) { $Printer.Trim() } else { $loadedCfg.Printer }
-$effMode    = if ($ForceGdi) { "GDI" } else { $loadedCfg.Mode }
+$effServer    = if (-not [string]::IsNullOrWhiteSpace($Server))  { $Server.Trim().TrimEnd("/") } else { $loadedCfg.Server }
+$effStation   = if (-not [string]::IsNullOrWhiteSpace($Station)) { $Station.Trim().ToLowerInvariant() } else { $loadedCfg.Station }
+$effPrinter   = if (-not [string]::IsNullOrWhiteSpace($Printer)) { $Printer.Trim() } else { $loadedCfg.Printer }
+$effMode      = if ($ForceGdi) { "GDI" } else { $loadedCfg.Mode }
+$effAutoStart = if ($NoAutoStart) { $false } else { [bool]$loadedCfg.AutoStart }
 
 if ($effStation -ne "main") { $effStation = "juice" }
 if ($effMode -notin @("AUTO", "RAW", "GDI")) { $effMode = "AUTO" }
@@ -804,13 +893,15 @@ $mutexName = "Global\SultanDesktopPrintAgent_$effStation"
 $mutex = New-Object System.Threading.Mutex($true, $mutexName, [ref]$createdNew)
 
 if (-not $createdNew) {
-    $stationLabel = if ($effStation -eq "juice") { "Juice Bar" } else { "Main Kitchen" }
-    [System.Windows.Forms.MessageBox]::Show(
-        "Sultan $stationLabel Printer Agent is ALREADY running on this PC!`n`nCheck the bottom-right system tray (near the clock) and double-click the icon to open the window.",
-        "Sultan Printer Agent Already Running",
-        [System.Windows.Forms.MessageBoxButtons]::OK,
-        [System.Windows.Forms.MessageBoxIcon]::Information
-    ) | Out-Null
+    if (-not $Minimized) {
+        $stationLabel = if ($effStation -eq "juice") { "Juice Bar" } else { "Main Kitchen" }
+        [System.Windows.Forms.MessageBox]::Show(
+            "Sultan $stationLabel Printer Agent is ALREADY running on this PC!`n`nCheck the bottom-right system tray (near the clock) and double-click the icon to open the window.",
+            "Sultan Printer Agent Already Running",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Information
+        ) | Out-Null
+    }
     exit 0
 }
 
@@ -824,6 +915,8 @@ try {
     $bgDark       = [System.Drawing.Color]::FromArgb(20, 20, 24)
     $panelDark    = [System.Drawing.Color]::FromArgb(30, 30, 36)
 
+    $permInstallDir = Get-PermanentInstallDir -Station $effStation
+
     $script:App = @{
         ServerUrl            = $effServer
         UrlCandidates        = @(Get-ServerUrlCandidates -PrimaryUrl $effServer)
@@ -832,7 +925,9 @@ try {
         Station              = $effStation
         ConfiguredPrinter    = $effPrinter
         PrintMode            = $effMode
+        AutoStart            = $effAutoStart
         ConfigPath           = $configPath
+        PermInstallDir       = $permInstallDir
         PcName               = $env:COMPUTERNAME
         PrintedCount         = 0
         WasConnected         = $false
@@ -888,7 +983,7 @@ try {
     # Config Panel
     $cfgPanel = New-Object System.Windows.Forms.Panel
     $cfgPanel.Location = New-Object System.Drawing.Point(16, 92)
-    $cfgPanel.Size = New-Object System.Drawing.Size(592, 152)
+    $cfgPanel.Size = New-Object System.Drawing.Size(592, 174)
     $cfgPanel.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $cfgPanel.BackColor = $panelDark
 
@@ -966,11 +1061,20 @@ try {
     $cmbMode.SelectedIndex = if ($script:App.PrintMode -eq "GDI") { 1 } elseif ($script:App.PrintMode -eq "RAW") { 2 } else { 0 }
     $cfgPanel.Controls.Add($cmbMode)
 
+    $chkAutoStart = New-Object System.Windows.Forms.CheckBox
+    $chkAutoStart.Text = "Auto-Start automatically on Windows Boot (No separate installer needed)"
+    $chkAutoStart.Checked = [bool]$script:App.AutoStart
+    $chkAutoStart.ForeColor = [System.Drawing.Color]::FromArgb(110, 231, 183)
+    $chkAutoStart.Font = New-Object System.Drawing.Font("Segoe UI", 8.8, [System.Drawing.FontStyle]::Bold)
+    $chkAutoStart.Location = New-Object System.Drawing.Point(12, 122)
+    $chkAutoStart.AutoSize = $true
+    $cfgPanel.Controls.Add($chkAutoStart)
+
     $lblHint = New-Object System.Windows.Forms.Label
-    $lblHint.Text = "Auto-detects USB printers every 15s. Keep open or minimized to tray for silent printing."
+    $lblHint.Text = "Auto-detects USB printers every 15s & self-installs into AppData for daily boot auto-start."
     $lblHint.ForeColor = [System.Drawing.Color]::FromArgb(145, 160, 175)
-    $lblHint.Font = New-Object System.Drawing.Font("Segoe UI", 8.3)
-    $lblHint.Location = New-Object System.Drawing.Point(12, 124)
+    $lblHint.Font = New-Object System.Drawing.Font("Segoe UI", 8.2)
+    $lblHint.Location = New-Object System.Drawing.Point(12, 148)
     $lblHint.AutoSize = $true
     $cfgPanel.Controls.Add($lblHint)
     $form.Controls.Add($cfgPanel)
@@ -980,13 +1084,13 @@ try {
     $lblLogTitle.Text = "LIVE PRINT ACTIVITY LOG:"
     $lblLogTitle.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 175)
     $lblLogTitle.Font = New-Object System.Drawing.Font("Segoe UI", 8.5, [System.Drawing.FontStyle]::Bold)
-    $lblLogTitle.Location = New-Object System.Drawing.Point(16, 254)
+    $lblLogTitle.Location = New-Object System.Drawing.Point(16, 276)
     $lblLogTitle.AutoSize = $true
     $form.Controls.Add($lblLogTitle)
 
     $txtLog = New-Object System.Windows.Forms.TextBox
-    $txtLog.Location = New-Object System.Drawing.Point(16, 274)
-    $txtLog.Size = New-Object System.Drawing.Size(592, 206)
+    $txtLog.Location = New-Object System.Drawing.Point(16, 296)
+    $txtLog.Size = New-Object System.Drawing.Size(592, 184)
     $txtLog.Anchor = [System.Windows.Forms.AnchorStyles]::Top -bor [System.Windows.Forms.AnchorStyles]::Bottom -bor [System.Windows.Forms.AnchorStyles]::Left -bor [System.Windows.Forms.AnchorStyles]::Right
     $txtLog.Multiline = $true
     $txtLog.ReadOnly = $true
@@ -1164,6 +1268,17 @@ try {
         return $resolved
     }
 
+    function Persist-AllConfigs {
+        try {
+            Save-AgentConfig -ConfigPath $script:App.ConfigPath -ServerUrl $script:App.ServerUrl -Station $script:App.Station -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode -AutoStart $script:App.AutoStart
+        } catch {}
+        if ($script:App.AutoStart -and -not $NoAutoStart) {
+            try {
+                Sync-PermanentInstall -Station $script:App.Station -ServerUrl $script:App.ServerUrl -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode -AutoStart $script:App.AutoStart | Out-Null
+            } catch {}
+        }
+    }
+
     # --- BUTTON & DROPDOWN HANDLERS ---
     $cmbPrinter.add_SelectedIndexChanged({
         if ($script:App.SuppressUiEvents) { return }
@@ -1172,9 +1287,7 @@ try {
             $mapped = $script:App.DisplayToPrinterName[$disp]
             if ($mapped) {
                 $script:App.ConfiguredPrinter = $mapped
-                try {
-                    Save-AgentConfig -ConfigPath $script:App.ConfigPath -ServerUrl $script:App.ServerUrl -Station $script:App.Station -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode
-                } catch {}
+                Persist-AllConfigs
                 Append-UiLog "Printer selected & saved: $mapped"
                 Request-ImmediateRepoll
             }
@@ -1189,11 +1302,32 @@ try {
             default { "AUTO" }
         }
         $script:App.PrintMode = $newMode
-        try {
-            Save-AgentConfig -ConfigPath $script:App.ConfigPath -ServerUrl $script:App.ServerUrl -Station $script:App.Station -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode
-        } catch {}
+        Persist-AllConfigs
         Append-UiLog "Print Engine mode switched to: $newMode"
         Request-ImmediateRepoll
+    })
+
+    $chkAutoStart.add_CheckedChanged({
+        if ($script:App.SuppressUiEvents) { return }
+        $enabled = [bool]$chkAutoStart.Checked
+        $script:App.AutoStart = $enabled
+        if ($enabled) {
+            try {
+                $perm = Sync-PermanentInstall -Station $script:App.Station -ServerUrl $script:App.ServerUrl -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode -AutoStart $true
+                $res = Set-WindowsBootAutoStart -Station $script:App.Station -Enable $true -TargetScriptPath $perm.Script -WorkingDir $perm.Dir
+                if ($res.Success) {
+                    Append-UiLog "Auto-Start on Windows Boot ENABLED ($($res.Method) -> $($perm.Dir))"
+                } else {
+                    Append-UiLog "Auto-Start warning: $($res.Error)"
+                }
+            } catch {
+                Append-UiLog "Auto-Start error: $($_.Exception.Message)"
+            }
+        } else {
+            Set-WindowsBootAutoStart -Station $script:App.Station -Enable $false | Out-Null
+            Append-UiLog "Auto-Start on Windows Boot DISABLED."
+        }
+        Persist-AllConfigs
     })
 
     $btnRefresh.add_Click({
@@ -1212,12 +1346,8 @@ try {
         $script:App.UrlCandidates = @(Get-ServerUrlCandidates -PrimaryUrl $url)
         $script:App.UrlIndex = 0
         $script:App.ConsecutiveErrors = 0
-        try {
-            Save-AgentConfig -ConfigPath $script:App.ConfigPath -ServerUrl $script:App.ServerUrl -Station $script:App.Station -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode
-            Append-UiLog "Saved config -> Hub: $($script:App.ServerUrl) | Printer: $($script:App.ConfiguredPrinter) | Mode: $($script:App.PrintMode)"
-        } catch {
-            Append-UiLog "Config save warning: $($_.Exception.Message)"
-        }
+        Persist-AllConfigs
+        Append-UiLog "Saved config -> Hub: $($script:App.ServerUrl) | Printer: $($script:App.ConfiguredPrinter) | Mode: $($script:App.PrintMode)"
         Request-ImmediateRepoll
     })
 
@@ -1291,9 +1421,22 @@ try {
         try { $trayIcon.Visible = $false; $trayIcon.Dispose() } catch {}
     })
 
-    # --- INITIAL PRINTER SCAN & LOG ---
-    Append-UiLog "Started Sultan $stationTitle Printer Agent v3.0 (Pure PowerShell)"
+    # --- INITIAL PRINTER SCAN, AUTOMATIC BOOT AUTO-START & LOG ---
+    Append-UiLog "Started Sultan $stationTitle Printer Agent v3.1 (Pure PowerShell)"
     Append-UiLog "PC: $($script:App.PcName) | Hub: $($script:App.ServerUrl) | Engine: $script:RawSpoolInitNote"
+    if ($script:App.AutoStart -and -not $NoAutoStart) {
+        try {
+            $perm = Sync-PermanentInstall -Station $script:App.Station -ServerUrl $script:App.ServerUrl -Printer $script:App.ConfiguredPrinter -PrintMode $script:App.PrintMode -AutoStart $true
+            $bootRes = Set-WindowsBootAutoStart -Station $script:App.Station -Enable $true -TargetScriptPath $perm.Script -WorkingDir $perm.Dir
+            if ($bootRes.Success) {
+                Append-UiLog "Auto-Start on Windows Boot: ENABLED automatically ($($bootRes.Method) -> $($perm.Dir))"
+            } else {
+                Append-UiLog "Auto-Start setup note: $($bootRes.Error)"
+            }
+        } catch {
+            Append-UiLog "Auto-Start setup note: $($_.Exception.Message)"
+        }
+    }
     Refresh-PrintersUi -VerboseLog | Out-Null
 
     # --- NON-BLOCKING ASYNC LONG-POLL TIMER (250ms tick, zero UI freeze!) ---

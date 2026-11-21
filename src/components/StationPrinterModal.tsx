@@ -377,13 +377,12 @@ export default function StationPrinterModal({
                       </Text>
                     </TouchableOpacity>
 
-                    {/* 4-Step Quick Guide */}
+                    {/* 2-Step Zero-Touch Quick Guide */}
                     <View style={styles.stepsBox}>
-                      <Text style={styles.stepsHeading}>Quick Setup (On {isJuice ? 'Juice Bar' : 'Kitchen'} PC):</Text>
-                      <Text style={styles.stepLine}>1. Download the ZIP above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC, RIGHT-CLICK it and click <Text style={styles.codeInline}>Extract All...</Text> (do NOT run inside the ZIP!).</Text>
-                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Start-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> — the Desktop Printer Agent window opens & auto-picks your USB printer!</Text>
-                      <Text style={styles.stepLine}>3. Click <Text style={styles.codeInline}>Print Test Slip</Text> inside the window, then run <Text style={styles.codeInline}>Install-AutoStart-On-Boot.bat</Text> once for daily auto-start.</Text>
-                      <Text style={styles.stepLine}>4. Need to check drivers/ports? Run <Text style={styles.codeInline}>Diagnose-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text>.</Text>
+                      <Text style={styles.stepsHeading}>One-Time Setup (On {isJuice ? 'Juice Bar' : 'Kitchen'} PC):</Text>
+                      <Text style={styles.stepLine}>1. Download the ZIP above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC, RIGHT-CLICK it and click <Text style={styles.codeInline}>Extract All...</Text>.</Text>
+                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Start-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> ONCE — it automatically picks up your USB printer AND enables Windows Boot Auto-Start in the background!</Text>
+                      <Text style={styles.stepLine}>3. Click <Text style={styles.codeInline}>Print Test Slip</Text> to confirm. (Need driver diagnostics? Run <Text style={styles.codeInline}>Diagnose-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text>.)</Text>
                     </View>
 
                     {/* Printer Selection on Remote PC */}

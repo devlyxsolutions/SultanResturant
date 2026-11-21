@@ -4938,11 +4938,12 @@ async function handleRequest(req, res) {
       const psScriptData = fs.readFileSync(psScriptPath);
 
       const agentConfig = [
-        '# Sultan Restaurant Dedicated Station Thermal Print Agent Config',
+        '# Sultan Restaurant Dedicated Station Thermal Print Agent Config (v3.1)',
         `SERVER=${serverUrl}`,
         `STATION=${station}`,
         'PRINTER=AUTO',
         'MODE=AUTO',
+        'AUTOSTART=true',
         '',
       ].join('\r\n');
 
@@ -4986,39 +4987,6 @@ async function handleRequest(req, res) {
         '',
       ].join('\r\n');
 
-      const installAutostartBat = [
-        '@echo off',
-        `title Install Sultan ${stationLabel} Printer Auto-Start`,
-        'set "APPDIR=%~dp0"',
-        'cd /d "%APPDIR%"',
-        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
-        '  echo.',
-        '  echo ====================================================================',
-        '  echo   ERROR: Please EXTRACT the ZIP file to Desktop or C:\\ first!',
-        '  echo   Do NOT run Install-AutoStart inside the ZIP preview window.',
-        '  echo ====================================================================',
-        '  echo.',
-        '  pause',
-        '  exit /b 1',
-        ')',
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'set "STARTUP=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
-        `set "LNK=%STARTUP%\\Sultan-${stationLabel}-Printer.lnk"`,
-        'set "PSFILE=%APPDIR%SultanPrintAgent.ps1"',
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut($env:LNK); $s.TargetPath = \'powershell.exe\'; $s.Arguments = \'-STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \' + [char]34 + $env:PSFILE + [char]34; $s.WorkingDirectory = $env:APPDIR; $s.WindowStyle = 7; $s.Save()"',
-        'echo.',
-        'echo ====================================================================',
-        `echo   [OK] Sultan ${stationLabel} Printer Auto-Start Installed!`,
-        `echo   Shortcut saved to: %LNK%`,
-        'echo   Opening Printer Agent Desktop Window now...',
-        'echo ====================================================================',
-        'echo.',
-        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PSFILE%"',
-        'timeout /t 3 >nul',
-        'exit /b 0',
-        '',
-      ].join('\r\n');
-
       const diagnoseBat = [
         '@echo off',
         `title Diagnose Sultan ${stationLabel} Printer`,
@@ -5039,15 +5007,17 @@ async function handleRequest(req, res) {
 
       const readmeTxt = [
         '================================================================',
-        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP (v3.0)`,
+        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP (v3.1)`,
         '================================================================',
         '',
-        'STEP 1: RIGHT-CLICK this ZIP file and click "Extract All..." to Desktop or C:\\SultanPrinter.',
+        'STEP 1: RIGHT-CLICK this ZIP file and click "Extract All..." anywhere on this PC.',
         '        (IMPORTANT: Do NOT run .bat files directly inside the ZIP window!)',
         'STEP 2: Plug in the USB Thermal Printer and make sure its Windows driver is installed.',
-        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" - the permanent Desktop window opens!`,
-        'STEP 4: Pick your printer (or keep AUTO) and click "Print Test Slip".',
-        'STEP 5: Double-click "Install-AutoStart-On-Boot.bat" ONCE so it starts every morning.',
+        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" ONCE!`,
+        '        - Opens the permanent Desktop Printer Agent window & auto-picks your USB printer.',
+        '        - AUTOMATICALLY installs itself in AppData & enables Windows Boot Auto-Start!',
+        '          (No separate Install-AutoStart file needed! Even if you delete the ZIP later, it keeps running.)',
+        'STEP 4: Click "Print Test Slip" inside the window to confirm printing.',
         '',
         `TROUBLESHOOTING: Double-click "Diagnose-${stationLabel}-Printer.bat" to see all detected`,
         'printers, USB ports, and live connection check to the Sultan Hub.',
@@ -5063,7 +5033,6 @@ async function handleRequest(req, res) {
         { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
         { name: `Test-${stationLabel}-Printer.bat`, data: testBat },
         { name: `Diagnose-${stationLabel}-Printer.bat`, data: diagnoseBat },
-        { name: 'Install-AutoStart-On-Boot.bat', data: installAutostartBat },
         { name: `README-${stationLabel.toUpperCase()}-PRINTER.txt`, data: readmeTxt },
       ]);
 
