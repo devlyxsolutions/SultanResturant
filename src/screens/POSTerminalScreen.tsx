@@ -258,6 +258,8 @@ export default function POSTerminalScreen({
   const [tableModalVisible, setTableModalVisible] = useState(false);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [pendingOrdersModalVisible, setPendingOrdersModalVisible] = useState(false);
+  const [kdsModalFilter, setKdsModalFilter] = useState<'all' | 'pending' | 'cooking' | 'ready' | 'takeaway' | 'dine-in' | 'delivery'>('all');
+  const [kdsStatusToast, setKdsStatusToast] = useState<string | null>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
   const [discountModalVisible, setDiscountModalVisible] = useState(false);
   const [customDiscountInput, setCustomDiscountInput] = useState('');
@@ -1100,17 +1102,76 @@ export default function POSTerminalScreen({
     setIsCreatingNewCustomer(false);
   };
 
+  const showKdsToast = (msg: string) => {
+    setKdsStatusToast(msg);
+    setTimeout(() => {
+      setKdsStatusToast((prev) => (prev === msg ? null : prev));
+    }, 5000);
+  };
+
+  const handlePrintPendingSlipForTicket = (ticket: typeof tickets[0]) => {
+    if (!requirePosPerm('posCanPrintUnpaidBill', 'print pending order slips')) return;
+    const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
+    const targetTable = isTable ? tables.find(tbl => tbl.id === ticket.tableId) : null;
+    const targetTableName = targetTable
+      ? targetTable.name
+      : (ticket.tableName || (ticket.tableId ? ticket.tableId.toUpperCase() : 'TAKEAWAY'));
+    const derivedOrderType: 'dine-in' | 'takeaway' | 'delivery' = isTable
+      ? 'dine-in'
+      : (ticket.tableId?.toLowerCase() === 'delivery' ? 'delivery' : 'takeaway');
+
+    const ticketSub = (ticket.items || []).reduce((sum, it) => sum + (it.price * it.qty), 0);
+    const ticketTax = ticketSub * effectiveTaxRate;
+    const ticketService = derivedOrderType === 'dine-in' && systemSettings.serviceChargeEnabled
+      ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
+      : 0;
+    const rawTotal = ticketSub + ticketTax + ticketService;
+    const ticketTotal = systemSettings.roundTotals ? Math.round(rawTotal) : rawTotal;
+
+    const pendingInvoice: Invoice = {
+      id: `PND-${ticket.id.replace(/^KOT-/, '')}`,
+      orderType: derivedOrderType,
+      tableId: isTable ? ticket.tableId : undefined,
+      tableName: targetTableName,
+      server: ticket.server || user?.name || 'Staff',
+      orderTakenBy: ticket.server || user?.name || 'Staff',
+      cashier: user?.name || 'POS Staff',
+      timePlaced: ticket.timePlaced || Date.now(),
+      timeSettled: Date.now(),
+      items: ticket.items || [],
+      subTotal: ticketSub,
+      discount: 0,
+      tax: ticketTax,
+      serviceCharge: ticketService > 0 ? ticketService : undefined,
+      total: ticketTotal,
+      payments: [],
+      status: 'unpaid',
+      isUnpaidBill: true,
+      notes: `Pending Order Slip • KOT #${ticket.id} (Sent to KDS)`,
+    };
+
+    printInvoiceReceipt(pendingInvoice);
+    showKdsToast(`Pending Slip printed for ${targetTableName} (${ticket.id})`);
+  };
+
   const sendToKitchen = () => {
     if (!requirePosPerm('posCanSendKot', 'dispatch KOT tickets to Kitchen')) return;
     if (cart.length === 0) return;
     if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
       if (Platform.OS === 'web') window.alert("Please assign a dining table first.");
+      else Alert.alert("Select Table", "Please assign a dining table first.");
       return;
     }
-    
+
     const tId = orderType === 'dine-in' ? selectedTableId : orderType;
-    
-    const kotItems: { item: MenuItem; qty: number }[] = [];
+    const targetTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
+    const targetTableName = targetTable
+      ? targetTable.name
+      : (selectedCustomerObj?.name
+        ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
+        : (orderType === 'delivery' ? 'Delivery' : 'Takeaway'));
+
+    const kotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
     cart.forEach(cartItem => {
       const loadedItem = loadedCart.find(i => i.id === cartItem.id);
       const loadedQty = loadedItem ? loadedItem.qty : 0;
@@ -1133,27 +1194,76 @@ export default function POSTerminalScreen({
 
         kotItems.push({
           item: itemObj,
-          qty: cartItem.qty - loadedQty
+          qty: cartItem.qty - loadedQty,
+          notes: cartItem.notes,
         });
       }
     });
 
     if (kotItems.length === 0) {
-      if (Platform.OS === 'web') window.alert("No new items to send.");
-      else Alert.alert("Info", "No new items to send.");
+      showKdsToast("All current items are already sent to KDS.");
       return;
     }
-    
+
     const isAddOn = loadedCart.length > 0;
-    placeOrder(tId, `${user?.name || 'Staff'} (POS)`, kotItems, isAddOn);
+    const serverLabel = selectedCustomerObj?.name
+      ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
+      : `${user?.name || 'Staff'} (POS)`;
+
+    const hasMain = kotItems.some(k => (k.item.station || 'main') === 'main');
+    const hasJuice = kotItems.some(k => (k.item.station || 'main') === 'juice');
+    const stationSummary = hasMain && hasJuice ? 'Kitchen + Juice KDS' : (hasJuice ? 'Juice Bar KDS' : 'Kitchen KDS');
+
+    placeOrder(tId, serverLabel, kotItems, isAddOn);
     broadcastImmediately();
-    setLoadedCart(JSON.parse(JSON.stringify(cart)));
-    
-    const alertMsg = isAddOn 
-      ? `Add-on items sent to Kitchen!` 
-      : `Order sent to Kitchen! Table occupied.`;
-    if (Platform.OS === 'web') window.alert(alertMsg);
-    else Alert.alert("Kitchen Notified", alertMsg);
+
+    // Immediately print Pending / Unpaid Order Slip on POS counter printer
+    const latestTicket = useRestaurantStore.getState().tickets?.[0];
+    const pendingSlipId = latestTicket?.id
+      ? `PND-${latestTicket.id.replace(/^KOT-/, '')}`
+      : `PND-${Date.now().toString().slice(-4)}`;
+
+    const pendingSlipInvoice: Invoice = {
+      id: pendingSlipId,
+      orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
+      tableId: selectedTableId || undefined,
+      tableName: targetTableName,
+      customer: selectedCustomerObj,
+      server: selectedServer || user?.name || 'Staff',
+      orderTakenBy: selectedServer || user?.name || 'Staff',
+      cashier: user?.name || 'POS Staff',
+      timePlaced: Date.now(),
+      timeSettled: Date.now(),
+      items: cart,
+      subTotal,
+      discount: discountVal,
+      tax,
+      serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
+      total,
+      payments: [],
+      status: 'unpaid',
+      isUnpaidBill: true,
+      notes: `Pending Slip • Sent to ${stationSummary}${latestTicket?.id ? ` (${latestTicket.id})` : ''}`,
+    };
+    printInvoiceReceipt(pendingSlipInvoice);
+
+    if (orderType === 'dine-in') {
+      setLoadedCart(JSON.parse(JSON.stringify(cart)));
+    } else {
+      // Clear counter cart for Takeaway / Delivery so cashier can take the next order immediately
+      setCart([]);
+      setLoadedCart([]);
+      setLoadedTicketId(null);
+      setSelectedCustomerId('');
+      setSelectedEventCampaign(null);
+      setDiscountAmount('0');
+    }
+
+    showKdsToast(
+      isAddOn
+        ? `Add-on sent to ${stationSummary} • Pending Slip printed`
+        : `Order sent to ${stationSummary} (${targetTableName}) • Pending Slip printed`
+    );
   };
 
   const openCheckout = () => {
@@ -1315,18 +1425,13 @@ export default function POSTerminalScreen({
 
     saveInvoice(invoice);
 
-    // Clean up ticket from pending orders
+    // Clean up only the explicitly loaded ticket or settled dining table tickets
     if (loadedTicketId) {
       dismissTicket(loadedTicketId);
       setLoadedTicketId(null);
     }
     if (targetTableId) {
       clearTableTickets(targetTableId);
-    } else if (orderType === 'takeaway' || orderType === 'delivery') {
-      const matching = (tickets || []).find(t => t.tableId === orderType);
-      if (matching) {
-        dismissTicket(matching.id);
-      }
     }
 
     broadcastImmediately();
@@ -1447,7 +1552,7 @@ export default function POSTerminalScreen({
       payments: [],
       status: 'unpaid',
       isUnpaidBill: true,
-      notes: 'Provisional check (Unpaid bill)',
+      notes: 'Pending Order Slip / Provisional Unpaid Bill',
     };
 
     if (selectedTableId) {
@@ -1456,12 +1561,7 @@ export default function POSTerminalScreen({
     broadcastImmediately();
     printInvoiceReceipt(unpaidInvoice);
 
-    const alertMsg = `Unpaid Bill (غیر ادا شدہ بل) printed for ${targetTableName}!\nTable status updated to Billed.`;
-    if (Platform.OS === 'web') {
-      window.alert(alertMsg);
-    } else {
-      Alert.alert("Unpaid Bill Printed", alertMsg);
-    }
+    showKdsToast(`Pending Slip printed for ${targetTableName}`);
   };
 
   // Permission & Module Guard (after all hooks so Rules of Hooks are respected)
@@ -2025,15 +2125,19 @@ export default function POSTerminalScreen({
                     {isMobile || isTablet ? 'Menu Catalog' : 'SULTAN RESTAURANT Menu'}
                   </Text>
 
-                  {/* Running Orders Pill */}
+                  {/* Sent to KDS / Running Orders Pill */}
                   <TouchableOpacity 
-                    style={[styles.runningOrdersPill, isTablet && { paddingHorizontal: 9, paddingVertical: 4 }]}
+                    style={[
+                      styles.runningOrdersPill,
+                      (tickets || []).length > 0 && styles.runningOrdersPillActive,
+                      isTablet && { paddingHorizontal: 9, paddingVertical: 4 },
+                    ]}
                     {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
                     onPress={() => setPendingOrdersModalVisible(true)}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="time" size={12} color="#D97706" />
-                    <Text style={[styles.runningOrdersText, isTablet && { fontSize: 11 }]}>Running</Text>
+                    <Ionicons name="flame-outline" size={13} color="#B45309" />
+                    <Text style={[styles.runningOrdersText, isTablet && { fontSize: 11 }]}>Sent to KDS</Text>
                     {!isMobile && !isTablet && <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>}
                     <View style={styles.runningOrdersBadge}>
                       <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
@@ -2173,6 +2277,119 @@ export default function POSTerminalScreen({
                             </View>
                           )}
                         </TouchableOpacity>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              )}
+
+              {/* Live KDS Dispatch Toast Banner */}
+              {kdsStatusToast && (
+                <View style={styles.kdsToastBar}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
+                    <Text style={styles.kdsToastText} numberOfLines={2}>{kdsStatusToast}</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => setKdsStatusToast(null)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
+                    <Ionicons name="close" size={16} color="#065F46" />
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {/* Live Sent-to-KDS Active Queue Strip (Directly visible on POS screen) */}
+              {(tickets || []).length > 0 && (
+                <View style={styles.kdsLiveStripWrapper}>
+                  <View style={styles.kdsLiveStripHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <View style={styles.kdsLiveDot} />
+                      <Text style={styles.kdsLiveStripTitle}>
+                        SENT TO KDS ({(tickets || []).length})
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={styles.kdsLiveViewAllBtn}
+                      onPress={() => setPendingOrdersModalVisible(true)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={styles.kdsLiveViewAllText}>Manage All [F6]</Text>
+                      <Ionicons name="chevron-forward" size={12} color="#52141C" />
+                    </TouchableOpacity>
+                  </View>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={styles.kdsLiveStripScroll}
+                  >
+                    {(tickets || []).map((t) => {
+                      const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
+                      const targetTable = isTable ? tables.find(tbl => tbl.id === t.tableId) : null;
+                      const targetLabel = targetTable
+                        ? targetTable.name
+                        : (t.tableName || (t.tableId ? t.tableId.toUpperCase() : 'TAKEAWAY'));
+                      const itemsArr = Array.isArray(t.items) ? t.items : [];
+                      const itemCount = itemsArr.reduce((s, it) => s + (it.qty || 1), 0);
+                      const tSub = itemsArr.reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0);
+                      const hasMain = itemsArr.some(it => (it.station || 'main') === 'main');
+                      const hasJuice = itemsArr.some(it => (it.station || 'main') === 'juice');
+                      const stationTag = hasMain && hasJuice ? 'Kitchen + Juice' : (hasJuice ? 'Juice Bar' : 'Kitchen');
+                      const statusColors: Record<string, { bg: string; text: string; border: string }> = {
+                        pending: { bg: '#FEF3C7', text: '#B45309', border: '#F59E0B' },
+                        cooking: { bg: '#FFEDD5', text: '#C2410C', border: '#FB923C' },
+                        ready: { bg: '#DBEAFE', text: '#1D4ED8', border: '#60A5FA' },
+                        served: { bg: '#D1FAE5', text: '#047857', border: '#34D399' },
+                      };
+                      const st = statusColors[t.status] || statusColors.pending;
+
+                      return (
+                        <View key={t.id} style={styles.kdsStripCard}>
+                          <TouchableOpacity
+                            style={{ flex: 1 }}
+                            onPress={() => handleCreateBillFromTicket(t, false)}
+                            activeOpacity={0.8}
+                          >
+                            <View style={styles.kdsStripTopRow}>
+                              <Text style={styles.kdsStripTarget} numberOfLines={1}>
+                                {targetLabel}
+                              </Text>
+                              <View style={[styles.kdsStripStatusPill, { backgroundColor: st.bg, borderColor: st.border }]}>
+                                <Text style={[styles.kdsStripStatusText, { color: st.text }]}>
+                                  {(t.status || 'pending').toUpperCase()}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={styles.kdsStripMetaRow}>
+                              <Text style={styles.kdsStripStation}>{stationTag}</Text>
+                              <Text style={styles.kdsStripMetaSep}>•</Text>
+                              <Text style={styles.kdsStripTicketId}>#{t.id.slice(-5).toUpperCase()}</Text>
+                              <Text style={styles.kdsStripMetaSep}>•</Text>
+                              <Text style={styles.kdsStripMetaCount}>
+                                {itemCount}x{!hidePrices ? ` • Rs. ${tSub.toLocaleString()}` : ''}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+
+                          <View style={styles.kdsStripActions}>
+                            <TouchableOpacity
+                              style={styles.kdsStripSlipBtn}
+                              onPress={() => handlePrintPendingSlipForTicket(t)}
+                              activeOpacity={0.75}
+                              {...(Platform.OS === 'web' ? ({ title: 'Print Pending Slip' } as any) : {})}
+                            >
+                              <Ionicons name="print-outline" size={12} color="#52141C" />
+                              <Text style={styles.kdsStripSlipText}>Slip</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.kdsStripPayBtn}
+                              onPress={() => handleCreateBillFromTicket(t, true)}
+                              activeOpacity={0.75}
+                              {...(Platform.OS === 'web' ? ({ title: 'Bill & Settle Payment' } as any) : {})}
+                            >
+                              <Ionicons name="card-outline" size={12} color="#FFFFFF" />
+                              <Text style={styles.kdsStripPayText}>Pay</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
                       );
                     })}
                   </ScrollView>
@@ -2759,37 +2976,39 @@ export default function POSTerminalScreen({
 
                       <TouchableOpacity 
                         style={[
-                          styles.holdOrderBtn, 
+                          styles.sendKdsBtn, 
                           isTablet && { flex: 1, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
                           (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.55 }
                         ]}
-                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Send order directly to Kitchen / Juice Bar KDS and print Pending Slip' } as any) : {})}
                         onPress={sendToKitchen}
                         disabled={cart.length === 0}
                         activeOpacity={0.85}
                       >
                         <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="pause-circle-outline" size={16} color="#52141C" style={{ marginRight: 6 }} />
-                          <Text style={[styles.holdOrderBtnText, isTablet && { fontSize: 12 }]}>HOLD / PENDING ORDER</Text>
+                          <Ionicons name="flame-outline" size={16} color="#92400E" style={{ marginRight: 6 }} />
+                          <Text style={[styles.sendKdsBtnText, isTablet && { fontSize: 12 }]}>
+                            SEND TO KDS + PENDING SLIP
+                          </Text>
                         </View>
-                        <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(82, 20, 28, 0.08)', borderColor: 'rgba(82, 20, 28, 0.2)' }]}>
-                          <Text style={[styles.btnShortcutBadgeText, { color: '#52141C' }]}>F8</Text>
+                        <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(146, 64, 14, 0.12)', borderColor: 'rgba(180, 83, 9, 0.35)' }]}>
+                          <Text style={[styles.btnShortcutBadgeText, { color: '#92400E' }]}>F8</Text>
                         </View>
                       </TouchableOpacity>
 
-                      {orderType === 'dine-in' && (role === 'admin' || can('posCanPrintUnpaidBill')) && (
+                      {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
                         <TouchableOpacity 
                           style={[
                             styles.unpaidBillBtn,
                             cart.length === 0 && { opacity: 0.55 }
                           ]}
-                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Print Pending / Unpaid Slip without resending KOT' } as any) : {})}
                           onPress={handlePrintUnpaidBill}
                           disabled={cart.length === 0}
                           activeOpacity={0.85}
                         >
                           <Ionicons name="print-outline" size={15} color="#B91C1C" style={{ marginRight: 6 }} />
-                          <Text style={styles.unpaidBillBtnText}>PRINT UNPAID BILL (غیر ادا شدہ بل)</Text>
+                          <Text style={styles.unpaidBillBtnText}>PRINT PENDING SLIP (غیر ادا شدہ بل)</Text>
                         </TouchableOpacity>
                       )}
                     </>
@@ -3540,14 +3759,15 @@ export default function POSTerminalScreen({
   </Modal>
 
       {/* ========================================================
-          MODAL: RUNNING ORDERS / KITCHEN TICKETS
+          MODAL: SENT TO KDS / RUNNING ORDERS
           ======================================================== */}
       <Modal visible={pendingOrdersModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 580 }]}>
+          <View style={[styles.modalBox, { maxWidth: 640 }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.modalHeaderTitle}>Running Orders ({(tickets || []).length})</Text>
+                <Ionicons name="flame-outline" size={18} color="#B45309" />
+                <Text style={styles.modalHeaderTitle}>Sent to KDS Orders ({(tickets || []).length})</Text>
                 {(tickets || []).length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
                   <TouchableOpacity
                     style={styles.clearAllTicketsBtn}
@@ -3575,7 +3795,7 @@ export default function POSTerminalScreen({
                 </View>
                 <TextInput 
                   style={styles.modalSearchInput}
-                  placeholder="Search ticket #, table, or server..."
+                  placeholder="Search ticket #, table, dish, or server..."
                   placeholderTextColor="#8A7A70"
                   value={pendingOrderSearchQuery}
                   onFocus={() => setIsPendingSearchFocused(true)}
@@ -3588,57 +3808,139 @@ export default function POSTerminalScreen({
                   </TouchableOpacity>
                 ) : null}
               </View>
+
+              {/* KDS Filter Tabs */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                style={{ marginTop: 8 }}
+                contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
+              >
+                {(
+                  [
+                    { id: 'all', label: 'All' },
+                    { id: 'pending', label: 'Pending' },
+                    { id: 'cooking', label: 'Cooking' },
+                    { id: 'ready', label: 'Ready' },
+                    { id: 'takeaway', label: 'Takeaway' },
+                    { id: 'dine-in', label: 'Dine-In' },
+                    { id: 'delivery', label: 'Delivery' },
+                  ] as const
+                ).map((tab) => {
+                  const active = kdsModalFilter === tab.id;
+                  return (
+                    <TouchableOpacity
+                      key={tab.id}
+                      style={[styles.kdsFilterChip, active && styles.kdsFilterChipActive]}
+                      onPress={() => setKdsModalFilter(tab.id)}
+                      activeOpacity={0.75}
+                    >
+                      <Text style={[styles.kdsFilterChipText, active && styles.kdsFilterChipTextActive]}>
+                        {tab.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
             </View>
 
-            <ScrollView style={{ maxHeight: 420, padding: 14 }}>
-              {(tickets || []).filter(t => !pendingOrderSearchQuery || 
-                t.id.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) || 
-                t.tableId?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) ||
-                t.server?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase())
-              ).length === 0 ? (
-                <View style={{ padding: 30, alignItems: 'center' }}>
-                  <Ionicons name="receipt-outline" size={36} color="#CBD5E1" style={{ marginBottom: 6 }} />
-                  <Text style={{ color: '#64748B', fontWeight: '700' }}>No active running orders found.</Text>
-                </View>
-              ) : (
-                (tickets || [])
-                  .filter(t => !pendingOrderSearchQuery || 
-                    t.id.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) || 
-                    t.tableId?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase()) ||
-                    t.server?.toLowerCase().includes(pendingOrderSearchQuery.toLowerCase())
-                  )
-                  .map(t => {
-                    const ticketSubtotal = t.items.reduce((sum, it) => sum + (it.price * it.qty), 0);
+            <ScrollView style={{ maxHeight: 440, padding: 14 }}>
+              {(() => {
+                const filteredTickets = (tickets || []).filter((t) => {
+                  const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
+                  if (kdsModalFilter === 'pending' && t.status !== 'pending') return false;
+                  if (kdsModalFilter === 'cooking' && t.status !== 'cooking') return false;
+                  if (kdsModalFilter === 'ready' && t.status !== 'ready') return false;
+                  if (kdsModalFilter === 'takeaway' && t.tableId !== 'takeaway') return false;
+                  if (kdsModalFilter === 'delivery' && t.tableId !== 'delivery') return false;
+                  if (kdsModalFilter === 'dine-in' && !isTable) return false;
+                  if (pendingOrderSearchQuery.trim()) {
+                    const q = pendingOrderSearchQuery.toLowerCase();
+                    const matchesId = t.id.toLowerCase().includes(q);
+                    const matchesTable = (t.tableId || '').toLowerCase().includes(q) || (t.tableName || '').toLowerCase().includes(q);
+                    const matchesServer = (t.server || '').toLowerCase().includes(q);
+                    const matchesItem = (t.items || []).some((it) => (it.name || '').toLowerCase().includes(q));
+                    if (!matchesId && !matchesTable && !matchesServer && !matchesItem) return false;
+                  }
+                  return true;
+                });
+
+                if (filteredTickets.length === 0) {
+                  return (
+                    <View style={{ padding: 30, alignItems: 'center' }}>
+                      <Ionicons name="receipt-outline" size={36} color="#CBD5E1" style={{ marginBottom: 6 }} />
+                      <Text style={{ color: '#64748B', fontWeight: '700' }}>No matching KDS orders found.</Text>
+                    </View>
+                  );
+                }
+
+                return filteredTickets.map(t => {
+                    const ticketSubtotal = (t.items || []).reduce((sum, it) => sum + (it.price * it.qty), 0);
                     const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
                     const targetTable = isTable ? tables.find(tbl => tbl.id === t.tableId) : null;
                     const tableNameDisplay = targetTable ? targetTable.name : (t.tableName || (t.tableId ? t.tableId.toUpperCase() : 'TAKEAWAY'));
-                    const statusColor = t.status === 'served' ? '#059669' : '#D97706';
-                    const statusBg = t.status === 'served' ? 'rgba(209, 250, 229, 0.85)' : 'rgba(254, 243, 199, 0.85)';
+                    const statusStyleMap: Record<string, { color: string; bg: string }> = {
+                      pending: { color: '#B45309', bg: '#FEF3C7' },
+                      cooking: { color: '#C2410C', bg: '#FFEDD5' },
+                      ready: { color: '#1D4ED8', bg: '#DBEAFE' },
+                      served: { color: '#047857', bg: '#D1FAE5' },
+                    };
+                    const stStyle = statusStyleMap[t.status] || statusStyleMap.pending;
+                    const hasMain = (t.items || []).some(it => (it.station || 'main') === 'main');
+                    const hasJuice = (t.items || []).some(it => (it.station || 'main') === 'juice');
+                    const mainStatus = t.stationStatuses?.main || t.status;
+                    const juiceStatus = t.stationStatuses?.juice || t.status;
+                    const placedTimeStr = t.timePlaced
+                      ? new Date(t.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                      : '';
 
                     return (
                       <View key={t.id} style={styles.ticketCard}>
                         {/* Top Row: Ticket ID + Table & Status Badge */}
                         <View style={styles.ticketCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
                             <Ionicons name="receipt-outline" size={16} color="#52141C" />
-                            <Text style={styles.ticketCardNumber}>Ticket #{t.id.slice(-6).toUpperCase()}</Text>
+                            <Text style={styles.ticketCardNumber}>{t.id}</Text>
                             <View style={styles.ticketTablePill}>
                               <Ionicons name={isTable ? "restaurant-outline" : "bag-handle-outline"} size={11} color="#52141C" />
                               <Text style={styles.ticketTableText}>{tableNameDisplay}</Text>
                             </View>
                           </View>
 
-                          <View style={[styles.ticketStatusPill, { backgroundColor: statusBg, borderColor: statusColor }]}>
-                            <Text style={[styles.ticketStatusText, { color: statusColor }]}>
-                              {t.status.toUpperCase()}
+                          <View style={[styles.ticketStatusPill, { backgroundColor: stStyle.bg, borderColor: stStyle.color }]}>
+                            <Text style={[styles.ticketStatusText, { color: stStyle.color }]}>
+                              {(t.status || 'pending').toUpperCase()}
                             </Text>
                           </View>
+                        </View>
+
+                        {/* KDS Stations Dispatched Badges */}
+                        <View style={styles.ticketStationRow}>
+                          {hasMain && (
+                            <View style={styles.ticketStationBadge}>
+                              <Ionicons name="flame-outline" size={11} color="#92400E" />
+                              <Text style={styles.ticketStationBadgeText}>
+                                Kitchen KDS: {(mainStatus || 'pending').toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          {hasJuice && (
+                            <View style={[styles.ticketStationBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                              <Ionicons name="wine-outline" size={11} color="#1D4ED8" />
+                              <Text style={[styles.ticketStationBadgeText, { color: '#1D4ED8' }]}>
+                                Juice Bar KDS: {(juiceStatus || 'pending').toUpperCase()}
+                              </Text>
+                            </View>
+                          )}
+                          {placedTimeStr ? (
+                            <Text style={styles.ticketPlacedTimeText}>Sent {placedTimeStr}</Text>
+                          ) : null}
                         </View>
 
                         {/* Meta info: Server, Items Count, Running Total */}
                         <View style={styles.ticketMetaRow}>
                           <Text style={styles.ticketMetaText}>
-                            Server: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{t.server || 'Staff'}</Text> • {t.items.reduce((s, i) => s + i.qty, 0)} items
+                            By: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{t.server || 'Staff'}</Text> • {(t.items || []).reduce((s, i) => s + i.qty, 0)} items
                           </Text>
                           {!hidePrices && (
                             <Text style={styles.ticketSubtotalText}>
@@ -3649,7 +3951,7 @@ export default function POSTerminalScreen({
 
                         {/* Items preview list */}
                         <View style={styles.ticketItemsList}>
-                          {t.items.map((it, idx) => (
+                          {(t.items || []).map((it, idx) => (
                             <View key={idx} style={styles.ticketItemRow}>
                               <Text style={styles.ticketItemQty}>{it.qty}x</Text>
                               <Text style={styles.ticketItemName} numberOfLines={1}>{it.name}</Text>
@@ -3660,7 +3962,7 @@ export default function POSTerminalScreen({
                           ))}
                         </View>
 
-                        {/* Interactive Action Row: Cancel / Load Cart / Create Bill & Settle */}
+                        {/* Interactive Action Row: Cancel / Pending Slip / Load Cart / Create Bill & Settle */}
                         <View style={styles.ticketActionRow}>
                           {(role === 'admin' || can('posCanDismissTicket')) && (
                             <TouchableOpacity
@@ -3671,6 +3973,18 @@ export default function POSTerminalScreen({
                             >
                               <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
                               <Text style={styles.ticketCancelBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
+                            <TouchableOpacity
+                              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+                              style={styles.ticketSlipBtn}
+                              onPress={() => handlePrintPendingSlipForTicket(t)}
+                              activeOpacity={0.8}
+                            >
+                              <Ionicons name="print-outline" size={13} color="#92400E" style={{ marginRight: 4 }} />
+                              <Text style={styles.ticketSlipBtnText}>Pending Slip</Text>
                             </TouchableOpacity>
                           )}
 
@@ -3694,18 +4008,18 @@ export default function POSTerminalScreen({
                             activeOpacity={0.8}
                           >
                             <Ionicons
-                              name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'flash'}
+                              name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'card-outline'}
                               size={14}
                               color="#FFFFFF"
                               style={{ marginRight: 4 }}
                             />
-                            <Text style={styles.ticketBillBtnText}>Create Bill & Settle</Text>
+                            <Text style={styles.ticketBillBtnText}>Bill & Settle</Text>
                           </TouchableOpacity>
                         </View>
                       </View>
                     );
-                  })
-              )}
+                  });
+              })()}
             </ScrollView>
           </View>
         </View>
@@ -7393,6 +7707,249 @@ const styles = StyleSheet.create({
     color: '#92400E',
     fontWeight: '700',
     flex: 1,
+  },
+  runningOrdersPillActive: {
+    backgroundColor: 'rgba(254, 243, 199, 0.98)',
+    borderColor: '#D97706',
+  },
+  sendKdsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#D97706',
+    borderRadius: 10,
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    marginBottom: 7,
+  },
+  sendKdsBtnText: {
+    color: '#92400E',
+    fontSize: 12.5,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  kdsToastBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#ECFDF5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#A7F3D0',
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  kdsToastText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#065F46',
+    flex: 1,
+  },
+  kdsLiveStripWrapper: {
+    backgroundColor: '#FFFBEB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  kdsLiveStripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 6,
+  },
+  kdsLiveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#D97706',
+  },
+  kdsLiveStripTitle: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#92400E',
+    letterSpacing: 0.6,
+  },
+  kdsLiveViewAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+    backgroundColor: 'rgba(82, 20, 28, 0.08)',
+  },
+  kdsLiveViewAllText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  kdsLiveStripScroll: {
+    gap: 8,
+    paddingRight: 8,
+  },
+  kdsStripCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    minWidth: 235,
+    maxWidth: 285,
+  },
+  kdsStripTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 6,
+    marginBottom: 2,
+  },
+  kdsStripTarget: {
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#1E293B',
+    flex: 1,
+  },
+  kdsStripStatusPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+    borderWidth: 1,
+  },
+  kdsStripStatusText: {
+    fontSize: 9,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  kdsStripMetaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  kdsStripStation: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  kdsStripMetaSep: {
+    fontSize: 10,
+    color: '#CBD5E1',
+  },
+  kdsStripTicketId: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  kdsStripMetaCount: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  kdsStripActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  kdsStripSlipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 7,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  kdsStripSlipText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  kdsStripPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#52141C',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  kdsStripPayText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  kdsFilterChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  kdsFilterChipActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  kdsFilterChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  kdsFilterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  ticketStationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  ticketStationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  ticketStationBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  ticketPlacedTimeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    marginLeft: 'auto',
+  },
+  ticketSlipBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 8,
+  },
+  ticketSlipBtnText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#92400E',
   },
 });
 
