@@ -2005,100 +2005,149 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
           ) : (
             <>
-              <View style={styles.itemsGrid}>
-              {expiriesPagination.paginatedData.map(({ item, expiry }) => {
-                const isExpired = expiry.status === 'expired';
-                const isCritical = expiry.status === 'critical';
+              <View style={styles.tableWrapper}>
+                <ScrollView
+                  horizontal={!isMobile}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ minWidth: isMobile ? undefined : 1120, width: '100%' }}
+                >
+                  <View style={{ width: '100%' }}>
+                    {/* Desktop / Tablet Column Headers */}
+                    {!isMobile && (
+                      <View style={styles.stockTableHeader}>
+                        <View style={[styles.thCol, { flex: 2.3, minWidth: 190 }]}>
+                          <Text style={styles.thColText}>ITEM & CODE</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.0, minWidth: 170 }]}>
+                          <Text style={styles.thColText}>STORAGE & BATCH</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                          <Text style={styles.thColText}>AT-RISK STOCK</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.1, minWidth: 170 }]}>
+                          <Text style={styles.thColText}>EXPIRY DATE & STATUS</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.4, minWidth: 200, alignItems: 'flex-end', paddingRight: 6 }]}>
+                          <Text style={styles.thColText}>ACTIONS</Text>
+                        </View>
+                      </View>
+                    )}
 
-                return (
-                  <View
-                    key={item.id}
-                    style={[
-                      styles.itemCard,
-                      isExpired && { borderColor: '#F87171', borderWidth: 2 },
-                      isCritical && { borderColor: '#FDBA74', borderWidth: 1.5 },
-                    ]}
-                  >
-                    <View style={styles.itemCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                          {item.itemCode ? (
-                            <View style={styles.skuBadge}>
-                              <Text style={styles.skuBadgeText}>{item.itemCode}</Text>
+                    {/* Table Rows (1 Full Row Per Expiry Item) */}
+                    <View style={{ gap: 6 }}>
+                      {expiriesPagination.paginatedData.map(({ item, expiry }) => {
+                        const isExpired = expiry.status === 'expired';
+                        const isCritical = expiry.status === 'critical';
+                        const expiryBorderColor = isExpired ? '#EF4444' : isCritical ? '#F97316' : expiry.status === 'warning' ? '#F59E0B' : '#10B981';
+
+                        return (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.stockTableRow,
+                              { borderLeftColor: expiryBorderColor },
+                              isMobile && styles.stockTableRowMobile
+                            ]}
+                            {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                          >
+                            {/* 1. Item & Code */}
+                            <View style={[styles.rowCol, { flex: 2.3, minWidth: 190, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                {item.itemCode ? (
+                                  <View style={styles.skuBadgeCompact}>
+                                    <Text style={styles.skuBadgeCompactText}>{item.itemCode}</Text>
+                                  </View>
+                                ) : null}
+                                <Text style={styles.stockRowCategory}>{item.category}</Text>
+                              </View>
+                              <Text style={styles.stockRowTitle} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                              {item.urduName ? (
+                                <Text style={styles.stockRowUrdu} numberOfLines={1}>
+                                  {item.urduName}
+                                </Text>
+                              ) : null}
                             </View>
-                          ) : null}
-                          <Text style={styles.categoryTagText}>{item.category}</Text>
-                        </View>
-                        <Text style={styles.itemCardTitle}>{item.name}</Text>
-                        {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
-                      </View>
 
-                      <View style={[styles.expiryPill, { backgroundColor: expiry.bgColor }]}>
-                        <Ionicons
-                          name={isExpired ? 'alert-circle' : 'timer'}
-                          size={13}
-                          color={expiry.color}
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={[styles.expiryPillText, { color: expiry.color }]}>{expiry.label}</Text>
-                      </View>
-                    </View>
+                            {/* 2. Storage Location & Batch */}
+                            <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, gap: 3 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="location" size={12} color={BRAND.burgundy} />
+                                <Text style={styles.stockRowLocation} numberOfLines={1}>
+                                  {item.location || 'Dry Ration Store'}
+                                </Text>
+                              </View>
+                              {item.batchNumber ? (
+                                <Text style={styles.stockRowBatch} numberOfLines={1}>
+                                  Batch: #{item.batchNumber}
+                                </Text>
+                              ) : null}
+                            </View>
 
-                    <View style={styles.expiryDetailsBox}>
-                      <View style={styles.stockStatRow}>
-                        <View>
-                          <Text style={styles.stockStatLabel}>Current At-Risk Stock</Text>
-                          <Text style={[styles.stockStatValue, isExpired && { color: BRAND.danger }]}>
-                            {item.stock} {item.unit}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.stockStatLabel}>Batch Number</Text>
-                          <Text style={styles.stockStatValue}>{item.batchNumber || 'N/A'}</Text>
-                        </View>
-                      </View>
+                            {/* 3. At-Risk Stock */}
+                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
+                              <Text style={[styles.stockRowQuantity, isExpired && { color: '#DC2626' }]}>
+                                {item.stock} <Text style={{ fontSize: 11, fontWeight: '600', color: BRAND.ink }}>{item.unit}</Text>
+                              </Text>
+                              <Text style={{ fontSize: 10.5, color: '#64748B' }}>
+                                Unit Cost: {item.costPerUnit ? money(item.costPerUnit) : 'N/A'}
+                              </Text>
+                            </View>
 
-                      <View style={{ marginTop: 8, flexDirection: 'row', justifyContent: 'space-between' }}>
-                        <Text style={styles.valLabel}>Storage Location:</Text>
-                        <Text style={[styles.valValue, { fontSize: 12 }]}>{item.location || 'Dry Store'}</Text>
-                      </View>
+                            {/* 4. Expiry Date & Urgency Badge */}
+                            <View style={[styles.rowCol, { flex: 2.1, minWidth: 170, gap: 3 }]}>
+                              <View style={[styles.stockRowExpiryPill, { backgroundColor: expiry.bgColor }]}>
+                                <Ionicons
+                                  name={isExpired ? 'alert-circle' : 'timer'}
+                                  size={11}
+                                  color={expiry.color}
+                                  style={{ marginRight: 3 }}
+                                />
+                                <Text style={[styles.stockRowExpiryText, { color: expiry.color }]}>
+                                  {expiry.label}
+                                </Text>
+                              </View>
+                              {item.expiryDate ? (
+                                <Text style={{ fontSize: 11, fontWeight: '600', color: '#475569' }}>
+                                  Exp: {new Date(item.expiryDate).toLocaleDateString('en-GB')}
+                                </Text>
+                              ) : null}
+                            </View>
 
-                      {item.expiryDate ? (
-                        <View style={{ marginTop: 4, flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={styles.valLabel}>Expiry Date:</Text>
-                          <Text style={[styles.valValue, { fontSize: 12, color: expiry.color }]}>
-                            {new Date(item.expiryDate).toLocaleDateString('en-GB')}
-                          </Text>
-                        </View>
-                      ) : null}
-                    </View>
+                            {/* 5. Actions */}
+                            <View style={[styles.rowCol, { flex: 2.4, minWidth: 200, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }]}>
+                              {canEditInventory && (
+                                <TouchableOpacity
+                                  style={[styles.stockRowUsageBtn, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}
+                                  onPress={() => handleOpenMovement(item, 'usage')}
+                                  activeOpacity={0.8}
+                                  {...(Platform.OS === 'web' ? ({ title: 'Use Immediately in Kitchen' } as any) : {})}
+                                >
+                                  <Ionicons name="restaurant" size={12} color="#6D28D9" style={{ marginRight: 3 }} />
+                                  <Text style={[styles.stockRowUsageText, { color: '#6D28D9' }]}>Use Now</Text>
+                                </TouchableOpacity>
+                              )}
 
-                    {/* Expiry Actions */}
-                    <View style={styles.cardActionsRow}>
-                      {canEditInventory && (
-                        <TouchableOpacity
-                          style={[styles.quickUsageBtn, { backgroundColor: '#EDE9FE', borderColor: '#8B5CF6' }]}
-                          onPress={() => handleOpenMovement(item, 'usage')}
-                        >
-                          <Ionicons name="restaurant" size={15} color="#6D28D9" />
-                          <Text style={[styles.quickUsageBtnText, { color: '#6D28D9' }]}>Use Immediately</Text>
-                        </TouchableOpacity>
-                      )}
-
-                      {(canEditInventory || canDeleteInventory) && (
-                        <TouchableOpacity
-                          style={[styles.quickMovementBtn, { backgroundColor: '#FEE2E2', borderColor: '#EF4444' }]}
-                          onPress={() => handleDisposeWastage(item)}
-                        >
-                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
-                          <Text style={[styles.quickMovementBtnText, { color: '#DC2626' }]}>Dispose as Wastage</Text>
-                        </TouchableOpacity>
-                      )}
+                              {(canEditInventory || canDeleteInventory) && (
+                                <TouchableOpacity
+                                  style={[styles.stockRowReceiveBtn, { backgroundColor: '#DC2626' }]}
+                                  onPress={() => handleDisposeWastage(item)}
+                                  activeOpacity={0.8}
+                                  {...(Platform.OS === 'web' ? ({ title: 'Write off as Kitchen Spoilage / Wastage' } as any) : {})}
+                                >
+                                  <Ionicons name="trash-outline" size={12} color="#FFFFFF" style={{ marginRight: 3 }} />
+                                  <Text style={styles.stockRowReceiveText}>Dispose</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </View>
-                );
-              })}
-            </View>
+                </ScrollView>
+              </View>
             <PaginationControl
               currentPage={expiriesPagination.currentPage}
               totalPages={expiriesPagination.totalPages}
@@ -2375,70 +2424,112 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </Text>
           </View>
 
-          <View style={styles.itemsGrid}>
-            {trackedDishes.map((dish) => {
-              const isTracked = !!dish.trackStock;
-              const stockQty = dish.stockQty || 0;
-              const cost = dish.costPrice || 0;
-              const margin = dish.price > 0 && cost > 0 ? Math.round(((dish.price - cost) / dish.price) * 100) : null;
-
-              return (
-                <View key={dish.id} style={styles.dishCard}>
-                  <View style={styles.dishCardHeader}>
-                    <View style={{ flex: 1, marginRight: 8 }}>
-                      <Text style={styles.dishTitle}>{dish.name}</Text>
-                      <Text style={styles.dishCategory}>{dish.category}</Text>
+          <View style={styles.tableWrapper}>
+            <ScrollView
+              horizontal={!isMobile}
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ minWidth: isMobile ? undefined : 1000, width: '100%' }}
+            >
+              <View style={{ width: '100%' }}>
+                {!isMobile && (
+                  <View style={styles.stockTableHeader}>
+                    <View style={[styles.thCol, { flex: 2.8, minWidth: 200 }]}>
+                      <Text style={styles.thColText}>DISH & CATEGORY</Text>
                     </View>
-                    <View style={styles.dishPriceBox}>
-                      <Text style={styles.dishPrice}>{money(dish.price)}</Text>
-                      {margin !== null ? (
-                        <Text style={styles.dishMargin}>{margin}% Margin</Text>
-                      ) : null}
+                    <View style={[styles.thCol, { flex: 2.0, minWidth: 160 }]}>
+                      <Text style={styles.thColText}>MENU PRICE & MARGIN</Text>
+                    </View>
+                    <View style={[styles.thCol, { flex: 2.2, minWidth: 180 }]}>
+                      <Text style={styles.thColText}>READY PORTIONS AVAILABLE</Text>
+                    </View>
+                    <View style={[styles.thCol, { flex: 2.0, minWidth: 170, alignItems: 'flex-end', paddingRight: 6 }]}>
+                      <Text style={styles.thColText}>QUICK STOCK STEPPER</Text>
                     </View>
                   </View>
+                )}
 
-                  <View style={styles.dishStockControlRow}>
-                    <View>
-                      <Text style={styles.dishStockLabel}>Ready Portions Available</Text>
-                      <Text
+                <View style={{ gap: 6 }}>
+                  {trackedDishes.map((dish) => {
+                    const isTracked = !!dish.trackStock;
+                    const stockQty = dish.stockQty || 0;
+                    const cost = dish.costPrice || 0;
+                    const margin = dish.price > 0 && cost > 0 ? Math.round(((dish.price - cost) / dish.price) * 100) : null;
+
+                    return (
+                      <View
+                        key={dish.id}
                         style={[
-                          styles.dishStockValue,
-                          stockQty <= 0 && isTracked && { color: BRAND.danger },
-                          stockQty > 0 && stockQty <= 5 && isTracked && { color: BRAND.warn },
+                          styles.stockTableRow,
+                          {
+                            borderLeftColor: !isTracked ? '#94A3B8' : stockQty <= 0 ? BRAND.danger : stockQty <= 5 ? BRAND.warn : BRAND.success,
+                          },
+                          isMobile && styles.stockTableRowMobile
                         ]}
+                        {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
                       >
-                        {isTracked ? `${stockQty} Portions Left` : 'Unlimited / Untracked'}
-                      </Text>
-                    </View>
+                        {/* 1. Dish Name & Category */}
+                        <View style={[styles.rowCol, { flex: 2.8, minWidth: 200, gap: 2 }]}>
+                          <Text style={styles.stockRowTitle} numberOfLines={1}>{dish.name}</Text>
+                          <Text style={styles.stockRowCategory}>{dish.category}</Text>
+                        </View>
 
-                    {canEditInventory && (
-                      <View style={styles.stepperRow}>
-                        <TouchableOpacity
-                          style={styles.stepperBtn}
-                          onPress={() => handleAdjustDishStock(dish, -1)}
-                        >
-                          <Ionicons name="remove" size={18} color={BRAND.ink} />
-                        </TouchableOpacity>
+                        {/* 2. Menu Price & Margin */}
+                        <View style={[styles.rowCol, { flex: 2.0, minWidth: 160, gap: 2 }]}>
+                          <Text style={styles.stockRowValuation}>{money(dish.price)}</Text>
+                          {margin !== null ? (
+                            <Text style={styles.dishMargin}>{margin}% Margin</Text>
+                          ) : null}
+                        </View>
 
-                        <TouchableOpacity
-                          style={[styles.stepperBtn, { backgroundColor: BRAND.burgundy }]}
-                          onPress={() => handleAdjustDishStock(dish, 1)}
-                        >
-                          <Ionicons name="add" size={18} color="#FFF" />
-                        </TouchableOpacity>
+                        {/* 3. Ready Portions */}
+                        <View style={[styles.rowCol, { flex: 2.2, minWidth: 180, gap: 2 }]}>
+                          <Text
+                            style={[
+                              styles.stockRowQuantity,
+                              stockQty <= 0 && isTracked && { color: BRAND.danger },
+                              stockQty > 0 && stockQty <= 5 && isTracked && { color: BRAND.warn },
+                            ]}
+                          >
+                            {isTracked ? `${stockQty} Portions Left` : 'Unlimited / Untracked'}
+                          </Text>
+                        </View>
 
-                        <TouchableOpacity
-                          style={[styles.stepperBtn, { backgroundColor: BRAND.goldSoft }]}
-                          onPress={() => handleAdjustDishStock(dish, 5)}
-                        >
-                          <Text style={{ fontWeight: '800', color: BRAND.burgundy, fontSize: 13 }}>+5</Text>
-                        </TouchableOpacity>
+                        {/* 4. Quick Stepper */}
+                        <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }]}>
+                          {canEditInventory && (
+                            <View style={styles.stepperRow}>
+                              <TouchableOpacity
+                                style={styles.stepperBtn}
+                                onPress={() => handleAdjustDishStock(dish, -1)}
+                                {...(Platform.OS === 'web' ? ({ title: 'Deduct 1 Portion' } as any) : {})}
+                              >
+                                <Ionicons name="remove" size={16} color={BRAND.ink} />
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[styles.stepperBtn, { backgroundColor: BRAND.burgundy }]}
+                                onPress={() => handleAdjustDishStock(dish, 1)}
+                                {...(Platform.OS === 'web' ? ({ title: 'Add 1 Portion' } as any) : {})}
+                              >
+                                <Ionicons name="add" size={16} color="#FFF" />
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[styles.stepperBtn, { backgroundColor: BRAND.goldSoft }]}
+                                onPress={() => handleAdjustDishStock(dish, 5)}
+                                {...(Platform.OS === 'web' ? ({ title: 'Add 5 Portions' } as any) : {})}
+                              >
+                                <Text style={{ fontWeight: '800', color: BRAND.burgundy, fontSize: 12 }}>+5</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </View>
                       </View>
-                    )}
-                  </View>
+                    );
+                  })}
                 </View>
-              );
-            })}
+              </View>
+            </ScrollView>
           </View>
         </View>
       )}
