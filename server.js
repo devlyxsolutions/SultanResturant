@@ -4865,21 +4865,21 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 8.6 One-Click Downloadable Dedicated Station Print Agent Setup Pack (.zip)
+  // 8.6 One-Click Downloadable Dedicated Station Print Agent Setup Pack (.zip - Zero unsigned .exe, Windows 11 Smart App Control safe!)
   if (url.pathname === '/api/print-agent/download' && req.method === 'GET') {
     try {
       const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
-      const exePath = path.join(__dirname, 'bin', 'SultanPrintAgent.exe');
-      if (!fs.existsSync(exePath) || !printerHelper || typeof printerHelper.buildZipBuffer !== 'function') {
+      const psScriptPath = path.join(__dirname, 'JuiceBar-Printer-Agent', 'SultanPrintAgent.ps1');
+      if (!fs.existsSync(psScriptPath) || !printerHelper || typeof printerHelper.buildZipBuffer !== 'function') {
         res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Print Agent binary not available on server' }));
+        res.end(JSON.stringify({ error: 'Print Agent script not available on server' }));
         return;
       }
 
       const hostRaw = (req.headers.host || '192.168.1.10:5050').split(':')[0];
       const serverUrl = `http://${hostRaw}:5050`;
       const stationLabel = station === 'juice' ? 'JuiceBar' : 'Kitchen';
-      const exeData = fs.readFileSync(exePath);
+      const psScriptData = fs.readFileSync(psScriptPath);
 
       const agentConfig = [
         '# Sultan Restaurant Dedicated Station Thermal Print Agent Config',
@@ -4891,10 +4891,11 @@ async function handleRequest(req, res) {
 
       const startBat = [
         '@echo off',
-        `title Sultan ${stationLabel} Direct Thermal Printer Agent`,
+        `title Sultan ${stationLabel} Printer Agent`,
         'cd /d "%~dp0"',
-        'SultanPrintAgent.exe',
-        'pause',
+        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1"',
+        'exit /b 0',
         '',
       ].join('\r\n');
 
@@ -4902,9 +4903,9 @@ async function handleRequest(req, res) {
         '@echo off',
         `title Test Sultan ${stationLabel} Printer`,
         'cd /d "%~dp0"',
-        'SultanPrintAgent.exe --test',
-        'echo.',
-        'pause',
+        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1" -Test',
+        'exit /b 0',
         '',
       ].join('\r\n');
 
@@ -4912,16 +4913,13 @@ async function handleRequest(req, res) {
         '@echo off',
         `title Install Sultan ${stationLabel} Printer Auto-Start`,
         'cd /d "%~dp0"',
+        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
         'set "STARTUP=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
-        `set "TARGET=%~dp0SultanPrintAgent.exe"`,
         `set "LNK=%STARTUP%\\Sultan-${stationLabel}-Printer.lnk"`,
-        'powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\'%LNK%\'); $s.TargetPath = \'%TARGET%\'; $s.WorkingDirectory = \'%~dp0\'; $s.WindowStyle = 7; $s.Save()"',
-        'echo.',
-        `echo [OK] Sultan ${stationLabel} Printer Agent added to Windows Startup!`,
-        'echo It will now launch automatically every morning when this PC turns on.',
-        'echo Starting agent right now...',
-        'start /min "" "%TARGET%"',
-        'timeout /t 4 >nul',
+        'powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\'%LNK%\'); $s.TargetPath = \'powershell.exe\'; $s.Arguments = \'-STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \\"%~dp0SultanPrintAgent.ps1\\"\'; $s.WorkingDirectory = \'%~dp0\'; $s.WindowStyle = 7; $s.Save()"',
+        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1"',
+        'timeout /t 2 >nul',
+        'exit /b 0',
         '',
       ].join('\r\n');
 
@@ -4932,18 +4930,16 @@ async function handleRequest(req, res) {
         '',
         'STEP 1: Extract this ZIP folder anywhere on the Juice Bar PC (e.g. Desktop).',
         'STEP 2: Make sure the Juice Bar USB Thermal Printer is plugged into THIS PC.',
-        'STEP 3: Double-click "Start-JuiceBar-Printer.bat" (or run "Install-AutoStart-On-Boot.bat" once so it starts automatically every day!).',
+        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" — a permanent Desktop GUI window opens!`,
+        'STEP 4: Click "Print Test Slip" inside the window, and run "Install-AutoStart-On-Boot.bat" once for daily auto-start.',
         '',
-        'What this solves:',
-        '- Juice Bar orders (Coffee, Tea, Ice Coffee, Mocktails, Shakes, Ice Cream, Cold Drinks)',
-        '  print ONLY on THIS Juice Bar USB printer (zero browser popups!).',
-        '- Kitchen orders print ONLY on the Kitchen printer (zero conflict!).',
+        'Windows 11 Safe: Uses Microsoft-signed PowerShell (no unsigned .exe blocked by Smart App Control!).',
         `- Pre-configured Server Hub: ${serverUrl}`,
         '',
       ].join('\r\n');
 
       const zipBuf = printerHelper.buildZipBuffer([
-        { name: 'SultanPrintAgent.exe', data: exeData },
+        { name: 'SultanPrintAgent.ps1', data: psScriptData },
         { name: 'agent-config.txt', data: agentConfig },
         { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
         { name: `Test-${stationLabel}-Printer.bat`, data: testBat },

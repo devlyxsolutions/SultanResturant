@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Modal,
   View,
@@ -55,9 +55,13 @@ export default function StationPrinterModal({
   const accent = isJuice ? '#FF9500' : '#D5A943';
   const title = isJuice ? 'Juice Bar Dedicated Printer Setup' : 'Main Kitchen Printer Setup';
 
+  const onStatusUpdatedRef = useRef(onStatusUpdated);
+  onStatusUpdatedRef.current = onStatusUpdated;
+
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [statusData, setStatusData] = useState<StationPrinterStatusResponse | null>(null);
 
   const [mode, setMode] = useState<PrinterMode>(isJuice ? 'agent' : 'windows');
@@ -82,53 +86,61 @@ export default function StationPrinterModal({
         setPort(String(stationInfo.config.port || 9100));
       }
 
-      if (onStatusUpdated && stationInfo) {
+      const cb = onStatusUpdatedRef.current;
+      if (cb && stationInfo) {
         const cfg = stationInfo.config;
         if (cfg.mode === 'agent') {
           const online = !!stationInfo.agent?.online;
-          onStatusUpdated({
+          cb({
             online,
             mode: 'agent',
             label: online
               ? `${stationInfo.agent?.activePrinter || 'USB Printer'}`
-              : 'Setup Juice Printer',
+              : 'Connect Juice Printer',
           });
         } else if (cfg.mode === 'network') {
-          onStatusUpdated({
+          cb({
             online: !!cfg.host,
             mode: 'network',
             label: cfg.host ? `LAN ${cfg.host}` : 'Set IP',
           });
         } else if (cfg.mode === 'windows') {
-          onStatusUpdated({
+          cb({
             online: true,
             mode: 'windows',
             label: cfg.printerName || 'POS-80',
           });
         } else {
-          onStatusUpdated({ online: false, mode: 'disabled', label: 'Disabled' });
+          cb({ online: false, mode: 'disabled', label: 'Disabled' });
         }
       }
     } catch {
       // Ignore transient network errors
     }
-  }, [isJuice, onStatusUpdated]);
+  }, [isJuice]);
 
+  // Only initialize when modal opens — NEVER re-run on parent 1-second clock ticks!
   useEffect(() => {
     if (!visible) return;
-    setFeedback(null);
-    setLoading(true);
-    fetchStatus(true).finally(() => setLoading(false));
-    const timer = setInterval(() => fetchStatus(false), 4000);
-    return () => clearInterval(timer);
+    let active = true;
+    fetchStatus(true).finally(() => {
+      if (active) setLoading(false);
+    });
+    const timer = setInterval(() => {
+      if (active) fetchStatus(false);
+    }, 5000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
   }, [visible, fetchStatus]);
 
   const stationInfo = statusData ? (isJuice ? statusData.juice : statusData.kitchen) : null;
   const agent = stationInfo?.agent;
   const agentOnline = !!agent?.online;
-  const agentPrinters = Array.isArray(agent?.availablePrinters) ? agent!.availablePrinters : [];
+  const agentPrinters = Array.isArray(agent?.availablePrinters) ? agent.availablePrinters : [];
   const serverWindowsPrinters = Array.isArray(statusData?.serverWindowsPrinters)
-    ? statusData!.serverWindowsPrinters
+    ? statusData.serverWindowsPrinters
     : ['POS-80'];
 
   const handleSave = async () => {
@@ -169,14 +181,42 @@ export default function StationPrinterModal({
     }
   };
 
-  const handleDownloadAgent = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  const handleDownloadAgent = async () => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined' || typeof document === 'undefined') {
+      return;
+    }
+    setDownloading(true);
+    setFeedback(null);
+    const filename = `Sultan-${isJuice ? 'JuiceBar' : 'Kitchen'}-Printer-Setup.zip`;
+    try {
       const base = getApiBaseUrl();
-      window.location.href = `${base}/api/print-agent/download?station=${station}`;
+      const res = await fetch(`${base}/api/print-agent/download?station=${station}`);
+      if (!res.ok) throw new Error('Server returned HTTP ' + res.status);
+      const blob = await res.blob();
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = blobUrl;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => {
+        try {
+          document.body.removeChild(a);
+          URL.revokeObjectURL(blobUrl);
+        } catch {}
+      }, 2000);
       setFeedback({
         type: 'ok',
-        text: `Downloading Sultan-${isJuice ? 'JuiceBar' : 'Kitchen'}-Printer-Setup.zip — extract it on the ${isJuice ? 'Juice Bar' : 'Kitchen'} PC and run Install-AutoStart-On-Boot.bat!`,
+        text: `Downloaded ${filename}! Extract the ZIP on the ${isJuice ? 'Juice Bar' : 'Kitchen'} PC and double-click Start-${isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat.`,
       });
+    } catch (e: any) {
+      setFeedback({
+        type: 'err',
+        text: e?.message || 'Download failed — please check connection to server.',
+      });
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -206,7 +246,7 @@ export default function StationPrinterModal({
     }
   };
 
-  const modeOptions: Array<{ id: PrinterMode; label: string; sub: string; icon: any }> = [
+  const modeOptions: { id: PrinterMode; label: string; sub: string; icon: any }[] = [
     {
       id: 'agent',
       label: isJuice ? 'Juice Bar PC USB (Recommended)' : 'Remote PC USB Agent',
@@ -311,29 +351,32 @@ export default function StationPrinterModal({
                         <Text style={styles.agentStatusSub}>
                           {agentOnline
                             ? `Live zero-popup ESC/POS link active (${agent?.ip || 'LAN'}). Pending queue: ${stationInfo?.pendingJobs || 0}`
-                            : `Run the tiny 16KB Print Agent on the ${isJuice ? 'Juice Bar' : 'Kitchen'} PC where the USB printer is plugged in.`}
+                            : `Run the dedicated Desktop Printer Agent on the ${isJuice ? 'Juice Bar' : 'Kitchen'} PC where the USB printer is plugged in.`}
                         </Text>
                       </View>
                     </View>
 
                     {/* Download Setup Pack Button */}
                     <TouchableOpacity
-                      style={[styles.downloadBtn, { backgroundColor: accent }]}
+                      style={[styles.downloadBtn, { backgroundColor: accent, opacity: downloading ? 0.7 : 1 }]}
                       onPress={handleDownloadAgent}
+                      disabled={downloading}
                       activeOpacity={0.85}
                     >
                       <Ionicons name="cloud-download-outline" size={18} color="#111827" />
                       <Text style={styles.downloadBtnText}>
-                        Download {isJuice ? 'Juice Bar' : 'Kitchen'} Printer Agent (.zip)
+                        {downloading
+                          ? 'Preparing Download...'
+                          : `Download ${isJuice ? 'Juice Bar' : 'Kitchen'} Printer Agent (.zip)`}
                       </Text>
                     </TouchableOpacity>
 
                     {/* 3-Step Quick Guide */}
                     <View style={styles.stepsBox}>
-                      <Text style={styles.stepsHeading}>Quick 30-Second Setup (On {isJuice ? 'Juice Bar' : 'Kitchen'} PC):</Text>
-                      <Text style={styles.stepLine}>1. Click Download above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC and extract the ZIP folder.</Text>
-                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Test-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> to verify your USB printer.</Text>
-                      <Text style={styles.stepLine}>3. Double-click <Text style={styles.codeInline}>Install-AutoStart-On-Boot.bat</Text> once — starts automatically every day!</Text>
+                      <Text style={styles.stepsHeading}>Quick Setup (On {isJuice ? 'Juice Bar' : 'Kitchen'} PC):</Text>
+                      <Text style={styles.stepLine}>1. Download the ZIP above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC and extract the folder.</Text>
+                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Start-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> — a permanent Desktop status window opens!</Text>
+                      <Text style={styles.stepLine}>3. Click <Text style={styles.codeInline}>Print Test Slip</Text> inside the window, and run <Text style={styles.codeInline}>Install-AutoStart-On-Boot.bat</Text> once for daily auto-start.</Text>
                     </View>
 
                     {/* Printer Selection on Remote PC */}

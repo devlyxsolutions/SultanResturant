@@ -57,7 +57,7 @@ export function resolveItemStation(
 
 export function resolveMenuCatalogStation(
   ticketItem: { id?: string; name?: string; station?: string; category?: string; region?: string },
-  menuItems?: Array<{ id?: string; name?: string; station?: string; category?: string; region?: string }>,
+  menuItems?: { id?: string; name?: string; station?: string; category?: string; region?: string }[],
   autoRouteBeverages: boolean = true
 ): StationType {
   if (!autoRouteBeverages) return 'main';
