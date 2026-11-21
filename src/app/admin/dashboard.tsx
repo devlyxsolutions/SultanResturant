@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, Invoice } from '../../store/restaurantStore';
+import { useRestaurantStore } from '../../store/restaurantStore';
 import { useShiftStore } from '../../store/shiftStore';
 import { useOpsStore } from '../../store/opsStore';
 import { useRolePermissions } from '../../store/roleStore';
@@ -176,23 +176,21 @@ export default function AdminDashboard() {
       }
     });
 
-    const totalRev = todaysSales || 1;
-
     return {
       dineIn: { 
         count: dineInCount, 
         revenue: dineInSales, 
-        pct: Math.round((dineInSales / totalRev) * 100) || (todaysInvoices.length === 0 ? 68 : 0) 
+        pct: todaysSales > 0 ? Math.round((dineInSales / todaysSales) * 100) : 0 
       },
       takeaway: { 
         count: takeawayCount, 
         revenue: takeawaySales, 
-        pct: Math.round((takeawaySales / totalRev) * 100) || (todaysInvoices.length === 0 ? 22 : 0) 
+        pct: todaysSales > 0 ? Math.round((takeawaySales / todaysSales) * 100) : 0 
       },
       delivery: { 
         count: deliveryCount, 
         revenue: deliverySales, 
-        pct: Math.round((deliverySales / totalRev) * 100) || (todaysInvoices.length === 0 ? 10 : 0) 
+        pct: todaysSales > 0 ? Math.round((deliverySales / todaysSales) * 100) : 0 
       },
     };
   }, [todaysInvoices, todaysSales]);
@@ -215,15 +213,15 @@ export default function AdminDashboard() {
       }
     });
 
-    const total = (cash + card + online) || 1;
+    const total = cash + card + online;
     return {
-      cash: { amount: cash, pct: Math.round((cash / total) * 100) || 60 },
-      card: { amount: card, pct: Math.round((card / total) * 100) || 30 },
-      online: { amount: online, pct: Math.round((online / total) * 100) || 10 },
+      cash: { amount: cash, pct: total > 0 ? Math.round((cash / total) * 100) : 0 },
+      card: { amount: card, pct: total > 0 ? Math.round((card / total) * 100) : 0 },
+      online: { amount: online, pct: total > 0 ? Math.round((online / total) * 100) : 0 },
     };
   }, [todaysInvoices]);
 
-  // Hourly Trend Data (12 PM to 11 PM)
+  // Hourly Trend Data (12 PM to 11 PM) — strictly live invoice data
   const hourlyData = useMemo(() => {
     const hours = [
       { label: '12 PM', hour: 12 },
@@ -249,15 +247,14 @@ export default function AdminDashboard() {
       hourlySalesMap[h].count += 1;
     });
 
-    const defaultRatios = [18, 42, 65, 25, 20, 35, 50, 85, 95, 100, 70, 30];
-    const maxSales = Math.max(...hours.map((_, i) => hourlySalesMap[hours[i].hour]?.amount || defaultRatios[i] * 120), 1000);
+    const maxSales = Math.max(...hours.map(h => hourlySalesMap[h.hour]?.amount || 0), 0);
 
-    return hours.map((h, i) => {
+    return hours.map((h) => {
       const real = hourlySalesMap[h.hour];
-      const sales = real && real.amount > 0 ? real.amount : Math.round((defaultRatios[i] / 100) * (todaysSales > 0 ? todaysSales * 0.22 : 14500));
-      const orders = real && real.count > 0 ? real.count : Math.max(1, Math.round(sales / (aov || 1200)));
-      const heightPct = Math.min(100, Math.max(12, Math.round((sales / maxSales) * 100)));
-      const isPeak = i === 8 || i === 9; // 8-9 PM
+      const sales = real ? real.amount : 0;
+      const orders = real ? real.count : 0;
+      const heightPct = maxSales > 0 && sales > 0 ? Math.min(100, Math.max(10, Math.round((sales / maxSales) * 100))) : 0;
+      const isPeak = maxSales > 0 && sales === maxSales;
 
       return {
         ...h,
@@ -267,9 +264,37 @@ export default function AdminDashboard() {
         isPeak,
       };
     });
-  }, [todaysInvoices, todaysSales, aov]);
+  }, [todaysInvoices]);
 
-  // Top Selling Dishes Table
+  const peakHourlySlot = useMemo(() => {
+    return hourlyData.find(h => h.isPeak && h.sales > 0) || null;
+  }, [hourlyData]);
+
+  // Live Kitchen vs Juice Bar station breakdown
+  const stationStats = useMemo(() => {
+    let mainCooking = 0;
+    let mainPending = 0;
+    let juiceActive = 0;
+    let juicePending = 0;
+    tickets.forEach(tk => {
+      if (tk.status === 'served') return;
+      const items = tk.items || [];
+      const mainItems = items.filter(it => it.station !== 'juice' && it.itemStatus !== 'served');
+      const juiceItems = items.filter(it => it.station === 'juice' && it.itemStatus !== 'served');
+      if (mainItems.length > 0) {
+        if (tk.status === 'cooking' || tk.stationStatuses?.main === 'cooking') mainCooking++;
+        else mainPending++;
+      }
+      if (juiceItems.length > 0) {
+        const qtySum = juiceItems.reduce((s, it) => s + (it.qty || 1), 0);
+        if (tk.status === 'cooking' || tk.stationStatuses?.juice === 'cooking') juiceActive += qtySum;
+        else juicePending += qtySum;
+      }
+    });
+    return { mainCooking, mainPending, juiceActive, juicePending };
+  }, [tickets]);
+
+  // Top Selling Dishes Table — strictly live invoice data
   const topDishes = useMemo(() => {
     const dishMap: { [key: string]: { name: string; qty: number; revenue: number; category: string } } = {};
 
@@ -290,68 +315,15 @@ export default function AdminDashboard() {
       }
     });
 
-    const list = Object.values(dishMap);
-    if (list.length >= 3) {
-      return list.sort((a, b) => b.qty - a.qty).slice(0, 5);
-    }
-
-    return [
-      { name: 'Mutton Shinwari Karahi (1 KG)', category: 'Special Karahi', qty: 18, revenue: 48600, tag: 'Best Seller' },
-      { name: 'Chicken Dum Biryani Special', category: 'Rice & Biryani', qty: 26, revenue: 20800, tag: 'High Volume' },
-      { name: 'Reshmi Kabab Platter (8 Pcs)', category: 'BBQ Specials', qty: 14, revenue: 19600, tag: 'Trending' },
-      { name: 'Fresh Mint Margarita Cooler', category: 'Beverages', qty: 32, revenue: 11200, tag: 'Fast Moving' },
-      { name: 'Sultan Special Roghni Naan', category: 'Tandoor', qty: 54, revenue: 8100, tag: 'Top Side' },
-    ];
+    return Object.values(dishMap)
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 5);
   }, [todaysInvoices]);
 
-  // Recent Settled Invoices Table
+  // Recent Settled Invoices Table — strictly live invoice data
   const recentInvoices = useMemo(() => {
-    if (todaysInvoices.length > 0) {
-      return todaysInvoices.slice(0, 5);
-    }
-    return [
-      {
-        id: 'INV-1092',
-        tableName: 'Table T-06 (Majlis)',
-        orderType: 'dine-in',
-        server: 'Rashid Ali',
-        items: [{ qty: 4 }],
-        total: 6850,
-        payments: [{ type: 'card' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 750,
-      },
-      {
-        id: 'INV-1091',
-        tableName: 'Takeaway Counter #1',
-        orderType: 'takeaway',
-        server: 'Cashier Terminal',
-        items: [{ qty: 2 }],
-        total: 2450,
-        payments: [{ type: 'cash' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 720,
-      },
-      {
-        id: 'INV-1090',
-        tableName: 'Table T-12 (Executive)',
-        orderType: 'dine-in',
-        server: 'Hamza Khan',
-        items: [{ qty: 6 }],
-        total: 11200,
-        payments: [{ type: 'card' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 690,
-      },
-      {
-        id: 'INV-1089',
-        tableName: 'Delivery FoodPanda',
-        orderType: 'delivery',
-        server: 'Online Dispatch',
-        items: [{ qty: 3 }],
-        total: 3900,
-        payments: [{ type: 'online' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 660,
-      },
-    ] as unknown as Invoice[];
-  }, [todaysInvoices, todayTimestamp]);
+    return todaysInvoices.slice(0, 5);
+  }, [todaysInvoices]);
 
   // -------------------------------------------------------------
   // CULINARY ANALYTICS (REGION, CATEGORY & ITEM-WISE PERFORMANCE)
@@ -452,45 +424,9 @@ export default function AdminDashboard() {
     const fallbackRegionColors = ['#52141C', '#DC2626', '#0284C7', '#059669', '#D97706', '#7C3AED', '#2563EB', '#E11D48'];
     const fallbackCategoryColors = ['#52141C', '#B45309', '#047857', '#4338CA', '#0369A1', '#7E22CE', '#BE185D', '#64748B'];
 
-    let formattedRegions = Object.values(regionMap).sort((a, b) => b.revenue - a.revenue);
-    let formattedCategories = Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
-    let formattedItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty || b.revenue - a.revenue);
-
-    // If no settled orders yet, provide realistic preview data
-    if (formattedRegions.length === 0) {
-      formattedRegions = [
-        { name: 'Pakistani', revenue: 76500, qty: 58, topDishName: 'Mutton Shinwari Karahi (1 KG)', topDishQty: 18 },
-        { name: 'Chinese', revenue: 28400, qty: 32, topDishName: 'Chicken Manchurian & Egg Fried Rice', topDishQty: 14 },
-        { name: 'Continental', revenue: 21600, qty: 22, topDishName: 'Grilled Chicken Alfredo Pasta', topDishQty: 11 },
-        { name: 'Arabic', revenue: 16800, qty: 15, topDishName: 'Arabic Chicken Mandi Platter', topDishQty: 8 },
-        { name: 'Fast Food', revenue: 9800, qty: 18, topDishName: 'Crispy Zinger Club Burger', topDishQty: 9 },
-      ];
-      totalRev = 153100;
-      totalUnits = 145;
-    }
-
-    if (formattedCategories.length === 0) {
-      formattedCategories = [
-        { name: 'Special Karahi & Handi', revenue: 58200, qty: 24, topDishName: 'Mutton Shinwari Karahi', topDishQty: 18 },
-        { name: 'Rice & Dum Biryani', revenue: 32400, qty: 38, topDishName: 'Chicken Dum Biryani Special', topDishQty: 26 },
-        { name: 'Chinese & Wok Specials', revenue: 28400, qty: 32, topDishName: 'Chicken Manchurian', topDishQty: 14 },
-        { name: 'BBQ & Kabab Platters', revenue: 24800, qty: 18, topDishName: 'Reshmi Kabab Platter', topDishQty: 12 },
-        { name: 'Continental & Pasta', revenue: 21600, qty: 22, topDishName: 'Alfredo Pasta', topDishQty: 11 },
-        { name: 'Beverages & Coolers', revenue: 14200, qty: 45, topDishName: 'Mint Margarita Cooler', topDishQty: 32 },
-      ];
-    }
-
-    if (formattedItems.length === 0) {
-      formattedItems = [
-        { name: 'Mutton Shinwari Karahi (1 KG)', category: 'Special Karahi', region: 'Pakistani', qty: 18, revenue: 48600 },
-        { name: 'Chicken Dum Biryani Special', category: 'Rice & Biryani', region: 'Pakistani', qty: 26, revenue: 20800 },
-        { name: 'Chicken Manchurian & Egg Fried Rice', category: 'Chinese', region: 'Chinese', qty: 14, revenue: 15400 },
-        { name: 'Grilled Chicken Alfredo Pasta', category: 'Continental', region: 'Continental', qty: 11, revenue: 14850 },
-        { name: 'Reshmi Kabab Platter (8 Pcs)', category: 'BBQ Specials', region: 'Pakistani', qty: 12, revenue: 16800 },
-        { name: 'Fresh Mint Margarita Cooler', category: 'Beverages', region: 'Pakistani', qty: 32, revenue: 11200 },
-        { name: 'Sultan Special Roghni Naan', category: 'Tandoor', region: 'Pakistani', qty: 54, revenue: 8100 },
-      ];
-    }
+    const formattedRegions = Object.values(regionMap).sort((a, b) => b.revenue - a.revenue);
+    const formattedCategories = Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
+    const formattedItems = Object.values(itemMap).sort((a, b) => b.qty - a.qty || b.revenue - a.revenue);
 
     const maxItemQty = Math.max(...formattedItems.map(i => i.qty), 1);
     const effectiveTotalRev = totalRev || 1;
@@ -1175,7 +1111,7 @@ export default function AdminDashboard() {
             </View>
             <View style={styles.frostedChip}>
               <Ionicons name="speedometer-outline" size={11} color="#A7F3D0" />
-              <Text style={styles.frostedChipText}>~12-14 Min Lead</Text>
+              <Text style={styles.frostedChipText}>{activeOrders > 0 ? 'Live Kitchen Queue' : 'Kitchen Idle'}</Text>
             </View>
             <View style={styles.frostedChip}>
               <Ionicons name="people-outline" size={11} color="#F3D179" />
@@ -1266,7 +1202,15 @@ export default function AdminDashboard() {
           <View style={styles.chartBottomInfo}>
             <Ionicons name="information-circle-outline" size={16} color={BRAND.textMuted} style={{ marginRight: 6 }} />
             <Text style={styles.chartNote}>
-              Highest revenue concentration observed between <Text style={{ fontWeight: '700', color: BRAND.textPrimary }}>8:00 PM – 10:30 PM</Text> (Dinner Prime).
+              {peakHourlySlot ? (
+                <>
+                  Peak revenue hour observed at{' '}
+                  <Text style={{ fontWeight: '700', color: BRAND.textPrimary }}>{peakHourlySlot.label}</Text> (
+                  {canViewRevenue ? `Rs. ${peakHourlySlot.sales.toLocaleString()}` : `${peakHourlySlot.orders} orders`}).
+                </>
+              ) : (
+                'No sales recorded in this period yet — live hourly bars will populate automatically as orders settle.'
+              )}
             </Text>
           </View>
         </View>
@@ -1463,7 +1407,15 @@ export default function AdminDashboard() {
 
               {/* Graphical Visualization Body */}
               <View style={styles.culinaryCardBody}>
-                {regionGraphMode === 'donut' ? (
+                {regionSales.length === 0 ? (
+                  <View style={{ paddingVertical: 36, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Ionicons name="pie-chart-outline" size={28} color="#CBD5E1" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: BRAND.textSecondary }}>No Cuisine Sales Yet</Text>
+                    <Text style={{ fontSize: 11.5, color: BRAND.textMuted, textAlign: 'center' }}>
+                      Region breakdown appears live once bills are settled.
+                    </Text>
+                  </View>
+                ) : regionGraphMode === 'donut' ? (
                   <View style={styles.donutCenteringWrap}>
                     <SvgDonutChart
                       data={regionDonutData}
@@ -1471,7 +1423,7 @@ export default function AdminDashboard() {
                       thickness={22}
                       plain={true}
                       compactLegend={true}
-                      centerTitle={canViewRevenue ? `Rs. ${(totalCulinaryRevenue / 1000).toFixed(0)}k` : `${totalCulinaryUnits}`}
+                      centerTitle={canViewRevenue ? `Rs. ${(totalCulinaryRevenue / 1000).toFixed(1)}k` : `${totalCulinaryUnits}`}
                       centerSubtitle="CUISINES"
                     />
                   </View>
@@ -1515,7 +1467,13 @@ export default function AdminDashboard() {
               <View style={styles.culinaryBoxFooter}>
                 <Ionicons name="sparkles" size={13} color={BRAND.gold} />
                 <Text style={styles.culinaryFooterNote} numberOfLines={1}>
-                  Leading: <Text style={{ fontWeight: '800', color: BRAND.burgundy }}>{regionSales[0]?.name || 'Pakistani'}</Text> ({regionSales[0]?.pct || 0}% volume)
+                  {regionSales[0] ? (
+                    <>
+                      Leading: <Text style={{ fontWeight: '800', color: BRAND.burgundy }}>{regionSales[0].name}</Text> ({regionSales[0].pct}% volume)
+                    </>
+                  ) : (
+                    'Awaiting settled orders for region metrics'
+                  )}
                 </Text>
               </View>
             </View>
@@ -1549,6 +1507,15 @@ export default function AdminDashboard() {
 
               {/* Category Meter Deck */}
               <View style={styles.culinaryCardBody}>
+                {categorySales.length === 0 ? (
+                  <View style={{ paddingVertical: 36, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Ionicons name="albums-outline" size={28} color="#CBD5E1" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: BRAND.textSecondary }}>No Category Sales Yet</Text>
+                    <Text style={{ fontSize: 11.5, color: BRAND.textMuted, textAlign: 'center' }}>
+                      Category share updates live with settled bills.
+                    </Text>
+                  </View>
+                ) : (
                 <View style={styles.catMetersListContainer}>
                   {categorySales.slice(0, 5).map((cat, idx) => (
                     <View key={idx} style={styles.catMeterCardRow}>
@@ -1571,19 +1538,26 @@ export default function AdminDashboard() {
                       </View>
                       <View style={styles.catMeterFooter}>
                         <Text style={styles.catTopDishHint} numberOfLines={1}>
-                          Top: <Text style={{ fontWeight: '700', color: BRAND.textPrimary }}>{cat.topDishName || 'Special'}</Text> ({cat.topDishQty || 0} sold)
+                          Top: <Text style={{ fontWeight: '700', color: BRAND.textPrimary }}>{cat.topDishName || '—'}</Text> ({cat.topDishQty || 0} sold)
                         </Text>
                         <Text style={styles.catOrderCountText}>{cat.qty} orders</Text>
                       </View>
                     </View>
                   ))}
                 </View>
+                )}
               </View>
 
               <View style={styles.culinaryBoxFooter}>
                 <Ionicons name="pie-chart-outline" size={13} color="#D97706" />
                 <Text style={styles.culinaryFooterNote} numberOfLines={1}>
-                  Top Category: <Text style={{ fontWeight: '800', color: BRAND.textPrimary }}>{categorySales[0]?.name || 'Special Karahi'}</Text> ({canViewRevenue ? `Rs. ${categorySales[0]?.revenue.toLocaleString()}` : `${categorySales[0]?.qty} sold`})
+                  {categorySales[0] ? (
+                    <>
+                      Top Category: <Text style={{ fontWeight: '800', color: BRAND.textPrimary }}>{categorySales[0].name}</Text> ({canViewRevenue ? `Rs. ${categorySales[0].revenue.toLocaleString()}` : `${categorySales[0].qty} sold`})
+                    </>
+                  ) : (
+                    'Awaiting settled orders for category metrics'
+                  )}
                 </Text>
               </View>
             </View>
@@ -1617,6 +1591,15 @@ export default function AdminDashboard() {
 
               {/* Star Dishes Leaderboard List */}
               <View style={styles.culinaryCardBody}>
+                {itemSales.length === 0 ? (
+                  <View style={{ paddingVertical: 36, alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                    <Ionicons name="trophy-outline" size={28} color="#CBD5E1" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: BRAND.textSecondary }}>No Dishes Sold Yet</Text>
+                    <Text style={{ fontSize: 11.5, color: BRAND.textMuted, textAlign: 'center' }}>
+                      Bestselling menu items will rank here automatically.
+                    </Text>
+                  </View>
+                ) : (
                 <View style={styles.leaderboardListContainer}>
                   {itemSales.slice(0, 5).map((dish, idx) => {
                     const isGold = dish.rank === 1;
@@ -1667,12 +1650,19 @@ export default function AdminDashboard() {
                     );
                   })}
                 </View>
+                )}
               </View>
 
               <View style={styles.culinaryBoxFooter}>
                 <Ionicons name="ribbon-outline" size={13} color="#B45309" />
                 <Text style={styles.culinaryFooterNote} numberOfLines={1}>
-                  #1 Star Dish: <Text style={{ fontWeight: '800', color: '#B45309' }}>{itemSales[0]?.name || 'Shinwari Karahi'}</Text> ({itemSales[0]?.qty || 0} units)
+                  {itemSales[0] ? (
+                    <>
+                      #1 Star Dish: <Text style={{ fontWeight: '800', color: '#B45309' }}>{itemSales[0].name}</Text> ({itemSales[0].qty} units)
+                    </>
+                  ) : (
+                    'No dishes ranked yet for this period'
+                  )}
                 </Text>
               </View>
             </View>
@@ -1707,7 +1697,14 @@ export default function AdminDashboard() {
             </View>
 
             {/* Item Rows */}
-            {topDishes.map((dish, i) => (
+            {topDishes.length === 0 ? (
+              <View style={{ paddingVertical: 28, alignItems: 'center', gap: 4 }}>
+                <Ionicons name="restaurant-outline" size={24} color="#CBD5E1" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: BRAND.textSecondary }}>No Dishes Sold Yet</Text>
+                <Text style={{ fontSize: 11, color: BRAND.textMuted }}>Settled orders will appear here live.</Text>
+              </View>
+            ) : (
+            topDishes.map((dish, i) => (
               <View 
                 key={i} 
                 style={styles.tableDataRow}
@@ -1736,7 +1733,8 @@ export default function AdminDashboard() {
                   </View>
                 </View>
               </View>
-            ))}
+            ))
+            )}
           </View>
         </View>
 
@@ -1765,7 +1763,14 @@ export default function AdminDashboard() {
             </View>
 
             {/* Invoice Rows */}
-            {recentInvoices.map((inv, idx) => (
+            {recentInvoices.length === 0 ? (
+              <View style={{ paddingVertical: 28, alignItems: 'center', gap: 4 }}>
+                <Ionicons name="receipt-outline" size={24} color="#CBD5E1" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: BRAND.textSecondary }}>No Settled Invoices Yet</Text>
+                <Text style={{ fontSize: 11, color: BRAND.textMuted }}>Paid receipts from POS will appear here in real time.</Text>
+              </View>
+            ) : (
+            recentInvoices.map((inv, idx) => (
               <View 
                 key={idx} 
                 style={styles.tableDataRow}
@@ -1792,12 +1797,13 @@ export default function AdminDashboard() {
                 <View style={{ flex: 1, alignItems: 'flex-end' }}>
                   <View style={[styles.payMethodBadge, { backgroundColor: inv.payments?.[0]?.type === 'card' ? BRAND.indigoLight : BRAND.emeraldLight }]}>
                     <Text style={[styles.payMethodText, { color: inv.payments?.[0]?.type === 'card' ? BRAND.indigo : BRAND.emeraldDark }]}>
-                      {inv.payments?.[0]?.type === 'card' ? 'CARD' : 'CASH'}
+                      {(inv.payments?.[0]?.type || 'cash').toUpperCase()}
                     </Text>
                   </View>
                 </View>
               </View>
-            ))}
+            ))
+            )}
           </View>
         </View>
       </View>
@@ -1810,11 +1816,13 @@ export default function AdminDashboard() {
         <View style={styles.kdsFloorHeader}>
           <View>
             <Text style={styles.sectionTitle}>Kitchen Prep Velocity & Floor Occupancy Status</Text>
-            <Text style={styles.sectionSubtitle}>Station queues, average turnaround times & dining table availability</Text>
+            <Text style={styles.sectionSubtitle}>Live station queues & dining table availability</Text>
           </View>
           <View style={styles.throughputBadge}>
             <Ionicons name="checkmark-circle" size={14} color={BRAND.emerald} />
-            <Text style={styles.throughputText}>98.4% On-Time Dispatch</Text>
+            <Text style={styles.throughputText}>
+              {activeOrders > 0 ? `${activeOrders} Active KOT${activeOrders > 1 ? 's' : ''}` : 'All Stations Idle'}
+            </Text>
           </View>
         </View>
 
@@ -1830,17 +1838,19 @@ export default function AdminDashboard() {
             </View>
             <View style={styles.stationMetrics}>
               <View>
-                <Text style={styles.stationMetricVal}>{tickets.filter(t => t.status === 'cooking').length} Cooking</Text>
-                <Text style={styles.stationMetricSub}>Prep Queue</Text>
+                <Text style={styles.stationMetricVal}>{stationStats.mainCooking} Cooking</Text>
+                <Text style={styles.stationMetricSub}>Active Prep</Text>
               </View>
               <View style={styles.stationDivider} />
               <View>
-                <Text style={styles.stationMetricVal}>14 Mins</Text>
-                <Text style={styles.stationMetricSub}>Avg Cook Time</Text>
+                <Text style={styles.stationMetricVal}>{stationStats.mainPending} Pending</Text>
+                <Text style={styles.stationMetricSub}>Waiting Queue</Text>
               </View>
               <View style={styles.stationDivider} />
               <View>
-                <Text style={[styles.stationMetricVal, { color: BRAND.emeraldDark }]}>Normal</Text>
+                <Text style={[styles.stationMetricVal, { color: stationStats.mainCooking + stationStats.mainPending > 4 ? BRAND.amber : BRAND.emeraldDark }]}>
+                  {stationStats.mainCooking + stationStats.mainPending === 0 ? 'Idle' : stationStats.mainCooking + stationStats.mainPending > 4 ? 'Busy' : 'Normal'}
+                </Text>
                 <Text style={styles.stationMetricSub}>Load Level</Text>
               </View>
             </View>
@@ -1857,17 +1867,19 @@ export default function AdminDashboard() {
             </View>
             <View style={styles.stationMetrics}>
               <View>
-                <Text style={styles.stationMetricVal}>{Math.max(1, Math.round(activeOrders * 0.4))} Drinks</Text>
+                <Text style={styles.stationMetricVal}>{stationStats.juiceActive} Drinks</Text>
                 <Text style={styles.stationMetricSub}>In Blending</Text>
               </View>
               <View style={styles.stationDivider} />
               <View>
-                <Text style={styles.stationMetricVal}>6 Mins</Text>
-                <Text style={styles.stationMetricSub}>Fast Pour</Text>
+                <Text style={styles.stationMetricVal}>{stationStats.juicePending} Queued</Text>
+                <Text style={styles.stationMetricSub}>Pending Bar</Text>
               </View>
               <View style={styles.stationDivider} />
               <View>
-                <Text style={[styles.stationMetricVal, { color: BRAND.emeraldDark }]}>Optimal</Text>
+                <Text style={[styles.stationMetricVal, { color: stationStats.juiceActive + stationStats.juicePending > 5 ? BRAND.amber : BRAND.emeraldDark }]}>
+                  {stationStats.juiceActive + stationStats.juicePending === 0 ? 'Idle' : stationStats.juiceActive + stationStats.juicePending > 5 ? 'Busy' : 'Optimal'}
+                </Text>
                 <Text style={styles.stationMetricSub}>Load Level</Text>
               </View>
             </View>

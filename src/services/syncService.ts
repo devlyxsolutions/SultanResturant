@@ -82,7 +82,7 @@ const FIREBASE_REST_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/live_stat
 const FIREBASE_REST_LAST_UPDATED_URL = `${FIREBASE_REST_BASE_URL}/sultan_restaurant/last_updated.json`;
 let isRtdbAccessible = false;
 
-let currentServerAddress = '192.168.100.3';
+let currentServerAddress = '192.168.1.10';
 let syncStatus: SyncStatus = 'offline';
 let isLanConnected = false;
 let isCloudConnected = false;
@@ -313,7 +313,7 @@ export async function discoverLocalServerIp(): Promise<string | null> {
 
     // 1. High-priority known static & router DHCP IPs in small batches of 6 (prevents Android OkHttp queue timeout)
     const priorityIps = [
-      '192.168.100.3',
+      '192.168.1.10',
       '192.168.0.148',
       '192.168.0.100',
       '192.168.0.101',
@@ -428,7 +428,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
   }
 
   // 5. Default fallback to host computer's known LAN IP
-  return '192.168.100.3';
+  return '192.168.1.10';
 }
 
 export function getActiveServerHttpUrl(): string {
@@ -439,8 +439,8 @@ export function getActiveServerHttpUrl(): string {
     }
     return `${loc.protocol}//${loc.hostname}:${SERVER_PORT}`;
   }
-  const { httpUrl } = parseServerEndpoints(currentServerAddress || '192.168.100.3');
-  return httpUrl || `http://192.168.100.3:${SERVER_PORT}`;
+  const { httpUrl } = parseServerEndpoints(currentServerAddress || '192.168.1.10');
+  return httpUrl || `http://192.168.1.10:${SERVER_PORT}`;
 }
 
 export async function setCustomServerIp(newAddress: string) {
@@ -945,6 +945,10 @@ function broadcastLocalState(force = false) {
       regions: state.regions,
       zones: state.zones,
       staff: state.staff,
+      attendance: state.attendance || [],
+      salaryPayments: state.salaryPayments || [],
+      feedbacks: state.feedbacks || [],
+      salesReturns: state.salesReturns || [],
       reservations: state.reservations,
       onlineOrders: state.onlineOrders,
       pendingFloorOrderAlert: state.pendingFloorOrderAlert,

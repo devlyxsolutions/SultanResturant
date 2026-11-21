@@ -10,6 +10,24 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSyncStatus } from '../hooks/useSyncStatus';
+import { useRestaurantStore, INITIAL_STAFF } from '../store';
+
+// ─── Admin PIN Guard ────────────────────────────────────────────────
+// Returns true if the entered PIN matches any Admin-role staff member
+function checkAdminPin(enteredPin: string): boolean {
+  if (!enteredPin || enteredPin.trim().length < 4) return false;
+  const liveStaff = useRestaurantStore.getState().staff ?? [];
+  const allStaff = [...liveStaff];
+  for (const s of INITIAL_STAFF) {
+    if (!allStaff.some((x) => x.id === s.id)) allStaff.push(s);
+  }
+  return allStaff.some(
+    (s) =>
+      s.role.toLowerCase() === 'admin' &&
+      s.status !== 'Inactive' &&
+      s.pin === enteredPin.trim()
+  );
+}
 
 interface Props {
   compact?: boolean;
@@ -28,6 +46,11 @@ export default function SyncStatusBadge({ compact = false }: Props) {
     setCustomServerIp 
   } = useSyncStatus();
 
+  // ── PIN gate state ──
+  const [pinGateVisible, setPinGateVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinError, setPinError] = useState('');
+
   const [modalVisible, setModalVisible] = useState(false);
   const [ipInput, setIpInput] = useState(serverIp);
   const [syncingNow, setSyncingNow] = useState(false);
@@ -36,10 +59,25 @@ export default function SyncStatusBadge({ compact = false }: Props) {
   const isConnected = status === 'connected';
   const isConnecting = status === 'connecting';
 
+  // Opens PIN gate first; Sync Hub opens only after correct admin PIN
   const handleOpenModal = () => {
-    setIpInput(serverIp);
-    setFeedbackMsg('');
-    setModalVisible(true);
+    setPinInput('');
+    setPinError('');
+    setPinGateVisible(true);
+  };
+
+  const handlePinSubmit = () => {
+    if (checkAdminPin(pinInput)) {
+      setPinGateVisible(false);
+      setPinInput('');
+      setPinError('');
+      setIpInput(serverIp);
+      setFeedbackMsg('');
+      setModalVisible(true);
+    } else {
+      setPinError('Galat PIN — Sirf Admin access kar sakta hai!');
+      setPinInput('');
+    }
   };
 
   const handleSaveIp = async () => {
@@ -93,6 +131,89 @@ export default function SyncStatusBadge({ compact = false }: Props) {
           {getStatusText()}
         </Text>
       </TouchableOpacity>
+
+      {/* ══════════════════════════════════════════
+          ADMIN PIN GATE MODAL
+          ══════════════════════════════════════════ */}
+      <Modal visible={pinGateVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContent, { maxWidth: 340 }]}>
+            {/* Header */}
+            <View style={styles.modalHeader}>
+              <View style={styles.headerLeft}>
+                <Ionicons name="shield-checkmark" size={22} color="#D4AF37" style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Admin Access Only</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => { setPinGateVisible(false); setPinInput(''); setPinError(''); }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Ionicons name="close" size={22} color="#8E8E93" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Lock icon */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={styles.lockIconCircle}>
+                <Ionicons name="lock-closed" size={32} color="#D4AF37" />
+              </View>
+              <Text style={styles.pinGateTitle}>Sync Hub — Admin PIN</Text>
+              <Text style={styles.pinGateSubtitle}>
+                Yeh section sirf Admin ke liye hai.{'\n'}Apna Admin PIN enter karein.
+              </Text>
+            </View>
+
+            {/* PIN Input */}
+            <TextInput
+              style={[styles.ipInput, { textAlign: 'center', letterSpacing: 8, fontSize: 22, fontWeight: '800', marginBottom: 8 }]}
+              value={pinInput}
+              onChangeText={(t) => { setPinInput(t.replace(/[^0-9]/g, '').slice(0, 8)); setPinError(''); }}
+              placeholder="● ● ● ●"
+              placeholderTextColor="#C0C0C0"
+              keyboardType="numeric"
+              secureTextEntry={true}
+              maxLength={8}
+              autoFocus={true}
+              onSubmitEditing={handlePinSubmit}
+            />
+
+            {/* Touch keypad */}
+            <View style={styles.keypadGrid}>
+              {['1','2','3','4','5','6','7','8','9','CLR','0','⌫'].map((k) => (
+                <TouchableOpacity
+                  key={k}
+                  style={[styles.keypadKey, (k === 'CLR' || k === '⌫') && styles.keypadKeyAlt]}
+                  onPress={() => {
+                    if (k === 'CLR') { setPinInput(''); setPinError(''); }
+                    else if (k === '⌫') { setPinInput((p) => p.slice(0, -1)); setPinError(''); }
+                    else if (pinInput.length < 8) setPinInput((p) => p + k);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.keypadKeyText, (k === 'CLR' || k === '⌫') && styles.keypadKeyTextAlt]}>{k}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Error */}
+            {pinError ? (
+              <View style={[styles.feedbackBox, { backgroundColor: 'rgba(231,76,60,0.1)', borderColor: '#e74c3c', marginBottom: 10 }]}>
+                <Text style={[styles.feedbackText, { color: '#c0392b' }]}>{pinError}</Text>
+              </View>
+            ) : null}
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[styles.syncNowBtn, { justifyContent: 'center', marginTop: 4 }]}
+              onPress={handlePinSubmit}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="checkmark-circle" size={18} color="#4a121a" style={{ marginRight: 6 }} />
+              <Text style={styles.syncNowBtnText}>Confirm PIN</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Sync Management Modal */}
       <Modal visible={modalVisible} transparent animationType="fade">
@@ -255,6 +376,62 @@ const styles = StyleSheet.create({
   textOffline: {
     color: '#c0392b',
   },
+  // ── PIN Gate ──────────────────────────────────
+  lockIconCircle: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    backgroundColor: 'rgba(212,175,55,0.12)',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  pinGateTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#1C1C1E',
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  pinGateSubtitle: {
+    fontSize: 12,
+    color: '#636366',
+    textAlign: 'center',
+    lineHeight: 18,
+  },
+  keypadGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+  keypadKey: {
+    width: 68,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: '#F2F2F7',
+    borderWidth: 1,
+    borderColor: '#E5E5EA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  keypadKeyAlt: {
+    backgroundColor: 'rgba(74,18,26,0.08)',
+    borderColor: '#4a121a',
+  },
+  keypadKeyText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1C1C1E',
+  },
+  keypadKeyTextAlt: {
+    fontSize: 14,
+    color: '#4a121a',
+  },
+  // ── Modal ──────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',

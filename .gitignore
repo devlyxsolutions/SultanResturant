@@ -47,4 +47,12 @@ example
 # backup files
 *.backup
 
+# large installer payloads & embedded node runtime
+SultanPayload.zip
+SultanClientPayload.zip
+SultanRestaurant-Setup.exe
+bin/SultanRestaurant-Setup.exe
+SultanRestaurant-App/node.exe
+SultanRestaurant-App/SultanRestaurant-Setup.exe
+
 

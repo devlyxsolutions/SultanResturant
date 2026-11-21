@@ -80,71 +80,27 @@ export function calculateDenominationTotal(denoms: CashDenominations): number {
   );
 }
 
-const morningStart = new Date();
-morningStart.setHours(9, 0, 0, 0);
-const morningEnd = new Date();
-morningEnd.setHours(16, 0, 0, 0);
+export const INITIAL_SHIFTS: ShiftRecord[] = [];
 
-export const INITIAL_SHIFTS: ShiftRecord[] = [
-  {
-    id: `SH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-01`,
-    shiftType: 'Morning',
-    registerId: 'Counter #1 (Main Dining)',
-    cashierId: 'st4',
-    cashierName: 'Sara Ahmed',
-    openedAt: morningStart.getTime(),
-    openedBy: 'Ali Khan (Manager)',
-    openingFloat: 5000,
-    openingNotes: 'Morning float issued: Rs. 5,000 in petty change.',
-    status: 'closed',
-    closedAt: morningEnd.getTime(),
-    closedBy: 'Sara Ahmed (Cashier)',
-    closedRole: 'Cashier',
-    actualCountedCash: 48650,
-    denominations: {
-      d5000: 6,
-      d1000: 14,
-      d500: 7,
-      d100: 10,
-      d50: 3,
-      d20: 0,
-      d10: 0,
-      coins: 0,
-    },
-    cardSlipsCount: 9,
-    cardSlipsTotal: 18400,
-    cashierNotes: 'Closing count completed blindly. 9 card slips stapled with settlement roll.',
-    systemCashSales: 43650,
-    systemCardSales: 18400,
-    systemOnlineSales: 4200,
-    systemTotalSales: 66250,
-    settledOrdersCount: 22,
-    cashPayouts: 0,
-    expectedCashInDrawer: 48650, // 5000 float + 43650 cash sales
-    cashVariance: 0,
-    varianceType: 'balanced',
-    auditedBy: 'Ali Khan (Manager)',
-    auditedAt: morningEnd.getTime() + 15 * 60 * 1000,
-    auditNotes: 'Reconciled 100% exact. Drawer balanced with zero shortage.',
-    isApproved: true,
-  },
-  {
-    id: `SH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-02`,
-    shiftType: 'Evening',
-    registerId: 'Counter #1 (Main Dining)',
-    cashierId: 'st2',
-    cashierName: 'Ali Khan',
-    openedAt: morningEnd.getTime() + 30 * 60 * 1000,
-    openedBy: 'Junaid Ahsan (Admin)',
-    openingFloat: 8000,
-    openingNotes: 'Dinner rush shift. Rs. 8,000 float given to drawer.',
-    status: 'open',
-  },
-];
+const isLegacyDummyShift = (s: ShiftRecord | null | undefined): boolean => {
+  if (!s) return true;
+  const note = (s.openingNotes || '').trim();
+  if (
+    note === 'Morning float issued: Rs. 5,000 in petty change.' ||
+    note === 'Dinner rush shift. Rs. 8,000 float given to drawer.'
+  ) {
+    return true;
+  }
+  if (s.cashierName === 'Sara Ahmed' && s.systemTotalSales === 66250 && s.settledOrdersCount === 22) {
+    return true;
+  }
+  return false;
+};
 
 interface ShiftState {
   shifts: ShiftRecord[];
   activeShiftId: string | null;
+  dummyPurgeVersion?: number;
 
   // Actions
   openShift: (params: {
@@ -193,8 +149,9 @@ interface ShiftState {
 export const useShiftStore = create<ShiftState>()(
   persist(
     (set, get) => ({
-      shifts: INITIAL_SHIFTS,
-      activeShiftId: INITIAL_SHIFTS.find((s) => s.status === 'open')?.id || null,
+      shifts: [],
+      activeShiftId: null,
+      dummyPurgeVersion: 1,
 
       openShift: (params) => {
         const id = `SH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(
@@ -324,30 +281,17 @@ export const useShiftStore = create<ShiftState>()(
           let updatedShifts = state.shifts;
           let updatedActiveId = state.activeShiftId;
 
-          if (Array.isArray(remote.shifts) && remote.shifts.length > 0) {
-            // Merge remote shifts with local shifts, preserving the most recently updated state
-            const shiftMap = new Map<string, ShiftRecord>();
-            // Add local first
-            state.shifts.forEach((s) => shiftMap.set(s.id, s));
-            // Overwrite / merge with incoming remote shifts
-            remote.shifts.forEach((r) => {
-              const existing = shiftMap.get(r.id);
-              if (!existing) {
-                shiftMap.set(r.id, r);
-              } else {
-                // If remote is closed while local was open, or remote has later closedAt/openedAt, trust remote
-                const remoteTime = r.closedAt || r.openedAt || 0;
-                const localTime = existing.closedAt || existing.openedAt || 0;
-                if (remoteTime >= localTime || (existing.status === 'open' && r.status === 'closed')) {
-                  shiftMap.set(r.id, { ...existing, ...r });
-                }
-              }
-            });
-            updatedShifts = Array.from(shiftMap.values()).sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
+          if (Array.isArray(remote.shifts)) {
+            updatedShifts = remote.shifts
+              .filter((r) => !isLegacyDummyShift(r))
+              .sort((a, b) => (b.openedAt || 0) - (a.openedAt || 0));
           }
 
           if (remote.activeShiftId !== undefined) {
-            updatedActiveId = remote.activeShiftId;
+            updatedActiveId =
+              remote.activeShiftId && updatedShifts.some((s) => s.id === remote.activeShiftId && s.status === 'open')
+                ? remote.activeShiftId
+                : null;
           } else {
             const currentOpen = updatedShifts.find((s) => s.status === 'open');
             updatedActiveId = currentOpen ? currentOpen.id : null;
@@ -356,6 +300,7 @@ export const useShiftStore = create<ShiftState>()(
           return {
             shifts: updatedShifts,
             activeShiftId: updatedActiveId,
+            dummyPurgeVersion: 1,
           };
         });
       },
@@ -365,10 +310,20 @@ export const useShiftStore = create<ShiftState>()(
       storage: appStorage,
       merge: (persistedState: any, currentState) => {
         const p = persistedState as Partial<ShiftState> | undefined;
+        const alreadyPurged = (p?.dummyPurgeVersion || 0) >= 1;
+        const cleanedShifts = alreadyPurged
+          ? (Array.isArray(p?.shifts) ? p.shifts : []).filter((s) => !isLegacyDummyShift(s))
+          : [];
+        const activeId =
+          alreadyPurged && p?.activeShiftId && cleanedShifts.some((s) => s.id === p.activeShiftId && s.status === 'open')
+            ? p.activeShiftId
+            : null;
         return {
           ...currentState,
           ...p,
-          shifts: p?.shifts && p.shifts.length > 0 ? p.shifts : currentState.shifts,
+          shifts: cleanedShifts,
+          activeShiftId: activeId,
+          dummyPurgeVersion: 1,
         };
       },
     }

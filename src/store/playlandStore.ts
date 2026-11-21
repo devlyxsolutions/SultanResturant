@@ -70,6 +70,7 @@ interface PlaylandState {
   customers: PlaylandCustomer[];
   activeFilter: RideCategory | 'all';
   searchQuery: string;
+  dummyPurgeVersion?: number;
 
   // Filter & Search
   setFilter: (category: RideCategory | 'all') => void;
@@ -271,24 +272,10 @@ export const INITIAL_RIDES: PlaylandRide[] = [
   },
 ];
 
-export const INITIAL_CUSTOMERS: PlaylandCustomer[] = [
-  {
-    id: 'cust-1',
-    childName: 'Ayan Khan',
-    parentName: 'Imran Khan',
-    parentPhone: '0300-1234567',
-    totalVisits: 3,
-    lastVisited: Date.now() - 86400000,
-  },
-  {
-    id: 'cust-2',
-    childName: 'Zain & Fatima',
-    parentName: 'Hamza Sheikh',
-    parentPhone: '0321-9876543',
-    totalVisits: 5,
-    lastVisited: Date.now() - 172800000,
-  },
-];
+export const INITIAL_CUSTOMERS: PlaylandCustomer[] = [];
+
+const LEGACY_PLAYLAND_DUMMY_CUST_IDS = new Set(['cust-1', 'cust-2']);
+const LEGACY_PLAYLAND_DUMMY_TICKET_IDS = new Set(['pltk-1792239314139-572']);
 
 export const usePlaylandStore = create<PlaylandState>()(
   persist(
@@ -299,6 +286,7 @@ export const usePlaylandStore = create<PlaylandState>()(
       customers: INITIAL_CUSTOMERS,
       activeFilter: 'all',
       searchQuery: '',
+      dummyPurgeVersion: 1,
 
       setFilter: (category) => set({ activeFilter: category }),
       setSearchQuery: (query) => set({ searchQuery: query }),
@@ -526,6 +514,15 @@ export const usePlaylandStore = create<PlaylandState>()(
       name: 'sultan-playland-storage',
       storage: appStorage,
       onRehydrateStorage: () => (state) => {
+        if (state && (state.dummyPurgeVersion || 0) < 1) {
+          state.customers = (state.customers || []).filter(
+            (c) => c && !LEGACY_PLAYLAND_DUMMY_CUST_IDS.has(c.id)
+          );
+          state.tickets = (state.tickets || []).filter(
+            (t) => t && !LEGACY_PLAYLAND_DUMMY_TICKET_IDS.has(t.id)
+          );
+          state.dummyPurgeVersion = 1;
+        }
         if (state && Array.isArray(state.rides)) {
           state.rides = state.rides.map((r) => {
             if (!r.variants || r.variants.length === 0) {

@@ -389,6 +389,7 @@ type RestaurantState = {
   staff: StaffMember[];
   menuItems: MenuItem[];
   hasClearedLegacyDummyMenu?: boolean;
+  dummyPurgeVersion?: number;
   categories: string[];
   regions: string[];
   zones: string[];
@@ -565,140 +566,19 @@ const INITIAL_TABLES: Table[] = [
   { id: 'rt-2', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Sky Cabin 1', seats: 8, status: 'available' },
 ];
 
-const INITIAL_RESERVATIONS: Reservation[] = [
-  {
-    id: 'res-1',
-    tableId: 'f1-m4',
-    tableName: 'Cabin 4',
-    customerName: 'Hamza Malik',
-    phone: '03219988776',
-    guestsCount: 6,
-    reservationDate: new Date().toISOString().split('T')[0],
-    timeSlot: '08:30 PM',
-    status: 'confirmed',
-    notes: 'Birthday celebration, requested quiet corner',
-    createdAt: Date.now() - 3600000,
-  }
-];
+const INITIAL_RESERVATIONS: Reservation[] = [];
 
-const INITIAL_CUSTOMERS: Customer[] = [
-  {
-    id: 'c1',
-    name: 'Zubair Tariq',
-    phone: '03009876543',
-    email: 'zubair.tariq@gmail.com',
-    address: 'DHA Phase 5, Lahore',
-    tier: 'VIP',
-    notes: 'Prefers Family Majlis Cabin. Likes low spice in Karahi.',
-    tags: ['VIP', 'Family Majlis', 'High Spender'],
-    totalOrders: 14,
-    totalSpent: 38400,
-    loyaltyPoints: 380,
-    firstVisit: Date.now() - 45 * 86400000,
-    lastVisit: Date.now() - 2 * 86400000,
-    favoriteDishes: ['Chicken Karahi', 'Sultan Kebab']
-  },
-  {
-    id: 'c2',
-    name: 'Fatima Noor',
-    phone: '03214567890',
-    email: 'fatima.noor@outlook.com',
-    address: 'Gulberg III, Lahore',
-    tier: 'Gold',
-    notes: 'Regular weekend diner. Enjoys fresh mint margaritas.',
-    tags: ['Gold', 'Weekend Regular'],
-    totalOrders: 6,
-    totalSpent: 16200,
-    loyaltyPoints: 160,
-    firstVisit: Date.now() - 30 * 86400000,
-    lastVisit: Date.now() - 5 * 86400000,
-    favoriteDishes: ['Mint Margarita', 'Kunafa']
-  },
-  {
-    id: 'c3',
-    name: 'Bilal Siddiqui',
-    phone: '03331122334',
-    email: 'bilal.s@yahoo.com',
-    address: 'Model Town, Block C',
-    tier: 'Silver',
-    notes: 'Corporate lunches on weekdays.',
-    tags: ['Silver', 'Corporate'],
-    totalOrders: 3,
-    totalSpent: 7500,
-    loyaltyPoints: 75,
-    firstVisit: Date.now() - 20 * 86400000,
-    lastVisit: Date.now() - 10 * 86400000,
-    favoriteDishes: ['Fajita Pizza (Medium)']
-  },
-  {
-    id: 'c4',
-    name: 'Dr. Ayesha Imran',
-    phone: '03028889900',
-    email: 'ayesha.imran@health.pk',
-    address: 'Bahria Town, Sector C',
-    tier: 'VIP',
-    notes: 'Requests extra garlic naan with Mutton Karahi.',
-    tags: ['VIP', 'Doctor'],
-    totalOrders: 19,
-    totalSpent: 52600,
-    loyaltyPoints: 520,
-    firstVisit: Date.now() - 60 * 86400000,
-    lastVisit: Date.now() - 1 * 86400000,
-    favoriteDishes: ['Mutton Shinwari Karahi', 'Sultan Special Roghni Naan']
-  },
-  {
-    id: 'c5',
-    name: 'Usman Ghani',
-    phone: '03456781234',
-    address: 'Johar Town, Phase 1',
-    tier: 'Regular',
-    notes: 'Takeaway orders mostly.',
-    tags: ['Takeaway Frequent'],
-    totalOrders: 4,
-    totalSpent: 5400,
-    loyaltyPoints: 50,
-    firstVisit: Date.now() - 15 * 86400000,
-    lastVisit: Date.now() - 3 * 86400000,
-    favoriteDishes: ['Chicken Dum Biryani Special']
-  },
-];
+const INITIAL_CUSTOMERS: Customer[] = [];
 
-const INITIAL_FEEDBACKS: InvoiceFeedback[] = [
-  {
-    id: 'fb-1',
-    invoiceId: 'INV-1090',
-    customerId: 'c1',
-    customerName: 'Zubair Tariq',
-    customerPhone: '03009876543',
-    overallRating: 5,
-    serviceRating: 5,
-    ambianceRating: 5,
-    items: [
-      { itemId: 'm2', itemName: 'Chicken Karahi', rating: 5, tags: ['Delicious', 'Served Hot'], comment: 'Desi ghee flavor was exceptional.' },
-      { itemId: 'm1', itemName: 'Sultan Kebab', rating: 5, tags: ['Authentic Taste'] },
-    ],
-    generalComments: 'Sultan restaurant provides an unmatched royal family dining experience. Server Hamza was very attentive.',
-    createdAt: Date.now() - 86400000,
-    status: 'published'
-  },
-  {
-    id: 'fb-2',
-    invoiceId: 'INV-1092',
-    customerId: 'c2',
-    customerName: 'Fatima Noor',
-    customerPhone: '03214567890',
-    overallRating: 4,
-    serviceRating: 5,
-    ambianceRating: 4,
-    items: [
-      { itemId: 'm5', itemName: 'Mint Margarita', rating: 5, tags: ['Refreshing'] },
-      { itemId: 'm4', itemName: 'Kunafa', rating: 4, tags: ['Delicious'] },
-    ],
-    generalComments: 'Beverages and desserts were mouth watering! Will return with family this weekend.',
-    createdAt: Date.now() - 43200000,
-    status: 'published'
-  }
-];
+const INITIAL_FEEDBACKS: InvoiceFeedback[] = [];
+
+const LEGACY_DUMMY_CUSTOMER_IDS = new Set(['c1', 'c2', 'c3', 'c4', 'c5']);
+const LEGACY_DUMMY_FEEDBACK_IDS = new Set(['fb-1', 'fb-2']);
+const LEGACY_DUMMY_RESERVATION_IDS = new Set(['res-1']);
+const LEGACY_DUMMY_ATTENDANCE_IDS = new Set([
+  'att-1', 'att-2', 'att-3', 'att-4', 'att-5', 'att-6', 'att-7', 'att-8', 'att-9', 'att-10', 'att-11',
+]);
+const LEGACY_DUMMY_SALARY_IDS = new Set(['sal-101', 'sal-102', 'sal-103']);
 
 export const INITIAL_MENU: MenuItem[] = SULTAN_DEFAULT_MENU;
 export const INITIAL_CATEGORIES: string[] = SULTAN_DEFAULT_CATEGORIES;
@@ -935,191 +815,9 @@ export const INITIAL_STAFF: StaffMember[] = [
   },
 ];
 
-const INITIAL_ATTENDANCE: AttendanceRecord[] = [
-  {
-    id: 'att-1',
-    staffId: 'st1',
-    staffName: 'Junaid Ahsan',
-    date: '2026-10-25',
-    checkIn: '08:50 AM',
-    checkOut: '05:30 PM',
-    status: 'Present',
-    overtimeHours: 0,
-    lateMinutes: 0,
-    notes: 'On duty on time',
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-2',
-    staffId: 'st2',
-    staffName: 'Ali Khan',
-    date: '2026-10-25',
-    checkIn: '09:05 AM',
-    checkOut: '06:00 PM',
-    status: 'Present',
-    overtimeHours: 1,
-    lateMinutes: 5,
-    notes: 'Morning shift opening manager',
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-3',
-    staffId: 'st3',
-    staffName: 'Chef Omar',
-    date: '2026-10-25',
-    checkIn: '11:45 AM',
-    checkOut: '10:30 PM',
-    status: 'Present',
-    overtimeHours: 2,
-    lateMinutes: 0,
-    notes: 'Weekend prep and evening grill station',
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-4',
-    staffId: 'st4',
-    staffName: 'Sara Ahmed',
-    date: '2026-10-25',
-    checkIn: '12:15 PM',
-    checkOut: '09:30 PM',
-    status: 'Late',
-    overtimeHours: 0,
-    lateMinutes: 15,
-    notes: 'Traffic delay on Ferozepur road',
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-5',
-    staffId: 'st5',
-    staffName: 'Hamza Malik',
-    date: '2026-10-25',
-    status: 'On Leave',
-    notes: 'Medical leave approved by manager',
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-6',
-    staffId: 'st6',
-    staffName: 'Ali Raza',
-    date: '2026-10-25',
-    checkIn: '02:00 PM',
-    checkOut: '10:00 PM',
-    status: 'Present',
-    overtimeHours: 0.5,
-    lateMinutes: 0,
-    recordedAt: Date.now() - 3600000,
-  },
-  {
-    id: 'att-7',
-    staffId: 'st7',
-    staffName: 'Tariq Juice Master',
-    date: '2026-10-25',
-    checkIn: '09:00 AM',
-    checkOut: '05:00 PM',
-    status: 'Present',
-    overtimeHours: 0,
-    lateMinutes: 0,
-    recordedAt: Date.now() - 3600000,
-  },
-  // Yesterday's records
-  {
-    id: 'att-8',
-    staffId: 'st2',
-    staffName: 'Ali Khan',
-    date: '2026-10-24',
-    checkIn: '09:00 AM',
-    checkOut: '06:00 PM',
-    status: 'Present',
-    recordedAt: Date.now() - 86400000,
-  },
-  {
-    id: 'att-9',
-    staffId: 'st3',
-    staffName: 'Chef Omar',
-    date: '2026-10-24',
-    checkIn: '12:00 PM',
-    checkOut: '11:00 PM',
-    status: 'Present',
-    overtimeHours: 2,
-    recordedAt: Date.now() - 86400000,
-  },
-  {
-    id: 'att-10',
-    staffId: 'st4',
-    staffName: 'Sara Ahmed',
-    date: '2026-10-24',
-    checkIn: '12:00 PM',
-    checkOut: '09:00 PM',
-    status: 'Present',
-    recordedAt: Date.now() - 86400000,
-  },
-  {
-    id: 'att-11',
-    staffId: 'st5',
-    staffName: 'Hamza Malik',
-    date: '2026-10-24',
-    status: 'Absent',
-    notes: 'Uninformed absence',
-    recordedAt: Date.now() - 86400000,
-  },
-];
+const INITIAL_ATTENDANCE: AttendanceRecord[] = [];
 
-const INITIAL_SALARY_PAYMENTS: SalaryPayment[] = [
-  {
-    id: 'sal-101',
-    staffId: 'st2',
-    staffName: 'Ali Khan',
-    month: '2026-09',
-    paymentDate: '2026-10-02',
-    baseSalary: 75000,
-    bonusAmount: 5000,
-    deductionAmount: 0,
-    advanceDeduction: 0,
-    overtimeAmount: 3500,
-    netPaid: 83500,
-    paymentMethod: 'bank',
-    status: 'Paid',
-    voucherNumber: 'VCH-2026-8812',
-    notes: 'September salary with quarterly performance reward',
-    paidAt: Date.now() - 20 * 86400000,
-  },
-  {
-    id: 'sal-102',
-    staffId: 'st3',
-    staffName: 'Chef Omar',
-    month: '2026-09',
-    paymentDate: '2026-10-02',
-    baseSalary: 65000,
-    bonusAmount: 3000,
-    deductionAmount: 0,
-    advanceDeduction: 5000,
-    overtimeAmount: 4800,
-    netPaid: 67800,
-    paymentMethod: 'cash',
-    status: 'Paid',
-    voucherNumber: 'VCH-2026-8813',
-    notes: 'September salary - Rs. 5000 kitchen advance deducted',
-    paidAt: Date.now() - 20 * 86400000,
-  },
-  {
-    id: 'sal-103',
-    staffId: 'st4',
-    staffName: 'Sara Ahmed',
-    month: '2026-09',
-    paymentDate: '2026-10-03',
-    baseSalary: 32000,
-    bonusAmount: 2000,
-    deductionAmount: 1000,
-    advanceDeduction: 0,
-    overtimeAmount: 1800,
-    netPaid: 34800,
-    paymentMethod: 'online',
-    status: 'Paid',
-    voucherNumber: 'VCH-2026-8814',
-    notes: 'Sent via JazzCash',
-    paidAt: Date.now() - 19 * 86400000,
-  },
-];
+const INITIAL_SALARY_PAYMENTS: SalaryPayment[] = [];
 
 /**
  * Reconciles tables with active tickets:
@@ -1228,6 +926,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       tickets: [],
       menuItems: INITIAL_MENU,
       hasClearedLegacyDummyMenu: true,
+      dummyPurgeVersion: 1,
       categories: INITIAL_CATEGORIES,
       regions: INITIAL_REGIONS,
       zones: INITIAL_FLOORS.map(f => f.name),
@@ -3367,13 +3066,21 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
-            state.floors = INITIAL_FLOORS
+            state.floors = INITIAL_FLOORS;
           }
-          if (!state.attendance || !Array.isArray(state.attendance) || state.attendance.length === 0) {
-            state.attendance = INITIAL_ATTENDANCE;
+          if (!Array.isArray(state.attendance)) {
+            state.attendance = [];
           }
-          if (!state.salaryPayments || !Array.isArray(state.salaryPayments) || state.salaryPayments.length === 0) {
-            state.salaryPayments = INITIAL_SALARY_PAYMENTS;
+          if (!Array.isArray(state.salaryPayments)) {
+            state.salaryPayments = [];
+          }
+          if ((state.dummyPurgeVersion || 0) < 1) {
+            state.customers = (state.customers || []).filter((c) => c && !LEGACY_DUMMY_CUSTOMER_IDS.has(c.id));
+            state.feedbacks = (state.feedbacks || []).filter((f) => f && !LEGACY_DUMMY_FEEDBACK_IDS.has(f.id));
+            state.reservations = (state.reservations || []).filter((r) => r && !LEGACY_DUMMY_RESERVATION_IDS.has(r.id));
+            state.attendance = (state.attendance || []).filter((a) => a && !LEGACY_DUMMY_ATTENDANCE_IDS.has(a.id));
+            state.salaryPayments = (state.salaryPayments || []).filter((p) => p && !LEGACY_DUMMY_SALARY_IDS.has(p.id));
+            state.dummyPurgeVersion = 1;
           }
           if (!state.regions || !Array.isArray(state.regions) || state.regions.length === 0) {
             state.regions = INITIAL_REGIONS;

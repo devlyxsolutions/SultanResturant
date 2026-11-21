@@ -302,56 +302,8 @@ const INITIAL_STATE = {
   serviceRequests: [],
   playlandTickets: [],
   playlandRides: DEFAULT_PLAYLAND_RIDES,
-  appUsers: [
-    {
-      id: 'usr-1',
-      name: 'Hamza Sheikh',
-      phone: '03219876543',
-      password: 'password123',
-      address: 'House #42, Street 7, Block F, Johar Town, Lahore',
-      deviceInfo: 'iPhone 15 Pro (iOS 18.1)',
-      registeredAt: Date.now() - 48 * 3600000,
-      lastLoginAt: Date.now() - 15 * 60000,
-      totalOrders: 3,
-      totalSpent: 8450,
-      status: 'Active'
-    },
-    {
-      id: 'usr-2',
-      name: 'Ayesha Khan',
-      phone: '03331122334',
-      password: 'password123',
-      address: 'Suite 304, Mega Tower, Gulberg II, Lahore',
-      deviceInfo: 'Samsung Galaxy S24 (Android 14)',
-      registeredAt: Date.now() - 24 * 3600000,
-      lastLoginAt: Date.now() - 2 * 3600000,
-      totalOrders: 1,
-      totalSpent: 2805,
-      status: 'Active'
-    }
-  ],
-  appUserLogs: [
-    {
-      id: 'log-1',
-      userId: 'usr-1',
-      name: 'Hamza Sheikh',
-      phone: '03219876543',
-      action: 'LOGIN',
-      deviceInfo: 'iPhone 15 Pro (iOS 18.1)',
-      timestamp: Date.now() - 15 * 60000,
-      details: 'Customer logged in successfully from mobile app'
-    },
-    {
-      id: 'log-2',
-      userId: 'usr-2',
-      name: 'Ayesha Khan',
-      phone: '03331122334',
-      action: 'SIGNUP',
-      deviceInfo: 'Samsung Galaxy S24 (Android 14)',
-      timestamp: Date.now() - 24 * 3600000,
-      details: 'New user registered via mobile app'
-    }
-  ],
+  appUsers: [],
+  appUserLogs: [],
   menuItems: [
   {
     "id": "slt-sal-caesar",
@@ -2383,21 +2335,26 @@ const INITIAL_STATE = {
     { id: 'st-fm1', name: 'Rashid Mehmood', phone: '+92 305 6677889', role: 'Floor Manager', pin: '6677', status: 'Active', shift: 'Morning', joinedDate: '2025-02-15', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Ground Floor Manager' },
     { id: 'st-fm2', name: 'Tariq Javed', phone: '+92 306 1122334', role: 'Floor Manager', pin: '7788', status: 'Active', shift: 'Evening', joinedDate: '2025-03-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: '1st Floor Manager' },
   ],
-  reservations: [
-    {
-      id: 'res-1',
-      tableId: '5',
-      tableName: 'Cabin 2',
-      customerName: 'Hamza Malik',
-      phone: '03219988776',
-      guestsCount: 6,
-      reservationDate: new Date().toISOString().split('T')[0],
-      timeSlot: '08:30 PM',
-      status: 'confirmed',
-      notes: 'Birthday celebration, requested quiet corner',
-      createdAt: Date.now() - 3600000,
-    }
-  ],
+  reservations: [],
+  inventory: [],
+  stockMovements: [],
+  expenses: [],
+  feedback: [],
+  feedbacks: [],
+  unavailableItemIds: [],
+  suppliers: [],
+  purchaseOrders: [],
+  supplierPayments: [],
+  recipes: [],
+  kitchenSessions: [],
+  kitchenConsumption: [],
+  kitchenManualUsage: [],
+  kitchenCash: [],
+  shifts: [],
+  activeShiftId: null,
+  attendance: [],
+  salaryPayments: [],
+  salesReturns: [],
   assets: [],
   damageRecords: [],
   activeStaffSessions: [],
@@ -2487,9 +2444,7 @@ try {
       }
     }
     if (!Array.isArray(serverState.deletedTicketIds)) {
-      serverState.deletedTicketIds = ['KOT-1042'];
-    } else if (!serverState.deletedTicketIds.includes('KOT-1042')) {
-      serverState.deletedTicketIds.push('KOT-1042');
+      serverState.deletedTicketIds = [];
     }
     if (Array.isArray(serverState.tickets)) {
       const delSet = new Set(serverState.deletedTicketIds);
@@ -5203,6 +5158,92 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // 8.7 Executive A4 Vector Financial Report PDF Generator (Zero external npm deps — uses installed Chrome/Edge headless)
+  if (url.pathname === '/api/reports/export-pdf' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const html = typeof data?.html === 'string' ? data.html : '';
+      const rawName = typeof data?.filename === 'string' ? data.filename : `Sultan_Financial_Report_${Date.now()}.pdf`;
+      const safeFilename = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.pdf$/i, '') + '.pdf';
+
+      if (!html || html.length < 40) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing report HTML payload' }));
+        return;
+      }
+
+      const browserCandidates = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+      ];
+      const browserBin = browserCandidates.find((p) => {
+        try { return fs.existsSync(p); } catch (_) { return false; }
+      });
+
+      if (!browserBin) {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Headless PDF browser not installed on server' }));
+        return;
+      }
+
+      const { execFile } = require('child_process');
+      const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const htmlPath = path.join(os.tmpdir(), `sultan_report_${stamp}.html`);
+      const pdfPath = path.join(os.tmpdir(), `sultan_report_${stamp}.pdf`);
+
+      fs.writeFileSync(htmlPath, html, 'utf8');
+      const fileUrl = 'file:///' + htmlPath.replace(/\\/g, '/');
+
+      const pdfBuf = await new Promise((resolve, reject) => {
+        execFile(
+          browserBin,
+          [
+            '--headless=new',
+            '--disable-gpu',
+            '--no-sandbox',
+            '--disable-extensions',
+            '--no-pdf-header-footer',
+            '--run-all-compositor-stages-before-draw',
+            `--print-to-pdf=${pdfPath}`,
+            fileUrl,
+          ],
+          { timeout: 18000, windowsHide: true },
+          (err) => {
+            try {
+              if (fs.existsSync(pdfPath)) {
+                const buf = fs.readFileSync(pdfPath);
+                if (buf.length > 500) {
+                  return resolve(buf);
+                }
+              }
+              return reject(err || new Error('PDF output was empty'));
+            } catch (readErr) {
+              return reject(readErr);
+            } finally {
+              try { fs.unlinkSync(htmlPath); } catch (_) {}
+              try { fs.unlinkSync(pdfPath); } catch (_) {}
+            }
+          }
+        );
+      });
+
+      res.writeHead(200, {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${safeFilename}"`,
+        'Content-Length': pdfBuf.length,
+        'Cache-Control': 'no-store',
+      });
+      res.end(pdfBuf);
+    } catch (err) {
+      console.warn('[Sultan Hub] /api/reports/export-pdf error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
   // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
   if (req.method === 'GET' || req.method === 'HEAD') {
     const DIST_DIR = path.join(__dirname, 'dist');
@@ -5453,13 +5494,58 @@ function computeStateFingerprint(st) {
   }
 }
 
+const LEGACY_DUMMY_SEED_IDS = {
+  inventory: new Set(Array.from({ length: 23 }, (_, i) => `inv${i + 1}`)),
+  stockMovements: new Set(['mv-01', 'mv-02', 'mv-03', 'mv-04']),
+  suppliers: new Set(['sup-1', 'sup-2', 'sup-3', 'sup-4', 'sup-5', 'sup-6', 'sup-7', 'sup-8', 'sup-9']),
+  purchaseOrders: new Set(['po-101', 'po-102']),
+  supplierPayments: new Set(['spay-1', 'spay-2']),
+  assets: new Set(['ast-1', 'ast-2', 'ast-3', 'ast-4', 'ast-5', 'ast-6', 'ast-7', 'ast-8']),
+  damageRecords: new Set(['dmg-1', 'dmg-2', 'dmg-3', 'dmg-4', 'dmg-5']),
+  recipes: new Set(['rc-1', 'rc-2', 'rc-3', 'rc-4']),
+  kitchenSessions: new Set(['ks-closed-today-morning', 'ks-active-evening']),
+  kitchenManualUsage: new Set(['mu-1', 'mu-2', 'mu-3', 'mu-4']),
+  customers: new Set(['c1', 'c2', 'c3', 'c4', 'c5']),
+  feedbacks: new Set(['fb-1', 'fb-2']),
+  reservations: new Set(['res-1']),
+  attendance: new Set(Array.from({ length: 11 }, (_, i) => `att-${i + 1}`)),
+  salaryPayments: new Set(['sal-101', 'sal-102', 'sal-103']),
+  appUsers: new Set(['usr-1', 'usr-2']),
+  appUserLogs: new Set(['log-1', 'log-2']),
+};
+
+function sanitizeIncomingSeedData(key, value) {
+  if (!Array.isArray(value)) return value;
+  const seedSet = LEGACY_DUMMY_SEED_IDS[key];
+  if (seedSet) {
+    return value.filter((item) => item && !seedSet.has(item.id));
+  }
+  if (key === 'shifts') {
+    return value.filter((s) => {
+      if (!s) return false;
+      const note = (s.openingNotes || '').trim();
+      if (
+        note === 'Morning float issued: Rs. 5,000 in petty change.' ||
+        note === 'Dinner rush shift. Rs. 8,000 float given to drawer.'
+      ) {
+        return false;
+      }
+      if (s.cashierName === 'Sara Ahmed' && s.systemTotalSales === 66250 && s.settledOrdersCount === 22) {
+        return false;
+      }
+      return true;
+    });
+  }
+  return value;
+}
+
 function applyStateUpdate(partialState, senderId, originWs = null) {
   if (!partialState || typeof partialState !== 'object') return;
 
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -5788,7 +5874,15 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           modified = true;
         }
       } else {
-        serverState[key] = partialState[key];
+        const sanitized = sanitizeIncomingSeedData(key, partialState[key]);
+        if (key === 'activeShiftId') {
+          const validShifts = Array.isArray(serverState.shifts) ? serverState.shifts : [];
+          serverState.activeShiftId = sanitized && validShifts.some(s => s && s.id === sanitized && s.status === 'open')
+            ? sanitized
+            : null;
+        } else {
+          serverState[key] = sanitized;
+        }
         modified = true;
       }
     }
@@ -5913,6 +6007,27 @@ function pushToFirestoreCloud() {
           tables: serverState.tables,
           tickets: serverState.tickets,
           deletedTicketIds: serverState.deletedTicketIds || [],
+          invoices: serverState.invoices || [],
+          customers: serverState.customers || [],
+          reservations: serverState.reservations || [],
+          attendance: serverState.attendance || [],
+          salaryPayments: serverState.salaryPayments || [],
+          feedbacks: serverState.feedbacks || [],
+          salesReturns: serverState.salesReturns || [],
+          serviceRequests: serverState.serviceRequests || [],
+          inventory: serverState.inventory || [],
+          stockMovements: serverState.stockMovements || [],
+          expenses: serverState.expenses || [],
+          suppliers: serverState.suppliers || [],
+          purchaseOrders: serverState.purchaseOrders || [],
+          supplierPayments: serverState.supplierPayments || [],
+          assets: serverState.assets || [],
+          damageRecords: serverState.damageRecords || [],
+          recipes: serverState.recipes || [],
+          kitchenSessions: serverState.kitchenSessions || [],
+          kitchenConsumption: serverState.kitchenConsumption || [],
+          kitchenManualUsage: serverState.kitchenManualUsage || [],
+          kitchenCash: serverState.kitchenCash || [],
           menuItems: serverState.menuItems,
           categories: serverState.categories,
           staff: serverState.staff,
@@ -5955,6 +6070,7 @@ async function pollFirestoreCloud() {
     if (senderId === 'SERVER_POS_HUB') return;
     const timestamp = Number(fields.timestamp?.integerValue || 0);
     if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
+    if (timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
 
     if (fields.state?.mapValue?.fields) {
       const decodedState = decodeFirestoreValue(fields.state);
@@ -5971,9 +6087,10 @@ async function pollFirestoreCloud() {
   }
 }
 
-// Start Cloud Firestore bridge pulse
+// Start Cloud Firestore bridge pulse (publish clean authoritative local state first)
+pushToFirestoreCloud();
 setInterval(pollFirestoreCloud, 2500);
-setTimeout(pollFirestoreCloud, 500);
+setTimeout(pollFirestoreCloud, 2000);
 
 wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;

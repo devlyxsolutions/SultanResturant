@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, Invoice } from '../../store/restaurantStore';
+import { useRestaurantStore } from '../../store/restaurantStore';
 import { useShiftStore } from '../../store/shiftStore';
 import { useAuthStore } from '../../store/authStore';
 import { useRoleStore, useRolePermissions } from '../../store/roleStore';
@@ -134,7 +134,7 @@ export default function ManagerDashboard() {
   const activeWaiters = activeStaff.filter(s => s.role === 'Waiter').length;
   const activeKitchen = activeStaff.filter(s => s.role === 'Kitchen').length;
 
-  // Hourly Dining & KDS Rush Curve
+  // Hourly Dining & KDS Rush Curve — strictly live invoice data
   const hourlyData = useMemo(() => {
     const hours = [
       { label: '12 PM', hour: 12 },
@@ -151,61 +151,52 @@ export default function ManagerDashboard() {
       { label: '11 PM', hour: 23 },
     ];
 
-    const defaultRatios = [20, 45, 60, 25, 20, 35, 55, 80, 95, 100, 75, 35];
-    return hours.map((h, i) => {
-      const isPeak = i === 8 || i === 9;
-      const sales = Math.round((defaultRatios[i] / 100) * (shiftSales > 0 ? shiftSales * 0.24 : 12500));
+    const hourlyMap: Record<number, number> = {};
+    todaysInvoices.forEach(inv => {
+      const hr = new Date(inv.timeSettled || inv.timePlaced).getHours();
+      hourlyMap[hr] = (hourlyMap[hr] || 0) + (inv.total || 0);
+    });
+    const maxSales = Math.max(...hours.map(h => hourlyMap[h.hour] || 0), 0);
+
+    return hours.map((h) => {
+      const sales = hourlyMap[h.hour] || 0;
+      const heightPct = maxSales > 0 && sales > 0 ? Math.min(100, Math.max(10, Math.round((sales / maxSales) * 100))) : 0;
+      const isPeak = maxSales > 0 && sales === maxSales;
       return {
         ...h,
         sales,
-        heightPct: defaultRatios[i],
+        heightPct,
         isPeak,
       };
     });
-  }, [shiftSales]);
+  }, [todaysInvoices]);
 
-  // Top Selling Items
+  // Top Selling Items — strictly live invoice data
   const topDishes = useMemo(() => {
-    return [
-      { name: 'Mutton Shinwari Karahi (1 KG)', category: 'Special Karahi', qty: 16, revenue: 43200 },
-      { name: 'Chicken Dum Biryani Special', category: 'Rice & Biryani', qty: 22, revenue: 17600 },
-      { name: 'Reshmi Kabab Platter (8 Pcs)', category: 'BBQ Specials', qty: 12, revenue: 16800 },
-      { name: 'Fresh Mint Margarita Cooler', category: 'Beverages', qty: 28, revenue: 9800 },
-    ];
-  }, []);
+    const dishMap: Record<string, { name: string; category: string; qty: number; revenue: number }> = {};
+    todaysInvoices.forEach(inv => {
+      (inv.items || []).forEach(it => {
+        if (!dishMap[it.name]) {
+          dishMap[it.name] = {
+            name: it.name,
+            category: it.station === 'juice' ? 'Beverages' : 'Kitchen',
+            qty: 0,
+            revenue: 0,
+          };
+        }
+        dishMap[it.name].qty += it.qty || 1;
+        dishMap[it.name].revenue += (it.price || 0) * (it.qty || 1);
+      });
+    });
+    return Object.values(dishMap)
+      .sort((a, b) => b.qty - a.qty || b.revenue - a.revenue)
+      .slice(0, 4);
+  }, [todaysInvoices]);
 
-  // Recent Settled Invoices
+  // Recent Settled Invoices — strictly live invoice data
   const recentInvoices = useMemo(() => {
-    if (todaysInvoices.length > 0) {
-      return todaysInvoices.slice(0, 4);
-    }
-    return [
-      {
-        id: 'INV-1092',
-        tableName: 'Table T-06 (Majlis)',
-        server: 'Rashid Ali',
-        total: 6850,
-        payments: [{ type: 'card' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 750,
-      },
-      {
-        id: 'INV-1091',
-        tableName: 'Takeaway Counter #1',
-        server: 'Cashier Terminal',
-        total: 2450,
-        payments: [{ type: 'cash' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 720,
-      },
-      {
-        id: 'INV-1090',
-        tableName: 'Table T-12 (Executive)',
-        server: 'Hamza Khan',
-        total: 11200,
-        payments: [{ type: 'card' }],
-        timeSettled: todayTimestamp + 1000 * 60 * 690,
-      },
-    ] as unknown as Invoice[];
-  }, [todaysInvoices, todayTimestamp]);
+    return todaysInvoices.slice(0, 4);
+  }, [todaysInvoices]);
 
   return (
     <ScrollView 
@@ -821,7 +812,14 @@ export default function ManagerDashboard() {
               <Text style={[styles.thText, { flex: 1.5, textAlign: 'right' }]}>REVENUE</Text>
             </View>
 
-            {topDishes.map((dish, i) => (
+            {topDishes.length === 0 ? (
+              <View style={{ paddingVertical: 28, alignItems: 'center', gap: 4 }}>
+                <Ionicons name="restaurant-outline" size={24} color="#CBD5E1" />
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: BRAND.textSecondary }}>No Dishes Sold Today</Text>
+                <Text style={{ fontSize: 11, color: BRAND.textMuted }}>Settled shift items will rank here live.</Text>
+              </View>
+            ) : (
+            topDishes.map((dish, i) => (
               <View 
                 key={i} 
                 style={styles.tableDataRow}
@@ -840,7 +838,8 @@ export default function ManagerDashboard() {
                   </Text>
                 </View>
               </View>
-            ))}
+            ))
+            )}
           </View>
         </View>
 
@@ -878,7 +877,14 @@ export default function ManagerDashboard() {
                 <Text style={[styles.thText, { flex: 1.5, textAlign: 'right' }]}>AMOUNT</Text>
               </View>
 
-              {recentInvoices.map((inv, idx) => (
+              {recentInvoices.length === 0 ? (
+                <View style={{ paddingVertical: 28, alignItems: 'center', gap: 4 }}>
+                  <Ionicons name="receipt-outline" size={24} color="#CBD5E1" />
+                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: BRAND.textSecondary }}>No Settled Orders Today</Text>
+                  <Text style={{ fontSize: 11, color: BRAND.textMuted }}>Completed receipts will appear here live.</Text>
+                </View>
+              ) : (
+              recentInvoices.map((inv, idx) => (
                 <View 
                   key={idx} 
                   style={styles.tableDataRow}
@@ -898,7 +904,8 @@ export default function ManagerDashboard() {
                     </Text>
                   </View>
                 </View>
-              ))}
+              ))
+              )}
             </View>
           )}
         </View>
