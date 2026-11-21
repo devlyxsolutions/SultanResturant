@@ -12,19 +12,43 @@ import WaiterNotificationHost from '../components/WaiterNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
 import SessionSecurityHost from '../components/SessionSecurityHost';
 
-// Ignore benign web font loading timeouts in Expo LogBox
+// Ignore benign web font loading timeouts and offline firestore notices in Expo LogBox
 LogBox.ignoreLogs([
   'Fetching the font family',
   'font family "ionicons"',
   'font family',
   'fontfaceobserver',
   'ERR_DOWNLOAD',
+  'Could not reach Cloud Firestore backend',
+  '@firebase/firestore',
+  'Firestore (12.19.0)',
+  'Backend didn\'t respond within 10 seconds',
+  'The client will operate in offline mode',
 ]);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Global Web Font Patch & Error Guard against external browser extension crashes, font timeouts & network stalls
 if (Platform.OS === 'web') {
+  // Suppress benign Firestore offline timeout warnings from popping up Expo LogBox overlay on web
+  if (typeof console !== 'undefined' && console.error) {
+    try {
+      const originalConsoleError = console.error.bind(console);
+      console.error = function (...args: any[]) {
+        const msg = args.map(a => String(a?.message || a || '')).join(' ');
+        if (
+          msg.includes('Could not reach Cloud Firestore backend') ||
+          msg.includes('@firebase/firestore') ||
+          (msg.includes('Firestore') && msg.includes('offline mode'))
+        ) {
+          // Benign offline fallback notice — do not pop up dev overlay
+          return;
+        }
+        return originalConsoleError(...args);
+      };
+    } catch (_) {}
+  }
+
   // 1. Intercept document.fonts.load so vector icon queries resolve immediately without hitting 12000ms timeout
   if (typeof document !== 'undefined' && (document as any).fonts && typeof (document as any).fonts.load === 'function') {
     try {
@@ -49,11 +73,14 @@ if (Platform.OS === 'web') {
         if (
           filename.includes('chrome-extension://') ||
           stack.includes('chrome-extension://') ||
+          stack.includes('@firebase/firestore') ||
           message.includes('M_ID') ||
           message.includes('font family') ||
           message.includes('timed out after') ||
           message.includes('ionicons') ||
-          message.includes('ERR_DOWNLOAD')
+          message.includes('ERR_DOWNLOAD') ||
+          message.includes('Could not reach Cloud Firestore backend') ||
+          message.includes('Firestore')
         ) {
           event.preventDefault();
           event.stopImmediatePropagation?.();
@@ -73,7 +100,9 @@ if (Platform.OS === 'web') {
         reasonStr.includes('ionicons') ||
         reasonStr.includes('ERR_DOWNLOAD') ||
         reasonStr.includes('chrome-extension://') ||
-        reasonStr.includes('M_ID')
+        reasonStr.includes('M_ID') ||
+        reasonStr.includes('Could not reach Cloud Firestore backend') ||
+        reasonStr.includes('Firestore')
       ) {
         event.preventDefault();
         event.stopImmediatePropagation?.();

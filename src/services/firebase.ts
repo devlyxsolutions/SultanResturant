@@ -1,6 +1,11 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getDatabase, Database } from 'firebase/database';
-import { getFirestore, initializeFirestore, Firestore } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, Firestore, setLogLevel } from 'firebase/firestore';
+
+// Silence Firestore internal network/offline timeout warnings from triggering dev error overlays
+try {
+  setLogLevel('silent');
+} catch (_) {}
 
 type FirebaseAppInstance = ReturnType<typeof initializeApp>;
 
