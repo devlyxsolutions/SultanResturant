@@ -100,6 +100,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const [statusFilter, setStatusFilter] = useState<StockLevel | 'all'>('all');
   const [expiryFilter, setExpiryFilter] = useState<ExpiryStatus | 'all'>('all');
   const [movementFilter, setMovementFilter] = useState<StockMovementType | 'all'>('all');
+  const [viewMode, setViewMode] = useState<'row' | 'grid'>('row');
 
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
@@ -1212,25 +1213,64 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
           </View>
 
-          {/* Status Filter Chips */}
-          <View style={styles.statusFilterRow}>
-            {(['all', 'ok', 'low', 'out'] as const).map((st) => (
+          {/* Status Filter Chips + View Mode Switcher */}
+          <View style={[styles.statusFilterRow, { justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }]}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+              {(['all', 'ok', 'low', 'out'] as const).map((st) => (
+                <TouchableOpacity
+                  key={st}
+                  style={[styles.statusFilterBtn, statusFilter === st && styles.statusFilterBtnActive]}
+                  onPress={() => setStatusFilter(st)}
+                >
+                  <Text style={[styles.statusFilterBtnText, statusFilter === st && styles.statusFilterBtnTextActive]}>
+                    {st === 'all'
+                      ? 'All Stock Levels'
+                      : st === 'ok'
+                      ? 'In Stock (Safe)'
+                      : st === 'low'
+                      ? 'Low Stock Warning'
+                      : 'Out of Stock'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* View Mode Toggle: Row / Table View (Default) vs Box / Cards View */}
+            <View style={styles.viewModeToggleGroup}>
               <TouchableOpacity
-                key={st}
-                style={[styles.statusFilterBtn, statusFilter === st && styles.statusFilterBtnActive]}
-                onPress={() => setStatusFilter(st)}
+                style={[styles.viewModeToggleBtn, viewMode === 'row' && styles.viewModeToggleBtnActive]}
+                onPress={() => setViewMode('row')}
+                accessibilityLabel="Row / Table View"
+                {...(Platform.OS === 'web' ? ({ title: 'Row-wise Table View (1 Row Per Item)' } as any) : {})}
               >
-                <Text style={[styles.statusFilterBtnText, statusFilter === st && styles.statusFilterBtnTextActive]}>
-                  {st === 'all'
-                    ? 'All Stock Levels'
-                    : st === 'ok'
-                    ? 'In Stock (Safe)'
-                    : st === 'low'
-                    ? 'Low Stock Warning'
-                    : 'Out of Stock'}
+                <Ionicons
+                  name="list"
+                  size={14}
+                  color={viewMode === 'row' ? '#FFFFFF' : '#64748B'}
+                  style={{ marginRight: 5 }}
+                />
+                <Text style={[styles.viewModeToggleText, viewMode === 'row' && styles.viewModeToggleTextActive]}>
+                  Row View (ٹیبل)
                 </Text>
               </TouchableOpacity>
-            ))}
+
+              <TouchableOpacity
+                style={[styles.viewModeToggleBtn, viewMode === 'grid' && styles.viewModeToggleBtnActive]}
+                onPress={() => setViewMode('grid')}
+                accessibilityLabel="Box / Cards View"
+                {...(Platform.OS === 'web' ? ({ title: 'Box / Card Grid View' } as any) : {})}
+              >
+                <Ionicons
+                  name="grid"
+                  size={13}
+                  color={viewMode === 'grid' ? '#FFFFFF' : '#64748B'}
+                  style={{ marginRight: 5 }}
+                />
+                <Text style={[styles.viewModeToggleText, viewMode === 'grid' && styles.viewModeToggleTextActive]}>
+                  Box Cards (باکس)
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Items Grid */}
@@ -1246,8 +1286,252 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 </TouchableOpacity>
               )}
             </View>
+          ) : viewMode === 'row' ? (
+            <>
+              {/* 1 ROW-WISE TABLE VIEW (AS REQUESTED) */}
+              <View style={styles.tableWrapper}>
+                <ScrollView
+                  horizontal={!isMobile}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ minWidth: isMobile ? undefined : 1120, width: '100%' }}
+                >
+                  <View style={{ width: '100%' }}>
+                    {/* Desktop / Tablet Column Headers */}
+                    {!isMobile && (
+                      <View style={styles.stockTableHeader}>
+                        <View style={[styles.thCol, { flex: 2.3, minWidth: 190 }]}>
+                          <Text style={styles.thColText}>ITEM & CODE</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.8, minWidth: 150 }]}>
+                          <Text style={styles.thColText}>CATEGORY & STORAGE</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.1, minWidth: 170 }]}>
+                          <Text style={styles.thColText}>CURRENT STOCK / REORDER</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                          <Text style={styles.thColText}>UNIT COST & VALUE</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.7, minWidth: 130 }]}>
+                          <Text style={styles.thColText}>SUPPLIER</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.6, minWidth: 125 }]}>
+                          <Text style={styles.thColText}>STATUS & EXPIRY</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.2, minWidth: 185, alignItems: 'flex-end', paddingRight: 6 }]}>
+                          <Text style={styles.thColText}>ACTIONS</Text>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Table Rows (1 Full Row Per Stock Item) */}
+                    <View style={{ gap: 6 }}>
+                      {rawPagination.paginatedData.map((item) => {
+                        const badge = getStatusBadge(item);
+                        const expiry = getExpiryStatus(item);
+                        const isLow = item.stock <= item.threshold;
+                        const totalItemVal = item.stock * (item.costPerUnit || 0);
+                        const percentLeft = Math.min(100, Math.round((item.stock / (item.threshold * 2 || 1)) * 100));
+
+                        return (
+                          <View
+                            key={item.id}
+                            style={[
+                              styles.stockTableRow,
+                              {
+                                borderLeftColor: item.stock <= 0 ? BRAND.danger : isLow ? BRAND.warn : BRAND.success,
+                              },
+                              isMobile && styles.stockTableRowMobile
+                            ]}
+                            {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                          >
+                            {/* 1. Item & Code */}
+                            <View style={[styles.rowCol, { flex: 2.3, minWidth: 190, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                {item.itemCode ? (
+                                  <View style={styles.skuBadgeCompact}>
+                                    <Text style={styles.skuBadgeCompactText}>{item.itemCode}</Text>
+                                  </View>
+                                ) : null}
+                                <Text style={styles.stockRowCategory}>{item.category}</Text>
+                              </View>
+                              <Text style={styles.stockRowTitle} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                              {item.urduName ? (
+                                <Text style={styles.stockRowUrdu} numberOfLines={1}>
+                                  {item.urduName}
+                                </Text>
+                              ) : null}
+                            </View>
+
+                            {/* 2. Category & Storage */}
+                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 150, gap: 3 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="location" size={12} color={BRAND.burgundy} />
+                                <Text style={styles.stockRowLocation} numberOfLines={1}>
+                                  {item.location || 'Dry Ration Store'}
+                                </Text>
+                              </View>
+                              {item.batchNumber ? (
+                                <Text style={styles.stockRowBatch} numberOfLines={1}>
+                                  Batch: #{item.batchNumber}
+                                </Text>
+                              ) : null}
+                            </View>
+
+                            {/* 3. Stock Level & Health Bar */}
+                            <View style={[styles.rowCol, { flex: 2.1, minWidth: 170, gap: 4 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                                <Text style={[styles.stockRowQuantity, isLow && { color: badge.text }]}>
+                                  {item.stock} <Text style={{ fontSize: 11, fontWeight: '600', color: BRAND.ink }}>{item.unit}</Text>
+                                </Text>
+                                <Text style={styles.stockRowAlert}>
+                                  Alert: {item.threshold} {item.unit}
+                                </Text>
+                              </View>
+                              <View style={styles.stockRowProgressBarBg}>
+                                <View
+                                  style={[
+                                    styles.stockRowProgressBarFill,
+                                    {
+                                      width: `${percentLeft}%`,
+                                      backgroundColor: item.stock <= 0 ? BRAND.danger : isLow ? BRAND.warn : BRAND.success,
+                                    },
+                                  ]}
+                                />
+                              </View>
+                            </View>
+
+                            {/* 4. Unit Cost & Total Valuation */}
+                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
+                              <Text style={styles.stockRowValuation}>{money(totalItemVal)}</Text>
+                              <Text style={styles.stockRowCostUnit}>
+                                {item.costPerUnit ? money(item.costPerUnit) : 'N/A'}/{item.unit}
+                              </Text>
+                            </View>
+
+                            {/* 5. Supplier */}
+                            <View style={[styles.rowCol, { flex: 1.7, minWidth: 130, gap: 3 }]}>
+                              {item.supplier ? (
+                                <>
+                                  <Text style={styles.stockRowSupplier} numberOfLines={1}>
+                                    {item.supplier}
+                                  </Text>
+                                  {item.supplierPhone ? (
+                                    <TouchableOpacity
+                                      style={styles.stockRowWhatsAppBtn}
+                                      onPress={() => {
+                                        const num = toWhatsAppNumber(item.supplierPhone!);
+                                        Linking.openURL(`https://wa.me/${num}`);
+                                      }}
+                                      activeOpacity={0.8}
+                                    >
+                                      <Ionicons name="logo-whatsapp" size={11} color="#16A34A" />
+                                      <Text style={styles.stockRowWhatsAppText}>WhatsApp</Text>
+                                    </TouchableOpacity>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <Text style={{ fontSize: 11, color: BRAND.muted, fontStyle: 'italic' }}>—</Text>
+                              )}
+                            </View>
+
+                            {/* 6. Status & Expiry */}
+                            <View style={[styles.rowCol, { flex: 1.6, minWidth: 125, gap: 3 }]}>
+                              <View style={[styles.stockRowStatusPill, { backgroundColor: badge.bg }]}>
+                                <Ionicons name={badge.icon as any} size={11} color={badge.text} style={{ marginRight: 3 }} />
+                                <Text style={[styles.stockRowStatusText, { color: badge.text }]}>{badge.label}</Text>
+                              </View>
+                              {expiry.status !== 'none' ? (
+                                <View style={[styles.stockRowExpiryPill, { backgroundColor: expiry.bgColor }]}>
+                                  <Text style={[styles.stockRowExpiryText, { color: expiry.color }]}>
+                                    {expiry.label}
+                                  </Text>
+                                </View>
+                              ) : null}
+                            </View>
+
+                            {/* 7. Action Buttons */}
+                            <View style={[styles.rowCol, { flex: 2.2, minWidth: 185, flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 5 }]}>
+                              {(canAddInventory || canEditInventory) && (
+                                <TouchableOpacity
+                                  style={styles.stockRowReceiveBtn}
+                                  onPress={() => handleOpenReceiveModal(item)}
+                                  activeOpacity={0.8}
+                                  {...(Platform.OS === 'web' ? ({ title: 'Receive Stock (GRN)' } as any) : {})}
+                                >
+                                  <Ionicons name="arrow-down-circle" size={13} color="#FFFFFF" style={{ marginRight: 3 }} />
+                                  <Text style={styles.stockRowReceiveText}>Receive</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              {canEditInventory && (
+                                <TouchableOpacity
+                                  style={styles.stockRowUsageBtn}
+                                  onPress={() => handleOpenMovement(item, 'usage')}
+                                  activeOpacity={0.8}
+                                  {...(Platform.OS === 'web' ? ({ title: 'Record Kitchen Usage' } as any) : {})}
+                                >
+                                  <Ionicons name="restaurant" size={12} color="#0284C7" style={{ marginRight: 2 }} />
+                                  <Text style={styles.stockRowUsageText}>Usage</Text>
+                                </TouchableOpacity>
+                              )}
+
+                              {canEditInventory && (
+                                <TouchableOpacity
+                                  style={styles.stockRowIconBtn}
+                                  onPress={() => handleOpenMovement(item, 'adjust')}
+                                  accessibilityLabel="Adjust Stock"
+                                  {...(Platform.OS === 'web' ? ({ title: 'Adjust Stock / Audit' } as any) : {})}
+                                >
+                                  <Ionicons name="options-outline" size={13} color="#475569" />
+                                </TouchableOpacity>
+                              )}
+
+                              {canEditInventory && (
+                                <TouchableOpacity
+                                  style={styles.stockRowIconBtn}
+                                  onPress={() => handleOpenEdit(item)}
+                                  accessibilityLabel="Edit Item"
+                                  {...(Platform.OS === 'web' ? ({ title: 'Edit SKU' } as any) : {})}
+                                >
+                                  <Ionicons name="pencil-outline" size={13} color="#475569" />
+                                </TouchableOpacity>
+                              )}
+
+                              {canDeleteInventory && (
+                                <TouchableOpacity
+                                  style={[styles.stockRowIconBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+                                  onPress={() => handleDelete(item)}
+                                  accessibilityLabel="Delete Item"
+                                  {...(Platform.OS === 'web' ? ({ title: 'Delete SKU' } as any) : {})}
+                                >
+                                  <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </View>
+                </ScrollView>
+              </View>
+
+              <PaginationControl
+                currentPage={rawPagination.currentPage}
+                totalPages={rawPagination.totalPages}
+                pageSize={rawPagination.pageSize}
+                totalItems={rawPagination.totalItems}
+                pageSizeOptions={[12, 24, 48, 96]}
+                onPageChange={rawPagination.goToPage}
+                onPageSizeChange={rawPagination.setPageSize}
+                itemName="inventory items"
+              />
+            </>
           ) : (
             <>
+              {/* BOX / CARD GRID VIEW (ALTERNATIVE VIEW) */}
               <View style={styles.itemsGrid}>
               {rawPagination.paginatedData.map((item) => {
                 const badge = getStatusBadge(item);
@@ -3131,6 +3415,239 @@ const styles = StyleSheet.create({
   statusFilterBtnTextActive: {
     color: BRAND.burgundy,
     fontWeight: '800',
+  },
+  viewModeToggleGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  viewModeToggleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+  },
+  viewModeToggleBtnActive: {
+    backgroundColor: BRAND.burgundy,
+    shadowColor: BRAND.burgundy,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.15,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  viewModeToggleText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  viewModeToggleTextActive: {
+    color: '#FFFFFF',
+  },
+  tableWrapper: {
+    width: '100%',
+    backgroundColor: 'transparent',
+    marginBottom: 16,
+  },
+  stockTableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  thCol: {
+    paddingHorizontal: 4,
+  },
+  thColText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+  },
+  stockTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  stockTableRowMobile: {
+    minWidth: 980,
+  },
+  rowCol: {
+    paddingHorizontal: 4,
+  },
+  skuBadgeCompact: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: '#BFDBFE',
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+  },
+  skuBadgeCompactText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#1D4ED8',
+    letterSpacing: 0.3,
+  },
+  stockRowCategory: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  stockRowTitle: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  stockRowUrdu: {
+    fontSize: 12,
+    color: '#92400E',
+    fontWeight: '600',
+    marginTop: 1,
+  },
+  stockRowLocation: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  stockRowBatch: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  stockRowQuantity: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  stockRowAlert: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  stockRowProgressBarBg: {
+    height: 5,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 3,
+    overflow: 'hidden',
+    width: '100%',
+  },
+  stockRowProgressBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  stockRowValuation: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  stockRowCostUnit: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  stockRowSupplier: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  stockRowWhatsAppBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#DCFCE7',
+    borderWidth: 1,
+    borderColor: '#86EFAC',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
+  },
+  stockRowWhatsAppText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  stockRowStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+    alignSelf: 'flex-start',
+  },
+  stockRowStatusText: {
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.3,
+  },
+  stockRowExpiryPill: {
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+    borderRadius: 5,
+    alignSelf: 'flex-start',
+  },
+  stockRowExpiryText: {
+    fontSize: 9.5,
+    fontWeight: '700',
+  },
+  stockRowReceiveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#16A34A',
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  stockRowReceiveText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  stockRowUsageBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 7,
+    paddingVertical: 4.5,
+    borderRadius: 6,
+  },
+  stockRowUsageText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0284C7',
+  },
+  stockRowIconBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   itemsGrid: {
     flexDirection: 'row',
