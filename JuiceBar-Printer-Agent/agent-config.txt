@@ -1,0 +1,4 @@
+# Sultan Restaurant Dedicated Juice Bar Thermal Print Agent Config
+SERVER=http://192.168.1.10:5050
+STATION=juice
+PRINTER=AUTO

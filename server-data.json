@@ -887,12 +887,11 @@
       "server": "Sara Ahmed",
       "timePlaced": 1795186052061,
       "estimatedPrepTime": 10,
-      "status": "cooking",
+      "status": "served",
       "isAddOn": false,
       "roundNumber": 1,
       "stationStatuses": {
-        "main": "served",
-        "juice": "cooking"
+        "main": "served"
       },
       "items": [
         {
@@ -907,7 +906,8 @@
           "readyAt": 1795186268523
         }
       ],
-      "cookingStartedAt": 1795186083822
+      "cookingStartedAt": 1795186083822,
+      "readyAt": 1795186683960
     },
     {
       "items": [
@@ -924,8 +924,7 @@
         }
       ],
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "id": "KOT-5108",
       "tableId": "tGF04",
@@ -985,22 +984,22 @@
       "id": "KOT-2623",
       "tableId": "t1791106748755",
       "stationStatuses": {
-        "main": "served",
-        "juice": "cooking"
+        "main": "served"
       },
-      "status": "cooking"
+      "status": "served",
+      "readyAt": 1795186629825
     },
     {
       "estimatedPrepTime": 20,
       "id": "KOT-3916",
-      "status": "ready",
+      "status": "served",
       "isAddOn": false,
       "items": [
         {
           "prepTimeMin": 20,
           "name": "Sultan Seekh Kebab",
           "qty": 1,
-          "itemStatus": "ready",
+          "itemStatus": "served",
           "station": "main",
           "id": "m1",
           "completed": true,
@@ -1014,33 +1013,31 @@
           "completed": true,
           "price": 899,
           "station": "main",
-          "itemStatus": "ready",
+          "itemStatus": "served",
           "id": "slt-des-kunafa",
           "readyAt": 1795186270732
         }
       ],
       "stationStatuses": {
-        "main": "ready",
-        "juice": "ready"
+        "main": "served"
       },
       "roundNumber": 1,
       "tableName": "T-01",
       "tableId": "1",
       "server": "Sara Ahmed",
       "timePlaced": 1795185072548,
-      "cookingStartedAt": 1795185103427,
-      "readyAt": 1795186305264
+      "cookingStartedAt": 1795185103427
     },
     {
       "roundNumber": 1,
       "cookingStartedAt": 1795185052325,
-      "status": "cooking",
+      "status": "served",
       "estimatedPrepTime": 35,
       "timePlaced": 1795185022061,
       "isAddOn": false,
       "stationStatuses": {
         "main": "served",
-        "juice": "cooking"
+        "juice": "served"
       },
       "tableName": "T-02",
       "items": [
@@ -1078,14 +1075,15 @@
           "readyAt": 1795186011652
         },
         {
-          "itemStatus": "cooking",
+          "itemStatus": "served",
           "name": "Fresh Mint Margarita",
           "qty": 9,
           "prepTimeMin": 5,
           "id": "m5",
           "station": "juice",
-          "completed": false,
-          "price": 450
+          "completed": true,
+          "price": 450,
+          "readyAt": 1795186730594
         },
         {
           "station": "main",
@@ -1132,8 +1130,7 @@
       ],
       "tableName": "T-10",
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "id": "KOT-AUTO-READY-TEST",
       "status": "served",
@@ -1142,8 +1139,7 @@
     },
     {
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "server": "Hamza Waiter",
       "timePlaced": 1795183638422,
@@ -1169,8 +1165,7 @@
       "status": "served",
       "readyAt": 1795184622337,
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "server": "Ali Waiter",
       "items": [
@@ -1198,7 +1193,8 @@
           "id": "m1",
           "readyAt": 1795185572306,
           "itemStatus": "served",
-          "completed": true
+          "completed": true,
+          "station": "main"
         }
       ],
       "stationStatuses": {
@@ -1217,8 +1213,7 @@
       "isAddOn": false,
       "server": "Junaid Ahsan (POS)",
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "cookingStartedAt": 1795182724531,
       "items": [
@@ -1284,8 +1279,7 @@
       "isAddOn": false,
       "status": "served",
       "stationStatuses": {
-        "main": "served",
-        "juice": "served"
+        "main": "served"
       },
       "estimatedPrepTime": 20,
       "tableId": "takeaway",
@@ -9318,7 +9312,8 @@
       "id": "slt-sal-caesar",
       "isDeal": false,
       "description": "Fresh crunchy Iceberg, grilled chicken, sun-dried tomatoes, tossed in Chef's special sauce, topped with croutons & Black olives & boiled eggs",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9332,7 +9327,8 @@
       "isDeal": false,
       "imageUrl": "https://images.unsplash.com/photo-1519996529931-28324d5a630e?w=800&q=80",
       "name": "Fruity Nutty Salad",
-      "category": "Salad"
+      "category": "Salad",
+      "station": "main"
     },
     {
       "name": "Russian Salad",
@@ -9346,7 +9342,8 @@
       "preparationTimeMinutes": 20,
       "imageUri": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80",
       "rating": 4.8,
-      "category": "Salad"
+      "category": "Salad",
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -9360,7 +9357,8 @@
       "name": "Fresh Green Salad",
       "imageUrl": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80",
       "imageUri": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "isPopular": true,
@@ -9375,7 +9373,8 @@
       "id": "slt-app-dynamite-prawns",
       "imageUri": "https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=800&q=80",
       "price": 1150,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "category": "Appetizers",
@@ -9389,7 +9388,8 @@
       "isAvailable": true,
       "isPopular": false,
       "price": 1150,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "id": "slt-app-stuffed-peri-bite",
@@ -9403,7 +9403,8 @@
       "imageUri": "https://images.unsplash.com/photo-1562967914-608f82629710?w=800&q=80",
       "isPopular": false,
       "isDeal": false,
-      "imageUrl": "https://images.unsplash.com/photo-1562967914-608f82629710?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1562967914-608f82629710?w=800&q=80",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9417,7 +9418,8 @@
       "name": "Finger Fish",
       "imageUrl": "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&q=80",
       "isDeal": false,
-      "category": "Appetizers"
+      "category": "Appetizers",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9431,7 +9433,8 @@
       "preparationTimeMinutes": 20,
       "id": "slt-app-chicken-dynamite",
       "isPopular": false,
-      "name": "Chicken Dynamite"
+      "name": "Chicken Dynamite",
+      "station": "main"
     },
     {
       "name": "Loaded Fries",
@@ -9445,7 +9448,8 @@
       "imageUri": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=800&q=80",
       "isAvailable": true,
       "preparationTimeMinutes": 20,
-      "category": "Appetizers"
+      "category": "Appetizers",
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -9459,7 +9463,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1527477378378-0c6f50529d33?w=800&q=80",
       "imageUri": "https://images.unsplash.com/photo-1527477378378-0c6f50529d33?w=800&q=80",
       "rating": 4.8,
-      "category": "Appetizers"
+      "category": "Appetizers",
+      "station": "main"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=800&q=80",
@@ -9473,7 +9478,8 @@
       "isPopular": false,
       "rating": 4.8,
       "preparationTimeMinutes": 20,
-      "description": "Crispy fries tossed in spicy masala seasoning"
+      "description": "Crispy fries tossed in spicy masala seasoning",
+      "station": "main"
     },
     {
       "category": "Appetizers",
@@ -9487,7 +9493,8 @@
       "name": "Fish Cracker",
       "isDeal": false,
       "isPopular": false,
-      "id": "slt-app-fish-cracker"
+      "id": "slt-app-fish-cracker",
+      "station": "main"
     },
     {
       "name": "Plain Fries",
@@ -9501,7 +9508,8 @@
       "price": 350,
       "category": "Appetizers",
       "description": "Classic salted crispy french fries",
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "isPopular": true,
@@ -9516,7 +9524,8 @@
       "name": "Sultan Special Soup",
       "preparationTimeMinutes": 20,
       "id": "slt-sop-sultan-special",
-      "price": 1450
+      "price": 1450,
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -9530,7 +9539,8 @@
       "isPopular": false,
       "description": "Classic hot & sour soup with chicken & tangy spices",
       "price": 1050,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "id": "slt-sop-chicken-corn",
@@ -9544,7 +9554,8 @@
       "imageUri": "https://images.unsplash.com/photo-1603105037880-880cd4edfb0d?w=800&q=80",
       "isDeal": false,
       "preparationTimeMinutes": 20,
-      "imageUrl": "https://images.unsplash.com/photo-1603105037880-880cd4edfb0d?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1603105037880-880cd4edfb0d?w=800&q=80",
+      "station": "main"
     },
     {
       "id": "slt-cnt-fish-steak",
@@ -9558,7 +9569,8 @@
       "price": 1650,
       "description": "Perfectly grilled fish fillet topped with lemon butter, tartar sauce, served with crispy fries or mashed potatoes",
       "rating": 4.8,
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "price": 1590,
@@ -9572,7 +9584,8 @@
       "preparationTimeMinutes": 20,
       "imageUrl": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=800&q=80",
       "imageUri": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=800&q=80",
-      "id": "slt-cnt-fish-chips"
+      "id": "slt-cnt-fish-chips",
+      "station": "main"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
@@ -9586,7 +9599,8 @@
       "name": "Tarragon Chicken",
       "preparationTimeMinutes": 20,
       "isDeal": false,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -9600,7 +9614,8 @@
       "imageUri": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=800&q=80",
       "preparationTimeMinutes": 20,
       "category": "Continental",
-      "description": "Juicy grilled chicken steak coated in cracked black pepper sauce with a rich creamy texture, served with crispy fries or mashed potatoes"
+      "description": "Juicy grilled chicken steak coated in cracked black pepper sauce with a rich creamy texture, served with crispy fries or mashed potatoes",
+      "station": "main"
     },
     {
       "price": 1590,
@@ -9614,7 +9629,8 @@
       "rating": 4.8,
       "imageUri": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&q=80",
       "isAvailable": true,
-      "category": "Continental"
+      "category": "Continental",
+      "station": "main"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=800&q=80",
@@ -9628,7 +9644,8 @@
       "category": "Continental",
       "price": 1590,
       "isAvailable": true,
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -9642,7 +9659,8 @@
       "isDeal": false,
       "isAvailable": true,
       "isPopular": false,
-      "category": "Continental"
+      "category": "Continental",
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -9657,7 +9675,8 @@
       "badge": "Chef Special",
       "description": "Signature stuffed chicken breast filled with cheese & herbs, topped with special creamy sauce, served with crispy fries or mashed potatoes",
       "category": "Continental",
-      "isPopular": true
+      "isPopular": true,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9671,7 +9690,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1621996346565-e3d5d6281292?w=800&q=80",
       "isDeal": false,
       "category": "Continental",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -9685,7 +9705,8 @@
       "price": 1499,
       "name": "Chicken Cashew Nut",
       "imageUrl": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=800&q=80",
-      "imageUri": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=800&q=80",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -9699,7 +9720,8 @@
       "imageUri": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=800&q=80",
       "isAvailable": true,
       "imageUrl": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=800&q=80",
-      "id": "slt-chn-manchurian"
+      "id": "slt-chn-manchurian",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9714,7 +9736,8 @@
       "preparationTimeMinutes": 20,
       "isAvailable": true,
       "name": "Chicken Chilli Dry",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -9728,7 +9751,8 @@
       "price": 1199,
       "id": "slt-chn-chowmein",
       "description": "Stir-fried noodles with shredded chicken & vegetables",
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "description": "Signature fried rice loaded with chicken, prawns, egg, fruits, nuts & fresh vegetables",
@@ -9743,7 +9767,8 @@
       "name": "Special Rice",
       "id": "slt-chn-special-rice",
       "isAvailable": true,
-      "isPopular": true
+      "isPopular": true,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9757,7 +9782,8 @@
       "isAvailable": true,
       "id": "slt-chn-masala-rice",
       "isDeal": false,
-      "name": "Chicken Masala Rice"
+      "name": "Chicken Masala Rice",
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -9771,7 +9797,8 @@
       "imageUri": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=800&q=80",
       "rating": 4.8,
       "price": 999,
-      "category": "Chinese"
+      "category": "Chinese",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -9792,7 +9819,8 @@
       "preparationTimeMinutes": 20,
       "isAvailable": true,
       "imageUrl": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80",
-      "imageUri": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80",
+      "station": "main"
     },
     {
       "variants": [
@@ -9821,7 +9849,8 @@
       "badge": "Chef Special",
       "imageUrl": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80",
       "imageUri": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80",
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -9849,7 +9878,8 @@
           "name": "Family"
         }
       ],
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1590947132387-155cc02f3212?w=800&q=80",
@@ -9878,7 +9908,8 @@
         }
       ],
       "isPopular": false,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9906,7 +9937,8 @@
       "name": "Tikka Pizza",
       "imageUri": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80",
       "preparationTimeMinutes": 20,
-      "imageUrl": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80",
+      "station": "main"
     },
     {
       "category": "Pizza",
@@ -9934,7 +9966,8 @@
       "imageUri": "https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?w=800&q=80",
       "rating": 4.8,
       "isAvailable": true,
-      "id": "slt-piz-cheese-lover"
+      "id": "slt-piz-cheese-lover",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -9954,7 +9987,8 @@
       "isDeal": false,
       "preparationTimeMinutes": 20,
       "category": "Pizza",
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9969,7 +10003,8 @@
       "isPopular": false,
       "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
       "imageUrl": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "id": "slt-fst-chicken-smash",
@@ -9983,7 +10018,8 @@
       "isPopular": false,
       "imageUri": "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=80",
       "category": "Fast Food",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -9997,7 +10033,8 @@
       "preparationTimeMinutes": 20,
       "description": "Grilled chicken fillet marinated in herbs and spices, topped with fresh lettuce, creamy mayo, & cheese, served with crispy fries & coleslaw",
       "isDeal": false,
-      "name": "Grilled Chicken Burger"
+      "name": "Grilled Chicken Burger",
+      "station": "main"
     },
     {
       "category": "Fast Food",
@@ -10012,7 +10049,8 @@
       "badge": "Crispy Bestseller",
       "isDeal": false,
       "imageUri": "https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=800&q=80",
-      "imageUrl": "https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=800&q=80",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10027,7 +10065,8 @@
       "isAvailable": true,
       "price": 990,
       "imageUri": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&q=80",
-      "imageUrl": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&q=80",
+      "station": "main"
     },
     {
       "id": "slt-fst-jalapeno-panini",
@@ -10041,7 +10080,8 @@
       "imageUri": "https://images.unsplash.com/photo-1509722747041-616f39b57569?w=800&q=80",
       "isDeal": false,
       "description": "Grilled Italian panini bread stuffed with chicken, cheese, jalapenos, olives & spicy jalapeno sauce, served with golden fries & coleslaw",
-      "imageUrl": "https://images.unsplash.com/photo-1509722747041-616f39b57569?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1509722747041-616f39b57569?w=800&q=80",
+      "station": "main"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1554433607-66b5efe9d304?w=800&q=80",
@@ -10055,7 +10095,8 @@
       "price": 790,
       "isDeal": false,
       "isAvailable": true,
-      "name": "Grilled Chicken Panini"
+      "name": "Grilled Chicken Panini",
+      "station": "main"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=800&q=80",
@@ -10069,7 +10110,8 @@
       "id": "slt-fst-club-sandwich",
       "isPopular": false,
       "rating": 4.8,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "id": "slt-brs-chicken-broast",
@@ -10094,7 +10136,8 @@
       ],
       "name": "Chicken Broast",
       "isDeal": false,
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "description": "Special Turkish mutton masala with mughlai spices, tender mutton pieces in aromatic gravy",
@@ -10109,7 +10152,8 @@
       "preparationTimeMinutes": 20,
       "isDeal": false,
       "id": "slt-tur-roghan-josh",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
@@ -10124,7 +10168,8 @@
       "category": "Turkish Cuisine",
       "isDeal": false,
       "price": 4299,
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "main"
     },
     {
       "name": "Mutton Larva",
@@ -10138,7 +10183,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
       "category": "Turkish Cuisine",
       "preparationTimeMinutes": 20,
-      "description": "Traditional Turkish mutton larva, slow-cooked mutton in rich Turkish spices & yogurt"
+      "description": "Traditional Turkish mutton larva, slow-cooked mutton in rich Turkish spices & yogurt",
+      "station": "main"
     },
     {
       "category": "BBQ",
@@ -10159,7 +10205,8 @@
       "name": "Mutton Champ",
       "badge": "Chef Special",
       "isPopular": true,
-      "price": 3300
+      "price": 3300,
+      "station": "main"
     },
     {
       "category": "BBQ",
@@ -10179,7 +10226,8 @@
       "isPopular": false,
       "imageUrl": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&q=80",
       "description": "Minced mutton seasoned with traditional herbs and skewered over embers",
-      "id": "slt-bbq-mutton-kabab"
+      "id": "slt-bbq-mutton-kabab",
+      "station": "main"
     },
     {
       "price": 1799,
@@ -10199,7 +10247,8 @@
       "isPopular": false,
       "category": "BBQ",
       "rating": 4.8,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -10220,7 +10269,8 @@
       "price": 1799,
       "isAvailable": true,
       "rating": 4.8,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "id": "slt-bbq-chicken-kabab",
@@ -10240,7 +10290,8 @@
       ],
       "price": 1499,
       "category": "BBQ",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "id": "slt-bbq-fish-tikka",
@@ -10260,7 +10311,8 @@
       "rating": 4.8,
       "description": "Boneless fish cubes marinated in lemon, carom seeds & royal tikka marinade",
       "category": "BBQ",
-      "price": 2299
+      "price": 2299,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10280,7 +10332,8 @@
       ],
       "category": "BBQ",
       "preparationTimeMinutes": 20,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "name": "Qandhari Boti",
@@ -10300,7 +10353,8 @@
       "description": "Authentic Afghan style spicy tender marinated chicken boti grilled to perfection",
       "preparationTimeMinutes": 20,
       "category": "BBQ",
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -10320,7 +10374,8 @@
       "category": "BBQ",
       "isPopular": false,
       "description": "Chicken cubes coated in aromatic green herb paste of mint, coriander and green chilies",
-      "name": "Haryali Boti"
+      "name": "Haryali Boti",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10341,7 +10396,8 @@
       "description": "Mouth melting chicken chunks marinated with thick dairy cream, cheese and mild white pepper",
       "badge": "Most Popular",
       "price": 1499,
-      "category": "BBQ"
+      "category": "BBQ",
+      "station": "main"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1527477378378-0c6f50529d33?w=800&q=80",
@@ -10361,7 +10417,8 @@
         }
       ],
       "description": "Traditional bone-in chicken cuts marinated in vibrant red tandoori spices and charred on coals",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "id": "slt-bir-mutton-biryani",
@@ -10376,7 +10433,8 @@
       "description": "Topped with Cashew Nuts & Brown Onion",
       "price": 1499,
       "name": "Sultan Special Mutton Biryani",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "id": "slt-bir-chicken-biryani",
@@ -10391,7 +10449,8 @@
       "category": "Biryani",
       "price": 1199,
       "preparationTimeMinutes": 20,
-      "badge": "Chef Special"
+      "badge": "Chef Special",
+      "station": "main"
     },
     {
       "price": 1499,
@@ -10406,7 +10465,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&q=80",
       "id": "slt-dal-makhni",
       "imageUri": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "isPopular": true,
@@ -10431,7 +10491,8 @@
           "name": "Full"
         }
       ],
-      "id": "slt-hnd-white-handi"
+      "id": "slt-hnd-white-handi",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10455,7 +10516,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
       "price": 1299,
       "description": "Royal Mughal feast handi simmered with saffron, roasted nuts, yogurt and golden spices",
-      "id": "slt-hnd-shahjahani"
+      "id": "slt-hnd-shahjahani",
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -10479,7 +10541,8 @@
       "description": "Punjabi Patiala style spiced chicken handi with rich onion-tomato masala and butter",
       "isDeal": false,
       "category": "Pakistani - Handi",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -10503,7 +10566,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
       "price": 1199,
       "description": "Boneless chicken prepared with generous fresh ginger juliennes and aromatic crushed spices",
-      "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10527,7 +10591,8 @@
           "price": 2099,
           "name": "Full"
         }
-      ]
+      ],
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -10551,7 +10616,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
       "price": 1199,
       "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
@@ -10576,7 +10642,8 @@
           "name": "Full"
         }
       ],
-      "id": "slt-krh-sultan-mutton-white"
+      "id": "slt-krh-sultan-mutton-white",
+      "station": "main"
     },
     {
       "id": "slt-krh-mutton",
@@ -10600,7 +10667,8 @@
         }
       ],
       "name": "Mutton Karahi",
-      "description": "Fresh tender mutton cuts braised in ripe red tomatoes, ginger slivers and desi ghee"
+      "description": "Fresh tender mutton cuts braised in ripe red tomatoes, ginger slivers and desi ghee",
+      "station": "main"
     },
     {
       "variants": [
@@ -10625,7 +10693,8 @@
       "badge": "Shinwari Authentic",
       "description": "Traditional Khyber tribal recipe prepared only with fresh tomatoes, salt and animal fat",
       "rating": 4.8,
-      "price": 2299
+      "price": 2299,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10649,7 +10718,8 @@
       "isPopular": false,
       "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
       "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
@@ -10674,7 +10744,8 @@
           "name": "Full"
         }
       ],
-      "name": "Dumba Shanwari"
+      "name": "Dumba Shanwari",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -10698,7 +10769,8 @@
       "preparationTimeMinutes": 20,
       "category": "Pakistani - Karahi",
       "isAvailable": true,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "variants": [
@@ -10722,7 +10794,8 @@
       "id": "slt-krh-lahori-chicken",
       "imageUrl": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
       "rating": 4.8,
-      "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10746,7 +10819,8 @@
       "isAvailable": true,
       "price": 1199,
       "isPopular": false,
-      "category": "Pakistani - Karahi"
+      "category": "Pakistani - Karahi",
+      "station": "main"
     },
     {
       "description": "200g pure desi makhan dollop for extra richness in your Karahi or Handi",
@@ -10760,7 +10834,8 @@
       "isPopular": false,
       "preparationTimeMinutes": 20,
       "name": "Extra Add-on: 200g Makhan",
-      "category": "Pakistani - Karahi"
+      "category": "Pakistani - Karahi",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10775,7 +10850,8 @@
       "name": "Lahm Mandi",
       "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
       "description": "Juicy grilled mutton Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts",
-      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+      "station": "main"
     },
     {
       "category": "Mandi Platter",
@@ -10789,7 +10865,8 @@
       "description": "Juicy grilled Fish Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts",
       "name": "Fish Mandi",
       "price": 3399,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "description": "Juicy grilled Chicken Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts",
@@ -10803,7 +10880,8 @@
       "id": "slt-mnd-dajaj",
       "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
       "rating": 4.8,
-      "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+      "station": "main"
     },
     {
       "isDeal": false,
@@ -10817,7 +10895,8 @@
       "preparationTimeMinutes": 20,
       "imageUrl": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
       "description": "Signature Mandi Rice, Topped on Mutton, Brown Onion, Cashew Nuts, Served with Kuzzu Yakhni",
-      "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+      "station": "main"
     },
     {
       "category": "Special Platters",
@@ -10832,7 +10911,8 @@
       "imageUri": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
       "isPopular": false,
       "isDeal": true,
-      "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -10847,7 +10927,8 @@
       "preparationTimeMinutes": 20,
       "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
       "imageUrl": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -10862,7 +10943,8 @@
       "price": 59999,
       "imageUrl": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80",
       "badge": "Emperor Feast (22-25)",
-      "imageUri": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80",
+      "station": "main"
     },
     {
       "price": 550,
@@ -10876,7 +10958,8 @@
       "rating": 4.8,
       "description": "Assorted tandoor basket featuring Roghni, Garlic, Kalonji and Cheese naan",
       "id": "slt-tan-mix-basket",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "category": "Tandoor",
@@ -10890,7 +10973,8 @@
       "isDeal": false,
       "preparationTimeMinutes": 20,
       "isPopular": false,
-      "id": "slt-tan-cheese-naan"
+      "id": "slt-tan-cheese-naan",
+      "station": "main"
     },
     {
       "description": "Fluffy leavened flatbread sprinkled with nigella seeds (kalonji)",
@@ -10904,7 +10988,8 @@
       "name": "Kalonji Naan",
       "isPopular": false,
       "price": 170,
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -10918,7 +11003,8 @@
       "preparationTimeMinutes": 20,
       "name": "Desi Ghee Paratha",
       "imageUri": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&q=80",
-      "isDeal": false
+      "isDeal": false,
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -10932,7 +11018,8 @@
       "description": "Tandoori naan topped with roasted garlic bits and fresh butter",
       "rating": 4.8,
       "isPopular": false,
-      "id": "slt-tan-garlic-naan"
+      "id": "slt-tan-garlic-naan",
+      "station": "main"
     },
     {
       "id": "slt-tan-roghni-naan",
@@ -10946,7 +11033,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
       "isAvailable": true,
       "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -10960,7 +11048,8 @@
       "isDeal": false,
       "imageUri": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&q=80",
       "id": "slt-tan-plain-roti",
-      "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&q=80",
+      "station": "main"
     },
     {
       "id": "slt-sau-mint",
@@ -10974,7 +11063,8 @@
       "isPopular": false,
       "isAvailable": true,
       "rating": 4.8,
-      "price": 150
+      "price": 150,
+      "station": "main"
     },
     {
       "price": 150,
@@ -10988,7 +11078,8 @@
       "id": "slt-sau-zeera-raita",
       "imageUrl": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80",
       "category": "Sauces",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "main"
     },
     {
       "category": "Sauces",
@@ -11002,7 +11093,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=800&q=80",
       "isPopular": false,
       "rating": 4.8,
-      "description": "Sweet and tangy slow-simmered tamarind dip infused with spices"
+      "description": "Sweet and tangy slow-simmered tamarind dip infused with spices",
+      "station": "main"
     },
     {
       "id": "slt-des-choc-brownie",
@@ -11016,7 +11108,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
       "isPopular": false,
       "category": "Bakery & Desserts",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "name": "Lotus Cheesecake",
@@ -11031,7 +11124,8 @@
       "badge": "Popular",
       "rating": 4.8,
       "category": "Bakery & Desserts",
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "price": 899,
@@ -11045,7 +11139,8 @@
       "category": "Bakery & Desserts",
       "isDeal": false,
       "isPopular": false,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "rating": 4.8,
@@ -11059,7 +11154,8 @@
       "category": "Bakery & Desserts",
       "name": "Melting Moment",
       "isDeal": false,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -11073,7 +11169,8 @@
       "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
       "isDeal": false,
       "id": "slt-des-molten-lava",
-      "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+      "station": "main"
     },
     {
       "preparationTimeMinutes": 20,
@@ -11087,7 +11184,8 @@
       "isDeal": false,
       "category": "Bakery & Desserts",
       "isAvailable": true,
-      "isPopular": false
+      "isPopular": false,
+      "station": "main"
     },
     {
       "category": "Bakery & Desserts",
@@ -11101,7 +11199,8 @@
       "preparationTimeMinutes": 20,
       "id": "slt-des-bread-pudding",
       "rating": 4.8,
-      "description": "Pleasantly milky baked bread with caramel sauce, served with ice cream topped on sugar crumb"
+      "description": "Pleasantly milky baked bread with caramel sauce, served with ice cream topped on sugar crumb",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -11115,7 +11214,8 @@
       "price": 699,
       "isAvailable": true,
       "name": "Red Velvet Cake/Slice",
-      "category": "Bakery & Desserts"
+      "category": "Bakery & Desserts",
+      "station": "main"
     },
     {
       "id": "slt-des-nutella-brownie",
@@ -11129,7 +11229,8 @@
       "name": "Nutella Brownie",
       "imageUrl": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
       "isAvailable": true,
-      "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+      "station": "main"
     },
     {
       "isPopular": false,
@@ -11143,7 +11244,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
       "preparationTimeMinutes": 20,
       "price": 499,
-      "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
+      "station": "main"
     },
     {
       "description": "Soft khoya dumplings dipped in hot green cardamom and saffron rose syrup",
@@ -11157,7 +11259,8 @@
       "category": "Bakery & Desserts",
       "id": "slt-des-gulab-jamun",
       "imageUrl": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
-      "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
+      "station": "main"
     },
     {
       "isAvailable": true,
@@ -11171,7 +11274,8 @@
       "isPopular": false,
       "description": "Espresso shot topped with steamed milk and thick micro-foam dusted with cocoa",
       "rating": 4.8,
-      "id": "slt-bev-cappuccino"
+      "id": "slt-bev-cappuccino",
+      "station": "juice"
     },
     {
       "isAvailable": true,
@@ -11185,7 +11289,8 @@
       "isPopular": false,
       "name": "Latte",
       "id": "slt-bev-latte",
-      "imageUrl": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
+      "station": "juice"
     },
     {
       "category": "Hot Coffee & Tea",
@@ -11199,7 +11304,8 @@
       "rating": 4.8,
       "name": "Cafe Mocha",
       "preparationTimeMinutes": 20,
-      "description": "Rich espresso combined with Belgian dark chocolate and velvety steamed milk"
+      "description": "Rich espresso combined with Belgian dark chocolate and velvety steamed milk",
+      "station": "juice"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
@@ -11213,7 +11319,8 @@
       "isDeal": false,
       "isPopular": false,
       "id": "slt-bev-caramel-latte",
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "juice"
     },
     {
       "name": "Irish Latte",
@@ -11227,7 +11334,8 @@
       "description": "Warm espresso latte flavored with non-alcoholic aromatic Irish cream essence",
       "imageUri": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&q=80",
       "preparationTimeMinutes": 20,
-      "imageUrl": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&q=80",
+      "station": "juice"
     },
     {
       "preparationTimeMinutes": 20,
@@ -11241,7 +11349,8 @@
       "price": 599,
       "isAvailable": true,
       "rating": 4.8,
-      "id": "slt-bev-french-vanilla-latte"
+      "id": "slt-bev-french-vanilla-latte",
+      "station": "juice"
     },
     {
       "category": "Hot Coffee & Tea",
@@ -11255,7 +11364,8 @@
       "name": "Hazelnut Latte",
       "isPopular": false,
       "isDeal": false,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "juice"
     },
     {
       "isPopular": false,
@@ -11269,7 +11379,8 @@
       "name": "Hot Chocolate",
       "imageUri": "https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=800&q=80",
       "description": "Indulgent melted cocoa and milk topped with whipped froth",
-      "imageUrl": "https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=800&q=80",
+      "station": "juice"
     },
     {
       "category": "Hot Coffee & Tea",
@@ -11283,7 +11394,8 @@
       "name": "Americano",
       "isDeal": false,
       "id": "slt-bev-americano",
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "juice"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=800&q=80",
@@ -11297,7 +11409,8 @@
       "category": "Hot Coffee & Tea",
       "price": 350,
       "rating": 4.8,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "juice"
     },
     {
       "isDeal": false,
@@ -11312,7 +11425,8 @@
       "description": "Strong, slow-brewed tea simmered with milk, cardamom and caramelized sugar",
       "imageUrl": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=800&q=80",
       "imageUri": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=800&q=80",
-      "isPopular": false
+      "isPopular": false,
+      "station": "juice"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=800&q=80",
@@ -11326,7 +11440,8 @@
       "description": "Soothing brewed green tea infused with whole cardamom and mint",
       "price": 149,
       "isPopular": false,
-      "id": "slt-bev-green-tea"
+      "id": "slt-bev-green-tea",
+      "station": "juice"
     },
     {
       "isPopular": false,
@@ -11340,7 +11455,8 @@
       "rating": 4.8,
       "category": "Ice Coffee",
       "price": 599,
-      "id": "slt-ice-caramel-frappe"
+      "id": "slt-ice-caramel-frappe",
+      "station": "juice"
     },
     {
       "isAvailable": true,
@@ -11354,7 +11470,8 @@
       "rating": 4.8,
       "price": 599,
       "id": "slt-ice-mocha-frappe",
-      "category": "Ice Coffee"
+      "category": "Ice Coffee",
+      "station": "juice"
     },
     {
       "category": "Ice Coffee",
@@ -11369,7 +11486,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
       "isAvailable": true,
       "isDeal": false,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "juice"
     },
     {
       "isAvailable": true,
@@ -11383,7 +11501,8 @@
       "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
       "rating": 4.8,
       "preparationTimeMinutes": 20,
-      "category": "Ice Coffee"
+      "category": "Ice Coffee",
+      "station": "juice"
     },
     {
       "isPopular": false,
@@ -11397,7 +11516,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
       "isAvailable": true,
       "price": 499,
-      "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80"
+      "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+      "station": "juice"
     },
     {
       "imageUrl": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
@@ -11411,7 +11531,8 @@
       "preparationTimeMinutes": 20,
       "description": "Crisp iced coffee sweetened with fragrant French vanilla bean",
       "isPopular": false,
-      "price": 499
+      "price": 499,
+      "station": "juice"
     },
     {
       "description": "Nutty roasted hazelnut cold coffee served chilled over ice",
@@ -11425,7 +11546,8 @@
       "name": "Hazelnut Ice Coffee",
       "id": "slt-ice-hazelnut-coffee",
       "price": 499,
-      "isDeal": false
+      "isDeal": false,
+      "station": "juice"
     },
     {
       "category": "Mocktail",
@@ -11440,7 +11562,8 @@
       "imageUri": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=80",
       "isPopular": false,
       "description": "Tropical blend of fresh pineapple juice and rich coconut cream served over ice",
-      "imageUrl": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=80",
+      "station": "juice"
     },
     {
       "rating": 4.8,
@@ -11454,7 +11577,8 @@
       "isDeal": false,
       "category": "Mocktail",
       "id": "slt-mck-strawberry-colada",
-      "name": "Strawberry Colada"
+      "name": "Strawberry Colada",
+      "station": "juice"
     },
     {
       "price": 499,
@@ -11468,7 +11592,8 @@
       "id": "slt-mck-guava-mint",
       "rating": 4.8,
       "isPopular": false,
-      "isAvailable": true
+      "isAvailable": true,
+      "station": "juice"
     },
     {
       "name": "Strawberry Margarita",
@@ -11482,7 +11607,8 @@
       "preparationTimeMinutes": 20,
       "isAvailable": true,
       "isPopular": false,
-      "rating": 4.8
+      "rating": 4.8,
+      "station": "juice"
     },
     {
       "name": "Blueberry Lagoon",
@@ -11496,7 +11622,8 @@
       "isPopular": false,
       "description": "Electric blue curacao flavor with wild blueberries, lime and soda",
       "isDeal": false,
-      "category": "Mocktail"
+      "category": "Mocktail",
+      "station": "juice"
     },
     {
       "rating": 4.8,
@@ -11510,7 +11637,8 @@
       "description": "Cuban style muddled fresh mint leaves, brown cane sugar, lime and club soda",
       "preparationTimeMinutes": 20,
       "price": 399,
-      "isDeal": false
+      "isDeal": false,
+      "station": "juice"
     },
     {
       "name": "Strawberry Mojito",
@@ -11524,7 +11652,8 @@
       "description": "Muddled fresh strawberries with wild mint, lime wheels and sparkling fizz",
       "isDeal": false,
       "imageUri": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
-      "imageUrl": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80"
+      "imageUrl": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+      "station": "juice"
     },
     {
       "rating": 4.8,
@@ -11538,7 +11667,8 @@
       "description": "Freshly squeezed Persian lime with salt or sweet syrup topped with sparkling soda",
       "preparationTimeMinutes": 20,
       "category": "Mocktail",
-      "name": "Fresh Lime"
+      "name": "Fresh Lime",
+      "station": "juice"
     },
     {
       "price": 499,
@@ -11578,7 +11708,8 @@
       "rating": 4.8,
       "preparationTimeMinutes": 20,
       "category": "Ice Cream",
-      "id": "slt-crm-shake"
+      "id": "slt-crm-shake",
+      "station": "juice"
     },
     {
       "variants": [
@@ -11618,7 +11749,8 @@
       "imageUrl": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=800&q=80",
       "isPopular": false,
       "imageUri": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=800&q=80",
-      "id": "slt-crm-scoop"
+      "id": "slt-crm-scoop",
+      "station": "juice"
     },
     {
       "price": 150,
@@ -11642,7 +11774,8 @@
       "isDeal": false,
       "rating": 4.8,
       "preparationTimeMinutes": 20,
-      "category": "Cold Drinks & Water"
+      "category": "Cold Drinks & Water",
+      "station": "juice"
     },
     {
       "imageUri": "https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=800&q=80",
@@ -11666,7 +11799,8 @@
         }
       ],
       "price": 70,
-      "preparationTimeMinutes": 20
+      "preparationTimeMinutes": 20,
+      "station": "juice"
     }
   ],
   "categories": [
@@ -12290,12 +12424,23 @@
       "platform": "web",
       "loginTime": 1795184741163,
       "lastActiveTime": 1795184741163
+    },
+    {
+      "sessionId": "sess_mwp3tjlw_3vl7n",
+      "staffId": "st7",
+      "staffName": "Tariq Juice Master",
+      "role": "juicebar",
+      "deviceId": "dev_web_mwp1fy1o_mx3f1_1bra",
+      "deviceName": "Chrome on Windows",
+      "platform": "web",
+      "loginTime": 1795186716548,
+      "lastActiveTime": 1795186716548
     }
   ],
   "revokedDeviceIds": {
     "dev_web_mwox4wf7_f0dpt_83sb": {
-      "timestamp": 1795182744015,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai",
+      "timestamp": 1795182744015,
       "staffName": "Junaid Ahsan"
     },
     "dev_web_mwp1fy1o_mx3f1_1bra": {
@@ -12305,18 +12450,7 @@
     }
   },
   "lastBillPaidAlert": null,
-  "lastFoodReadyAlert": {
-    "id": "ready_KOT-3916_all_1795186305264",
-    "ticketId": "KOT-3916",
-    "tableId": "1",
-    "tableName": "T-01",
-    "server": "Sara Ahmed",
-    "station": "all",
-    "stationLabel": "Kitchen",
-    "itemsSummary": "1x Sultan Seekh Kebab, 4x Kunafa",
-    "type": "ready",
-    "time": 1795186305264
-  },
+  "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
   "inventory": [
     {
@@ -20384,19 +20518,19 @@
     }
   ],
   "kitchenSettings": {
-    "shiftLowPct": 25,
-    "par": {},
     "targetMarginPct": 65,
-    "ingredientDefaults": {},
-    "varianceTolerancePct": 3,
-    "openingHour": 11,
-    "closingHour": 23,
-    "overheadPct": 12,
-    "categoryTemplates": {},
-    "alarmSound": true,
-    "runwayAlertMin": 90,
     "shiftCriticalPct": 10,
-    "priceRounding": 10
+    "openingHour": 11,
+    "ingredientDefaults": {},
+    "runwayAlertMin": 90,
+    "priceRounding": 10,
+    "closingHour": 23,
+    "shiftLowPct": 25,
+    "alarmSound": true,
+    "categoryTemplates": {},
+    "varianceTolerancePct": 3,
+    "par": {},
+    "overheadPct": 12
   },
   "shifts": [
     {
@@ -21505,7 +21639,7 @@
       "baseRole": "playland"
     }
   ],
-  "lastUpdated": 1795186270927,
+  "lastUpdated": 1795246213687,
   "deletedTicketIds": [
     "KOT-1042",
     "KOT-5647",

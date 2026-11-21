@@ -2415,6 +2415,24 @@ try {
         serverState.menuItems = INITIAL_STATE.menuItems;
       }
     }
+    // Repair missing station tags on menuItems (ensures Hot Coffee & Tea, Ice Coffee, Mocktail, Ice Cream, Cold Drinks & Water -> 'juice')
+    if (Array.isArray(serverState.menuItems) && printerHelper && typeof printerHelper.resolveItemStation === 'function') {
+      let repairedMenuCount = 0;
+      for (const m of serverState.menuItems) {
+        if (!m) continue;
+        if (m.station !== 'juice' && m.station !== 'main') {
+          m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+          repairedMenuCount++;
+        }
+      }
+      if (repairedMenuCount > 0) {
+        console.log(`[Sultan Hub] Repaired station tags on ${repairedMenuCount} menu items (Juice Bar vs Main Kitchen).`);
+        try {
+          fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
+        } catch (_) {}
+      }
+    }
+
     // Clean empty categories on startup
     const usedCatsOnBoot = new Set((serverState.menuItems || []).map(m => m.category).filter(Boolean));
     serverState.categories = ['All', ...Array.from(usedCatsOnBoot)];
@@ -2534,36 +2552,271 @@ try {
 }
 
 // -------------------------------------------------------------
-// CENTRAL THERMAL PRINT ENGINE (Zero-Dialog Background ESC/POS)
+// CENTRAL DUAL-STATION THERMAL PRINT ENGINE + REMOTE PRINT AGENT HUB
+// Strict Isolation:
+//   - 'main'  -> Main Kitchen Thermal Printer ONLY (default: local POS-80)
+//   - 'juice' -> Juice Bar Thermal Printer ONLY (default: Juice Bar PC Print Agent)
+//   - Juice Bar slips NEVER leak onto the Kitchen printer!
 // -------------------------------------------------------------
-const serverAutoPrintedTicketIds = new Set();
-// Pre-populate with startup tickets so rebooting server does not reprint historical tickets
+const serverAutoPrintedTicketIds = new Set(); // Stores station-scoped keys: "main:KOT-1234", "juice:KOT-1234"
 if (Array.isArray(serverState.tickets)) {
   for (const t of serverState.tickets) {
-    if (t && t.id) serverAutoPrintedTicketIds.add(String(t.id));
+    if (t && t.id) {
+      const idStr = String(t.id);
+      serverAutoPrintedTicketIds.add(`main:${idStr}`);
+      serverAutoPrintedTicketIds.add(`juice:${idStr}`);
+    }
   }
+}
+
+function isAutoRouteBeveragesEnabled() {
+  return !(serverState.systemSettings && serverState.systemSettings.kdsAutoRouteBeverages === false);
+}
+
+function getStationPrinterConfig(station) {
+  const s = serverState.systemSettings || {};
+  if (station === 'juice') {
+    return {
+      station: 'juice',
+      mode: s.juicePrinterMode || 'agent', // 'agent' (Juice Bar PC USB) | 'windows' | 'network' | 'disabled'
+      printerName: s.juicePrinterName || 'AUTO',
+      host: s.juicePrinterHost || '',
+      port: Number(s.juicePrinterPort) || 9100,
+    };
+  }
+  return {
+    station: 'main',
+    mode: s.kitchenPrinterMode || 'windows', // 'windows' (Server PC USB) | 'network' | 'agent' | 'disabled'
+    printerName: s.kitchenPrinterName || 'POS-80',
+    host: s.kitchenPrinterHost || '',
+    port: Number(s.kitchenPrinterPort) || 9100,
+  };
+}
+
+// Remote Print Agent Hub (for Juice Bar PC / Remote Station PCs running SultanPrintAgent.exe)
+const connectedPrintAgents = { main: null, juice: null };
+const remotePrintQueues = { main: [], juice: [] };
+const longPollWaiters = { main: [], juice: [] };
+const pendingAgentAcks = new Map(); // jobId -> { resolve, timer }
+const REMOTE_JOB_TTL_MS = 10 * 60 * 1000; // 10 mins max queue retention
+const AGENT_ONLINE_TIMEOUT_MS = 28 * 1000;
+
+function isPrintAgentOnline(station) {
+  const info = connectedPrintAgents[station];
+  return !!(info && (Date.now() - info.lastSeen) < AGENT_ONLINE_TIMEOUT_MS);
+}
+
+function pruneExpiredRemoteJobs(station) {
+  const q = remotePrintQueues[station];
+  if (!Array.isArray(q) || q.length === 0) return;
+  const now = Date.now();
+  remotePrintQueues[station] = q.filter((j) => now - j.createdAt < REMOTE_JOB_TTL_MS).slice(-50);
+}
+
+function deliverNextRemoteJobToWaiter(station) {
+  pruneExpiredRemoteJobs(station);
+  const q = remotePrintQueues[station];
+  const waiters = longPollWaiters[station];
+  if (!q || q.length === 0 || !waiters || waiters.length === 0) return false;
+
+  const job = q.shift();
+  const waiter = waiters.shift();
+  if (!waiter) {
+    q.unshift(job);
+    return false;
+  }
+  clearTimeout(waiter.timer);
+  const cfg = getStationPrinterConfig(station);
+  try {
+    waiter.res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    waiter.res.end(JSON.stringify({
+      ok: true,
+      configuredPrinter: cfg.printerName || 'AUTO',
+      jobId: job.jobId,
+      ticketId: job.ticketId,
+      tableName: job.tableName,
+      station: job.station,
+      printerName: job.printerName || cfg.printerName || 'AUTO',
+      rawBase64: job.rawBase64,
+    }));
+    return true;
+  } catch (_) {
+    q.unshift(job);
+    return false;
+  }
+}
+
+function enqueueRemoteAgentPrintJob(station, ticket, buffer, overridePrinterName) {
+  pruneExpiredRemoteJobs(station);
+  const cfg = getStationPrinterConfig(station);
+  const jobId = `job_${station}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const job = {
+    jobId,
+    ticketId: String(ticket.id || 'KOT'),
+    tableName: String(ticket.tableName || ticket.tableId || 'Takeaway'),
+    station,
+    printerName: overridePrinterName || cfg.printerName || 'AUTO',
+    rawBase64: buffer.toString('base64'),
+    createdAt: Date.now(),
+  };
+
+  if (!remotePrintQueues[station]) remotePrintQueues[station] = [];
+  remotePrintQueues[station].push(job);
+  if (remotePrintQueues[station].length > 50) {
+    remotePrintQueues[station].shift();
+  }
+
+  console.log(`[Sultan Hub Print-Agent] Queued ${station.toUpperCase()} KOT #${job.ticketId} (${job.tableName}) for remote Print Agent [${jobId}] (agent ${isPrintAgentOnline(station) ? 'ONLINE' : 'OFFLINE'})`);
+  deliverNextRemoteJobToWaiter(station);
+  return job;
+}
+
+function dispatchStationPrint(ticket, station, options = {}) {
+  const targetStation = station === 'juice' ? 'juice' : 'main';
+  if (!printerHelper || typeof printerHelper.buildEscPosKotBuffer !== 'function') {
+    return Promise.resolve({ success: false, error: 'Printer helper not available', station: targetStation });
+  }
+
+  // Normalize stations first so beverage items NEVER stay on 'main'
+  const ticketClone = {
+    ...ticket,
+    items: Array.isArray(ticket.items) ? ticket.items.map((it) => ({ ...it })) : [],
+  };
+  if (typeof printerHelper.normalizeTicketStations === 'function') {
+    printerHelper.normalizeTicketStations(ticketClone, serverState.menuItems || [], isAutoRouteBeveragesEnabled());
+  }
+
+  const buffer = printerHelper.buildEscPosKotBuffer(ticketClone, targetStation);
+  if (!buffer) {
+    return Promise.resolve({
+      success: true,
+      skipped: true,
+      reason: `No ${targetStation} items on ticket #${ticket.id}`,
+      station: targetStation,
+      ticketId: ticket.id,
+    });
+  }
+
+  const cfg = getStationPrinterConfig(targetStation);
+  if (cfg.mode === 'disabled') {
+    return Promise.resolve({
+      success: true,
+      skipped: true,
+      reason: `${targetStation} printer is disabled in settings`,
+      station: targetStation,
+      ticketId: ticket.id,
+    });
+  }
+
+  // Mode 1: Remote Station Print Agent (Default for Juice Bar PC!)
+  if (cfg.mode === 'agent') {
+    const agentOnline = isPrintAgentOnline(targetStation);
+    const job = enqueueRemoteAgentPrintJob(targetStation, ticketClone, buffer, options.printerName);
+
+    if (!options.waitForAck) {
+      return Promise.resolve({
+        success: true,
+        queued: true,
+        agentOnline,
+        jobId: job.jobId,
+        station: targetStation,
+        ticketId: ticketClone.id,
+        printer: (connectedPrintAgents[targetStation] && connectedPrintAgents[targetStation].activePrinter) || cfg.printerName || 'Juice Bar Printer',
+      });
+    }
+
+    if (!agentOnline) {
+      return Promise.resolve({
+        success: false,
+        queued: true,
+        agentOffline: true,
+        jobId: job.jobId,
+        station: targetStation,
+        ticketId: ticketClone.id,
+        error: targetStation === 'juice'
+          ? 'Juice Bar PC Print Agent is offline. Please run Start-JuiceBar-Printer.bat on the Juice Bar PC.'
+          : 'Kitchen PC Print Agent is offline.',
+      });
+    }
+
+    return new Promise((resolve) => {
+      const timer = setTimeout(() => {
+        pendingAgentAcks.delete(job.jobId);
+        resolve({
+          success: true,
+          queued: true,
+          agentOnline: true,
+          jobId: job.jobId,
+          station: targetStation,
+          ticketId: ticketClone.id,
+          printer: (connectedPrintAgents[targetStation] && connectedPrintAgents[targetStation].activePrinter) || 'Remote Printer',
+        });
+      }, 5000);
+      pendingAgentAcks.set(job.jobId, { resolve, timer });
+    });
+  }
+
+  // Mode 2: Network LAN/Wi-Fi Thermal Printer (Direct TCP Port 9100)
+  if (cfg.mode === 'network') {
+    if (!cfg.host) {
+      return Promise.resolve({
+        success: false,
+        station: targetStation,
+        ticketId: ticketClone.id,
+        error: `${targetStation} network printer IP is not configured`,
+      });
+    }
+    return printerHelper.printRawBufferToNetworkTcp(buffer, cfg.host, cfg.port, ticketClone.id)
+      .then((res) => ({ ...res, station: targetStation }));
+  }
+
+  // Mode 3: Local / Shared Windows Printer on Server PC (Default for Kitchen POS-80)
+  const targetWindowsPrinter = (options.printerName && options.printerName !== 'AUTO')
+    ? options.printerName
+    : (cfg.printerName && cfg.printerName !== 'AUTO' ? cfg.printerName : 'POS-80');
+
+  return printerHelper.printRawBufferToWindows(buffer, targetWindowsPrinter, ticketClone.id)
+    .then((res) => ({ ...res, station: targetStation }));
 }
 
 let isAutoPrintingTicket = false;
 const serverPrintQueue = [];
 
-function queueAutoPrintTicket(ticket, station = 'all') {
+function queueAutoPrintTicket(ticket, requestedStation = 'auto') {
   if (!ticket || !ticket.id) return;
+  if (!printerHelper || typeof printerHelper.normalizeTicketStations !== 'function') return;
+
+  const autoRouteBev = isAutoRouteBeveragesEnabled();
+  const { hasMain, hasJuice } = printerHelper.normalizeTicketStations(
+    ticket,
+    serverState.menuItems || [],
+    autoRouteBev
+  );
+
+  const stationsToPrint = [];
+  if (requestedStation === 'auto' || requestedStation === 'all') {
+    if (hasMain) stationsToPrint.push('main');
+    if (hasJuice) stationsToPrint.push('juice');
+  } else if (requestedStation === 'main' && hasMain) {
+    stationsToPrint.push('main');
+  } else if (requestedStation === 'juice' && hasJuice) {
+    stationsToPrint.push('juice');
+  }
+
   const tId = String(ticket.id);
-  if (serverAutoPrintedTicketIds.has(tId)) return;
-  serverAutoPrintedTicketIds.add(tId);
+  for (const st of stationsToPrint) {
+    const dedupKey = `${st}:${tId}`;
+    if (serverAutoPrintedTicketIds.has(dedupKey)) continue;
+    serverAutoPrintedTicketIds.add(dedupKey);
 
-  // Keep set bounded to last 1000 IDs
-  if (serverAutoPrintedTicketIds.size > 1000) {
-    const firstKey = serverAutoPrintedTicketIds.values().next().value;
-    serverAutoPrintedTicketIds.delete(firstKey);
+    if (serverAutoPrintedTicketIds.size > 2000) {
+      const firstKey = serverAutoPrintedTicketIds.values().next().value;
+      serverAutoPrintedTicketIds.delete(firstKey);
+    }
+
+    serverPrintQueue.push({ ticket, station: st });
   }
 
-  if (!printerHelper || typeof printerHelper.printTicketDirect !== 'function') {
-    return;
-  }
-
-  serverPrintQueue.push({ ticket, station });
   processServerPrintQueue();
 }
 
@@ -2573,30 +2826,32 @@ function processServerPrintQueue() {
   if (!job) return;
 
   isAutoPrintingTicket = true;
-  console.log(`[Sultan Hub Auto-Print] Background ESC/POS printing KOT #${job.ticket.id} (${job.ticket.tableName || 'Takeaway'}) to POS-80...`);
+  const cfg = getStationPrinterConfig(job.station);
+  console.log(`[Sultan Hub Auto-Print] Routing ${job.station.toUpperCase()} KOT #${job.ticket.id} (${job.ticket.tableName || 'Takeaway'}) via ${cfg.mode} (${cfg.mode === 'network' ? cfg.host : cfg.printerName})...`);
 
-  printerHelper.printTicketDirect(job.ticket, {
-    station: job.station || 'all',
-    printerName: 'POS-80',
-  })
+  dispatchStationPrint(job.ticket, job.station, { waitForAck: false })
     .then((result) => {
-      console.log(`[Sultan Hub Auto-Print] Direct KOT #${job.ticket.id} printed successfully to POS-80.`);
-      broadcastToClients({
-        type: 'TICKET_AUTO_PRINTED',
-        ticketId: job.ticket.id,
-        station: job.station,
-        printer: 'POS-80',
-        timestamp: Date.now(),
-      });
+      if (result && result.skipped) {
+        console.log(`[Sultan Hub Auto-Print] Skipped ${job.station.toUpperCase()} KOT #${job.ticket.id}: ${result.reason}`);
+      } else if (result && result.success && !result.queued) {
+        console.log(`[Sultan Hub Auto-Print] Direct ${job.station.toUpperCase()} KOT #${job.ticket.id} printed successfully to ${result.printer}.`);
+        broadcastToClients({
+          type: 'TICKET_AUTO_PRINTED',
+          ticketId: job.ticket.id,
+          station: job.station,
+          printer: result.printer,
+          timestamp: Date.now(),
+        });
+      }
     })
     .catch((err) => {
-      console.warn(`[Sultan Hub Auto-Print] Print error for #${job.ticket.id}:`, err.message);
+      console.warn(`[Sultan Hub Auto-Print] Print error for ${job.station.toUpperCase()} #${job.ticket.id}:`, err.message);
     })
     .finally(() => {
       setTimeout(() => {
         isAutoPrintingTicket = false;
         processServerPrintQueue();
-      }, 250);
+      }, 220);
     });
 }
 
@@ -2653,15 +2908,14 @@ setInterval(() => {
         ticket.status = 'cooking';
         ticket.cookingStartedAt = now;
 
-        if (!ticket.stationStatuses) {
-          ticket.stationStatuses = { main: 'cooking', juice: 'cooking' };
-        } else {
-          if (ticket.stationStatuses.main === 'pending' || !ticket.stationStatuses.main) {
-            ticket.stationStatuses.main = 'cooking';
-          }
-          if (ticket.stationStatuses.juice === 'pending' || !ticket.stationStatuses.juice) {
-            ticket.stationStatuses.juice = 'cooking';
-          }
+        const hasMainIt = Array.isArray(ticket.items) && ticket.items.some(i => (i?.station || 'main') === 'main');
+        const hasJuiceIt = Array.isArray(ticket.items) && ticket.items.some(i => i?.station === 'juice');
+        if (!ticket.stationStatuses) ticket.stationStatuses = {};
+        if (hasMainIt && (!ticket.stationStatuses.main || ticket.stationStatuses.main === 'pending')) {
+          ticket.stationStatuses.main = 'cooking';
+        }
+        if (hasJuiceIt && (!ticket.stationStatuses.juice || ticket.stationStatuses.juice === 'pending')) {
+          ticket.stationStatuses.juice = 'cooking';
         }
 
         if (Array.isArray(ticket.items)) {
@@ -2955,14 +3209,14 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // Rate Limiting Enforcement
-  if (!checkRateLimit(clientIp)) {
+  const url = new URL(req.url, `http://${req.headers.host}`);
+
+  // Rate Limiting Enforcement (never throttle local print agents or internal sync/print calls)
+  if (!url.pathname.startsWith('/api/print') && !checkRateLimit(clientIp)) {
     res.writeHead(429, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: false, error: 'Rate limit reached. Please wait a moment.' }));
     return;
   }
-
-  const url = new URL(req.url, `http://${req.headers.host}`);
 
   // 1. Health / System Status (Pure API endpoints only, never intercept browser HTML paths)
   if (url.pathname === '/health' || url.pathname === '/api/status') {
@@ -3723,9 +3977,12 @@ async function handleRequest(req, res) {
             completed: false
           }))
         };
+        if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
+          printerHelper.normalizeTicketStations(kotTicket, serverState.menuItems || [], isAutoRouteBeveragesEnabled());
+        }
         if (!serverState.tickets) serverState.tickets = [];
         serverState.tickets.unshift(kotTicket);
-        if (kotTicket) queueAutoPrintTicket(kotTicket, 'all');
+        if (kotTicket) queueAutoPrintTicket(kotTicket, 'auto');
       }
 
       // Update customer total orders & spent in appUsers and customers
@@ -3935,9 +4192,12 @@ async function handleRequest(req, res) {
               completed: false
             }))
           };
+          if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
+            printerHelper.normalizeTicketStations(ticket, serverState.menuItems || [], isAutoRouteBeveragesEnabled());
+          }
           if (!serverState.tickets) serverState.tickets = [];
           serverState.tickets.unshift(ticket);
-          if (ticket) queueAutoPrintTicket(ticket, 'all');
+          if (ticket) queueAutoPrintTicket(ticket, 'auto');
         } else {
           if (assignedWaiter) ticket.server = assignedWaiter;
         }
@@ -4356,11 +4616,8 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 8.1 Direct Thermal Printer Raw ESC/POS KOT Dispatch (Instant Silent Print)
+  // 8.1 Direct Thermal Printer Raw ESC/POS KOT Dispatch (Strict Station Isolation: Main vs Juice Bar)
   if (url.pathname === '/api/print/kot' && req.method === 'POST') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     try {
       const data = await readRequestBody(req);
       if (!data || !data.ticket) {
@@ -4370,32 +4627,338 @@ async function handleRequest(req, res) {
       }
       const tId = String(data.ticket.id || (data.ticket.orderId ? `ord-${data.ticket.orderId}` : '') || '');
       const isForceReprint = !!data.forceReprint;
+      const requestedStation = data.station === 'juice' ? 'juice' : (data.station === 'all' ? 'all' : 'main');
 
-      // Deduplication Guard: Never print 2 duplicate slips for the same ticket
-      if (!isForceReprint && tId && serverAutoPrintedTicketIds.has(tId)) {
-        console.log(`[Sultan Hub] Direct KOT print skipped for #${tId} (already printed on POS-80).`);
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: true, skipped: true, reason: 'Already printed', ticketId: tId }));
+      const stations = requestedStation === 'all' ? ['main', 'juice'] : [requestedStation];
+      const results = [];
+
+      for (const st of stations) {
+        const dedupKey = `${st}:${tId}`;
+        if (!isForceReprint && tId && serverAutoPrintedTicketIds.has(dedupKey)) {
+          console.log(`[Sultan Hub] Direct ${st.toUpperCase()} KOT print skipped for #${tId} (already printed/queued).`);
+          results.push({ success: true, skipped: true, reason: 'Already printed', station: st, ticketId: tId });
+          continue;
+        }
+
+        console.log(`[Sultan Hub] ${isForceReprint ? '[Manual Reprint]' : '[KDS Print]'} HTTP POST /api/print/kot for ticket #${tId} (station: ${st})`);
+        if (tId) {
+          serverAutoPrintedTicketIds.add(dedupKey);
+        }
+
+        const r = await dispatchStationPrint(data.ticket, st, {
+          waitForAck: true,
+          printerName: data.printerName,
+        });
+        results.push(r);
+      }
+
+      const primaryResult = results.length === 1
+        ? results[0]
+        : { success: results.some((r) => r.success), results };
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(primaryResult));
+    } catch (err) {
+      console.warn('[Sultan Hub] /api/print/kot error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.2 Remote Print Agent Long-Poll Endpoint (Used by SultanPrintAgent.exe on Juice Bar PC)
+  if (url.pathname === '/api/print-agent/poll' && req.method === 'GET') {
+    const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
+    const pcName = url.searchParams.get('pc') || 'Station-PC';
+    const activePrinter = url.searchParams.get('printer') || '';
+    const printersRaw = url.searchParams.get('printers') || '';
+    const availablePrinters = printersRaw ? printersRaw.split('||').map((s) => s.trim()).filter(Boolean) : [];
+    const wasOnline = isPrintAgentOnline(station);
+
+    connectedPrintAgents[station] = {
+      station,
+      pcName,
+      activePrinter,
+      availablePrinters,
+      ip: clientIp,
+      lastSeen: Date.now(),
+    };
+
+    if (!wasOnline) {
+      console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} Print Agent ONLINE from ${pcName} (${clientIp}) -> Printer: ${activePrinter || 'NONE'}`);
+      broadcastToClients({
+        type: 'PRINT_AGENT_STATUS',
+        station,
+        online: true,
+        pcName,
+        activePrinter,
+        availablePrinters,
+        timestamp: Date.now(),
+      });
+    }
+
+    const cfg = getStationPrinterConfig(station);
+    pruneExpiredRemoteJobs(station);
+
+    // Immediate delivery if job already queued
+    if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
+      const job = remotePrintQueues[station].shift();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        ok: true,
+        configuredPrinter: cfg.printerName || 'AUTO',
+        jobId: job.jobId,
+        ticketId: job.ticketId,
+        tableName: job.tableName,
+        station: job.station,
+        printerName: job.printerName || cfg.printerName || 'AUTO',
+        rawBase64: job.rawBase64,
+      }));
+      return;
+    }
+
+    // Hold long-poll open for up to 12 seconds for <10ms instant push when an order arrives
+    const waiter = { res, timer: null };
+    waiter.timer = setTimeout(() => {
+      const list = longPollWaiters[station] || [];
+      const idx = list.indexOf(waiter);
+      if (idx !== -1) list.splice(idx, 1);
+      try {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({ ok: true, configuredPrinter: cfg.printerName || 'AUTO', jobId: null }));
+      } catch (_) {}
+    }, 12000);
+
+    req.on('close', () => {
+      clearTimeout(waiter.timer);
+      const list = longPollWaiters[station] || [];
+      const idx = list.indexOf(waiter);
+      if (idx !== -1) list.splice(idx, 1);
+    });
+
+    if (!longPollWaiters[station]) longPollWaiters[station] = [];
+    longPollWaiters[station].push(waiter);
+    return;
+  }
+
+  // 8.3 Remote Print Agent Print Acknowledgment
+  if (url.pathname === '/api/print-agent/ack' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const station = data.station === 'main' ? 'main' : 'juice';
+      const jobId = String(data.jobId || '');
+      const ticketId = String(data.ticketId || '');
+      const success = !!data.success;
+      const printerName = data.printerName || 'Remote Printer';
+      const pcName = data.pcName || 'Station-PC';
+
+      if (success) {
+        console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} PRINTED OK on ${pcName} -> ${printerName}`);
+        broadcastToClients({
+          type: 'TICKET_AUTO_PRINTED',
+          ticketId,
+          station,
+          printer: printerName,
+          pcName,
+          timestamp: Date.now(),
+        });
+      } else {
+        console.warn(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} FAILED on ${pcName}: ${data.error || 'Unknown error'}`);
+      }
+
+      if (jobId && pendingAgentAcks.has(jobId)) {
+        const pending = pendingAgentAcks.get(jobId);
+        clearTimeout(pending.timer);
+        pendingAgentAcks.delete(jobId);
+        pending.resolve({
+          success,
+          station,
+          ticketId,
+          printer: printerName,
+          pcName,
+          error: data.error || undefined,
+        });
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.4 Live Station Printer Status & Available Printers Discovery
+  if (url.pathname === '/api/print/status' && req.method === 'GET') {
+    try {
+      const serverWindowsPrinters = (printerHelper && typeof printerHelper.getLocalWindowsPrinters === 'function')
+        ? await printerHelper.getLocalWindowsPrinters()
+        : ['POS-80'];
+
+      const hostHeader = req.headers.host || '192.168.1.10:5050';
+      const formatAgent = (st) => {
+        const a = connectedPrintAgents[st];
+        const online = isPrintAgentOnline(st);
+        return a ? { ...a, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
+      };
+
+      pruneExpiredRemoteJobs('main');
+      pruneExpiredRemoteJobs('juice');
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        serverUrl: `http://${hostHeader}`,
+        serverWindowsPrinters,
+        kitchen: {
+          config: getStationPrinterConfig('main'),
+          agent: formatAgent('main'),
+          pendingJobs: (remotePrintQueues.main || []).length,
+        },
+        juice: {
+          config: getStationPrinterConfig('juice'),
+          agent: formatAgent('juice'),
+          pendingJobs: (remotePrintQueues.juice || []).length,
+        },
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.5 Save Station Printer Routing Configuration
+  if (url.pathname === '/api/print/config' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      if (!serverState.systemSettings || typeof serverState.systemSettings !== 'object') {
+        serverState.systemSettings = {};
+      }
+      const allowedPrinterKeys = [
+        'kitchenPrinterMode', 'kitchenPrinterName', 'kitchenPrinterHost', 'kitchenPrinterPort',
+        'juicePrinterMode', 'juicePrinterName', 'juicePrinterHost', 'juicePrinterPort',
+      ];
+      for (const k of allowedPrinterKeys) {
+        if (data[k] !== undefined) {
+          serverState.systemSettings[k] = data[k];
+        }
+      }
+      serverState.systemSettings.updatedAt = Date.now();
+      persistState();
+      broadcastToClients({
+        type: 'STATE_UPDATE',
+        state: { systemSettings: serverState.systemSettings },
+        senderId: 'SERVER_PRINTER_CONFIG',
+        timestamp: Date.now(),
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        kitchen: getStationPrinterConfig('main'),
+        juice: getStationPrinterConfig('juice'),
+      }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.6 One-Click Downloadable Dedicated Station Print Agent Setup Pack (.zip)
+  if (url.pathname === '/api/print-agent/download' && req.method === 'GET') {
+    try {
+      const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
+      const exePath = path.join(__dirname, 'bin', 'SultanPrintAgent.exe');
+      if (!fs.existsSync(exePath) || !printerHelper || typeof printerHelper.buildZipBuffer !== 'function') {
+        res.writeHead(503, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Print Agent binary not available on server' }));
         return;
       }
 
-      console.log(`[Sultan Hub] ${isForceReprint ? '[Manual Reprint]' : '[KDS Print]'} HTTP POST /api/print/kot for ticket #${tId} (${data.station || 'all'})`);
-      if (tId) {
-        serverAutoPrintedTicketIds.add(tId);
-      }
-      if (printerHelper && typeof printerHelper.printTicketDirect === 'function') {
-        const printResult = await printerHelper.printTicketDirect(data.ticket, {
-          station: data.station || 'all',
-          printerName: data.printerName || 'POS-80',
-        });
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(printResult));
-      } else {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Printer helper not available' }));
-      }
+      const hostRaw = (req.headers.host || '192.168.1.10:5050').split(':')[0];
+      const serverUrl = `http://${hostRaw}:5050`;
+      const stationLabel = station === 'juice' ? 'JuiceBar' : 'Kitchen';
+      const exeData = fs.readFileSync(exePath);
+
+      const agentConfig = [
+        '# Sultan Restaurant Dedicated Station Thermal Print Agent Config',
+        `SERVER=${serverUrl}`,
+        `STATION=${station}`,
+        'PRINTER=AUTO',
+        '',
+      ].join('\r\n');
+
+      const startBat = [
+        '@echo off',
+        `title Sultan ${stationLabel} Direct Thermal Printer Agent`,
+        'cd /d "%~dp0"',
+        'SultanPrintAgent.exe',
+        'pause',
+        '',
+      ].join('\r\n');
+
+      const testBat = [
+        '@echo off',
+        `title Test Sultan ${stationLabel} Printer`,
+        'cd /d "%~dp0"',
+        'SultanPrintAgent.exe --test',
+        'echo.',
+        'pause',
+        '',
+      ].join('\r\n');
+
+      const installAutostartBat = [
+        '@echo off',
+        `title Install Sultan ${stationLabel} Printer Auto-Start`,
+        'cd /d "%~dp0"',
+        'set "STARTUP=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
+        `set "TARGET=%~dp0SultanPrintAgent.exe"`,
+        `set "LNK=%STARTUP%\\Sultan-${stationLabel}-Printer.lnk"`,
+        'powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\'%LNK%\'); $s.TargetPath = \'%TARGET%\'; $s.WorkingDirectory = \'%~dp0\'; $s.WindowStyle = 7; $s.Save()"',
+        'echo.',
+        `echo [OK] Sultan ${stationLabel} Printer Agent added to Windows Startup!`,
+        'echo It will now launch automatically every morning when this PC turns on.',
+        'echo Starting agent right now...',
+        'start /min "" "%TARGET%"',
+        'timeout /t 4 >nul',
+        '',
+      ].join('\r\n');
+
+      const readmeTxt = [
+        '================================================================',
+        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP`,
+        '================================================================',
+        '',
+        'STEP 1: Extract this ZIP folder anywhere on the Juice Bar PC (e.g. Desktop).',
+        'STEP 2: Make sure the Juice Bar USB Thermal Printer is plugged into THIS PC.',
+        'STEP 3: Double-click "Start-JuiceBar-Printer.bat" (or run "Install-AutoStart-On-Boot.bat" once so it starts automatically every day!).',
+        '',
+        'What this solves:',
+        '- Juice Bar orders (Coffee, Tea, Ice Coffee, Mocktails, Shakes, Ice Cream, Cold Drinks)',
+        '  print ONLY on THIS Juice Bar USB printer (zero browser popups!).',
+        '- Kitchen orders print ONLY on the Kitchen printer (zero conflict!).',
+        `- Pre-configured Server Hub: ${serverUrl}`,
+        '',
+      ].join('\r\n');
+
+      const zipBuf = printerHelper.buildZipBuffer([
+        { name: 'SultanPrintAgent.exe', data: exeData },
+        { name: 'agent-config.txt', data: agentConfig },
+        { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
+        { name: `Test-${stationLabel}-Printer.bat`, data: testBat },
+        { name: 'Install-AutoStart-On-Boot.bat', data: installAutostartBat },
+        { name: `README-${stationLabel.toUpperCase()}-PRINTER.txt`, data: readmeTxt },
+      ]);
+
+      res.writeHead(200, {
+        'Content-Type': 'application/zip',
+        'Content-Disposition': `attachment; filename="Sultan-${stationLabel}-Printer-Setup.zip"`,
+        'Content-Length': zipBuf.length,
+        'Cache-Control': 'no-store',
+      });
+      res.end(zipBuf);
     } catch (err) {
-      console.warn('[Sultan Hub] /api/print/kot error:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }
@@ -4766,14 +5329,25 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           deduplicatedMerged.push(t);
         }
 
+        // Normalize item stations across all synced tickets (protects against older waiter APKs missing beverage stations)
+        if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
+          const autoRouteBev = isAutoRouteBeveragesEnabled();
+          for (const tk of deduplicatedMerged) {
+            if (tk && Array.isArray(tk.items) && tk.items.length > 0) {
+              printerHelper.normalizeTicketStations(tk, serverState.menuItems || [], autoRouteBev);
+            }
+          }
+        }
+
         serverState.tickets = deduplicatedMerged;
 
-        // Auto-print newly placed incoming tickets to POS-80 thermal printer
+        // Auto-print newly placed incoming tickets strictly split by station (main -> Kitchen ONLY, juice -> Juice Bar ONLY)
         for (const inc of incomingTickets) {
           if (!inc || !inc.id) continue;
           if (deletedSet.has(inc.id)) continue;
-          if ((inc.status === 'pending' || inc.isAddOn) && Array.isArray(inc.items) && inc.items.length > 0) {
-            queueAutoPrintTicket(inc, 'all');
+          const mergedTicket = deduplicatedMerged.find((t) => t && t.id === inc.id) || inc;
+          if ((mergedTicket.status === 'pending' || mergedTicket.isAddOn) && Array.isArray(mergedTicket.items) && mergedTicket.items.length > 0) {
+            queueAutoPrintTicket(mergedTicket, 'auto');
           }
         }
 
@@ -4895,6 +5469,13 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       } else if (key === 'menuItems') {
         const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
         if (incoming.length > 0) {
+          if (printerHelper && typeof printerHelper.resolveItemStation === 'function') {
+            for (const m of incoming) {
+              if (m && m.station !== 'juice' && m.station !== 'main') {
+                m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+              }
+            }
+          }
           serverState.menuItems = incoming;
           modified = true;
         }

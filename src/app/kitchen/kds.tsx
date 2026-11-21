@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
+import StationPrinterModal from '../../components/StationPrinterModal';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { isFirebaseConfigured } from '../../services/firebase';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
@@ -104,6 +105,43 @@ export default function KitchenDisplayScreen() {
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(() => getKdsAutoPrintEnabled('main'));
   const autoPrintRef = useRef<boolean>(autoPrintEnabled);
   const [lastAutoPrintedTicket, setLastAutoPrintedTicket] = useState<string | null>(null);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState<{ online: boolean; label: string }>({
+    online: true,
+    label: 'Kitchen Printer',
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const pollPrinter = async () => {
+      try {
+        const res = await fetch(`${window.location.origin}/api/print/status`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const k = data?.kitchen;
+        if (!k?.config) return;
+        if (k.config.mode === 'agent') {
+          setPrinterStatus({
+            online: !!k.agent?.online,
+            label: k.agent?.online ? (k.agent.activePrinter || 'Kitchen USB') : 'Kitchen Offline',
+          });
+        } else if (k.config.mode === 'network') {
+          setPrinterStatus({
+            online: !!k.config.host,
+            label: k.config.host ? `LAN ${k.config.host}` : 'Set Kitchen IP',
+          });
+        } else {
+          setPrinterStatus({
+            online: k.config.mode !== 'disabled',
+            label: k.config.printerName || 'POS-80',
+          });
+        }
+      } catch {}
+    };
+    pollPrinter();
+    const t = setInterval(pollPrinter, 12000);
+    return () => clearInterval(t);
+  }, []);
 
   const toggleAutoPrint = () => {
     setAutoPrintEnabled((prev) => {
@@ -268,7 +306,7 @@ export default function KitchenDisplayScreen() {
               return t;
             });
             useRestaurantStore.getState().syncFromServer({ tickets: updated });
-          } else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId) {
+          } else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId && (!msg.station || msg.station === 'main' || msg.station === 'all')) {
             setLastAutoPrintedTicket(msg.ticketId);
             seenTicketIdsRef.current.add(msg.ticketId);
             markKdsTicketPrinted('main', { id: msg.ticketId } as any);
@@ -1026,11 +1064,36 @@ export default function KitchenDisplayScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.testPrintBtn}
-              onPress={() => printKdsTestSlip('main')}
+              style={[
+                styles.testPrintBtn,
+                { borderColor: printerStatus.online ? 'rgba(52,211,153,0.45)' : 'rgba(245,158,11,0.55)' },
+              ]}
+              onPress={() => setShowPrinterModal(true)}
               activeOpacity={0.75}
               {...(Platform.OS === 'web'
-                ? ({ title: 'Send a test 80mm KOT slip to the connected printer' } as any)
+                ? ({ title: 'Configure dedicated Main Kitchen thermal printer' } as any)
+                : {})}
+            >
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: printerStatus.online ? '#34D399' : '#F59E0B',
+                }}
+              />
+              <Text style={styles.testPrintBtnText}>{printerStatus.label}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.testPrintBtn}
+              onPress={async () => {
+                const res = await printKdsTestSlip('main');
+                if (!res.success) setShowPrinterModal(true);
+              }}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Send a test 80mm KOT slip strictly to the Kitchen printer' } as any)
                 : {})}
             >
               <Ionicons name="receipt-outline" size={15} color="#D5A943" />
@@ -1179,6 +1242,14 @@ export default function KitchenDisplayScreen() {
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Dedicated Main Kitchen Printer Configuration Modal */}
+      <StationPrinterModal
+        visible={showPrinterModal}
+        station="main"
+        onClose={() => setShowPrinterModal(false)}
+        onStatusUpdated={(st) => setPrinterStatus({ online: st.online, label: st.label })}
+      />
 
       {/* Kitchen Inventory & Stock Quick Modal */}
       <Modal

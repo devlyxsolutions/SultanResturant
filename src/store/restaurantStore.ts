@@ -5,6 +5,7 @@ import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS 
 import { getTableFloor, getTableSeatingType } from '../constants/floors';
 import type { SalesReturn } from '../types/returns';
 import type { RolePermissions } from './roleStore';
+import { resolveItemStation, resolveMenuCatalogStation } from '../utils/stationRouting';
 import { useSettingsStore } from './settingsStore';
 import { appStorage } from './storage';
 
@@ -1279,6 +1280,19 @@ export const useRestaurantStore = create<RestaurantState>()(
             );
 
             if (!existingTicket) {
+              const autoRouteBevOnline = useSettingsStore.getState().settings.kdsAutoRouteBeverages !== false;
+              const resolvedOnlineItems = (order.items || []).map(it => ({
+                id: it.id,
+                name: it.name,
+                price: it.unitPrice || it.price || 0,
+                qty: it.qty || it.quantity || 1,
+                notes: it.notes,
+                station: resolveMenuCatalogStation(it as any, state.menuItems, autoRouteBevOnline),
+                itemStatus: 'pending' as const,
+                completed: false
+              }));
+              const onlineHasMain = resolvedOnlineItems.some(i => i.station === 'main');
+              const onlineHasJuice = resolvedOnlineItems.some(i => i.station === 'juice');
               const kotTicket: Ticket = serverTicket || {
                 id: `KOT-${(order.orderNumber || order.id).replace(/\D/g, '') || Date.now().toString().slice(-4)}`,
                 orderId: order.id,
@@ -1290,17 +1304,11 @@ export const useRestaurantStore = create<RestaurantState>()(
                 status: 'pending',
                 roundNumber: order.roundNumber || 1,
                 isAddOn: order.isAddOn || false,
-                stationStatuses: { main: 'pending', juice: 'pending' },
-                items: (order.items || []).map(it => ({
-                  id: it.id,
-                  name: it.name,
-                  price: it.unitPrice || it.price || 0,
-                  qty: it.qty || it.quantity || 1,
-                  notes: it.notes,
-                  station: (it.station as any) || 'main',
-                  itemStatus: 'pending',
-                  completed: false
-                }))
+                stationStatuses: {
+                  main: onlineHasMain ? 'pending' : undefined,
+                  juice: onlineHasJuice ? 'pending' : undefined,
+                },
+                items: resolvedOnlineItems,
               };
               updatedTickets.unshift(kotTicket);
             } else if (serverTicket) {
@@ -1408,8 +1416,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
           const resolveStation = (item: MenuItem): 'main' | 'juice' => {
-            if (!autoRouteBev) return 'main';
-            return item.station || (item.category === 'Drinks' ? 'juice' : 'main');
+            return resolveMenuCatalogStation(item, state.menuItems, autoRouteBev);
           };
 
           const hasMain = orderItems.some(oi => resolveStation(oi.item) === 'main');

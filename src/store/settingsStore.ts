@@ -57,6 +57,16 @@ export interface SystemSettings {
   enableRecipesBomModule: boolean;
   autoDeductRecipeStock: boolean;
 
+  // Dedicated Per-Station Thermal Printer Routing (Zero Kitchen/Juice Conflict)
+  kitchenPrinterMode: 'windows' | 'network' | 'agent' | 'disabled';
+  kitchenPrinterName: string;
+  kitchenPrinterHost: string;
+  kitchenPrinterPort: number;
+  juicePrinterMode: 'agent' | 'windows' | 'network' | 'disabled';
+  juicePrinterName: string;
+  juicePrinterHost: string;
+  juicePrinterPort: number;
+
   // Group 4 — Sales, CRM, Promotions & Returns
   enableInvoicesModule: boolean;
   enableReturnsModule: boolean;
@@ -150,6 +160,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   enableKitchenHandoverModule: true,
   enableRecipesBomModule: true,
   autoDeductRecipeStock: true,
+
+  // Dedicated Per-Station Thermal Printer Routing
+  kitchenPrinterMode: 'windows',
+  kitchenPrinterName: 'POS-80',
+  kitchenPrinterHost: '',
+  kitchenPrinterPort: 9100,
+  juicePrinterMode: 'agent',
+  juicePrinterName: 'AUTO',
+  juicePrinterHost: '',
+  juicePrinterPort: 9100,
 
   // Group 4 — Sales, CRM, Promotions & Returns
   enableInvoicesModule: true,

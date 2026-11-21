@@ -21,6 +21,7 @@ import { useSettingsStore } from '../../store/settingsStore';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
+import StationPrinterModal from '../../components/StationPrinterModal';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 import {
   enqueueKdsAutoPrint,
@@ -103,6 +104,46 @@ export default function KitchenDisplayScreen() {
   const [autoPrintEnabled, setAutoPrintEnabled] = useState<boolean>(() => getKdsAutoPrintEnabled('juice'));
   const autoPrintRef = useRef<boolean>(autoPrintEnabled);
   const [lastAutoPrintedTicket, setLastAutoPrintedTicket] = useState<string | null>(null);
+  const [showPrinterModal, setShowPrinterModal] = useState(false);
+  const [juicePrinterStatus, setJuicePrinterStatus] = useState<{ online: boolean; label: string }>({
+    online: false,
+    label: 'Setup Juice Printer',
+  });
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const pollPrinter = async () => {
+      try {
+        const res = await fetch(`${window.location.origin}/api/print/status`, { cache: 'no-store' });
+        if (!res.ok) return;
+        const data = await res.json();
+        const j = data?.juice;
+        if (!j?.config) return;
+        if (j.config.mode === 'agent') {
+          const online = !!j.agent?.online;
+          setJuicePrinterStatus({
+            online,
+            label: online ? `Juice: ${j.agent.activePrinter || 'USB Ready'}` : 'Connect Juice Printer',
+          });
+        } else if (j.config.mode === 'network') {
+          setJuicePrinterStatus({
+            online: !!j.config.host,
+            label: j.config.host ? `Juice LAN ${j.config.host}` : 'Set Juice IP',
+          });
+        } else if (j.config.mode === 'windows') {
+          setJuicePrinterStatus({
+            online: true,
+            label: `Juice: ${j.config.printerName || 'Windows'}`,
+          });
+        } else {
+          setJuicePrinterStatus({ online: false, label: 'Juice Printer OFF' });
+        }
+      } catch {}
+    };
+    pollPrinter();
+    const t = setInterval(pollPrinter, 8000);
+    return () => clearInterval(t);
+  }, []);
 
   const toggleAutoPrint = () => {
     setAutoPrintEnabled((prev) => {
@@ -264,10 +305,15 @@ export default function KitchenDisplayScreen() {
               }
             }
           }
-        else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId) {
+        else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId && msg.station === 'juice') {
             setLastAutoPrintedTicket(msg.ticketId);
             seenTicketIdsRef.current.add(msg.ticketId);
             markKdsTicketPrinted('juice', { id: msg.ticketId } as any);
+          } else if (msg.type === 'PRINT_AGENT_STATUS' && msg.station === 'juice') {
+            setJuicePrinterStatus({
+              online: !!msg.online,
+              label: msg.online ? `Juice: ${msg.activePrinter || 'USB Ready'}` : 'Connect Juice Printer',
+            });
           }
         } catch {
           // Ignore malformed ws messages
@@ -566,6 +612,10 @@ export default function KitchenDisplayScreen() {
                     const data = await res.json();
                     if (data && data.success) {
                       setLastAutoPrintedTicket(item.id);
+                      return;
+                    }
+                    if (data && data.agentOffline) {
+                      setShowPrinterModal(true);
                       return;
                     }
                   }
@@ -952,11 +1002,41 @@ export default function KitchenDisplayScreen() {
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.testPrintBtn}
-              onPress={() => printKdsTestSlip('juice')}
+              style={[
+                styles.testPrintBtn,
+                {
+                  borderColor: juicePrinterStatus.online ? 'rgba(52,211,153,0.55)' : 'rgba(255,149,0,0.7)',
+                  backgroundColor: juicePrinterStatus.online ? 'rgba(16,185,129,0.12)' : 'rgba(255,149,0,0.16)',
+                },
+              ]}
+              onPress={() => setShowPrinterModal(true)}
               activeOpacity={0.75}
               {...(Platform.OS === 'web'
-                ? ({ title: 'Send a test 80mm KOT slip to the connected printer' } as any)
+                ? ({ title: 'Setup or switch dedicated Juice Bar USB/LAN printer (never prints on Kitchen printer)' } as any)
+                : {})}
+            >
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: juicePrinterStatus.online ? '#34D399' : '#FF9500',
+                }}
+              />
+              <Text style={[styles.testPrintBtnText, { color: juicePrinterStatus.online ? '#34D399' : '#FF9500' }]}>
+                {juicePrinterStatus.label}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.testPrintBtn}
+              onPress={async () => {
+                const res = await printKdsTestSlip('juice');
+                if (!res.success) setShowPrinterModal(true);
+              }}
+              activeOpacity={0.75}
+              {...(Platform.OS === 'web'
+                ? ({ title: 'Send a test 80mm KOT slip strictly to the Juice Bar printer' } as any)
                 : {})}
             >
               <Ionicons name="receipt-outline" size={15} color="#FF9500" />
@@ -1070,18 +1150,47 @@ export default function KitchenDisplayScreen() {
             
             {printingTicket && <OrderSlip ticket={printingTicket} />}
             
-            <TouchableOpacity style={styles.printBtnAction} onPress={() => {
+            <TouchableOpacity style={styles.printBtnAction} onPress={async () => {
                 if (printingTicket) {
+                  try {
+                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                    const res = await fetch(`${origin}/api/print/kot`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ticket: printingTicket, station: 'juice', forceReprint: true }),
+                    });
+                    if (res.ok) {
+                      const data = await res.json();
+                      if (data && data.success) {
+                        setLastAutoPrintedTicket(printingTicket.id);
+                        setPrintingTicket(null);
+                        return;
+                      }
+                      if (data && data.agentOffline) {
+                        setPrintingTicket(null);
+                        setShowPrinterModal(true);
+                        return;
+                      }
+                    }
+                  } catch (_) {}
                   printOrderSlip(printingTicket, { stationLabel: 'JUICE BAR KOT' });
                 } else if (typeof window !== 'undefined') {
                   window.print();
                 }
             }}>
-              <Text style={styles.printBtnText}>Print Slip</Text>
+              <Text style={styles.printBtnText}>Print Slip (Juice Bar Thermal)</Text>
             </TouchableOpacity>
           </ScrollView>
         </View>
       </Modal>
+
+      {/* Dedicated Juice Bar Printer Setup & Status Modal */}
+      <StationPrinterModal
+        visible={showPrinterModal}
+        station="juice"
+        onClose={() => setShowPrinterModal(false)}
+        onStatusUpdated={(st) => setJuicePrinterStatus({ online: st.online, label: st.online ? `Juice: ${st.label}` : st.label })}
+      />
 
       {/* Juice Corner Inventory & Handover Quick Modal */}
       <Modal

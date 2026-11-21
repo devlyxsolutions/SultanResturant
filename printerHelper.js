@@ -1,17 +1,150 @@
 const fs = require('fs');
 const path = require('path');
+const net = require('net');
 const { execFile } = require('child_process');
 
 const RAW_PRINTER_EXE = path.join(__dirname, 'bin', 'RawPrinter.exe');
 const DEFAULT_THERMAL_PRINTER = 'POS-80';
 
 /**
- * Format a ticket into ESC/POS binary buffer for 80mm thermal printers
+ * Canonical Juice Bar / Beverage categories.
+ * Items in these categories ALWAYS route strictly to the Juice Bar station & printer.
+ */
+const JUICE_BAR_CATEGORIES = new Set([
+  'hot coffee & tea',
+  'ice coffee',
+  'mocktail',
+  'mocktails',
+  'ice cream',
+  'cold drinks & water',
+  'cold drinks',
+  'drinks',
+  'beverages',
+  'juice',
+  'juices',
+  'juice bar',
+  'shakes',
+  'milkshakes',
+  'smoothies',
+  'tea & coffee',
+  'coffee',
+  'tea',
+]);
+
+/**
+ * Resolve the canonical station ('main' | 'juice') for a menu or ticket item.
+ */
+function resolveItemStation(item, menuItems = [], autoRouteBeverages = true) {
+  if (!autoRouteBeverages) return 'main';
+  if (!item) return 'main';
+
+  // Explicit station on item takes priority when already tagged 'juice'
+  if (item.station === 'juice') return 'juice';
+
+  // Direct category / region check on the item itself
+  const itemCat = String(item.category || '').trim().toLowerCase();
+  if (itemCat && JUICE_BAR_CATEGORIES.has(itemCat)) return 'juice';
+  const itemReg = String(item.region || '').trim().toLowerCase();
+  if (itemReg === 'beverages' || itemReg === 'juice bar' || itemReg === 'drinks') return 'juice';
+
+  // Cross-check against live menu catalog (handles older waiter APKs & variant names like "Soft Drink (Tin)")
+  if (Array.isArray(menuItems) && menuItems.length > 0) {
+    const rawId = String(item.id || '').trim();
+    const rawName = String(item.name || '').trim().toLowerCase();
+    const baseName = rawName.includes('(') ? rawName.split('(')[0].trim() : rawName;
+
+    const matched = menuItems.find((m) => {
+      if (!m) return false;
+      if (rawId && m.id && (m.id === rawId || rawId.startsWith(`${m.id}-`))) return true;
+      const mName = String(m.name || '').trim().toLowerCase();
+      if (mName && (mName === rawName || mName === baseName)) return true;
+      return false;
+    });
+
+    if (matched) {
+      if (matched.station === 'juice') return 'juice';
+      const mCat = String(matched.category || '').trim().toLowerCase();
+      if (mCat && JUICE_BAR_CATEGORIES.has(mCat)) return 'juice';
+      const mReg = String(matched.region || '').trim().toLowerCase();
+      if (mReg === 'beverages' || mReg === 'juice bar' || mReg === 'drinks') return 'juice';
+      if (matched.station === 'main') return 'main';
+    }
+  }
+
+  // Fallback: respect explicit 'main' or default to 'main'
+  return item.station === 'juice' ? 'juice' : 'main';
+}
+
+/**
+ * Normalize every item's station on a ticket & compute accurate station presence.
+ */
+function normalizeTicketStations(ticket, menuItems = [], autoRouteBeverages = true) {
+  if (!ticket || !Array.isArray(ticket.items)) {
+    return { hasMain: false, hasJuice: false, mainItems: [], juiceItems: [] };
+  }
+
+  const mainItems = [];
+  const juiceItems = [];
+
+  for (const it of ticket.items) {
+    if (!it) continue;
+    const resolved = resolveItemStation(it, menuItems, autoRouteBeverages);
+    it.station = resolved;
+    if (resolved === 'juice') {
+      juiceItems.push(it);
+    } else {
+      mainItems.push(it);
+    }
+  }
+
+  const hasMain = mainItems.length > 0;
+  const hasJuice = juiceItems.length > 0;
+
+  // Keep stationStatuses strictly aligned with items actually present on this ticket
+  const prevStatuses = ticket.stationStatuses || {};
+  const fallbackStatus = ticket.status || 'pending';
+  const nextStatuses = {};
+  if (hasMain) {
+    nextStatuses.main = prevStatuses.main || fallbackStatus;
+  }
+  if (hasJuice) {
+    nextStatuses.juice = prevStatuses.juice || fallbackStatus;
+  }
+  ticket.stationStatuses = nextStatuses;
+
+  return { hasMain, hasJuice, mainItems, juiceItems };
+}
+
+/**
+ * Filter ticket items strictly for a specific station.
+ * NEVER leaks Juice Bar items to Kitchen or Kitchen items to Juice Bar!
+ */
+function filterItemsForStation(items, station = 'all') {
+  const list = Array.isArray(items) ? items : [];
+  if (station === 'main') {
+    return list.filter((i) => (i?.station || 'main') === 'main');
+  }
+  if (station === 'juice') {
+    return list.filter((i) => i?.station === 'juice');
+  }
+  return list;
+}
+
+/**
+ * Format a ticket into ESC/POS binary buffer for 80mm thermal printers.
+ * Returns null if there are ZERO items matching the requested station (prevents cross-station slip leaks).
  */
 function buildEscPosKotBuffer(ticket, station = 'all') {
+  const items = Array.isArray(ticket?.items) ? ticket.items : [];
+  const activeItems = filterItemsForStation(items, station);
+
+  // STRICT STATION ISOLATION: Never print an empty slip or fall back to other station's items!
+  if (activeItems.length === 0) {
+    return null;
+  }
+
   const esc = '\x1b';
   const gs = '\x1d';
-
   const parts = [];
 
   // Init printer
@@ -39,7 +172,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 
   // Table / Order Type (Huge bold double size)
   parts.push(Buffer.from(esc + '!\x38', 'ascii'));
-  const tableText = (ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
+  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
   parts.push(Buffer.from(`[ ${tableText} ]\n`, 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
@@ -56,17 +189,6 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 
   const kotId = ticket.id || 'N/A';
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
-  const items = Array.isArray(ticket.items) ? ticket.items : [];
-
-  let activeItems = items;
-  if (station === 'main') {
-    const mainOnly = items.filter(i => (i?.station || 'main') === 'main');
-    activeItems = mainOnly.length > 0 ? mainOnly : items;
-  } else if (station === 'juice') {
-    const juiceOnly = items.filter(i => i?.station === 'juice');
-    activeItems = juiceOnly.length > 0 ? juiceOnly : items;
-  }
-
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(21) + `Time: ${dateStr}\n`, 'ascii'));
@@ -99,7 +221,10 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from(esc + '!\x01', 'ascii')); // Bold
   parts.push(Buffer.from(`TOTAL ITEMS: ${totalQty}\n`, 'ascii'));
   parts.push(Buffer.from(esc + '!\x00', 'ascii'));
-  parts.push(Buffer.from('SULTAN RESTAURANT - AUTO KOT\n', 'ascii'));
+  const footerLabel = station === 'juice'
+    ? 'SULTAN JUICE BAR - AUTO KOT\n'
+    : 'SULTAN MAIN KITCHEN - AUTO KOT\n';
+  parts.push(Buffer.from(footerLabel, 'ascii'));
 
   // Feed 4 lines & cut
   parts.push(Buffer.from('\n\n\n\n', 'ascii'));
@@ -109,41 +234,222 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 }
 
 /**
- * Print a ticket buffer directly to a Windows printer using RawPrinter.exe
+ * Send raw ESC/POS buffer directly to a local/shared Windows printer via RawPrinter.exe
  */
-function printTicketDirect(ticket, options = {}) {
+function printRawBufferToWindows(buffer, printerName = DEFAULT_THERMAL_PRINTER, ticketId = '') {
   return new Promise((resolve, reject) => {
-    const printerName = options.printerName || DEFAULT_THERMAL_PRINTER;
-    const station = options.station || 'all';
-
     if (!fs.existsSync(RAW_PRINTER_EXE)) {
       return reject(new Error(`RawPrinter binary not found at ${RAW_PRINTER_EXE}`));
     }
 
-    const buffer = buildEscPosKotBuffer(ticket, station);
     const tempFile = path.join(__dirname, `temp_kot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}.bin`);
-
     fs.writeFile(tempFile, buffer, (writeErr) => {
       if (writeErr) return reject(writeErr);
 
       execFile(RAW_PRINTER_EXE, [printerName, tempFile], (execErr, stdout, stderr) => {
-        // Clean up temp file
         try { fs.unlinkSync(tempFile); } catch (_) {}
 
         if (execErr) {
-          console.warn(`[PrinterHelper] Direct print to ${printerName} failed:`, stderr || execErr.message);
+          console.warn(`[PrinterHelper] Windows direct print to ${printerName} failed:`, stderr || execErr.message);
           return reject(execErr);
         }
 
-        console.log(`[PrinterHelper] Direct KOT printed successfully to ${printerName} (ticket: ${ticket.id})`);
-        resolve({ success: true, printer: printerName, ticketId: ticket.id });
+        console.log(`[PrinterHelper] Direct KOT printed successfully to ${printerName} (ticket: ${ticketId})`);
+        resolve({ success: true, printer: printerName, ticketId });
       });
     });
   });
 }
 
+/**
+ * Send raw ESC/POS buffer directly to a LAN/Wi-Fi Thermal Printer over raw TCP (Port 9100)
+ */
+function printRawBufferToNetworkTcp(buffer, host, port = 9100, ticketId = '') {
+  return new Promise((resolve, reject) => {
+    if (!host) return reject(new Error('Network printer IP/host not configured'));
+    const socket = new net.Socket();
+    let settled = false;
+
+    const finish = (err, result) => {
+      if (settled) return;
+      settled = true;
+      try { socket.destroy(); } catch (_) {}
+      if (err) reject(err);
+      else resolve(result);
+    };
+
+    socket.setTimeout(5000);
+    socket.on('timeout', () => finish(new Error(`Network printer ${host}:${port} timed out`)));
+    socket.on('error', (err) => finish(err));
+
+    socket.connect(Number(port) || 9100, host, () => {
+      socket.write(buffer, () => {
+        console.log(`[PrinterHelper] Network TCP KOT printed successfully to ${host}:${port} (ticket: ${ticketId})`);
+        // Give printer a brief moment to accept bytes before closing
+        setTimeout(() => {
+          finish(null, { success: true, printer: `${host}:${port}`, ticketId });
+        }, 120);
+      });
+    });
+  });
+}
+
+/**
+ * Print a ticket directly to a Windows or Network TCP printer.
+ * Safely skips if there are no items matching the requested station.
+ */
+function printTicketDirect(ticket, options = {}) {
+  const station = options.station || 'main';
+  const buffer = buildEscPosKotBuffer(ticket, station);
+
+  if (!buffer) {
+    return Promise.resolve({
+      success: true,
+      skipped: true,
+      reason: `No ${station} items on ticket #${ticket?.id || ''}`,
+      ticketId: ticket?.id,
+      station,
+    });
+  }
+
+  if (options.mode === 'network' && options.host) {
+    return printRawBufferToNetworkTcp(buffer, options.host, options.port || 9100, ticket?.id);
+  }
+
+  const printerName = options.printerName || DEFAULT_THERMAL_PRINTER;
+  return printRawBufferToWindows(buffer, printerName, ticket?.id);
+}
+
+// Cache installed Windows printers on Server PC for 20s
+let cachedServerPrinters = [];
+let cachedServerPrintersAt = 0;
+
+function getLocalWindowsPrinters() {
+  return new Promise((resolve) => {
+    if (Date.now() - cachedServerPrintersAt < 20000 && cachedServerPrinters.length > 0) {
+      return resolve(cachedServerPrinters);
+    }
+    execFile(
+      'powershell.exe',
+      ['-NoProfile', '-Command', 'Get-Printer | Select-Object -ExpandProperty Name'],
+      { timeout: 5000 },
+      (err, stdout) => {
+        if (!err && stdout) {
+          const list = stdout
+            .split(/\r?\n/)
+            .map((s) => s.trim())
+            .filter(Boolean);
+          if (list.length > 0) {
+            cachedServerPrinters = list;
+            cachedServerPrintersAt = Date.now();
+            return resolve(list);
+          }
+        }
+        resolve(cachedServerPrinters.length > 0 ? cachedServerPrinters : [DEFAULT_THERMAL_PRINTER]);
+      }
+    );
+  });
+}
+
+/**
+ * Pure zero-dependency PKZIP archive builder (Store method + standard IEEE CRC32)
+ * Used to serve the 1-click downloadable Sultan-JuiceBar-Printer-Setup.zip directly from server.js!
+ */
+const CRC32_TABLE = (() => {
+  const table = new Uint32Array(256);
+  for (let i = 0; i < 256; i++) {
+    let c = i;
+    for (let k = 0; k < 8; k++) {
+      c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    }
+    table[i] = c >>> 0;
+  }
+  return table;
+})();
+
+function crc32(buf) {
+  let crc = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    crc = CRC32_TABLE[(crc ^ buf[i]) & 0xff] ^ (crc >>> 8);
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function buildZipBuffer(files) {
+  const localParts = [];
+  const centralParts = [];
+  let offset = 0;
+
+  for (const file of files) {
+    const nameBuf = Buffer.from(file.name, 'utf8');
+    const dataBuf = Buffer.isBuffer(file.data) ? file.data : Buffer.from(String(file.data), 'utf8');
+    const checksum = crc32(dataBuf);
+    const size = dataBuf.length;
+
+    // Local File Header (30 bytes + filename)
+    const localHeader = Buffer.alloc(30);
+    localHeader.writeUInt32LE(0x04034b50, 0); // signature
+    localHeader.writeUInt16LE(20, 4);         // version needed
+    localHeader.writeUInt16LE(0, 6);          // flags
+    localHeader.writeUInt16LE(0, 8);          // method: 0 (STORE)
+    localHeader.writeUInt16LE(0, 10);         // mod time
+    localHeader.writeUInt16LE(0x5421, 12);    // mod date
+    localHeader.writeUInt32LE(checksum, 14);  // crc32
+    localHeader.writeUInt32LE(size, 18);      // compressed size
+    localHeader.writeUInt32LE(size, 22);      // uncompressed size
+    localHeader.writeUInt16LE(nameBuf.length, 26); // filename length
+    localHeader.writeUInt16LE(0, 28);         // extra length
+
+    localParts.push(localHeader, nameBuf, dataBuf);
+
+    // Central Directory Header (46 bytes + filename)
+    const centralHeader = Buffer.alloc(46);
+    centralHeader.writeUInt32LE(0x02014b50, 0); // signature
+    centralHeader.writeUInt16LE(20, 4);         // version made by
+    centralHeader.writeUInt16LE(20, 6);         // version needed
+    centralHeader.writeUInt16LE(0, 8);          // flags
+    centralHeader.writeUInt16LE(0, 10);         // method: 0 (STORE)
+    centralHeader.writeUInt16LE(0, 12);         // mod time
+    centralHeader.writeUInt16LE(0x5421, 14);    // mod date
+    centralHeader.writeUInt32LE(checksum, 16);  // crc32
+    centralHeader.writeUInt32LE(size, 20);      // compressed size
+    centralHeader.writeUInt32LE(size, 24);      // uncompressed size
+    centralHeader.writeUInt16LE(nameBuf.length, 28); // filename length
+    centralHeader.writeUInt16LE(0, 30);         // extra length
+    centralHeader.writeUInt16LE(0, 32);         // comment length
+    centralHeader.writeUInt16LE(0, 34);         // disk number
+    centralHeader.writeUInt16LE(0, 36);         // internal attrs
+    centralHeader.writeUInt32LE(0, 38);         // external attrs
+    centralHeader.writeUInt32LE(offset, 42);    // relative offset of local header
+
+    centralParts.push(centralHeader, nameBuf);
+    offset += localHeader.length + nameBuf.length + dataBuf.length;
+  }
+
+  const centralDirBuf = Buffer.concat(centralParts);
+  const eocd = Buffer.alloc(22);
+  eocd.writeUInt32LE(0x06054b50, 0);          // signature
+  eocd.writeUInt16LE(0, 4);                   // disk number
+  eocd.writeUInt16LE(0, 6);                   // disk with central dir
+  eocd.writeUInt16LE(files.length, 8);        // entries on this disk
+  eocd.writeUInt16LE(files.length, 10);       // total entries
+  eocd.writeUInt32LE(centralDirBuf.length, 12); // central dir size
+  eocd.writeUInt32LE(offset, 16);             // central dir offset
+  eocd.writeUInt16LE(0, 20);                  // comment length
+
+  return Buffer.concat([...localParts, centralDirBuf, eocd]);
+}
+
 module.exports = {
+  JUICE_BAR_CATEGORIES,
+  resolveItemStation,
+  normalizeTicketStations,
+  filterItemsForStation,
   buildEscPosKotBuffer,
+  printRawBufferToWindows,
+  printRawBufferToNetworkTcp,
   printTicketDirect,
+  getLocalWindowsPrinters,
+  buildZipBuffer,
   DEFAULT_THERMAL_PRINTER,
 };

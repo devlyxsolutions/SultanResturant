@@ -1,8 +1,16 @@
 import { Platform } from 'react-native';
 import { printOrderSlip } from '../components/OrderSlip';
 import { Ticket } from '../store/restaurantStore';
+import { resolveItemStation } from './stationRouting';
 
 export type KdsStation = 'main' | 'juice';
+
+export type KdsTestPrintResult = {
+  success: boolean;
+  printer?: string;
+  agentOffline?: boolean;
+  error?: string;
+};
 
 const AUTO_PRINT_KEY_PREFIX = 'sultan_kds_autoprint_v1_';
 const PRINTED_REGISTRY_KEY = 'sultan_kds_printed_tickets_v1';
@@ -148,7 +156,8 @@ function processNextPrintJob() {
 
   isProcessingQueue = true;
 
-  // 1. Direct Server Thermal Print (Zero browser dialogs, instant ESC/POS)
+  // Direct Server/Station-Isolated Thermal Print (Zero browser dialogs, instant ESC/POS)
+  // Server routes 'main' ONLY to Kitchen Printer and 'juice' ONLY to Juice Bar Printer Agent/Printer.
   const tryDirectPrint = async (): Promise<boolean> => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
       try {
@@ -164,7 +173,7 @@ function processNextPrintJob() {
         });
         if (res.ok) {
           const data = await res.json();
-          if (data && data.success) {
+          if (data && (data.success || data.queued)) {
             return true;
           }
         }
@@ -176,13 +185,14 @@ function processNextPrintJob() {
   };
 
   tryDirectPrint().then((directSuccess) => {
-    // Notify UI of print job completion
-    next.onComplete?.(next.ticket.id);
+    if (directSuccess) {
+      next.onComplete?.(next.ticket.id);
+    }
 
     // CRITICAL: NEVER call printOrderSlip() or window.print() in automated queue!
     // In web browsers, window.print() opens a blocking Print Preview modal that halts the KDS screen.
     if (!directSuccess) {
-      console.warn(`[KDS AutoPrint] Direct print unavailable for ticket ${next.ticket.id} (${next.station})`);
+      console.warn(`[KDS AutoPrint] Station print pending/unavailable for ticket ${next.ticket.id} (${next.station})`);
     }
 
     // Cooldown before processing next queued slip
@@ -212,7 +222,7 @@ export function enqueueKdsAutoPrint(
   if (!options?.forceReprint && !autoEnabled) return false;
 
   const allItems = Array.isArray(ticket.items) ? ticket.items : [];
-  const stationItems = allItems.filter((i) => (i?.station || 'main') === station);
+  const stationItems = allItems.filter((i) => resolveItemStation(i, true) === station);
   if (stationItems.length === 0) return false;
 
   if (!options?.forceReprint && isKdsTicketPrinted(station, ticket)) {
@@ -240,14 +250,15 @@ export function enqueueKdsAutoPrint(
 }
 
 /**
- * Prints a clean 80mm Test KOT Slip to verify the connected kitchen/juicebar printer.
+ * Sends a clean 80mm Test KOT Slip strictly to the requested station's dedicated printer.
+ * NEVER sends a Juice Bar test slip to the Kitchen printer!
  */
-export function printKdsTestSlip(station: KdsStation) {
+export async function printKdsTestSlip(station: KdsStation): Promise<KdsTestPrintResult> {
   const stationLabel = station === 'juice' ? 'JUICE BAR KOT' : 'MAIN KITCHEN KOT';
   const testTicket: Ticket = {
     id: `TEST-${Date.now().toString().slice(-4)}`,
     tableId: 'TEST',
-    tableName: 'PRINTER TEST SLIP',
+    tableName: station === 'juice' ? 'JUICE BAR PRINTER TEST' : 'KITCHEN PRINTER TEST',
     server: 'KDS Auto-Print Check',
     status: 'pending',
     timePlaced: Date.now(),
@@ -260,21 +271,35 @@ export function printKdsTestSlip(station: KdsStation) {
         completed: false,
         itemStatus: 'pending',
         station,
-        notes: 'Connected printer verified — Auto-Print Ready',
+        notes:
+          station === 'juice'
+            ? 'Juice Bar Dedicated Printer Verified'
+            : 'Main Kitchen Dedicated Printer Verified',
       },
     ],
   };
 
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    fetch(`${window.location.origin}/api/print/kot`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticket: testTicket, station }),
-    }).catch(() => {
-      printOrderSlip(testTicket, { stationLabel });
-    });
-    return;
+    try {
+      const res = await fetch(`${window.location.origin}/api/print/kot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket: testTicket, station, forceReprint: true }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data?.success) {
+        return { success: true, printer: data.printer };
+      }
+      return {
+        success: false,
+        agentOffline: !!data?.agentOffline,
+        error: data?.error || 'Printer did not respond',
+      };
+    } catch (e: any) {
+      return { success: false, error: e?.message || 'Unable to contact server' };
+    }
   }
 
   printOrderSlip(testTicket, { stationLabel });
+  return { success: true };
 }
