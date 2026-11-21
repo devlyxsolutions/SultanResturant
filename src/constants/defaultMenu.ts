@@ -81,7 +81,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 12,
-    "imageUri": "https://images.unsplash.com/photo-1546793665-c74683f339c1?w=800&q=80",
+    "imageUri": "/menu-images/slt-sal-caesar.jpg",
     "description": "Fresh crunchy Iceberg, grilled chicken, sun-dried tomatoes, tossed in Chef's special sauce, topped with croutons & Black olives & boiled eggs"
   },
   {
@@ -92,7 +92,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 10,
-    "imageUri": "https://images.unsplash.com/photo-1519996529931-28324d5a630e?w=800&q=80",
+    "imageUri": "/menu-images/slt-sal-fruity-nutty.jpg",
     "description": "Julienne cut apples, Papaya, carrots tossed in honey sauce, topped with dry nuts"
   },
   {
@@ -103,7 +103,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 10,
-    "imageUri": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80",
+    "imageUri": "/menu-images/slt-sal-russian.jpg",
     "description": "Classic creamy Russian salad with fresh cube-cut Apple & Fruit Cocktail Topped with dry Nuts"
   },
   {
@@ -114,7 +114,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?w=800&q=80",
+    "imageUri": "/menu-images/slt-sal-green.jpg",
     "description": "Fresh garden vegetables with our signature dressing"
   },
   {
@@ -126,7 +126,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 14,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1565680018434-b513d5e5fd47?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-dynamite-prawns.jpg",
     "description": "Crispy battered fried prawns tossed in Dynamite sauce, served with Iceberg"
   },
   {
@@ -137,7 +137,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Arabic",
     "station": "main",
     "prepTimeMin": 12,
-    "imageUri": "https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-loaded-hummus.jpg",
     "description": "Creamy chickpea hummus topped with grilled chicken, tahini sauce & Extra Virgin olive oil, served with Pita Bread & Carrot sticks"
   },
   {
@@ -148,7 +148,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 15,
-    "imageUri": "https://images.unsplash.com/photo-1562967914-608f82629710?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-stuffed-peri-bite.jpg",
     "description": "Thin layered stuffed chicken, crunchy fried, served with Peri Peri sauce"
   },
   {
@@ -159,7 +159,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 15,
-    "imageUri": "https://images.unsplash.com/photo-1534422298391-e4f8c172dddb?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-finger-fish.jpg",
     "description": "Crispy fried boneless fish, served with Tartar sauce & fries"
   },
   {
@@ -170,7 +170,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 12,
-    "imageUri": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-chicken-dynamite.jpg",
     "description": "Crispy battered fried chicken tossed in Dynamite sauce, served with Iceberg"
   },
   {
@@ -181,7 +181,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 10,
-    "imageUri": "https://images.unsplash.com/photo-1585109649139-366815a0d713?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-loaded-fries.jpg",
     "description": "Crispy fries topped with cheese sauce, chicken & sauces"
   },
   {
@@ -192,7 +192,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1527477378378-0c6f50529d33?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-honey-chilli-wings.jpg",
     "description": "Crispy chicken wings tossed in sweet honey-chilli glaze, served with Iceberg"
   },
   {
@@ -203,7 +203,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1576107232684-1279f3908594?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-masala-fries.jpg",
     "description": "Crispy fries tossed in spicy masala seasoning"
   },
   {
@@ -214,7 +214,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-fish-cracker.jpg",
     "description": "Crispy fried fish crackers served with a dip"
   },
   {
@@ -225,7 +225,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1573080496219-bb080dd4f877?w=800&q=80",
+    "imageUri": "/menu-images/slt-app-plain-fries.jpg",
     "description": "Classic salted crispy french fries"
   },
   {
@@ -237,7 +237,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 15,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=800&q=80",
+    "imageUri": "/menu-images/slt-sop-sultan-special.jpg",
     "description": "Signature special soup loaded with chicken, Black Mushrooms, Fish, Prawn, vegetables, Topped on Dry Nuts and secret spices"
   },
   {
@@ -248,7 +248,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 12,
-    "imageUri": "https://images.unsplash.com/photo-1582878826629-29b7ad1cdc43?w=800&q=80",
+    "imageUri": "/menu-images/slt-sop-hot-sour.jpg",
     "description": "Classic hot & sour soup with chicken & tangy spices"
   },
   {
@@ -259,7 +259,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 12,
-    "imageUri": "https://images.unsplash.com/photo-1603105037880-880cd4edfb0d?w=800&q=80",
+    "imageUri": "/menu-images/slt-sop-chicken-corn.jpg",
     "description": "Chicken corn soup with sweet corn & tender chicken pieces"
   },
   {
@@ -270,7 +270,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-fish-steak.jpg",
     "description": "Perfectly grilled fish fillet topped with lemon butter, tartar sauce, served with crispy fries or mashed potatoes"
   },
   {
@@ -281,7 +281,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1579208030886-b937da0925dc?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-fish-chips.jpg",
     "description": "Crispy fried Fish, Coated in crumbs, Serve with Fries & Tartar Sauce"
   },
   {
@@ -292,7 +292,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-tarragon-chicken.jpg",
     "description": "Grilled chicken steak topped with creamy tarragon sauce, served with crispy fries or mashed potatoes"
   },
   {
@@ -303,7 +303,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1532550907401-a500c9a57435?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-pepper-chicken.jpg",
     "description": "Juicy grilled chicken steak coated in cracked black pepper sauce with a rich creamy texture, served with crispy fries or mashed potatoes"
   },
   {
@@ -314,7 +314,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-moroccan-chicken.jpg",
     "description": "Tender grilled chicken infused with authentic Moroccan spices, topped with special Moroccan sauce, served with crispy fries or mashed potatoes"
   },
   {
@@ -325,7 +325,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Continental",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1588166524941-3bf61a9c41db?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-mushroom-chicken.jpg",
     "description": "Classic grilled chicken steak topped with creamy white mushroom sauce, served with sautéed vegetables & fries or mashed potatoes"
   },
   {
@@ -336,7 +336,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Italian",
     "station": "main",
     "prepTimeMin": 16,
-    "imageUri": "https://images.unsplash.com/photo-1645112411341-6c4fd023714a?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-fettuccine-alfredo.jpg",
     "description": "Creamy fettuccine pasta tossed in rich Alfredo sauce with grilled chicken chunks, mushrooms & parmesan cheese"
   },
   {
@@ -348,7 +348,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 22,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-stuffed-chicken.jpg",
     "description": "Signature stuffed chicken breast filled with cheese & herbs, topped with special creamy sauce, served with crispy fries or mashed potatoes"
   },
   {
@@ -359,7 +359,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Italian",
     "station": "main",
     "prepTimeMin": 16,
-    "imageUri": "https://images.unsplash.com/photo-1621996346565-e3d5d6281292?w=800&q=80",
+    "imageUri": "/menu-images/slt-cnt-arrabbiata-pasta.jpg",
     "description": "Spicy penne pasta tossed in tangy tomato Arrabbiata sauce with herbs, garlic & a touch of chilli"
   },
   {
@@ -370,7 +370,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1525755662778-989d0524087e?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-cashew-nut.jpg",
     "description": "Tender chicken cooked with roasted cashew nuts, Spring Onion, capsicum in a mild spicy gravy"
   },
   {
@@ -381,7 +381,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 16,
-    "imageUri": "https://images.unsplash.com/photo-1585032226651-759b368d7246?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-manchurian.jpg",
     "description": "Juicy chicken cooked in tangy & spicy Manchurian sauce with capsicum & onion"
   },
   {
@@ -393,7 +393,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 16,
     "badge": "Popular",
-    "imageUri": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-chilli-dry.jpg",
     "description": "Crispy fried chicken tossed in dry spicy chilli sauce with capsicum, onion, green chillies & fresh ginger"
   },
   {
@@ -404,7 +404,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 15,
-    "imageUri": "https://images.unsplash.com/photo-1612927601601-6638404737ce?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-chowmein.jpg",
     "description": "Stir-fried noodles with shredded chicken & vegetables"
   },
   {
@@ -416,7 +416,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 15,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-special-rice.jpg",
     "description": "Signature fried rice loaded with chicken, prawns, egg, fruits, nuts & fresh vegetables"
   },
   {
@@ -427,7 +427,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-masala-rice.jpg",
     "description": "Spicy masala rice tossed with tender chicken chunks & aromatic spices"
   },
   {
@@ -438,7 +438,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Chinese",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1536304929831-ee1ca9d44906?w=800&q=80",
+    "imageUri": "/menu-images/slt-chn-fried-rice.jpg",
     "description": "Classic Chinese style fried rice with juicy chicken, egg & vegetables"
   },
   {
@@ -450,7 +450,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 25,
     "badge": "Grand Feast",
-    "imageUri": "https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-train.jpg",
     "description": "Three Flavours of Your Choice: Veggie Pizza, Kabab Crust Pizza, Tikka Pizza",
     "variants": [
       {
@@ -468,7 +468,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 20,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1565299624946-b28f40a0ae38?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-sultan-special.jpg",
     "description": "Chef's royal recipe with premium mozzarella, smoked chicken, pepperoni, veggies & secret sauce",
     "variants": [
       {
@@ -493,7 +493,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Italian",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-kabab-crust.jpg",
     "description": "Handcrafted golden crust stuffed with succulent minced seekh kababs and melted cheese",
     "variants": [
       {
@@ -519,7 +519,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 22,
     "badge": "Signature Crust",
-    "imageUri": "https://images.unsplash.com/photo-1590947132387-155cc02f3212?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-crown-crust.jpg",
     "description": "Crown-shaped crust filled with creamy cheese & spicy chicken chunks with rich toppings",
     "variants": [
       {
@@ -544,7 +544,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Italian",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1604382354936-07c5d9983bd3?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-tikka.jpg",
     "description": "Traditional spicy chicken tikka chunks with onions, bell peppers & gooey melted cheese",
     "variants": [
       {
@@ -569,7 +569,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Italian",
     "station": "main",
     "prepTimeMin": 16,
-    "imageUri": "https://images.unsplash.com/photo-1571407970349-bc81e7e96d47?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-cheese-lover.jpg",
     "description": "Loaded double blend of mozzarella and cheddar cheese over rich Italian tomato base",
     "variants": [
       {
@@ -594,7 +594,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Turkish",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1585238342024-78d387f4a707?w=800&q=80",
+    "imageUri": "/menu-images/slt-piz-turkish-fatayer.jpg",
     "description": "Authentic boat-shaped Turkish pastry pizza topped with spiced meats, cheese & herbs",
     "variants": [
       {
@@ -612,7 +612,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 16,
     "badge": "Top Rated",
-    "imageUri": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-beef-smash.jpg",
     "description": "Premium beef patty smashed on grill loaded with melted cheese, caramelized onions, lettuce, tomato & special sauce, served with fries & coleslaw"
   },
   {
@@ -623,7 +623,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 15,
-    "imageUri": "https://images.unsplash.com/photo-1550547660-d9450f859349?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-chicken-smash.jpg",
     "description": "Premium Chicken patty smashed on grill loaded with melted cheese, caramelized onions, lettuce, tomato & special sauce, served with fries & coleslaw"
   },
   {
@@ -634,7 +634,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 15,
-    "imageUri": "https://images.unsplash.com/photo-1521305916504-4a1121188589?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-grilled-burger.jpg",
     "description": "Grilled chicken fillet marinated in herbs and spices, topped with fresh lettuce, creamy mayo, & cheese, served with crispy fries & coleslaw"
   },
   {
@@ -646,7 +646,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 12,
     "badge": "Crispy Bestseller",
-    "imageUri": "https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-zinger-burger.jpg",
     "description": "Crispy, spicy Zinger with fresh lettuce & creamy mayo, served with crispy golden fries & coleslaw"
   },
   {
@@ -658,7 +658,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 14,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1528735602780-2552fd46c7af?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-sultan-panini.jpg",
     "description": "Double chicken, double cheese, Sun-dried Tomato, Pepperoni & Sultan special secret sauce, served with crispy fries & coleslaw"
   },
   {
@@ -669,7 +669,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1509722747041-616f39b57569?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-jalapeno-panini.jpg",
     "description": "Grilled Italian panini bread stuffed with chicken, cheese, jalapenos, olives & spicy jalapeno sauce, served with golden fries & coleslaw"
   },
   {
@@ -680,7 +680,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1554433607-66b5efe9d304?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-grilled-panini.jpg",
     "description": "Panini bread filled with grilled chicken chunks, mozzarella cheese, bell peppers & creamy sauce, served with crispy fries & coleslaw"
   },
   {
@@ -691,7 +691,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Fast Food",
     "station": "main",
     "prepTimeMin": 14,
-    "imageUri": "https://images.unsplash.com/photo-1567620832903-9fc6debc209f?w=800&q=80",
+    "imageUri": "/menu-images/slt-fst-club-sandwich.jpg",
     "description": "Triple-layer classic club with grilled chicken, fried egg, cheese, lettuce & mayo, cut into 4 triangles & served with fries & coleslaw"
   },
   {
@@ -703,7 +703,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 20,
     "badge": "Golden Crispy",
-    "imageUri": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800&q=80",
+    "imageUri": "/menu-images/slt-brs-chicken-broast.jpg",
     "description": "Crispy, juicy chicken broast with a delicious special flavor",
     "variants": [
       {
@@ -725,7 +725,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 30,
     "badge": "Royal Dish",
-    "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
+    "imageUri": "/menu-images/slt-tur-roghan-josh.jpg",
     "description": "Special Turkish mutton masala with mughlai spices, tender mutton pieces in aromatic gravy"
   },
   {
@@ -737,7 +737,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 30,
     "badge": "Pasha Royal",
-    "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
+    "imageUri": "/menu-images/slt-tur-pasha-gosht.jpg",
     "description": "Royal Pasha style mutton curry, premium cut mutton in rich & flavorful Turkish gravy"
   },
   {
@@ -748,7 +748,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Turkish",
     "station": "main",
     "prepTimeMin": 30,
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-tur-mutton-larva.jpg",
     "description": "Traditional Turkish mutton larva, slow-cooked mutton in rich Turkish spices & yogurt"
   },
   {
@@ -760,7 +760,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 25,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-mutton-champ.jpg",
     "description": "Tender prime mutton ribs grilled over charcoal with royal aromatic rub",
     "variants": [
       {
@@ -777,7 +777,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-mutton-kabab.jpg",
     "description": "Minced mutton seasoned with traditional herbs and skewered over embers",
     "variants": [
       {
@@ -794,7 +794,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-reshmi-kabab.jpg",
     "description": "Silky tender chicken mince kababs infused with cream, cheese & green coriander",
     "variants": [
       {
@@ -812,7 +812,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 18,
     "badge": "Signature",
-    "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-mint-cheese-kabab.jpg",
     "description": "Grilled skewers with melted mozzarella cheese center and refreshing wild mint",
     "variants": [
       {
@@ -829,7 +829,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 16,
-    "imageUri": "https://images.unsplash.com/photo-1529193591184-b1d58069ecdd?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-chicken-kabab.jpg",
     "description": "Spiced chicken mince seekh kababs barbecued on open wood embers",
     "variants": [
       {
@@ -846,7 +846,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-fish-tikka.jpg",
     "description": "Boneless fish cubes marinated in lemon, carom seeds & royal tikka marinade",
     "variants": [
       {
@@ -863,7 +863,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-kastoori-boti.jpg",
     "description": "Boneless chicken marinated with fenugreek leaves, saffron and royal creamy yogurt",
     "variants": [
       {
@@ -880,7 +880,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1599488615731-7e5c2823ff28?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-qandhari-boti.jpg",
     "description": "Authentic Afghan style spicy tender marinated chicken boti grilled to perfection",
     "variants": [
       {
@@ -897,7 +897,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 18,
-    "imageUri": "https://images.unsplash.com/photo-1598515214211-89d3c73ae83b?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-haryali-boti.jpg",
     "description": "Chicken cubes coated in aromatic green herb paste of mint, coriander and green chilies",
     "variants": [
       {
@@ -915,7 +915,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 18,
     "badge": "Most Popular",
-    "imageUri": "https://images.unsplash.com/photo-1604908176997-125f25cc6f3d?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-malai-boti.jpg",
     "description": "Mouth melting chicken chunks marinated with thick dairy cream, cheese and mild white pepper",
     "variants": [
       {
@@ -932,7 +932,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "BBQ",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1527477378378-0c6f50529d33?w=800&q=80",
+    "imageUri": "/menu-images/slt-bbq-tandoori-boti.jpg",
     "description": "Traditional bone-in chicken cuts marinated in vibrant red tandoori spices and charred on coals",
     "variants": [
       {
@@ -950,7 +950,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 15,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+    "imageUri": "/menu-images/slt-bir-mutton-biryani.jpg",
     "description": "Topped with Cashew Nuts & Brown Onion"
   },
   {
@@ -962,7 +962,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 15,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
+    "imageUri": "/menu-images/slt-bir-chicken-biryani.jpg",
     "description": "Topped with Cashew Nuts & Brown Onion"
   },
   {
@@ -974,7 +974,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 15,
     "badge": "Royal Daal",
-    "imageUri": "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=800&q=80",
+    "imageUri": "/menu-images/slt-dal-makhni.jpg",
     "description": "Rich and creamy blend of lentils, slow-cooked with aromatic spices, butter, and fresh cream"
   },
   {
@@ -986,7 +986,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 22,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-white-handi.jpg",
     "description": "Velvety smooth boneless chicken cooked in pure dairy butter, cream, almonds and white pepper",
     "variants": [
       {
@@ -1007,7 +1007,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-shahjahani.jpg",
     "description": "Royal Mughal feast handi simmered with saffron, roasted nuts, yogurt and golden spices",
     "variants": [
       {
@@ -1028,7 +1028,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-patiala.jpg",
     "description": "Punjabi Patiala style spiced chicken handi with rich onion-tomato masala and butter",
     "variants": [
       {
@@ -1049,7 +1049,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-ginger.jpg",
     "description": "Boneless chicken prepared with generous fresh ginger juliennes and aromatic crushed spices",
     "variants": [
       {
@@ -1070,7 +1070,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1563245372-f21724e3856d?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-jalfrezi.jpg",
     "description": "Stir-cooked chicken handi tossed with crunchy bell peppers, fresh tomatoes and sweet onions",
     "variants": [
       {
@@ -1091,7 +1091,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+    "imageUri": "/menu-images/slt-hnd-lahori.jpg",
     "description": "Classic Lahori food street recipe cooked with freshly ground garam masala in clay pot",
     "variants": [
       {
@@ -1113,7 +1113,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 35,
     "badge": "Chef Special",
-    "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-sultan-mutton-white.jpg",
     "description": "Tender mountain mutton cooked in cast iron wok with fresh cream, butter, green chilies and white pepper",
     "variants": [
       {
@@ -1134,7 +1134,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 35,
-    "imageUri": "https://images.unsplash.com/photo-1589302168068-964664d93dc0?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-mutton.jpg",
     "description": "Fresh tender mutton cuts braised in ripe red tomatoes, ginger slivers and desi ghee",
     "variants": [
       {
@@ -1156,7 +1156,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 35,
     "badge": "Shinwari Authentic",
-    "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-mutton-shanwari.jpg",
     "description": "Traditional Khyber tribal recipe prepared only with fresh tomatoes, salt and animal fat",
     "variants": [
       {
@@ -1177,7 +1177,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 35,
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-dumba.jpg",
     "description": "Succulent sheep tail fat lamb prepared in classic wok with pure salt and ripe tomatoes",
     "variants": [
       {
@@ -1199,7 +1199,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 35,
     "badge": "Tribal Classic",
-    "imageUri": "https://images.unsplash.com/photo-1545247181-516773cae754?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-dumba-shanwari.jpg",
     "description": "Authentic Shinwari style dumba lamb, slow seared with tomatoes and mild green peppers",
     "variants": [
       {
@@ -1221,7 +1221,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 30,
     "badge": "Organic Desi",
-    "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-desi-murgh.jpg",
     "description": "Country chicken slow-cooked in pure desi ghee with crushed coriander and farm tomatoes",
     "variants": [
       {
@@ -1242,7 +1242,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 25,
-    "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-white-chicken.jpg",
     "description": "Chicken pieces cooked without red spices, bathed in cream, butter and cracked black pepper",
     "variants": [
       {
@@ -1263,7 +1263,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 25,
-    "imageUri": "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-lahori-chicken.jpg",
     "description": "Food street favorite with punchy tomatoes, fresh garlic and aromatic ground spices",
     "variants": [
       {
@@ -1284,7 +1284,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-special-chicken.jpg",
     "description": "Chef's signature chicken karahi bursting with robust ginger and roasted cumin aroma",
     "variants": [
       {
@@ -1305,7 +1305,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 2,
-    "imageUri": "https://images.unsplash.com/photo-1589985270826-4b7bb135bc9d?w=800&q=80",
+    "imageUri": "/menu-images/slt-krh-addon-makhan.jpg",
     "description": "200g pure desi makhan dollop for extra richness in your Karahi or Handi"
   },
   {
@@ -1317,7 +1317,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 25,
     "badge": "Royal Arabic",
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-mnd-lahm.jpg",
     "description": "Juicy grilled mutton Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts"
   },
   {
@@ -1328,7 +1328,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Arabic",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1519708227418-c8fd9a32b7a2?w=800&q=80",
+    "imageUri": "/menu-images/slt-mnd-fish.jpg",
     "description": "Juicy grilled Fish Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts"
   },
   {
@@ -1339,7 +1339,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Arabic",
     "station": "main",
     "prepTimeMin": 22,
-    "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+    "imageUri": "/menu-images/slt-mnd-dajaj.jpg",
     "description": "Juicy grilled Chicken Turkish kabab, special Mandi rice, grilled vegetables, boiled eggs, Mandi & garlic sauces, dry nuts"
   },
   {
@@ -1350,7 +1350,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Arabic",
     "station": "main",
     "prepTimeMin": 20,
-    "imageUri": "https://images.unsplash.com/photo-1563379091339-03b21ab4a4f8?w=800&q=80",
+    "imageUri": "/menu-images/slt-mnd-lahm-kuzzu.jpg",
     "description": "Signature Mandi Rice, Topped on Mutton, Brown Onion, Cashew Nuts, Served with Kuzzu Yakhni"
   },
   {
@@ -1363,7 +1363,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "prepTimeMin": 25,
     "badge": "Serving 2-3",
     "isDeal": true,
-    "imageUri": "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
+    "imageUri": "/menu-images/slt-plt-chicken-bbq-mix.jpg",
     "description": "Serving: 02-03 Persons | Includes: Chicken Tandoori Boti 3 pcs, Fish Tikka 3 pcs, Chicken Malai Boti 3 pcs, Chicken Haryali Boti 3 pcs, Chicken Turkish Kabab 2 pcs, Sheeshtok 3 pcs, Grilled Vegetables, Special BBQ Sauce, Green Mint Sauce"
   },
   {
@@ -1376,7 +1376,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "prepTimeMin": 35,
     "badge": "Serving 10-12",
     "isDeal": true,
-    "imageUri": "https://images.unsplash.com/photo-1544025162-d76694265947?w=800&q=80",
+    "imageUri": "/menu-images/slt-plt-king-sultan.jpg",
     "description": "Serving: 10-12 Persons | Includes: Mix Mutton Turkish 750g, Chicken Turkish Kabab 2 pcs, Fish Tikka 10 pcs, Mutton Kabab 4 pcs, Kastoori Boti 10 pcs, Special Malai Boti 10 pcs, Tandoori Boti 10 pcs, Haryali Boti 10 pcs, Chicken Kabab 4 pcs, Mandi Rice, Boiled Eggs, Vegetables with Sweet Garnish, Zeera Raita, BBQ Sauce, Mint Sauce"
   },
   {
@@ -1389,7 +1389,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "prepTimeMin": 60,
     "badge": "Emperor Feast (22-25)",
     "isDeal": true,
-    "imageUri": "https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=800&q=80",
+    "imageUri": "/menu-images/slt-plt-grand-sultan.jpg",
     "description": "Serving: 22-25 Persons | Includes: Grilled Tender Juicy Full Goat, Mutton Kabab, Chicken Turkish Kabab, Dajaj Mandi, Pome Boti, Malai Boti, Haryali Boti, Cashew Nut, Almond, Black Raisins, Bread Crouton, Turkish Bread, Grilled Vegetables, Roasted Potatoes, Sweet Garnish, Fries, Mandi Rice, Hummus, Kachumbar Salad, Thoam Sauce, Mandi Sauce, Mint Sauce, BBQ Sauce, Boiled Eggs"
   },
   {
@@ -1400,7 +1400,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-mix-basket.jpg",
     "description": "Assorted tandoor basket featuring Roghni, Garlic, Kalonji and Cheese naan"
   },
   {
@@ -1411,7 +1411,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1626082927389-6cd097cdc6ec?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-cheese-naan.jpg",
     "description": "Fresh clay oven baked naan oozing with melted mozzarella cheese"
   },
   {
@@ -1422,7 +1422,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-kalonji-naan.jpg",
     "description": "Fluffy leavened flatbread sprinkled with nigella seeds (kalonji)"
   },
   {
@@ -1433,7 +1433,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1589301760014-d929f3979dbc?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-desi-ghee-paratha.jpg",
     "description": "Flaky layered golden paratha griddled with pure fragrant desi ghee"
   },
   {
@@ -1444,7 +1444,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-garlic-naan.jpg",
     "description": "Tandoori naan topped with roasted garlic bits and fresh butter"
   },
   {
@@ -1455,7 +1455,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1601050690597-df0568f70950?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-roghni-naan.jpg",
     "description": "Traditional soft royal naan glazed with sesame seeds and milk wash"
   },
   {
@@ -1466,7 +1466,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1565557623262-b51c2513a641?w=800&q=80",
+    "imageUri": "/menu-images/slt-tan-plain-roti.jpg",
     "description": "Whole wheat freshly slapped tandoor roti (Per Head)"
   },
   {
@@ -1477,7 +1477,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 3,
-    "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=80",
+    "imageUri": "/menu-images/slt-sau-mint.jpg",
     "description": "Fresh crushed garden mint and green chili yogurt sauce"
   },
   {
@@ -1488,7 +1488,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 3,
-    "imageUri": "https://images.unsplash.com/photo-1540420773420-3366772f4999?w=800&q=80",
+    "imageUri": "/menu-images/slt-sau-zeera-raita.jpg",
     "description": "Creamy whipped yogurt seasoned with roasted cumin and rock salt"
   },
   {
@@ -1499,7 +1499,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 3,
-    "imageUri": "https://images.unsplash.com/photo-1541518763669-27fef04b14ea?w=800&q=80",
+    "imageUri": "/menu-images/slt-sau-imli.jpg",
     "description": "Sweet and tangy slow-simmered tamarind dip infused with spices"
   },
   {
@@ -1510,7 +1510,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-choc-brownie.jpg",
     "description": "Served with ice cream"
   },
   {
@@ -1522,7 +1522,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 6,
     "badge": "Popular",
-    "imageUri": "https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-lotus-cheesecake.jpg",
     "description": "New York baked cheesecake topped with Lotus spread & Lotus biscuit"
   },
   {
@@ -1533,7 +1533,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 10,
-    "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-hot-skillet-brownie.jpg",
     "description": "Hot skillet brownie with ice cream on top, served on hot chocolate sizzling"
   },
   {
@@ -1544,7 +1544,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1587314168485-3236d6710814?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-melting-moment.jpg",
     "description": "Rich melt-in-the-mouth buttery pastry layered with creamy goodness"
   },
   {
@@ -1556,7 +1556,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "main",
     "prepTimeMin": 14,
     "badge": "Royal Dessert",
-    "imageUri": "https://images.unsplash.com/photo-1579954115545-a95591f28bfc?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-kunafa.jpg",
     "description": "Crunchy golden spun kataifi pastry filled with sweet cheese, orange blossom syrup & pistachios"
   },
   {
@@ -1567,7 +1567,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 10,
-    "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-molten-lava.jpg",
     "description": "Moist chocolate hot sauce with vanilla ice cream"
   },
   {
@@ -1578,7 +1578,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-three-milk-cake.jpg",
     "description": "Vanilla sponge dipped in special milky sauce sprinkled with Lotus biscuit"
   },
   {
@@ -1589,7 +1589,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1587314168485-3236d6710814?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-bread-pudding.jpg",
     "description": "Pleasantly milky baked bread with caramel sauce, served with ice cream topped on sugar crumb"
   },
   {
@@ -1600,7 +1600,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1586985289688-ca3cf47d3e6e?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-red-velvet.jpg",
     "description": "Moist red cocoa sponge layered with smooth, tangy cream cheese frosting"
   },
   {
@@ -1611,7 +1611,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "main",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1606313564200-e75d5e30476c?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-nutella-brownie.jpg",
     "description": "Rich, fudgy chocolate brownie swirled with creamy Nutella"
   },
   {
@@ -1622,7 +1622,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-shahi-kheer.jpg",
     "description": "Slow-reduced aromatic basmati rice pudding topped with cardamom, kewra and slivered nuts"
   },
   {
@@ -1633,7 +1633,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Pakistani",
     "station": "main",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1541781774459-bb2af2f05b55?w=800&q=80",
+    "imageUri": "/menu-images/slt-des-gulab-jamun.jpg",
     "description": "Soft khoya dumplings dipped in hot green cardamom and saffron rose syrup"
   },
   {
@@ -1644,7 +1644,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1534778101976-62847782c213?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-cappuccino.jpg",
     "description": "Espresso shot topped with steamed milk and thick micro-foam dusted with cocoa"
   },
   {
@@ -1655,7 +1655,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-latte.jpg",
     "description": "Smooth double shot of espresso balanced with silky steamed dairy milk"
   },
   {
@@ -1666,7 +1666,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1578314675249-a6910f80cc4e?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-cafe-mocha.jpg",
     "description": "Rich espresso combined with Belgian dark chocolate and velvety steamed milk"
   },
   {
@@ -1677,7 +1677,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-caramel-latte.jpg",
     "description": "Steamed latte infused with buttery sweet caramel syrup and drizzle"
   },
   {
@@ -1688,7 +1688,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-irish-latte.jpg",
     "description": "Warm espresso latte flavored with non-alcoholic aromatic Irish cream essence"
   },
   {
@@ -1699,7 +1699,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-french-vanilla-latte.jpg",
     "description": "Classic latte infused with rich French vanilla bean syrup"
   },
   {
@@ -1710,7 +1710,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1570968915860-54d5c301fa9f?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-hazelnut-latte.jpg",
     "description": "Fragrant espresso latte blended with roasted nutty hazelnut syrup"
   },
   {
@@ -1721,7 +1721,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1542990253-0d0f5be5f0ed?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-hot-chocolate.jpg",
     "description": "Indulgent melted cocoa and milk topped with whipped froth"
   },
   {
@@ -1732,7 +1732,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-americano.jpg",
     "description": "Double espresso shots lengthened with pure piping hot water for a crisp finish"
   },
   {
@@ -1743,7 +1743,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 4,
-    "imageUri": "https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-espresso.jpg",
     "description": "Intense, concentrated shot of pure dark roast coffee with golden crema"
   },
   {
@@ -1755,7 +1755,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "juice",
     "prepTimeMin": 6,
     "badge": "Desi Favorite",
-    "imageUri": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-karak-tea.jpg",
     "description": "Strong, slow-brewed tea simmered with milk, cardamom and caramelized sugar"
   },
   {
@@ -1766,7 +1766,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1576092768241-dec231879fc3?w=800&q=80",
+    "imageUri": "/menu-images/slt-bev-green-tea.jpg",
     "description": "Soothing brewed green tea infused with whole cardamom and mint"
   },
   {
@@ -1777,7 +1777,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-caramel-frappe.jpg",
     "description": "Chilled blended coffee frappe swirled with caramel and topped with whipped cream"
   },
   {
@@ -1788,7 +1788,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-mocha-frappe.jpg",
     "description": "Blended iced espresso and chocolate topped with chocolate drizzle"
   },
   {
@@ -1800,7 +1800,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "juice",
     "prepTimeMin": 6,
     "badge": "Trending",
-    "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-spanish-latte.jpg",
     "description": "Iced espresso poured over sweetened condensed milk and cold fresh milk"
   },
   {
@@ -1811,7 +1811,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-caramel-coffee.jpg",
     "description": "Cold brewed espresso served over crystal ice cubes with caramel syrup"
   },
   {
@@ -1822,7 +1822,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-irish-coffee.jpg",
     "description": "Refreshing cold coffee with rich non-alcoholic Irish cream infusion"
   },
   {
@@ -1833,7 +1833,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-vanilla-coffee.jpg",
     "description": "Crisp iced coffee sweetened with fragrant French vanilla bean"
   },
   {
@@ -1844,7 +1844,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1517701550927-30cf4ba1dba5?w=800&q=80",
+    "imageUri": "/menu-images/slt-ice-hazelnut-coffee.jpg",
     "description": "Nutty roasted hazelnut cold coffee served chilled over ice"
   },
   {
@@ -1856,7 +1856,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "juice",
     "prepTimeMin": 6,
     "badge": "Popular",
-    "imageUri": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-pina-colada.jpg",
     "description": "Tropical blend of fresh pineapple juice and rich coconut cream served over ice"
   },
   {
@@ -1867,7 +1867,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-strawberry-colada.jpg",
     "description": "Sweet wild strawberries blended with coconut cream and pineapple juice"
   },
   {
@@ -1878,7 +1878,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 6,
-    "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-guava-mint.jpg",
     "description": "Pink guava juice paired with freshly crushed garden mint and lemon"
   },
   {
@@ -1890,7 +1890,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "station": "juice",
     "prepTimeMin": 5,
     "badge": "Signature Cooler",
-    "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-mint-margarita.jpg",
     "description": "Ice-cold crushed mint leaves, fresh lime juice and sparkling soda"
   },
   {
@@ -1901,7 +1901,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-strawberry-margarita.jpg",
     "description": "Zesty crushed strawberries with Persian lime and sparkling soda"
   },
   {
@@ -1912,7 +1912,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1544145945-f90425340c7e?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-blueberry-lagoon.jpg",
     "description": "Electric blue curacao flavor with wild blueberries, lime and soda"
   },
   {
@@ -1923,7 +1923,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-mint-mojito.jpg",
     "description": "Cuban style muddled fresh mint leaves, brown cane sugar, lime and club soda"
   },
   {
@@ -1934,7 +1934,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 5,
-    "imageUri": "https://images.unsplash.com/photo-1551024709-8f23befc6f87?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-strawberry-mojito.jpg",
     "description": "Muddled fresh strawberries with wild mint, lime wheels and sparkling fizz"
   },
   {
@@ -1945,7 +1945,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 4,
-    "imageUri": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&q=80",
+    "imageUri": "/menu-images/slt-mck-fresh-lime.jpg",
     "description": "Freshly squeezed Persian lime with salt or sweet syrup topped with sparkling soda"
   },
   {
@@ -1956,7 +1956,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 8,
-    "imageUri": "https://images.unsplash.com/photo-1572490122747-3968b75cc699?w=800&q=80",
+    "imageUri": "/menu-images/slt-crm-shake.jpg",
     "description": "Thick creamy dairy milkshake prepared with your choice of premium ice cream flavor",
     "variants": [
       {
@@ -1993,7 +1993,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Bakery & Desserts",
     "station": "juice",
     "prepTimeMin": 3,
-    "imageUri": "https://images.unsplash.com/photo-1563805042-7684c019e1cb?w=800&q=80",
+    "imageUri": "/menu-images/slt-crm-scoop.jpg",
     "description": "Single scoop of artisan ice cream served in cup or cone",
     "variants": [
       {
@@ -2030,7 +2030,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 2,
-    "imageUri": "https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&q=80",
+    "imageUri": "/menu-images/slt-drk-soft-drink.jpg",
     "description": "Chilled soft drink selection (Coke, Sprite, Fanta, Dew)",
     "variants": [
       {
@@ -2051,7 +2051,7 @@ export const SULTAN_DEFAULT_MENU: MenuItem[] = [
     "region": "Beverages",
     "station": "juice",
     "prepTimeMin": 2,
-    "imageUri": "https://images.unsplash.com/photo-1548839140-29a749e1bc4e?w=800&q=80",
+    "imageUri": "/menu-images/slt-drk-water.jpg",
     "description": "Pure mineral spring water bottle",
     "variants": [
       {

@@ -30,6 +30,7 @@ import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions, type RolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
+import { resolveMenuImageUri } from '../utils/menuImage';
 import { broadcastImmediately } from '../services/syncService';
 import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
@@ -2458,9 +2459,9 @@ export default function POSTerminalScreen({
                           isTablet && { height: 74, marginBottom: 5, borderRadius: 10 },
                           isMobile && { height: 76 }
                         ]}>
-                          {item.imageUri && !failedImages[item.id] ? (
+                          {resolveMenuImageUri(item) && !failedImages[item.id] ? (
                             <Image 
-                              source={{ uri: item.imageUri }} 
+                              source={{ uri: resolveMenuImageUri(item)! }} 
                               style={styles.dishCardImage} 
                               resizeMode="cover"
                               onError={() => setFailedImages(prev => ({ ...prev, [item.id]: true }))}

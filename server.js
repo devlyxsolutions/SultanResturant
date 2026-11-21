@@ -2395,18 +2395,29 @@ try {
         serverState.menuItems = INITIAL_STATE.menuItems;
       }
     }
-    // Repair missing station tags on menuItems (ensures Hot Coffee & Tea, Ice Coffee, Mocktail, Ice Cream, Cold Drinks & Water -> 'juice')
-    if (Array.isArray(serverState.menuItems) && printerHelper && typeof printerHelper.resolveItemStation === 'function') {
+    // Repair missing station tags and authentic local menu-images on menuItems
+    if (Array.isArray(serverState.menuItems)) {
       let repairedMenuCount = 0;
       for (const m of serverState.menuItems) {
         if (!m) continue;
-        if (m.station !== 'juice' && m.station !== 'main') {
+        if (printerHelper && typeof printerHelper.resolveItemStation === 'function' && m.station !== 'juice' && m.station !== 'main') {
           m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+          repairedMenuCount++;
+        }
+        const curImg = (m.imageUri || m.imageUrl || '').trim();
+        const isBuiltIn = typeof m.id === 'string' && m.id.startsWith('slt-');
+        const isLegacyStock = !curImg || curImg.toLowerCase().includes('images.unsplash.com/photo-');
+        if (isBuiltIn && isLegacyStock) {
+          m.imageUri = `/menu-images/${m.id}.jpg`;
+          m.imageUrl = m.imageUri;
+          repairedMenuCount++;
+        } else if (!m.imageUri && m.imageUrl) {
+          m.imageUri = m.imageUrl;
           repairedMenuCount++;
         }
       }
       if (repairedMenuCount > 0) {
-        console.log(`[Sultan Hub] Repaired station tags on ${repairedMenuCount} menu items (Juice Bar vs Main Kitchen).`);
+        console.log(`[Sultan Hub] Repaired station/image tags on ${repairedMenuCount} menu items.`);
         try {
           fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
         } catch (_) {}
@@ -3290,6 +3301,11 @@ function checkRateLimit(ip) {
 function sanitizeMenuItem(item) {
   const lowerName = (item.name || '').toLowerCase().trim();
   const visual = PRESET_VISUALS[lowerName] || {};
+  const rawImg = (item.imageUri || item.imageUrl || '').trim();
+  const isBuiltIn = typeof item.id === 'string' && item.id.startsWith('slt-');
+  const resolvedImg = (isBuiltIn && (!rawImg || rawImg.toLowerCase().includes('images.unsplash.com/photo-')))
+    ? `/menu-images/${item.id}.jpg`
+    : (rawImg || visual.imageUri || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80');
 
   return {
     id: item.id || `m-${Date.now()}`,
@@ -3297,8 +3313,12 @@ function sanitizeMenuItem(item) {
     urduName: item.urduName || undefined,
     price: Number(item.price) || 0,
     category: item.category || visual.category || 'Mains',
+    region: item.region || undefined,
+    station: item.station || undefined,
+    prepTimeMin: item.prepTimeMin || undefined,
     description: item.description || visual.description || `${item.name} prepared freshly with authentic royal spices.`,
-    imageUrl: item.imageUri || item.imageUrl || visual.imageUri || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80',
+    imageUri: resolvedImg,
+    imageUrl: resolvedImg,
     badge: item.badge || visual.badge || undefined,
     isPopular: item.isPopular || item.badge === 'Chef Special' || item.badge === 'Best Seller',
     isAvailable: item.isAvailable !== false,
@@ -5244,6 +5264,35 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // 8b. Serve Menu Dish Images directly from D:\SultanMenuImages or public/menu-images
+  if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname && url.pathname.startsWith('/menu-images/')) {
+    const fileName = path.basename(decodeURIComponent(url.pathname));
+    const candidates = [
+      path.join('D:\\SultanMenuImages', fileName),
+      path.join(__dirname, 'public', 'menu-images', fileName),
+    ];
+    for (const candidate of candidates) {
+      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+        const ext = path.extname(candidate).toLowerCase();
+        const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        res.writeHead(200, {
+          'Content-Type': mime,
+          'Cache-Control': 'public, max-age=604800',
+          'Access-Control-Allow-Origin': '*',
+        });
+        if (req.method === 'HEAD') {
+          res.end();
+        } else {
+          fs.createReadStream(candidate).pipe(res);
+        }
+        return;
+      }
+    }
+    res.writeHead(404, { 'Content-Type': 'text/plain' });
+    res.end('Image not found');
+    return;
+  }
+
   // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
   if (req.method === 'GET' || req.method === 'HEAD') {
     const DIST_DIR = path.join(__dirname, 'dist');
@@ -5822,11 +5871,17 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       } else if (key === 'menuItems') {
         const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
         if (incoming.length > 0) {
-          if (printerHelper && typeof printerHelper.resolveItemStation === 'function') {
-            for (const m of incoming) {
-              if (m && m.station !== 'juice' && m.station !== 'main') {
-                m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
-              }
+          for (const m of incoming) {
+            if (!m) continue;
+            if (printerHelper && typeof printerHelper.resolveItemStation === 'function' && m.station !== 'juice' && m.station !== 'main') {
+              m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+            }
+            const curImg = (m.imageUri || m.imageUrl || '').trim();
+            if (typeof m.id === 'string' && m.id.startsWith('slt-') && (!curImg || curImg.toLowerCase().includes('images.unsplash.com/photo-'))) {
+              m.imageUri = `/menu-images/${m.id}.jpg`;
+              m.imageUrl = m.imageUri;
+            } else if (!m.imageUri && m.imageUrl) {
+              m.imageUri = m.imageUrl;
             }
           }
           serverState.menuItems = incoming;

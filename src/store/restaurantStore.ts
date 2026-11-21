@@ -6,6 +6,7 @@ import { getTableFloor, getTableSeatingType } from '../constants/floors';
 import type { SalesReturn } from '../types/returns';
 import type { RolePermissions } from './roleStore';
 import { resolveItemStation, resolveMenuCatalogStation } from '../utils/stationRouting';
+import { normalizeMenuItemImage } from '../utils/menuImage';
 import { useSettingsStore } from './settingsStore';
 import { appStorage } from './storage';
 
@@ -2922,7 +2923,9 @@ export const useRestaurantStore = create<RestaurantState>()(
             })()
           } : {}),
           ...(remoteState.menuItems !== undefined ? {
-            menuItems: (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : []).filter((m) => !isLegacyDummyDish(m))
+            menuItems: (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
+              .filter((m) => !isLegacyDummyDish(m))
+              .map(normalizeMenuItemImage)
           } : {}),
           ...(remoteState.categories ? {
             categories: (() => {
@@ -3088,11 +3091,13 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           // Guarantee real Sultan Restaurant menu items on storage rehydration
           if (!Array.isArray(state.menuItems) || state.menuItems.length === 0) {
-            state.menuItems = SULTAN_DEFAULT_MENU;
+            state.menuItems = SULTAN_DEFAULT_MENU.map(normalizeMenuItemImage);
           } else {
-            state.menuItems = state.menuItems.filter((m) => !isLegacyDummyDish(m));
+            state.menuItems = state.menuItems
+              .filter((m) => !isLegacyDummyDish(m))
+              .map(normalizeMenuItemImage);
             if (state.menuItems.length === 0) {
-              state.menuItems = SULTAN_DEFAULT_MENU;
+              state.menuItems = SULTAN_DEFAULT_MENU.map(normalizeMenuItemImage);
             }
           }
           const activeDishCats = new Set((state.menuItems || []).map((m: any) => m?.category).filter(Boolean));

@@ -25,6 +25,7 @@ import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syn
 import PaginationControl from '../../components/PaginationControl';
 import { usePagination } from '../../hooks/usePagination';
 import { useRolePermissions } from '../../store/roleStore';
+import { normalizeMenuItemImage, resolveMenuImageUri } from '../../utils/menuImage';
 
 export default function MenuManagement() {
   const router = useRouter();
@@ -97,9 +98,25 @@ export default function MenuManagement() {
           const json = await res.json();
           if (json.success && Array.isArray(json.data) && json.data.length > 0) {
             const current = useRestaurantStore.getState().menuItems || [];
-            const remoteMap = new Map(json.data.map((m: any) => [m.id, m]));
-            const localOnly = current.filter(m => !remoteMap.has(m.id));
-            useRestaurantStore.setState({ menuItems: [...localOnly, ...json.data] });
+            const currentMap = new Map(current.map((m) => [m.id, m]));
+            const mergedRemote = json.data.map((rem: any) => {
+              const existing = currentMap.get(rem.id);
+              return normalizeMenuItemImage({
+                ...(existing || {}),
+                ...rem,
+                imageUri: rem.imageUri || existing?.imageUri || rem.imageUrl,
+                region: rem.region || existing?.region,
+                station: rem.station || existing?.station,
+                prepTimeMin: rem.prepTimeMin ?? existing?.prepTimeMin,
+                costPrice: rem.costPrice ?? existing?.costPrice,
+                trackStock: rem.trackStock ?? existing?.trackStock,
+                stockQty: rem.stockQty ?? existing?.stockQty,
+                lowStockThreshold: rem.lowStockThreshold ?? existing?.lowStockThreshold,
+              });
+            });
+            const remoteIds = new Set(mergedRemote.map((m: any) => m.id));
+            const localOnly = current.filter(m => !remoteIds.has(m.id)).map(normalizeMenuItemImage);
+            useRestaurantStore.setState({ menuItems: [...localOnly, ...mergedRemote] });
             break;
           }
         } catch (e) {}
@@ -1677,8 +1694,8 @@ export default function MenuManagement() {
                     <View key={item.id} style={styles.itemCard}>
                       <View style={styles.itemCardMain}>
                         {/* Option 3: Image Thumbnail */}
-                        {item.imageUri ? (
-                          <Image source={{ uri: item.imageUri }} style={styles.itemThumbImage} />
+                        {resolveMenuImageUri(item) ? (
+                          <Image source={{ uri: resolveMenuImageUri(item)! }} style={styles.itemThumbImage} />
                         ) : (
                           <View style={styles.itemIconBadge}>
                             <Ionicons name={item.isDeal ? "gift" : "fast-food-outline"} size={24} color={BRAND.gold} />
@@ -1849,8 +1866,8 @@ export default function MenuManagement() {
                     <View key={item.id} style={styles.tableRow}>
                       {/* Name & Image */}
                       <View style={[styles.tableCell, { flex: 2.2, flexDirection: 'row', alignItems: 'center' }]}>
-                        {item.imageUri ? (
-                          <Image source={{ uri: item.imageUri }} style={styles.tableThumbImage} />
+                        {resolveMenuImageUri(item) ? (
+                          <Image source={{ uri: resolveMenuImageUri(item)! }} style={styles.tableThumbImage} />
                         ) : (
                           <View style={styles.tableThumbPlaceholder}>
                             <Ionicons name={item.isDeal ? "gift" : "restaurant-outline"} size={18} color={BRAND.gold} />
