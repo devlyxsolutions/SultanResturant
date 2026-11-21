@@ -1757,100 +1757,165 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
           ) : (
             <>
-              <View style={{ gap: 12 }}>
-              {receivingPagination.paginatedData.map((m) => {
-                const totalVal = (m.qty || 0) * (m.unitCost || 0);
-
-                return (
-                  <View key={m.id} style={styles.receivingCard}>
-                    <View style={styles.receivingCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                          {m.itemCode ? (
-                            <View style={styles.skuBadge}>
-                              <Text style={styles.skuBadgeText}>{m.itemCode}</Text>
-                            </View>
-                          ) : null}
-                          {m.invoiceNo ? (
-                            <View style={[styles.skuBadge, { backgroundColor: '#EDE9FE' }]}>
-                              <Text style={[styles.skuBadgeText, { color: '#6D28D9' }]}>Inv: {m.invoiceNo}</Text>
-                            </View>
-                          ) : null}
-                          {m.batchNumber ? (
-                            <View style={[styles.skuBadge, { backgroundColor: '#FEF3C7' }]}>
-                              <Text style={[styles.skuBadgeText, { color: '#B45309' }]}>Batch: {m.batchNumber}</Text>
-                            </View>
-                          ) : null}
+              <View style={styles.tableWrapper}>
+                <ScrollView
+                  horizontal={!isMobile}
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ minWidth: isMobile ? undefined : 1120, width: '100%' }}
+                >
+                  <View style={{ width: '100%' }}>
+                    {/* Desktop / Tablet Column Headers */}
+                    {!isMobile && (
+                      <View style={styles.stockTableHeader}>
+                        <View style={[styles.thCol, { flex: 2.4, minWidth: 200 }]}>
+                          <Text style={styles.thColText}>ITEM & INVOICE / BATCH</Text>
                         </View>
-                        <Text style={styles.receivingItemName}>{m.itemName}</Text>
-                        <Text style={styles.receivingSupplierText}>
-                          Vendor: <Text style={{ fontWeight: '700', color: BRAND.ink }}>{m.supplier || 'Vendor'}</Text>
-                        </Text>
+                        <View style={[styles.thCol, { flex: 2.0, minWidth: 170 }]}>
+                          <Text style={styles.thColText}>VENDOR & NOTES</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 2.0, minWidth: 170 }]}>
+                          <Text style={styles.thColText}>RECEIVED DATE & TIME</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
+                          <Text style={styles.thColText}>RECEIVED BY</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.9, minWidth: 150 }]}>
+                          <Text style={styles.thColText}>INWARD QTY & RATE</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.7, minWidth: 130 }]}>
+                          <Text style={styles.thColText}>TOTAL AMOUNT</Text>
+                        </View>
+                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140, alignItems: 'flex-end', paddingRight: 6 }]}>
+                          <Text style={styles.thColText}>GRN SLIP</Text>
+                        </View>
                       </View>
+                    )}
 
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.receivingQtyText}>+{m.qty}</Text>
-                        {totalVal > 0 ? (
-                          <Text style={styles.receivingValText}>{money(totalVal)}</Text>
-                        ) : null}
-                      </View>
-                    </View>
+                    {/* Table Rows (1 Full Row Per Inward Delivery) */}
+                    <View style={{ gap: 6 }}>
+                      {receivingPagination.paginatedData.map((m) => {
+                        const totalVal = (m.qty || 0) * (m.unitCost || 0);
 
-                    <View style={styles.receivingDetailsGrid}>
-                      <View>
-                        <Text style={styles.receivingMetaLabel}>Received Date & Time</Text>
-                        <Text style={styles.receivingMetaValue}>
-                          {formatDay(m.at)} • {formatTime(m.at)}
-                        </Text>
-                      </View>
-                      <View>
-                        <Text style={styles.receivingMetaLabel}>Unit Purchase Cost</Text>
-                        <Text style={styles.receivingMetaValue}>
-                          {m.unitCost ? money(m.unitCost) : 'As per PO'}
-                        </Text>
-                      </View>
-                      <View>
-                        <Text style={styles.receivingMetaLabel}>Received By</Text>
-                        <Text style={styles.receivingMetaValue}>{m.by || 'Storekeeper'}</Text>
-                      </View>
-                    </View>
+                        return (
+                          <View
+                            key={m.id}
+                            style={[
+                              styles.receivingTableRow,
+                              isMobile && styles.receivingTableRowMobile
+                            ]}
+                            {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                          >
+                            {/* 1. Item & Codes */}
+                            <View style={[styles.rowCol, { flex: 2.4, minWidth: 200, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginBottom: 2 }}>
+                                {m.itemCode ? (
+                                  <View style={styles.skuBadgeCompact}>
+                                    <Text style={styles.skuBadgeCompactText}>{m.itemCode}</Text>
+                                  </View>
+                                ) : null}
+                                {m.invoiceNo ? (
+                                  <View style={[styles.skuBadgeCompact, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
+                                    <Text style={[styles.skuBadgeCompactText, { color: '#6D28D9' }]}>Inv: {m.invoiceNo}</Text>
+                                  </View>
+                                ) : null}
+                                {m.batchNumber ? (
+                                  <View style={[styles.skuBadgeCompact, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                                    <Text style={[styles.skuBadgeCompactText, { color: '#B45309' }]}>Batch: {m.batchNumber}</Text>
+                                  </View>
+                                ) : null}
+                              </View>
+                              <Text style={styles.stockRowTitle} numberOfLines={1}>
+                                {m.itemName}
+                              </Text>
+                            </View>
 
-                    {m.note ? (
-                      <Text style={styles.receivingNoteText}>
-                        <Ionicons name="document-text-outline" size={13} color={BRAND.muted} /> {m.note}
-                      </Text>
-                    ) : null}
+                            {/* 2. Vendor & Notes */}
+                            <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="business" size={12} color={BRAND.burgundy} />
+                                <Text style={styles.stockRowLocation} numberOfLines={1}>
+                                  {m.supplier || 'Direct Vendor'}
+                                </Text>
+                              </View>
+                              {m.note ? (
+                                <Text style={styles.receivingRowNote} numberOfLines={1}>
+                                  {m.note}
+                                </Text>
+                              ) : null}
+                            </View>
 
-                    <View style={styles.receivingActionRow}>
-                      <TouchableOpacity
-                        style={styles.grnBtn}
-                        onPress={() => {
-                          setLastGrn({
-                            grnNo: `GRN-${m.id.slice(-6).toUpperCase()}`,
-                            itemName: m.itemName,
-                            itemCode: m.itemCode,
-                            qty: m.qty,
-                            unit: '',
-                            unitCost: m.unitCost || 0,
-                            totalAmount: (m.qty || 0) * (m.unitCost || 0),
-                            supplier: m.supplier || 'Vendor',
-                            invoiceNo: m.invoiceNo || 'N/A',
-                            batchNumber: m.batchNumber || 'N/A',
-                            location: 'Kitchen Store',
-                            receivedBy: m.by || 'Storekeeper',
-                            at: m.at,
-                          });
-                          setShowGrnModal(true);
-                        }}
-                      >
-                        <Ionicons name="print-outline" size={14} color={BRAND.burgundy} />
-                        <Text style={styles.grnBtnText}>View Goods Receipt Note (GRN)</Text>
-                      </TouchableOpacity>
+                            {/* 3. Received Date & Time */}
+                            <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="calendar-outline" size={12} color="#64748B" />
+                                <Text style={styles.receivingRowDate}>{formatDay(m.at)}</Text>
+                              </View>
+                              <Text style={styles.receivingRowTime}>{formatTime(m.at)}</Text>
+                            </View>
+
+                            {/* 4. Received By */}
+                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <Ionicons name="person-outline" size={12} color="#64748B" />
+                                <Text style={styles.receivingRowStaff} numberOfLines={1}>
+                                  {m.by || 'Storekeeper'}
+                                </Text>
+                              </View>
+                            </View>
+
+                            {/* 5. Inward Qty & Rate */}
+                            <View style={[styles.rowCol, { flex: 1.9, minWidth: 150, gap: 2 }]}>
+                              <Text style={styles.receivingRowQty}>
+                                +{m.qty} <Text style={{ fontSize: 11, fontWeight: '600', color: '#15803D' }}>units</Text>
+                              </Text>
+                              <Text style={styles.stockRowCostUnit}>
+                                @ {m.unitCost ? money(m.unitCost) : 'As per PO'}
+                              </Text>
+                            </View>
+
+                            {/* 6. Total Amount */}
+                            <View style={[styles.rowCol, { flex: 1.7, minWidth: 130, gap: 2 }]}>
+                              <Text style={styles.receivingRowTotal}>
+                                {totalVal > 0 ? money(totalVal) : '—'}
+                              </Text>
+                            </View>
+
+                            {/* 7. Action Button: View GRN */}
+                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }]}>
+                              <TouchableOpacity
+                                style={styles.receivingRowGrnBtn}
+                                onPress={() => {
+                                  setLastGrn({
+                                    grnNo: `GRN-${m.id.slice(-6).toUpperCase()}`,
+                                    itemName: m.itemName,
+                                    itemCode: m.itemCode,
+                                    qty: m.qty,
+                                    unit: '',
+                                    unitCost: m.unitCost || 0,
+                                    totalAmount: (m.qty || 0) * (m.unitCost || 0),
+                                    supplier: m.supplier || 'Vendor',
+                                    invoiceNo: m.invoiceNo || 'N/A',
+                                    batchNumber: m.batchNumber || 'N/A',
+                                    location: 'Kitchen Store',
+                                    receivedBy: m.by || 'Storekeeper',
+                                    at: m.at,
+                                  });
+                                  setShowGrnModal(true);
+                                }}
+                                activeOpacity={0.8}
+                                {...(Platform.OS === 'web' ? ({ title: 'View Goods Receipt Note (GRN)' } as any) : {})}
+                              >
+                                <Ionicons name="document-text-outline" size={13} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+                                <Text style={styles.receivingRowGrnText}>GRN Slip</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        );
+                      })}
                     </View>
                   </View>
-                );
-              })}
-            </View>
+                </ScrollView>
+              </View>
             <PaginationControl
               currentPage={receivingPagination.currentPage}
               totalPages={receivingPagination.totalPages}
@@ -3648,6 +3713,72 @@ const styles = StyleSheet.create({
     borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  receivingTableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 4,
+    borderLeftColor: '#10B981',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  receivingTableRowMobile: {
+    minWidth: 980,
+  },
+  receivingRowNote: {
+    fontSize: 11,
+    color: '#64748B',
+    fontStyle: 'italic',
+    marginTop: 1,
+  },
+  receivingRowDate: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  receivingRowTime: {
+    fontSize: 10.5,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  receivingRowStaff: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  receivingRowQty: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#15803D',
+  },
+  receivingRowTotal: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: BRAND.burgundy,
+  },
+  receivingRowGrnBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF7ED',
+    borderWidth: 1,
+    borderColor: '#FED7AA',
+    paddingHorizontal: 9,
+    paddingVertical: 5.5,
+    borderRadius: 7,
+  },
+  receivingRowGrnText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: BRAND.burgundy,
   },
   itemsGrid: {
     flexDirection: 'row',
