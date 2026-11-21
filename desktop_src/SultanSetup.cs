@@ -490,7 +490,7 @@ namespace SultanRestaurantSetup
             // Step 7: Write installation complete marker so running this exe again won't reinstall
             try
             {
-                File.WriteAllText(Path.Combine(installDir, ".sultan_installed_v2"), DateTime.Now.ToString("o"));
+                File.WriteAllText(Path.Combine(installDir, ".sultan_installed_v4"), DateTime.Now.ToString("o"));
             }
             catch { }
 
@@ -615,7 +615,7 @@ namespace SultanRestaurantSetup
             foreach (string dir in candidates)
             {
                 string posExe = Path.Combine(dir, "SultanRestaurant.exe");
-                string marker = Path.Combine(dir, ".sultan_installed_v2");
+                string marker = Path.Combine(dir, ".sultan_installed_v4");
                 if (File.Exists(posExe) && File.Exists(marker))
                 {
                     return dir;

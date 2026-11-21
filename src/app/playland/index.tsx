@@ -173,8 +173,61 @@ export default function PlaylandCounterScreen() {
 
   // Print function
   const handlePrint = () => {
-    if (Platform.OS === 'web') {
-      window.print();
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && completedTicket) {
+      const itemsRows = (completedTicket.items || [])
+        .map(
+          (it) =>
+            `<div class="row"><span>${it.name}${it.variantName ? ` (${it.variantName})` : ''} x${it.qty}</span><span class="bold">PKR ${it.price * it.qty}</span></div>`
+        )
+        .join('');
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Playland Slip</title><style>
+        @page { size: 72mm auto; margin: 0mm !important; }
+        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+        html, body { margin: 0 !important; padding: 1.5mm 1.5mm 4mm 1mm !important; width: 66mm !important; max-width: 66mm !important; background: #fff !important; font-family: Arial, sans-serif; font-size: 11px; }
+        .center { text-align: center; }
+        .title { font-size: 15px; font-weight: 900; }
+        .sub { font-size: 10px; font-weight: 700; margin-bottom: 4px; }
+        .line { border-top: 1.5px dashed #000; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px; }
+        .bold { font-weight: 800; }
+        .total { font-size: 14px; font-weight: 900; margin: 4px 0; }
+      </style></head><body>
+        <div class="center"><div class="title">SULTAN BASEMENT PLAYLAND</div><div class="sub">Official Kids & Rides Invoice</div></div>
+        <div class="line"></div>
+        <div class="row"><span>TICKET #:</span><span class="bold">${completedTicket.ticketCode}</span></div>
+        <div class="row"><span>DATE:</span><span>${new Date(completedTicket.issuedAt).toLocaleString('en-US')}</span></div>
+        <div class="row"><span>CHILD:</span><span class="bold">${completedTicket.childName || 'Guest'}</span></div>
+        <div class="row"><span>WRISTBAND:</span><span>${completedTicket.wristbandColor || 'Gold'}</span></div>
+        <div class="row"><span>CASHIER:</span><span>${completedTicket.issuedBy || 'Staff'}</span></div>
+        <div class="line"></div>
+        <div class="bold" style="margin-bottom:3px;">PURCHASED RIDES:</div>
+        ${itemsRows}
+        <div class="line"></div>
+        <div class="row total"><span>TOTAL PAID:</span><span>PKR ${completedTicket.totalAmount}</span></div>
+        <div class="row"><span>PAYMENT:</span><span class="bold">${(completedTicket.paymentMethod || 'CASH').toUpperCase()}</span></div>
+        <div class="line"></div>
+        <div class="center" style="font-size:9.5px;margin-top:4px;">Please wear wristband at all times. Valid for today only.</div>
+      </body></html>`;
+      const old = document.getElementById('playland-print-frame');
+      if (old) old.remove();
+      const iframe = document.createElement('iframe');
+      iframe.id = 'playland-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '66mm';
+      iframe.style.height = '600px';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 180);
+      }
     }
   };
 

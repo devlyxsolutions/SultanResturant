@@ -1278,10 +1278,10 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                               position: fixed !important;
                               left: 0 !important;
                               top: 0 !important;
-                              width: 80mm !important;
-                              max-width: 100% !important;
+                              width: 66mm !important;
+                              max-width: 66mm !important;
                               margin: 0 !important;
-                              padding: 6mm 4mm !important;
+                              padding: 1.5mm 1.5mm 4mm 1mm !important;
                               box-shadow: none !important;
                               border: none !important;
                               background: #fff !important;

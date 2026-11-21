@@ -3840,6 +3840,153 @@ async function handleRequest(req, res) {
   }
 
   // -------------------------------------------------------------
+  // CENTRAL 10-TABLET & 7-PC AUTO-UPDATER ENDPOINTS
+  // -------------------------------------------------------------
+  if (
+    (url.pathname === '/api/app-update/info' ||
+      url.pathname === '/api/desktop-update/info' ||
+      url.pathname === '/api/desktop-update/SultanRestaurant.exe' ||
+      url.pathname === '/api/tablet-update/Sultan-POS-Tablet.apk' ||
+      url.pathname === '/apk') &&
+    req.method === 'GET'
+  ) {
+    const crypto = require('crypto');
+
+    const findNewestFile = (candidates, minSize = 1000) => {
+      let bestPath = null;
+      let bestMtime = 0;
+      for (const p of candidates) {
+        try {
+          if (fs.existsSync(p)) {
+            const st = fs.statSync(p);
+            if (st.size >= minSize && st.mtimeMs >= bestMtime) {
+              bestMtime = st.mtimeMs;
+              bestPath = p;
+            }
+          }
+        } catch (err) {}
+      }
+      return bestPath ? { path: bestPath, mtime: Math.floor(bestMtime) } : null;
+    };
+
+    const exeInfo = findNewestFile([
+      path.join(__dirname, 'Updates', 'SultanRestaurant.exe'),
+      path.join(__dirname, 'SultanRestaurant.exe'),
+      'C:\\SultanRestaurant\\Updates\\SultanRestaurant.exe',
+      'C:\\SultanRestaurant\\SultanRestaurant.exe',
+    ], 50000);
+
+    const apkInfo = findNewestFile([
+      path.join(__dirname, 'Updates', 'Sultan-POS-Tablet.apk'),
+      path.join(__dirname, 'Sultan-POS-Tablet.apk'),
+      path.join(__dirname, 'Sultan_POS_Release.apk'),
+      'C:\\SultanRestaurant\\Updates\\Sultan-POS-Tablet.apk',
+      'C:\\SultanRestaurant\\Sultan-POS-Tablet.apk',
+    ], 1000000);
+
+    if (url.pathname === '/api/app-update/info') {
+      let webBundleHash = '';
+      try {
+        const idxPath = path.join(__dirname, 'dist', 'index.html');
+        if (fs.existsSync(idxPath)) {
+          const idxContent = fs.readFileSync(idxPath, 'utf8');
+          const st = fs.statSync(idxPath);
+          webBundleHash = crypto.createHash('sha256').update(idxContent + '|' + Math.floor(st.mtimeMs)).digest('hex').slice(0, 24);
+        }
+      } catch (e) {}
+
+      let exeHash = '';
+      if (exeInfo) {
+        try {
+          const st = fs.statSync(exeInfo.path);
+          exeHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
+        } catch (e) {}
+      }
+
+      let apkHash = '';
+      if (apkInfo) {
+        try {
+          const st = fs.statSync(apkInfo.path);
+          const clientApkVer = Number(url.searchParams.get('apkVer') || '0');
+          if (clientApkVer < 4) {
+            apkHash = `force_upgrade_v4_${Math.floor(Date.now() / 6000)}`;
+          } else {
+            apkHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
+          }
+        } catch (e) {}
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        success: true,
+        webBundleHash,
+        exeHash,
+        apkHash,
+        apkVersion: 4,
+        apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
+      }));
+      return;
+    }
+
+    if (url.pathname === '/api/tablet-update/Sultan-POS-Tablet.apk' || url.pathname === '/apk') {
+      if (!apkInfo) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Sultan-POS-Tablet.apk not found on server' }));
+        return;
+      }
+      try {
+        const st = fs.statSync(apkInfo.path);
+        res.writeHead(200, {
+          'Content-Type': 'application/vnd.android.package-archive',
+          'Content-Length': st.size,
+          'Content-Disposition': 'attachment; filename="Sultan-POS-Tablet.apk"',
+          'Cache-Control': 'no-store',
+        });
+        fs.createReadStream(apkInfo.path).pipe(res);
+        return;
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: err.message }));
+        return;
+      }
+    }
+
+    if (!exeInfo) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'SultanRestaurant.exe not found on server' }));
+      return;
+    }
+
+    try {
+      const buf = fs.readFileSync(exeInfo.path);
+      if (url.pathname === '/api/desktop-update/info') {
+        const hash = crypto.createHash('sha256').update(buf).digest('hex').toLowerCase();
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({
+          success: true,
+          hash,
+          size: buf.length,
+          mtime: exeInfo.mtime,
+        }));
+        return;
+      } else {
+        res.writeHead(200, {
+          'Content-Type': 'application/octet-stream',
+          'Content-Length': buf.length,
+          'Content-Disposition': 'attachment; filename="SultanRestaurant.exe"',
+          'Cache-Control': 'no-store',
+        });
+        res.end(buf);
+        return;
+      }
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+      return;
+    }
+  }
+
+  // -------------------------------------------------------------
   // PUBLIC MENU, DEALS & ORDERING ENDPOINTS
   // -------------------------------------------------------------
 
@@ -4815,6 +4962,34 @@ async function handleRequest(req, res) {
       res.end(JSON.stringify(primaryResult));
     } catch (err) {
       console.warn('[Sultan Hub] /api/print/kot error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.1b Direct Thermal Printer Customer Bill / Unpaid Bill Dispatch (For Android Tablets & POS)
+  if (url.pathname === '/api/print/bill' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      if (!data || !data.invoice) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing invoice payload' }));
+        return;
+      }
+      if (!printerHelper || typeof printerHelper.buildEscPosBillBuffer !== 'function') {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Printer helper bill builder not available' }));
+        return;
+      }
+      const buffer = printerHelper.buildEscPosBillBuffer(data.invoice);
+      const cfg = getStationPrinterConfig('main');
+      const targetPrinter = data.printerName || (cfg && cfg.printerName && cfg.printerName !== 'AUTO' ? cfg.printerName : 'POS-80');
+      const result = await printerHelper.printRawBufferToWindows(buffer, targetPrinter, data.invoice.id);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, result }));
+    } catch (err) {
+      console.warn('[Sultan Hub] /api/print/bill error:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
     }

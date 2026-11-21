@@ -459,15 +459,16 @@ function Send-PlainTextViaGdiDriver {
             $fontReg = $null
             $brush = $null
             try {
-                $fontTitle = New-Object System.Drawing.Font("Consolas", 11.5, [System.Drawing.FontStyle]::Bold)
-                $fontSub   = New-Object System.Drawing.Font("Consolas", 10.0, [System.Drawing.FontStyle]::Bold)
-                $fontItem  = New-Object System.Drawing.Font("Consolas", 9.5, [System.Drawing.FontStyle]::Bold)
-                $fontReg   = New-Object System.Drawing.Font("Consolas", 8.5, [System.Drawing.FontStyle]::Regular)
+                $fontTitle = New-Object System.Drawing.Font("Consolas", 10.0, [System.Drawing.FontStyle]::Bold)
+                $fontSub   = New-Object System.Drawing.Font("Consolas", 9.0, [System.Drawing.FontStyle]::Bold)
+                $fontItem  = New-Object System.Drawing.Font("Consolas", 8.8, [System.Drawing.FontStyle]::Bold)
+                $fontReg   = New-Object System.Drawing.Font("Consolas", 8.0, [System.Drawing.FontStyle]::Regular)
                 $brush     = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
 
-                $pageW = [Math]::Max(240, [Math]::Min(310, $e.PageBounds.Width - 6))
+                # Safe 63.5mm (250 hundredths of an inch) left-anchored printable width so 80mm/72mm thermal heads never clip right side
+                $pageW = 250
                 $maxY  = [Math]::Max(400, $e.PageBounds.Height - 20)
-                $y = 4.0
+                $y = 2.0
 
                 while ($script:GdiPrintIndex -lt $script:GdiPrintLines.Count) {
                     $line = [string]$script:GdiPrintLines[$script:GdiPrintIndex]

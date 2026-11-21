@@ -242,7 +242,58 @@ export default function ShiftManagementScreen() {
 
   const handlePrint = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.print();
+      const targetShift = selectedShiftForDetail || activeShift;
+      const cashSales = ((selectedShiftForDetail ? selectedShiftForDetail.systemCashSales : shiftFinancials.cashSales) || 0).toLocaleString();
+      const cardSales = ((selectedShiftForDetail ? (selectedShiftForDetail.systemCardSales || 0) + (selectedShiftForDetail.systemOnlineSales || 0) : shiftFinancials.cardSales + shiftFinancials.onlineSales) || 0).toLocaleString();
+      const payouts = ((selectedShiftForDetail ? selectedShiftForDetail.cashPayouts : shiftFinancials.cashPayouts) || 0).toLocaleString();
+      const expected = ((selectedShiftForDetail ? selectedShiftForDetail.expectedCashInDrawer : shiftFinancials.expectedCash) || 0).toLocaleString();
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${reportModalType} Slip</title><style>
+        @page { size: 72mm auto; margin: 0mm !important; }
+        * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+        html, body { margin: 0 !important; padding: 1.5mm 1.5mm 4mm 1mm !important; width: 66mm !important; max-width: 66mm !important; background: #fff !important; font-family: Arial, sans-serif; font-size: 11px; }
+        .center { text-align: center; }
+        .title { font-size: 16px; font-weight: 900; }
+        .sub { font-size: 11px; font-weight: 800; margin-bottom: 4px; }
+        .line { border-top: 1.5px dashed #000; margin: 5px 0; }
+        .row { display: flex; justify-content: space-between; margin: 2.5px 0; font-size: 11px; }
+        .bold { font-weight: 800; }
+      </style></head><body>
+        <div class="center"><div class="title">SULTAN RESTAURANT</div><div class="sub">${reportModalType} • SHIFT SUMMARY</div></div>
+        <div class="line"></div>
+        <div class="row"><span>Shift ID:</span><span class="bold">${targetShift?.id || 'N/A'}</span></div>
+        <div class="row"><span>Cashier:</span><span class="bold">${targetShift?.cashierName || 'Staff'}</span></div>
+        <div class="row"><span>Printed:</span><span>${new Date().toLocaleString()}</span></div>
+        <div class="line"></div>
+        <div class="row"><span>Opening Float:</span><span class="bold">Rs. ${(targetShift?.openingFloat || 0).toLocaleString()}</span></div>
+        <div class="row"><span>Cash Sales:</span><span class="bold">Rs. ${cashSales}</span></div>
+        <div class="row"><span>Card / Digital:</span><span class="bold">Rs. ${cardSales}</span></div>
+        <div class="row"><span>Cash Expenses:</span><span class="bold">-Rs. ${payouts}</span></div>
+        <div class="line"></div>
+        <div class="row" style="font-size:13px;"><span class="bold">Expected Cash:</span><span class="bold">Rs. ${expected}</span></div>
+        ${selectedShiftForDetail?.actualCountedCash !== undefined ? `<div class="row"><span class="bold">Counted Cash:</span><span class="bold">Rs. ${selectedShiftForDetail.actualCountedCash.toLocaleString()}</span></div>` : ''}
+        <div class="line"></div>
+        <div class="center" style="font-size:9.5px;margin-top:4px;">Sultan POS Official Audit Slip</div>
+      </body></html>`;
+      const old = document.getElementById('shift-print-frame');
+      if (old) old.remove();
+      const iframe = document.createElement('iframe');
+      iframe.id = 'shift-print-frame';
+      iframe.style.position = 'fixed';
+      iframe.style.top = '-9999px';
+      iframe.style.left = '-9999px';
+      iframe.style.width = '66mm';
+      iframe.style.height = '600px';
+      document.body.appendChild(iframe);
+      const doc = iframe.contentWindow?.document;
+      if (doc) {
+        doc.open();
+        doc.write(html);
+        doc.close();
+        setTimeout(() => {
+          iframe.contentWindow?.focus();
+          iframe.contentWindow?.print();
+        }, 180);
+      }
     } else {
       Alert.alert('Printing Slip', 'Sending report to Sultan Thermal Receipt Printer...');
     }

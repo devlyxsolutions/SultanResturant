@@ -147,15 +147,17 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   const gs = '\x1d';
   const parts = [];
 
-  // Init printer
+  // Init printer & explicitly set zero left margin + safe 512-dot printable width (prevents right-side cutoff on POS-80)
   parts.push(Buffer.from(esc + '@', 'ascii'));
+  parts.push(Buffer.from(gs + 'L\x00\x00', 'ascii'));
+  parts.push(Buffer.from(gs + 'W\x00\x02', 'ascii'));
 
   // Center: Header
   parts.push(Buffer.from(esc + 'a\x01', 'ascii')); // Align center
-  parts.push(Buffer.from(esc + '!\x30', 'ascii')); // Double width + double height + bold
+  parts.push(Buffer.from(esc + '!\x18', 'ascii')); // Double height + bold (never double-width so it never overflows 80mm/72mm)
   parts.push(Buffer.from('SULTAN RESTAURANT\n', 'ascii'));
 
-  parts.push(Buffer.from(esc + '!\x10', 'ascii')); // Double height
+  parts.push(Buffer.from(esc + '!\x08', 'ascii')); // Bold
   let stationTitle = 'KITCHEN KOT';
   if (station === 'juice') stationTitle = 'JUICE BAR KOT';
   else if (station === 'main') stationTitle = 'MAIN KITCHEN KOT';
@@ -168,15 +170,15 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
     parts.push(Buffer.from('--- NEW ORDER ---\n', 'ascii'));
   }
 
-  parts.push(Buffer.from('------------------------------------------\n', 'ascii'));
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
-  // Table / Order Type (Huge bold double size)
-  parts.push(Buffer.from(esc + '!\x38', 'ascii'));
-  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
+  // Table / Order Type (Double-height + bold so long table names never cut off on the side)
+  parts.push(Buffer.from(esc + '!\x18', 'ascii'));
+  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 30);
   parts.push(Buffer.from(`[ ${tableText} ]\n`, 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
-  parts.push(Buffer.from('------------------------------------------\n', 'ascii'));
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   // Meta: Left aligned
   parts.push(Buffer.from(esc + 'a\x00', 'ascii')); // Align left
@@ -187,34 +189,34 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
     month: 'short',
   });
 
-  const kotId = ticket.id || 'N/A';
-  const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
+  const kotId = String(ticket.id || 'N/A').substring(0, 14);
+  const serverName = String(ticket.server || ticket.orderTakenBy || 'Staff').substring(0, 14);
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
-  parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(21) + `Time: ${dateStr}\n`, 'ascii'));
-  parts.push(Buffer.from(`Server: ${serverName}`.padEnd(21) + `Total Qty: ${totalQty}\n`, 'ascii'));
-  parts.push(Buffer.from('==========================================\n', 'ascii'));
+  parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(18) + `${dateStr}\n`, 'ascii'));
+  parts.push(Buffer.from(`Staff: ${serverName}`.padEnd(20) + `Qty: ${totalQty}\n`, 'ascii'));
+  parts.push(Buffer.from('====================================\n', 'ascii'));
 
   // Items List
-  parts.push(Buffer.from('QTY   ITEM DESCRIPTION\n', 'ascii'));
-  parts.push(Buffer.from('------------------------------------------\n', 'ascii'));
+  parts.push(Buffer.from('QTY  ITEM DESCRIPTION\n', 'ascii'));
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   for (const item of activeItems) {
-    const qtyStr = `${item.qty || 1}x`.padEnd(6);
-    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [JUICE]' : '';
-    const nameStr = ((item.name || '') + stationBadge).substring(0, 36);
+    const qtyStr = `${item.qty || 1}x`.padEnd(5);
+    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
+    const nameStr = ((item.name || '') + stationBadge).substring(0, 31);
 
     // Print item with double height/bold
-    parts.push(Buffer.from(esc + '!\x10', 'ascii')); // Double height
+    parts.push(Buffer.from(esc + '!\x18', 'ascii')); // Double height + bold
     parts.push(Buffer.from(`${qtyStr}${nameStr}\n`, 'ascii'));
     parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
 
     if (item.notes) {
-      parts.push(Buffer.from(`      * Notes: ${item.notes}\n`, 'ascii'));
+      parts.push(Buffer.from(`     * ${String(item.notes).substring(0, 29)}\n`, 'ascii'));
     }
   }
 
-  parts.push(Buffer.from('==========================================\n', 'ascii'));
+  parts.push(Buffer.from('====================================\n', 'ascii'));
 
   // Footer: Centered
   parts.push(Buffer.from(esc + 'a\x01', 'ascii')); // Align center
@@ -264,32 +266,96 @@ function buildPlainTextKot(ticket, station = 'all') {
     'SULTAN RESTAURANT',
     stationTitle,
     ticket.isAddOn ? `*** ADD-ON ROUND #${ticket.roundNumber || 2} ***` : '--- NEW ORDER ---',
-    '----------------------------------------',
-    `[ ${tableText} ]`,
-    '----------------------------------------',
+    '------------------------------------',
+    `[ ${tableText.substring(0, 30)} ]`,
+    '------------------------------------',
     `KOT: #${kotId}`,
     `Time: ${dateStr}`,
-    `Server: ${serverName}   Qty: ${totalQty}`,
-    '========================================',
-    'QTY   ITEM DESCRIPTION',
-    '----------------------------------------',
+    `Staff: ${String(serverName).substring(0, 14)}  Qty: ${totalQty}`,
+    '====================================',
+    'QTY  ITEM DESCRIPTION',
+    '------------------------------------',
   ];
 
   for (const item of activeItems) {
-    const qtyStr = `${item.qty || 1}x`.padEnd(6);
-    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [JUICE]' : '';
-    const nameStr = ((item.name || '') + stationBadge).substring(0, 34);
+    const qtyStr = `${item.qty || 1}x`.padEnd(5);
+    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
+    const nameStr = ((item.name || '') + stationBadge).substring(0, 30);
     lines.push(`${qtyStr}${nameStr}`);
     if (item.notes) {
-      lines.push(`      * Notes: ${item.notes}`);
+      lines.push(`     * ${String(item.notes).substring(0, 29)}`);
     }
   }
 
-  lines.push('========================================');
+  lines.push('====================================');
   lines.push(`TOTAL ITEMS: ${totalQty}`);
   lines.push(station === 'juice' ? 'SULTAN JUICE BAR - AUTO KOT' : 'SULTAN MAIN KITCHEN - AUTO KOT');
 
   return lines.join('\n');
+}
+
+function buildEscPosBillBuffer(invoice) {
+  if (!invoice) return null;
+  const esc = '\x1b';
+  const gs = '\x1d';
+  const parts = [];
+  const isUnpaid = invoice.isUnpaidBill || invoice.status === 'unpaid';
+  const items = Array.isArray(invoice.items) ? invoice.items : [];
+  const dateStr = new Date(invoice.timeSettled || invoice.timePlaced || Date.now()).toLocaleString('en-PK', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: 'short',
+  });
+
+  parts.push(Buffer.from(esc + '@', 'ascii'));
+  parts.push(Buffer.from(gs + 'L\x00\x00', 'ascii'));
+  parts.push(Buffer.from(gs + 'W\x00\x02', 'ascii'));
+
+  parts.push(Buffer.from(esc + 'a\x01', 'ascii'));
+  parts.push(Buffer.from(esc + '!\x18', 'ascii'));
+  parts.push(Buffer.from('SULTAN RESTAURANT\n', 'ascii'));
+  parts.push(Buffer.from(esc + '!\x00', 'ascii'));
+  parts.push(Buffer.from('LUXURY DINING & BANQUET\n', 'ascii'));
+  if (isUnpaid) {
+    parts.push(Buffer.from(esc + '!\x08', 'ascii'));
+    parts.push(Buffer.from('*** UNPAID PROVISIONAL BILL ***\n', 'ascii'));
+    parts.push(Buffer.from(esc + '!\x00', 'ascii'));
+  }
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
+
+  parts.push(Buffer.from(esc + 'a\x00', 'ascii'));
+  parts.push(Buffer.from(`INV: #${String(invoice.id || '').substring(0, 14)}`.padEnd(20) + `${dateStr}\n`, 'ascii'));
+  parts.push(Buffer.from(`Type: ${String(invoice.orderType || 'DINE-IN').toUpperCase()}`.padEnd(20) + `${invoice.tableName ? String(invoice.tableName).substring(0, 15) : ''}\n`, 'ascii'));
+  parts.push(Buffer.from('====================================\n', 'ascii'));
+  parts.push(Buffer.from('QTY  ITEM                     AMOUNT\n', 'ascii'));
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
+
+  for (const it of items) {
+    const q = `${it.qty || 1}x`.padEnd(4);
+    const amt = String(((it.price || 0) * (it.qty || 1)).toLocaleString()).padStart(8);
+    const nm = String(it.name || '').substring(0, 22).padEnd(23);
+    parts.push(Buffer.from(`${q} ${nm}${amt}\n`, 'ascii'));
+  }
+
+  parts.push(Buffer.from('------------------------------------\n', 'ascii'));
+  parts.push(Buffer.from(`Sub Total:`.padEnd(24) + `Rs. ${Number(invoice.subTotal || 0).toLocaleString()}\n`, 'ascii'));
+  if ((invoice.discount || 0) > 0) {
+    parts.push(Buffer.from(`Discount:`.padEnd(24) + `-Rs. ${Number(invoice.discount || 0).toLocaleString()}\n`, 'ascii'));
+  }
+  if ((invoice.tax || 0) > 0) {
+    parts.push(Buffer.from(`Tax:`.padEnd(24) + `Rs. ${Number(invoice.tax || 0).toLocaleString()}\n`, 'ascii'));
+  }
+  parts.push(Buffer.from('====================================\n', 'ascii'));
+  parts.push(Buffer.from(esc + '!\x18', 'ascii'));
+  parts.push(Buffer.from(`TOTAL: Rs. ${Number(invoice.total || 0).toLocaleString()}\n`, 'ascii'));
+  parts.push(Buffer.from(esc + '!\x00', 'ascii'));
+  parts.push(Buffer.from('====================================\n', 'ascii'));
+  parts.push(Buffer.from(esc + 'a\x01', 'ascii'));
+  parts.push(Buffer.from('Thank you for dining with Sultan!\n\n\n\n', 'ascii'));
+  parts.push(Buffer.from(gs + 'V\x00', 'ascii'));
+
+  return Buffer.concat(parts);
 }
 
 /**
@@ -506,6 +572,7 @@ module.exports = {
   filterItemsForStation,
   buildEscPosKotBuffer,
   buildPlainTextKot,
+  buildEscPosBillBuffer,
   printRawBufferToWindows,
   printRawBufferToNetworkTcp,
   printTicketDirect,

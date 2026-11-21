@@ -7,6 +7,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import SultanLogo from './SultanLogo';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import { generateInvoiceQrCode, getInvoiceFeedbackUrl } from '../utils/qrCode';
+import { getActiveServerHttpUrl } from '../services/syncService';
 
 type InvoiceProps = {
   invoice: Invoice;
@@ -42,6 +43,20 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   const feedbackUrl = getInvoiceFeedbackUrl(invoice.id);
 
   if (Platform.OS !== 'web' || typeof window === 'undefined') {
+    try {
+      const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+      if (base) {
+        const res = await fetch(`${base}/api/print/bill`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ invoice }),
+        });
+        if (res.ok) {
+          Alert.alert('Printed', 'Receipt sent to POS Thermal Printer.');
+          return;
+        }
+      }
+    } catch {}
     const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleString();
     const orderCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : 'Staff');
     const cashierName = invoice.cashier || (invoice.server?.toLowerCase().includes('pos') ? invoice.server : 'Manager');
@@ -189,8 +204,8 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         }
 
         @page {
-          size: 80mm auto;
-          margin: 0mm;
+          size: 72mm auto;
+          margin: 0mm !important;
         }
 
         html, body {
@@ -199,16 +214,17 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
           background: #ffffff !important;
           color: #000000 !important;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif !important;
-          width: 100% !important;
+          width: 66mm !important;
+          max-width: 66mm !important;
           text-rendering: optimizeLegibility !important;
           -webkit-font-smoothing: antialiased !important;
         }
 
         .receipt-container {
-          width: 72mm;
-          max-width: 72mm;
-          margin: 0 auto;
-          padding: 2mm 1mm 4mm 1mm;
+          width: 66mm !important;
+          max-width: 66mm !important;
+          margin: 0 !important;
+          padding: 1.5mm 1.5mm 4mm 1mm !important;
           box-sizing: border-box;
           background: #ffffff;
         }

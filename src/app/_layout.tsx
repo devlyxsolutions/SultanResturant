@@ -11,6 +11,7 @@ import IncomingCallHost from '../components/IncomingCallHost';
 import WaiterNotificationHost from '../components/WaiterNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
 import SessionSecurityHost from '../components/SessionSecurityHost';
+import CentralUpdateHost from '../components/CentralUpdateHost';
 
 // Ignore benign web font loading timeouts and offline firestore notices in Expo LogBox
 LogBox.ignoreLogs([
@@ -391,6 +392,8 @@ export default function RootLayout() {
       <FloorManagerNotificationHost />
       {/* Multi-Device Security & Concurrent Session Kick Host */}
       <SessionSecurityHost />
+      {/* Central Auto-Updater for 10 Android Tablets & 7 Windows PCs */}
+      <CentralUpdateHost />
     </>
   );
 }

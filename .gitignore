@@ -51,8 +51,13 @@ example
 SultanPayload.zip
 SultanClientPayload.zip
 SultanRestaurant-Setup.exe
+Sultan-Restaurant-Setup.exe
 bin/SultanRestaurant-Setup.exe
 SultanRestaurant-App/node.exe
 SultanRestaurant-App/SultanRestaurant-Setup.exe
+SultanRestaurant-App/Sultan-Restaurant-Setup.exe
+SultanRestaurant-App/Sultan-POS-Tablet.apk
+SultanRestaurant-App/Updates/*.apk
+Updates/*.apk
 
 

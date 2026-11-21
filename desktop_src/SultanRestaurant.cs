@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -271,6 +272,53 @@ namespace SultanRestaurantDesktop
             return null;
         }
 
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int Msg, IntPtr wParam, IntPtr lParam);
+
+        private delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+
+        [DllImport("user32.dll")]
+        private static extern bool EnumWindows(EnumWindowsProc enumProc, IntPtr lParam);
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto, SetLastError = true)]
+        private static extern int GetWindowText(IntPtr hWnd, StringBuilder lpString, int nMaxCount);
+
+        [DllImport("user32.dll")]
+        private static extern bool IsWindowVisible(IntPtr hWnd);
+
+        public static void ApplySultanIconToAppWindows()
+        {
+            try
+            {
+                string icoPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "assets", "sultan.ico");
+                Icon appIcon = File.Exists(icoPath) ? new Icon(icoPath) : Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+                if (appIcon == null) return;
+                IntPtr hIcon = appIcon.Handle;
+
+                for (int attempt = 0; attempt < 8; attempt++)
+                {
+                    Thread.Sleep(250);
+                    bool found = false;
+                    EnumWindows((hWnd, lParam) =>
+                    {
+                        if (!IsWindowVisible(hWnd)) return true;
+                        StringBuilder sb = new StringBuilder(256);
+                        GetWindowText(hWnd, sb, 256);
+                        string title = sb.ToString();
+                        if (!string.IsNullOrEmpty(title) && (title.IndexOf("Sultan POS", StringComparison.OrdinalIgnoreCase) >= 0 || title.IndexOf("Sultan Restaurant", StringComparison.OrdinalIgnoreCase) >= 0))
+                        {
+                            SendMessage(hWnd, 0x0080, (IntPtr)0, hIcon); // ICON_SMALL
+                            SendMessage(hWnd, 0x0080, (IntPtr)1, hIcon); // ICON_BIG
+                            found = true;
+                        }
+                        return true;
+                    }, IntPtr.Zero);
+                    if (found && attempt >= 3) break;
+                }
+            }
+            catch {}
+        }
+
         public static bool LaunchAppMode(string targetUrl, bool kioskPrinting, bool startMaximized, out string error)
         {
             error = "";
@@ -290,7 +338,7 @@ namespace SultanRestaurantDesktop
                 }
             }
 
-            string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SultanRestaurant", "POSProfile");
+            string profileDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SultanRestaurant", "SultanAppProfile");
             try
             {
                 if (!Directory.Exists(profileDir)) Directory.CreateDirectory(profileDir);
@@ -323,6 +371,7 @@ namespace SultanRestaurantDesktop
                 psi.Arguments = args.ToString();
                 psi.UseShellExecute = false;
                 Process.Start(psi);
+                ApplySultanIconToAppWindows();
                 return true;
             }
             catch (Exception ex)
@@ -833,16 +882,39 @@ namespace SultanRestaurantDesktop
         {
             SaveSettings();
 
-            // Ensure server is up if this machine is the server
             string baseServer = config.serverUrl;
             if (string.IsNullOrEmpty(baseServer)) baseServer = "http://192.168.1.10:5050";
 
             if (IsLocalOrOwnedIp(baseServer))
             {
-                if (config.autoStartHub && !ProcessHelper.IsPortListening("127.0.0.1", 5050, 400))
+                if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 400))
                 {
                     string err;
                     ProcessHelper.StartHub(out err);
+                }
+            }
+            else
+            {
+                // Running on another laptop/computer:
+                // 1) Check if Master Server (e.g. 192.168.1.10:5050) is reachable on LAN
+                bool masterReachable = false;
+                try
+                {
+                    Uri u = new Uri(baseServer);
+                    masterReachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 700);
+                }
+                catch {}
+
+                if (!masterReachable)
+                {
+                    // 2) Master Server is not on this network (standalone laptop / external PC).
+                    // Automatically start the embedded background server silently and run on localhost:5050!
+                    if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 400))
+                    {
+                        string err;
+                        ProcessHelper.StartHub(out err);
+                    }
+                    baseServer = "http://localhost:5050";
                 }
             }
 
@@ -937,6 +1009,138 @@ namespace SultanRestaurantDesktop
 
     public static class Program
     {
+        private static string ComputeFileSha256(string filePath)
+        {
+            try
+            {
+                using (FileStream fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                using (SHA256 sha = SHA256.Create())
+                {
+                    byte[] hash = sha.ComputeHash(fs);
+                    StringBuilder sb = new StringBuilder();
+                    foreach (byte b in hash) sb.Append(b.ToString("x2"));
+                    return sb.ToString().ToLower();
+                }
+            }
+            catch
+            {
+                return "";
+            }
+        }
+
+        private static bool ReplaceAndRestartWithNewExe(byte[] newExeBytes)
+        {
+            try
+            {
+                if (newExeBytes == null || newExeBytes.Length < 50000) return false;
+                string currentExe = Application.ExecutablePath;
+                string dir = Path.GetDirectoryName(currentExe);
+                string newExe = Path.Combine(dir, "SultanRestaurant.new.exe");
+                string oldExe = Path.Combine(dir, "SultanRestaurant.old.exe");
+
+                File.WriteAllBytes(newExe, newExeBytes);
+                if (File.Exists(oldExe))
+                {
+                    try { File.Delete(oldExe); } catch {}
+                }
+
+                // Windows allows renaming a currently running executable!
+                File.Move(currentExe, oldExe);
+                File.Move(newExe, currentExe);
+
+                ProcessStartInfo psi = new ProcessStartInfo(currentExe, "--updated");
+                psi.WorkingDirectory = dir;
+                Process.Start(psi);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static bool CheckAndApplyAutoUpdate(SultanConfig config, string[] args)
+        {
+            try
+            {
+                string currentExe = Application.ExecutablePath;
+                string dir = Path.GetDirectoryName(currentExe);
+                string oldExe = Path.Combine(dir, "SultanRestaurant.old.exe");
+                if (File.Exists(oldExe))
+                {
+                    try { File.Delete(oldExe); } catch {}
+                }
+
+                if (args != null)
+                {
+                    foreach (string a in args)
+                    {
+                        if (a.ToLower() == "--updated") return false;
+                    }
+                }
+
+                string localHash = ComputeFileSha256(currentExe);
+                if (string.IsNullOrEmpty(localHash)) return false;
+
+                // 1) Check Master Server HTTP OTA Update Endpoint (Works across all 5 PCs without Windows SMB password!)
+                string baseServer = (config != null && !string.IsNullOrEmpty(config.serverUrl)) ? config.serverUrl.TrimEnd('/') : "http://192.168.1.10:5050";
+                try
+                {
+                    Uri u = new Uri(baseServer);
+                    if (ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 500))
+                    {
+                        HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseServer + "/api/desktop-update/info");
+                        req.Timeout = 1200;
+                        req.ReadWriteTimeout = 1200;
+                        using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                        using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+                        {
+                            string json = sr.ReadToEnd();
+                            Match m = Regex.Match(json, "\"hash\"\\s*:\\s*\"([a-fA-F0-9]+)\"");
+                            if (m.Success)
+                            {
+                                string remoteHash = m.Groups[1].Value.ToLower();
+                                if (!string.IsNullOrEmpty(remoteHash) && remoteHash != localHash)
+                                {
+                                    using (WebClient wc = new WebClient())
+                                    {
+                                        byte[] newBytes = wc.DownloadData(baseServer + "/api/desktop-update/SultanRestaurant.exe");
+                                        if (ReplaceAndRestartWithNewExe(newBytes)) return true;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                catch {}
+
+                // 2) Fallback: Check Shared Network Folder (\\192.168.1.10\Updates\SultanRestaurant.exe or \\ServerPC\Updates\SultanRestaurant.exe)
+                string[] sharePaths = new string[]
+                {
+                    @"\\192.168.1.10\Updates\SultanRestaurant.exe",
+                    @"\\ServerPC\Updates\SultanRestaurant.exe"
+                };
+                foreach (string sp in sharePaths)
+                {
+                    try
+                    {
+                        if (File.Exists(sp))
+                        {
+                            string shareHash = ComputeFileSha256(sp);
+                            if (!string.IsNullOrEmpty(shareHash) && shareHash != localHash)
+                            {
+                                byte[] newBytes = File.ReadAllBytes(sp);
+                                if (ReplaceAndRestartWithNewExe(newBytes)) return true;
+                            }
+                        }
+                    }
+                    catch {}
+                }
+            }
+            catch {}
+            return false;
+        }
+
         [STAThread]
         public static void Main(string[] args)
         {
@@ -944,6 +1148,12 @@ namespace SultanRestaurantDesktop
             Application.SetCompatibleTextRenderingDefault(false);
 
             SultanConfig config = SultanConfig.Load();
+
+            // Automatic 5-PC Self-Update Check before launching!
+            if (CheckAndApplyAutoUpdate(config, args))
+            {
+                return;
+            }
 
             bool forceSetup = false;
             foreach (string a in args)

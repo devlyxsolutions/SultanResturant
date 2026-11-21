@@ -55,15 +55,15 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
       <title>${stationTitle} #${ticket.id} - Sultan Restaurant</title>
       <style>
         @page {
-          size: auto;
-          margin: 0mm;
+          size: 72mm auto;
+          margin: 0mm !important;
         }
         @media print {
           html, body {
-            width: 72mm !important;
-            max-width: 72mm !important;
+            width: 66mm !important;
+            max-width: 66mm !important;
             margin: 0 !important;
-            padding: 2mm 1mm 4mm 1mm !important;
+            padding: 1.5mm 1.5mm 4mm 1mm !important;
             background: #fff !important;
             color: #000 !important;
           }
@@ -74,14 +74,14 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
           print-color-adjust: exact !important;
         }
         body {
-          margin: 0 auto;
-          padding: 2mm 1mm 4mm 1mm;
-          width: 72mm;
-          max-width: 72mm;
+          margin: 0 !important;
+          padding: 1.5mm 1.5mm 4mm 1mm !important;
+          width: 66mm !important;
+          max-width: 66mm !important;
           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
           color: #000;
           background: #fff;
-          font-size: 13px;
+          font-size: 12.5px;
         }
         .header {
           text-align: center;
@@ -260,15 +260,15 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
                 visibility: visible;
               }
               #order-slip-container {
-                position: absolute;
-                left: 50%;
-                transform: translateX(-50%);
-                top: 0;
-                width: 80mm;
-                max-width: 80mm;
-                margin: 0 auto;
-                padding: 6mm 4mm;
-                background: #fff;
+                position: fixed !important;
+                left: 0 !important;
+                transform: none !important;
+                top: 0 !important;
+                width: 66mm !important;
+                max-width: 66mm !important;
+                margin: 0 !important;
+                padding: 1.5mm 1.5mm 4mm 1mm !important;
+                background: #fff !important;
               }
             }
           `}
