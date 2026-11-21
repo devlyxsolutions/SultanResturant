@@ -1,11 +1,34 @@
 const http = require('http');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
 const PORT = process.env.PORT || 5050;
+
+function getServerLanIp() {
+  try {
+    const ifaces = os.networkInterfaces();
+    const candidates = [];
+    for (const name of Object.keys(ifaces)) {
+      for (const info of ifaces[name] || []) {
+        if (!info || info.internal || info.family !== 'IPv4' || !info.address) continue;
+        if (info.address.startsWith('169.254.')) continue; // skip APIPA link-local
+        candidates.push(info.address);
+      }
+    }
+    const lan192 = candidates.find((ip) => ip.startsWith('192.168.'));
+    if (lan192) return lan192;
+    const lan10 = candidates.find((ip) => ip.startsWith('10.'));
+    if (lan10) return lan10;
+    const lan172 = candidates.find((ip) => /^172\.(1[6-9]|2\d|3[01])\./.test(ip));
+    if (lan172) return lan172;
+    if (candidates.length > 0) return candidates[0];
+  } catch (_) {}
+  return '192.168.1.10';
+}
 const DATA_FILE = path.join(__dirname, 'server-data.json');
 let printerHelper = null;
 try {
@@ -2638,6 +2661,7 @@ function deliverNextRemoteJobToWaiter(station) {
       station: job.station,
       printerName: job.printerName || cfg.printerName || 'AUTO',
       rawBase64: job.rawBase64,
+      plainText: job.plainText || '',
     }));
     return true;
   } catch (_) {
@@ -2650,6 +2674,9 @@ function enqueueRemoteAgentPrintJob(station, ticket, buffer, overridePrinterName
   pruneExpiredRemoteJobs(station);
   const cfg = getStationPrinterConfig(station);
   const jobId = `job_${station}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const plainText = (printerHelper && typeof printerHelper.buildPlainTextKot === 'function')
+    ? (printerHelper.buildPlainTextKot(ticket, station) || '')
+    : '';
   const job = {
     jobId,
     ticketId: String(ticket.id || 'KOT'),
@@ -2657,6 +2684,7 @@ function enqueueRemoteAgentPrintJob(station, ticket, buffer, overridePrinterName
     station,
     printerName: overridePrinterName || cfg.printerName || 'AUTO',
     rawBase64: buffer.toString('base64'),
+    plainText,
     createdAt: Date.now(),
   };
 
@@ -4665,26 +4693,35 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 8.2 Remote Print Agent Long-Poll Endpoint (Used by SultanPrintAgent.exe on Juice Bar PC)
+  // 8.2 Remote Print Agent Long-Poll Endpoint (Used by SultanPrintAgent.ps1 on Juice Bar PC)
   if (url.pathname === '/api/print-agent/poll' && req.method === 'GET') {
     const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
     const pcName = url.searchParams.get('pc') || 'Station-PC';
     const activePrinter = url.searchParams.get('printer') || '';
     const printersRaw = url.searchParams.get('printers') || '';
+    const printEngine = url.searchParams.get('engine') || '';
     const availablePrinters = printersRaw ? printersRaw.split('||').map((s) => s.trim()).filter(Boolean) : [];
+    const prevAgent = connectedPrintAgents[station];
     const wasOnline = isPrintAgentOnline(station);
+    const prevPrintersKey = prevAgent && Array.isArray(prevAgent.availablePrinters) ? prevAgent.availablePrinters.join('||') : '';
+    const changed = !wasOnline
+      || !prevAgent
+      || prevAgent.activePrinter !== activePrinter
+      || prevPrintersKey !== availablePrinters.join('||')
+      || prevAgent.pcName !== pcName;
 
     connectedPrintAgents[station] = {
       station,
       pcName,
       activePrinter,
       availablePrinters,
+      printEngine: printEngine || undefined,
       ip: clientIp,
       lastSeen: Date.now(),
     };
 
-    if (!wasOnline) {
-      console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} Print Agent ONLINE from ${pcName} (${clientIp}) -> Printer: ${activePrinter || 'NONE'}`);
+    if (changed) {
+      console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} Print Agent ONLINE from ${pcName} (${clientIp}) -> Active: ${activePrinter || 'NONE'} | Printers(${availablePrinters.length}): [${availablePrinters.join(', ')}]${printEngine ? ` | Engine: ${printEngine}` : ''}`);
       broadcastToClients({
         type: 'PRINT_AGENT_STATUS',
         station,
@@ -4692,6 +4729,7 @@ async function handleRequest(req, res) {
         pcName,
         activePrinter,
         availablePrinters,
+        printEngine: printEngine || undefined,
         timestamp: Date.now(),
       });
     }
@@ -4712,6 +4750,19 @@ async function handleRequest(req, res) {
         station: job.station,
         printerName: job.printerName || cfg.printerName || 'AUTO',
         rawBase64: job.rawBase64,
+        plainText: job.plainText || '',
+      }));
+      return;
+    }
+
+    // Fast handshake response on initial connect / printer change so Desktop Agent turns GREEN instantly!
+    if (url.searchParams.get('hello') === '1' || changed) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        ok: true,
+        connected: true,
+        configuredPrinter: cfg.printerName || 'AUTO',
+        jobId: null,
       }));
       return;
     }
@@ -4795,7 +4846,8 @@ async function handleRequest(req, res) {
         ? await printerHelper.getLocalWindowsPrinters()
         : ['POS-80'];
 
-      const hostHeader = req.headers.host || '192.168.1.10:5050';
+      const lanIp = getServerLanIp();
+      const hostHeader = req.headers.host || `${lanIp}:${PORT}`;
       const formatAgent = (st) => {
         const a = connectedPrintAgents[st];
         const online = isPrintAgentOnline(st);
@@ -4808,6 +4860,7 @@ async function handleRequest(req, res) {
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({
         serverUrl: `http://${hostHeader}`,
+        lanServerUrl: `http://${lanIp}:${PORT}`,
         serverWindowsPrinters,
         kitchen: {
           config: getStationPrinterConfig('main'),
@@ -4876,8 +4929,11 @@ async function handleRequest(req, res) {
         return;
       }
 
-      const hostRaw = (req.headers.host || '192.168.1.10:5050').split(':')[0];
-      const serverUrl = `http://${hostRaw}:5050`;
+      const lanIp = getServerLanIp();
+      const hostRaw = String(req.headers.host || '').split(':')[0].trim().toLowerCase();
+      const isLoopback = !hostRaw || hostRaw === 'localhost' || hostRaw === '127.0.0.1' || hostRaw === '::1' || hostRaw === '[::1]';
+      const resolvedHost = isLoopback ? lanIp : hostRaw;
+      const serverUrl = `http://${resolvedHost}:${PORT}`;
       const stationLabel = station === 'juice' ? 'JuiceBar' : 'Kitchen';
       const psScriptData = fs.readFileSync(psScriptPath);
 
@@ -4886,15 +4942,30 @@ async function handleRequest(req, res) {
         `SERVER=${serverUrl}`,
         `STATION=${station}`,
         'PRINTER=AUTO',
+        'MODE=AUTO',
         '',
       ].join('\r\n');
 
       const startBat = [
         '@echo off',
         `title Sultan ${stationLabel} Printer Agent`,
-        'cd /d "%~dp0"',
-        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1"',
+        'set "APPDIR=%~dp0"',
+        'cd /d "%APPDIR%"',
+        '',
+        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+        '  echo.',
+        '  echo ====================================================================',
+        '  echo   ERROR: Please EXTRACT the ZIP file first!',
+        '  echo   Right-click the downloaded ZIP -^> click "Extract All..."',
+        `  echo   Then open the extracted folder and run Start-${stationLabel}-Printer.bat`,
+        '  echo ====================================================================',
+        '  echo.',
+        '  pause',
+        '  exit /b 1',
+        ')',
+        '',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1"',
         'exit /b 0',
         '',
       ].join('\r\n');
@@ -4902,9 +4973,15 @@ async function handleRequest(req, res) {
       const testBat = [
         '@echo off',
         `title Test Sultan ${stationLabel} Printer`,
-        'cd /d "%~dp0"',
-        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1" -Test',
+        'set "APPDIR=%~dp0"',
+        'cd /d "%APPDIR%"',
+        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+        '  echo ERROR: Please EXTRACT the ZIP file first!',
+        '  pause',
+        '  exit /b 1',
+        ')',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Test',
         'exit /b 0',
         '',
       ].join('\r\n');
@@ -4912,28 +4989,70 @@ async function handleRequest(req, res) {
       const installAutostartBat = [
         '@echo off',
         `title Install Sultan ${stationLabel} Printer Auto-Start`,
-        'cd /d "%~dp0"',
-        'powershell -NoProfile -Command "Get-ChildItem -LiteralPath \'%~dp0\' -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'set "APPDIR=%~dp0"',
+        'cd /d "%APPDIR%"',
+        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+        '  echo.',
+        '  echo ====================================================================',
+        '  echo   ERROR: Please EXTRACT the ZIP file to Desktop or C:\\ first!',
+        '  echo   Do NOT run Install-AutoStart inside the ZIP preview window.',
+        '  echo ====================================================================',
+        '  echo.',
+        '  pause',
+        '  exit /b 1',
+        ')',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
         'set "STARTUP=%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"',
         `set "LNK=%STARTUP%\\Sultan-${stationLabel}-Printer.lnk"`,
-        'powershell -NoProfile -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut(\'%LNK%\'); $s.TargetPath = \'powershell.exe\'; $s.Arguments = \'-STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \\"%~dp0SultanPrintAgent.ps1\\"\'; $s.WorkingDirectory = \'%~dp0\'; $s.WindowStyle = 7; $s.Save()"',
-        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%~dp0SultanPrintAgent.ps1"',
-        'timeout /t 2 >nul',
+        'set "PSFILE=%APPDIR%SultanPrintAgent.ps1"',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "$ws = New-Object -ComObject WScript.Shell; $s = $ws.CreateShortcut($env:LNK); $s.TargetPath = \'powershell.exe\'; $s.Arguments = \'-STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File \' + [char]34 + $env:PSFILE + [char]34; $s.WorkingDirectory = $env:APPDIR; $s.WindowStyle = 7; $s.Save()"',
+        'echo.',
+        'echo ====================================================================',
+        `echo   [OK] Sultan ${stationLabel} Printer Auto-Start Installed!`,
+        `echo   Shortcut saved to: %LNK%`,
+        'echo   Opening Printer Agent Desktop Window now...',
+        'echo ====================================================================',
+        'echo.',
+        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%PSFILE%"',
+        'timeout /t 3 >nul',
+        'exit /b 0',
+        '',
+      ].join('\r\n');
+
+      const diagnoseBat = [
+        '@echo off',
+        `title Diagnose Sultan ${stationLabel} Printer`,
+        'set "APPDIR=%~dp0"',
+        'cd /d "%APPDIR%"',
+        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+        '  echo ERROR: Please EXTRACT the ZIP file first!',
+        '  pause',
+        '  exit /b 1',
+        ')',
+        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+        'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Diagnose',
+        'echo.',
+        'pause',
         'exit /b 0',
         '',
       ].join('\r\n');
 
       const readmeTxt = [
         '================================================================',
-        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP`,
+        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP (v3.0)`,
         '================================================================',
         '',
-        'STEP 1: Extract this ZIP folder anywhere on the Juice Bar PC (e.g. Desktop).',
-        'STEP 2: Make sure the Juice Bar USB Thermal Printer is plugged into THIS PC.',
-        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" — a permanent Desktop GUI window opens!`,
-        'STEP 4: Click "Print Test Slip" inside the window, and run "Install-AutoStart-On-Boot.bat" once for daily auto-start.',
+        'STEP 1: RIGHT-CLICK this ZIP file and click "Extract All..." to Desktop or C:\\SultanPrinter.',
+        '        (IMPORTANT: Do NOT run .bat files directly inside the ZIP window!)',
+        'STEP 2: Plug in the USB Thermal Printer and make sure its Windows driver is installed.',
+        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" - the permanent Desktop window opens!`,
+        'STEP 4: Pick your printer (or keep AUTO) and click "Print Test Slip".',
+        'STEP 5: Double-click "Install-AutoStart-On-Boot.bat" ONCE so it starts every morning.',
         '',
-        'Windows 11 Safe: Uses Microsoft-signed PowerShell (no unsigned .exe blocked by Smart App Control!).',
+        `TROUBLESHOOTING: Double-click "Diagnose-${stationLabel}-Printer.bat" to see all detected`,
+        'printers, USB ports, and live connection check to the Sultan Hub.',
+        '',
+        'Windows 11 Safe: 100% pure Microsoft-signed PowerShell (zero unsigned .exe, zero Smart App Control block!).',
         `- Pre-configured Server Hub: ${serverUrl}`,
         '',
       ].join('\r\n');
@@ -4943,6 +5062,7 @@ async function handleRequest(req, res) {
         { name: 'agent-config.txt', data: agentConfig },
         { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
         { name: `Test-${stationLabel}-Printer.bat`, data: testBat },
+        { name: `Diagnose-${stationLabel}-Printer.bat`, data: diagnoseBat },
         { name: 'Install-AutoStart-On-Boot.bat', data: installAutostartBat },
         { name: `README-${stationLabel.toUpperCase()}-PRINTER.txt`, data: readmeTxt },
       ]);

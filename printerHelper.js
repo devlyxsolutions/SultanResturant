@@ -234,6 +234,65 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 }
 
 /**
+ * Format a ticket into clean 80mm plain-text lines for Windows GDI PrintDocument fallback.
+ * Uses the exact same strict station isolation as buildEscPosKotBuffer (returns null if 0 matching items).
+ */
+function buildPlainTextKot(ticket, station = 'all') {
+  const items = Array.isArray(ticket?.items) ? ticket.items : [];
+  const activeItems = filterItemsForStation(items, station);
+
+  if (activeItems.length === 0) {
+    return null;
+  }
+
+  let stationTitle = 'KITCHEN KOT';
+  if (station === 'juice') stationTitle = 'JUICE BAR KOT';
+  else if (station === 'main') stationTitle = 'MAIN KITCHEN KOT';
+
+  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
+  const dateStr = new Date(ticket.timePlaced || Date.now()).toLocaleString('en-PK', {
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: 'short',
+  });
+  const kotId = ticket.id || 'N/A';
+  const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
+  const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
+
+  const lines = [
+    'SULTAN RESTAURANT',
+    stationTitle,
+    ticket.isAddOn ? `*** ADD-ON ROUND #${ticket.roundNumber || 2} ***` : '--- NEW ORDER ---',
+    '----------------------------------------',
+    `[ ${tableText} ]`,
+    '----------------------------------------',
+    `KOT: #${kotId}`,
+    `Time: ${dateStr}`,
+    `Server: ${serverName}   Qty: ${totalQty}`,
+    '========================================',
+    'QTY   ITEM DESCRIPTION',
+    '----------------------------------------',
+  ];
+
+  for (const item of activeItems) {
+    const qtyStr = `${item.qty || 1}x`.padEnd(6);
+    const stationBadge = (station === 'all' && item.station === 'juice') ? ' [JUICE]' : '';
+    const nameStr = ((item.name || '') + stationBadge).substring(0, 34);
+    lines.push(`${qtyStr}${nameStr}`);
+    if (item.notes) {
+      lines.push(`      * Notes: ${item.notes}`);
+    }
+  }
+
+  lines.push('========================================');
+  lines.push(`TOTAL ITEMS: ${totalQty}`);
+  lines.push(station === 'juice' ? 'SULTAN JUICE BAR - AUTO KOT' : 'SULTAN MAIN KITCHEN - AUTO KOT');
+
+  return lines.join('\n');
+}
+
+/**
  * Send raw ESC/POS buffer directly to a local/shared Windows printer via RawPrinter.exe
  */
 function printRawBufferToWindows(buffer, printerName = DEFAULT_THERMAL_PRINTER, ticketId = '') {
@@ -446,6 +505,7 @@ module.exports = {
   normalizeTicketStations,
   filterItemsForStation,
   buildEscPosKotBuffer,
+  buildPlainTextKot,
   printRawBufferToWindows,
   printRawBufferToNetworkTcp,
   printTicketDirect,

@@ -56,9 +56,10 @@ export default function StationPrinterModal({
   const title = isJuice ? 'Juice Bar Dedicated Printer Setup' : 'Main Kitchen Printer Setup';
 
   const onStatusUpdatedRef = useRef(onStatusUpdated);
-  onStatusUpdatedRef.current = onStatusUpdated;
+  useEffect(() => {
+    onStatusUpdatedRef.current = onStatusUpdated;
+  }, [onStatusUpdated]);
 
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [downloading, setDownloading] = useState(false);
@@ -123,15 +124,20 @@ export default function StationPrinterModal({
   useEffect(() => {
     if (!visible) return;
     let active = true;
-    fetchStatus(true).finally(() => {
-      if (active) setLoading(false);
-    });
-    const timer = setInterval(() => {
-      if (active) fetchStatus(false);
+    const initTimer = setTimeout(() => {
+      if (active) {
+        void fetchStatus(true);
+      }
+    }, 0);
+    const pollTimer = setInterval(() => {
+      if (active) {
+        void fetchStatus(false);
+      }
     }, 5000);
     return () => {
       active = false;
-      clearInterval(timer);
+      clearTimeout(initTimer);
+      clearInterval(pollTimer);
     };
   }, [visible, fetchStatus]);
 
@@ -302,7 +308,7 @@ export default function StationPrinterModal({
               </Text>
             </View>
 
-            {loading && !statusData ? (
+            {!statusData ? (
               <View style={{ padding: 28, alignItems: 'center' }}>
                 <ActivityIndicator color={accent} />
                 <Text style={{ color: '#9CA3AF', marginTop: 10, fontSize: 13 }}>Checking printer status...</Text>
@@ -371,12 +377,13 @@ export default function StationPrinterModal({
                       </Text>
                     </TouchableOpacity>
 
-                    {/* 3-Step Quick Guide */}
+                    {/* 4-Step Quick Guide */}
                     <View style={styles.stepsBox}>
                       <Text style={styles.stepsHeading}>Quick Setup (On {isJuice ? 'Juice Bar' : 'Kitchen'} PC):</Text>
-                      <Text style={styles.stepLine}>1. Download the ZIP above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC and extract the folder.</Text>
-                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Start-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> — a permanent Desktop status window opens!</Text>
-                      <Text style={styles.stepLine}>3. Click <Text style={styles.codeInline}>Print Test Slip</Text> inside the window, and run <Text style={styles.codeInline}>Install-AutoStart-On-Boot.bat</Text> once for daily auto-start.</Text>
+                      <Text style={styles.stepLine}>1. Download the ZIP above on the {isJuice ? 'Juice Bar' : 'Kitchen'} PC, RIGHT-CLICK it and click <Text style={styles.codeInline}>Extract All...</Text> (do NOT run inside the ZIP!).</Text>
+                      <Text style={styles.stepLine}>2. Double-click <Text style={styles.codeInline}>Start-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text> — the Desktop Printer Agent window opens & auto-picks your USB printer!</Text>
+                      <Text style={styles.stepLine}>3. Click <Text style={styles.codeInline}>Print Test Slip</Text> inside the window, then run <Text style={styles.codeInline}>Install-AutoStart-On-Boot.bat</Text> once for daily auto-start.</Text>
+                      <Text style={styles.stepLine}>4. Need to check drivers/ports? Run <Text style={styles.codeInline}>Diagnose-{isJuice ? 'JuiceBar' : 'Kitchen'}-Printer.bat</Text>.</Text>
                     </View>
 
                     {/* Printer Selection on Remote PC */}
