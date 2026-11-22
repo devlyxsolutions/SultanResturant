@@ -1,24 +1,24 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  useWindowDimensions,
-} from 'react-native';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useAuthStore } from '../../store/authStore';
-import { useRestaurantStore, Table, Ticket, OnlineOrder, OrderItem, Invoice, BeverageOrderAlert } from '../../store/restaurantStore';
-import { useOpsStore, InventoryItem } from '../../store/opsStore';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import { printInvoiceReceipt } from '../../components/Invoice';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
+import { useAuthStore } from '../../store/authStore';
+import { InventoryItem, useOpsStore } from '../../store/opsStore';
+import { Invoice, OrderItem, Table, useRestaurantStore } from '../../store/restaurantStore';
 
 // Note: Pending digital menu order audio & modal popups are handled universally by FloorManagerNotificationHost in root _layout.tsx.
 
@@ -52,7 +52,7 @@ function playFloorAttentionChime() {
         osc2.start(now + 0.18);
         osc2.stop(now + 0.65);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -207,13 +207,13 @@ export default function FloorManagerScreen() {
       const docEl = document.documentElement as any;
       if (!doc.fullscreenElement && !doc.webkitFullscreenElement) {
         if (docEl.requestFullscreen) {
-          docEl.requestFullscreen().catch(() => {});
+          docEl.requestFullscreen().catch(() => { });
         } else if (docEl.webkitRequestFullscreen) {
           docEl.webkitRequestFullscreen();
         }
       } else {
         if (doc.exitFullscreen) {
-          doc.exitFullscreen().catch(() => {});
+          doc.exitFullscreen().catch(() => { });
         } else if (doc.webkitExitFullscreen) {
           doc.webkitExitFullscreen();
         }
@@ -922,7 +922,7 @@ export default function FloorManagerScreen() {
           <Text style={styles.kpiSub} numberOfLines={1}>{kpis.occupied + kpis.billed}/{kpis.total} In Use</Text>
         </View>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#F59E0B', borderTopWidth: 3 }, activeView === 'kds' && { borderColor: '#F59E0B' }]}
           onPress={() => {
             setActiveView('kds');
@@ -939,7 +939,7 @@ export default function FloorManagerScreen() {
           <Text style={styles.kpiSub} numberOfLines={1}>{kdsMetrics.totalDishes} In Kitchen</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.kpiCard, { width: kpiCardWidth, borderTopColor: '#10B981', borderTopWidth: 3 }, activeView === 'kds' && { borderColor: '#10B981' }]}
           onPress={() => {
             setActiveView('kds');
@@ -1021,12 +1021,12 @@ export default function FloorManagerScreen() {
                 filter === 'all'
                   ? kpis.total
                   : filter === 'occupied'
-                  ? kpis.occupied
-                  : filter === 'ready'
-                  ? kpis.readyCount
-                  : filter === 'available'
-                  ? kpis.available
-                  : kpis.billed;
+                    ? kpis.occupied
+                    : filter === 'ready'
+                      ? kpis.readyCount
+                      : filter === 'available'
+                        ? kpis.available
+                        : kpis.billed;
 
               return (
                 <TouchableOpacity
@@ -1063,10 +1063,10 @@ export default function FloorManagerScreen() {
                 fKey === 'all'
                   ? floorTickets.length
                   : fKey === 'cooking'
-                  ? kdsMetrics.cookingCount
-                  : fKey === 'ready'
-                  ? kdsMetrics.readyCount
-                  : kdsMetrics.pendingCount;
+                    ? kdsMetrics.cookingCount
+                    : fKey === 'ready'
+                      ? kdsMetrics.readyCount
+                      : kdsMetrics.pendingCount;
 
               return (
                 <TouchableOpacity
@@ -1153,8 +1153,8 @@ export default function FloorManagerScreen() {
                               table.seatingType === 'majlis'
                                 ? 'sofa'
                                 : table.seatingType === 'couches'
-                                ? 'chair-rolling'
-                                : 'table-furniture'
+                                  ? 'chair-rolling'
+                                  : 'table-furniture'
                             }
                             size={13}
                             color="#B45309"
@@ -1404,8 +1404,8 @@ export default function FloorManagerScreen() {
                           isReady
                             ? styles.kdsPillReady
                             : isCooking
-                            ? styles.kdsPillCooking
-                            : styles.kdsPillPending,
+                              ? styles.kdsPillCooking
+                              : styles.kdsPillPending,
                         ]}
                       >
                         <MaterialCommunityIcons
@@ -1459,8 +1459,8 @@ export default function FloorManagerScreen() {
                                 itemReady
                                   ? styles.itemTagReady
                                   : itemCooking
-                                  ? styles.itemTagCooking
-                                  : styles.itemTagQueue,
+                                    ? styles.itemTagCooking
+                                    : styles.itemTagQueue,
                               ]}
                             >
                               <Text
@@ -1469,8 +1469,8 @@ export default function FloorManagerScreen() {
                                   itemReady
                                     ? styles.itemTextReady
                                     : itemCooking
-                                    ? styles.itemTextCooking
-                                    : styles.itemTextQueue,
+                                      ? styles.itemTextCooking
+                                      : styles.itemTextQueue,
                                 ]}
                               >
                                 {itemReady ? 'READY' : itemCooking ? 'COOKING' : 'QUEUED'}

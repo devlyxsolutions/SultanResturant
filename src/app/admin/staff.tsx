@@ -1,36 +1,36 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  useWindowDimensions,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import {
-  useRestaurantStore,
-  StaffMember,
-  StaffRole,
-  StaffShift,
-  StaffStatus,
-} from '../../store/restaurantStore';
-import { 
-  useRoleStore, 
-  useRolePermissions,
-} from '../../store/roleStore';
-import { useSettingsStore } from '../../store/settingsStore';
-import { sortFloors } from '../../constants/floors';
-import { broadcastImmediately } from '../../services/syncService';
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
 import SultanLogo from '../../components/SultanLogo';
 import AttendanceTab from '../../components/staff/AttendanceTab';
 import PayrollTab from '../../components/staff/PayrollTab';
+import { sortFloors } from '../../constants/floors';
+import { broadcastImmediately } from '../../services/syncService';
+import {
+  StaffMember,
+  StaffRole,
+  StaffShift,
+  StaffStatus,
+  useRestaurantStore,
+} from '../../store/restaurantStore';
+import {
+  useRolePermissions,
+  useRoleStore,
+} from '../../store/roleStore';
+import { useSettingsStore } from '../../store/settingsStore';
 
 const SHIFTS: StaffShift[] = ['Morning', 'Evening', 'Night'];
 const STATUSES: StaffStatus[] = ['Active', 'On Leave', 'Inactive'];
@@ -254,8 +254,8 @@ export default function StaffManagementScreen({
       member.assignedZones && member.assignedZones.length > 0
         ? member.assignedZones
         : member.assignedZone
-        ? [member.assignedZone]
-        : ['All Floors'];
+          ? [member.assignedZone]
+          : ['All Floors'];
     setFormAssignedZones(initialZones);
     setFormCnic(member.cnic || '');
     setFormDesignation(member.designation || '');
