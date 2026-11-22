@@ -855,6 +855,7 @@ export default function AdminSettingsScreen() {
 
   // User modal state
   const [userModalVisible, setUserModalVisible] = useState(false);
+  const [uHasSystemAccess, setUHasSystemAccess] = useState<boolean>(true);
   const [uMaxDevices, setUMaxDevices] = useState<number>(0); // 0 = follow Global Default
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
   const [uUsername, setUUsername] = useState('');
@@ -976,6 +977,7 @@ export default function AdminSettingsScreen() {
 
   const openAddUserModal = () => {
     setEditingStaff(null);
+    setUHasSystemAccess(true);
     setUUsername('');
     setUName('');
     setUPhone('');
@@ -990,6 +992,7 @@ export default function AdminSettingsScreen() {
 
   const openAddCashierModal = () => {
     setEditingStaff(null);
+    setUHasSystemAccess(true);
     setUUsername('');
     setUName('');
     setUPhone('');
@@ -1003,11 +1006,16 @@ export default function AdminSettingsScreen() {
   };
 
   const openEditUserModal = (member: StaffMember) => {
+    const isMaster = member.id === 'st-master' || (member.username || '').trim().toLowerCase() === 'master';
+    const hasAccess = isMaster
+      ? true
+      : member.hasSystemAccess !== false && Boolean((member.pin || '').trim().length > 0);
     setEditingStaff(member);
-    setUUsername(member.username || '');
+    setUHasSystemAccess(hasAccess);
+    setUUsername(hasAccess ? member.username || '' : '');
     setUName(member.name);
     setUPhone(member.phone || '');
-    setUPin(member.pin || '');
+    setUPin(hasAccess ? member.pin || '' : '');
     setUMaxDevices(member.maxConcurrentDevices && member.maxConcurrentDevices > 0 ? member.maxConcurrentDevices : 0);
     setURole(member.role);
     const matchedRole =
@@ -1741,41 +1749,81 @@ export default function AdminSettingsScreen() {
       Alert.alert('Validation', 'Staff name is required.');
       return;
     }
-    if (!uPin.trim() || uPin.trim().length < 4) {
-      Alert.alert('Validation', 'PIN must be at least 4 digits.');
-      return;
-    }
-    const cleanUsername = uUsername.trim().toLowerCase().replace(/\s+/g, '');
-    if (cleanUsername) {
-      const duplicate = (staff || []).find(
-        (s) =>
-          s.id !== editingStaff?.id &&
-          (s.username || '').trim().toLowerCase() === cleanUsername
-      );
-      if (duplicate) {
-        Alert.alert('Duplicate Login ID', `Login ID "${cleanUsername}" is already used by ${duplicate.name}. Please choose a unique Login ID.`);
+    const isMaster =
+      editingStaff?.id === 'st-master' ||
+      (editingStaff?.username || '').trim().toLowerCase() === 'master';
+    const allowLogin = isMaster ? true : uHasSystemAccess;
+
+    let cleanUsername = '';
+    let cleanPin = '';
+    if (allowLogin) {
+      if (!uPin.trim() || uPin.trim().length < 4) {
+        Alert.alert('Validation', 'PIN must be at least 4 digits.');
         return;
       }
+      cleanUsername = uUsername.trim().toLowerCase().replace(/\s+/g, '');
+      cleanPin = uPin.trim();
+      if (cleanUsername) {
+        const duplicate = (staff || []).find(
+          (s) =>
+            s.id !== editingStaff?.id &&
+            (s.username || '').trim().toLowerCase() === cleanUsername
+        );
+        if (duplicate) {
+          Alert.alert('Duplicate Login ID', `Login ID "${cleanUsername}" is already used by ${duplicate.name}. Please choose a unique Login ID.`);
+          return;
+        }
+      }
     }
-    const effectiveLimitOverride = uMaxDevices > 0 ? uMaxDevices : undefined;
+
+    const effectiveLimitOverride = allowLogin && uMaxDevices > 0 ? uMaxDevices : undefined;
     if (editingStaff) {
       updateStaff(editingStaff.id, {
-        username: cleanUsername || undefined,
+        hasSystemAccess: allowLogin,
+        username: allowLogin ? (cleanUsername || undefined) : '',
         name: uName.trim(),
         phone: uPhone.trim(),
-        pin: uPin.trim(),
+        pin: allowLogin ? cleanPin : '',
         role: uRole,
         customRoleId: uCustomRoleId || undefined,
         shift: uShift,
         maxConcurrentDevices: effectiveLimitOverride,
       });
-      showToast(`Updated user "${uName.trim()}"`);
+
+      // If login access was denied, immediately kick any active sessions for this user
+      if (!allowLogin) {
+        const matchingSessions = activeStaffSessions.filter(
+          (s) => s.staffId && s.staffId === editingStaff.id
+        );
+        const kickReason = 'Admin نے اس اکاؤنٹ کا لاگ ان بند (Login Denied) کر دیا ہے۔';
+        const baseUrl = getActiveServerHttpUrl();
+        matchingSessions.forEach((sess) => {
+          terminateStaffSession(sess.sessionId, kickReason);
+          if (baseUrl) {
+            fetch(`${baseUrl}/api/auth/staff-session/kick`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                sessionId: sess.sessionId,
+                reason: kickReason,
+              }),
+            }).catch(() => {});
+          }
+        });
+      }
+
+      showToast(
+        allowLogin
+          ? `Updated user "${uName.trim()}"`
+          : `Updated "${uName.trim()}" — Login Denied (No ID / PIN)`
+      );
     } else {
       addStaff({
-        username: cleanUsername || undefined,
+        hasSystemAccess: allowLogin,
+        username: allowLogin ? (cleanUsername || undefined) : '',
         name: uName.trim(),
         phone: uPhone.trim() || '0300-0000000',
-        pin: uPin.trim(),
+        pin: allowLogin ? cleanPin : '',
         role: uRole,
         customRoleId: uCustomRoleId || undefined,
         status: 'Active',
@@ -1783,7 +1831,11 @@ export default function AdminSettingsScreen() {
         joinedDate: new Date().toISOString().split('T')[0],
         maxConcurrentDevices: effectiveLimitOverride,
       });
-      showToast(`Added user "${uName.trim()}"`);
+      showToast(
+        allowLogin
+          ? `Added user "${uName.trim()}"`
+          : `Added staff "${uName.trim()}" — Login Denied (No ID / PIN)`
+      );
     }
     broadcastImmediately();
     setUserModalVisible(false);
@@ -3163,7 +3215,7 @@ export default function AdminSettingsScreen() {
                             </View>
                           </View>
                           <Text style={styles.roleSelectorMeta}>
-                            {baseRole?.name || member.role} • {member.shift} Shift • PIN: {member.pin}
+                            {baseRole?.name || member.role} • {member.shift} Shift • {member.hasSystemAccess === false || !(member.pin && member.pin.trim()) ? 'Login Denied' : `PIN: ${member.pin}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -3528,6 +3580,8 @@ export default function AdminSettingsScreen() {
                     r.name.toLowerCase() === (member.role || '').toLowerCase() ||
                     r.baseRole === (member.role || '').toLowerCase()
                 );
+              const isLoginDenied =
+                member.hasSystemAccess === false || !(member.pin && member.pin.trim().length > 0);
               return (
                 <View key={member.id} style={styles.userRow}>
                   <View style={{ flex: 1 }}>
@@ -3536,7 +3590,14 @@ export default function AdminSettingsScreen() {
                       <View style={[styles.badge, isActive ? styles.badgeGreen : styles.badgeGray]}>
                         <Text style={styles.badgeText}>{isActive ? 'ACTIVE' : 'DISABLED'}</Text>
                       </View>
-                      {(() => {
+                      {isLoginDenied ? (
+                        <View style={[styles.badge, { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FCA5A5', flexDirection: 'row', alignItems: 'center', gap: 4 }]}>
+                          <Ionicons name="ban-outline" size={11} color="#DC2626" />
+                          <Text style={[styles.badgeText, { color: '#DC2626' }]}>
+                            LOGIN DENIED
+                          </Text>
+                        </View>
+                      ) : (() => {
                         const activeDevCount = activeStaffSessions.filter(
                           (s) => s.staffId && s.staffId === member.id
                         ).length;
@@ -3586,7 +3647,9 @@ export default function AdminSettingsScreen() {
                       )}
                     </View>
                     <Text style={styles.rowSub}>
-                      {member.username ? `Login ID: @${member.username} • ` : ''}Role: {(assignedRole?.name || member.role).toUpperCase()} • PIN: {member.pin} • Shift: {member.shift}
+                      {isLoginDenied
+                        ? `No Login ID / PIN (Login Denied) • Role: ${(assignedRole?.name || member.role).toUpperCase()} • Shift: ${member.shift}`
+                        : `${member.username ? `Login ID: @${member.username} • ` : ''}Role: ${(assignedRole?.name || member.role).toUpperCase()} • PIN: ${member.pin} • Shift: ${member.shift}`}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
@@ -3919,89 +3982,209 @@ export default function AdminSettingsScreen() {
       {/* Add/Edit User Modal */}
       <Modal visible={userModalVisible} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            <Text style={styles.sectionTitle}>
-              {editingStaff ? 'Edit Staff / User' : 'Add New Staff / User'}
-            </Text>
-            <Text style={styles.label}>Full Name</Text>
-            <TextInput style={styles.input} value={uName} onChangeText={setUName} placeholder="Order Taker 1 / Ali Raza" />
-            <Text style={[styles.label, { marginTop: 10 }]}>Login ID / Username (منفرد یوزر نیم)</Text>
-            <TextInput
-              style={styles.input}
-              value={uUsername}
-              onChangeText={setUUsername}
-              autoCapitalize="none"
-              autoCorrect={false}
-              placeholder="e.g. ordertaker1, cashier1, master"
-            />
-            <Text style={[styles.label, { marginTop: 10 }]}>Phone</Text>
-            <TextInput style={styles.input} value={uPhone} onChangeText={setUPhone} placeholder="0300-1234567" />
-            <Text style={[styles.label, { marginTop: 10 }]}>Login PIN (4+ digits)</Text>
-            <TextInput
-              style={styles.input}
-              value={uPin}
-              onChangeText={setUPin}
-              keyboardType="numeric"
-              placeholder="1001"
-            />
-            <Text style={[styles.label, { marginTop: 10 }]}>
-              Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت ڈیوائس حد)
-            </Text>
-            <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
-              یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ پر کوئی اثر نہیں پڑے گا۔
-            </Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-              {[
-                { val: 0, label: `Global Default (${(draft.defaultMaxDevicesPerStaff ?? 1) >= 999 ? 'Unlimited' : draft.defaultMaxDevicesPerStaff ?? 1})` },
-                { val: 1, label: '1 Device' },
-                { val: 2, label: '2 Devices' },
-                { val: 3, label: '3 Devices' },
-                { val: 5, label: '5 Devices' },
-                { val: 999, label: 'Unlimited (لا محدود)' },
-              ].map((opt) => {
-                const selected = uMaxDevices === opt.val;
-                return (
-                  <TouchableOpacity
-                    key={opt.val}
-                    style={[styles.chip, selected && styles.chipActive]}
-                    onPress={() => setUMaxDevices(opt.val)}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+          <View style={[styles.modalCard, { maxHeight: '92%' }]}>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.sectionTitle}>
+                {editingStaff ? 'Edit Staff / User' : 'Add New Staff / User'}
+              </Text>
+              <Text style={styles.label}>Full Name</Text>
+              <TextInput style={styles.input} value={uName} onChangeText={setUName} placeholder="Order Taker 1 / Ali Raza" />
+              <Text style={[styles.label, { marginTop: 10 }]}>Phone</Text>
+              <TextInput style={styles.input} value={uPhone} onChangeText={setUPhone} placeholder="0300-1234567" />
 
-            <Text style={[styles.label, { marginTop: 10 }]}>Assigned Role (System & Custom Roles)</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
-              {roles.map((r) => {
-                const selected = uCustomRoleId
-                  ? uCustomRoleId === r.id
-                  : (uRole || '').toLowerCase() === r.baseRole;
+              {(() => {
+                const isMasterAccount =
+                  editingStaff?.id === 'st-master' ||
+                  (editingStaff?.username || '').trim().toLowerCase() === 'master';
                 return (
-                  <TouchableOpacity
-                    key={r.id}
-                    style={[styles.chip, selected && styles.chipActive]}
-                    onPress={() => {
-                      setUCustomRoleId(r.id);
-                      const staffRoleValue =
-                        r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier'
-                          ? 'Cashier'
-                          : r.baseRole === 'custom'
-                            ? 'manager'
-                            : r.baseRole;
-                      setURole(staffRoleValue as StaffRole);
-                    }}
-                  >
-                    <Text style={[styles.chipText, selected && styles.chipTextActive]}>
-                      {r.name}
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={styles.label}>
+                      System Login Access (سسٹم لاگ ان رسائی)
                     </Text>
-                  </TouchableOpacity>
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.chip,
+                          {
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            paddingVertical: 10,
+                          },
+                          uHasSystemAccess && {
+                            backgroundColor: '#065F46',
+                            borderColor: '#065F46',
+                          },
+                        ]}
+                        onPress={() => setUHasSystemAccess(true)}
+                      >
+                        <Ionicons
+                          name="checkmark-circle-outline"
+                          size={16}
+                          color={uHasSystemAccess ? '#FFFFFF' : '#065F46'}
+                        />
+                        <Text
+                          style={[
+                            styles.chipText,
+                            uHasSystemAccess && { color: '#FFFFFF', fontWeight: '800' },
+                          ]}
+                        >
+                          Allow Login (لاگ ان آن)
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        disabled={isMasterAccount}
+                        style={[
+                          styles.chip,
+                          {
+                            flex: 1,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: 6,
+                            paddingVertical: 10,
+                            opacity: isMasterAccount ? 0.45 : 1,
+                          },
+                          !uHasSystemAccess && {
+                            backgroundColor: '#DC2626',
+                            borderColor: '#DC2626',
+                          },
+                        ]}
+                        onPress={() => {
+                          if (isMasterAccount) return;
+                          setUHasSystemAccess(false);
+                          setUUsername('');
+                          setUPin('');
+                          setUMaxDevices(0);
+                        }}
+                      >
+                        <Ionicons
+                          name="ban-outline"
+                          size={16}
+                          color={!uHasSystemAccess ? '#FFFFFF' : '#DC2626'}
+                        />
+                        <Text
+                          style={[
+                            styles.chipText,
+                            !uHasSystemAccess
+                              ? { color: '#FFFFFF', fontWeight: '800' }
+                              : { color: '#DC2626' },
+                          ]}
+                        >
+                          Login Denied (لاگ ان بند)
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
                 );
-              })}
-            </View>
+              })()}
+
+              {!uHasSystemAccess ? (
+                <View
+                  style={{
+                    marginTop: 12,
+                    padding: 12,
+                    borderRadius: 10,
+                    backgroundColor: '#FEF2F2',
+                    borderWidth: 1,
+                    borderColor: '#FCA5A5',
+                    flexDirection: 'row',
+                    alignItems: 'flex-start',
+                    gap: 8,
+                  }}
+                >
+                  <Ionicons name="lock-closed-outline" size={18} color="#DC2626" style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#991B1B' }}>
+                      Login Denied — No Login ID / No PIN
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#7F1D1D', marginTop: 2 }}>
+                      اس اسٹاف ممبر کا کوئی لاگ ان آئی ڈی یا پاسورڈ/پن نہیں ہوگا اور یہ POS یا ٹیبلیٹ پر لاگ ان نہیں کر سکے گا۔
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <>
+                  <Text style={[styles.label, { marginTop: 10 }]}>Login ID / Username (منفرد یوزر نیم)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={uUsername}
+                    onChangeText={setUUsername}
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    placeholder="e.g. ordertaker1, cashier1, master"
+                  />
+                  <Text style={[styles.label, { marginTop: 10 }]}>Login PIN (4+ digits)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={uPin}
+                    onChangeText={setUPin}
+                    keyboardType="numeric"
+                    placeholder="1001"
+                  />
+                  <Text style={[styles.label, { marginTop: 10 }]}>
+                    Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت ڈیوائس حد)
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
+                    یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ پر کوئی اثر نہیں پڑے گا۔
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                    {[
+                      { val: 0, label: `Global Default (${(draft.defaultMaxDevicesPerStaff ?? 1) >= 999 ? 'Unlimited' : draft.defaultMaxDevicesPerStaff ?? 1})` },
+                      { val: 1, label: '1 Device' },
+                      { val: 2, label: '2 Devices' },
+                      { val: 3, label: '3 Devices' },
+                      { val: 5, label: '5 Devices' },
+                      { val: 999, label: 'Unlimited (لا محدود)' },
+                    ].map((opt) => {
+                      const selected = uMaxDevices === opt.val;
+                      return (
+                        <TouchableOpacity
+                          key={opt.val}
+                          style={[styles.chip, selected && styles.chipActive]}
+                          onPress={() => setUMaxDevices(opt.val)}
+                        >
+                          <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </>
+              )}
+
+              <Text style={[styles.label, { marginTop: 10 }]}>Assigned Role (System & Custom Roles)</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+                {roles.map((r) => {
+                  const selected = uCustomRoleId
+                    ? uCustomRoleId === r.id
+                    : (uRole || '').toLowerCase() === r.baseRole;
+                  return (
+                    <TouchableOpacity
+                      key={r.id}
+                      style={[styles.chip, selected && styles.chipActive]}
+                      onPress={() => {
+                        setUCustomRoleId(r.id);
+                        const staffRoleValue =
+                          r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier'
+                            ? 'Cashier'
+                            : r.baseRole === 'custom'
+                              ? 'manager'
+                              : r.baseRole;
+                        setURole(staffRoleValue as StaffRole);
+                      }}
+                    >
+                      <Text style={[styles.chipText, selected && styles.chipTextActive]}>
+                        {r.name}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
             <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 8 }}>
               <TouchableOpacity
                 style={styles.secondaryBtn}
