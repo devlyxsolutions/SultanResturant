@@ -59,6 +59,8 @@ export type StockMovement = {
   itemId: string;
   itemName: string;
   itemCode?: string;
+  unit?: string;
+  grnNo?: string;
   type: StockMovementType;
   /** Absolute quantity entered by the user. */
   qty: number;
@@ -544,6 +546,8 @@ type OpsState = OpsData & {
       unitCost?: number;
       expiryDate?: number;
       location?: string;
+      unit?: string;
+      grnNo?: string;
     }
   ) => void;
 
@@ -798,6 +802,8 @@ export const useOpsStore = create<OpsState>()(
             itemId,
             itemName: item.name,
             itemCode: item.itemCode,
+            unit: meta?.unit || item.unit,
+            grnNo: meta?.grnNo,
             type,
             qty,
             delta: newStock - item.stock,
@@ -818,6 +824,7 @@ export const useOpsStore = create<OpsState>()(
                     ...i,
                     stock: newStock,
                     updatedAt: movement.at,
+                    ...(meta?.unit && { unit: meta.unit }),
                     ...(meta?.unitCost !== undefined && { costPerUnit: meta.unitCost }),
                     ...(meta?.batchNumber && { batchNumber: meta.batchNumber }),
                     ...(meta?.expiryDate !== undefined && { expiryDate: meta.expiryDate }),

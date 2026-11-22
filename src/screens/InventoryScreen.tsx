@@ -86,9 +86,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     return Array.from(new Set([...base, ...used]));
   }, [storedCategories, inventory]);
 
-  // Menu items from restaurant store for dishes stock tab
+  // Menu items & Staff from restaurant store
   const menuItems = useRestaurantStore((s) => s.menuItems);
   const updateMenuItem = useRestaurantStore((s) => s.updateMenuItem);
+  const staffList = useRestaurantStore((s) => s.staff) || [];
 
   // Live Cloud & Network Sync
   const { isConnected, isConnecting, isOffline, lastSyncedAt, forceSyncNow } = useSyncStatus();
@@ -153,33 +154,44 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const [movementQty, setMovementQty] = useState('');
   const [movementNote, setMovementNote] = useState('');
 
-  // Receiving & Invoicing Form State
-  const [recItemId, setRecItemId] = useState('');
-  const [recSupplier, setRecSupplier] = useState('');
-  const [recInvoiceNo, setRecInvoiceNo] = useState('');
-  const [recBatchNumber, setRecBatchNumber] = useState('');
-  const [recQty, setRecQty] = useState('');
-  const [recUnitCost, setRecUnitCost] = useState('');
-  const [recExpiryDays, setRecExpiryDays] = useState('30');
-  const [recLocation, setRecLocation] = useState<string>(STORAGE_LOCATIONS[0]);
-  const [recReceivedBy, setRecReceivedBy] = useState('Storekeeper / Chef');
-  const [recNotes, setRecNotes] = useState('');
-
-  // Last Generated GRN State
-  const [lastGrn, setLastGrn] = useState<{
-    grnNo: string;
-    itemName: string;
-    itemCode?: string;
-    qty: number;
+  // Receiving & Invoicing Multi-Item Form State
+  type ReceiveLineItem = {
+    rowId: string;
+    itemId: string;
+    qty: string;
     unit: string;
-    unitCost: number;
-    totalAmount: number;
-    supplier: string;
-    invoiceNo: string;
+    unitCost: string;
+    expiryDays: string;
     batchNumber: string;
     location: string;
+  };
+  const [recSupplier, setRecSupplier] = useState('');
+  const [recCustomSupplier, setRecCustomSupplier] = useState(false);
+  const [recInvoiceNo, setRecInvoiceNo] = useState('');
+  const [recReceivedBy, setRecReceivedBy] = useState('');
+  const [recNotes, setRecNotes] = useState('');
+  const [recLines, setRecLines] = useState<ReceiveLineItem[]>([]);
+
+  // Last Generated Multi-Item GRN State
+  const [lastGrn, setLastGrn] = useState<{
+    grnNo: string;
+    supplier: string;
+    invoiceNo: string;
     receivedBy: string;
+    notes?: string;
+    totalAmount: number;
     at: number;
+    items: {
+      itemName: string;
+      itemCode?: string;
+      qty: number;
+      unit: string;
+      unitCost: number;
+      lineTotal: number;
+      batchNumber?: string;
+      location?: string;
+      expiryDate?: number;
+    }[];
   } | null>(null);
 
   // Analytics & Summary Metrics
@@ -309,12 +321,81 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
           !q ||
           m.itemName.toLowerCase().includes(q) ||
           (m.invoiceNo && m.invoiceNo.toLowerCase().includes(q)) ||
+          (m.grnNo && m.grnNo.toLowerCase().includes(q)) ||
           (m.supplier && m.supplier.toLowerCase().includes(q)) ||
+          (m.by && m.by.toLowerCase().includes(q)) ||
           (m.batchNumber && m.batchNumber.toLowerCase().includes(q)) ||
           (m.itemCode && m.itemCode.toLowerCase().includes(q))
         );
       });
   }, [stockMovements, searchQuery]);
+
+  // Group multi-item deliveries by GRN / Invoice # so 1 supplier invoice with N items appears as a unified GRN shipment
+  const groupedReceivingShipments = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        groupKey: string;
+        grnNo: string;
+        invoiceNo: string;
+        supplier: string;
+        receivedBy: string;
+        at: number;
+        totalAmount: number;
+        items: StockMovement[];
+      }
+    >();
+
+    receivingLogs.forEach((m) => {
+      const key = m.grnNo
+        ? m.grnNo
+        : m.invoiceNo
+        ? `inv_${m.invoiceNo}_${Math.floor((m.at || 0) / 60000)}`
+        : m.id;
+      const existing = map.get(key);
+      const lineAmt = (m.qty || 0) * (m.unitCost || 0);
+      if (existing) {
+        existing.items.push(m);
+        existing.totalAmount += lineAmt;
+        if ((m.at || 0) > existing.at) existing.at = m.at;
+      } else {
+        map.set(key, {
+          groupKey: key,
+          grnNo: m.grnNo || `GRN-${m.id.slice(-6).toUpperCase()}`,
+          invoiceNo: m.invoiceNo || 'N/A',
+          supplier: m.supplier || 'Direct Vendor',
+          receivedBy: m.by || 'Storekeeper',
+          at: m.at || Date.now(),
+          totalAmount: lineAmt,
+          items: [m],
+        });
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => b.at - a.at);
+  }, [receivingLogs]);
+
+  const receivingStats = useMemo(() => {
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+    const todayTs = startOfToday.getTime();
+    let totalPurchaseValue = 0;
+    let totalLineItems = 0;
+    let todayShipments = 0;
+
+    groupedReceivingShipments.forEach((g) => {
+      totalPurchaseValue += g.totalAmount;
+      totalLineItems += g.items.length;
+      if (g.at >= todayTs) todayShipments++;
+    });
+
+    return {
+      totalShipments: groupedReceivingShipments.length,
+      totalLineItems,
+      totalPurchaseValue,
+      todayShipments,
+    };
+  }, [groupedReceivingShipments]);
 
   // All Filtered Stock Movements
   const filteredMovements = useMemo(() => {
@@ -347,7 +428,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   });
 
   const receivingPagination = usePagination({
-    data: receivingLogs,
+    data: groupedReceivingShipments,
     initialPageSize: 10,
   });
 
@@ -429,26 +510,81 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setShowMovementModal(true);
   };
 
+  const createReceiveLine = (preset?: InventoryItem, index = 1): ReceiveLineItem => {
+    const yr = new Date().getFullYear();
+    const rand = Math.floor(100 + Math.random() * 900);
+    return {
+      rowId: `rl_${Date.now()}_${index}_${rand}`,
+      itemId: preset?.id || '',
+      qty: '',
+      unit: preset?.unit || 'kg',
+      unitCost: preset?.costPerUnit ? preset.costPerUnit.toString() : '',
+      expiryDays: '30',
+      batchNumber: `B-${yr}-${rand}`,
+      location: preset?.location || STORAGE_LOCATIONS[0],
+    };
+  };
+
   const handleOpenReceiveModal = (presetItem?: InventoryItem) => {
     if (!canAddInventory && !canEditInventory) {
       alertMsg('Permission Denied', 'You do not have permission to receive inventory stock.');
       return;
     }
     const item = presetItem || inventory[0];
-    if (item) {
-      setRecItemId(item.id);
-      setRecSupplier(item.supplier || (suppliers[0]?.name ?? ''));
-      setRecUnitCost(item.costPerUnit ? item.costPerUnit.toString() : '');
-      setRecLocation(item.location || STORAGE_LOCATIONS[0]);
-    }
+    const defaultSup = item?.supplier || (suppliers[0]?.name ?? '');
+    setRecSupplier(defaultSup);
+    setRecCustomSupplier(suppliers.length === 0 || (Boolean(defaultSup) && !suppliers.some((s) => s.name === defaultSup)));
     setRecInvoiceNo(`INV-${Date.now().toString().slice(-4)}`);
-    setRecBatchNumber(`B-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`);
-    setRecQty('');
-    setRecExpiryDays('30');
-    setRecReceivedBy('Staff Storekeeper');
+    const defaultStaff = user?.name || staffList[0]?.name || 'Storekeeper';
+    setRecReceivedBy(defaultStaff);
     setRecNotes('');
+    setRecLines([createReceiveLine(item, 1)]);
     setShowReceiveModal(true);
   };
+
+  const handleAddReceiveLine = () => {
+    const usedIds = new Set(recLines.map((l) => l.itemId).filter(Boolean));
+    const nextItem = inventory.find((i) => !usedIds.has(i.id));
+    setRecLines((prev) => [...prev, createReceiveLine(nextItem, prev.length + 1)]);
+  };
+
+  const handleRemoveReceiveLine = (rowId: string) => {
+    setRecLines((prev) => (prev.length > 1 ? prev.filter((l) => l.rowId !== rowId) : prev));
+  };
+
+  const handleUpdateReceiveLine = (rowId: string, patch: Partial<ReceiveLineItem>) => {
+    setRecLines((prev) =>
+      prev.map((line) => {
+        if (line.rowId !== rowId) return line;
+        const updated = { ...line, ...patch };
+        if (patch.itemId && patch.itemId !== line.itemId) {
+          const inv = inventory.find((i) => i.id === patch.itemId);
+          if (inv) {
+            updated.unit = inv.unit || updated.unit;
+            updated.unitCost = inv.costPerUnit ? inv.costPerUnit.toString() : updated.unitCost;
+            updated.location = inv.location || updated.location;
+          }
+        }
+        return updated;
+      })
+    );
+  };
+
+  const receiveDraftSummary = useMemo(() => {
+    let validCount = 0;
+    let totalQty = 0;
+    let grandTotal = 0;
+    recLines.forEach((l) => {
+      const q = parseFloat(l.qty) || 0;
+      const c = parseFloat(l.unitCost) || 0;
+      if (l.itemId && q > 0) {
+        validCount++;
+        totalQty += q;
+        grandTotal += q * c;
+      }
+    });
+    return { validCount, totalQty, grandTotal };
+  }, [recLines]);
 
   const handleSaveAdd = () => {
     if (!canAddInventory) {
@@ -562,63 +698,118 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     alertMsg('Stock Recorded', `${selectedItem.name}: ${actionLabel}`);
   };
 
-  // Submit Goods Receiving & Invoicing
+  // Submit Multi-Item Goods Receiving & Invoicing (Updates stock for every item atomically)
   const handleSaveReceive = () => {
     if (!canAddInventory && !canEditInventory) {
       alertMsg('Permission Denied', 'You do not have permission to receive inventory stock.');
       return;
     }
-    const item = inventory.find((i) => i.id === recItemId);
-    if (!item) {
-      alertMsg('Select Item', 'Please select an item to receive.');
+    if (!recSupplier.trim()) {
+      alertMsg('Select Supplier', 'Please select or enter a Supplier / Vendor name.');
       return;
     }
-    const qtyNum = parseFloat(recQty);
-    if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
-      alertMsg('Invalid Quantity', 'Please enter a valid positive quantity.');
+    if (!recReceivedBy.trim()) {
+      alertMsg('Select Staff', 'Please select the Staff member who received the delivery.');
       return;
     }
-    const unitCostNum = parseFloat(recUnitCost) || item.costPerUnit || 0;
-    const expiryDaysNum = parseInt(recExpiryDays, 10);
-    const expiryDate = Number.isFinite(expiryDaysNum) && expiryDaysNum > 0 ? Date.now() + expiryDaysNum * 86400000 : undefined;
-    const grnNo = `GRN-${Date.now().toString().slice(-6)}`;
-    const totalAmount = qtyNum * unitCostNum;
 
-    // Record Stock Movement with meta
-    recordStockMovement(
-      item.id,
-      'receive',
-      qtyNum,
-      `Inward Invoice #${recInvoiceNo.trim()} from ${recSupplier.trim() || 'Vendor'}. ${recNotes.trim()}`,
-      recReceivedBy.trim() || 'Storekeeper',
-      {
-        supplier: recSupplier.trim() || item.supplier,
-        invoiceNo: recInvoiceNo.trim() || undefined,
-        batchNumber: recBatchNumber.trim() || undefined,
+    const validEntries: {
+      inv: InventoryItem;
+      qty: number;
+      unit: string;
+      unitCost: number;
+      expiryDate?: number;
+      batchNumber: string;
+      location: string;
+    }[] = [];
+
+    for (let idx = 0; idx < recLines.length; idx++) {
+      const line = recLines[idx];
+      const inv = inventory.find((i) => i.id === line.itemId);
+      const qtyNum = parseFloat(line.qty);
+      if (!inv) {
+        alertMsg('Select Item', `Row #${idx + 1}: Please select an inventory item.`);
+        return;
+      }
+      if (!Number.isFinite(qtyNum) || qtyNum <= 0) {
+        alertMsg('Invalid Quantity', `Row #${idx + 1} (${inv.name}): Please enter a valid quantity greater than 0.`);
+        return;
+      }
+      const unitCostNum = parseFloat(line.unitCost) || inv.costPerUnit || 0;
+      const expiryDaysNum = parseInt(line.expiryDays, 10);
+      const expiryDate = Number.isFinite(expiryDaysNum) && expiryDaysNum > 0
+        ? Date.now() + expiryDaysNum * 86400000
+        : undefined;
+      validEntries.push({
+        inv,
+        qty: qtyNum,
+        unit: line.unit || inv.unit || 'kg',
         unitCost: unitCostNum,
         expiryDate,
-        location: recLocation,
-      }
-    );
+        batchNumber: line.batchNumber.trim() || `B-${new Date().getFullYear()}-${idx + 1}`,
+        location: line.location || inv.location || STORAGE_LOCATIONS[0],
+      });
+    }
+
+    if (validEntries.length === 0) {
+      alertMsg('No Items', 'Please add at least one item to receive.');
+      return;
+    }
+
+    const grnNo = `GRN-${Date.now().toString().slice(-6)}`;
+    const invoiceNum = recInvoiceNo.trim() || `INV-${Date.now().toString().slice(-4)}`;
+    const supplierName = recSupplier.trim();
+    const staffName = recReceivedBy.trim();
+    const now = Date.now();
+
+    let grandTotal = 0;
+    const grnItems = validEntries.map((entry) => {
+      const lineTotal = entry.qty * entry.unitCost;
+      grandTotal += lineTotal;
+
+      recordStockMovement(
+        entry.inv.id,
+        'receive',
+        entry.qty,
+        `GRN #${grnNo} • Inv #${invoiceNum} from ${supplierName}${recNotes.trim() ? ` — ${recNotes.trim()}` : ''}`,
+        staffName,
+        {
+          supplier: supplierName,
+          invoiceNo: invoiceNum,
+          batchNumber: entry.batchNumber,
+          unitCost: entry.unitCost,
+          expiryDate: entry.expiryDate,
+          location: entry.location,
+          unit: entry.unit,
+          grnNo,
+        }
+      );
+
+      return {
+        itemName: entry.inv.name,
+        itemCode: entry.inv.itemCode,
+        qty: entry.qty,
+        unit: entry.unit,
+        unitCost: entry.unitCost,
+        lineTotal,
+        batchNumber: entry.batchNumber,
+        location: entry.location,
+        expiryDate: entry.expiryDate,
+      };
+    });
+
     broadcastImmediately();
 
-    // Save GRN for voucher modal
-    const grnData = {
+    setLastGrn({
       grnNo,
-      itemName: item.name,
-      itemCode: item.itemCode,
-      qty: qtyNum,
-      unit: item.unit,
-      unitCost: unitCostNum,
-      totalAmount,
-      supplier: recSupplier.trim() || item.supplier || 'N/A',
-      invoiceNo: recInvoiceNo.trim() || 'N/A',
-      batchNumber: recBatchNumber.trim() || 'N/A',
-      location: recLocation,
-      receivedBy: recReceivedBy.trim() || 'Storekeeper',
-      at: Date.now(),
-    };
-    setLastGrn(grnData);
+      supplier: supplierName,
+      invoiceNo: invoiceNum,
+      receivedBy: staffName,
+      notes: recNotes.trim() || undefined,
+      totalAmount: grandTotal,
+      at: now,
+      items: grnItems,
+    });
 
     setShowReceiveModal(false);
     setShowGrnModal(true);
@@ -1765,206 +1956,219 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 2: RECEIVING & INVOICING MODULE */}
+      {/* TAB 2: RECEIVING & INVOICING MODULE (MULTI-ITEM GRN LEDGER) */}
       {/* ========================================================================= */}
       {activeTab === 'receiving' && (
         <View>
           <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>Goods Receiving & Inward Shipments</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>Goods Receiving & Inward Invoicing (GRN)</Text>
               <Text style={styles.sectionDesc}>
-                Log vendor deliveries, inward invoice numbers, batch shelf-life, and print Goods Receipt Notes (GRN).
+                Receive multiple items on a single supplier invoice, assign receiving staff, track per-item expiry & auto-update stocks.
               </Text>
             </View>
             {(canAddInventory || canEditInventory) && (
               <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: BRAND.success }]}
+                style={[styles.addBtn, { backgroundColor: BRAND.success, paddingHorizontal: 16, paddingVertical: 11 }]}
                 onPress={() => handleOpenReceiveModal()}
               >
-                <Ionicons name="add" size={18} color="#FFF" />
-                <Text style={styles.addBtnText}>Receive New Stock</Text>
+                <Ionicons name="add-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.addBtnText}>+ New Supplier Receiving (Multi-Item GRN)</Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {receivingLogs.length === 0 ? (
+          {/* Receiving Summary KPI Strip */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
+            <View style={{ flex: 1, minWidth: 160, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', borderLeftWidth: 4, borderLeftColor: BRAND.burgundy }}>
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Total GRN Invoices</Text>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: BRAND.burgundy, marginTop: 4 }}>{receivingStats.totalShipments}</Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>{receivingStats.todayShipments} received today</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 160, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', borderLeftWidth: 4, borderLeftColor: BRAND.success }}>
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Total Items Received</Text>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: BRAND.success, marginTop: 4 }}>{receivingStats.totalLineItems} Lines</Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Auto-added to live stock</Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 180, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', borderLeftWidth: 4, borderLeftColor: '#D5A943' }}>
+              <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Total Inward Value</Text>
+              <Text style={{ fontSize: 22, fontWeight: '900', color: '#92400E', marginTop: 4 }}>{money(receivingStats.totalPurchaseValue)}</Text>
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>Verified supplier invoices</Text>
+            </View>
+          </View>
+
+          {groupedReceivingShipments.length === 0 ? (
             <View style={styles.emptyCard}>
               <Ionicons name="receipt-outline" size={48} color={BRAND.muted} />
-              <Text style={styles.emptyTitle}>No Inward Deliveries Recorded</Text>
-              <Text style={styles.emptyDesc}>Receive inventory shipments with invoice numbers and batch numbers.</Text>
+              <Text style={styles.emptyTitle}>No Inward Deliveries Recorded Yet</Text>
+              <Text style={styles.emptyDesc}>
+                Click "+ New Supplier Receiving (Multi-Item GRN)" above to receive multiple items from a supplier and update stocks automatically.
+              </Text>
+              {(canAddInventory || canEditInventory) && (
+                <TouchableOpacity
+                  style={[styles.addBtn, { backgroundColor: BRAND.success, marginTop: 12 }]}
+                  onPress={() => handleOpenReceiveModal()}
+                >
+                  <Ionicons name="add" size={18} color="#FFF" />
+                  <Text style={styles.addBtnText}>Record First Supplier Delivery</Text>
+                </TouchableOpacity>
+              )}
             </View>
           ) : (
             <>
-              <View style={styles.tableWrapper}>
-                <ScrollView
-                  horizontal={!isMobile}
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ minWidth: isMobile ? undefined : 1120, width: '100%' }}
-                >
-                  <View style={{ width: '100%' }}>
-                    {/* Desktop / Tablet Column Headers */}
-                    {!isMobile && (
-                      <View style={styles.stockTableHeader}>
-                        <View style={[styles.thCol, { flex: 2.4, minWidth: 200 }]}>
-                          <Text style={styles.thColText}>ITEM & INVOICE / BATCH</Text>
+              <View style={{ gap: 12 }}>
+                {receivingPagination.paginatedData.map((ship) => (
+                  <View
+                    key={ship.groupKey}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 14,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      borderLeftWidth: 4,
+                      borderLeftColor: BRAND.success,
+                      padding: 14,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.04,
+                      shadowRadius: 4,
+                      elevation: 2,
+                    }}
+                  >
+                    {/* Shipment Header */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+                      <View style={{ flex: 1, minWidth: 220 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 4 }}>
+                          <View style={[styles.skuBadgeCompact, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}>
+                            <Text style={[styles.skuBadgeCompactText, { color: '#15803D' }]}>{ship.grnNo}</Text>
+                          </View>
+                          <View style={[styles.skuBadgeCompact, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
+                            <Text style={[styles.skuBadgeCompactText, { color: '#6D28D9' }]}>Inv: {ship.invoiceNo}</Text>
+                          </View>
+                          <View style={[styles.skuBadgeCompact, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                            <Text style={[styles.skuBadgeCompactText, { color: '#92400E' }]}>{ship.items.length} Item{ship.items.length > 1 ? 's' : ''}</Text>
+                          </View>
                         </View>
-                        <View style={[styles.thCol, { flex: 2.0, minWidth: 170 }]}>
-                          <Text style={styles.thColText}>VENDOR & NOTES</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Ionicons name="business" size={15} color={BRAND.burgundy} />
+                          <Text style={{ fontSize: 15.5, fontWeight: '800', color: BRAND.ink }}>{ship.supplier}</Text>
                         </View>
-                        <View style={[styles.thCol, { flex: 2.0, minWidth: 170 }]}>
-                          <Text style={styles.thColText}>RECEIVED DATE & TIME</Text>
-                        </View>
-                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140 }]}>
-                          <Text style={styles.thColText}>RECEIVED BY</Text>
-                        </View>
-                        <View style={[styles.thCol, { flex: 1.9, minWidth: 150 }]}>
-                          <Text style={styles.thColText}>INWARD QTY & RATE</Text>
-                        </View>
-                        <View style={[styles.thCol, { flex: 1.7, minWidth: 130 }]}>
-                          <Text style={styles.thColText}>TOTAL AMOUNT</Text>
-                        </View>
-                        <View style={[styles.thCol, { flex: 1.8, minWidth: 140, alignItems: 'flex-end', paddingRight: 6 }]}>
-                          <Text style={styles.thColText}>GRN SLIP</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="person-circle-outline" size={14} color={BRAND.burgundy} />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>Received By: {ship.receivedBy}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Ionicons name="calendar-outline" size={13} color="#64748B" />
+                            <Text style={{ fontSize: 12, color: '#64748B' }}>{formatDay(ship.at)} • {formatTime(ship.at)}</Text>
+                          </View>
                         </View>
                       </View>
-                    )}
 
-                    {/* Table Rows (1 Full Row Per Inward Delivery) */}
-                    <View style={{ gap: 6 }}>
-                      {receivingPagination.paginatedData.map((m) => {
-                        const totalVal = (m.qty || 0) * (m.unitCost || 0);
+                      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Invoice Total</Text>
+                          <Text style={{ fontSize: 18, fontWeight: '900', color: BRAND.burgundy }}>{money(ship.totalAmount)}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={styles.receivingRowGrnBtn}
+                          onPress={() => {
+                            setLastGrn({
+                              grnNo: ship.grnNo,
+                              supplier: ship.supplier,
+                              invoiceNo: ship.invoiceNo,
+                              receivedBy: ship.receivedBy,
+                              totalAmount: ship.totalAmount,
+                              at: ship.at,
+                              items: ship.items.map((it) => {
+                                const invRef = inventory.find((x) => x.id === it.itemId);
+                                return {
+                                  itemName: it.itemName,
+                                  itemCode: it.itemCode,
+                                  qty: it.qty,
+                                  unit: it.unit || invRef?.unit || 'units',
+                                  unitCost: it.unitCost || 0,
+                                  lineTotal: (it.qty || 0) * (it.unitCost || 0),
+                                  batchNumber: it.batchNumber,
+                                  location: invRef?.location,
+                                  expiryDate: it.expiryDate,
+                                };
+                              }),
+                            });
+                            setShowGrnModal(true);
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="print-outline" size={14} color={BRAND.burgundy} style={{ marginRight: 5 }} />
+                          <Text style={styles.receivingRowGrnText}>View / Print GRN Slip</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
 
+                    {/* Itemized Table Inside Shipment Card */}
+                    <View style={{ marginTop: 10, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
+                      <View style={{ flexDirection: 'row', backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' }}>
+                        <Text style={{ flex: 2.5, fontSize: 10.5, fontWeight: '800', color: '#475569' }}>ITEM</Text>
+                        <Text style={{ flex: 1.2, fontSize: 10.5, fontWeight: '800', color: '#475569', textAlign: 'center' }}>QTY & UNIT</Text>
+                        <Text style={{ flex: 1.2, fontSize: 10.5, fontWeight: '800', color: '#475569', textAlign: 'right' }}>RATE</Text>
+                        <Text style={{ flex: 1.3, fontSize: 10.5, fontWeight: '800', color: '#475569', textAlign: 'center' }}>EXPIRY</Text>
+                        <Text style={{ flex: 1.3, fontSize: 10.5, fontWeight: '800', color: '#475569', textAlign: 'right' }}>LINE TOTAL</Text>
+                      </View>
+                      {ship.items.map((it, idx) => {
+                        const invRef = inventory.find((x) => x.id === it.itemId);
+                        const unitLabel = it.unit || invRef?.unit || 'units';
+                        const lineVal = (it.qty || 0) * (it.unitCost || 0);
                         return (
                           <View
-                            key={m.id}
-                            style={[
-                              styles.receivingTableRow,
-                              isMobile && styles.receivingTableRowMobile
-                            ]}
-                            {...(Platform.OS === 'web' ? ({ className: 'interactive-table-row' } as any) : {})}
+                            key={it.id}
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                              borderTopWidth: idx > 0 ? 1 : 0,
+                              borderTopColor: '#E2E8F0',
+                            }}
                           >
-                            {/* 1. Item & Codes */}
-                            <View style={[styles.rowCol, { flex: 2.4, minWidth: 200, gap: 2 }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flexWrap: 'wrap', marginBottom: 2 }}>
-                                {m.itemCode ? (
-                                  <View style={styles.skuBadgeCompact}>
-                                    <Text style={styles.skuBadgeCompactText}>{m.itemCode}</Text>
-                                  </View>
-                                ) : null}
-                                {m.invoiceNo ? (
-                                  <View style={[styles.skuBadgeCompact, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}>
-                                    <Text style={[styles.skuBadgeCompactText, { color: '#6D28D9' }]}>Inv: {m.invoiceNo}</Text>
-                                  </View>
-                                ) : null}
-                                {m.batchNumber ? (
-                                  <View style={[styles.skuBadgeCompact, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
-                                    <Text style={[styles.skuBadgeCompactText, { color: '#B45309' }]}>Batch: {m.batchNumber}</Text>
-                                  </View>
-                                ) : null}
-                              </View>
-                              <Text style={styles.stockRowTitle} numberOfLines={1}>
-                                {m.itemName}
+                            <View style={{ flex: 2.5, paddingRight: 6 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: BRAND.ink }} numberOfLines={1}>
+                                {it.itemName}
                               </Text>
-                            </View>
-
-                            {/* 2. Vendor & Notes */}
-                            <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, gap: 2 }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="business" size={12} color={BRAND.burgundy} />
-                                <Text style={styles.stockRowLocation} numberOfLines={1}>
-                                  {m.supplier || 'Direct Vendor'}
-                                </Text>
-                              </View>
-                              {m.note ? (
-                                <Text style={styles.receivingRowNote} numberOfLines={1}>
-                                  {m.note}
-                                </Text>
+                              {it.batchNumber ? (
+                                <Text style={{ fontSize: 10.5, color: '#64748B' }}>Batch: {it.batchNumber}</Text>
                               ) : null}
                             </View>
-
-                            {/* 3. Received Date & Time */}
-                            <View style={[styles.rowCol, { flex: 2.0, minWidth: 170, gap: 2 }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="calendar-outline" size={12} color="#64748B" />
-                                <Text style={styles.receivingRowDate}>{formatDay(m.at)}</Text>
-                              </View>
-                              <Text style={styles.receivingRowTime}>{formatTime(m.at)}</Text>
-                            </View>
-
-                            {/* 4. Received By */}
-                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, gap: 2 }]}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Ionicons name="person-outline" size={12} color="#64748B" />
-                                <Text style={styles.receivingRowStaff} numberOfLines={1}>
-                                  {m.by || 'Storekeeper'}
-                                </Text>
-                              </View>
-                            </View>
-
-                            {/* 5. Inward Qty & Rate */}
-                            <View style={[styles.rowCol, { flex: 1.9, minWidth: 150, gap: 2 }]}>
-                              <Text style={styles.receivingRowQty}>
-                                +{m.qty} <Text style={{ fontSize: 11, fontWeight: '600', color: '#15803D' }}>units</Text>
-                              </Text>
-                              <Text style={styles.stockRowCostUnit}>
-                                @ {m.unitCost ? money(m.unitCost) : 'As per PO'}
-                              </Text>
-                            </View>
-
-                            {/* 6. Total Amount */}
-                            <View style={[styles.rowCol, { flex: 1.7, minWidth: 130, gap: 2 }]}>
-                              <Text style={styles.receivingRowTotal}>
-                                {totalVal > 0 ? money(totalVal) : '—'}
-                              </Text>
-                            </View>
-
-                            {/* 7. Action Button: View GRN */}
-                            <View style={[styles.rowCol, { flex: 1.8, minWidth: 140, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center' }]}>
-                              <TouchableOpacity
-                                style={styles.receivingRowGrnBtn}
-                                onPress={() => {
-                                  setLastGrn({
-                                    grnNo: `GRN-${m.id.slice(-6).toUpperCase()}`,
-                                    itemName: m.itemName,
-                                    itemCode: m.itemCode,
-                                    qty: m.qty,
-                                    unit: '',
-                                    unitCost: m.unitCost || 0,
-                                    totalAmount: (m.qty || 0) * (m.unitCost || 0),
-                                    supplier: m.supplier || 'Vendor',
-                                    invoiceNo: m.invoiceNo || 'N/A',
-                                    batchNumber: m.batchNumber || 'N/A',
-                                    location: 'Kitchen Store',
-                                    receivedBy: m.by || 'Storekeeper',
-                                    at: m.at,
-                                  });
-                                  setShowGrnModal(true);
-                                }}
-                                activeOpacity={0.8}
-                                {...(Platform.OS === 'web' ? ({ title: 'View Goods Receipt Note (GRN)' } as any) : {})}
-                              >
-                                <Ionicons name="document-text-outline" size={13} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                                <Text style={styles.receivingRowGrnText}>GRN Slip</Text>
-                              </TouchableOpacity>
-                            </View>
+                            <Text style={{ flex: 1.2, fontSize: 12.5, fontWeight: '800', color: '#15803D', textAlign: 'center' }}>
+                              +{it.qty} {unitLabel}
+                            </Text>
+                            <Text style={{ flex: 1.2, fontSize: 12, color: '#334155', textAlign: 'right' }}>
+                              {it.unitCost ? money(it.unitCost) : '—'}
+                            </Text>
+                            <Text style={{ flex: 1.3, fontSize: 11.5, color: '#475569', textAlign: 'center' }}>
+                              {it.expiryDate ? new Date(it.expiryDate).toLocaleDateString('en-GB') : '—'}
+                            </Text>
+                            <Text style={{ flex: 1.3, fontSize: 12.5, fontWeight: '800', color: BRAND.ink, textAlign: 'right' }}>
+                              {lineVal > 0 ? money(lineVal) : '—'}
+                            </Text>
                           </View>
                         );
                       })}
                     </View>
                   </View>
-                </ScrollView>
+                ))}
               </View>
-            <PaginationControl
-              currentPage={receivingPagination.currentPage}
-              totalPages={receivingPagination.totalPages}
-              pageSize={receivingPagination.pageSize}
-              totalItems={receivingPagination.totalItems}
-              onPageChange={receivingPagination.goToPage}
-              onPageSizeChange={receivingPagination.setPageSize}
-              itemName="inward shipments"
-            />
-          </>
-        )}
+
+              <PaginationControl
+                currentPage={receivingPagination.currentPage}
+                totalPages={receivingPagination.totalPages}
+                pageSize={receivingPagination.pageSize}
+                totalItems={receivingPagination.totalItems}
+                onPageChange={receivingPagination.goToPage}
+                onPageSizeChange={receivingPagination.setPageSize}
+                itemName="supplier deliveries"
+              />
+            </>
+          )}
         </View>
       )}
 
@@ -2776,16 +2980,16 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL 2: GOODS RECEIVING & INVOICING MODAL */}
+      {/* MODAL 2: MULTI-ITEM GOODS RECEIVING & INVOICING MODAL */}
       {/* ========================================================================= */}
       <Modal visible={showReceiveModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+          <View style={[styles.modalCard, { maxWidth: 820, width: '96%' }, isMobile && styles.modalCardMobile]}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Receive Goods & Inward Invoice</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Receive Goods & Supplier Invoice (Multi-Item GRN)</Text>
                 <Text style={styles.modalSubtitle}>
-                  Stock-in from supplier with batch number, invoice #, and Goods Receipt Note
+                  Receive multiple items from 1 supplier, pick receiving staff from directory, set per-item unit & expiry, and auto-update stocks
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowReceiveModal(false)}>
@@ -2793,156 +2997,294 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
-              <RoyalDropdown
-                label="Select Ingredient / Material *"
-                placeholder="Choose ingredient to receive..."
-                options={inventory.map((inv) => ({
-                  label: `${inv.name} (${inv.stock} ${inv.unit})`,
-                  value: inv.id,
-                  sublabel: `${inv.category} • Zone: ${inv.location || 'N/A'}`,
-                  badge: `${inv.stock} ${inv.unit}`,
-                }))}
-                value={recItemId}
-                onSelect={(val) => {
-                  setRecItemId(val);
-                  const inv = inventory.find((i) => i.id === val);
-                  if (inv) {
-                    if (inv.supplier) setRecSupplier(inv.supplier);
-                    if (inv.costPerUnit) setRecUnitCost(inv.costPerUnit.toString());
-                    if (inv.location) setRecLocation(inv.location);
-                  }
-                }}
-                searchable
-                searchPlaceholder="Search material by name..."
-                icon="cube-outline"
-                style={{ marginBottom: 12 }}
-              />
+            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
+              {/* SECTION 1: SUPPLIER, STAFF & INVOICE DETAILS */}
+              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 14 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+                  1. Supplier, Staff & Invoice Information
+                </Text>
 
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Supplier Invoice No. *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. AMP-8821"
-                    value={recInvoiceNo}
-                    onChangeText={setRecInvoiceNo}
-                  />
+                <View style={styles.formRow2}>
+                  <View style={{ flex: 1.2, minWidth: 210 }}>
+                    {!recCustomSupplier && suppliers.length > 0 ? (
+                      <View>
+                        <RoyalDropdown
+                          label="Supplier / Vendor *"
+                          placeholder="Search & select supplier..."
+                          options={suppliers.map((s) => ({
+                            label: s.name,
+                            value: s.name,
+                            badge: s.category,
+                            sublabel: s.phone,
+                          }))}
+                          value={recSupplier}
+                          onSelect={(val) => setRecSupplier(val)}
+                          icon="business-outline"
+                          searchable
+                          searchPlaceholder="Search supplier by name..."
+                        />
+                        <TouchableOpacity onPress={() => setRecCustomSupplier(true)} style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>+ Type custom / walk-in vendor instead</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View>
+                        <Text style={styles.inputLabel}>Supplier / Vendor Name *</Text>
+                        <TextInput
+                          style={[styles.input, { marginBottom: 4 }]}
+                          placeholder="e.g. Al-Madina Fresh Poultry"
+                          value={recSupplier}
+                          onChangeText={setRecSupplier}
+                        />
+                        {suppliers.length > 0 && (
+                          <TouchableOpacity onPress={() => setRecCustomSupplier(false)}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>← Pick from registered suppliers list</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
+                  </View>
+
+                  <View style={{ flex: 1.2, minWidth: 210 }}>
+                    {staffList.length > 0 ? (
+                      <RoyalDropdown
+                        label="Received By Staff *"
+                        placeholder="Search & select staff member..."
+                        options={staffList.map((st) => ({
+                          label: st.name,
+                          value: st.name,
+                          badge: st.role,
+                          sublabel: st.phone || st.shift || 'Staff',
+                        }))}
+                        value={recReceivedBy}
+                        onSelect={(val) => setRecReceivedBy(val)}
+                        icon="person-outline"
+                        searchable
+                        searchPlaceholder="Search staff by name or role..."
+                      />
+                    ) : (
+                      <View>
+                        <Text style={styles.inputLabel}>Received By Staff *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. Storekeeper / Chef"
+                          value={recReceivedBy}
+                          onChangeText={setRecReceivedBy}
+                        />
+                      </View>
+                    )}
+                  </View>
                 </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Batch / Lot Number *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. B-26-CHK-081"
-                    value={recBatchNumber}
-                    onChangeText={setRecBatchNumber}
-                  />
+
+                <View style={[styles.formRow2, { marginTop: 10 }]}>
+                  <View style={{ flex: 1, minWidth: 160 }}>
+                    <Text style={styles.inputLabel}>Supplier Invoice No. *</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0 }]}
+                      placeholder="e.g. INV-8821"
+                      value={recInvoiceNo}
+                      onChangeText={setRecInvoiceNo}
+                    />
+                  </View>
+                  <View style={{ flex: 1.5, minWidth: 200 }}>
+                    <Text style={styles.inputLabel}>Delivery Remarks / Inspection Note</Text>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0 }]}
+                      placeholder="e.g. Chilled van verified, quality approved"
+                      value={recNotes}
+                      onChangeText={setRecNotes}
+                    />
+                  </View>
                 </View>
               </View>
 
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Supplier / Vendor Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Al-Madina Fresh Poultry"
-                    value={recSupplier}
-                    onChangeText={setRecSupplier}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Received By Staff</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Chef Omar / Storekeeper"
-                    value={recReceivedBy}
-                    onChangeText={setRecReceivedBy}
-                  />
-                </View>
-              </View>
-
-              {/* Quick Supplier Dropdown if available */}
-              {suppliers.length > 0 ? (
-                <View style={{ marginBottom: 12 }}>
-                  <RoyalDropdown
-                    label="Quick Pick Supplier"
-                    placeholder="Select from registered suppliers..."
-                    options={suppliers.map((s) => ({
-                      label: s.name,
-                      value: s.name,
-                      badge: s.category,
-                      sublabel: s.phone,
-                    }))}
-                    value={recSupplier}
-                    onSelect={(val) => setRecSupplier(val)}
-                    icon="business-outline"
-                    searchable
-                  />
-                </View>
-              ) : null}
-
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Quantity Received *</Text>
-                  <TextInput
-                    style={[styles.input, { fontSize: 18, fontWeight: '700' }]}
-                    placeholder="e.g. 50"
-                    keyboardType="numeric"
-                    value={recQty}
-                    onChangeText={setRecQty}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Unit Purchase Cost (PKR)</Text>
-                  <TextInput
-                    style={[styles.input, { fontSize: 18, fontWeight: '700' }]}
-                    placeholder="e.g. 780"
-                    keyboardType="numeric"
-                    value={recUnitCost}
-                    onChangeText={setRecUnitCost}
-                  />
-                </View>
-              </View>
-
-              {/* Live Invoice Value */}
-              {recQty && recUnitCost ? (
-                <View style={styles.impactBox}>
-                  <Text style={styles.impactLabel}>Total Inward Shipment Amount:</Text>
-                  <Text style={styles.impactValue}>
-                    {money((parseFloat(recQty) || 0) * (parseFloat(recUnitCost) || 0))}
+              {/* SECTION 2: MULTIPLE ITEMS LIST */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                <View>
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: BRAND.burgundy, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+                    2. Received Items ({recLines.length} Item{recLines.length > 1 ? 's' : ''})
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                    Add all items delivered on this invoice with individual qty, unit, cost & expiry
                   </Text>
                 </View>
-              ) : null}
-
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Batch Expiry (Days from Today)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 7 (days)"
-                    keyboardType="numeric"
-                    value={recExpiryDays}
-                    onChangeText={setRecExpiryDays}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Store in Zone</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Walk-in Chiller"
-                    value={recLocation}
-                    onChangeText={setRecLocation}
-                  />
-                </View>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#FEF3C7',
+                    borderWidth: 1,
+                    borderColor: '#D5A943',
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    borderRadius: 8,
+                  }}
+                  onPress={handleAddReceiveLine}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add-circle" size={16} color={BRAND.burgundy} style={{ marginRight: 5 }} />
+                  <Text style={{ fontSize: 12.5, fontWeight: '800', color: BRAND.burgundy }}>+ Add Another Item</Text>
+                </TouchableOpacity>
               </View>
 
-              <Text style={styles.inputLabel}>Delivery Remarks / Inspection Note</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g. Chilled delivery van verified, seals intact, quality approved"
-                value={recNotes}
-                onChangeText={setRecNotes}
-              />
+              <View style={{ gap: 10, marginBottom: 12 }}>
+                {recLines.map((line, index) => {
+                  const lineTotal = (parseFloat(line.qty) || 0) * (parseFloat(line.unitCost) || 0);
+                  return (
+                    <View
+                      key={line.rowId}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 12,
+                        borderWidth: 1.5,
+                        borderColor: '#E2E8F0',
+                        padding: 12,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <View style={{ backgroundColor: BRAND.burgundy, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ color: '#FFF', fontSize: 11, fontWeight: '800' }}>Item #{index + 1}</Text>
+                          </View>
+                          {lineTotal > 0 && (
+                            <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ color: '#15803D', fontSize: 11.5, fontWeight: '800' }}>Subtotal: {money(lineTotal)}</Text>
+                            </View>
+                          )}
+                        </View>
+                        {recLines.length > 1 && (
+                          <TouchableOpacity
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
+                            onPress={() => handleRemoveReceiveLine(line.rowId)}
+                          >
+                            <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#DC2626' }}>Remove</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Item Picker */}
+                      <RoyalDropdown
+                        label="Select Inventory Item / Material *"
+                        placeholder="Search & choose item..."
+                        options={inventory.map((inv) => ({
+                          label: `${inv.name} (Stock: ${inv.stock} ${inv.unit})`,
+                          value: inv.id,
+                          sublabel: `${inv.category} • ${inv.itemCode || 'SKU'} • Zone: ${inv.location || 'Store'}`,
+                          badge: `${inv.stock} ${inv.unit}`,
+                        }))}
+                        value={line.itemId}
+                        onSelect={(val) => handleUpdateReceiveLine(line.rowId, { itemId: val })}
+                        searchable
+                        searchPlaceholder="Search inventory item by name..."
+                        icon="cube-outline"
+                        style={{ marginBottom: 10 }}
+                      />
+
+                      {/* Qty, Unit, Cost, Expiry */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+                        <View style={{ flex: 1, minWidth: 105 }}>
+                          <Text style={styles.inputLabel}>Quantity *</Text>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0, fontWeight: '800', fontSize: 15 }]}
+                            placeholder="e.g. 25"
+                            keyboardType="numeric"
+                            value={line.qty}
+                            onChangeText={(t) => handleUpdateReceiveLine(line.rowId, { qty: t })}
+                          />
+                        </View>
+                        <View style={{ flex: 1.1, minWidth: 120 }}>
+                          <RoyalDropdown
+                            label="Unit *"
+                            options={UNITS}
+                            value={line.unit}
+                            onSelect={(val) => handleUpdateReceiveLine(line.rowId, { unit: val })}
+                            icon="scale-outline"
+                            searchable
+                          />
+                        </View>
+                        <View style={{ flex: 1.1, minWidth: 115 }}>
+                          <Text style={styles.inputLabel}>Unit Cost (PKR)</Text>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0, fontWeight: '700' }]}
+                            placeholder="e.g. 780"
+                            keyboardType="numeric"
+                            value={line.unitCost}
+                            onChangeText={(t) => handleUpdateReceiveLine(line.rowId, { unitCost: t })}
+                          />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 105 }}>
+                          <Text style={styles.inputLabel}>Expiry (Days)</Text>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0 }]}
+                            placeholder="e.g. 30"
+                            keyboardType="numeric"
+                            value={line.expiryDays}
+                            onChangeText={(t) => handleUpdateReceiveLine(line.rowId, { expiryDays: t })}
+                          />
+                        </View>
+                      </View>
+
+                      {/* Storage Zone & Batch */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                        <View style={{ flex: 1.3, minWidth: 160 }}>
+                          <RoyalDropdown
+                            label="Storage Zone"
+                            options={STORAGE_LOCATIONS}
+                            value={line.location}
+                            onSelect={(val) => handleUpdateReceiveLine(line.rowId, { location: val })}
+                            icon="location-outline"
+                            searchable
+                          />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 140 }}>
+                          <Text style={styles.inputLabel}>Batch / Lot #</Text>
+                          <TextInput
+                            style={[styles.input, { marginBottom: 0 }]}
+                            placeholder="e.g. B-2026-101"
+                            value={line.batchNumber}
+                            onChangeText={(t) => handleUpdateReceiveLine(line.rowId, { batchNumber: t })}
+                          />
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+
+              {/* Bottom Add Another Item Quick Bar */}
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1.5,
+                  borderStyle: 'dashed',
+                  borderColor: '#D5A943',
+                  backgroundColor: '#FFFBEB',
+                  marginBottom: 12,
+                }}
+                onPress={handleAddReceiveLine}
+              >
+                <Ionicons name="add-circle-outline" size={18} color={BRAND.burgundy} style={{ marginRight: 6 }} />
+                <Text style={{ fontSize: 13, fontWeight: '800', color: BRAND.burgundy }}>+ Add Another Item from Same Supplier</Text>
+              </TouchableOpacity>
+
+              {/* Grand Total Summary Banner */}
+              <View style={[styles.impactBox, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 14 }]}>
+                <View>
+                  <Text style={styles.impactLabel}>Invoice Summary ({receiveDraftSummary.validCount} ready items)</Text>
+                  <Text style={{ fontSize: 11.5, color: '#475569', marginTop: 2 }}>
+                    All selected items will be added directly to live Inventory Stock
+                  </Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                  <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', textTransform: 'uppercase' }}>Grand Total</Text>
+                  <Text style={[styles.impactValue, { fontSize: 20 }]}>{money(receiveDraftSummary.grandTotal)}</Text>
+                </View>
+              </View>
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -2950,11 +3292,13 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 <Text style={styles.modalCancelBtnText}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.modalSaveBtn, { backgroundColor: BRAND.success }]}
+                style={[styles.modalSaveBtn, { backgroundColor: BRAND.success, paddingHorizontal: 18 }]}
                 onPress={handleSaveReceive}
               >
                 <Ionicons name="checkmark-done-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.modalSaveBtnText}>Confirm Inward Receipt</Text>
+                <Text style={styles.modalSaveBtnText}>
+                  Confirm & Update {recLines.length} Stock{recLines.length > 1 ? 's' : ''}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2962,80 +3306,90 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL 3: GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}
+      {/* MODAL 3: MULTI-ITEM GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}
       {/* ========================================================================= */}
       <Modal visible={showGrnModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxWidth: 520 }]}>
-            <View style={styles.grnVoucherHeader}>
-              <Image
-                source={{ uri: SULTAN_LOGO_BASE64 }}
-                style={{ width: 125, height: 115, alignSelf: 'center', marginBottom: 4 }}
-                resizeMode="contain"
-              />
-              <Text style={{ fontSize: 13, fontWeight: '700', color: '#000', textAlign: 'center', marginBottom: 2 }}>
-                جہاں ہر مہمان ہے سلطان
-              </Text>
-              <Text style={styles.grnVoucherTitle}>OFFICIAL GOODS RECEIPT NOTE (GRN)</Text>
-              <Text style={styles.grnVoucherNo}>GRN #{lastGrn?.grnNo}</Text>
-            </View>
+          <View style={[styles.modalCard, { maxWidth: 560 }]}>
+            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.grnVoucherHeader}>
+                <Image
+                  source={{ uri: SULTAN_LOGO_BASE64 }}
+                  style={{ width: 125, height: 115, alignSelf: 'center', marginBottom: 4 }}
+                  resizeMode="contain"
+                />
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#000', textAlign: 'center', marginBottom: 2 }}>
+                  جہاں ہر مہمان ہے سلطان
+                </Text>
+                <Text style={styles.grnVoucherTitle}>OFFICIAL GOODS RECEIPT NOTE (GRN)</Text>
+                <Text style={styles.grnVoucherNo}>GRN #{lastGrn?.grnNo}</Text>
+              </View>
 
-            <View style={styles.grnDetailsBox}>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Date & Time:</Text>
-                <Text style={styles.grnValue}>
-                  {lastGrn?.at ? `${formatDay(lastGrn.at)} ${formatTime(lastGrn.at)}` : ''}
+              <View style={styles.grnDetailsBox}>
+                <View style={styles.grnRow}>
+                  <Text style={styles.grnLabel}>Date & Time:</Text>
+                  <Text style={styles.grnValue}>
+                    {lastGrn?.at ? `${formatDay(lastGrn.at)} ${formatTime(lastGrn.at)}` : ''}
+                  </Text>
+                </View>
+                <View style={styles.grnRow}>
+                  <Text style={styles.grnLabel}>Supplier / Vendor:</Text>
+                  <Text style={[styles.grnValue, { fontWeight: '800' }]}>{lastGrn?.supplier}</Text>
+                </View>
+                <View style={styles.grnRow}>
+                  <Text style={styles.grnLabel}>Supplier Invoice #:</Text>
+                  <Text style={styles.grnValue}>{lastGrn?.invoiceNo}</Text>
+                </View>
+                <View style={styles.grnRow}>
+                  <Text style={styles.grnLabel}>Received & Verified By:</Text>
+                  <Text style={[styles.grnValue, { fontWeight: '800', color: BRAND.burgundy }]}>{lastGrn?.receivedBy}</Text>
+                </View>
+
+                <View style={styles.grnDivider} />
+
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: BRAND.burgundy, marginBottom: 6 }}>
+                  RECEIVED ITEMS ({lastGrn?.items?.length || 0}):
+                </Text>
+                {(lastGrn?.items || []).map((it, idx) => (
+                  <View
+                    key={idx}
+                    style={{
+                      paddingVertical: 6,
+                      borderBottomWidth: idx < (lastGrn?.items?.length || 0) - 1 ? 1 : 0,
+                      borderBottomColor: '#E2E8F0',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: BRAND.ink, flex: 1 }}>
+                        {idx + 1}. {it.itemName}
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: BRAND.success }}>
+                        +{it.qty} {it.unit}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 }}>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        Rate: {money(it.unitCost)}/{it.unit}
+                        {it.expiryDate ? ` • Exp: ${new Date(it.expiryDate).toLocaleDateString('en-GB')}` : ''}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: BRAND.ink }}>{money(it.lineTotal)}</Text>
+                    </View>
+                  </View>
+                ))}
+
+                <View style={styles.grnDivider} />
+
+                <View style={[styles.grnRow, { marginTop: 4 }]}>
+                  <Text style={[styles.grnLabel, { fontWeight: '800', color: BRAND.ink }]}>GRAND TOTAL VALUE:</Text>
+                  <Text style={[styles.grnValue, { fontSize: 18, color: BRAND.burgundy, fontWeight: '900' }]}>
+                    {lastGrn ? money(lastGrn.totalAmount) : ''}
+                  </Text>
+                </View>
+                <Text style={{ textAlign: 'center', fontSize: 10, fontWeight: '700', color: '#475569', marginTop: 10 }}>
+                  Powered & Designed by Nizaam Digital Solution
                 </Text>
               </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Supplier / Vendor:</Text>
-                <Text style={[styles.grnValue, { fontWeight: '800' }]}>{lastGrn?.supplier}</Text>
-              </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Supplier Invoice #:</Text>
-                <Text style={styles.grnValue}>{lastGrn?.invoiceNo}</Text>
-              </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Batch Number:</Text>
-                <Text style={styles.grnValue}>{lastGrn?.batchNumber}</Text>
-              </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Storage Location:</Text>
-                <Text style={styles.grnValue}>{lastGrn?.location}</Text>
-              </View>
-
-              <View style={styles.grnDivider} />
-
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Item Received:</Text>
-                <Text style={[styles.grnValue, { fontWeight: '800' }]}>
-                  {lastGrn?.itemName} {lastGrn?.itemCode ? `(${lastGrn.itemCode})` : ''}
-                </Text>
-              </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Quantity Verified:</Text>
-                <Text style={[styles.grnValue, { fontSize: 16, color: BRAND.success, fontWeight: '800' }]}>
-                  {lastGrn?.qty} {lastGrn?.unit}
-                </Text>
-              </View>
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Unit Cost:</Text>
-                <Text style={styles.grnValue}>{lastGrn ? money(lastGrn.unitCost) : ''}</Text>
-              </View>
-              <View style={[styles.grnRow, { marginTop: 6 }]}>
-                <Text style={[styles.grnLabel, { fontWeight: '800', color: BRAND.ink }]}>Total Inward Value:</Text>
-                <Text style={[styles.grnValue, { fontSize: 18, color: BRAND.burgundy, fontWeight: '900' }]}>
-                  {lastGrn ? money(lastGrn.totalAmount) : ''}
-                </Text>
-              </View>
-
-              <View style={styles.grnDivider} />
-
-              <View style={styles.grnRow}>
-                <Text style={styles.grnLabel}>Received & Verified By:</Text>
-                <Text style={styles.grnValue}>{lastGrn?.receivedBy}</Text>
-              </View>
-            </View>
+            </ScrollView>
 
             <View style={styles.modalFooter}>
               <TouchableOpacity
@@ -3049,6 +3403,16 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   style={[styles.modalSaveBtn, { backgroundColor: '#D5A943' }]}
                   onPress={() => {
                     if (!lastGrn || typeof window === 'undefined') return;
+                    const itemsHtml = (lastGrn.items || [])
+                      .map(
+                        (it) => `
+                          <div class="item-block">
+                            <div class="row"><span class="bold">${it.itemName}</span><span class="bold">${money(it.lineTotal)}</span></div>
+                            <div class="row" style="font-size:9.5px;"><span>+${it.qty} ${it.unit} @ ${money(it.unitCost)}</span><span>${it.expiryDate ? `Exp: ${new Date(it.expiryDate).toLocaleDateString('en-GB')}` : ''}</span></div>
+                          </div>
+                        `
+                      )
+                      .join('');
                     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>GRN #${lastGrn.grnNo}</title><style>
                       @page { size: 72mm auto; margin: 0mm !important; }
                       * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
@@ -3057,7 +3421,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                       .logo-img { width: 130px; height: 120px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
                       .sub { font-size: 11px; font-weight: 900; margin-bottom: 3px; }
                       .line { border-top: 1.5px dashed #000; margin: 5px 0; }
-                      .row { display: flex; justify-content: space-between; margin: 2.5px 0; font-size: 11px; }
+                      .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 10.5px; }
+                      .item-block { padding: 3px 0; border-bottom: 1px dotted #444; }
                       .bold { font-weight: 800; }
                     </style></head><body>
                       <div class="center">
@@ -3070,15 +3435,12 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                       <div class="row"><span>Date:</span><span>${lastGrn.at ? `${formatDay(lastGrn.at)} ${formatTime(lastGrn.at)}` : ''}</span></div>
                       <div class="row"><span>Supplier:</span><span class="bold">${lastGrn.supplier}</span></div>
                       <div class="row"><span>Invoice #:</span><span>${lastGrn.invoiceNo}</span></div>
-                      <div class="row"><span>Batch #:</span><span>${lastGrn.batchNumber}</span></div>
-                      <div class="row"><span>Location:</span><span>${lastGrn.location}</span></div>
+                      <div class="row"><span>Received By:</span><span class="bold">${lastGrn.receivedBy}</span></div>
                       <div class="line"></div>
-                      <div class="row"><span>Item:</span><span class="bold">${lastGrn.itemName}</span></div>
-                      <div class="row"><span>Qty Verified:</span><span class="bold">${lastGrn.qty} ${lastGrn.unit}</span></div>
-                      <div class="row"><span>Unit Cost:</span><span>${money(lastGrn.unitCost)}</span></div>
-                      <div class="row" style="font-size:13px;"><span class="bold">Total Value:</span><span class="bold">${money(lastGrn.totalAmount)}</span></div>
+                      <div class="bold" style="margin-bottom:3px;">ITEMS RECEIVED (${(lastGrn.items || []).length}):</div>
+                      ${itemsHtml}
                       <div class="line"></div>
-                      <div class="row"><span>Verified By:</span><span>${lastGrn.receivedBy}</span></div>
+                      <div class="row" style="font-size:13px;"><span class="bold">GRAND TOTAL:</span><span class="bold">${money(lastGrn.totalAmount)}</span></div>
                       <div class="line"></div>
                       <div class="center" style="font-size:9.5px;font-weight:700;margin-top:4px;">Powered & Designed by Nizaam Digital Solution</div>
                     </body></html>`;
@@ -3112,7 +3474,6 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 style={[styles.modalSaveBtn, { backgroundColor: BRAND.burgundy }]}
                 onPress={() => {
                   setShowGrnModal(false);
-                  alertMsg('GRN Recorded', `GRN #${lastGrn?.grnNo} saved to receiving audit ledger.`);
                 }}
               >
                 <Ionicons name="checkmark-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
