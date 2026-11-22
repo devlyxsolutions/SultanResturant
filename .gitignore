@@ -5,7 +5,6 @@ node_modules/
 
 # Expo
 .expo/
-dist/
 dist-android/
 backups/
 web-build/

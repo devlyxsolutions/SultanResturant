@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -20,6 +20,8 @@ import PayrollTab from '../../components/staff/PayrollTab';
 import { sortFloors } from '../../constants/floors';
 import { broadcastImmediately } from '../../services/syncService';
 import {
+  INITIAL_STAFF,
+  isLegacyDummyStaff,
   StaffMember,
   StaffRole,
   StaffShift,
@@ -72,12 +74,33 @@ export default function StaffManagementScreen({
   const { can, canAddStaff, canEditStaff, canDeleteStaff } = useRolePermissions();
   const canViewSensitiveSalaries = role === 'admin' || can('canViewRevenue');
 
-  const staff = useRestaurantStore((state) => state.staff) || [];
+  const rawStaff = useRestaurantStore((state) => state.staff) || [];
+  const staff = rawStaff.filter((s) => !isLegacyDummyStaff(s));
   const tables = useRestaurantStore((state) => state.tables) || [];
   const zones = useRestaurantStore((state) => state.zones) || [];
   const addStaff = useRestaurantStore((state) => state.addStaff);
   const updateStaff = useRestaurantStore((state) => state.updateStaff);
   const deleteStaff = useRestaurantStore((state) => state.deleteStaff);
+
+  // Auto-purge any lingering legacy dummy staff from localStorage / state on mount & seed all 53 real staff
+  useEffect(() => {
+    const hasDummy = rawStaff.some((s) => isLegacyDummyStaff(s));
+    const missingInitial = INITIAL_STAFF.some((initS) => !rawStaff.some((s) => s.id === initS.id));
+    if (hasDummy || missingInitial) {
+      const sMap = new Map<string, StaffMember>();
+      for (const initS of INITIAL_STAFF) {
+        sMap.set(initS.id, { ...initS });
+      }
+      for (const existing of rawStaff) {
+        if (existing && existing.id && !isLegacyDummyStaff(existing)) {
+          const base = sMap.get(existing.id);
+          sMap.set(existing.id, { ...(base || {}), ...existing });
+        }
+      }
+      useRestaurantStore.setState({ staff: Array.from(sMap.values()), staffSeedVersion: 3 });
+      broadcastImmediately();
+    }
+  }, [rawStaff]);
 
   const { roles } = useRoleStore();
   const systemSettings = useSettingsStore((s) => s.settings);

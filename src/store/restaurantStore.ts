@@ -656,6 +656,35 @@ export const LEGACY_DUMMY_STAFF_IDS = new Set([
   'st1794730033364',
 ]);
 
+export const LEGACY_DUMMY_STAFF_NAMES = new Set([
+  'junaid ahsan',
+  'ali khan',
+  'chef omar',
+  'order taker 1',
+  'order taker 2',
+  'order taker 3',
+  'order taker 4',
+  'sara ahmed',
+  'hamza malik',
+  'ali raza',
+  'tariq juice master',
+  'rashid mehmood',
+  'tariq javed',
+  'usman tariq',
+  'bilal hassan',
+  'rohan ali',
+]);
+
+export function isLegacyDummyStaff(s: any): boolean {
+  if (!s || typeof s !== 'object') return true;
+  const sid = String(s.id || '').trim();
+  if (sid === 'st-master') return false;
+  if (sid && LEGACY_DUMMY_STAFF_IDS.has(sid)) return true;
+  const normName = String(s.name || '').trim().toLowerCase();
+  if (normName && LEGACY_DUMMY_STAFF_NAMES.has(normName)) return true;
+  return false;
+}
+
 export const INITIAL_STAFF: StaffMember[] = [
   // ── Master System Account (Only account with active login access by default) ──
   {
@@ -3006,15 +3035,11 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.staff ? {
             staff: (() => {
               const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
-                (s) => s && s.id && !LEGACY_DUMMY_STAFF_IDS.has(s.id)
+                (s) => s && s.id && !isLegacyDummyStaff(s)
               );
               const sMap = new Map<string, StaffMember>();
-              const masterInit = INITIAL_STAFF[0];
-              sMap.set(masterInit.id, { ...masterInit });
-              if (cleanRemote.length <= 1) {
-                for (const initS of INITIAL_STAFF) {
-                  sMap.set(initS.id, { ...initS });
-                }
+              for (const initS of INITIAL_STAFF) {
+                sMap.set(initS.id, { ...initS });
               }
               for (const rem of cleanRemote) {
                 const base = sMap.get(rem.id);
@@ -3195,18 +3220,13 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           // Reconcile staff on storage rehydration: purge legacy dummy accounts and seed real restaurant staff
           const existingCleanStaff = (state.staff || []).filter(
-            (s) => s && s.id && !LEGACY_DUMMY_STAFF_IDS.has(s.id)
+            (s) => s && s.id && !isLegacyDummyStaff(s)
           );
           const staffMap = new Map<string, StaffMember>();
-          if ((state.staffSeedVersion || 0) < 2 || existingCleanStaff.length <= 1) {
-            for (const initS of INITIAL_STAFF) {
-              staffMap.set(initS.id, { ...initS });
-            }
-            state.staffSeedVersion = 2;
-          } else {
-            const masterInit = INITIAL_STAFF[0];
-            staffMap.set(masterInit.id, { ...masterInit });
+          for (const initS of INITIAL_STAFF) {
+            staffMap.set(initS.id, { ...initS });
           }
+          state.staffSeedVersion = 3;
           for (const existing of existingCleanStaff) {
             const base = staffMap.get(existing.id);
             staffMap.set(existing.id, {

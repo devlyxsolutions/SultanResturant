@@ -2511,10 +2511,19 @@ try {
       serverState.tables = INITIAL_STATE.tables;
     }
     const LEGACY_DUMMY_STAFF_SET = new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']);
+    const LEGACY_DUMMY_STAFF_NAMES = new Set(['junaid ahsan', 'ali khan', 'chef omar', 'order taker 1', 'order taker 2', 'order taker 3', 'order taker 4', 'sara ahmed', 'hamza malik', 'ali raza', 'tariq juice master', 'rashid mehmood', 'tariq javed', 'usman tariq', 'bilal hassan', 'rohan ali']);
+    const isDummyStaffServer = (s) => {
+      if (!s || !s.id) return true;
+      if (s.id === 'st-master') return false;
+      if (LEGACY_DUMMY_STAFF_SET.has(String(s.id).trim())) return true;
+      const nm = String(s.name || '').trim().toLowerCase();
+      if (nm && LEGACY_DUMMY_STAFF_NAMES.has(nm)) return true;
+      return false;
+    };
     if (!Array.isArray(serverState.staff) || serverState.staff.length === 0) {
       serverState.staff = INITIAL_STATE.staff;
     } else {
-      serverState.staff = serverState.staff.filter(s => s && s.id && !LEGACY_DUMMY_STAFF_SET.has(s.id));
+      serverState.staff = serverState.staff.filter(s => !isDummyStaffServer(s));
       for (const initSt of (INITIAL_STATE.staff || [])) {
         const existing = serverState.staff.find(s => s && s.id === initSt.id);
         if (!existing) {
@@ -6189,6 +6198,17 @@ const LEGACY_DUMMY_SEED_IDS = {
 function sanitizeIncomingSeedData(key, value) {
   if (!Array.isArray(value)) return value;
   const seedSet = LEGACY_DUMMY_SEED_IDS[key];
+  if (key === 'staff') {
+    const dummyNames = new Set(['junaid ahsan', 'ali khan', 'chef omar', 'order taker 1', 'order taker 2', 'order taker 3', 'order taker 4', 'sara ahmed', 'hamza malik', 'ali raza', 'tariq juice master', 'rashid mehmood', 'tariq javed', 'usman tariq', 'bilal hassan', 'rohan ali']);
+    return value.filter((item) => {
+      if (!item || !item.id) return false;
+      if (item.id === 'st-master') return true;
+      if (seedSet && seedSet.has(item.id)) return false;
+      const nm = String(item.name || '').trim().toLowerCase();
+      if (nm && dummyNames.has(nm)) return false;
+      return true;
+    });
+  }
   if (seedSet) {
     return value.filter((item) => item && !seedSet.has(item.id));
   }
@@ -6627,19 +6647,21 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             : null;
         } else if (key === 'staff') {
           const incStaff = Array.isArray(sanitized) ? sanitized : [];
-          if (incStaff.length <= 1 && Array.isArray(serverState.staff) && serverState.staff.length > 1) {
-            // Do not allow an un-seeded client with only master or empty staff to wipe the 53 real staff members
-            const masterOnly = INITIAL_STATE.staff[0];
-            if (!serverState.staff.some(s => s && s.id === 'st-master')) {
-              serverState.staff.unshift({ ...masterOnly });
-            }
-          } else {
-            const masterOnly = INITIAL_STATE.staff[0];
-            if (!incStaff.some(s => s && s.id === 'st-master')) {
-              incStaff.unshift({ ...masterOnly });
-            }
-            serverState.staff = incStaff;
+          const sMap = new Map();
+          for (const initSt of (INITIAL_STATE.staff || [])) {
+            sMap.set(initSt.id, { ...initSt });
           }
+          for (const curr of (serverState.staff || [])) {
+            if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
+              sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
+            }
+          }
+          for (const inc of incStaff) {
+            if (inc && inc.id) {
+              sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+            }
+          }
+          serverState.staff = Array.from(sMap.values());
         } else {
           serverState[key] = sanitized;
         }
