@@ -406,9 +406,9 @@ export const DEFAULT_ROLES: CustomRole[] = [
       canAddSuppliers: true,
       canEditSuppliers: true,
       canDeleteSuppliers: true,
-      canAddTables: true,
-      canEditTables: true,
-      canDeleteTables: true,
+      canAddTables: false,
+      canEditTables: false,
+      canDeleteTables: false,
       canAddRecipes: true,
       canEditRecipes: true,
       canDeleteRecipes: true,
@@ -475,8 +475,8 @@ export const DEFAULT_ROLES: CustomRole[] = [
       ...EMPTY_CRUD_PERMISSIONS,
       canAddRecords: true,
       canEditRecords: true,
-      canAddTables: true,
-      canEditTables: true,
+      canAddTables: false,
+      canEditTables: false,
       canAddCustomers: true,
       canEditCustomers: true,
     },
@@ -1034,12 +1034,27 @@ export const useRoleStore = create<RoleState>()(
     {
       name: 'sultan-roles-permissions-store',
       storage: appStorage,
-      version: 5,
-      // v5: always normalize roles with complete POS + CRUD permission keys and sync-safe timestamps.
-      migrate: (persistedState: any) => {
+      version: 6,
+      // v6: default Manager & Floor Manager to View-Only on Floor Command (canAddTables/canEditTables/canDeleteTables = false) controllable via Settings.
+      migrate: (persistedState: any, version: number) => {
         const state = persistedState || {};
         const savedRoles: CustomRole[] = Array.isArray(state.roles) ? state.roles : DEFAULT_ROLES;
-        return { ...state, roles: normalizeRolesList(savedRoles) };
+        const normalized = normalizeRolesList(savedRoles).map((r) => {
+          if ((version || 0) < 6 && (r.id === 'role-manager' || r.id === 'role-floor-manager')) {
+            return {
+              ...r,
+              permissions: {
+                ...r.permissions,
+                canAccessFloorPlan: true,
+                canAddTables: false,
+                canEditTables: false,
+                canDeleteTables: false,
+              },
+            };
+          }
+          return r;
+        });
+        return { ...state, roles: normalized };
       },
     }
   )

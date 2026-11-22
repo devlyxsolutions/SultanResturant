@@ -1149,8 +1149,10 @@ export default function TablesBlueprintScreen({
               {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
               onPress={() => router.push(floorsRoute as any)}
             >
-              <Ionicons name="layers-outline" size={16} color="#fff" />
-              <Text style={styles.headerBtnText}>Manage Floors</Text>
+              <Ionicons name={canAddTables || canEditTables ? 'layers-outline' : 'eye-outline'} size={16} color="#fff" />
+              <Text style={styles.headerBtnText}>
+                {canAddTables || canEditTables ? 'Manage Floors' : 'View Floors'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.headerBtn, styles.headerBtnGhost]}
@@ -1529,9 +1531,15 @@ export default function TablesBlueprintScreen({
                   <Ionicons name="layers" size={20} color="#fff" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.floorBannerTitle}>Looking to Add, Edit, or Delete Floors?</Text>
+                  <Text style={styles.floorBannerTitle}>
+                    {canAddTables || canEditTables || canDeleteTables
+                      ? 'Looking to Add, Edit, or Delete Floors?'
+                      : 'Floor Command Details (View-Only Mode)'}
+                  </Text>
                   <Text style={styles.floorBannerSub}>
-                    Floors and table management are separated. Open the Floor Management screen to manage floors, color themes, codes & prefixes.
+                    {canAddTables || canEditTables || canDeleteTables
+                      ? 'Floors and table management are separated. Open the Floor Command screen to manage floors, color themes, codes & prefixes.'
+                      : 'You currently have View-Only access to Floor Command. Admin can grant Add/Edit/Delete access from Settings > Roles & CRUD.'}
                   </Text>
                 </View>
               </View>
@@ -1539,7 +1547,9 @@ export default function TablesBlueprintScreen({
                 style={styles.floorBannerBtn}
                 onPress={() => router.push(floorsRoute as any)}
               >
-                <Text style={styles.floorBannerBtnText}>Manage Floors Screen ➔</Text>
+                <Text style={styles.floorBannerBtnText}>
+                  {canAddTables || canEditTables || canDeleteTables ? 'Manage Floors Screen ➔' : 'View Floor Command ➔'}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -1569,8 +1579,10 @@ export default function TablesBlueprintScreen({
                         style={styles.floorEditMiniBtn}
                         onPress={() => router.push(floorsRoute as any)}
                       >
-                        <Ionicons name="create-outline" size={12} color={BRAND} />
-                        <Text style={styles.floorEditMiniBtnText}>Edit Floor</Text>
+                        <Ionicons name={canEditTables ? 'create-outline' : 'eye-outline'} size={12} color={BRAND} />
+                        <Text style={styles.floorEditMiniBtnText}>
+                          {canEditTables ? 'Edit Floor' : 'Floor Details'}
+                        </Text>
                       </TouchableOpacity>
                     </View>
                   </View>

@@ -265,9 +265,9 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
   },
   {
     id: 'tables',
-    label: 'Floor Plan, Tables & Zones',
-    desc: 'Add tables/cabins/zones/floors, edit seating layouts, or delete units',
-    icon: 'grid-outline',
+    label: 'Floor Command, Floors, Tables & Zones (فلور کمانڈ)',
+    desc: 'View floor details vs Add, Edit, or Delete restaurant floors, dining tables, couches & Majlis cabins',
+    icon: 'layers-outline',
     viewKey: 'canAccessFloorPlan',
     addKey: 'canAddTables',
     editKey: 'canEditTables',
@@ -2092,6 +2092,300 @@ export default function AdminSettingsScreen() {
       { lockedKeys: role.id === 'role-admin' ? ['canAccessStaff'] : [] }
     );
 
+  const renderFloorCommandAccessCard = (targetRole?: CustomRole) => {
+    const managerRole =
+      targetRole ||
+      roles.find((r) => r.id === 'role-manager') ||
+      roles.find((r) => r.baseRole === 'manager') ||
+      roles[0];
+    if (!managerRole) return null;
+
+    const p = managerRole.permissions;
+    const canView = !!p.canAccessFloorPlan;
+    const canAdd = !!p.canAddTables && !!p.canAddRecords;
+    const canEdit = !!p.canEditTables && !!p.canEditRecords;
+    const canDel = !!p.canDeleteTables && !!p.canDeleteRecords;
+
+    const isViewOnly = canView && !canAdd && !canEdit && !canDel;
+    const isAddEdit = canView && canAdd && canEdit && !canDel;
+    const isFull = canView && canAdd && canEdit && canDel;
+
+    const applyFloorCommandMode = (mode: 'view_only' | 'add_edit' | 'full' | 'hidden') => {
+      const nextPerms: RolePermissions = { ...managerRole.permissions };
+      if (mode === 'hidden') {
+        nextPerms.canAccessFloorPlan = false;
+        nextPerms.canAddTables = false;
+        nextPerms.canEditTables = false;
+        nextPerms.canDeleteTables = false;
+      } else if (mode === 'view_only') {
+        nextPerms.canAccessFloorPlan = true;
+        nextPerms.canAddTables = false;
+        nextPerms.canEditTables = false;
+        nextPerms.canDeleteTables = false;
+      } else if (mode === 'add_edit') {
+        nextPerms.canAccessFloorPlan = true;
+        nextPerms.canAddRecords = true;
+        nextPerms.canEditRecords = true;
+        nextPerms.canAddTables = true;
+        nextPerms.canEditTables = true;
+        nextPerms.canDeleteTables = false;
+      } else if (mode === 'full') {
+        nextPerms.canAccessFloorPlan = true;
+        nextPerms.canAddRecords = true;
+        nextPerms.canEditRecords = true;
+        nextPerms.canDeleteRecords = true;
+        nextPerms.canAddTables = true;
+        nextPerms.canEditTables = true;
+        nextPerms.canDeleteTables = true;
+      }
+      updateRole(managerRole.id, { permissions: nextPerms });
+      broadcastImmediately();
+      const modeLabel =
+        mode === 'view_only'
+          ? 'View Floor Details Only (Add/Edit/Delete Locked)'
+          : mode === 'add_edit'
+            ? 'View + Add & Edit Floors/Tables Allowed'
+            : mode === 'full'
+              ? 'Full Floor Command (View + Add + Edit + Delete)'
+              : 'Floor Command Hidden';
+      showToast(`${managerRole.name}: ${modeLabel}`);
+    };
+
+    return (
+      <View style={[styles.card, { borderColor: '#D4AF37', borderWidth: 1.5, backgroundColor: '#FFFDF9' }]}>
+        <View style={styles.sectionHeaderRow}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 230 }}>
+            <View style={[styles.permCategoryIconWrap, { backgroundColor: '#52171B' }]}>
+              <Ionicons name="layers-outline" size={18} color="#F3D179" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                <Text style={[styles.sectionTitle, { marginBottom: 0, fontSize: 15.5 }]}>
+                  Floor Command Access Control — {managerRole.name} (فلور کمانڈ کنٹرول)
+                </Text>
+                <View
+                  style={[
+                    styles.groupCountPill,
+                    isViewOnly
+                      ? { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }
+                      : isAddEdit || isFull
+                        ? { backgroundColor: '#DCFCE7', borderColor: '#22C55E' }
+                        : { backgroundColor: '#FEE2E2', borderColor: '#EF4444' },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.groupCountPillText,
+                      isViewOnly
+                        ? { color: '#92400E' }
+                        : isAddEdit || isFull
+                          ? { color: '#15803D' }
+                          : { color: '#B91C1C' },
+                    ]}
+                  >
+                    {isViewOnly
+                      ? '🔒 VIEW DETAILS ONLY (صرف تفصیلات)'
+                      : isFull
+                        ? '🔓 FULL ACCESS (ایڈ / ایڈٹ / ڈیلیٹ)'
+                        : isAddEdit
+                          ? '✅ VIEW + ADD & EDIT ALLOWED'
+                          : canView
+                            ? '⚙️ CUSTOM FLOOR ACCESS'
+                            : '🚫 FLOOR COMMAND HIDDEN'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={styles.rowSub}>
+                Control whether {managerRole.name} can only view floor details & capacities, or also Add, Edit, and Delete floors, tables, couches & Majlis cabins
+              </Text>
+            </View>
+          </View>
+
+          {/* Quick Role Switcher between Manager & Floor Manager */}
+          <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+            {roles
+              .filter((r) => r.id === 'role-manager' || r.id === 'role-floor-manager' || r.id === 'role-cashier')
+              .map((r) => {
+                const active = managerRole.id === r.id;
+                return (
+                  <TouchableOpacity
+                    key={r.id}
+                    style={[
+                      styles.groupMiniBtn,
+                      active && { backgroundColor: '#52171B', borderColor: '#52171B' },
+                    ]}
+                    onPress={() => setSelectedRoleId(r.id)}
+                  >
+                    <Ionicons
+                      name="person-circle-outline"
+                      size={14}
+                      color={active ? '#F3D179' : '#52171B'}
+                    />
+                    <Text style={[styles.groupMiniBtnText, { color: active ? '#F3D179' : '#52171B' }]}>
+                      {r.name}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+          </View>
+        </View>
+
+        {/* 1-Click Floor Command Mode Presets */}
+        <View style={[styles.crudPresetRow, { marginTop: 10, marginBottom: 12 }]}>
+          <TouchableOpacity
+            style={[
+              styles.crudPresetBtn,
+              {
+                borderColor: isViewOnly ? '#D97706' : '#E7E5E4',
+                backgroundColor: isViewOnly ? '#FEF3C7' : '#FAFAF9',
+                borderWidth: isViewOnly ? 1.5 : 1,
+              },
+            ]}
+            onPress={() => applyFloorCommandMode('view_only')}
+          >
+            <Ionicons name="eye-outline" size={15} color="#92400E" />
+            <Text style={[styles.crudPresetBtnText, { color: '#92400E' }]}>
+              View Floor Details Only (صرف تفصیلات دیکھیں)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.crudPresetBtn,
+              {
+                borderColor: isAddEdit ? '#2563EB' : '#E7E5E4',
+                backgroundColor: isAddEdit ? '#DBEAFE' : '#FAFAF9',
+                borderWidth: isAddEdit ? 1.5 : 1,
+              },
+            ]}
+            onPress={() => applyFloorCommandMode('add_edit')}
+          >
+            <Ionicons name="add-circle-outline" size={15} color="#1D4ED8" />
+            <Text style={[styles.crudPresetBtnText, { color: '#1D4ED8' }]}>
+              Allow Add & Edit Floors/Tables (ایڈ اور ایڈٹ کی اجازت)
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.crudPresetBtn,
+              {
+                borderColor: isFull ? '#16A34A' : '#E7E5E4',
+                backgroundColor: isFull ? '#DCFCE7' : '#FAFAF9',
+                borderWidth: isFull ? 1.5 : 1,
+              },
+            ]}
+            onPress={() => applyFloorCommandMode('full')}
+          >
+            <Ionicons name="checkmark-done-circle-outline" size={15} color="#15803D" />
+            <Text style={[styles.crudPresetBtnText, { color: '#15803D' }]}>
+              Full Access: Add + Edit + Delete (مکمل اختیار)
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Individual Granular Toggles for Floor Command */}
+        <View style={styles.permGridWrap}>
+          <TouchableOpacity
+            style={[styles.permItemCard, canView && styles.permItemCardActive]}
+            onPress={() => handleToggleRolePerm(managerRole.id, 'canAccessFloorPlan', !canView)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.permItemIcon}>
+              <Ionicons name="eye-outline" size={17} color={canView ? '#52171B' : '#78716C'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permItemTitle, !canView && { color: '#78716C' }]}>
+                1. View Floor Command & Details (صرف تفصیلات دیکھیں)
+              </Text>
+              <Text style={styles.permItemDesc}>
+                Allow {managerRole.name} to open Floor Command & Floor Plan to view floors, tables, couches & cabins
+              </Text>
+            </View>
+            <Switch
+              value={canView}
+              onValueChange={(v) => handleToggleRolePerm(managerRole.id, 'canAccessFloorPlan', v)}
+              trackColor={{ false: '#D6D3D1', true: '#52171B' }}
+              thumbColor={canView ? '#D4AF37' : '#F5F5F4'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.permItemCard, canAdd && styles.permItemCardActive]}
+            onPress={() => handleToggleRolePerm(managerRole.id, 'canAddTables', !canAdd)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.permItemIcon}>
+              <Ionicons name="add-circle-outline" size={17} color={canAdd ? '#15803D' : '#78716C'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permItemTitle, !canAdd && { color: '#78716C' }]}>
+                2. Add New Floors, Tables & Cabins (نیا فلور یا ٹیبل ایڈ کریں)
+              </Text>
+              <Text style={styles.permItemDesc}>
+                Allow {managerRole.name} to create new floors, add dining tables, couches, or Arabian Majlis cabins
+              </Text>
+            </View>
+            <Switch
+              value={canAdd}
+              onValueChange={(v) => handleToggleRolePerm(managerRole.id, 'canAddTables', v)}
+              trackColor={{ false: '#D6D3D1', true: '#15803D' }}
+              thumbColor={canAdd ? '#BBF7D0' : '#F5F5F4'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.permItemCard, canEdit && styles.permItemCardActive]}
+            onPress={() => handleToggleRolePerm(managerRole.id, 'canEditTables', !canEdit)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.permItemIcon}>
+              <Ionicons name="create-outline" size={17} color={canEdit ? '#1D4ED8' : '#78716C'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permItemTitle, !canEdit && { color: '#78716C' }]}>
+                3. Edit Floor Details & Table Capacity (فلور اور ٹیبل ایڈٹ کریں)
+              </Text>
+              <Text style={styles.permItemDesc}>
+                Allow {managerRole.name} to edit floor names, prefixes, color themes, table names & guest capacities
+              </Text>
+            </View>
+            <Switch
+              value={canEdit}
+              onValueChange={(v) => handleToggleRolePerm(managerRole.id, 'canEditTables', v)}
+              trackColor={{ false: '#D6D3D1', true: '#1D4ED8' }}
+              thumbColor={canEdit ? '#BFDBFE' : '#F5F5F4'}
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.permItemCard, canDel && styles.permItemCardActive]}
+            onPress={() => handleToggleRolePerm(managerRole.id, 'canDeleteTables', !canDel)}
+            activeOpacity={0.75}
+          >
+            <View style={styles.permItemIcon}>
+              <Ionicons name="trash-outline" size={17} color={canDel ? '#B91C1C' : '#78716C'} />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.permItemTitle, !canDel && { color: '#78716C' }]}>
+                4. Delete Floors & Tables (فلور اور ٹیبل ڈیلیٹ کریں)
+              </Text>
+              <Text style={styles.permItemDesc}>
+                Allow {managerRole.name} to permanently delete floors, tables, couches, or Majlis cabins
+              </Text>
+            </View>
+            <Switch
+              value={canDel}
+              onValueChange={(v) => handleToggleRolePerm(managerRole.id, 'canDeleteTables', v)}
+              trackColor={{ false: '#D6D3D1', true: '#B91C1C' }}
+              thumbColor={canDel ? '#FECACA' : '#F5F5F4'}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  };
+
   const isConnected = syncInfo?.status === 'connected';
 
   return (
@@ -2448,6 +2742,9 @@ export default function AdminSettingsScreen() {
               </View>
             </View>
 
+            {/* Dedicated Floor Command Quick Access Card for Manager / Floor Manager */}
+            {renderFloorCommandAccessCard()}
+
             {/* 7 Structured Module Control Cards */}
             {MODULE_CONTROL_GROUPS.map((group) => {
               const q = moduleSearch.trim().toLowerCase();
@@ -2779,6 +3076,9 @@ export default function AdminSettingsScreen() {
               )}
             </View>
 
+            {/* Dedicated Floor Command Quick Access Card for Selected Role */}
+            {crudScope === 'role' && renderFloorCommandAccessCard(selectedRole)}
+
             {/* Selected Role CRUD Matrix Card */}
             {crudScope === 'role' && selectedRole && (
               <View style={styles.card}>
@@ -2986,6 +3286,8 @@ export default function AdminSettingsScreen() {
                 })}
               </ScrollView>
             </View>
+
+            {selectedRole && renderFloorCommandAccessCard(selectedRole)}
 
             {selectedRole && (
               <View style={styles.card}>

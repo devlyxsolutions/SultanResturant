@@ -12,6 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useRestaurantStore } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
 import { BRAND } from '../constants/brand';
 import { FLOOR_TEMPLATE, getFloorMeta, sortFloors, getTableFloor, getTableSeatingType, SEATING_ZONES } from '../constants/floors';
 import { money, percent } from '../utils/format';
@@ -21,6 +22,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { canAddTables } = useRolePermissions();
 
   const rawTables = useRestaurantStore((s) => s.tables) || [];
   // Deduplicate by id — guards against duplicate-id data from server
@@ -139,10 +141,12 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           <Text style={[styles.headerTitle, isMobile && { fontSize: 17 }]}>Sultan 5-Floor Operations</Text>
           <Text style={styles.headerSubtitle} numberOfLines={2}>Multi-Level Dine-In, Banquet & Rooftop Management</Text>
         </View>
-        <TouchableOpacity style={[styles.setupBtn, isMobile && { paddingHorizontal: 10, paddingVertical: 8 }]} onPress={handlePopulateFloors}>
-          <Ionicons name="layers-outline" size={16} color="#24050A" style={{ marginRight: 6 }} />
-          <Text style={styles.setupBtnText}>{isMobile ? 'Template' : '5-Floor Template'}</Text>
-        </TouchableOpacity>
+        {canAddTables && (
+          <TouchableOpacity style={[styles.setupBtn, isMobile && { paddingHorizontal: 10, paddingVertical: 8 }]} onPress={handlePopulateFloors}>
+            <Ionicons name="layers-outline" size={16} color="#24050A" style={{ marginRight: 6 }} />
+            <Text style={styles.setupBtnText}>{isMobile ? 'Template' : '5-Floor Template'}</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Top Mega-KPI Bar */}

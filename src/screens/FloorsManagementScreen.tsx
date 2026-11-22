@@ -221,8 +221,20 @@ export default function FloorsManagementScreen({
             <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
           <View style={{ flex: 1 }}>
-            <Text style={styles.headerTitle}>Floor Management</Text>
-            <Text style={styles.headerSubtitle}>Create, edit & manage multi-level restaurant floors</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <Text style={styles.headerTitle}>Floor Command & Management</Text>
+              {!canAddTables && !canEditTables && !canDeleteTables && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 9, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(213, 169, 67, 0.4)' }}>
+                  <Ionicons name="eye-outline" size={13} color="#F3D179" />
+                  <Text style={{ color: '#F3D179', fontSize: 11, fontWeight: '800' }}>View Only (صرف تفصیلات)</Text>
+                </View>
+              )}
+            </View>
+            <Text style={styles.headerSubtitle}>
+              {!canAddTables && !canEditTables && !canDeleteTables
+                ? 'View multi-level restaurant floor details & seating capacities (Add/Edit controlled in Admin Settings)'
+                : 'Create, edit & manage multi-level restaurant floors'}
+            </Text>
           </View>
         </View>
 
@@ -409,8 +421,10 @@ export default function FloorsManagementScreen({
                     onPress={() => router.push(`${tablesRoute}?prefillFloor=${encodeURIComponent(floor.name)}` as any)}
                     activeOpacity={0.85}
                   >
-                    <Ionicons name="grid-outline" size={15} color="#fff" />
-                    <Text style={styles.manageTablesBtnText}>Manage Tables & Cabins ➔</Text>
+                    <Ionicons name={canAddTables || canEditTables ? 'grid-outline' : 'eye-outline'} size={15} color="#fff" />
+                    <Text style={styles.manageTablesBtnText}>
+                      {canAddTables || canEditTables ? 'Manage Tables & Cabins ➔' : 'View Floor Tables & Cabins ➔'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -422,11 +436,17 @@ export default function FloorsManagementScreen({
           <View style={styles.emptyState}>
             <Ionicons name="business-outline" size={48} color="#C7C7CC" />
             <Text style={styles.emptyTitle}>No Floors Configured</Text>
-            <Text style={styles.emptySub}>Add your first restaurant floor to get started.</Text>
-            <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary, { marginTop: 12 }]} onPress={openAddModal}>
-              <Ionicons name="add" size={18} color="#fff" />
-              <Text style={styles.actionBtnText}>+ Add New Floor</Text>
-            </TouchableOpacity>
+            <Text style={styles.emptySub}>
+              {canAddTables
+                ? 'Add your first restaurant floor to get started.'
+                : 'No restaurant floors configured yet. Ask Administrator to enable Floor Command Add permission in Settings.'}
+            </Text>
+            {canAddTables && (
+              <TouchableOpacity style={[styles.actionBtn, styles.actionBtnPrimary, { marginTop: 12 }]} onPress={openAddModal}>
+                <Ionicons name="add" size={18} color="#fff" />
+                <Text style={styles.actionBtnText}>+ Add New Floor</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
       </ScrollView>
