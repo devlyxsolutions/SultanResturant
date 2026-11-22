@@ -79,6 +79,18 @@ export type PendingFloorOrderAlert = {
   time: number;
 };
 
+export type BeverageOrderAlert = {
+  id: string;
+  tableId: string;
+  tableName: string;
+  floor: string;
+  server?: string;
+  items: { name: string; qty: number; menuItemId?: string }[];
+  itemsSummary: string;
+  time: number;
+  status: 'pending' | 'served' | 'dismissed';
+};
+
 export type OnlineOrderItem = {
   id: string;
   name: string;
@@ -371,12 +383,14 @@ type RestaurantState = {
   reservations: Reservation[];
   onlineOrders: OnlineOrder[];
   pendingFloorOrderAlert?: PendingFloorOrderAlert | null;
+  lastBeverageOrderAlert?: BeverageOrderAlert | null;
   lastBillPaidAlert?: { id?: string; tableId: string; tableName: string; billTotal: number; time: number } | null;
   lastFoodReadyAlert?: FoodReadyAlert | null;
 
   confirmOnlineOrder: (orderId: string, assignedWaiter?: string) => Promise<void>;
   rejectOnlineOrder: (orderId: string, reason?: string) => Promise<void>;
   clearPendingFloorOrderAlert: (orderId?: string) => void;
+  clearBeverageOrderAlert: (alertId?: string) => void;
 
   placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
@@ -1270,6 +1284,13 @@ export const useRestaurantStore = create<RestaurantState>()(
         return state;
       }),
 
+      clearBeverageOrderAlert: (alertId?: string) => set((state) => {
+        if (!alertId || state.lastBeverageOrderAlert?.id === alertId) {
+          return { lastBeverageOrderAlert: null };
+        }
+        return state;
+      }),
+
       placeOrder: (tableId, serverName, orderItems, isAddOn) => {
         set((state) => {
           const table = state.tables.find(t => t.id === tableId);
@@ -1328,9 +1349,62 @@ export const useRestaurantStore = create<RestaurantState>()(
             return m;
           });
 
+          // Detect beverages for Floor Manager Chiller Notification & Deduction
+          const beverageItems = orderItems.filter(
+            (oi) =>
+              (oi.item.category || '').toLowerCase() === 'drinks' ||
+              (oi.item.category || '').toLowerCase() === 'beverages' ||
+              oi.item.station === 'juice' ||
+              (oi.item.name || '').toLowerCase().includes('water') ||
+              (oi.item.name || '').toLowerCase().includes('pepsi') ||
+              (oi.item.name || '').toLowerCase().includes('coke') ||
+              (oi.item.name || '').toLowerCase().includes('soda')
+          );
+
+          let newBeverageAlert: BeverageOrderAlert | null = null;
+          if (beverageItems.length > 0 && table) {
+            const tableFloor = (table.floor || table.zone || 'Ground Floor').trim();
+            const itemsSummary = beverageItems.map((b) => `${b.qty}x ${b.item.name}`).join(', ');
+            newBeverageAlert = {
+              id: `bev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+              tableId: table.id,
+              tableName: table.name,
+              floor: tableFloor,
+              server: serverName,
+              items: beverageItems.map((b) => ({
+                name: b.item.name,
+                qty: b.qty,
+                menuItemId: b.item.id,
+              })),
+              itemsSummary,
+              time: Date.now(),
+              status: 'pending',
+            };
+
+            // Trigger opsStore floor beverage deduction safely
+            try {
+              // eslint-disable-next-line @typescript-eslint/no-require-imports
+              const { useOpsStore } = require('./opsStore');
+              if (useOpsStore && typeof useOpsStore.getState === 'function') {
+                useOpsStore.getState().deductFloorBeverageUsage({
+                  floor: tableFloor,
+                  items: beverageItems.map((b) => ({
+                    menuItemId: b.item.id,
+                    name: b.item.name,
+                    qty: b.qty,
+                  })),
+                  tableId: table.id,
+                  tableName: table.name,
+                  by: serverName,
+                });
+              }
+            } catch (_) {}
+          }
+
           return {
             tickets: [newTicket, ...state.tickets],
             menuItems: updatedMenuItems,
+            lastBeverageOrderAlert: newBeverageAlert || state.lastBeverageOrderAlert,
             tables: table
               ? state.tables.map(t => {
                 if (t.id !== tableId) return t;
@@ -3024,6 +3098,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.reservations ? { reservations: remoteState.reservations } : {}),
           ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
           ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
+          ...(remoteState.lastBeverageOrderAlert !== undefined ? { lastBeverageOrderAlert: remoteState.lastBeverageOrderAlert } : {}),
           ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
           ...(remoteState.feedbacks ? { feedbacks: remoteState.feedbacks } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? {

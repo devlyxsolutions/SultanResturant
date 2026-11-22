@@ -50,9 +50,15 @@ export type InventoryItem = {
   invoiceNo?: string;
   notes?: string;
   updatedAt: number;
+  /** Floor/Chiller-wise stock breakdown (e.g. { "Ground Floor": 24, "1st Floor": 12, "Rooftop": 18, "Main Store": 100 }) */
+  chillerStock?: Record<string, number>;
+  /** Minimum warning threshold for individual chillers */
+  chillerThreshold?: number;
+  /** Optional linked POS Menu Item ID for auto deduction upon beverage orders */
+  menuItemId?: string;
 };
 
-export type StockMovementType = 'receive' | 'usage' | 'wastage' | 'adjust';
+export type StockMovementType = 'receive' | 'usage' | 'wastage' | 'adjust' | 'transfer' | 'handover';
 
 export type StockMovement = {
   id: string;
@@ -72,6 +78,10 @@ export type StockMovement = {
   batchNumber?: string;
   unitCost?: number;
   expiryDate?: number;
+  fromLocation?: string;
+  toLocation?: string;
+  fromFloor?: string;
+  toFloor?: string;
 };
 
 export type ExpiryStatus = 'expired' | 'critical' | 'warning' | 'fresh' | 'none';
@@ -133,9 +143,41 @@ export const STORAGE_LOCATIONS = [
   'Dry Ration Store - Shelf B',
   'Spice & Masala Rack',
   'Beverage Cold Room',
+  'Ground Floor Chiller',
+  '1st Floor Chiller',
+  '2nd Floor Chiller',
+  '3rd Floor Chiller',
+  'Rooftop Chiller',
   'Cooking Line / Kitchen',
   'Packaging Store',
 ] as const;
+
+export const CHILLER_FLOORS = [
+  'Ground Floor',
+  '1st Floor',
+  '2nd Floor',
+  '3rd Floor',
+  'Rooftop',
+] as const;
+
+export type ChillerFloor = typeof CHILLER_FLOORS[number];
+
+export type ChillerHandoverRecord = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  itemCode?: string;
+  unit: string;
+  qty: number;
+  fromLocation: string; // e.g. "Beverage Cold Room" / "Main Storage"
+  toFloor: string; // e.g. "Ground Floor"
+  toChiller: string; // e.g. "Ground Floor Chiller"
+  handedOverBy: string; // Manager / Storekeeper name
+  receivedByFloorManager: string; // Floor Manager name
+  at: number;
+  notes?: string;
+  status: 'transferred' | 'verified';
+};
 
 export type ExpenseMethod = 'cash' | 'online';
 
@@ -234,7 +276,10 @@ const seedItem = (
   location: string,
   batchNumber: string,
   expiryOffsetDays?: number,
-  invoiceNo?: string
+  invoiceNo?: string,
+  chillerStock?: Record<string, number>,
+  chillerThreshold?: number,
+  menuItemId?: string
 ): InventoryItem => ({
   id,
   itemCode,
@@ -253,6 +298,15 @@ const seedItem = (
   receivedDate: Date.now() - 3 * 86400000,
   invoiceNo: invoiceNo || `INV-${id.toUpperCase()}-01`,
   updatedAt: Date.now() - 86400000,
+  chillerStock: chillerStock || (category === 'Beverages' ? {
+    'Ground Floor': Math.round(stock * 0.35),
+    '1st Floor': Math.round(stock * 0.25),
+    '2nd Floor': Math.round(stock * 0.15),
+    '3rd Floor': Math.round(stock * 0.10),
+    'Rooftop': Math.round(stock * 0.15),
+  } : undefined),
+  chillerThreshold: chillerThreshold || (category === 'Beverages' ? 6 : undefined),
+  menuItemId,
 });
 
 export const INITIAL_INVENTORY: InventoryItem[] = [
@@ -265,8 +319,11 @@ export const INITIAL_INVENTORY: InventoryItem[] = [
   seedItem('inv7', 'SKU-PR-001', 'Onions (Piaz)', 'پیاز دیسی', 'Produce', 'kg', 30, 15, 120, 'Sindh Green Fresh Produce Wholesale', '+92 333 5551234', 'Dry Ration Store - Shelf B', 'B-26-ONN-032', 8, 'SGP-9011'),
   seedItem('inv8', 'SKU-PR-002', 'Tomatoes (Tamatar)', 'ٹماٹر فارمی', 'Produce', 'kg', 18, 12, 150, 'Sindh Green Fresh Produce Wholesale', '+92 333 5551234', 'Walk-in Chiller', 'B-26-TOM-088', 4, 'SGP-9011'),
   seedItem('inv9', 'SKU-PR-003', 'Mint & Coriander Leaves', 'پودینہ و دھنیا', 'Produce', 'kg', 1.5, 5, 400, 'Sindh Green Fresh Produce Wholesale', '+92 333 5551234', 'Walk-in Chiller', 'B-26-MNT-003', -1, 'SGP-8977'),
-  seedItem('inv10', 'SKU-BV-001', 'Pepsi 1L Bottled', 'پیپسی ایک لیٹر', 'Beverages', 'bottles', 12, 24, 150, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-PEP-210', 60, 'GBM-3320'),
-  seedItem('inv11', 'SKU-BV-002', 'Mineral Water 500ml', 'منرل واٹر', 'Beverages', 'bottles', 60, 48, 55, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-WAT-110', 90, 'GBM-3320'),
+  seedItem('inv10', 'SKU-BV-001', 'Pepsi 1L Bottled', 'پیپسی ایک لیٹر', 'Beverages', 'bottles', 84, 24, 150, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-PEP-210', 60, 'GBM-3320'),
+  seedItem('inv11', 'SKU-BV-002', 'Mineral Water 500ml', 'منرل واٹر', 'Beverages', 'bottles', 130, 48, 55, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-WAT-110', 90, 'GBM-3320'),
+  seedItem('inv11b', 'SKU-BV-003', 'Coca Cola 500ml', 'کوکا کولا 500 ملی لیٹر', 'Beverages', 'bottles', 72, 24, 120, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-CC-112', 90, 'GBM-3320'),
+  seedItem('inv11c', 'SKU-BV-004', 'Sprite 500ml', 'اسپرائٹ 500 ملی لیٹر', 'Beverages', 'bottles', 60, 20, 120, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-SP-113', 90, 'GBM-3320'),
+  seedItem('inv11d', 'SKU-BV-005', 'Pakola Ice Cream Soda', 'پاکولہ آئس کریم سوڈا', 'Beverages', 'cans', 48, 15, 140, 'Gourmet Beverages & Mineral Water', '+92 300 1234567', 'Beverage Cold Room', 'B-26-PAK-114', 90, 'GBM-3320'),
   seedItem('inv12', 'SKU-FL-001', 'Commercial LPG Cylinder (45kg)', 'کمرشل گیس سلنڈر', 'Fuel', 'cylinders', 3, 2, 11000, 'Al-Rehman LPG & Charcoal Agency', '+92 322 1199887', 'Cooking Line / Kitchen', 'B-26-LPG-004', undefined, 'ARL-7712'),
   seedItem('inv13', 'SKU-FL-002', 'Charcoal BBQ (Hardwood)', 'کوئلہ باربی کیو', 'Fuel', 'kg', 80, 50, 90, 'Al-Rehman LPG & Charcoal Agency', '+92 322 1199887', 'Dry Ration Store - Shelf B', 'B-26-CHR-055', undefined, 'ARL-7712'),
   seedItem('inv14', 'SKU-SP-001', 'Tissue & Cutlery Packs', 'ٹشو اور کٹلری', 'Supplies', 'packs', 20, 15, 180, 'Modern Pack & Eco Disposables', '+92 301 7766554', 'Packaging Store', 'B-26-TIS-022', undefined, 'MPE-1230'),
@@ -1248,6 +1305,7 @@ export type OpsData = {
   serviceRequests: ServiceRequest[];
   inventory: InventoryItem[];
   stockMovements: StockMovement[];
+  chillerHandovers: ChillerHandoverRecord[];
   expenses: Expense[];
   feedback: GuestFeedback[];
   unavailableItemIds: string[];
@@ -1263,6 +1321,7 @@ export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'serviceRequests',
   'inventory',
   'stockMovements',
+  'chillerHandovers',
   'expenses',
   'feedback',
   'unavailableItemIds',
@@ -1306,8 +1365,36 @@ type OpsState = OpsData & {
       unitCost?: number;
       expiryDate?: number;
       location?: string;
+      fromLocation?: string;
+      toLocation?: string;
+      fromFloor?: string;
+      toFloor?: string;
     }
   ) => void;
+  handoverBeveragesToFloor: (params: {
+    itemId: string;
+    qty: number;
+    toFloor: string;
+    fromLocation?: string;
+    handedOverBy: string;
+    receivedByFloorManager: string;
+    notes?: string;
+  }) => boolean;
+  deductFloorBeverageUsage: (params: {
+    floor: string;
+    items: { menuItemId?: string; name: string; qty: number }[];
+    tableId?: string;
+    tableName?: string;
+    orderId?: string;
+    by?: string;
+  }) => void;
+  adjustFloorChillerStock: (params: {
+    itemId: string;
+    floor: string;
+    newStock: number;
+    reason?: string;
+    by?: string;
+  }) => void;
 
   // Expenses
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
@@ -1404,6 +1491,7 @@ export const useOpsStore = create<OpsState>()(
       serviceRequests: [],
       inventory: INITIAL_INVENTORY,
       stockMovements: INITIAL_STOCK_MOVEMENTS,
+      chillerHandovers: [],
       expenses: [],
       feedback: [],
       unavailableItemIds: [],
@@ -1496,6 +1584,10 @@ export const useOpsStore = create<OpsState>()(
             batchNumber: meta?.batchNumber || item.batchNumber,
             unitCost: meta?.unitCost ?? item.costPerUnit,
             expiryDate: meta?.expiryDate ?? item.expiryDate,
+            fromLocation: meta?.fromLocation,
+            toLocation: meta?.toLocation,
+            fromFloor: meta?.fromFloor,
+            toFloor: meta?.toFloor,
           };
 
           return {
@@ -1518,6 +1610,186 @@ export const useOpsStore = create<OpsState>()(
           };
         });
         notifySync();
+      },
+
+      handoverBeveragesToFloor: ({
+        itemId,
+        qty,
+        toFloor,
+        fromLocation = 'Beverage Cold Room',
+        handedOverBy,
+        receivedByFloorManager,
+        notes,
+      }) => {
+        let success = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item || qty <= 0) return state;
+
+          const currentFloorStock = Number(item.chillerStock?.[toFloor] || 0);
+          const nextFloorStock = currentFloorStock + qty;
+
+          const updatedChillerStock = {
+            ...(item.chillerStock || {}),
+            [toFloor]: nextFloorStock,
+          };
+
+          const handoverId = uid('hnd');
+          const handoverRecord: ChillerHandoverRecord = {
+            id: handoverId,
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            unit: item.unit,
+            qty,
+            fromLocation,
+            toFloor,
+            toChiller: `${toFloor} Chiller`,
+            handedOverBy: handedOverBy || 'Store Manager',
+            receivedByFloorManager: receivedByFloorManager || 'Floor Manager',
+            at: Date.now(),
+            notes,
+            status: 'transferred',
+          };
+
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'handover',
+            qty,
+            delta: 0,
+            note: `Handover to ${toFloor} Chiller (${receivedByFloorManager ? `Received by ${receivedByFloorManager}` : 'Pending Reception'})`,
+            by: handedOverBy,
+            at: Date.now(),
+            fromLocation,
+            toLocation: `${toFloor} Chiller`,
+            toFloor,
+          };
+
+          success = true;
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === itemId
+                ? {
+                    ...i,
+                    chillerStock: updatedChillerStock,
+                    updatedAt: Date.now(),
+                  }
+                : i
+            ),
+            chillerHandovers: [handoverRecord, ...(state.chillerHandovers || [])].slice(0, 100),
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (success) notifySync();
+        return success;
+      },
+
+      deductFloorBeverageUsage: ({ floor, items, tableId, tableName, orderId, by }) => {
+        if (!items || items.length === 0) return;
+        set((state) => {
+          let hasChanged = false;
+          const newMovements: StockMovement[] = [];
+          const updatedInventory = state.inventory.map((invItem) => {
+            const target = items.find(
+              (it) =>
+                (invItem.menuItemId && it.menuItemId === invItem.menuItemId) ||
+                invItem.id === it.menuItemId ||
+                invItem.name.toLowerCase().trim() === it.name.toLowerCase().trim() ||
+                invItem.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
+                it.name.toLowerCase().includes(invItem.name.toLowerCase().trim())
+            );
+
+            if (!target || target.qty <= 0) return invItem;
+
+            hasChanged = true;
+            const currentFloorQty = Number(invItem.chillerStock?.[floor] || 0);
+            const deductFloorQty = Math.min(currentFloorQty, target.qty);
+            const nextFloorQty = Math.max(0, currentFloorQty - target.qty);
+            const nextTotalStock = Math.max(0, invItem.stock - target.qty);
+
+            newMovements.push({
+              id: uid('mv'),
+              itemId: invItem.id,
+              itemName: invItem.name,
+              itemCode: invItem.itemCode,
+              type: 'usage',
+              qty: target.qty,
+              delta: -target.qty,
+              note: `Floor Sale at ${tableName || tableId || floor}${orderId ? ` (#${orderId})` : ''} [${floor} Chiller: -${deductFloorQty}]`,
+              by: by || 'POS / Waiter',
+              at: Date.now(),
+              fromFloor: floor,
+              fromLocation: `${floor} Chiller`,
+            });
+
+            return {
+              ...invItem,
+              stock: nextTotalStock,
+              chillerStock: {
+                ...(invItem.chillerStock || {}),
+                [floor]: nextFloorQty,
+              },
+              updatedAt: Date.now(),
+            };
+          });
+
+          if (!hasChanged) return state;
+
+          return {
+            inventory: updatedInventory,
+            stockMovements: [...newMovements, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        notifySync();
+      },
+
+      adjustFloorChillerStock: ({ itemId, floor, newStock, reason, by }) => {
+        let hasChanged = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item) return state;
+
+          const oldFloorStock = Number(item.chillerStock?.[floor] || 0);
+          const safeNewStock = Math.max(0, Number(newStock) || 0);
+          const diff = safeNewStock - oldFloorStock;
+          if (diff === 0) return state;
+
+          hasChanged = true;
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'adjust',
+            qty: safeNewStock,
+            delta: diff,
+            note: `${floor} Chiller stock count audit: ${oldFloorStock} ➔ ${safeNewStock} (${reason || 'Physical Count'})`,
+            by: by || 'Floor Manager',
+            at: Date.now(),
+            toFloor: floor,
+            toLocation: `${floor} Chiller`,
+          };
+
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === itemId
+                ? {
+                    ...i,
+                    chillerStock: {
+                      ...(i.chillerStock || {}),
+                      [floor]: safeNewStock,
+                    },
+                    updatedAt: Date.now(),
+                  }
+                : i
+            ),
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (hasChanged) notifySync();
       },
 
       addExpense: (expense) => {
@@ -2093,6 +2365,20 @@ export const useOpsStore = create<OpsState>()(
             next.stockMovements = mergedMovements.slice(0, MAX_MOVEMENTS);
           }
 
+          // Stable Chiller Handovers Reconciliation
+          if (Array.isArray(remote.chillerHandovers)) {
+            const seen = new Set<string>();
+            const mergedHandovers: ChillerHandoverRecord[] = [];
+            [...(remote.chillerHandovers || []), ...(state.chillerHandovers || [])].forEach((h) => {
+              if (h && h.id && !seen.has(h.id)) {
+                seen.add(h.id);
+                mergedHandovers.push(h);
+              }
+            });
+            mergedHandovers.sort((a, b) => (b.at || 0) - (a.at || 0));
+            next.chillerHandovers = mergedHandovers.slice(0, 100);
+          }
+
           // Stable Expenses Reconciliation (union by id, sorted by at desc)
           if (Array.isArray(remote.expenses)) {
             const seen = new Set<string>();
@@ -2187,6 +2473,7 @@ export function getOpsSyncState(): OpsData {
     serviceRequests: s.serviceRequests,
     inventory: s.inventory,
     stockMovements: s.stockMovements,
+    chillerHandovers: s.chillerHandovers || [],
     expenses: s.expenses,
     feedback: s.feedback,
     unavailableItemIds: s.unavailableItemIds,
