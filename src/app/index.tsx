@@ -392,7 +392,20 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         baseStaff.push(initS);
       }
     }
-    const activeStaff = baseStaff.filter((s) => s.status !== 'Inactive');
+    const activeStaff = baseStaff.filter(
+      (s) =>
+        s.status !== 'Inactive' &&
+        s.hasSystemAccess !== false &&
+        Boolean(s.pin && s.pin.trim().length > 0)
+    );
+
+    // Check if user entered the name of an HR-only employee who has System Access = No
+    const hrOnlyMatch = baseStaff.find((s) => {
+      if (s.hasSystemAccess !== false && Boolean(s.pin && s.pin.trim().length > 0)) return false;
+      const sName = s.name.trim().toLowerCase();
+      const sCompactName = sName.replace(/\s+/g, '');
+      return sName === normUser || sCompactName === compactNorm;
+    });
 
     // 1. Exact match by unique Login ID (username), Staff ID, Full Name, or Phone
     const exactMatches = activeStaff.filter((s) => {
@@ -419,6 +432,13 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         return;
       }
       setErrorMessage(`Incorrect PIN for ${exactMatches[0].name} (${exactMatches[0].username || exactMatches[0].id}).`);
+      return;
+    }
+
+    if (hrOnlyMatch) {
+      setErrorMessage(
+        `"${hrOnlyMatch.name}" does not have System Login Access enabled. Enable System Access in Admin -> Staff & HR first.`
+      );
       return;
     }
 
@@ -460,24 +480,11 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         completeStaffLogin(pinMember);
         return;
       }
-      if (enteredPin === '1234' && roleMembers.length === 0) {
-        const baseRole = (matchedCustomRole.baseRole === 'custom' ? 'manager' : matchedCustomRole.baseRole) as Role;
-        const dest = getRoleHome(baseRole, matchedCustomRole.baseRole);
-        void establishAccountSession({
-          staffId: `role_${matchedCustomRole.id}`,
-          username: normUser,
-          name: matchedCustomRole.name,
-          role: baseRole,
-          customRoleId: matchedCustomRole.id,
-          dest,
-        });
-        return;
-      }
-      setErrorMessage(`Incorrect PIN for ${matchedCustomRole.name}.`);
+      setErrorMessage(`No active account with that PIN for ${matchedCustomRole.name}.`);
       return;
     }
 
-    // 4. Standard role keyword match (e.g. "manager", "cashier", "waiter", "kitchen", "juicebar")
+    // 4. Standard role keyword match (e.g. "admin", "manager", "cashier", "waiter", "kitchen", "juicebar")
     const mappedRole = ROLE_ALIASES[normUser];
     if (mappedRole) {
       const isCashierKeyword = normUser === 'cashier' || normUser === 'pos';
@@ -486,26 +493,13 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
           ? s.role.toLowerCase() === 'cashier' || s.customRoleId === 'role-cashier'
           : s.role.toLowerCase() === mappedRole.toLowerCase()
       );
-      // Match strictly by the entered PIN among members of this role
+      // Match strictly by the entered PIN among members of this role who have system access
       const pinMember = roleMembers.find((s) => s.pin === enteredPin);
       if (pinMember) {
         completeStaffLogin(pinMember);
         return;
       }
-      if (enteredPin === '1234' && roleMembers.length === 0) {
-        const dest = getRoleHome(mappedRole);
-        const uDisplayName = enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1);
-        void establishAccountSession({
-          staffId: `role_${mappedRole}_${normUser}`,
-          username: normUser,
-          name: uDisplayName,
-          role: mappedRole,
-          customRoleId: isCashierKeyword ? 'role-cashier' : undefined,
-          dest,
-        });
-        return;
-      }
-      setErrorMessage('Incorrect PIN. Please sign in with your own Login ID and 4-digit PIN.');
+      setErrorMessage('Incorrect PIN or no system access enabled for this role. Sign in with your Login ID and PIN.');
       return;
     }
 

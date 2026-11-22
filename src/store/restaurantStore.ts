@@ -330,6 +330,8 @@ export type SalaryPayment = {
 
 export type StaffMember = {
   id: string;
+  /** Whether this employee is allowed to sign in to the POS / System (false for HR/Attendance-only staff like sweepers, helpers, dishwashers). */
+  hasSystemAccess?: boolean;
   /** Unique Login ID / Username for independent per-account sign-in (e.g. "master", "ordertaker1"). */
   username?: string;
   name: string;
@@ -415,6 +417,7 @@ type RestaurantState = {
   menuItems: MenuItem[];
   hasClearedLegacyDummyMenu?: boolean;
   dummyPurgeVersion?: number;
+  staffSeedVersion?: number;
   categories: string[];
   regions: string[];
   zones: string[];
@@ -634,9 +637,30 @@ export function isLegacyDummyDish(m: any): boolean {
   return false;
 }
 
+export const LEGACY_DUMMY_STAFF_IDS = new Set([
+  'st1',
+  'st2',
+  'st3',
+  'st4',
+  'st5',
+  'st6',
+  'st7',
+  'st-ot1',
+  'st-ot2',
+  'st-ot3',
+  'st-ot4',
+  'st-fm1',
+  'st-fm2',
+  'st-c1',
+  'st-c2',
+  'st1794730033364',
+]);
+
 export const INITIAL_STAFF: StaffMember[] = [
+  // ── Master System Account (Only account with active login access by default) ──
   {
     id: 'st-master',
+    hasSystemAccess: true,
     username: 'master',
     name: 'Master Admin',
     phone: '+92 300 0000001',
@@ -648,283 +672,63 @@ export const INITIAL_STAFF: StaffMember[] = [
     joinedDate: '2025-01-01',
     designation: 'Master System Owner (Independent)',
   },
-  {
-    id: 'st1',
-    username: 'admin',
-    name: 'Junaid Ahsan',
-    phone: '+92 300 1234567',
-    role: 'Admin',
-    customRoleId: 'role-admin',
-    pin: '1122',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-01-15',
-    cnic: '35201-8472910-1',
-    designation: 'General Director / Admin',
-    monthlySalary: 120000,
-    hourlyRate: 600,
-    emergencyContact: '+92 321 4455667',
-    address: 'Gulberg III, Lahore',
-    bankAccountDetails: 'Meezan Bank - PK36MEZN00012345678901'
-  },
-  {
-    id: 'st2',
-    username: 'manager',
-    name: 'Ali Khan',
-    phone: '+92 301 7654321',
-    role: 'Manager',
-    customRoleId: 'role-manager',
-    pin: '2233',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-02-01',
-    cnic: '35202-1928374-3',
-    designation: 'Restaurant Operations Manager',
-    monthlySalary: 75000,
-    hourlyRate: 350,
-    emergencyContact: '+92 333 7891234',
-    address: 'DHA Phase 5, Lahore',
-    bankAccountDetails: 'Bank Alfalah - PK45ALFH009876543210'
-  },
-  {
-    id: 'st3',
-    username: 'kitchen',
-    name: 'Chef Omar',
-    phone: '+92 302 9876543',
-    role: 'Kitchen',
-    customRoleId: 'role-kitchen',
-    pin: '3344',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-03-10',
-    cnic: '35201-9281734-5',
-    designation: 'Executive Head Chef',
-    monthlySalary: 65000,
-    hourlyRate: 320,
-    emergencyContact: '+92 345 1122334',
-    address: 'Johar Town, Lahore',
-    bankAccountDetails: 'Faysal Bank - PK12FAYS001122334455'
-  },
-  {
-    id: 'st-ot1',
-    username: 'ordertaker1',
-    name: 'Order Taker 1',
-    phone: '+92 303 1001001',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '1001',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-04-01',
-    assignedZone: 'Ground Floor',
-    assignedZones: ['Ground Floor'],
-    designation: 'Order Taker #1 (Ground Floor)',
-  },
-  {
-    id: 'st-ot2',
-    username: 'ordertaker2',
-    name: 'Order Taker 2',
-    phone: '+92 303 1002002',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '1002',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-04-01',
-    assignedZone: '1st Floor',
-    assignedZones: ['1st Floor'],
-    designation: 'Order Taker #2 (1st Floor)',
-  },
-  {
-    id: 'st-ot3',
-    username: 'ordertaker3',
-    name: 'Order Taker 3',
-    phone: '+92 303 1003003',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '1003',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-04-01',
-    assignedZone: '2nd Floor',
-    assignedZones: ['2nd Floor'],
-    designation: 'Order Taker #3 (2nd Floor)',
-  },
-  {
-    id: 'st-ot4',
-    username: 'ordertaker4',
-    name: 'Order Taker 4',
-    phone: '+92 303 1004004',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '1004',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-04-01',
-    assignedZone: 'Rooftop',
-    assignedZones: ['Rooftop'],
-    designation: 'Order Taker #4 (Rooftop)',
-  },
-  {
-    id: 'st4',
-    username: 'sara',
-    name: 'Sara Ahmed',
-    phone: '+92 303 5556677',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '4455',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-04-05',
-    assignedZone: 'Ground Floor',
-    assignedZones: ['Ground Floor'],
-    cnic: '35202-5463728-2',
-    designation: 'Senior Order Taker / Hostess',
-    monthlySalary: 32000,
-    hourlyRate: 180,
-    emergencyContact: '+92 300 9988776',
-    address: 'Model Town, Lahore',
-    bankAccountDetails: 'JazzCash - 03035556677'
-  },
-  {
-    id: 'st5',
-    username: 'hamza',
-    name: 'Hamza Malik',
-    phone: '+92 304 4443322',
-    role: 'Waiter',
-    customRoleId: 'role-waiter',
-    pin: '5566',
-    status: 'On Leave',
-    shift: 'Night',
-    joinedDate: '2025-05-12',
-    assignedZone: '1st Floor',
-    assignedZones: ['1st Floor'],
-    cnic: '35201-3829104-9',
-    designation: 'Floor Waiter',
-    monthlySalary: 30000,
-    hourlyRate: 170,
-    emergencyContact: '+92 301 5566778',
-    address: 'Faisal Town, Lahore',
-    bankAccountDetails: 'Easypaisa - 03044443322'
-  },
-  {
-    id: 'st6',
-    username: 'playland',
-    name: 'Ali Raza',
-    phone: '+92 305 9988776',
-    role: 'Playland',
-    customRoleId: 'role-playland',
-    pin: '1234',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-06-01',
-    cnic: '35202-9988771-7',
-    designation: 'Playland Attendant & Supervisor',
-    monthlySalary: 28000,
-    hourlyRate: 150,
-    emergencyContact: '+92 312 3344556',
-    address: 'Township, Lahore',
-    bankAccountDetails: 'HBL - PK09HABB002233445566'
-  },
-  {
-    id: 'st7',
-    username: 'juicebar',
-    name: 'Tariq Juice Master',
-    phone: '+92 306 1122334',
-    role: 'JuiceBar',
-    customRoleId: 'role-juicebar',
-    pin: '1234',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-06-15',
-    cnic: '35201-1122334-5',
-    designation: 'Juice & Mocktail Barista',
-    monthlySalary: 35000,
-    hourlyRate: 200,
-    emergencyContact: '+92 334 7788990',
-    address: 'Ichhra, Lahore',
-    bankAccountDetails: 'UBL - PK88UNIL000998877665'
-  },
-  {
-    id: 'st-fm1',
-    username: 'floor1',
-    name: 'Rashid Mehmood',
-    phone: '+92 305 6677889',
-    role: 'Floor Manager',
-    customRoleId: 'role-floor-manager',
-    pin: '6677',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-02-15',
-    assignedZone: 'Ground Floor',
-    assignedZones: ['Ground Floor'],
-    cnic: '35201-7788990-1',
-    designation: 'Ground Floor Manager',
-    monthlySalary: 55000,
-    hourlyRate: 280,
-    emergencyContact: '+92 321 9988776',
-    address: 'Johar Town, Lahore',
-    bankAccountDetails: 'Meezan Bank - PK12MEZN0099887766'
-  },
-  {
-    id: 'st-fm2',
-    username: 'floor2',
-    name: 'Tariq Javed',
-    phone: '+92 306 1122334',
-    role: 'Floor Manager',
-    customRoleId: 'role-floor-manager',
-    pin: '7788',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-03-01',
-    assignedZone: '1st Floor',
-    assignedZones: ['1st Floor'],
-    cnic: '35202-3344556-3',
-    designation: '1st Floor Manager',
-    monthlySalary: 55000,
-    hourlyRate: 280,
-    emergencyContact: '+92 333 4455667',
-    address: 'Gulberg III, Lahore',
-    bankAccountDetails: 'Bank Alfalah - PK55ALFH0011223344'
-  },
-  {
-    id: 'st-c1',
-    username: 'cashier1',
-    name: 'Usman Tariq',
-    phone: '+92 307 2233445',
-    role: 'Cashier',
-    customRoleId: 'role-cashier',
-    pin: '3333',
-    status: 'Active',
-    shift: 'Morning',
-    joinedDate: '2025-03-15',
-    cnic: '35202-4455667-1',
-    designation: 'Senior Counter Cashier',
-    monthlySalary: 45000,
-    hourlyRate: 240,
-    emergencyContact: '+92 300 7788991',
-    address: 'Garden Town, Lahore',
-    bankAccountDetails: 'Meezan Bank - PK22MEZN0044556677'
-  },
-  {
-    id: 'st-c2',
-    username: 'cashier2',
-    name: 'Bilal Hassan',
-    phone: '+92 308 8899001',
-    role: 'Cashier',
-    customRoleId: 'role-cashier',
-    pin: '4444',
-    status: 'Active',
-    shift: 'Evening',
-    joinedDate: '2025-04-01',
-    cnic: '35201-6677889-5',
-    designation: 'Evening Shift Cashier',
-    monthlySalary: 40000,
-    hourlyRate: 210,
-    emergencyContact: '+92 322 1122334',
-    address: 'Model Town, Lahore',
-    bankAccountDetails: 'HBL - PK77HABB0033445566'
-  },
+
+  // ── Kitchen & Production Staff (23 Employees — HR/Payroll registered, System Access: No until enabled) ──
+  { id: 'st-emp-k01', hasSystemAccess: false, name: 'Fateh Sher', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Head Chef' },
+  { id: 'st-emp-k02', hasSystemAccess: false, name: 'Sajid', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+  { id: 'st-emp-k03', hasSystemAccess: false, name: 'Arslan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+  { id: 'st-emp-k04', hasSystemAccess: false, name: 'Babar', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+  { id: 'st-emp-k05', hasSystemAccess: false, name: 'Majid', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Bakery' },
+  { id: 'st-emp-k06', hasSystemAccess: false, name: 'Shahzaib', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'BBQ' },
+  { id: 'st-emp-k07', hasSystemAccess: false, name: 'Jafar', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Pakistani Food' },
+  { id: 'st-emp-k08', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Pakistani Food' },
+  { id: 'st-emp-k09', hasSystemAccess: false, name: 'Qasim', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Fast Food' },
+  { id: 'st-emp-k10', hasSystemAccess: false, name: 'Hammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Fast Food' },
+  { id: 'st-emp-k11', hasSystemAccess: false, name: 'Ahsan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Continental' },
+  { id: 'st-emp-k12', hasSystemAccess: false, name: 'Saiful', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Chinese' },
+  { id: 'st-emp-k13', hasSystemAccess: false, name: 'Asad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Fast Food' },
+  { id: 'st-emp-k14', hasSystemAccess: false, name: 'Muzamil', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Kitchen Staff' },
+  { id: 'st-emp-k15', hasSystemAccess: false, name: 'Talha', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Chinese' },
+  { id: 'st-emp-k16', hasSystemAccess: false, name: 'Huzaifa', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Kitchen Staff' },
+  { id: 'st-emp-k17', hasSystemAccess: false, name: 'Kamran', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'GK' },
+  { id: 'st-emp-k18', hasSystemAccess: false, name: 'Sajid Dry Cleaner', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+  { id: 'st-emp-k19', hasSystemAccess: false, name: 'Haider', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'BBQ' },
+  { id: 'st-emp-k20', hasSystemAccess: false, name: 'Sarim', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Chinese' },
+  { id: 'st-emp-k21', hasSystemAccess: false, name: 'Darshan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+  { id: 'st-emp-k22', hasSystemAccess: false, name: 'Khan muhammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+  { id: 'st-emp-k23', hasSystemAccess: false, name: 'Din Muhammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+
+  // ── Management, Floor, Service & Bar Staff (30 Employees — HR/Payroll registered, System Access: No until enabled) ──
+  { id: 'st-emp-f01', hasSystemAccess: false, name: 'Shakeel', phone: '', role: 'Manager', customRoleId: 'role-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'G. Manager' },
+  { id: 'st-emp-f02', hasSystemAccess: false, name: 'Nadeem', phone: '', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'F. Manager' },
+  { id: 'st-emp-f03', hasSystemAccess: false, name: 'Adil Shah', phone: '', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: 'F. Manager' },
+  { id: 'st-emp-f04', hasSystemAccess: false, name: 'Zulfiqar', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Order Taker' },
+  { id: 'st-emp-f05', hasSystemAccess: false, name: 'Mubashir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f06', hasSystemAccess: false, name: 'Aetsham', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f07', hasSystemAccess: false, name: 'Usama', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f08', hasSystemAccess: false, name: 'Najeeb', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f09', hasSystemAccess: false, name: 'Ashir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f10', hasSystemAccess: false, name: 'Tasleema', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+  { id: 'st-emp-f11', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Order Taker' },
+  { id: 'st-emp-f12', hasSystemAccess: false, name: 'Tayab', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f13', hasSystemAccess: false, name: 'Fahad', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f14', hasSystemAccess: false, name: 'Shafaqat', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f15', hasSystemAccess: false, name: 'Mohib', phone: '', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Bar Helper' },
+  { id: 'st-emp-f16', hasSystemAccess: false, name: 'Sharjeel', phone: '', role: 'Cashier', customRoleId: 'role-cashier', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Cashier' },
+  { id: 'st-emp-f17', hasSystemAccess: false, name: 'Misbah', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+  { id: 'st-emp-f18', hasSystemAccess: false, name: 'Firyal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+  { id: 'st-emp-f19', hasSystemAccess: false, name: 'Sheroz', phone: '', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Barman' },
+  { id: 'st-emp-f20', hasSystemAccess: false, name: 'Qasim', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Food Runner' },
+  { id: 'st-emp-f21', hasSystemAccess: false, name: 'Tehreem', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'GRO - (F)' },
+  { id: 'st-emp-f22', hasSystemAccess: false, name: 'Madhia', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'GRO - (F)' },
+  { id: 'st-emp-f23', hasSystemAccess: false, name: 'Tahir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Houseman' },
+  { id: 'st-emp-f24', hasSystemAccess: false, name: 'Zahid', phone: '', role: 'Manager', customRoleId: 'role-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Store Keeper' },
+  { id: 'st-emp-f25', hasSystemAccess: false, name: 'Tanveer', phone: '', role: 'Cashier', customRoleId: 'role-cashier', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Cashier' },
+  { id: 'st-emp-f26', hasSystemAccess: false, name: 'Shameer', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f27', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f28', hasSystemAccess: false, name: 'Mohson', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+  { id: 'st-emp-f29', hasSystemAccess: false, name: 'Ali Abid', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Food Helper' },
+  { id: 'st-emp-f30', hasSystemAccess: false, name: 'Umar', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
 ];
 
 const INITIAL_ATTENDANCE: AttendanceRecord[] = [];
@@ -1040,6 +844,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       menuItems: INITIAL_MENU,
       hasClearedLegacyDummyMenu: true,
       dummyPurgeVersion: 1,
+      staffSeedVersion: 2,
       categories: INITIAL_CATEGORIES,
       regions: INITIAL_REGIONS,
       zones: INITIAL_FLOORS.map(f => f.name),
@@ -2790,17 +2595,26 @@ export const useRestaurantStore = create<RestaurantState>()(
         zones: state.zones.filter(z => z !== zoneName)
       })),
 
-      addStaff: (newStaff) => set((state) => ({
-        staff: [...(state.staff || []), { ...newStaff, id: `st${Date.now()}` }]
-      })),
+      addStaff: (newStaff) => {
+        set((state) => ({
+          staff: [...(state.staff || []), { ...newStaff, id: `st${Date.now()}` }]
+        }));
+        notifySync();
+      },
 
-      updateStaff: (id, staffUpdates) => set((state) => ({
-        staff: (state.staff || []).map(s => s.id === id ? { ...s, ...staffUpdates } : s)
-      })),
+      updateStaff: (id, staffUpdates) => {
+        set((state) => ({
+          staff: (state.staff || []).map(s => s.id === id ? { ...s, ...staffUpdates } : s)
+        }));
+        notifySync();
+      },
 
-      deleteStaff: (id) => set((state) => ({
-        staff: (state.staff || []).filter(s => s.id !== id)
-      })),
+      deleteStaff: (id) => {
+        set((state) => ({
+          staff: (state.staff || []).filter(s => s.id !== id)
+        }));
+        notifySync();
+      },
 
       registerStaffSession: (sessionData, maxAllowed = 1, autoKick = true) => {
         const now = Date.now();
@@ -3175,18 +2989,23 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.floors ? { floors: remoteState.floors } : {}),
           ...(remoteState.staff ? {
             staff: (() => {
+              const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
+                (s) => s && s.id && !LEGACY_DUMMY_STAFF_IDS.has(s.id)
+              );
               const sMap = new Map<string, StaffMember>();
-              for (const initS of INITIAL_STAFF) {
-                sMap.set(initS.id, { ...initS });
-              }
-              for (const rem of remoteState.staff) {
-                if (rem && rem.id) {
-                  const base = sMap.get(rem.id);
-                  sMap.set(rem.id, {
-                    ...(base?.username && !rem.username ? { username: base.username } : {}),
-                    ...rem,
-                  });
+              const masterInit = INITIAL_STAFF[0];
+              sMap.set(masterInit.id, { ...masterInit });
+              if (cleanRemote.length <= 1) {
+                for (const initS of INITIAL_STAFF) {
+                  sMap.set(initS.id, { ...initS });
                 }
+              }
+              for (const rem of cleanRemote) {
+                const base = sMap.get(rem.id);
+                sMap.set(rem.id, {
+                  ...(base || {}),
+                  ...rem,
+                });
               }
               return Array.from(sMap.values());
             })()
@@ -3347,19 +3166,26 @@ export const useRestaurantStore = create<RestaurantState>()(
           state.categories = Array.from(new Set(['All', ...Array.from(activeDishCats)]));
           state.regions = Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...SULTAN_DEFAULT_REGIONS]));
 
-          // Reconcile and guarantee built-in staff members on storage rehydration (ensures Master + 4 Order Takers + Floor Managers exist with usernames)
+          // Reconcile staff on storage rehydration: purge legacy dummy accounts and seed real restaurant staff
+          const existingCleanStaff = (state.staff || []).filter(
+            (s) => s && s.id && !LEGACY_DUMMY_STAFF_IDS.has(s.id)
+          );
           const staffMap = new Map<string, StaffMember>();
-          for (const initS of INITIAL_STAFF) {
-            staffMap.set(initS.id, { ...initS });
-          }
-          for (const existing of (state.staff || [])) {
-            if (existing && existing.id) {
-              const base = staffMap.get(existing.id);
-              staffMap.set(existing.id, {
-                ...(base?.username && !existing.username ? { username: base.username } : {}),
-                ...existing,
-              });
+          if ((state.staffSeedVersion || 0) < 2 || existingCleanStaff.length <= 1) {
+            for (const initS of INITIAL_STAFF) {
+              staffMap.set(initS.id, { ...initS });
             }
+            state.staffSeedVersion = 2;
+          } else {
+            const masterInit = INITIAL_STAFF[0];
+            staffMap.set(masterInit.id, { ...masterInit });
+          }
+          for (const existing of existingCleanStaff) {
+            const base = staffMap.get(existing.id);
+            staffMap.set(existing.id, {
+              ...(base || {}),
+              ...existing,
+            });
           }
           state.staff = Array.from(staffMap.values());
 

@@ -107,6 +107,7 @@ export default function StaffManagementScreen({
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   // Staff Form Fields (Detailed Employee Profile)
+  const [formHasSystemAccess, setFormHasSystemAccess] = useState<boolean>(false);
   const [formUsername, setFormUsername] = useState('');
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
@@ -206,6 +207,7 @@ export default function StaffManagementScreen({
       return;
     }
     setEditingStaff(null);
+    setFormHasSystemAccess(false);
     setFormUsername('');
     setFormName('');
     setFormPhone('');
@@ -218,7 +220,7 @@ export default function StaffManagementScreen({
     setFormMaxDevices(0);
     setFormAssignedZones(['Ground Floor']);
     setFormCnic('');
-    setFormDesignation('Order Taker');
+    setFormDesignation('');
     setFormJoinedDate(new Date().toISOString().split('T')[0]);
     setFormMonthlySalary('30000');
     setFormHourlyRate('150');
@@ -235,6 +237,11 @@ export default function StaffManagementScreen({
       return;
     }
     setEditingStaff(member);
+    const hasAccess =
+      member.hasSystemAccess !== undefined
+        ? member.hasSystemAccess
+        : Boolean(member.pin && member.pin.trim().length > 0);
+    setFormHasSystemAccess(hasAccess);
     setFormUsername(member.username || '');
     setFormName(member.name);
     setFormPhone(member.phone || '');
@@ -248,7 +255,7 @@ export default function StaffManagementScreen({
     setFormCustomRoleId(matchedR ? matchedR.id : member.customRoleId || 'role-waiter');
     setFormShift(member.shift);
     setFormStatus(member.status);
-    setFormPin(member.pin);
+    setFormPin(member.pin && member.pin.trim().length > 0 ? member.pin : Math.floor(1000 + Math.random() * 9000).toString());
     setFormMaxDevices(member.maxConcurrentDevices && member.maxConcurrentDevices > 0 ? member.maxConcurrentDevices : 0);
     const initialZones =
       member.assignedZones && member.assignedZones.length > 0
@@ -283,18 +290,22 @@ export default function StaffManagementScreen({
       setFormError('Please enter an employee name');
       return;
     }
-    if (!formPin.trim() || formPin.trim().length < 4) {
-      setFormError('PIN must be at least 4 digits');
-      return;
-    }
 
     const cleanUsername = formUsername.trim().toLowerCase().replace(/\s+/g, '');
-    if (cleanUsername) {
+    if (formHasSystemAccess) {
+      if (!cleanUsername) {
+        setFormError('Please enter a Login ID / Username for system access');
+        return;
+      }
       const duplicate = (staff || []).find(
         (s) => s.id !== editingStaff?.id && (s.username || '').trim().toLowerCase() === cleanUsername
       );
       if (duplicate) {
         setFormError(`Login ID "${cleanUsername}" is already used by ${duplicate.name}.`);
+        return;
+      }
+      if (!formPin.trim() || formPin.trim().length < 4) {
+        setFormError('Password / PIN must be at least 4 digits');
         return;
       }
     }
@@ -303,17 +314,21 @@ export default function StaffManagementScreen({
       ? 'All Floors'
       : formAssignedZones[0] || 'All Floors';
 
+    const isFloorRole =
+      formRole === 'Waiter' || formRole === 'Order Taker' || formRole === 'Floor Manager';
+
     const staffPayload = {
-      username: cleanUsername || undefined,
+      hasSystemAccess: formHasSystemAccess,
+      username: formHasSystemAccess ? (cleanUsername || undefined) : undefined,
       name: formName.trim(),
       phone: formPhone.trim(),
       role: formRole,
       customRoleId: formCustomRoleId,
       shift: formShift,
       status: formStatus,
-      pin: formPin.trim(),
-      assignedZone: formRole === 'Waiter' || formRole === 'Order Taker' ? primaryZone : undefined,
-      assignedZones: formRole === 'Waiter' || formRole === 'Order Taker' ? formAssignedZones : undefined,
+      pin: formHasSystemAccess ? formPin.trim() : '',
+      assignedZone: isFloorRole ? primaryZone : undefined,
+      assignedZones: isFloorRole ? formAssignedZones : undefined,
       cnic: formCnic.trim() || undefined,
       designation: formDesignation.trim() || undefined,
       joinedDate: formJoinedDate.trim() || new Date().toISOString().split('T')[0],
@@ -322,7 +337,7 @@ export default function StaffManagementScreen({
       emergencyContact: formEmergencyContact.trim() || undefined,
       address: formAddress.trim() || undefined,
       bankAccountDetails: formBankDetails.trim() || undefined,
-      maxConcurrentDevices: formMaxDevices > 0 ? formMaxDevices : undefined,
+      maxConcurrentDevices: formHasSystemAccess && formMaxDevices > 0 ? formMaxDevices : undefined,
     };
 
     if (editingStaff) {
@@ -631,19 +646,31 @@ export default function StaffManagementScreen({
                           </Text>
                         </View>
                         <View style={styles.detailRow}>
-                          <Text style={styles.detailLabel}>Secret PIN:</Text>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={styles.pinCodeText}>
-                              {isPinRevealed ? member.pin : '••••'}
-                            </Text>
-                            <TouchableOpacity onPress={() => togglePinReveal(member.id)}>
-                              <Ionicons
-                                name={isPinRevealed ? 'eye-off-outline' : 'eye-outline'}
-                                size={16}
-                                color="#007AFF"
-                              />
-                            </TouchableOpacity>
-                          </View>
+                          <Text style={styles.detailLabel}>System Access:</Text>
+                          {member.hasSystemAccess === false || !member.pin ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <Ionicons name="lock-closed-outline" size={12} color="#64748B" />
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>No System Access</Text>
+                            </View>
+                          ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              {Boolean(member.username) && (
+                                <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>
+                                  ID: {member.username} •
+                                </Text>
+                              )}
+                              <Text style={styles.pinCodeText}>
+                                {isPinRevealed ? member.pin : '••••'}
+                              </Text>
+                              <TouchableOpacity onPress={() => togglePinReveal(member.id)}>
+                                <Ionicons
+                                  name={isPinRevealed ? 'eye-off-outline' : 'eye-outline'}
+                                  size={16}
+                                  color="#007AFF"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          )}
                         </View>
                       </View>
 
@@ -689,7 +716,7 @@ export default function StaffManagementScreen({
                   <Text style={[styles.thText, { flex: 1.8 }]}>FLOOR / SHIFT</Text>
                   <Text style={[styles.thText, { flex: 1.5 }]}>BASE SALARY</Text>
                   <Text style={[styles.thText, { flex: 1.1 }]}>STATUS</Text>
-                  <Text style={[styles.thText, { flex: 1.2 }]}>4-DIGIT PIN</Text>
+                  <Text style={[styles.thText, { flex: 1.4 }]}>SYSTEM ACCESS / PIN</Text>
                   <Text style={[styles.thText, { flex: 1.4, textAlign: 'right' }]}>ACTIONS</Text>
                 </View>
 
@@ -760,15 +787,46 @@ export default function StaffManagementScreen({
                         <Text style={styles.statusText}>{member.status}</Text>
                       </View>
 
-                      <View style={[styles.tableCell, { flex: 1.2, flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
-                        <Text style={styles.pinCodeText}>{isPinRevealed ? member.pin : '••••'}</Text>
-                        <TouchableOpacity onPress={() => togglePinReveal(member.id)}>
-                          <Ionicons
-                            name={isPinRevealed ? 'eye-off-outline' : 'eye-outline'}
-                            size={17}
-                            color="#007AFF"
-                          />
-                        </TouchableOpacity>
+                      <View style={[styles.tableCell, { flex: 1.4 }]}>
+                        {member.hasSystemAccess === false || !member.pin ? (
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              alignSelf: 'flex-start',
+                              gap: 4,
+                              backgroundColor: '#F1F5F9',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                              borderWidth: 1,
+                              borderColor: '#E2E8F0',
+                            }}
+                          >
+                            <Ionicons name="lock-closed-outline" size={12} color="#64748B" />
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                              No Access
+                            </Text>
+                          </View>
+                        ) : (
+                          <View>
+                            {Boolean(member.username) && (
+                              <Text style={{ fontSize: 10.5, fontWeight: '700', color: BRAND.burgundy, marginBottom: 2 }}>
+                                ID: {member.username}
+                              </Text>
+                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={styles.pinCodeText}>{isPinRevealed ? member.pin : '••••'}</Text>
+                              <TouchableOpacity onPress={() => togglePinReveal(member.id)}>
+                                <Ionicons
+                                  name={isPinRevealed ? 'eye-off-outline' : 'eye-outline'}
+                                  size={17}
+                                  color="#007AFF"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
                       </View>
 
                       <View style={[styles.tableCell, { flex: 1.4, flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', gap: 8 }]}>
@@ -855,7 +913,7 @@ export default function StaffManagementScreen({
                 <Text style={styles.formLabel}>Full Name *</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="e.g. Order Taker 1 / Tariq Mehmood"
+                  placeholder="e.g. Fateh Sher / Zulfiqar / Sweeper"
                   placeholderTextColor="#A0A0A5"
                   value={formName}
                   onChangeText={(val) => {
@@ -865,40 +923,193 @@ export default function StaffManagementScreen({
                 />
               </View>
 
-              {/* Unique Login ID / Username */}
+              {/* Job Title / Designation & Phone */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.formLabel}>Job Title / Designation</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. Head Chef / Waiter / Sweeper"
+                    placeholderTextColor="#A0A0A5"
+                    value={formDesignation}
+                    onChangeText={setFormDesignation}
+                  />
+                </View>
+                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.formLabel}>Phone Number</Text>
+                  <TextInput
+                    style={styles.formInput}
+                    placeholder="e.g. +92 300 1234567"
+                    placeholderTextColor="#A0A0A5"
+                    value={formPhone}
+                    onChangeText={setFormPhone}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              </View>
+
+              {/* System Login Access Toggle (Yes / No) */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Login ID / Username (منفرد لاگ ان آئی ڈی)</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g. ordertaker1, ordertaker2, cashier1, master"
-                  placeholderTextColor="#A0A0A5"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  value={formUsername}
-                  onChangeText={(val) => {
-                    setFormUsername(val);
-                    if (formError) setFormError('');
+                <Text style={styles.formLabel}>
+                  System Access (کیا اس ملازم کو سسٹم لاگ ان کی رسائی دینی ہے؟) *
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                  <TouchableOpacity
+                    style={[
+                      styles.formPill,
+                      {
+                        flex: 1,
+                        paddingVertical: 11,
+                        justifyContent: 'center',
+                        borderWidth: 1.5,
+                      },
+                      formHasSystemAccess
+                        ? { backgroundColor: '#10B981', borderColor: '#059669' }
+                        : { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' },
+                    ]}
+                    onPress={() => {
+                      setFormHasSystemAccess(true);
+                      if (!formPin || formPin.trim().length < 4) {
+                        setFormPin(Math.floor(1000 + Math.random() * 9000).toString());
+                      }
+                      if (formError) setFormError('');
+                    }}
+                  >
+                    <Ionicons
+                      name={formHasSystemAccess ? 'checkmark-circle' : 'key-outline'}
+                      size={16}
+                      color={formHasSystemAccess ? '#FFFFFF' : '#475569'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.formPillText,
+                        { fontWeight: '800' },
+                        formHasSystemAccess ? { color: '#FFFFFF' } : { color: '#475569' },
+                      ]}
+                    >
+                      Yes (سسٹم ایکسیس دیں)
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.formPill,
+                      {
+                        flex: 1,
+                        paddingVertical: 11,
+                        justifyContent: 'center',
+                        borderWidth: 1.5,
+                      },
+                      !formHasSystemAccess
+                        ? { backgroundColor: BRAND.burgundy, borderColor: BRAND.burgundy }
+                        : { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' },
+                    ]}
+                    onPress={() => {
+                      setFormHasSystemAccess(false);
+                      if (formError) setFormError('');
+                    }}
+                  >
+                    <Ionicons
+                      name={!formHasSystemAccess ? 'lock-closed' : 'lock-closed-outline'}
+                      size={16}
+                      color={!formHasSystemAccess ? '#FFFFFF' : '#475569'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text
+                      style={[
+                        styles.formPillText,
+                        { fontWeight: '800' },
+                        !formHasSystemAccess ? { color: '#FFFFFF' } : { color: '#475569' },
+                      ]}
+                    >
+                      No (صرف اسٹاف ریکارڈ)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                {!formHasSystemAccess && (
+                  <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 6 }}>
+                    یہ ملازم سسٹم میں لاگ ان نہیں کر سکے گا (جیسے Sweeper, Dish Washer, Helper) — صرف اسٹاف ڈائریکٹری، حاضری اور تنخواہ کے ریکارڈ میں شامل ہوگا۔
+                  </Text>
+                )}
+              </View>
+
+              {/* System Login Credentials (Shown ONLY when System Access = Yes) */}
+              {formHasSystemAccess && (
+                <View
+                  style={{
+                    backgroundColor: '#F0FDF4',
+                    borderWidth: 1.5,
+                    borderColor: '#86EFAC',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 14,
                   }}
-                />
-              </View>
+                >
+                  {/* Unique Login ID / Username */}
+                  <View style={styles.formGroup}>
+                    <Text style={[styles.formLabel, { color: '#065F46' }]}>
+                      Login ID / Username (منفرد لاگ ان آئی ڈی) *
+                    </Text>
+                    <TextInput
+                      style={[styles.formInput, { backgroundColor: '#FFFFFF', borderColor: '#6EE7B7' }]}
+                      placeholder="e.g. ordertaker1, cashier1, shakeel, master"
+                      placeholderTextColor="#A0A0A5"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      value={formUsername}
+                      onChangeText={(val) => {
+                        setFormUsername(val);
+                        if (formError) setFormError('');
+                      }}
+                    />
+                  </View>
 
-              {/* Phone */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Phone Number</Text>
-                <TextInput
-                  style={styles.formInput}
-                  placeholder="e.g. +92 300 1234567"
-                  placeholderTextColor="#A0A0A5"
-                  value={formPhone}
-                  onChangeText={setFormPhone}
-                  keyboardType="phone-pad"
-                />
-              </View>
+                  {/* 4-Digit Secret PIN / Password */}
+                  <View style={[styles.formGroup, { marginBottom: 4 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.formLabel, { color: '#065F46', marginBottom: 0 }]}>
+                        Password / 4-Digit Login PIN (پاس ورڈ / پن کوڈ) *
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => setFormPin(Math.floor(1000 + Math.random() * 9000).toString())}
+                      >
+                        <Text style={{ fontSize: 11, color: '#059669', fontWeight: '800' }}>
+                          Auto Generate
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <TextInput
+                      style={[
+                        styles.formInput,
+                        {
+                          backgroundColor: '#FFFFFF',
+                          borderColor: '#6EE7B7',
+                          letterSpacing: 3,
+                          fontWeight: '800',
+                          fontSize: 16,
+                        },
+                      ]}
+                      placeholder="e.g. 1234"
+                      placeholderTextColor="#A0A0A5"
+                      value={formPin}
+                      onChangeText={(val) => {
+                        setFormPin(val);
+                        if (formError) setFormError('');
+                      }}
+                      keyboardType="numeric"
+                      maxLength={6}
+                    />
+                  </View>
+                </View>
+              )}
 
-              {/* Dynamic Role Selection (Built-in + Custom Roles) */}
+              {/* Dynamic Role / Department Selection (Built-in + Custom Roles) */}
               <View style={styles.formGroup}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.formLabel}>Assigned Role *</Text>
+                  <Text style={styles.formLabel}>
+                    {formHasSystemAccess ? 'Assigned System Role *' : 'Department / Role Category'}
+                  </Text>
                   {role === 'admin' && (
                     <TouchableOpacity
                       onPress={() => {
@@ -941,42 +1152,44 @@ export default function StaffManagementScreen({
                 </View>
               </View>
 
-              {/* Concurrent Device Limit */}
-              <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت لاگ ان حد)</Text>
-                <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
-                  یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ مکمل طور پر الگ رہیں گے۔
-                </Text>
-                <View style={styles.pillsRow}>
-                  {[
-                    { val: 0, label: 'Global Default' },
-                    { val: 1, label: '1 Device' },
-                    { val: 2, label: '2 Devices' },
-                    { val: 3, label: '3 Devices' },
-                    { val: 5, label: '5 Devices' },
-                    { val: 999, label: 'Unlimited (لا محدود)' },
-                  ].map((opt) => {
-                    const isSelected = formMaxDevices === opt.val;
-                    return (
-                      <TouchableOpacity
-                        key={opt.val}
-                        style={[
-                          styles.formPill,
-                          isSelected && {
-                            backgroundColor: BRAND.burgundy,
-                            borderColor: BRAND.burgundy,
-                          },
-                        ]}
-                        onPress={() => setFormMaxDevices(opt.val)}
-                      >
-                        <Text style={[styles.formPillText, isSelected && styles.formPillTextActive]}>
-                          {opt.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+              {/* Concurrent Device Limit (Shown ONLY when System Access = Yes) */}
+              {formHasSystemAccess && (
+                <View style={styles.formGroup}>
+                  <Text style={styles.formLabel}>Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت لاگ ان حد)</Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
+                    یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ مکمل طور پر الگ رہیں گے۔
+                  </Text>
+                  <View style={styles.pillsRow}>
+                    {[
+                      { val: 0, label: 'Global Default' },
+                      { val: 1, label: '1 Device' },
+                      { val: 2, label: '2 Devices' },
+                      { val: 3, label: '3 Devices' },
+                      { val: 5, label: '5 Devices' },
+                      { val: 999, label: 'Unlimited (لا محدود)' },
+                    ].map((opt) => {
+                      const isSelected = formMaxDevices === opt.val;
+                      return (
+                        <TouchableOpacity
+                          key={opt.val}
+                          style={[
+                            styles.formPill,
+                            isSelected && {
+                              backgroundColor: BRAND.burgundy,
+                              borderColor: BRAND.burgundy,
+                            },
+                          ]}
+                          onPress={() => setFormMaxDevices(opt.val)}
+                        >
+                          <Text style={[styles.formPillText, isSelected && styles.formPillTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
                 </View>
-              </View>
+              )}
 
               {/* Floor / Zone Assignment for Order Takers */}
               {Boolean(formRole === 'Waiter' || formRole === 'Order Taker') && (
@@ -1091,28 +1304,16 @@ export default function StaffManagementScreen({
                 </View>
               </View>
 
-              {/* Designation & CNIC */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
-                  <Text style={styles.formLabel}>Job Title / Designation</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. Senior Waiter / Head Chef"
-                    placeholderTextColor="#A0A0A5"
-                    value={formDesignation}
-                    onChangeText={setFormDesignation}
-                  />
-                </View>
-                <View style={[styles.formGroup, { flex: 1, minWidth: 150 }]}>
-                  <Text style={styles.formLabel}>CNIC / National ID</Text>
-                  <TextInput
-                    style={styles.formInput}
-                    placeholder="e.g. 35201-1234567-1"
-                    placeholderTextColor="#A0A0A5"
-                    value={formCnic}
-                    onChangeText={setFormCnic}
-                  />
-                </View>
+              {/* CNIC */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>CNIC / National ID</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g. 35201-1234567-1"
+                  placeholderTextColor="#A0A0A5"
+                  value={formCnic}
+                  onChangeText={setFormCnic}
+                />
               </View>
 
               {/* Salary & Overtime Rate */}
@@ -1186,32 +1387,6 @@ export default function StaffManagementScreen({
                   placeholderTextColor="#A0A0A5"
                   value={formAddress}
                   onChangeText={setFormAddress}
-                />
-              </View>
-
-              {/* 4-Digit Secret PIN */}
-              <View style={styles.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                  <Text style={styles.formLabel}>4-Digit POS Login PIN *</Text>
-                  <TouchableOpacity
-                    onPress={() => setFormPin(Math.floor(1000 + Math.random() * 9000).toString())}
-                  >
-                    <Text style={{ fontSize: 11, color: '#007AFF', fontWeight: '700' }}>
-                      Auto Generate
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <TextInput
-                  style={[styles.formInput, { letterSpacing: 3, fontWeight: '800', fontSize: 16 }]}
-                  placeholder="e.g. 1234"
-                  placeholderTextColor="#A0A0A5"
-                  value={formPin}
-                  onChangeText={(val) => {
-                    setFormPin(val);
-                    if (formError) setFormError('');
-                  }}
-                  keyboardType="numeric"
-                  maxLength={6}
                 />
               </View>
             </ScrollView>

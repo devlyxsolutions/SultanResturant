@@ -7,7 +7,6 @@ const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
 const PORT = process.env.PORT || 5050;
-
 function getServerLanIp() {
   try {
     const ifaces = os.networkInterfaces();
@@ -2327,22 +2326,62 @@ const INITIAL_STATE = {
   zones: ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
   regions: ['Pakistani', 'Chinese', 'Continental', 'Arabic', 'Turkish', 'Fast Food', 'Italian'],
   staff: [
-    { id: 'st-master', username: 'master', name: 'Master Admin', phone: '+92 300 0000001', role: 'Admin', customRoleId: 'role-admin', pin: '0000', status: 'Active', shift: 'Morning', joinedDate: '2025-01-01', designation: 'Master System Owner (Independent)' },
-    { id: 'st1', username: 'admin', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', customRoleId: 'role-admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
-    { id: 'st2', username: 'manager', name: 'Ali Khan', phone: '+92 301 7654321', role: 'Manager', customRoleId: 'role-manager', pin: '2233', status: 'Active', shift: 'Morning', joinedDate: '2025-02-01' },
-    { id: 'st3', username: 'kitchen', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
-    { id: 'st-ot1', username: 'ordertaker1', name: 'Order Taker 1', phone: '+92 303 1001001', role: 'Waiter', customRoleId: 'role-waiter', pin: '1001', status: 'Active', shift: 'Morning', joinedDate: '2025-04-01', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Order Taker #1 (Ground Floor)' },
-    { id: 'st-ot2', username: 'ordertaker2', name: 'Order Taker 2', phone: '+92 303 1002002', role: 'Waiter', customRoleId: 'role-waiter', pin: '1002', status: 'Active', shift: 'Morning', joinedDate: '2025-04-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: 'Order Taker #2 (1st Floor)' },
-    { id: 'st-ot3', username: 'ordertaker3', name: 'Order Taker 3', phone: '+92 303 1003003', role: 'Waiter', customRoleId: 'role-waiter', pin: '1003', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01', assignedZone: '2nd Floor', assignedZones: ['2nd Floor'], designation: 'Order Taker #3 (2nd Floor)' },
-    { id: 'st-ot4', username: 'ordertaker4', name: 'Order Taker 4', phone: '+92 303 1004004', role: 'Waiter', customRoleId: 'role-waiter', pin: '1004', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01', assignedZone: 'Rooftop', assignedZones: ['Rooftop'], designation: 'Order Taker #4 (Rooftop)' },
-    { id: 'st4', username: 'sara', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', customRoleId: 'role-waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
-    { id: 'st5', username: 'hamza', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', customRoleId: 'role-waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
-    { id: 'st6', username: 'playland', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', customRoleId: 'role-playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
-    { id: 'st7', username: 'juicebar', name: 'Tariq Juice Master', phone: '+92 306 1122334', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '1234', status: 'Active', shift: 'Morning', joinedDate: '2025-06-15' },
-    { id: 'st-fm1', username: 'floor1', name: 'Rashid Mehmood', phone: '+92 305 6677889', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '6677', status: 'Active', shift: 'Morning', joinedDate: '2025-02-15', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Ground Floor Manager' },
-    { id: 'st-fm2', username: 'floor2', name: 'Tariq Javed', phone: '+92 306 1122334', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '7788', status: 'Active', shift: 'Evening', joinedDate: '2025-03-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: '1st Floor Manager' },
-    { id: 'st-c1', username: 'cashier1', name: 'Usman Tariq', phone: '+92 307 2233445', role: 'Cashier', customRoleId: 'role-cashier', pin: '3333', status: 'Active', shift: 'Morning', joinedDate: '2025-03-15' },
-    { id: 'st-c2', username: 'cashier2', name: 'Bilal Hassan', phone: '+92 308 8899001', role: 'Cashier', customRoleId: 'role-cashier', pin: '4444', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01' },
+    { id: 'st-master', hasSystemAccess: true, username: 'master', name: 'Master Admin', phone: '+92 300 0000001', role: 'Admin', customRoleId: 'role-admin', pin: '0000', status: 'Active', shift: 'Morning', joinedDate: '2025-01-01', designation: 'Master System Owner (Independent)' },
+    // Kitchen & Production Staff (23 Employees)
+    { id: 'st-emp-k01', hasSystemAccess: false, name: 'Fateh Sher', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Head Chef' },
+    { id: 'st-emp-k02', hasSystemAccess: false, name: 'Sajid', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+    { id: 'st-emp-k03', hasSystemAccess: false, name: 'Arslan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+    { id: 'st-emp-k04', hasSystemAccess: false, name: 'Babar', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'CDP' },
+    { id: 'st-emp-k05', hasSystemAccess: false, name: 'Majid', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Bakery' },
+    { id: 'st-emp-k06', hasSystemAccess: false, name: 'Shahzaib', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'BBQ' },
+    { id: 'st-emp-k07', hasSystemAccess: false, name: 'Jafar', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Pakistani Food' },
+    { id: 'st-emp-k08', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Pakistani Food' },
+    { id: 'st-emp-k09', hasSystemAccess: false, name: 'Qasim', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Fast Food' },
+    { id: 'st-emp-k10', hasSystemAccess: false, name: 'Hammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Fast Food' },
+    { id: 'st-emp-k11', hasSystemAccess: false, name: 'Ahsan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Continental' },
+    { id: 'st-emp-k12', hasSystemAccess: false, name: 'Saiful', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Chinese' },
+    { id: 'st-emp-k13', hasSystemAccess: false, name: 'Asad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Fast Food' },
+    { id: 'st-emp-k14', hasSystemAccess: false, name: 'Muzamil', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Kitchen Staff' },
+    { id: 'st-emp-k15', hasSystemAccess: false, name: 'Talha', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Chinese' },
+    { id: 'st-emp-k16', hasSystemAccess: false, name: 'Huzaifa', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Kitchen Staff' },
+    { id: 'st-emp-k17', hasSystemAccess: false, name: 'Kamran', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'GK' },
+    { id: 'st-emp-k18', hasSystemAccess: false, name: 'Sajid Dry Cleaner', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+    { id: 'st-emp-k19', hasSystemAccess: false, name: 'Haider', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'BBQ' },
+    { id: 'st-emp-k20', hasSystemAccess: false, name: 'Sarim', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Chinese' },
+    { id: 'st-emp-k21', hasSystemAccess: false, name: 'Darshan', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+    { id: 'st-emp-k22', hasSystemAccess: false, name: 'Khan muhammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+    { id: 'st-emp-k23', hasSystemAccess: false, name: 'Din Muhammad', phone: '', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Dish Washer' },
+    // Management, Floor, Service & Bar Staff (30 Employees)
+    { id: 'st-emp-f01', hasSystemAccess: false, name: 'Shakeel', phone: '', role: 'Manager', customRoleId: 'role-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'G. Manager' },
+    { id: 'st-emp-f02', hasSystemAccess: false, name: 'Nadeem', phone: '', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'F. Manager' },
+    { id: 'st-emp-f03', hasSystemAccess: false, name: 'Adil Shah', phone: '', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: 'F. Manager' },
+    { id: 'st-emp-f04', hasSystemAccess: false, name: 'Zulfiqar', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Order Taker' },
+    { id: 'st-emp-f05', hasSystemAccess: false, name: 'Mubashir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f06', hasSystemAccess: false, name: 'Aetsham', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f07', hasSystemAccess: false, name: 'Usama', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f08', hasSystemAccess: false, name: 'Najeeb', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f09', hasSystemAccess: false, name: 'Ashir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f10', hasSystemAccess: false, name: 'Tasleema', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+    { id: 'st-emp-f11', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Order Taker' },
+    { id: 'st-emp-f12', hasSystemAccess: false, name: 'Tayab', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f13', hasSystemAccess: false, name: 'Fahad', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f14', hasSystemAccess: false, name: 'Shafaqat', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f15', hasSystemAccess: false, name: 'Mohib', phone: '', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Bar Helper' },
+    { id: 'st-emp-f16', hasSystemAccess: false, name: 'Sharjeel', phone: '', role: 'Cashier', customRoleId: 'role-cashier', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Cashier' },
+    { id: 'st-emp-f17', hasSystemAccess: false, name: 'Misbah', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+    { id: 'st-emp-f18', hasSystemAccess: false, name: 'Firyal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter (F)' },
+    { id: 'st-emp-f19', hasSystemAccess: false, name: 'Sheroz', phone: '', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Barman' },
+    { id: 'st-emp-f20', hasSystemAccess: false, name: 'Qasim', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Food Runner' },
+    { id: 'st-emp-f21', hasSystemAccess: false, name: 'Tehreem', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'GRO - (F)' },
+    { id: 'st-emp-f22', hasSystemAccess: false, name: 'Madhia', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'GRO - (F)' },
+    { id: 'st-emp-f23', hasSystemAccess: false, name: 'Tahir', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Houseman' },
+    { id: 'st-emp-f24', hasSystemAccess: false, name: 'Zahid', phone: '', role: 'Manager', customRoleId: 'role-manager', pin: '', status: 'Active', shift: 'Morning', joinedDate: '2026-01-01', designation: 'Store Keeper' },
+    { id: 'st-emp-f25', hasSystemAccess: false, name: 'Tanveer', phone: '', role: 'Cashier', customRoleId: 'role-cashier', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', designation: 'Cashier' },
+    { id: 'st-emp-f26', hasSystemAccess: false, name: 'Shameer', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f27', hasSystemAccess: false, name: 'Bilal', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f28', hasSystemAccess: false, name: 'Mohson', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
+    { id: 'st-emp-f29', hasSystemAccess: false, name: 'Ali Abid', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Food Helper' },
+    { id: 'st-emp-f30', hasSystemAccess: false, name: 'Umar', phone: '', role: 'Waiter', customRoleId: 'role-waiter', pin: '', status: 'Active', shift: 'Evening', joinedDate: '2026-01-01', assignedZone: 'All Floors', assignedZones: ['All Floors'], designation: 'Waiter' },
   ],
   reservations: [],
   inventory: [],
@@ -2368,7 +2407,8 @@ const INITIAL_STATE = {
   damageRecords: [],
   activeStaffSessions: [],
   revokedSessions: {},
-  revokedDeviceIds: {}
+  revokedDeviceIds: {},
+  chillerHandovers: []
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -2456,14 +2496,16 @@ try {
     if (!serverState.tables || serverState.tables.length < 10 || !serverState.tables.some(t => t.seatingType === 'majlis')) {
       serverState.tables = INITIAL_STATE.tables;
     }
+    const LEGACY_DUMMY_STAFF_SET = new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']);
     if (!Array.isArray(serverState.staff) || serverState.staff.length === 0) {
       serverState.staff = INITIAL_STATE.staff;
     } else {
+      serverState.staff = serverState.staff.filter(s => s && s.id && !LEGACY_DUMMY_STAFF_SET.has(s.id));
       for (const initSt of (INITIAL_STATE.staff || [])) {
         const existing = serverState.staff.find(s => s && s.id === initSt.id);
         if (!existing) {
           serverState.staff.push({ ...initSt });
-        } else if (initSt.username && !existing.username) {
+        } else if (initSt.username && !existing.username && existing.hasSystemAccess !== false) {
           existing.username = initSt.username;
         }
       }
@@ -5849,7 +5891,7 @@ async function handleRequest(req, res) {
 
   // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
   if (req.method === 'GET' || req.method === 'HEAD') {
-    const DIST_DIR = path.join(__dirname, 'dist');
+    const DIST_DIR = process.env.SULTAN_DIST_DIR || path.join(__dirname, 'dist');
     if (fs.existsSync(DIST_DIR)) {
       let rawPath = (url.pathname || '/').split('?')[0];
       try {
@@ -5993,11 +6035,6 @@ try {
   server80 = http.createServer(handleRequest);
 } catch (e) { }
 
-let server8081 = null;
-try {
-  server8081 = http.createServer(handleRequest);
-} catch (e) { }
-
 const wss = new WebSocketServer({ noServer: true });
 
 function bindUpgrade(srv) {
@@ -6011,7 +6048,6 @@ function bindUpgrade(srv) {
 bindUpgrade(server);
 bindUpgrade(server5000);
 if (server80) bindUpgrade(server80);
-if (server8081) bindUpgrade(server8081);
 
 function broadcastToClients(msgObj, excludeWs = null) {
   const payload = JSON.stringify(msgObj);
@@ -6075,8 +6111,10 @@ function computeStateFingerprint(st) {
       staffState: Array.isArray(st.staff)
         ? st.staff.map(s => ({
             id: s?.id || '',
+            hasSystemAccess: s?.hasSystemAccess !== false,
             username: s?.username || '',
             name: s?.name || '',
+            designation: s?.designation || '',
             role: s?.role || '',
             customRoleId: s?.customRoleId || '',
             status: s?.status || '',
@@ -6101,6 +6139,7 @@ function computeStateFingerprint(st) {
 }
 
 const LEGACY_DUMMY_SEED_IDS = {
+  staff: new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']),
   inventory: new Set(Array.from({ length: 23 }, (_, i) => `inv${i + 1}`)),
   stockMovements: new Set(['mv-01', 'mv-02', 'mv-03', 'mv-04']),
   suppliers: new Set(['sup-1', 'sup-2', 'sup-3', 'sup-4', 'sup-5', 'sup-6', 'sup-7', 'sup-8', 'sup-9']),
@@ -6151,7 +6190,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -6538,6 +6577,21 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           serverState.activeShiftId = sanitized && validShifts.some(s => s && s.id === sanitized && s.status === 'open')
             ? sanitized
             : null;
+        } else if (key === 'staff') {
+          const incStaff = Array.isArray(sanitized) ? sanitized : [];
+          if (incStaff.length <= 1 && Array.isArray(serverState.staff) && serverState.staff.length > 1) {
+            // Do not allow an un-seeded client with only master or empty staff to wipe the 53 real staff members
+            const masterOnly = INITIAL_STATE.staff[0];
+            if (!serverState.staff.some(s => s && s.id === 'st-master')) {
+              serverState.staff.unshift({ ...masterOnly });
+            }
+          } else {
+            const masterOnly = INITIAL_STATE.staff[0];
+            if (!incStaff.some(s => s && s.id === 'st-master')) {
+              incStaff.unshift({ ...masterOnly });
+            }
+            serverState.staff = incStaff;
+          }
         } else {
           serverState[key] = sanitized;
         }
@@ -6844,19 +6898,6 @@ if (server80) {
     },
     (err) => {
       console.log('[Sultan Hub] Port 80 listener:', err.message);
-    }
-  );
-}
-
-if (server8081 && PORT !== 8081 && !process.env.SKIP_8081) {
-  listenDualStack(
-    server8081,
-    8081,
-    () => {
-      console.log(`Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
-    },
-    (err) => {
-      console.log('[Sultan Hub] Port 8081 in use (e.g. by Metro bundler) — primary hub active on 5050 & 5000');
     }
   );
 }
