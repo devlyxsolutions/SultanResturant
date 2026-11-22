@@ -3847,8 +3847,10 @@ async function handleRequest(req, res) {
       url.pathname === '/api/desktop-update/info' ||
       url.pathname === '/api/desktop-update/SultanRestaurant.exe' ||
       url.pathname === '/api/tablet-update/Sultan-POS-Tablet.apk' ||
-      url.pathname === '/apk') &&
-    req.method === 'GET'
+      url.pathname === '/apk' ||
+      url.pathname === '/exe' ||
+      url.pathname === '/setup') &&
+    (req.method === 'GET' || req.method === 'HEAD')
   ) {
     const crypto = require('crypto');
 
@@ -3908,8 +3910,8 @@ async function handleRequest(req, res) {
         try {
           const st = fs.statSync(apkInfo.path);
           const clientApkVer = Number(url.searchParams.get('apkVer') || '0');
-          if (clientApkVer < 4) {
-            apkHash = `force_upgrade_v4_${Math.floor(Date.now() / 6000)}`;
+          if (clientApkVer < 7) {
+            apkHash = `force_upgrade_v7_${Math.floor(Date.now() / 6000)}`;
           } else {
             apkHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
           }
@@ -3922,9 +3924,31 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 4,
+        apkVersion: 7,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
+      return;
+    }
+
+    if (url.pathname === '/setup') {
+      const setupInfo = findNewestFile([
+        path.join(__dirname, 'Sultan-Restaurant-Setup.exe'),
+        'C:\\Users\\Nizaam Digital Sol\\Desktop\\SultanRestaurant-App\\Sultan-Restaurant-Setup.exe',
+        'C:\\Users\\Nizaam Digital Sol\\Desktop\\SultanResturant\\Sultan-Restaurant-Setup.exe',
+      ], 1000000);
+      if (!setupInfo) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Sultan-Restaurant-Setup.exe not found on server' }));
+        return;
+      }
+      const st = fs.statSync(setupInfo.path);
+      res.writeHead(200, {
+        'Content-Type': 'application/octet-stream',
+        'Content-Length': st.size,
+        'Content-Disposition': 'attachment; filename="Sultan-Restaurant-Setup.exe"',
+        'Cache-Control': 'no-store',
+      });
+      fs.createReadStream(setupInfo.path).pipe(res);
       return;
     }
 
@@ -5678,6 +5702,7 @@ function computeStateFingerprint(st) {
       zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
       customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
       inventoryLen: Array.isArray(st.inventory) ? st.inventory.length : 0,
+      inventoryCategoriesKey: Array.isArray(st.inventoryCategories) ? st.inventoryCategories.join('|') : '',
       suppliersLen: Array.isArray(st.suppliers) ? st.suppliers.length : 0,
       recipesLen: Array.isArray(st.recipes) ? st.recipes.length : 0,
       expensesLen: Array.isArray(st.expenses) ? st.expenses.length : 0,
@@ -5769,7 +5794,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -6246,6 +6271,7 @@ function pushToFirestoreCloud() {
           salesReturns: serverState.salesReturns || [],
           serviceRequests: serverState.serviceRequests || [],
           inventory: serverState.inventory || [],
+          inventoryCategories: serverState.inventoryCategories || [],
           stockMovements: serverState.stockMovements || [],
           expenses: serverState.expenses || [],
           suppliers: serverState.suppliers || [],
