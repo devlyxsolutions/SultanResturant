@@ -370,6 +370,12 @@ export default function RootLayout() {
           .animated-shield-ring {
             animation: shieldGlow 2.8s infinite ease-in-out !important;
           }
+
+          @media print {
+            #sultan-global-version-badge {
+              display: none !important;
+            }
+          }
         `}</style>
       )}
 
