@@ -7,7 +7,8 @@ import {
   StatusBar, 
   useWindowDimensions, 
   Platform,
-  ActivityIndicator
+  ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { useState, useMemo, useEffect } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +17,8 @@ import { useRoleGuard } from '../../hooks/useRoleGuard';
 import { useRolePermissions } from '../../store/roleStore';
 import { useSidebarStore } from '../../store/sidebarStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useRestaurantStore } from '../../store/restaurantStore';
+import { DEVICE_ID, broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import FullscreenButton from '../../components/FullscreenButton';
 import SultanLogo from '../../components/SultanLogo';
@@ -64,6 +67,51 @@ export default function AdminLayout() {
   const isTablet = width >= 768 && width < 1024;
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const { isCollapsed, setIsCollapsed, toggleCollapsed } = useSidebarStore();
+  const activeStaffSessions = useRestaurantStore((s) => s.activeStaffSessions) || [];
+  const terminateAllStaffSessions = useRestaurantStore((s) => s.terminateAllStaffSessions);
+  const [logoutAllConfirmOpen, setLogoutAllConfirmOpen] = useState(false);
+  const [logoutAllFeedback, setLogoutAllFeedback] = useState<string | null>(null);
+
+  const otherActiveCount = useMemo(
+    () =>
+      activeStaffSessions.filter(
+        (s) => s && (!user?.sessionId || s.sessionId !== user.sessionId)
+      ).length,
+    [activeStaffSessions, user?.sessionId]
+  );
+
+  const handleConfirmLogoutAllUsers = async () => {
+    setLogoutAllConfirmOpen(false);
+    const kickReason = 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے';
+    const mySessionId = user?.sessionId || undefined;
+    const localKicked = terminateAllStaffSessions(mySessionId, DEVICE_ID, kickReason);
+    const baseUrl = getActiveServerHttpUrl();
+    let kickedCount = localKicked;
+    if (baseUrl) {
+      try {
+        const res = await fetch(`${baseUrl}/api/auth/staff-session/kick-all`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            exceptSessionId: mySessionId,
+            exceptDeviceId: DEVICE_ID,
+            reason: kickReason,
+          }),
+        });
+        const data = await res.json().catch(() => null);
+        if (data && typeof data.kickedCount === 'number') {
+          kickedCount = Math.max(kickedCount, data.kickedCount);
+        }
+      } catch {}
+    }
+    broadcastImmediately();
+    const msg =
+      kickedCount > 0
+        ? `Logged out ${kickedCount} active user(s) across all devices!`
+        : 'Logout All sent to all connected devices!';
+    setLogoutAllFeedback(msg);
+    setTimeout(() => setLogoutAllFeedback((prev) => (prev === msg ? null : prev)), 3500);
+  };
 
   // On tablet screens (768-1023px), default to collapsed dock on route change so screens get full width
   useEffect(() => {
@@ -372,6 +420,28 @@ export default function AdminLayout() {
                 )}
               </View>
 
+              {/* 1-Click Logout All Users (Master Admin Only) */}
+              <TouchableOpacity
+                style={[
+                  styles.logoutBtn,
+                  {
+                    backgroundColor: 'rgba(220, 38, 38, 0.22)',
+                    borderColor: 'rgba(248, 113, 113, 0.55)',
+                  },
+                  width < 900 && { paddingHorizontal: 8 },
+                ]}
+                onPress={() => setLogoutAllConfirmOpen(true)}
+                activeOpacity={0.75}
+                hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+              >
+                <Ionicons name="power" size={15} color="#FCA5A5" style={width >= 900 ? { marginRight: 5 } : undefined} />
+                {width >= 900 && (
+                  <Text style={[styles.logoutText, { color: '#FECACA' }]}>
+                    {otherActiveCount > 0 ? `Logout All (${otherActiveCount})` : 'Logout All'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+
               {/* Logout button */}
               <TouchableOpacity 
                 style={[styles.logoutBtn, width < 900 && { paddingHorizontal: 8 }]}
@@ -384,6 +454,113 @@ export default function AdminLayout() {
               </TouchableOpacity>
             </View>
           </View>
+
+          {logoutAllFeedback && (
+            <View
+              style={{
+                backgroundColor: '#991B1B',
+                paddingVertical: 7,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <Ionicons name="checkmark-circle" size={16} color="#FDE68A" />
+              <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '700' }}>
+                {logoutAllFeedback}
+              </Text>
+            </View>
+          )}
+
+          {/* Confirmation Modal for Master Admin 1-Click Logout All Users */}
+          <Modal
+            visible={logoutAllConfirmOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setLogoutAllConfirmOpen(false)}
+          >
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(15, 23, 42, 0.65)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: 20,
+              }}
+            >
+              <View
+                style={{
+                  width: '100%',
+                  maxWidth: 420,
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 16,
+                  padding: 20,
+                  borderWidth: 1.5,
+                  borderColor: '#FCA5A5',
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                  <View
+                    style={{
+                      width: 40,
+                      height: 40,
+                      borderRadius: 20,
+                      backgroundColor: '#FEF2F2',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="power" size={22} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#7F1D1D' }}>
+                      Logout All Logged-In Users?
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#991B1B', fontWeight: '600' }}>
+                      تمام صارفین کو ایک کلک میں لاگ آؤٹ کریں
+                    </Text>
+                  </View>
+                </View>
+                <Text style={{ fontSize: 13, color: '#334155', lineHeight: 19, marginBottom: 16 }}>
+                  Is button se sab PCs aur Tablets par jitne bhi users login hain ({otherActiveCount} active terminals) foran logout ho jayenge. Aapka apna Master Admin account login rahega.
+                </Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10 }}>
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 14,
+                      paddingVertical: 9,
+                      borderRadius: 9,
+                      borderWidth: 1,
+                      borderColor: '#CBD5E1',
+                      backgroundColor: '#F8FAFC',
+                    }}
+                    onPress={() => setLogoutAllConfirmOpen(false)}
+                  >
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={{
+                      paddingHorizontal: 16,
+                      paddingVertical: 9,
+                      borderRadius: 9,
+                      backgroundColor: '#DC2626',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                    onPress={handleConfirmLogoutAllUsers}
+                  >
+                    <Ionicons name="power" size={14} color="#FFFFFF" />
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#FFFFFF' }}>
+                      Yes, Logout All
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </Modal>
 
           {/* Screen Content */}
           <View 

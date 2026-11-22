@@ -31,6 +31,7 @@ import {
 } from '../../store/roleStore';
 import { useAuthStore } from '../../store/authStore';
 import {
+  DEVICE_ID,
   subscribeToSyncStatus,
   setCustomServerIp,
   forceSyncNow,
@@ -820,6 +821,8 @@ export default function AdminSettingsScreen() {
   const deleteStaff = useRestaurantStore((s) => s.deleteStaff);
   const activeStaffSessions = useRestaurantStore((s) => s.activeStaffSessions) || [];
   const terminateStaffSession = useRestaurantStore((s) => s.terminateStaffSession);
+  const terminateAllStaffSessions = useRestaurantStore((s) => s.terminateAllStaffSessions);
+  const currentAuthUser = useAuthStore((s) => s.user);
 
   const tables = useRestaurantStore((s) => s.tables);
   const tickets = useRestaurantStore((s) => s.tickets);
@@ -3725,10 +3728,64 @@ export default function AdminSettingsScreen() {
                     </Text>
                   </View>
                 </View>
-                <View style={[styles.badge, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1 }]}>
-                  <Text style={[styles.badgeText, { color: '#065F46' }]}>
-                    {activeStaffSessions.length} Terminals Active
-                  </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <View style={[styles.badge, { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0', borderWidth: 1 }]}>
+                    <Text style={[styles.badgeText, { color: '#065F46' }]}>
+                      {activeStaffSessions.length} Terminals Active
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                      backgroundColor: '#DC2626',
+                      paddingHorizontal: 12,
+                      paddingVertical: 7,
+                      borderRadius: 8,
+                    }}
+                    onPress={() => {
+                      askConfirm(
+                        'Logout All Logged-In Users',
+                        'Kya aap waqai tamam PCs aur Tablets par logged-in users ko 1 click me logout karna chahte hain?\n\nAapka apna Master Admin session active rahega, baqi sab devices foran logout ho jayengi.',
+                        async () => {
+                          const kickReason = 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے';
+                          const mySessionId = currentAuthUser?.sessionId || undefined;
+                          const localKicked = terminateAllStaffSessions(mySessionId, DEVICE_ID, kickReason);
+                          const baseUrl = getActiveServerHttpUrl();
+                          let serverKicked = localKicked;
+                          if (baseUrl) {
+                            try {
+                              const res = await fetch(`${baseUrl}/api/auth/staff-session/kick-all`, {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  exceptSessionId: mySessionId,
+                                  exceptDeviceId: DEVICE_ID,
+                                  reason: kickReason,
+                                }),
+                              });
+                              const data = await res.json().catch(() => null);
+                              if (data && typeof data.kickedCount === 'number') {
+                                serverKicked = Math.max(serverKicked, data.kickedCount);
+                              }
+                            } catch {}
+                          }
+                          broadcastImmediately();
+                          showToast(
+                            serverKicked > 0
+                              ? `All ${serverKicked} logged-in user(s) logged out across all devices!`
+                              : 'Logout All signal sent to all connected PCs & Tablets!'
+                          );
+                        }
+                      );
+                    }}
+                  >
+                    <Ionicons name="power-outline" size={14} color="#FFFFFF" />
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                      Logout All Users (سب لاگ آؤٹ)
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
 

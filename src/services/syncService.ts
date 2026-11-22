@@ -834,6 +834,11 @@ function connectWebSocket(forceReconnect = false) {
                   },
                 }
               : {}),
+            ...(data.forceLogoutAll && typeof data.forceLogoutAll === 'object'
+              ? {
+                  forceLogoutAll: data.forceLogoutAll,
+                }
+              : {}),
           }));
         } else if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
@@ -976,6 +981,7 @@ function broadcastLocalState(force = false) {
       activeStaffSessions: state.activeStaffSessions || [],
       revokedSessions: state.revokedSessions || {},
       revokedDeviceIds: state.revokedDeviceIds || {},
+      forceLogoutAll: state.forceLogoutAll || null,
       ...opsState,
       ...kitchenState,
     },

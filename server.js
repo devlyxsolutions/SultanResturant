@@ -2409,6 +2409,7 @@ const INITIAL_STATE = {
   activeStaffSessions: [],
   revokedSessions: {},
   revokedDeviceIds: {},
+  forceLogoutAll: null,
   chillerHandovers: []
 };
 
@@ -3917,11 +3918,122 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // POST /api/auth/staff-session/kick-all (Master Admin 1-Click Logout ALL logged-in devices except self)
+  if (url.pathname === '/api/auth/staff-session/kick-all' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { exceptSessionId, exceptDeviceId, reason } = payload || {};
+      const now = Date.now();
+      const reasonText = reason || 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے';
+
+      if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') {
+        serverState.revokedSessions = {};
+      }
+      if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') {
+        serverState.revokedDeviceIds = {};
+      }
+
+      const newlyRevokedSessions = {};
+      const newlyRevokedDevices = {};
+      const keptSessions = [];
+      let kickedCount = 0;
+
+      for (const s of (serverState.activeStaffSessions || [])) {
+        if (!s) continue;
+        const isExempt = Boolean(
+          (exceptSessionId && s.sessionId === exceptSessionId) ||
+          (!exceptSessionId && exceptDeviceId && s.deviceId === exceptDeviceId)
+        );
+        if (isExempt) {
+          keptSessions.push(s);
+          continue;
+        }
+        kickedCount++;
+        const rec = {
+          sessionId: s.sessionId,
+          deviceId: s.deviceId || '',
+          staffId: s.staffId || '',
+          staffName: s.staffName || 'Staff Member',
+          timestamp: now,
+          reason: reasonText,
+        };
+        serverState.revokedSessions[s.sessionId] = rec;
+        newlyRevokedSessions[s.sessionId] = rec;
+        if (s.deviceId) {
+          serverState.revokedDeviceIds[s.deviceId] = rec;
+          newlyRevokedDevices[s.deviceId] = rec;
+        }
+      }
+
+      serverState.activeStaffSessions = keptSessions;
+      serverState.forceLogoutAll = {
+        timestamp: now,
+        exceptSessionId: exceptSessionId || undefined,
+        exceptDeviceId: exceptDeviceId || undefined,
+        reason: reasonText,
+      };
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+
+      broadcastToClients({
+        type: 'FORCE_LOGOUT_DEVICE',
+        revokedSessions: newlyRevokedSessions,
+        revokedDeviceIds: newlyRevokedDevices,
+        activeStaffSessions: serverState.activeStaffSessions,
+        forceLogoutAll: serverState.forceLogoutAll,
+        timestamp: now,
+      });
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'ADMIN_KICK_ALL',
+        timestamp: now,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          kickedCount,
+          activeStaffSessions: serverState.activeStaffSessions,
+          forceLogoutAll: serverState.forceLogoutAll,
+        })
+      );
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
   // GET /api/auth/staff-session/verify (Heartbeat check for exact sessionId validity)
   if (url.pathname === '/api/auth/staff-session/verify' && req.method === 'GET') {
     const qSessionId = (url.searchParams.get('sessionId') || '').trim();
     const qStaffId = (url.searchParams.get('staffId') || '').toLowerCase().trim();
     const qDeviceId = (url.searchParams.get('deviceId') || '').trim();
+    const qLoginTime = Number(url.searchParams.get('loginTime') || '0');
+
+    // Global Master Admin "Logout All" check
+    const fla = serverState.forceLogoutAll;
+    if (fla && fla.timestamp && Date.now() - fla.timestamp < 24 * 60 * 60 * 1000) {
+      const isExempt = Boolean(
+        (fla.exceptSessionId && qSessionId && fla.exceptSessionId === qSessionId) ||
+        (!qSessionId && fla.exceptDeviceId && qDeviceId && fla.exceptDeviceId === qDeviceId)
+      );
+      if (!isExempt && (!qLoginTime || qLoginTime <= fla.timestamp)) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            valid: false,
+            revoked: true,
+            reason: fla.reason || 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے',
+            timestamp: fla.timestamp,
+          })
+        );
+        return;
+      }
+    }
 
     if (!qSessionId) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -4320,8 +4432,8 @@ async function handleRequest(req, res) {
         try {
           const st = fs.statSync(apkInfo.path);
           const clientApkVer = Number(url.searchParams.get('apkVer') || '0');
-          if (clientApkVer < 17) {
-            apkHash = `force_upgrade_v17_${Math.floor(Date.now() / 6000)}`;
+          if (clientApkVer < 18) {
+            apkHash = `force_upgrade_v18_${Math.floor(Date.now() / 6000)}`;
           } else {
             apkHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
           }
@@ -4334,7 +4446,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 17,
+        apkVersion: 18,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -6534,6 +6646,15 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         if (Array.isArray(partialState.roles) && partialState.roles.length > 0) {
           serverState.roles = mergeServerRolesSafely(serverState.roles, partialState.roles);
           modified = true;
+        }
+      } else if (key === 'forceLogoutAll') {
+        if (partialState.forceLogoutAll && typeof partialState.forceLogoutAll === 'object') {
+          const prevTs = serverState.forceLogoutAll?.timestamp || 0;
+          const nextTs = partialState.forceLogoutAll.timestamp || 0;
+          if (nextTs >= prevTs) {
+            serverState.forceLogoutAll = partialState.forceLogoutAll;
+            modified = true;
+          }
         }
       } else if (key === 'revokedSessions') {
         if (partialState.revokedSessions && typeof partialState.revokedSessions === 'object') {

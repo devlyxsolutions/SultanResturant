@@ -501,6 +501,7 @@ type RestaurantState = {
   activeStaffSessions: StaffSession[];
   revokedSessions?: Record<string, RevokedSessionRecord>;
   revokedDeviceIds?: Record<string, { sessionId?: string; staffId?: string; staffName: string; timestamp: number; reason: string }>;
+  forceLogoutAll?: { timestamp: number; exceptSessionId?: string; exceptDeviceId?: string; reason: string } | null;
   registerStaffSession: (
     session: Omit<StaffSession, 'loginTime' | 'lastActiveTime'>,
     maxAllowed?: number,
@@ -508,6 +509,7 @@ type RestaurantState = {
   ) => { allowed: boolean; kickedCount: number; kickedSessions: StaffSession[]; activeDevices?: StaffSession[] };
   unregisterStaffSession: (sessionId?: string, deviceId?: string) => void;
   terminateStaffSession: (sessionId: string, reason?: string) => void;
+  terminateAllStaffSessions: (exceptSessionId?: string, exceptDeviceId?: string, reason?: string) => number;
   clearStaffSessions: (staffId?: string) => void;
   syncFromServer: (remoteState: Partial<RestaurantState>) => void;
 };
@@ -877,6 +879,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       activeStaffSessions: [],
       revokedSessions: {},
       revokedDeviceIds: {},
+      forceLogoutAll: null,
       attendance: INITIAL_ATTENDANCE,
       salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
@@ -2814,6 +2817,59 @@ export const useRestaurantStore = create<RestaurantState>()(
         }));
       },
 
+      terminateAllStaffSessions: (exceptSessionId, exceptDeviceId, reason) => {
+        const now = Date.now();
+        const reasonText = reason || 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے';
+        const currentSessions = get().activeStaffSessions || [];
+        const newRevokedSessions = { ...(get().revokedSessions || {}) };
+        const newRevokedDevices = { ...(get().revokedDeviceIds || {}) };
+        const keptSessions: StaffSession[] = [];
+        let kickedCount = 0;
+
+        for (const sess of currentSessions) {
+          if (!sess) continue;
+          const isExempt = Boolean(
+            (exceptSessionId && sess.sessionId === exceptSessionId) ||
+            (!exceptSessionId && exceptDeviceId && sess.deviceId === exceptDeviceId)
+          );
+          if (isExempt) {
+            keptSessions.push(sess);
+            continue;
+          }
+          kickedCount++;
+          newRevokedSessions[sess.sessionId] = {
+            sessionId: sess.sessionId,
+            deviceId: sess.deviceId,
+            staffId: sess.staffId,
+            staffName: sess.staffName,
+            timestamp: now,
+            reason: reasonText,
+          };
+          if (sess.deviceId) {
+            newRevokedDevices[sess.deviceId] = {
+              sessionId: sess.sessionId,
+              staffId: sess.staffId,
+              staffName: sess.staffName,
+              timestamp: now,
+              reason: reasonText,
+            };
+          }
+        }
+
+        set({
+          activeStaffSessions: keptSessions,
+          revokedSessions: newRevokedSessions,
+          revokedDeviceIds: newRevokedDevices,
+          forceLogoutAll: {
+            timestamp: now,
+            exceptSessionId: exceptSessionId || undefined,
+            exceptDeviceId: exceptDeviceId || undefined,
+            reason: reasonText,
+          },
+        });
+        return kickedCount;
+      },
+
       clearStaffSessions: (staffId) => {
         if (!staffId) {
           set({ activeStaffSessions: [] });
@@ -3103,6 +3159,12 @@ export const useRestaurantStore = create<RestaurantState>()(
               }
               return clean;
             })()
+          } : {}),
+          ...(remoteState.forceLogoutAll && typeof remoteState.forceLogoutAll === 'object' ? {
+            forceLogoutAll:
+              !state.forceLogoutAll || (remoteState.forceLogoutAll.timestamp || 0) >= (state.forceLogoutAll.timestamp || 0)
+                ? remoteState.forceLogoutAll
+                : state.forceLogoutAll,
           } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? {
             lastBillPaidAlert: (() => {

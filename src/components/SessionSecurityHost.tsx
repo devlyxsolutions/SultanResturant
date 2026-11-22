@@ -39,6 +39,7 @@ export default function SessionSecurityHost() {
   const revokedSessions = useRestaurantStore((s) => s.revokedSessions);
   const revokedDeviceIds = useRestaurantStore((s) => s.revokedDeviceIds);
   const activeStaffSessions = useRestaurantStore((s) => s.activeStaffSessions);
+  const forceLogoutAll = useRestaurantStore((s) => s.forceLogoutAll);
 
   const [kickModalVisible, setKickModalVisible] = useState(false);
   const [kickDetails, setKickDetails] = useState<{
@@ -79,6 +80,28 @@ export default function SessionSecurityHost() {
     const now = Date.now();
     const mySessionId = user.sessionId || '';
     const myStaffId = (user.staffId || user.id || '').toLowerCase().trim();
+
+    // 1.0 Global Master Admin "Logout All Users" sweep (applies to every logged-in device except the admin who triggered it)
+    if (
+      forceLogoutAll &&
+      forceLogoutAll.timestamp &&
+      now - forceLogoutAll.timestamp < 24 * 60 * 60 * 1000
+    ) {
+      const isExempt = Boolean(
+        (forceLogoutAll.exceptSessionId && mySessionId && forceLogoutAll.exceptSessionId === mySessionId) ||
+        (!mySessionId && forceLogoutAll.exceptDeviceId && forceLogoutAll.exceptDeviceId === DEVICE_ID)
+      );
+      const loggedInBeforeSweep = !user.loginTime || user.loginTime <= forceLogoutAll.timestamp;
+      if (!isExempt && loggedInBeforeSweep) {
+        triggerForcedLogout(
+          user.name,
+          forceLogoutAll.reason || 'Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے',
+          forceLogoutAll.timestamp
+        );
+        return;
+      }
+    }
+
     if (!mySessionId) return;
 
     // 1a. Primary exact check: was THIS exact sessionId revoked for THIS exact account?
@@ -111,7 +134,7 @@ export default function SessionSecurityHost() {
         });
       }
     }
-  }, [revokedSessions, revokedDeviceIds, isAuthenticated, user, silentLogout]);
+  }, [revokedSessions, revokedDeviceIds, forceLogoutAll, isAuthenticated, user, silentLogout]);
 
   // 2. Active-Sessions Eviction Check (STRICTLY scoped to exact same staffId + newer login — NEVER cross-account!)
   useEffect(() => {
@@ -163,8 +186,9 @@ export default function SessionSecurityHost() {
         const staffId = encodeURIComponent(user.staffId || user.id || '');
         const sessionId = encodeURIComponent(user.sessionId || '');
         const deviceId = encodeURIComponent(DEVICE_ID);
+        const loginTime = encodeURIComponent(String(user.loginTime || 0));
         const res = await fetch(
-          `${baseUrl}/api/auth/staff-session/verify?sessionId=${sessionId}&staffId=${staffId}&deviceId=${deviceId}`
+          `${baseUrl}/api/auth/staff-session/verify?sessionId=${sessionId}&staffId=${staffId}&deviceId=${deviceId}&loginTime=${loginTime}`
         );
         if (!res.ok || cancelled) return;
         const data = await res.json();
@@ -215,7 +239,11 @@ export default function SessionSecurityHost() {
           </View>
 
           <Text style={styles.urduTitle}>سیشن ختم ہو گیا • Session Terminated</Text>
-          <Text style={styles.englishTitle}>Account Logged In On Another Device</Text>
+          <Text style={styles.englishTitle}>
+            {/admin|لاگ آؤٹ|کک|logout all/i.test(kickDetails.reason || '')
+              ? 'Logged Out By Master Admin'
+              : 'Account Logged In On Another Device'}
+          </Text>
 
           <View style={styles.infoBox}>
             <View style={styles.infoRow}>
