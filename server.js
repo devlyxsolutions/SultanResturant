@@ -2510,6 +2510,7 @@ try {
     if (!Array.isArray(serverState.staff) || serverState.staff.length === 0) {
       serverState.staff = INITIAL_STATE.staff;
     } else {
+      serverState.staff = serverState.staff.filter(s => s && s.id && !LEGACY_DUMMY_STAFF_SET.has(s.id));
       serverState.staff = serverState.staff.filter(s => !isDummyStaffServer(s));
       for (const initSt of (INITIAL_STATE.staff || [])) {
         const existing = serverState.staff.find(s => s && s.id === initSt.id);
@@ -6602,327 +6603,337 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             : null;
         } else if (key === 'staff') {
           const incStaff = Array.isArray(sanitized) ? sanitized : [];
-          const sMap = new Map();
-          for (const initSt of (INITIAL_STATE.staff || [])) {
-            sMap.set(initSt.id, { ...initSt });
-          }
-          for (const curr of (serverState.staff || [])) {
-            if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
-              sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
+          if (incStaff.length <= 1 && Array.isArray(serverState.staff) && serverState.staff.length > 1) {
+            // Do not allow an un-seeded client with only master or empty staff to wipe the 53 real staff members
+            const masterOnly = INITIAL_STATE.staff[0];
+            if (!serverState.staff.some(s => s && s.id === 'st-master')) {
+              serverState.staff.unshift({ ...masterOnly });
+              const sMap = new Map();
+              for (const initSt of (INITIAL_STATE.staff || [])) {
+                sMap.set(initSt.id, { ...initSt });
+              }
+              for (const curr of (serverState.staff || [])) {
+                if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
+                  sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
+                }
+              } else {
+                const masterOnly = INITIAL_STATE.staff[0];
+                if (!incStaff.some(s => s && s.id === 'st-master')) {
+                  incStaff.unshift({ ...masterOnly });
+                }
+                for (const inc of incStaff) {
+                  if (inc && inc.id) {
+                    sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+                  }
+                  serverState.staff = incStaff;
+                }
+                serverState.staff = Array.from(sMap.values());
+              } else {
+                serverState[key] = sanitized;
+              }
+              modified = true;
             }
           }
-          for (const inc of incStaff) {
-            if (inc && inc.id) {
-              sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+        }
+
+        if (modified) {
+          // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
+          const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+          if (Array.isArray(serverState.tables)) {
+            const nowRec = Date.now();
+            serverState.tables = serverState.tables.map(t => {
+              if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto) {
+                return {
+                  ...t,
+                  status: 'available',
+                  billTotal: 0,
+                  orders: [],
+                  server: undefined,
+                  isPaid: false,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  lastSettledAt: t.lastSettledAt || nowRec,
+                };
+              }
+              return t;
+            });
+          }
+
+          const nextFingerprint = computeStateFingerprint(serverState);
+          if (nextFingerprint === prevFingerprint) {
+            return;
+          }
+          lastStateFingerprint = nextFingerprint;
+          serverState.lastUpdated = Date.now();
+          persistState();
+          console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
+          if (
+            (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
+            (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
+          ) {
+            broadcastToClients({
+              type: 'FORCE_LOGOUT_DEVICE',
+              revokedSessions: serverState.revokedSessions || {},
+              revokedDeviceIds: serverState.revokedDeviceIds || {},
+              activeStaffSessions: serverState.activeStaffSessions || [],
+              timestamp: Date.now()
+            });
+          }
+          broadcastToClients({
+            type: 'SERVER_BROADCAST',
+            state: serverState,
+            senderId: senderId || 'SERVER',
+            timestamp: serverState.lastUpdated
+          }, originWs);
+          pushToFirestoreCloud();
+        }
+      }
+
+      // ==============================================================
+      // BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
+      // ==============================================================
+      const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
+      const FIRESTORE_PROJECT_ID = "sultan-resturant";
+      const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
+
+      let lastProcessedCloudTimestamp = 0;
+      let lastProcessedCloudUpdateTime = '';
+      let isPushingToFirestore = false;
+      let isApplyingCloudUpdate = false;
+      let firestorePushTimer = null;
+
+      function decodeFirestoreValue(val) {
+        if (!val || typeof val !== 'object') return val;
+        if ('stringValue' in val) return val.stringValue;
+        if ('integerValue' in val) return Number(val.integerValue);
+        if ('doubleValue' in val) return Number(val.doubleValue);
+        if ('booleanValue' in val) return val.booleanValue;
+        if ('nullValue' in val) return null;
+        if ('mapValue' in val) {
+          const fields = val.mapValue.fields || {};
+          const res = {};
+          for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
+          return res;
+        }
+        if ('arrayValue' in val) {
+          const values = val.arrayValue.values || [];
+          return values.map(decodeFirestoreValue);
+        }
+        return val;
+      }
+
+      function encodeFirestoreValue(val) {
+        if (val === null || val === undefined) return { nullValue: null };
+        if (typeof val === 'string') return { stringValue: val };
+        if (typeof val === 'boolean') return { booleanValue: val };
+        if (typeof val === 'number') {
+          if (Number.isInteger(val)) return { integerValue: val.toString() };
+          return { doubleValue: val };
+        }
+        if (Array.isArray(val)) {
+          return { arrayValue: { values: val.map(encodeFirestoreValue) } };
+        }
+        if (typeof val === 'object') {
+          const fields = {};
+          for (const k in val) {
+            if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
+          }
+          return { mapValue: { fields } };
+        }
+        return { stringValue: String(val) };
+      }
+
+      function pushToFirestoreCloud() {
+        if (isApplyingCloudUpdate) return;
+        if (firestorePushTimer) clearTimeout(firestorePushTimer);
+        firestorePushTimer = setTimeout(async () => {
+          if (isPushingToFirestore) return;
+          isPushingToFirestore = true;
+          try {
+            const now = Date.now();
+            lastProcessedCloudTimestamp = now;
+            const payload = {
+              type: 'SERVER_BROADCAST',
+              senderId: 'SERVER_POS_HUB',
+              timestamp: now,
+              state: {
+                tables: serverState.tables,
+                tickets: serverState.tickets,
+                deletedTicketIds: serverState.deletedTicketIds || [],
+                invoices: serverState.invoices || [],
+                customers: serverState.customers || [],
+                reservations: serverState.reservations || [],
+                attendance: serverState.attendance || [],
+                salaryPayments: serverState.salaryPayments || [],
+                feedbacks: serverState.feedbacks || [],
+                salesReturns: serverState.salesReturns || [],
+                serviceRequests: serverState.serviceRequests || [],
+                inventory: serverState.inventory || [],
+                inventoryCategories: serverState.inventoryCategories || [],
+                stockMovements: serverState.stockMovements || [],
+                expenses: serverState.expenses || [],
+                suppliers: serverState.suppliers || [],
+                purchaseOrders: serverState.purchaseOrders || [],
+                supplierPayments: serverState.supplierPayments || [],
+                assets: serverState.assets || [],
+                damageRecords: serverState.damageRecords || [],
+                recipes: serverState.recipes || [],
+                kitchenSessions: serverState.kitchenSessions || [],
+                kitchenConsumption: serverState.kitchenConsumption || [],
+                kitchenManualUsage: serverState.kitchenManualUsage || [],
+                kitchenCash: serverState.kitchenCash || [],
+                menuItems: serverState.menuItems,
+                categories: serverState.categories,
+                staff: serverState.staff,
+                onlineOrders: serverState.onlineOrders,
+                pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
+                lastBillPaidAlert: serverState.lastBillPaidAlert,
+                lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+                roles: serverState.roles,
+                shifts: serverState.shifts,
+                activeShiftId: serverState.activeShiftId,
+                systemSettings: serverState.systemSettings,
+              }
+            };
+            const fields = {};
+            for (const k in payload) {
+              fields[k] = encodeFirestoreValue(payload[k]);
+            }
+            await fetch(FIRESTORE_DOC_URL, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ fields })
+            });
+          } catch (_) {
+            // Local LAN continues seamlessly if cloud is offline
+          } finally {
+            isPushingToFirestore = false;
+          }
+        }, 400);
+      }
+
+      async function pollFirestoreCloud() {
+        if (isPushingToFirestore) return;
+        try {
+          const res = await fetch(FIRESTORE_DOC_URL);
+          if (!res.ok) return;
+          const doc = await res.json();
+          if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
+          const fields = doc.fields || {};
+          const senderId = fields.senderId?.stringValue;
+          if (senderId === 'SERVER_POS_HUB') return;
+          const timestamp = Number(fields.timestamp?.integerValue || 0);
+          if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
+          if (timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
+
+          if (fields.state?.mapValue?.fields) {
+            const decodedState = decodeFirestoreValue(fields.state);
+            if (decodedState && typeof decodedState === 'object') {
+              isApplyingCloudUpdate = true;
+              lastProcessedCloudTimestamp = timestamp || Date.now();
+              if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
+              applyStateUpdate(decodedState, senderId);
+              setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
             }
           }
-          serverState.staff = Array.from(sMap.values());
-        } else {
-          serverState[key] = sanitized;
+        } catch (_) {
+          // Network retry next pulse
         }
-        modified = true;
       }
-    }
-  }
 
-  if (modified) {
-    // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
-    const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
-    if (Array.isArray(serverState.tables)) {
-      const nowRec = Date.now();
-      serverState.tables = serverState.tables.map(t => {
-        if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto) {
-          return {
-            ...t,
-            status: 'available',
-            billTotal: 0,
-            orders: [],
-            server: undefined,
-            isPaid: false,
-            lastInvoiceId: undefined,
-            occupiedSince: undefined,
-            lastSettledAt: t.lastSettledAt || nowRec,
-          };
-        }
-        return t;
+      // Start Cloud Firestore bridge pulse (publish clean authoritative local state first)
+      pushToFirestoreCloud();
+      setInterval(pollFirestoreCloud, 2500);
+      setTimeout(pollFirestoreCloud, 2000);
+
+      wss.on('connection', (ws, req) => {
+        const remoteIp = req.socket.remoteAddress;
+        console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
+
+        ws.send(JSON.stringify({
+          type: 'INIT_STATE',
+          state: serverState,
+          senderId: 'SERVER',
+          timestamp: Date.now()
+        }));
+
+        ws.on('message', (message) => {
+          try {
+            const data = JSON.parse(message.toString());
+            if (data.type === 'CLIENT_UPDATE' && data.state) {
+              const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
+              console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
+              if (!hasProcessedServerPacket(data.packetId)) {
+                applyStateUpdate(data.state, data.senderId, ws);
+              }
+            } else if (data.type === 'PING') {
+              ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+            }
+          } catch (e) {
+            console.error('[Sultan Hub] Bad WS message:', e.message);
+          }
+        });
+
+        ws.on('close', () => {
+          console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
+        });
+
+        ws.on('error', (err) => {
+          console.error('[Sultan Hub] WS socket error:', err.message);
+        });
       });
-    }
 
-    const nextFingerprint = computeStateFingerprint(serverState);
-    if (nextFingerprint === prevFingerprint) {
-      return;
-    }
-    lastStateFingerprint = nextFingerprint;
-    serverState.lastUpdated = Date.now();
-    persistState();
-    console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
-    if (
-      (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
-      (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
-    ) {
-      broadcastToClients({
-        type: 'FORCE_LOGOUT_DEVICE',
-        revokedSessions: serverState.revokedSessions || {},
-        revokedDeviceIds: serverState.revokedDeviceIds || {},
-        activeStaffSessions: serverState.activeStaffSessions || [],
-        timestamp: Date.now()
-      });
-    }
-    broadcastToClients({
-      type: 'SERVER_BROADCAST',
-      state: serverState,
-      senderId: senderId || 'SERVER',
-      timestamp: serverState.lastUpdated
-    }, originWs);
-    pushToFirestoreCloud();
-  }
-}
-
-// ==============================================================
-// BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
-// ==============================================================
-const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
-const FIRESTORE_PROJECT_ID = "sultan-resturant";
-const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
-
-let lastProcessedCloudTimestamp = 0;
-let lastProcessedCloudUpdateTime = '';
-let isPushingToFirestore = false;
-let isApplyingCloudUpdate = false;
-let firestorePushTimer = null;
-
-function decodeFirestoreValue(val) {
-  if (!val || typeof val !== 'object') return val;
-  if ('stringValue' in val) return val.stringValue;
-  if ('integerValue' in val) return Number(val.integerValue);
-  if ('doubleValue' in val) return Number(val.doubleValue);
-  if ('booleanValue' in val) return val.booleanValue;
-  if ('nullValue' in val) return null;
-  if ('mapValue' in val) {
-    const fields = val.mapValue.fields || {};
-    const res = {};
-    for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
-    return res;
-  }
-  if ('arrayValue' in val) {
-    const values = val.arrayValue.values || [];
-    return values.map(decodeFirestoreValue);
-  }
-  return val;
-}
-
-function encodeFirestoreValue(val) {
-  if (val === null || val === undefined) return { nullValue: null };
-  if (typeof val === 'string') return { stringValue: val };
-  if (typeof val === 'boolean') return { booleanValue: val };
-  if (typeof val === 'number') {
-    if (Number.isInteger(val)) return { integerValue: val.toString() };
-    return { doubleValue: val };
-  }
-  if (Array.isArray(val)) {
-    return { arrayValue: { values: val.map(encodeFirestoreValue) } };
-  }
-  if (typeof val === 'object') {
-    const fields = {};
-    for (const k in val) {
-      if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
-    }
-    return { mapValue: { fields } };
-  }
-  return { stringValue: String(val) };
-}
-
-function pushToFirestoreCloud() {
-  if (isApplyingCloudUpdate) return;
-  if (firestorePushTimer) clearTimeout(firestorePushTimer);
-  firestorePushTimer = setTimeout(async () => {
-    if (isPushingToFirestore) return;
-    isPushingToFirestore = true;
-    try {
-      const now = Date.now();
-      lastProcessedCloudTimestamp = now;
-      const payload = {
-        type: 'SERVER_BROADCAST',
-        senderId: 'SERVER_POS_HUB',
-        timestamp: now,
-        state: {
-          tables: serverState.tables,
-          tickets: serverState.tickets,
-          deletedTicketIds: serverState.deletedTicketIds || [],
-          invoices: serverState.invoices || [],
-          customers: serverState.customers || [],
-          reservations: serverState.reservations || [],
-          attendance: serverState.attendance || [],
-          salaryPayments: serverState.salaryPayments || [],
-          feedbacks: serverState.feedbacks || [],
-          salesReturns: serverState.salesReturns || [],
-          serviceRequests: serverState.serviceRequests || [],
-          inventory: serverState.inventory || [],
-          inventoryCategories: serverState.inventoryCategories || [],
-          stockMovements: serverState.stockMovements || [],
-          expenses: serverState.expenses || [],
-          suppliers: serverState.suppliers || [],
-          purchaseOrders: serverState.purchaseOrders || [],
-          supplierPayments: serverState.supplierPayments || [],
-          assets: serverState.assets || [],
-          damageRecords: serverState.damageRecords || [],
-          recipes: serverState.recipes || [],
-          kitchenSessions: serverState.kitchenSessions || [],
-          kitchenConsumption: serverState.kitchenConsumption || [],
-          kitchenManualUsage: serverState.kitchenManualUsage || [],
-          kitchenCash: serverState.kitchenCash || [],
-          menuItems: serverState.menuItems,
-          categories: serverState.categories,
-          staff: serverState.staff,
-          onlineOrders: serverState.onlineOrders,
-          pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
-          lastBillPaidAlert: serverState.lastBillPaidAlert,
-          lastFoodReadyAlert: serverState.lastFoodReadyAlert,
-          roles: serverState.roles,
-          shifts: serverState.shifts,
-          activeShiftId: serverState.activeShiftId,
-          systemSettings: serverState.systemSettings,
+      function listenDualStack(srv, port, onSuccess, onError) {
+        if (!srv) return;
+        srv.on('error', (err) => {
+          if (onError) onError(err);
+        });
+        try {
+          srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
+        } catch (_) {
+          srv.listen(Number(port), '0.0.0.0', onSuccess);
         }
-      };
-      const fields = {};
-      for (const k in payload) {
-        fields[k] = encodeFirestoreValue(payload[k]);
       }
-      await fetch(FIRESTORE_DOC_URL, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields })
-      });
-    } catch (_) {
-      // Local LAN continues seamlessly if cloud is offline
-    } finally {
-      isPushingToFirestore = false;
-    }
-  }, 400);
-}
 
-async function pollFirestoreCloud() {
-  if (isPushingToFirestore) return;
-  try {
-    const res = await fetch(FIRESTORE_DOC_URL);
-    if (!res.ok) return;
-    const doc = await res.json();
-    if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
-    const fields = doc.fields || {};
-    const senderId = fields.senderId?.stringValue;
-    if (senderId === 'SERVER_POS_HUB') return;
-    const timestamp = Number(fields.timestamp?.integerValue || 0);
-    if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
-    if (timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
-
-    if (fields.state?.mapValue?.fields) {
-      const decodedState = decodeFirestoreValue(fields.state);
-      if (decodedState && typeof decodedState === 'object') {
-        isApplyingCloudUpdate = true;
-        lastProcessedCloudTimestamp = timestamp || Date.now();
-        if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
-        applyStateUpdate(decodedState, senderId);
-        setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
-      }
-    }
-  } catch (_) {
-    // Network retry next pulse
-  }
-}
-
-// Start Cloud Firestore bridge pulse (publish clean authoritative local state first)
-pushToFirestoreCloud();
-setInterval(pollFirestoreCloud, 2500);
-setTimeout(pollFirestoreCloud, 2000);
-
-wss.on('connection', (ws, req) => {
-  const remoteIp = req.socket.remoteAddress;
-  console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
-
-  ws.send(JSON.stringify({
-    type: 'INIT_STATE',
-    state: serverState,
-    senderId: 'SERVER',
-    timestamp: Date.now()
-  }));
-
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.type === 'CLIENT_UPDATE' && data.state) {
-        const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
-        console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
-        if (!hasProcessedServerPacket(data.packetId)) {
-          applyStateUpdate(data.state, data.senderId, ws);
+      listenDualStack(
+        server,
+        PORT,
+        () => {
+          console.log(`=================================================`);
+          console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
+          console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
+          console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
+          console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+          console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
+          console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
+          console.log(`WebSocket URL: ws://localhost:${PORT}`);
+          console.log(`=================================================`);
+        },
+        (err) => {
+          console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
         }
-      } else if (data.type === 'PING') {
-        ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      );
+
+      listenDualStack(
+        server5000,
+        5000,
+        () => {
+          console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+        },
+        (err) => {
+          console.log('[Sultan Hub] Port 5000 listener:', err.message);
+        }
+      );
+
+      if (server80) {
+        listenDualStack(
+          server80,
+          80,
+          () => {
+            console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+          },
+          (err) => {
+            console.log('[Sultan Hub] Port 80 listener:', err.message);
+          }
+        );
       }
-    } catch (e) {
-      console.error('[Sultan Hub] Bad WS message:', e.message);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
-  });
-
-  ws.on('error', (err) => {
-    console.error('[Sultan Hub] WS socket error:', err.message);
-  });
-});
-
-function listenDualStack(srv, port, onSuccess, onError) {
-  if (!srv) return;
-  srv.on('error', (err) => {
-    if (onError) onError(err);
-  });
-  try {
-    srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
-  } catch (_) {
-    srv.listen(Number(port), '0.0.0.0', onSuccess);
-  }
-}
-
-listenDualStack(
-  server,
-  PORT,
-  () => {
-    console.log(`=================================================`);
-    console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
-    console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
-    console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
-    console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
-    console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
-    console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
-    console.log(`WebSocket URL: ws://localhost:${PORT}`);
-    console.log(`=================================================`);
-  },
-  (err) => {
-    console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
-  }
-);
-
-listenDualStack(
-  server5000,
-  5000,
-  () => {
-    console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
-  },
-  (err) => {
-    console.log('[Sultan Hub] Port 5000 listener:', err.message);
-  }
-);
-
-if (server80) {
-  listenDualStack(
-    server80,
-    80,
-    () => {
-      console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
-    },
-    (err) => {
-      console.log('[Sultan Hub] Port 80 listener:', err.message);
-    }
-  );
-}
