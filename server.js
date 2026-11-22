@@ -7,7 +7,6 @@ const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
 const PORT = process.env.PORT || 5050;
-
 function getServerLanIp() {
   try {
     const ifaces = os.networkInterfaces();
@@ -2368,7 +2367,8 @@ const INITIAL_STATE = {
   damageRecords: [],
   activeStaffSessions: [],
   revokedSessions: {},
-  revokedDeviceIds: {}
+  revokedDeviceIds: {},
+  chillerHandovers: []
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -5849,7 +5849,7 @@ async function handleRequest(req, res) {
 
   // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
   if (req.method === 'GET' || req.method === 'HEAD') {
-    const DIST_DIR = path.join(__dirname, 'dist');
+    const DIST_DIR = process.env.SULTAN_DIST_DIR || path.join(__dirname, 'dist');
     if (fs.existsSync(DIST_DIR)) {
       let rawPath = (url.pathname || '/').split('?')[0];
       try {
@@ -5993,11 +5993,6 @@ try {
   server80 = http.createServer(handleRequest);
 } catch (e) { }
 
-let server8081 = null;
-try {
-  server8081 = http.createServer(handleRequest);
-} catch (e) { }
-
 const wss = new WebSocketServer({ noServer: true });
 
 function bindUpgrade(srv) {
@@ -6011,7 +6006,6 @@ function bindUpgrade(srv) {
 bindUpgrade(server);
 bindUpgrade(server5000);
 if (server80) bindUpgrade(server80);
-if (server8081) bindUpgrade(server8081);
 
 function broadcastToClients(msgObj, excludeWs = null) {
   const payload = JSON.stringify(msgObj);
@@ -6151,7 +6145,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -6844,19 +6838,6 @@ if (server80) {
     },
     (err) => {
       console.log('[Sultan Hub] Port 80 listener:', err.message);
-    }
-  );
-}
-
-if (server8081 && PORT !== 8081 && !process.env.SKIP_8081) {
-  listenDualStack(
-    server8081,
-    8081,
-    () => {
-      console.log(`Sultan Web POS & Fast Hub active on Port 8081 (Instant Launch)`);
-    },
-    (err) => {
-      console.log('[Sultan Hub] Port 8081 in use (e.g. by Metro bundler) — primary hub active on 5050 & 5000');
     }
   );
 }
