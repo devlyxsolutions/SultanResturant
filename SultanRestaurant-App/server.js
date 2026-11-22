@@ -2490,20 +2490,6 @@ try {
     if (!Array.isArray(serverState.activeStaffSessions)) serverState.activeStaffSessions = [];
     if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') serverState.revokedSessions = {};
     if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') serverState.revokedDeviceIds = {};
-    // Purge legacy session-less revokedDeviceIds entries on boot so old entries can NEVER kick unrelated accounts
-    const bootNow = Date.now();
-    for (const devKey of Object.keys(serverState.revokedDeviceIds)) {
-      const entry = serverState.revokedDeviceIds[devKey];
-      if (!entry || !entry.sessionId || bootNow - (entry.timestamp || 0) > 60 * 60 * 1000) {
-        delete serverState.revokedDeviceIds[devKey];
-      }
-    }
-    for (const sessKey of Object.keys(serverState.revokedSessions)) {
-      const entry = serverState.revokedSessions[sessKey];
-      if (!entry || bootNow - (entry.timestamp || 0) > 60 * 60 * 1000) {
-        delete serverState.revokedSessions[sessKey];
-      }
-    }
     if (!Array.isArray(serverState.playlandRides) || serverState.playlandRides.length === 0) {
       serverState.playlandRides = DEFAULT_PLAYLAND_RIDES;
     }
@@ -3946,8 +3932,6 @@ async function handleRequest(req, res) {
         JSON.stringify({
           valid: false,
           revoked: true,
-          sessionId: qSessionId,
-          staffId: rev.staffId || '',
           reason: rev.reason,
           staffName: rev.staffName,
           timestamp: rev.timestamp,
@@ -3965,32 +3949,21 @@ async function handleRequest(req, res) {
       return;
     }
 
-    // If our exact sessionId is not in active list, check if other devices exceeded THIS account's max device limit
+    // If our exact sessionId is not in active list, check if another device replaced this EXACT staffId
     if (qStaffId) {
-      const staffRec = (serverState.staff || []).find(
-        (s) => s && String(s.id || '').toLowerCase().trim() === qStaffId
-      );
-      const globalMax = Math.max(1, Number(serverState.systemSettings?.defaultMaxDevicesPerStaff || 1));
-      const effectiveMax = Math.max(
-        1,
-        staffRec && Number(staffRec.maxConcurrentDevices) > 0 ? Number(staffRec.maxConcurrentDevices) : globalMax
-      );
-      const sameAccountOthers = active.filter(
+      const replacement = active.find(
         (s) =>
           s &&
           String(s.staffId || '').toLowerCase().trim() === qStaffId &&
           s.sessionId !== qSessionId &&
           (!qDeviceId || s.deviceId !== qDeviceId)
       );
-      if (sameAccountOthers.length >= effectiveMax) {
-        const replacement = sameAccountOthers.sort((a, b) => (b.loginTime || 0) - (a.loginTime || 0))[0];
+      if (replacement) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(
           JSON.stringify({
             valid: false,
             revoked: true,
-            sessionId: qSessionId,
-            staffId: replacement.staffId || qStaffId,
             reason: `Doosri device (${replacement.deviceName || 'New Device'}) par login kiya gaya hai`,
             staffName: replacement.staffName,
             timestamp: replacement.loginTime || Date.now(),
@@ -4343,8 +4316,8 @@ async function handleRequest(req, res) {
         try {
           const st = fs.statSync(apkInfo.path);
           const clientApkVer = Number(url.searchParams.get('apkVer') || '0');
-          if (clientApkVer < 12) {
-            apkHash = `force_upgrade_v12_${Math.floor(Date.now() / 6000)}`;
+          if (clientApkVer < 13) {
+            apkHash = `force_upgrade_v13_${Math.floor(Date.now() / 6000)}`;
           } else {
             apkHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
           }
@@ -4357,7 +4330,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 12,
+        apkVersion: 13,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -6237,10 +6210,8 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'revokedSessions', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
-  const newlyRevokedSessionsInSync = {};
-  const newlyRevokedDevicesInSync = {};
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
   if (!Array.isArray(serverState.deletedTicketIds)) {
@@ -6563,24 +6534,17 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       } else if (key === 'revokedSessions') {
         if (partialState.revokedSessions && typeof partialState.revokedSessions === 'object') {
           const nowR = Date.now();
-          const prevRev = serverState.revokedSessions || {};
-          const mergedRev = { ...prevRev };
-          for (const k of Object.keys(partialState.revokedSessions)) {
-            const entry = partialState.revokedSessions[k];
-            if (!entry || !entry.sessionId) continue;
-            if (nowR - (entry.timestamp || 0) > 60 * 60 * 1000) continue;
-            if (!prevRev[k]) {
-              newlyRevokedSessionsInSync[k] = entry;
-              if (entry.deviceId) newlyRevokedDevicesInSync[entry.deviceId] = entry;
-            }
-            mergedRev[k] = entry;
-          }
+          const mergedRev = {
+            ...(serverState.revokedSessions || {}),
+            ...partialState.revokedSessions,
+          };
           for (const k of Object.keys(mergedRev)) {
             if (nowR - (mergedRev[k]?.timestamp || 0) > 60 * 60 * 1000) {
               delete mergedRev[k];
             }
           }
           serverState.revokedSessions = mergedRev;
+          // Also evict any newly revoked sessionIds from activeStaffSessions
           if (Array.isArray(serverState.activeStaffSessions)) {
             serverState.activeStaffSessions = serverState.activeStaffSessions.filter(
               (s) => s && !mergedRev[s.sessionId]
@@ -6590,22 +6554,10 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         }
       } else if (key === 'revokedDeviceIds') {
         if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {
-          const nowD = Date.now();
-          const cleaned = { ...(serverState.revokedDeviceIds || {}) };
-          // Only accept session-scoped revocations (ignore legacy session-less entries!)
-          for (const dKey of Object.keys(partialState.revokedDeviceIds)) {
-            const entry = partialState.revokedDeviceIds[dKey];
-            if (entry && entry.sessionId && nowD - (entry.timestamp || 0) < 60 * 60 * 1000) {
-              cleaned[dKey] = entry;
-            }
-          }
-          for (const dKey of Object.keys(cleaned)) {
-            const entry = cleaned[dKey];
-            if (!entry || !entry.sessionId || nowD - (entry.timestamp || 0) > 60 * 60 * 1000) {
-              delete cleaned[dKey];
-            }
-          }
-          serverState.revokedDeviceIds = cleaned;
+          serverState.revokedDeviceIds = {
+            ...(serverState.revokedDeviceIds || {}),
+            ...partialState.revokedDeviceIds,
+          };
           modified = true;
         }
       } else if (key === 'activeStaffSessions') {
@@ -6701,11 +6653,14 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     serverState.lastUpdated = Date.now();
     persistState();
     console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
-    if (Object.keys(newlyRevokedSessionsInSync).length > 0) {
+    if (
+      (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
+      (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
+    ) {
       broadcastToClients({
         type: 'FORCE_LOGOUT_DEVICE',
-        revokedSessions: newlyRevokedSessionsInSync,
-        revokedDeviceIds: newlyRevokedDevicesInSync,
+        revokedSessions: serverState.revokedSessions || {},
+        revokedDeviceIds: serverState.revokedDeviceIds || {},
         activeStaffSessions: serverState.activeStaffSessions || [],
         timestamp: Date.now()
       });
