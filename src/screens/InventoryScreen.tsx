@@ -444,16 +444,55 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   // ---------------- Handlers ----------------
 
+  // Smart Auto-Generated Unique SKU Helper (Never duplicates even after deletions)
+  const generateNextSkuCode = (categoryName?: string) => {
+    const cleanCat = (categoryName || '').replace(/[^a-zA-Z]/g, '').toUpperCase();
+    const prefixMap: Record<string, string> = {
+      MEAT: 'MT',
+      PRODUCE: 'PR',
+      GRAINS: 'GR',
+      DAIRY: 'DR',
+      PANTRY: 'PN',
+      BEVERAGES: 'BV',
+      FUEL: 'FL',
+      PACKAGING: 'PK',
+      SUPPLIES: 'SP',
+    };
+    const prefix = prefixMap[cleanCat] || (cleanCat.length >= 2 ? cleanCat.slice(0, 2) : 'RM');
+    let maxNum = 0;
+    const existingCodes = new Set<string>();
+    inventory.forEach((it) => {
+      if (it.itemCode) {
+        existingCodes.add(it.itemCode.toUpperCase());
+        const m = it.itemCode.match(/(\d+)$/);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (Number.isFinite(n) && n > maxNum) maxNum = n;
+        }
+      }
+    });
+    let nextNum = Math.max(maxNum + 1, inventory.length + 1);
+    let candidate = `SKU-${prefix}-${String(nextNum).padStart(3, '0')}`;
+    while (existingCodes.has(candidate)) {
+      nextNum++;
+      candidate = `SKU-${prefix}-${String(nextNum).padStart(3, '0')}`;
+    }
+    return candidate;
+  };
+
   const handleOpenAdd = () => {
     if (!canAddInventory) {
       alertMsg('Permission Denied', 'You do not have permission to add inventory items.');
       return;
     }
-    const nextCodeNum = inventory.length + 1;
-    setFormItemCode(`SKU-RM-${String(nextCodeNum).padStart(3, '0')}`);
+    const defaultCat = allCategories[0] || INVENTORY_CATEGORIES[0];
+    const autoSku = generateNextSkuCode(defaultCat);
+    const numMatch = autoSku.match(/(\d+)$/);
+    const seqStr = numMatch ? numMatch[1] : String(inventory.length + 1).padStart(3, '0');
+    setFormItemCode(autoSku);
     setFormName('');
     setFormUrduName('');
-    setFormCategory(allCategories[0] || INVENTORY_CATEGORIES[0]);
+    setFormCategory(defaultCat);
     setShowInlineCatCreator(false);
     setInlineNewCatInput('');
     setFormLocation(STORAGE_LOCATIONS[0]);
@@ -463,7 +502,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setFormCost('');
     setFormSupplier('');
     setFormSupplierPhone('');
-    setFormBatchNumber(`B-${new Date().getFullYear()}-${String(nextCodeNum).padStart(3, '0')}`);
+    setFormBatchNumber(`B-${new Date().getFullYear()}-${seqStr}`);
     setFormExpiryDays('30');
     setFormInvoiceNo('');
     setShowAddModal(true);
@@ -2795,12 +2834,17 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
               <View style={styles.formRow2}>
                 <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Item SKU Code *</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={[styles.inputLabel, { marginBottom: 0 }]}>Item SKU Code</Text>
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#15803D' }}>AUTO-GENERATED</Text>
+                    </View>
+                  </View>
                   <TextInput
-                    style={styles.input}
-                    placeholder="e.g. SKU-MT-001"
+                    style={[styles.input, { backgroundColor: '#F1F5F9', color: '#334155', fontWeight: '800' }]}
                     value={formItemCode}
-                    onChangeText={setFormItemCode}
+                    editable={false}
+                    selectTextOnFocus={false}
                   />
                 </View>
                 <View style={{ flex: 1, minWidth: 160 }}>
@@ -2828,7 +2872,10 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     label="Category"
                     options={allCategories}
                     value={formCategory}
-                    onSelect={(val) => setFormCategory(val)}
+                    onSelect={(val) => {
+                      setFormCategory(val);
+                      setFormItemCode(generateNextSkuCode(val));
+                    }}
                     icon="pricetag-outline"
                     searchable
                   />
@@ -3623,8 +3670,17 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
               <View style={styles.formRow2}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.inputLabel}>Item SKU Code *</Text>
-                  <TextInput style={styles.input} value={formItemCode} onChangeText={setFormItemCode} />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <Text style={[styles.inputLabel, { marginBottom: 0 }]}>Item SKU Code</Text>
+                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#15803D' }}>AUTO</Text>
+                    </View>
+                  </View>
+                  <TextInput
+                    style={[styles.input, { backgroundColor: '#F1F5F9', color: '#334155', fontWeight: '800' }]}
+                    value={formItemCode}
+                    editable={false}
+                  />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.inputLabel}>Urdu Name</Text>
