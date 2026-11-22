@@ -776,8 +776,22 @@ export const useOpsStore = create<OpsState>()(
           const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
             ? [...currentCats, cat]
             : currentCats;
+          let finalCode = (item.itemCode || '').trim();
+          if (!finalCode) {
+            let maxNum = 0;
+            state.inventory.forEach((it) => {
+              const m = (it.itemCode || '').match(/(\d+)$/);
+              if (m) {
+                const n = parseInt(m[1], 10);
+                if (Number.isFinite(n) && n > maxNum) maxNum = n;
+              }
+            });
+            const cleanCat = cat.replace(/[^a-zA-Z]/g, '').toUpperCase();
+            const pref = cleanCat.length >= 2 ? cleanCat.slice(0, 2) : 'RM';
+            finalCode = `SKU-${pref}-${String(Math.max(maxNum + 1, state.inventory.length + 1)).padStart(3, '0')}`;
+          }
           return {
-            inventory: [...state.inventory, { ...item, id: uid('inv'), updatedAt: Date.now() }],
+            inventory: [...state.inventory, { ...item, itemCode: finalCode, id: uid('inv'), updatedAt: Date.now() }],
             inventoryCategories: nextCats,
           };
         });
