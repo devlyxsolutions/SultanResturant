@@ -9,6 +9,7 @@ import {
   Modal,
   useWindowDimensions,
   Platform,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -631,7 +632,14 @@ export default function PlaylandCounterScreen() {
 
               {/* Clean White Thermal Slip */}
               <View style={styles.thermalPaper}>
-                <SultanLogo size="md" variant="bare" width={120} height={110} style={{ alignSelf: 'center', marginBottom: 4 }} />
+                <Image
+                  source={{ uri: SULTAN_LOGO_BASE64 }}
+                  style={{ width: 130, height: 120, alignSelf: 'center', marginBottom: 4 }}
+                  resizeMode="contain"
+                />
+                <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#000', textAlign: 'center', marginBottom: 2 }}>
+                  جہاں ہر مہمان ہے سلطان
+                </Text>
                 <Text style={styles.thermalBrandName}>BASEMENT PLAYLAND</Text>
                 <Text style={styles.thermalBrandSub}>Official Kids & Rides Invoice</Text>
                 <View style={styles.thermalDivider} />
@@ -688,6 +696,9 @@ export default function PlaylandCounterScreen() {
                 <View style={styles.thermalDivider} />
                 <Text style={styles.thermalFooterNote}>
                   Please wear wristband at all times. Valid for today only at Sultan Basement Playland.
+                </Text>
+                <Text style={[styles.thermalFooterNote, { fontWeight: '700', color: '#111827', marginTop: 3 }]}>
+                  Powered & Designed by Nizaam Digital Solution
                 </Text>
               </View>
 

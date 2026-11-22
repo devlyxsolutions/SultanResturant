@@ -1,4 +1,4 @@
-import { Platform, StyleSheet, Text, View } from 'react-native';
+import { Image, Platform, StyleSheet, Text, View } from 'react-native';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import { Ticket } from '../store/restaurantStore';
 import SultanLogo from './SultanLogo';
@@ -275,7 +275,11 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
       )}
       {/* Header */}
       <View style={styles.header}>
-        <SultanLogo size="md" variant="bare" width={118} height={108} style={{ alignSelf: 'center', marginBottom: 4 }} />
+        <Image
+          source={{ uri: SULTAN_LOGO_BASE64 }}
+          style={{ width: 128, height: 118, alignSelf: 'center', marginBottom: 4 }}
+          resizeMode="contain"
+        />
         <Text style={styles.logoText}>KITCHEN SLIP</Text>
         <Text style={styles.logoSubText}>{ticket.isAddOn ? 'ADD-ON ORDER' : 'NEW ORDER'}</Text>
       </View>
@@ -318,6 +322,9 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
       ))}
 
       <View style={styles.divider} />
+      <Text style={{ textAlign: 'center', fontSize: 10, fontWeight: '700', color: '#000', marginTop: 4 }}>
+        Powered & Designed by Nizaam Digital Solution
+      </Text>
     </View>
   );
 }

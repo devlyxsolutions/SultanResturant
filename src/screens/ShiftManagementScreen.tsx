@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -972,8 +973,12 @@ export default function ShiftManagementScreen() {
           <View style={styles.receiptPaper}>
             {/* Header */}
             <View style={styles.receiptHeader}>
-              <Text style={styles.receiptBrand}>SULTAN RESTAURANT</Text>
-              <Text style={styles.receiptTagline}>شاہی دسترخوان • SMART POS</Text>
+              <Image
+                source={{ uri: SULTAN_LOGO_BASE64 }}
+                style={{ width: 130, height: 120, alignSelf: 'center', marginBottom: 4 }}
+                resizeMode="contain"
+              />
+              <Text style={styles.receiptTagline}>جہاں ہر مہمان ہے سلطان</Text>
               <Text style={styles.receiptReportType}>{reportModalType.toUpperCase()} SLIP</Text>
             </View>
 
@@ -1068,6 +1073,9 @@ export default function ShiftManagementScreen() {
             )}
 
             <View style={styles.receiptDashed} />
+            <Text style={{ textAlign: 'center', fontSize: 10, fontWeight: '700', color: '#111827', marginBottom: 8 }}>
+              Powered & Designed by Nizaam Digital Solution
+            </Text>
 
             {/* Actions */}
             <View style={styles.receiptActions}>

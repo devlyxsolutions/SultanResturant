@@ -3910,8 +3910,8 @@ async function handleRequest(req, res) {
         try {
           const st = fs.statSync(apkInfo.path);
           const clientApkVer = Number(url.searchParams.get('apkVer') || '0');
-          if (clientApkVer < 7) {
-            apkHash = `force_upgrade_v7_${Math.floor(Date.now() / 6000)}`;
+          if (clientApkVer < 8) {
+            apkHash = `force_upgrade_v8_${Math.floor(Date.now() / 6000)}`;
           } else {
             apkHash = `${st.size}_${Math.floor(st.mtimeMs)}`;
           }
@@ -3924,7 +3924,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 7,
+        apkVersion: 8,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;

@@ -710,7 +710,11 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
         {/* Header with Big Logo */}
         <View style={styles.header}>
           {showLogo && (
-            <SultanLogo size="lg" variant="bare" width={140} height={130} style={{ alignSelf: 'center', marginBottom: 6 }} />
+            <Image
+              source={{ uri: SULTAN_LOGO_BASE64 }}
+              style={{ width: 145, height: 135, alignSelf: 'center', marginBottom: 4 }}
+              resizeMode="contain"
+            />
           )}
           <Text style={styles.brandUrduSlogan}>جہاں ہر مہمان ہے سلطان</Text>
           {Boolean(brandTagline) && <Text style={styles.brandSub}>{brandTagline}</Text>}

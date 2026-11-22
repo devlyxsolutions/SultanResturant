@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import {
   Alert,
+  Image,
   Modal,
   Platform,
   ScrollView,
@@ -16,6 +17,7 @@ import {
   ViewStyle,
 } from 'react-native';
 import { printInvoiceReceipt } from '../components/Invoice';
+import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import PaginationControl from '../components/PaginationControl';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
@@ -1293,7 +1295,14 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
                       <View nativeID="thermal-printable-receipt" style={[styles.thermalPaper, isSmallMobile && styles.thermalPaperSmallMobile]}>
                         <View style={styles.thermalHeader}>
-                          <SultanLogo size="lg" variant="bare" width={140} height={130} style={{ alignSelf: 'center', marginBottom: 6 }} />
+                          <Image
+                            source={{ uri: SULTAN_LOGO_BASE64 }}
+                            style={{ width: 145, height: 135, alignSelf: 'center', marginBottom: 4 }}
+                            resizeMode="contain"
+                          />
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#000', textAlign: 'center', marginVertical: 2 }}>
+                            جہاں ہر مہمان ہے سلطان
+                          </Text>
                           <Text style={styles.thermalBrandSub}>{systemSettings.tagline || 'LUXURY DINING & BANQUET'}</Text>
                           {Boolean(systemSettings.address) && <Text style={styles.thermalContactText}>{systemSettings.address}</Text>}
                           {(Boolean(systemSettings.phone) || (Boolean(systemSettings.ntnOrTaxId) && systemSettings.ntnOrTaxId !== '8943120-4')) && (

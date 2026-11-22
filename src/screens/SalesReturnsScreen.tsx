@@ -11,6 +11,7 @@ import {
   Platform,
   Share,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -19,6 +20,7 @@ import { useAuthStore } from '../store/authStore';
 import { useKitchenStore } from '../store/kitchenStore';
 import { broadcastImmediately } from '../services/syncService';
 import SultanLogo from '../components/SultanLogo';
+import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import RoyalDropdown from '../components/RoyalDropdown';
 import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
@@ -395,7 +397,6 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
 
     let t = '';
     t += '================================\n';
-    t += '       SULTAN RESTAURANT        \n';
     t += '  REFUND VOUCHER & CREDIT NOTE  \n';
     t += '================================\n';
     t += `Return Slip #: ${ret.id}\n`;
@@ -429,7 +430,7 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
     t += '================================\n';
     t += 'Customer Signature: ____________\n';
     t += 'Manager Signature:  ____________\n';
-    t += '       Thank You - Sultan       \n';
+    t += 'Powered & Designed by Nizaam Digital Solution\n';
     t += '================================\n';
     return t;
   };
@@ -1107,6 +1108,14 @@ export default function SalesReturnsScreen({ userRole, backRoute = '/admin/dashb
             {selectedReturn && (
               <>
                 <ScrollView style={styles.thermalPaperWrap} contentContainerStyle={{ padding: 14 }}>
+                  <Image
+                    source={{ uri: SULTAN_LOGO_BASE64 }}
+                    style={{ width: 125, height: 115, alignSelf: 'center', marginBottom: 4 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#000', textAlign: 'center', marginBottom: 4 }}>
+                    جہاں ہر مہمان ہے سلطان
+                  </Text>
                   <Text style={styles.thermalMonoText}>{generateThermalSlip(selectedReturn)}</Text>
                 </ScrollView>
 

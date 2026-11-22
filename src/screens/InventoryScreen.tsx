@@ -11,6 +11,7 @@ import {
   Alert,
   Linking,
   useWindowDimensions,
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -2967,7 +2968,14 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxWidth: 520 }]}>
             <View style={styles.grnVoucherHeader}>
-              <SultanLogo size="md" variant="bare" width={115} height={105} style={{ alignSelf: 'center', marginBottom: 4 }} />
+              <Image
+                source={{ uri: SULTAN_LOGO_BASE64 }}
+                style={{ width: 125, height: 115, alignSelf: 'center', marginBottom: 4 }}
+                resizeMode="contain"
+              />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#000', textAlign: 'center', marginBottom: 2 }}>
+                جہاں ہر مہمان ہے سلطان
+              </Text>
               <Text style={styles.grnVoucherTitle}>OFFICIAL GOODS RECEIPT NOTE (GRN)</Text>
               <Text style={styles.grnVoucherNo}>GRN #{lastGrn?.grnNo}</Text>
             </View>
