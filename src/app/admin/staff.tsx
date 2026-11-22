@@ -82,11 +82,16 @@ export default function StaffManagementScreen({
   const updateStaff = useRestaurantStore((state) => state.updateStaff);
   const deleteStaff = useRestaurantStore((state) => state.deleteStaff);
 
-  // Auto-purge any lingering legacy dummy staff from localStorage / state on mount & seed all 53 real staff
+  // Auto-purge any lingering legacy dummy staff from localStorage / state on mount & seed all real staff + logins
   useEffect(() => {
     const hasDummy = rawStaff.some((s) => isLegacyDummyStaff(s));
-    const missingInitial = INITIAL_STAFF.some((initS) => !rawStaff.some((s) => s.id === initS.id));
-    if (hasDummy || missingInitial) {
+    const missingInitialOrLogins = INITIAL_STAFF.some((initS) => {
+      const found = rawStaff.find((s) => s.id === initS.id);
+      if (!found) return true;
+      if (initS.hasSystemAccess && (!found.pin || found.hasSystemAccess === false || !found.username)) return true;
+      return false;
+    });
+    if (hasDummy || missingInitialOrLogins) {
       const sMap = new Map<string, StaffMember>();
       for (const initS of INITIAL_STAFF) {
         sMap.set(initS.id, { ...initS });
@@ -94,10 +99,16 @@ export default function StaffManagementScreen({
       for (const existing of rawStaff) {
         if (existing && existing.id && !isLegacyDummyStaff(existing)) {
           const base = sMap.get(existing.id);
-          sMap.set(existing.id, { ...(base || {}), ...existing });
+          const merged: StaffMember = { ...(base || {}), ...existing };
+          if (base?.hasSystemAccess && (!existing.pin || existing.hasSystemAccess === false || !existing.username)) {
+            merged.hasSystemAccess = true;
+            merged.username = existing.username || base.username;
+            merged.pin = existing.pin || base.pin;
+          }
+          sMap.set(existing.id, merged);
         }
       }
-      useRestaurantStore.setState({ staff: Array.from(sMap.values()), staffSeedVersion: 3 });
+      useRestaurantStore.setState({ staff: Array.from(sMap.values()), staffSeedVersion: 4 });
       broadcastImmediately();
     }
   }, [rawStaff]);
