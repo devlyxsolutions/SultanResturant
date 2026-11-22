@@ -812,14 +812,25 @@ function connectWebSocket(forceReconnect = false) {
         if (data.senderId === DEVICE_ID) return;
 
         if (data.type === 'FORCE_LOGOUT_DEVICE') {
-          if (data.revokedDeviceIds && data.revokedDeviceIds[DEVICE_ID]) {
-            useRestaurantStore.setState((s) => ({
-              revokedDeviceIds: {
-                ...(s.revokedDeviceIds || {}),
-                ...data.revokedDeviceIds,
-              },
-            }));
-          }
+          useRestaurantStore.setState((s) => ({
+            ...(Array.isArray(data.activeStaffSessions) ? { activeStaffSessions: data.activeStaffSessions } : {}),
+            ...(data.revokedSessions && typeof data.revokedSessions === 'object'
+              ? {
+                  revokedSessions: {
+                    ...(s.revokedSessions || {}),
+                    ...data.revokedSessions,
+                  },
+                }
+              : {}),
+            ...(data.revokedDeviceIds && typeof data.revokedDeviceIds === 'object'
+              ? {
+                  revokedDeviceIds: {
+                    ...(s.revokedDeviceIds || {}),
+                    ...data.revokedDeviceIds,
+                  },
+                }
+              : {}),
+          }));
         } else if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
           if (data.state) {
             isLanConnected = true;
@@ -959,6 +970,7 @@ function broadcastLocalState(force = false) {
       activeShiftId: shiftState.activeShiftId,
       systemSettings: useSettingsStore.getState().settings,
       activeStaffSessions: state.activeStaffSessions || [],
+      revokedSessions: state.revokedSessions || {},
       revokedDeviceIds: state.revokedDeviceIds || {},
       ...opsState,
       ...kitchenState,

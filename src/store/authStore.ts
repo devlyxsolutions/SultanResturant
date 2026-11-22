@@ -8,12 +8,14 @@ export type Role = 'admin' | 'manager' | 'floor_manager' | 'Floor Manager' | 'wa
 export interface User {
   id: string;
   name: string;
+  username?: string;
   role: Role;
   staffId?: string;
   customRoleId?: string;
   assignedZone?: string;
   assignedZones?: string[];
   sessionId?: string;
+  loginTime?: number;
 }
 
 interface AuthState {
@@ -24,16 +26,25 @@ interface AuthState {
   login: (
     name: string,
     role: Role,
-    meta?: { staffId?: string; customRoleId?: string; assignedZone?: string; assignedZones?: string[]; sessionId?: string }
+    meta?: {
+      staffId?: string;
+      username?: string;
+      customRoleId?: string;
+      assignedZone?: string;
+      assignedZones?: string[];
+      sessionId?: string;
+      loginTime?: number;
+    }
   ) => void;
   updateUserZones: (assignedZone?: string, assignedZones?: string[]) => void;
   logout: () => void;
+  silentLogout: () => void;
   setHasHydrated: (value: boolean) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       user: null,
       isAuthenticated: false,
       hasHydrated: Platform.OS === 'web',
@@ -42,12 +53,14 @@ export const useAuthStore = create<AuthState>()(
           user: {
             id: meta?.staffId || Date.now().toString(),
             name,
+            username: meta?.username,
             role,
             staffId: meta?.staffId,
             customRoleId: meta?.customRoleId,
             assignedZone: meta?.assignedZone,
             assignedZones: meta?.assignedZones,
             sessionId: meta?.sessionId,
+            loginTime: meta?.loginTime ?? Date.now(),
           },
           isAuthenticated: true,
           hasHydrated: true,
@@ -62,7 +75,42 @@ export const useAuthStore = create<AuthState>()(
               }
             : null,
         })),
-      logout: () => set({ user: null, isAuthenticated: false, hasHydrated: true }),
+      silentLogout: () => {
+        set({ user: null, isAuthenticated: false, hasHydrated: true });
+      },
+      logout: () => {
+        const prevUser = get().user;
+        set({ user: null, isAuthenticated: false, hasHydrated: true });
+
+        // Cleanly release ONLY this user's own session on manual logout (never impacts other users)
+        if (prevUser?.sessionId) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useRestaurantStore } = require('./restaurantStore');
+            useRestaurantStore?.getState()?.unregisterStaffSession?.(prevUser.sessionId);
+          } catch {}
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { getActiveServerHttpUrl, getStableDeviceId, broadcastImmediately } = require('../services/syncService');
+            const baseUrl = typeof getActiveServerHttpUrl === 'function' ? getActiveServerHttpUrl() : '';
+            const devId = typeof getStableDeviceId === 'function' ? getStableDeviceId() : '';
+            if (baseUrl) {
+              fetch(`${baseUrl}/api/auth/staff-session/logout`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  sessionId: prevUser.sessionId,
+                  staffId: prevUser.staffId || prevUser.id,
+                  deviceId: devId,
+                }),
+              }).catch(() => {});
+            }
+            if (typeof broadcastImmediately === 'function') {
+              broadcastImmediately();
+            }
+          } catch {}
+        }
+      },
       setHasHydrated: (value) => set({ hasHydrated: value }),
     }),
     {

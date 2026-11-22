@@ -30,7 +30,12 @@ import FullscreenButton from '../components/FullscreenButton';
 import SyncStatusBadge from '../components/SyncStatusBadge';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettingsStore } from '../store/settingsStore';
-import { getStableDeviceId, getDeviceFriendlyName, broadcastImmediately } from '../services/syncService';
+import {
+  getStableDeviceId,
+  getDeviceFriendlyName,
+  getActiveServerHttpUrl,
+  broadcastImmediately,
+} from '../services/syncService';
 
 // Session-wide splash skip flag for instant navigation after initial launch
 let hasSeenSplashSession = false;
@@ -211,8 +216,137 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   }, [finishSplash, progressAnim, shouldSkipSplash]);
 
   // -------------------------------------------------------------
-  // Login Authentication Handler
+  // Login Authentication Handler (Per-Account Independent Session Control)
   // -------------------------------------------------------------
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  const establishAccountSession = async (opts: {
+    staffId: string;
+    username?: string;
+    name: string;
+    role: Role;
+    customRoleId?: string;
+    assignedZone?: string;
+    assignedZones?: string[];
+    dest: string;
+    maxConcurrentDevices?: number;
+  }) => {
+    const sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+    const deviceId = getStableDeviceId();
+    const deviceName = getDeviceFriendlyName();
+    const globalDefaultMax = Math.max(1, systemSettings?.defaultMaxDevicesPerStaff ?? 1);
+    const effectiveMaxDevices =
+      opts.maxConcurrentDevices && opts.maxConcurrentDevices > 0
+        ? opts.maxConcurrentDevices
+        : globalDefaultMax;
+    const autoKick = systemSettings?.autoKickPreviousDevice !== false;
+
+    setIsAuthenticating(true);
+    try {
+      // 1. Authoritative server-side session registration (atomically kicks ONLY this user's earlier device)
+      let handledByServer = false;
+      const baseUrl = getActiveServerHttpUrl();
+      if (baseUrl) {
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 2500) : null;
+        try {
+          const res = await fetch(`${baseUrl}/api/auth/staff-session/login`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              sessionId,
+              staffId: opts.staffId,
+              username: opts.username,
+              staffName: opts.name,
+              role: String(opts.role),
+              deviceId,
+              deviceName,
+              platform: Platform.OS,
+              maxConcurrentDevices: effectiveMaxDevices,
+              autoKickPreviousDevice: autoKick,
+            }),
+            ...(controller ? { signal: controller.signal } : {}),
+          });
+          if (timer) clearTimeout(timer);
+          const data = await res.json().catch(() => null);
+          if (res.status === 409 || (data && data.allowed === false)) {
+            setErrorMessage(
+              data?.error ||
+                `This account (${opts.username || opts.name}) is already logged in on another device (Limit: ${effectiveMaxDevices}). Log out from the other device first or enable Auto-Logout in Settings.`
+            );
+            return;
+          }
+          if (res.ok && data?.success) {
+            handledByServer = true;
+            useRestaurantStore.setState((s) => ({
+              ...(Array.isArray(data.activeStaffSessions)
+                ? { activeStaffSessions: data.activeStaffSessions }
+                : {}),
+              ...(data.revokedSessions
+                ? {
+                    revokedSessions: {
+                      ...(s.revokedSessions || {}),
+                      ...data.revokedSessions,
+                    },
+                  }
+                : {}),
+              ...(data.revokedDeviceIds
+                ? {
+                    revokedDeviceIds: {
+                      ...(s.revokedDeviceIds || {}),
+                      ...data.revokedDeviceIds,
+                    },
+                  }
+                : {}),
+            }));
+          }
+        } catch {
+          if (timer) clearTimeout(timer);
+        }
+      }
+
+      // 2. Offline / fallback local session registration + broadcast
+      if (!handledByServer) {
+        const result = useRestaurantStore.getState().registerStaffSession(
+          {
+            sessionId,
+            staffId: opts.staffId,
+            username: opts.username,
+            staffName: opts.name,
+            role: String(opts.role),
+            deviceId,
+            deviceName,
+            platform: Platform.OS,
+          },
+          effectiveMaxDevices,
+          autoKick
+        );
+        if (!result.allowed) {
+          const activeLabel = result.activeDevices?.[0]?.deviceName || 'another device';
+          setErrorMessage(
+            `This account (${opts.username || opts.name}) is already active on ${activeLabel} (Limit: ${effectiveMaxDevices}). Log out there first or enable Auto-Logout in Settings.`
+          );
+          return;
+        }
+        broadcastImmediately();
+      }
+
+      setErrorMessage('');
+      login(opts.name, opts.role, {
+        staffId: opts.staffId,
+        username: opts.username,
+        customRoleId: opts.customRoleId,
+        assignedZone: opts.assignedZone,
+        assignedZones: opts.assignedZones,
+        sessionId,
+        loginTime: Date.now(),
+      });
+      router.replace(opts.dest as Href);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
   const completeStaffLogin = (member: StaffMember) => {
     const memberCustomRole = allRoles.find(
       (r) => r.id === member.customRoleId || r.name.toLowerCase() === member.role.toLowerCase()
@@ -222,82 +356,73 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
       : (member.role.toLowerCase() as Role);
 
     const dest = getRoleHome(resolvedRole, memberCustomRole?.baseRole);
-    setErrorMessage('');
-
-    const sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
-    const maxDevices = member.maxConcurrentDevices ?? systemSettings?.defaultMaxDevicesPerStaff ?? 1;
-
-    useRestaurantStore.getState().registerStaffSession(
-      {
-        sessionId,
-        staffId: member.id,
-        staffName: member.name,
-        role: String(resolvedRole),
-        deviceId: getStableDeviceId(),
-        deviceName: getDeviceFriendlyName(),
-        platform: Platform.OS,
-      },
-      maxDevices
-    );
-    broadcastImmediately();
-
-    login(member.name, resolvedRole, {
+    void establishAccountSession({
       staffId: member.id,
+      username: member.username,
+      name: member.name,
+      role: resolvedRole,
       customRoleId: memberCustomRole?.id || member.customRoleId,
       assignedZone: member.assignedZone,
       assignedZones: member.assignedZones,
-      sessionId,
+      dest,
+      maxConcurrentDevices: member.maxConcurrentDevices,
     });
-    router.replace(dest as Href);
   };
 
   const handleLogin = () => {
+    if (isAuthenticating) return;
     const enteredUser = username.trim();
     const enteredPin = pin.trim();
 
     if (!enteredUser) {
-      setErrorMessage('Please enter your Username / Staff Name.');
+      setErrorMessage('Please enter your Login ID / Username.');
       return;
     }
 
     if (!enteredPin) {
-      setErrorMessage('Please enter your 4-digit Security PIN.');
+      setErrorMessage('Please enter your Security PIN.');
       return;
     }
 
     const normUser = enteredUser.toLowerCase();
+    const compactNorm = normUser.replace(/\s+/g, '');
     const baseStaff = [...(staff || [])];
     for (const initS of INITIAL_STAFF) {
-      if (!baseStaff.some(s => s.id === initS.id || s.name.trim().toLowerCase() === initS.name.trim().toLowerCase())) {
+      if (!baseStaff.some((s) => s.id === initS.id)) {
         baseStaff.push(initS);
       }
     }
     const activeStaff = baseStaff.filter((s) => s.status !== 'Inactive');
 
-    // 1. Exact match by full name, staff ID, or phone number
+    // 1. Exact match by unique Login ID (username), Staff ID, Full Name, or Phone
     const exactMatches = activeStaff.filter((s) => {
+      const sUsername = (s.username || '').trim().toLowerCase();
       const sName = s.name.trim().toLowerCase();
+      const sCompactName = sName.replace(/\s+/g, '');
       const sId = s.id.trim().toLowerCase();
       const sPhone = (s.phone || '').replace(/\D/g, '');
       const uPhone = enteredUser.replace(/\D/g, '');
       return (
-        sName === normUser ||
+        (sUsername && (sUsername === normUser || sUsername === compactNorm)) ||
         sId === normUser ||
+        sName === normUser ||
+        sCompactName === compactNorm ||
         (uPhone.length >= 7 && sPhone.endsWith(uPhone))
       );
     });
 
     if (exactMatches.length > 0) {
-      const pinMatched = exactMatches.find((s) => s.pin === enteredPin || enteredPin === '1234');
+      // Strict per-account PIN verification (each ID + PIN is completely independent)
+      const pinMatched = exactMatches.find((s) => s.pin === enteredPin);
       if (pinMatched) {
         completeStaffLogin(pinMatched);
         return;
       }
-      setErrorMessage(`Incorrect PIN for ${exactMatches[0].name}. Please try again.`);
+      setErrorMessage(`Incorrect PIN for ${exactMatches[0].name} (${exactMatches[0].username || exactMatches[0].id}).`);
       return;
     }
 
-    // 2. First-name / word / prefix match on staff members
+    // 2. Partial name match — ONLY succeeds if PIN matches a specific staff member (never guesses wrong user!)
     const partialMatches = activeStaff.filter((s) => {
       const sName = s.name.trim().toLowerCase();
       const words = sName.split(/\s+/);
@@ -305,12 +430,18 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
     });
 
     if (partialMatches.length > 0) {
-      const pinMatched = partialMatches.find((s) => s.pin === enteredPin || enteredPin === '1234');
+      const pinMatched = partialMatches.find((s) => s.pin === enteredPin);
       if (pinMatched) {
         completeStaffLogin(pinMatched);
         return;
       }
-      setErrorMessage(`Incorrect PIN for ${partialMatches[0].name}. Please try again.`);
+      if (partialMatches.length > 1) {
+        setErrorMessage(
+          `Multiple accounts match "${enteredUser}". Please sign in with your exact Login ID (e.g. ordertaker1, ordertaker2) and PIN.`
+        );
+      } else {
+        setErrorMessage(`Incorrect PIN for ${partialMatches[0].name}. Please try again.`);
+      }
       return;
     }
 
@@ -329,23 +460,24 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
         completeStaffLogin(pinMember);
         return;
       }
-      if (enteredPin === '1234') {
-        if (roleMembers.length > 0) {
-          completeStaffLogin(roleMembers[0]);
-          return;
-        }
+      if (enteredPin === '1234' && roleMembers.length === 0) {
         const baseRole = (matchedCustomRole.baseRole === 'custom' ? 'manager' : matchedCustomRole.baseRole) as Role;
         const dest = getRoleHome(baseRole, matchedCustomRole.baseRole);
-        setErrorMessage('');
-        login(matchedCustomRole.name, baseRole, { customRoleId: matchedCustomRole.id });
-        router.replace(dest as Href);
+        void establishAccountSession({
+          staffId: `role_${matchedCustomRole.id}`,
+          username: normUser,
+          name: matchedCustomRole.name,
+          role: baseRole,
+          customRoleId: matchedCustomRole.id,
+          dest,
+        });
         return;
       }
       setErrorMessage(`Incorrect PIN for ${matchedCustomRole.name}.`);
       return;
     }
 
-    // 4. Standard role keyword match (e.g., "admin", "manager", "cashier", "waiter", "kitchen", "juicebar")
+    // 4. Standard role keyword match (e.g. "manager", "cashier", "waiter", "kitchen", "juicebar")
     const mappedRole = ROLE_ALIASES[normUser];
     if (mappedRole) {
       const isCashierKeyword = normUser === 'cashier' || normUser === 'pos';
@@ -354,52 +486,30 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
           ? s.role.toLowerCase() === 'cashier' || s.customRoleId === 'role-cashier'
           : s.role.toLowerCase() === mappedRole.toLowerCase()
       );
+      // Match strictly by the entered PIN among members of this role
       const pinMember = roleMembers.find((s) => s.pin === enteredPin);
       if (pinMember) {
         completeStaffLogin(pinMember);
         return;
       }
-      if (enteredPin === '1234') {
-        if (roleMembers.length > 0) {
-          completeStaffLogin(roleMembers[0]);
-          return;
-        }
+      if (enteredPin === '1234' && roleMembers.length === 0) {
         const dest = getRoleHome(mappedRole);
-        setErrorMessage('');
-        const sessionId = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
-        const defaultMax = systemSettings?.defaultMaxDevicesPerStaff ?? 1;
         const uDisplayName = enteredUser.charAt(0).toUpperCase() + enteredUser.slice(1);
-
-        useRestaurantStore.getState().registerStaffSession(
-          {
-            sessionId,
-            staffId: mappedRole,
-            staffName: uDisplayName,
-            role: String(mappedRole),
-            deviceId: getStableDeviceId(),
-            deviceName: getDeviceFriendlyName(),
-            platform: Platform.OS,
-          },
-          defaultMax
-        );
-        broadcastImmediately();
-
-        login(
-          uDisplayName,
-          mappedRole,
-          {
-            ...(isCashierKeyword ? { customRoleId: 'role-cashier' } : {}),
-            sessionId,
-          }
-        );
-        router.replace(dest as Href);
+        void establishAccountSession({
+          staffId: `role_${mappedRole}_${normUser}`,
+          username: normUser,
+          name: uDisplayName,
+          role: mappedRole,
+          customRoleId: isCashierKeyword ? 'role-cashier' : undefined,
+          dest,
+        });
         return;
       }
-      setErrorMessage('Incorrect PIN. Please enter your valid 4-digit security PIN.');
+      setErrorMessage('Incorrect PIN. Please sign in with your own Login ID and 4-digit PIN.');
       return;
     }
 
-    setErrorMessage(`User "${enteredUser}" not found. Please check your username.`);
+    setErrorMessage(`Account "${enteredUser}" not found. Enter a valid Login ID (e.g. master, admin, ordertaker1).`);
   };
 
   const dynamicMetrics = useMemo(() => {
@@ -823,7 +933,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                           />
                           <TextInput
                             style={styles.input}
-                            placeholder="e.g. Tariq, Admin, Floor Manager, Chef..."
+                            placeholder="e.g. master, admin, ordertaker1, ordertaker2, cashier1..."
                             placeholderTextColor="rgba(255,255,255,0.38)"
                             autoCapitalize="none"
                             autoCorrect={false}

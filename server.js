@@ -2327,13 +2327,22 @@ const INITIAL_STATE = {
   zones: ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
   regions: ['Pakistani', 'Chinese', 'Continental', 'Arabic', 'Turkish', 'Fast Food', 'Italian'],
   staff: [
-    { id: 'st1', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
-    { id: 'st2', name: 'Ali Khan', phone: '+92 301 7654321', role: 'Manager', pin: '2233', status: 'Active', shift: 'Morning', joinedDate: '2025-02-01' },
-    { id: 'st3', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
-    { id: 'st4', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
-    { id: 'st5', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
-    { id: 'st-fm1', name: 'Rashid Mehmood', phone: '+92 305 6677889', role: 'Floor Manager', pin: '6677', status: 'Active', shift: 'Morning', joinedDate: '2025-02-15', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Ground Floor Manager' },
-    { id: 'st-fm2', name: 'Tariq Javed', phone: '+92 306 1122334', role: 'Floor Manager', pin: '7788', status: 'Active', shift: 'Evening', joinedDate: '2025-03-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: '1st Floor Manager' },
+    { id: 'st-master', username: 'master', name: 'Master Admin', phone: '+92 300 0000001', role: 'Admin', customRoleId: 'role-admin', pin: '0000', status: 'Active', shift: 'Morning', joinedDate: '2025-01-01', designation: 'Master System Owner (Independent)' },
+    { id: 'st1', username: 'admin', name: 'Junaid Ahsan', phone: '+92 300 1234567', role: 'Admin', customRoleId: 'role-admin', pin: '1122', status: 'Active', shift: 'Morning', joinedDate: '2025-01-15' },
+    { id: 'st2', username: 'manager', name: 'Ali Khan', phone: '+92 301 7654321', role: 'Manager', customRoleId: 'role-manager', pin: '2233', status: 'Active', shift: 'Morning', joinedDate: '2025-02-01' },
+    { id: 'st3', username: 'kitchen', name: 'Chef Omar', phone: '+92 302 9876543', role: 'Kitchen', customRoleId: 'role-kitchen', pin: '3344', status: 'Active', shift: 'Evening', joinedDate: '2025-03-10' },
+    { id: 'st-ot1', username: 'ordertaker1', name: 'Order Taker 1', phone: '+92 303 1001001', role: 'Waiter', customRoleId: 'role-waiter', pin: '1001', status: 'Active', shift: 'Morning', joinedDate: '2025-04-01', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Order Taker #1 (Ground Floor)' },
+    { id: 'st-ot2', username: 'ordertaker2', name: 'Order Taker 2', phone: '+92 303 1002002', role: 'Waiter', customRoleId: 'role-waiter', pin: '1002', status: 'Active', shift: 'Morning', joinedDate: '2025-04-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: 'Order Taker #2 (1st Floor)' },
+    { id: 'st-ot3', username: 'ordertaker3', name: 'Order Taker 3', phone: '+92 303 1003003', role: 'Waiter', customRoleId: 'role-waiter', pin: '1003', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01', assignedZone: '2nd Floor', assignedZones: ['2nd Floor'], designation: 'Order Taker #3 (2nd Floor)' },
+    { id: 'st-ot4', username: 'ordertaker4', name: 'Order Taker 4', phone: '+92 303 1004004', role: 'Waiter', customRoleId: 'role-waiter', pin: '1004', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01', assignedZone: 'Rooftop', assignedZones: ['Rooftop'], designation: 'Order Taker #4 (Rooftop)' },
+    { id: 'st4', username: 'sara', name: 'Sara Ahmed', phone: '+92 303 5556677', role: 'Waiter', customRoleId: 'role-waiter', pin: '4455', status: 'Active', shift: 'Evening', joinedDate: '2025-04-05', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'] },
+    { id: 'st5', username: 'hamza', name: 'Hamza Malik', phone: '+92 304 4443322', role: 'Waiter', customRoleId: 'role-waiter', pin: '5566', status: 'On Leave', shift: 'Night', joinedDate: '2025-05-12', assignedZone: '1st Floor', assignedZones: ['1st Floor'] },
+    { id: 'st6', username: 'playland', name: 'Ali Raza', phone: '+92 305 9988776', role: 'Playland', customRoleId: 'role-playland', pin: '1234', status: 'Active', shift: 'Evening', joinedDate: '2025-06-01' },
+    { id: 'st7', username: 'juicebar', name: 'Tariq Juice Master', phone: '+92 306 1122334', role: 'JuiceBar', customRoleId: 'role-juicebar', pin: '1234', status: 'Active', shift: 'Morning', joinedDate: '2025-06-15' },
+    { id: 'st-fm1', username: 'floor1', name: 'Rashid Mehmood', phone: '+92 305 6677889', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '6677', status: 'Active', shift: 'Morning', joinedDate: '2025-02-15', assignedZone: 'Ground Floor', assignedZones: ['Ground Floor'], designation: 'Ground Floor Manager' },
+    { id: 'st-fm2', username: 'floor2', name: 'Tariq Javed', phone: '+92 306 1122334', role: 'Floor Manager', customRoleId: 'role-floor-manager', pin: '7788', status: 'Active', shift: 'Evening', joinedDate: '2025-03-01', assignedZone: '1st Floor', assignedZones: ['1st Floor'], designation: '1st Floor Manager' },
+    { id: 'st-c1', username: 'cashier1', name: 'Usman Tariq', phone: '+92 307 2233445', role: 'Cashier', customRoleId: 'role-cashier', pin: '3333', status: 'Active', shift: 'Morning', joinedDate: '2025-03-15' },
+    { id: 'st-c2', username: 'cashier2', name: 'Bilal Hassan', phone: '+92 308 8899001', role: 'Cashier', customRoleId: 'role-cashier', pin: '4444', status: 'Active', shift: 'Evening', joinedDate: '2025-04-01' },
   ],
   reservations: [],
   inventory: [],
@@ -2358,6 +2367,7 @@ const INITIAL_STATE = {
   assets: [],
   damageRecords: [],
   activeStaffSessions: [],
+  revokedSessions: {},
   revokedDeviceIds: {}
 };
 
@@ -2438,6 +2448,7 @@ try {
     if (!Array.isArray(serverState.reservations)) serverState.reservations = INITIAL_STATE.reservations || [];
     if (!Array.isArray(serverState.playlandTickets)) serverState.playlandTickets = [];
     if (!Array.isArray(serverState.activeStaffSessions)) serverState.activeStaffSessions = [];
+    if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') serverState.revokedSessions = {};
     if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') serverState.revokedDeviceIds = {};
     if (!Array.isArray(serverState.playlandRides) || serverState.playlandRides.length === 0) {
       serverState.playlandRides = DEFAULT_PLAYLAND_RIDES;
@@ -2449,8 +2460,11 @@ try {
       serverState.staff = INITIAL_STATE.staff;
     } else {
       for (const initSt of (INITIAL_STATE.staff || [])) {
-        if (!serverState.staff.some(s => s.id === initSt.id || s.name.toLowerCase() === initSt.name.toLowerCase())) {
-          serverState.staff.push(initSt);
+        const existing = serverState.staff.find(s => s && s.id === initSt.id);
+        if (!existing) {
+          serverState.staff.push({ ...initSt });
+        } else if (initSt.username && !existing.username) {
+          existing.username = initSt.username;
         }
       }
     }
@@ -3569,6 +3583,347 @@ async function handleRequest(req, res) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: e.message }));
     }
+    return;
+  }
+
+  // ==============================================================
+  // STAFF PER-ACCOUNT INDEPENDENT SESSION MANAGEMENT (Single/Multi-Device)
+  // ==============================================================
+  // POST /api/auth/staff-session/login
+  if (url.pathname === '/api/auth/staff-session/login' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const {
+        sessionId,
+        staffId,
+        username,
+        staffName,
+        role,
+        deviceId,
+        deviceName,
+        platform,
+        maxConcurrentDevices,
+        autoKickPreviousDevice,
+      } = payload || {};
+
+      if (!sessionId || !staffId || !deviceId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'sessionId, staffId, and deviceId are required' }));
+        return;
+      }
+
+      const now = Date.now();
+      const normStaffId = String(staffId).toLowerCase().trim();
+      const staffRecord = (serverState.staff || []).find(
+        (s) => s && String(s.id || '').toLowerCase().trim() === normStaffId
+      );
+
+      const globalDefaultMax = Math.max(1, Number(serverState.systemSettings?.defaultMaxDevicesPerStaff || 1));
+      const userOverrideMax =
+        staffRecord && Number(staffRecord.maxConcurrentDevices) > 0
+          ? Number(staffRecord.maxConcurrentDevices)
+          : Number(maxConcurrentDevices) > 0
+            ? Number(maxConcurrentDevices)
+            : 0;
+      const effectiveMaxDevices = Math.max(1, userOverrideMax || globalDefaultMax);
+      const shouldAutoKick =
+        typeof autoKickPreviousDevice === 'boolean'
+          ? autoKickPreviousDevice
+          : serverState.systemSettings?.autoKickPreviousDevice !== false;
+
+      // Prune stale sessions (>24h) and expired revocations (>1h)
+      const currentSessions = (serverState.activeStaffSessions || []).filter(
+        (s) => s && now - (s.lastActiveTime || s.loginTime || 0) < 24 * 60 * 60 * 1000
+      );
+      if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') {
+        serverState.revokedSessions = {};
+      }
+      if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') {
+        serverState.revokedDeviceIds = {};
+      }
+      for (const k of Object.keys(serverState.revokedSessions)) {
+        if (now - (serverState.revokedSessions[k]?.timestamp || 0) > 60 * 60 * 1000) {
+          delete serverState.revokedSessions[k];
+        }
+      }
+      for (const d of Object.keys(serverState.revokedDeviceIds)) {
+        if (now - (serverState.revokedDeviceIds[d]?.timestamp || 0) > 60 * 60 * 1000) {
+          delete serverState.revokedDeviceIds[d];
+        }
+      }
+
+      // STRICT per-account isolation: ONLY inspect sessions belonging to THIS exact staffId!
+      const isSameAccount = (s) => String(s.staffId || '').toLowerCase().trim() === normStaffId;
+      const sameAccountOtherDevices = currentSessions.filter(
+        (s) => isSameAccount(s) && s.deviceId !== deviceId
+      );
+
+      const excess = sameAccountOtherDevices.length + 1 - effectiveMaxDevices;
+      if (excess > 0 && !shouldAutoKick) {
+        const activeOn = sameAccountOtherDevices[0]?.deviceName || 'another device';
+        res.writeHead(409, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            success: false,
+            allowed: false,
+            code: 'DEVICE_LIMIT_REACHED',
+            error: `Account "${username || staffName || staffId}" is already logged in on ${activeOn} (Max ${effectiveMaxDevices} device). Log out there first or enable Auto-Logout in Settings.`,
+            activeDevices: sameAccountOtherDevices,
+          })
+        );
+        return;
+      }
+
+      // Clear any stale device-level revocation for the newly logging-in device
+      if (serverState.revokedDeviceIds[deviceId]) {
+        delete serverState.revokedDeviceIds[deviceId];
+      }
+
+      let remainingOtherDevices = [...sameAccountOtherDevices];
+      const kickedSessions = [];
+      const newlyRevokedSessions = {};
+      const newlyRevokedDevices = {};
+
+      if (excess > 0) {
+        remainingOtherDevices.sort((a, b) => (a.loginTime || 0) - (b.loginTime || 0));
+        const toKick = remainingOtherDevices.slice(0, excess);
+        for (const kicked of toKick) {
+          kickedSessions.push(kicked);
+          const reasonText = `Doosri device (${deviceName || 'New Device'}) par login kiya gaya hai`;
+          const rec = {
+            sessionId: kicked.sessionId,
+            deviceId: kicked.deviceId,
+            staffId: kicked.staffId,
+            staffName: kicked.staffName,
+            timestamp: now,
+            reason: reasonText,
+          };
+          serverState.revokedSessions[kicked.sessionId] = rec;
+          serverState.revokedDeviceIds[kicked.deviceId] = rec;
+          newlyRevokedSessions[kicked.sessionId] = rec;
+          newlyRevokedDevices[kicked.deviceId] = rec;
+        }
+        remainingOtherDevices = remainingOtherDevices.slice(excess);
+      }
+
+      const newSession = {
+        sessionId,
+        staffId: String(staffId),
+        username: username || staffRecord?.username || undefined,
+        staffName: staffName || staffRecord?.name || String(staffId),
+        role: String(role || staffRecord?.role || 'staff'),
+        deviceId: String(deviceId),
+        deviceName: deviceName || 'Terminal',
+        platform: platform || 'web',
+        loginTime: now,
+        lastActiveTime: now,
+      };
+
+      // Preserve ALL other users' sessions 100% untouched (also clear any prior session on THIS device)
+      const otherUsersSessions = currentSessions.filter(
+        (s) => !isSameAccount(s) && s.deviceId !== deviceId
+      );
+      serverState.activeStaffSessions = [...otherUsersSessions, ...remainingOtherDevices, newSession];
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+
+      if (kickedSessions.length > 0) {
+        console.log(
+          `[Sultan Hub Auth] Account "${newSession.username || newSession.staffName}" logged in on ${newSession.deviceName}; auto-logged out ${kickedSessions.length} earlier device(s).`
+        );
+        broadcastToClients({
+          type: 'FORCE_LOGOUT_DEVICE',
+          revokedSessions: newlyRevokedSessions,
+          revokedDeviceIds: newlyRevokedDevices,
+          activeStaffSessions: serverState.activeStaffSessions,
+          timestamp: now,
+        });
+      }
+
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: deviceId,
+        timestamp: now,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          allowed: true,
+          session: newSession,
+          kickedCount: kickedSessions.length,
+          kickedSessions,
+          activeStaffSessions: serverState.activeStaffSessions,
+          revokedSessions: serverState.revokedSessions,
+          revokedDeviceIds: serverState.revokedDeviceIds,
+        })
+      );
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // POST /api/auth/staff-session/logout (Clean self-logout — removes ONLY this user's session)
+  if (url.pathname === '/api/auth/staff-session/logout' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { sessionId, deviceId, staffId } = payload || {};
+      const beforeCount = (serverState.activeStaffSessions || []).length;
+      serverState.activeStaffSessions = (serverState.activeStaffSessions || []).filter((s) => {
+        if (!s) return false;
+        if (sessionId && s.sessionId === sessionId) return false;
+        if (!sessionId && deviceId && staffId && s.deviceId === deviceId && String(s.staffId) === String(staffId)) {
+          return false;
+        }
+        return true;
+      });
+      if (serverState.activeStaffSessions.length !== beforeCount) {
+        serverState.lastUpdated = Date.now();
+        lastStateFingerprint = computeStateFingerprint(serverState);
+        persistState();
+        broadcastToClients({
+          type: 'SERVER_BROADCAST',
+          state: serverState,
+          senderId: deviceId || 'SERVER',
+          timestamp: serverState.lastUpdated,
+        });
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, activeStaffSessions: serverState.activeStaffSessions }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // POST /api/auth/staff-session/kick (Admin force-logout of a specific session)
+  if (url.pathname === '/api/auth/staff-session/kick' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const { sessionId, reason } = payload || {};
+      if (!sessionId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'sessionId is required' }));
+        return;
+      }
+      const now = Date.now();
+      const target = (serverState.activeStaffSessions || []).find((s) => s && s.sessionId === sessionId);
+      if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') {
+        serverState.revokedSessions = {};
+      }
+      if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') {
+        serverState.revokedDeviceIds = {};
+      }
+      const rec = {
+        sessionId,
+        deviceId: target?.deviceId || '',
+        staffId: target?.staffId || '',
+        staffName: target?.staffName || 'Staff Member',
+        timestamp: now,
+        reason: reason || 'Admin ne session terminate kar diya hai',
+      };
+      serverState.revokedSessions[sessionId] = rec;
+      if (target?.deviceId) {
+        serverState.revokedDeviceIds[target.deviceId] = rec;
+      }
+      serverState.activeStaffSessions = (serverState.activeStaffSessions || []).filter(
+        (s) => s && s.sessionId !== sessionId
+      );
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+
+      broadcastToClients({
+        type: 'FORCE_LOGOUT_DEVICE',
+        revokedSessions: { [sessionId]: rec },
+        revokedDeviceIds: target?.deviceId ? { [target.deviceId]: rec } : {},
+        activeStaffSessions: serverState.activeStaffSessions,
+        timestamp: now,
+      });
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'ADMIN_KICK',
+        timestamp: now,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, activeStaffSessions: serverState.activeStaffSessions }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // GET /api/auth/staff-session/verify (Heartbeat check for exact sessionId validity)
+  if (url.pathname === '/api/auth/staff-session/verify' && req.method === 'GET') {
+    const qSessionId = (url.searchParams.get('sessionId') || '').trim();
+    const qStaffId = (url.searchParams.get('staffId') || '').toLowerCase().trim();
+    const qDeviceId = (url.searchParams.get('deviceId') || '').trim();
+
+    if (!qSessionId) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ valid: true }));
+      return;
+    }
+
+    const rev = serverState.revokedSessions && serverState.revokedSessions[qSessionId];
+    if (rev) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          valid: false,
+          revoked: true,
+          reason: rev.reason,
+          staffName: rev.staffName,
+          timestamp: rev.timestamp,
+        })
+      );
+      return;
+    }
+
+    const active = serverState.activeStaffSessions || [];
+    const mine = active.find((s) => s && s.sessionId === qSessionId);
+    if (mine) {
+      mine.lastActiveTime = Date.now();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ valid: true }));
+      return;
+    }
+
+    // If our exact sessionId is not in active list, check if another device replaced this EXACT staffId
+    if (qStaffId) {
+      const replacement = active.find(
+        (s) =>
+          s &&
+          String(s.staffId || '').toLowerCase().trim() === qStaffId &&
+          s.sessionId !== qSessionId &&
+          (!qDeviceId || s.deviceId !== qDeviceId)
+      );
+      if (replacement) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(
+          JSON.stringify({
+            valid: false,
+            revoked: true,
+            reason: `Doosri device (${replacement.deviceName || 'New Device'}) par login kiya gaya hai`,
+            staffName: replacement.staffName,
+            timestamp: replacement.loginTime || Date.now(),
+          })
+        );
+        return;
+      }
+    }
+
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ valid: true }));
     return;
   }
 
@@ -5720,6 +6075,7 @@ function computeStateFingerprint(st) {
       staffState: Array.isArray(st.staff)
         ? st.staff.map(s => ({
             id: s?.id || '',
+            username: s?.username || '',
             name: s?.name || '',
             role: s?.role || '',
             customRoleId: s?.customRoleId || '',
@@ -5734,6 +6090,7 @@ function computeStateFingerprint(st) {
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
       pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
       activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
+      revokedSessions: Object.keys(st.revokedSessions || {}).sort().join(','),
       revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
       shiftsCount: Array.isArray(st.shifts) ? st.shifts.length : 0,
       activeShiftId: st.activeShiftId || null,
@@ -6115,6 +6472,27 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           serverState.roles = mergeServerRolesSafely(serverState.roles, partialState.roles);
           modified = true;
         }
+      } else if (key === 'revokedSessions') {
+        if (partialState.revokedSessions && typeof partialState.revokedSessions === 'object') {
+          const nowR = Date.now();
+          const mergedRev = {
+            ...(serverState.revokedSessions || {}),
+            ...partialState.revokedSessions,
+          };
+          for (const k of Object.keys(mergedRev)) {
+            if (nowR - (mergedRev[k]?.timestamp || 0) > 60 * 60 * 1000) {
+              delete mergedRev[k];
+            }
+          }
+          serverState.revokedSessions = mergedRev;
+          // Also evict any newly revoked sessionIds from activeStaffSessions
+          if (Array.isArray(serverState.activeStaffSessions)) {
+            serverState.activeStaffSessions = serverState.activeStaffSessions.filter(
+              (s) => s && !mergedRev[s.sessionId]
+            );
+          }
+          modified = true;
+        }
       } else if (key === 'revokedDeviceIds') {
         if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {
           serverState.revokedDeviceIds = {
@@ -6125,7 +6503,32 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         }
       } else if (key === 'activeStaffSessions') {
         if (Array.isArray(partialState.activeStaffSessions)) {
-          serverState.activeStaffSessions = partialState.activeStaffSessions;
+          // Safely merge active sessions so a stale client never wipes another independent user's live session
+          const nowS = Date.now();
+          const revokedSet = serverState.revokedSessions || {};
+          const incomingRevoked = partialState.revokedSessions || {};
+          const mergedBySession = new Map();
+          for (const s of (serverState.activeStaffSessions || [])) {
+            if (!s || !s.sessionId) continue;
+            if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
+            if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
+            mergedBySession.set(s.sessionId, s);
+          }
+          for (const s of partialState.activeStaffSessions) {
+            if (!s || !s.sessionId) continue;
+            if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
+            if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
+            mergedBySession.set(s.sessionId, s);
+          }
+          // Deduplicate per deviceId (keep newest session on a given device)
+          const byDevice = new Map();
+          for (const s of mergedBySession.values()) {
+            const prev = byDevice.get(s.deviceId);
+            if (!prev || (s.loginTime || 0) >= (prev.loginTime || 0)) {
+              byDevice.set(s.deviceId, s);
+            }
+          }
+          serverState.activeStaffSessions = Array.from(byDevice.values());
           modified = true;
         }
       } else {
@@ -6174,10 +6577,15 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     serverState.lastUpdated = Date.now();
     persistState();
     console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
-    if (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0) {
+    if (
+      (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
+      (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
+    ) {
       broadcastToClients({
         type: 'FORCE_LOGOUT_DEVICE',
-        revokedDeviceIds: serverState.revokedDeviceIds,
+        revokedSessions: serverState.revokedSessions || {},
+        revokedDeviceIds: serverState.revokedDeviceIds || {},
+        activeStaffSessions: serverState.activeStaffSessions || [],
         timestamp: Date.now()
       });
     }

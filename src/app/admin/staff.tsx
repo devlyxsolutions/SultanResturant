@@ -107,6 +107,7 @@ export default function StaffManagementScreen({
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
 
   // Staff Form Fields (Detailed Employee Profile)
+  const [formUsername, setFormUsername] = useState('');
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formRole, setFormRole] = useState<string>('Order Taker');
@@ -114,7 +115,7 @@ export default function StaffManagementScreen({
   const [formShift, setFormShift] = useState<StaffShift>('Morning');
   const [formStatus, setFormStatus] = useState<StaffStatus>('Active');
   const [formPin, setFormPin] = useState('');
-  const [formMaxDevices, setFormMaxDevices] = useState<number>(1);
+  const [formMaxDevices, setFormMaxDevices] = useState<number>(0); // 0 = follow Global Settings default
   const [formAssignedZones, setFormAssignedZones] = useState<string[]>(['Ground Floor']);
   const [formCnic, setFormCnic] = useState('');
   const [formDesignation, setFormDesignation] = useState('');
@@ -205,6 +206,7 @@ export default function StaffManagementScreen({
       return;
     }
     setEditingStaff(null);
+    setFormUsername('');
     setFormName('');
     setFormPhone('');
     const defaultR = roles.find((r) => r.name === 'Order Taker') || roles[0];
@@ -213,7 +215,7 @@ export default function StaffManagementScreen({
     setFormShift('Morning');
     setFormStatus('Active');
     setFormPin(Math.floor(1000 + Math.random() * 9000).toString());
-    setFormMaxDevices(1);
+    setFormMaxDevices(0);
     setFormAssignedZones(['Ground Floor']);
     setFormCnic('');
     setFormDesignation('Order Taker');
@@ -233,6 +235,7 @@ export default function StaffManagementScreen({
       return;
     }
     setEditingStaff(member);
+    setFormUsername(member.username || '');
     setFormName(member.name);
     setFormPhone(member.phone || '');
     setFormRole(member.role);
@@ -246,7 +249,7 @@ export default function StaffManagementScreen({
     setFormShift(member.shift);
     setFormStatus(member.status);
     setFormPin(member.pin);
-    setFormMaxDevices(member.maxConcurrentDevices ?? 1);
+    setFormMaxDevices(member.maxConcurrentDevices && member.maxConcurrentDevices > 0 ? member.maxConcurrentDevices : 0);
     const initialZones =
       member.assignedZones && member.assignedZones.length > 0
         ? member.assignedZones
@@ -285,11 +288,23 @@ export default function StaffManagementScreen({
       return;
     }
 
+    const cleanUsername = formUsername.trim().toLowerCase().replace(/\s+/g, '');
+    if (cleanUsername) {
+      const duplicate = (staff || []).find(
+        (s) => s.id !== editingStaff?.id && (s.username || '').trim().toLowerCase() === cleanUsername
+      );
+      if (duplicate) {
+        setFormError(`Login ID "${cleanUsername}" is already used by ${duplicate.name}.`);
+        return;
+      }
+    }
+
     const primaryZone = formAssignedZones.includes('All Floors')
       ? 'All Floors'
       : formAssignedZones[0] || 'All Floors';
 
     const staffPayload = {
+      username: cleanUsername || undefined,
       name: formName.trim(),
       phone: formPhone.trim(),
       role: formRole,
@@ -307,7 +322,7 @@ export default function StaffManagementScreen({
       emergencyContact: formEmergencyContact.trim() || undefined,
       address: formAddress.trim() || undefined,
       bankAccountDetails: formBankDetails.trim() || undefined,
-      maxConcurrentDevices: formMaxDevices,
+      maxConcurrentDevices: formMaxDevices > 0 ? formMaxDevices : undefined,
     };
 
     if (editingStaff) {
@@ -840,11 +855,28 @@ export default function StaffManagementScreen({
                 <Text style={styles.formLabel}>Full Name *</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="e.g. Tariq Mehmood"
+                  placeholder="e.g. Order Taker 1 / Tariq Mehmood"
                   placeholderTextColor="#A0A0A5"
                   value={formName}
                   onChangeText={(val) => {
                     setFormName(val);
+                    if (formError) setFormError('');
+                  }}
+                />
+              </View>
+
+              {/* Unique Login ID / Username */}
+              <View style={styles.formGroup}>
+                <Text style={styles.formLabel}>Login ID / Username (منفرد لاگ ان آئی ڈی)</Text>
+                <TextInput
+                  style={styles.formInput}
+                  placeholder="e.g. ordertaker1, ordertaker2, cashier1, master"
+                  placeholderTextColor="#A0A0A5"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={formUsername}
+                  onChangeText={(val) => {
+                    setFormUsername(val);
                     if (formError) setFormError('');
                   }}
                 />
@@ -911,13 +943,14 @@ export default function StaffManagementScreen({
 
               {/* Concurrent Device Limit */}
               <View style={styles.formGroup}>
-                <Text style={styles.formLabel}>Max Concurrent Devices (ایک وقت میں بیک وقت لاگ ان کی حد)</Text>
+                <Text style={styles.formLabel}>Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت لاگ ان حد)</Text>
                 <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
-                  اگر ڈیوائسز اس حد سے بڑھیں تو پرانی ڈیوائس خود بخود لاگ آؤٹ ہو جائے گی (ڈیفالٹ: 1)
+                  یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ مکمل طور پر الگ رہیں گے۔
                 </Text>
                 <View style={styles.pillsRow}>
                   {[
-                    { val: 1, label: '1 Device (Default)' },
+                    { val: 0, label: 'Global Default' },
+                    { val: 1, label: '1 Device' },
                     { val: 2, label: '2 Devices' },
                     { val: 3, label: '3 Devices' },
                     { val: 5, label: '5 Devices' },

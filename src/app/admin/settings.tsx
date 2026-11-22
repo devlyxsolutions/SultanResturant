@@ -35,6 +35,7 @@ import {
   setCustomServerIp,
   forceSyncNow,
   broadcastImmediately,
+  getActiveServerHttpUrl,
   reconnect,
   SyncInfo,
 } from '../../services/syncService';
@@ -854,8 +855,9 @@ export default function AdminSettingsScreen() {
 
   // User modal state
   const [userModalVisible, setUserModalVisible] = useState(false);
-  const [uMaxDevices, setUMaxDevices] = useState<number>(1);
+  const [uMaxDevices, setUMaxDevices] = useState<number>(0); // 0 = follow Global Default
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
+  const [uUsername, setUUsername] = useState('');
   const [uName, setUName] = useState('');
   const [uPhone, setUPhone] = useState('');
   const [uPin, setUPin] = useState('');
@@ -966,6 +968,7 @@ export default function AdminSettingsScreen() {
     return (staff || []).filter(
       (s) =>
         s.name.toLowerCase().includes(q) ||
+        (s.username || '').toLowerCase().includes(q) ||
         s.role.toLowerCase().includes(q) ||
         (s.phone || '').toLowerCase().includes(q)
     );
@@ -973,9 +976,11 @@ export default function AdminSettingsScreen() {
 
   const openAddUserModal = () => {
     setEditingStaff(null);
+    setUUsername('');
     setUName('');
     setUPhone('');
     setUPin('');
+    setUMaxDevices(0);
     setURole('waiter');
     const waiterRole = roles.find((r) => r.id === 'role-waiter' || r.baseRole === 'waiter') || roles[0];
     setUCustomRoleId(waiterRole?.id || 'role-waiter');
@@ -985,9 +990,11 @@ export default function AdminSettingsScreen() {
 
   const openAddCashierModal = () => {
     setEditingStaff(null);
+    setUUsername('');
     setUName('');
     setUPhone('');
     setUPin('');
+    setUMaxDevices(0);
     setURole('Cashier');
     const cashierRole = roles.find((r) => r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier') || roles[0];
     setUCustomRoleId(cashierRole?.id || 'role-cashier');
@@ -997,9 +1004,11 @@ export default function AdminSettingsScreen() {
 
   const openEditUserModal = (member: StaffMember) => {
     setEditingStaff(member);
+    setUUsername(member.username || '');
     setUName(member.name);
     setUPhone(member.phone || '');
     setUPin(member.pin || '');
+    setUMaxDevices(member.maxConcurrentDevices && member.maxConcurrentDevices > 0 ? member.maxConcurrentDevices : 0);
     setURole(member.role);
     const matchedRole =
       roles.find((r) => r.id === member.customRoleId) ||
@@ -1736,19 +1745,34 @@ export default function AdminSettingsScreen() {
       Alert.alert('Validation', 'PIN must be at least 4 digits.');
       return;
     }
+    const cleanUsername = uUsername.trim().toLowerCase().replace(/\s+/g, '');
+    if (cleanUsername) {
+      const duplicate = (staff || []).find(
+        (s) =>
+          s.id !== editingStaff?.id &&
+          (s.username || '').trim().toLowerCase() === cleanUsername
+      );
+      if (duplicate) {
+        Alert.alert('Duplicate Login ID', `Login ID "${cleanUsername}" is already used by ${duplicate.name}. Please choose a unique Login ID.`);
+        return;
+      }
+    }
+    const effectiveLimitOverride = uMaxDevices > 0 ? uMaxDevices : undefined;
     if (editingStaff) {
       updateStaff(editingStaff.id, {
+        username: cleanUsername || undefined,
         name: uName.trim(),
         phone: uPhone.trim(),
         pin: uPin.trim(),
         role: uRole,
         customRoleId: uCustomRoleId || undefined,
         shift: uShift,
-        maxConcurrentDevices: uMaxDevices,
+        maxConcurrentDevices: effectiveLimitOverride,
       });
       showToast(`Updated user "${uName.trim()}"`);
     } else {
       addStaff({
+        username: cleanUsername || undefined,
         name: uName.trim(),
         phone: uPhone.trim() || '0300-0000000',
         pin: uPin.trim(),
@@ -1757,7 +1781,7 @@ export default function AdminSettingsScreen() {
         status: 'Active',
         shift: uShift,
         joinedDate: new Date().toISOString().split('T')[0],
-        maxConcurrentDevices: uMaxDevices,
+        maxConcurrentDevices: effectiveLimitOverride,
       });
       showToast(`Added user "${uName.trim()}"`);
     }
@@ -3357,7 +3381,7 @@ export default function AdminSettingsScreen() {
               {/* Global Default Setting */}
               <View style={styles.deviceLimitRow}>
                 <Text style={styles.deviceLimitLabel}>
-                  Default Device Limit (تمام ملازمین اور رولز کے لیے ڈیفالٹ حد):
+                  Default Device Limit Per Account (ہر لاگ ان آئی ڈی کی ڈیفالٹ حد — ہر اکاؤنٹ الگ اور خود مختار):
                 </Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
                   {[
@@ -3389,6 +3413,42 @@ export default function AdminSettingsScreen() {
                     );
                   })}
                 </View>
+
+                {/* Auto-Logout Previous Device Toggle */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    marginTop: 12,
+                    paddingTop: 10,
+                    borderTopWidth: 1,
+                    borderTopColor: '#E2E8F0',
+                    gap: 12,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.deviceLimitLabel}>
+                      Auto-Logout Previous Device on New Login (نئی ڈیوائس پر لاگ ان ہو تو پرانی خود لاگ آؤٹ)
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                      ON: Same ID & PIN doosri device par login ho to pehli device auto-logout ho jati hai. OFF: 2nd device block ho jati hai. Doosre users aur Master par koi asar nahi padta.
+                    </Text>
+                  </View>
+                  <Switch
+                    value={draft.autoKickPreviousDevice !== false}
+                    onValueChange={(val) => {
+                      applySettingPatchImmediate({ autoKickPreviousDevice: val });
+                      showToast(
+                        val
+                          ? 'Auto-Logout Previous Device enabled (Default)'
+                          : 'Strict Block mode enabled (2nd device blocked)'
+                      );
+                    }}
+                    trackColor={{ false: '#CBD5E1', true: '#D4AF37' }}
+                    thumbColor={draft.autoKickPreviousDevice !== false ? '#52171B' : '#F8FAFC'}
+                  />
+                </View>
               </View>
 
               {/* Live Connected Sessions Monitor */}
@@ -3401,8 +3461,13 @@ export default function AdminSettingsScreen() {
                     {activeStaffSessions.map((sess) => (
                       <View key={sess.sessionId} style={styles.activeSessionItem}>
                         <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                             <Text style={styles.activeSessionStaffName}>{sess.staffName}</Text>
+                            {sess.username ? (
+                              <View style={[styles.badge, { backgroundColor: '#FEF3C7', paddingHorizontal: 6, paddingVertical: 1 }]}>
+                                <Text style={[styles.badgeText, { fontSize: 10, color: '#92400E' }]}>@{sess.username}</Text>
+                              </View>
+                            ) : null}
                             <View style={[styles.badge, styles.badgeGray, { paddingHorizontal: 6, paddingVertical: 1 }]}>
                               <Text style={[styles.badgeText, { fontSize: 10 }]}>{sess.role}</Text>
                             </View>
@@ -3416,9 +3481,21 @@ export default function AdminSettingsScreen() {
                           onPress={() => {
                             askConfirm(
                               'Terminate Device',
-                              `Kick "${sess.staffName}" from ${sess.deviceName || 'this device'}? The device will be logged out instantly.`,
+                              `Kick "${sess.staffName}" from ${sess.deviceName || 'this device'}? Only this account session will be logged out instantly.`,
                               () => {
-                                terminateStaffSession(sess.sessionId, 'Admin نے سیشن کک کر دیا');
+                                const kickReason = 'Admin نے سیشن کک کر دیا';
+                                terminateStaffSession(sess.sessionId, kickReason);
+                                const baseUrl = getActiveServerHttpUrl();
+                                if (baseUrl) {
+                                  fetch(`${baseUrl}/api/auth/staff-session/kick`, {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      sessionId: sess.sessionId,
+                                      reason: kickReason,
+                                    }),
+                                  }).catch(() => {});
+                                }
                                 broadcastImmediately();
                                 showToast(`Terminated session on ${sess.deviceName || 'device'}`);
                               }
@@ -3461,14 +3538,20 @@ export default function AdminSettingsScreen() {
                       </View>
                       {(() => {
                         const activeDevCount = activeStaffSessions.filter(
-                          (s) => (s.staffId && s.staffId === member.id) || (s.staffName && s.staffName.toLowerCase() === member.name.toLowerCase())
+                          (s) => s.staffId && s.staffId === member.id
                         ).length;
+                        const limitText =
+                          member.maxConcurrentDevices && member.maxConcurrentDevices > 0
+                            ? member.maxConcurrentDevices >= 999
+                              ? 'Unlimited Devices'
+                              : `${member.maxConcurrentDevices} Dev Limit`
+                            : `Default (${(draft.defaultMaxDevicesPerStaff ?? 1) >= 999 ? 'Unlimited' : `${draft.defaultMaxDevicesPerStaff ?? 1} Dev`})`;
                         return (
                           <>
                             <View style={[styles.badge, { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#CBD5E1' }]}>
                               <Ionicons name="phone-portrait-outline" size={11} color="#52171B" />
                               <Text style={[styles.badgeText, { color: '#334155' }]}>
-                                {member.maxConcurrentDevices ? `${member.maxConcurrentDevices} Dev Limit` : `Limit: Default (${draft.defaultMaxDevicesPerStaff ?? 1})`}
+                                {limitText}
                               </Text>
                             </View>
                             {activeDevCount > 0 && (
@@ -3503,7 +3586,7 @@ export default function AdminSettingsScreen() {
                       )}
                     </View>
                     <Text style={styles.rowSub}>
-                      Role: {(assignedRole?.name || member.role).toUpperCase()} • PIN: {member.pin} • Shift: {member.shift}
+                      {member.username ? `Login ID: @${member.username} • ` : ''}Role: {(assignedRole?.name || member.role).toUpperCase()} • PIN: {member.pin} • Shift: {member.shift}
                     </Text>
                   </View>
                   <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
@@ -3841,7 +3924,16 @@ export default function AdminSettingsScreen() {
               {editingStaff ? 'Edit Staff / User' : 'Add New Staff / User'}
             </Text>
             <Text style={styles.label}>Full Name</Text>
-            <TextInput style={styles.input} value={uName} onChangeText={setUName} placeholder="Ali Raza" />
+            <TextInput style={styles.input} value={uName} onChangeText={setUName} placeholder="Order Taker 1 / Ali Raza" />
+            <Text style={[styles.label, { marginTop: 10 }]}>Login ID / Username (منفرد یوزر نیم)</Text>
+            <TextInput
+              style={styles.input}
+              value={uUsername}
+              onChangeText={setUUsername}
+              autoCapitalize="none"
+              autoCorrect={false}
+              placeholder="e.g. ordertaker1, cashier1, master"
+            />
             <Text style={[styles.label, { marginTop: 10 }]}>Phone</Text>
             <TextInput style={styles.input} value={uPhone} onChangeText={setUPhone} placeholder="0300-1234567" />
             <Text style={[styles.label, { marginTop: 10 }]}>Login PIN (4+ digits)</Text>
@@ -3850,17 +3942,18 @@ export default function AdminSettingsScreen() {
               value={uPin}
               onChangeText={setUPin}
               keyboardType="numeric"
-              placeholder="1234"
+              placeholder="1001"
             />
             <Text style={[styles.label, { marginTop: 10 }]}>
-              Max Concurrent Devices (ایک وقت میں بیک وقت لاگ ان کی حد)
+              Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت ڈیوائس حد)
             </Text>
             <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
-              اگر ڈیوائسز اس حد سے بڑھیں تو پرانی ڈیوائس خود بخود لاگ آؤٹ ہو جائے گی (ڈیفالٹ: 1)
+              یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ پر کوئی اثر نہیں پڑے گا۔
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
               {[
-                { val: 1, label: '1 Device (Default)' },
+                { val: 0, label: `Global Default (${(draft.defaultMaxDevicesPerStaff ?? 1) >= 999 ? 'Unlimited' : draft.defaultMaxDevicesPerStaff ?? 1})` },
+                { val: 1, label: '1 Device' },
                 { val: 2, label: '2 Devices' },
                 { val: 3, label: '3 Devices' },
                 { val: 5, label: '5 Devices' },

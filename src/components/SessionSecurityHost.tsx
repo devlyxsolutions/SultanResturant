@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter, usePathname } from 'expo-router';
 import { useAuthStore } from '../store/authStore';
 import { useRestaurantStore } from '../store/restaurantStore';
-import { DEVICE_ID, getDeviceFriendlyName } from '../services/syncService';
+import { DEVICE_ID, getActiveServerHttpUrl } from '../services/syncService';
 
 const BRAND = {
   burgundy: '#52171B',
@@ -34,8 +34,9 @@ export default function SessionSecurityHost() {
 
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
-  const logout = useAuthStore((s) => s.logout);
+  const silentLogout = useAuthStore((s) => s.silentLogout);
 
+  const revokedSessions = useRestaurantStore((s) => s.revokedSessions);
   const revokedDeviceIds = useRestaurantStore((s) => s.revokedDeviceIds);
   const activeStaffSessions = useRestaurantStore((s) => s.activeStaffSessions);
 
@@ -52,28 +53,57 @@ export default function SessionSecurityHost() {
 
   const hasHandledKickRef = useRef(false);
 
-  // 1. Check for explicit revocation targeted at this device
+  const triggerForcedLogout = (staffName: string, reason: string, timestamp?: number) => {
+    if (hasHandledKickRef.current) return;
+    hasHandledKickRef.current = true;
+    setKickDetails({
+      staffName,
+      reason: reason || 'Doosri device par login kiya gaya hai',
+      time: new Date(timestamp || Date.now()).toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+      }),
+    });
+    setKickModalVisible(true);
+    silentLogout();
+  };
+
+  // 1. Exact Session-Scoped Revocation Check (ZERO false kicks on other users or fresh logins!)
   useEffect(() => {
     if (!isAuthenticated || !user) {
       hasHandledKickRef.current = false;
       return;
     }
 
+    const now = Date.now();
+    const mySessionId = user.sessionId || '';
+    const myStaffId = (user.staffId || user.id || '').toLowerCase().trim();
+    const myLoginTime = user.loginTime || 0;
+
+    // 1a. Primary exact check: was THIS exact sessionId revoked?
+    if (mySessionId && revokedSessions && revokedSessions[mySessionId]) {
+      const rev = revokedSessions[mySessionId];
+      if (now - (rev.timestamp || 0) < 60 * 60 * 1000) {
+        triggerForcedLogout(rev.staffName || user.name, rev.reason, rev.timestamp);
+        return;
+      }
+    }
+
+    // 1b. Backward-compatible device revocation check — ONLY if it matches THIS sessionId or THIS staffId after loginTime
     if (revokedDeviceIds && revokedDeviceIds[DEVICE_ID]) {
       const rev = revokedDeviceIds[DEVICE_ID];
-      const now = Date.now();
-      // If revoked in the last 15 minutes
-      if (now - rev.timestamp < 15 * 60 * 1000 && !hasHandledKickRef.current) {
-        hasHandledKickRef.current = true;
-        setKickDetails({
-          staffName: rev.staffName || user.name,
-          reason: rev.reason || 'Doosri device par login kiya gaya hai',
-          time: new Date(rev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-        });
-        setKickModalVisible(true);
-        logout();
+      const revStaffId = (rev.staffId || '').toLowerCase().trim();
+      const matchesThisSession = Boolean(rev.sessionId && mySessionId && rev.sessionId === mySessionId);
+      const matchesLegacySameAccount = Boolean(
+        !rev.sessionId &&
+          (!revStaffId || revStaffId === myStaffId) &&
+          rev.timestamp >= myLoginTime &&
+          now - rev.timestamp < 15 * 60 * 1000
+      );
 
-        // Clear local entry so it does not loop
+      if (matchesThisSession || matchesLegacySameAccount) {
+        triggerForcedLogout(rev.staffName || user.name, rev.reason, rev.timestamp);
         useRestaurantStore.setState((state) => {
           const next = { ...(state.revokedDeviceIds || {}) };
           delete next[DEVICE_ID];
@@ -81,47 +111,78 @@ export default function SessionSecurityHost() {
         });
       }
     }
-  }, [revokedDeviceIds, isAuthenticated, user, logout]);
+  }, [revokedSessions, revokedDeviceIds, isAuthenticated, user, silentLogout]);
 
-  // 2. Heartbeat check: If user is logged in, ensure their session still exists in activeStaffSessions
+  // 2. Active-Sessions Eviction Check (STRICTLY scoped to exact same staffId — never cross-account!)
   useEffect(() => {
     if (!isAuthenticated || !user || !user.sessionId) return;
     if (!activeStaffSessions || activeStaffSessions.length === 0) return;
 
-    // Check if another device has logged in with the exact same staffId or name, and our session is gone
+    // Brief 2.5s grace window right after login so a stale pre-login sync packet can never kick a fresh login
+    if (user.loginTime && Date.now() - user.loginTime < 2500) return;
+
     const normStaffId = (user.staffId || user.id || '').toLowerCase().trim();
-    const normName = (user.name || '').toLowerCase().trim();
+    if (!normStaffId) return;
 
     const mySessionStillActive = activeStaffSessions.some(
-      (s) => s.sessionId === user.sessionId && s.deviceId === DEVICE_ID
+      (s) => s.sessionId === user.sessionId
     );
 
-    const hasOtherSessionsForThisStaff = activeStaffSessions.some(
+    const otherSessForExactSameAccount = activeStaffSessions.find(
       (s) =>
+        s.sessionId !== user.sessionId &&
         s.deviceId !== DEVICE_ID &&
-        ((s.staffId && s.staffId.toLowerCase().trim() === normStaffId) ||
-          (s.staffName && s.staffName.toLowerCase().trim() === normName))
+        s.staffId &&
+        s.staffId.toLowerCase().trim() === normStaffId
     );
 
-    // If our session was evicted and replaced by another device session
-    if (!mySessionStillActive && hasOtherSessionsForThisStaff && !hasHandledKickRef.current) {
-      hasHandledKickRef.current = true;
-      const otherSess = activeStaffSessions.find(
-        (s) =>
-          s.deviceId !== DEVICE_ID &&
-          ((s.staffId && s.staffId.toLowerCase().trim() === normStaffId) ||
-            (s.staffName && s.staffName.toLowerCase().trim() === normName))
+    // Only log out if OUR exact sessionId is gone AND another device holds an active session for OUR exact staffId
+    if (!mySessionStillActive && otherSessForExactSameAccount && !hasHandledKickRef.current) {
+      triggerForcedLogout(
+        user.name,
+        `New login on ${otherSessForExactSameAccount.deviceName || 'another device'}`,
+        otherSessForExactSameAccount.loginTime
       );
-
-      setKickDetails({
-        staffName: user.name,
-        reason: `New login on ${otherSess?.deviceName || 'another device'}`,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      });
-      setKickModalVisible(true);
-      logout();
     }
-  }, [activeStaffSessions, isAuthenticated, user, logout]);
+  }, [activeStaffSessions, isAuthenticated, user, silentLogout]);
+
+  // 3. Authoritative Server Heartbeat Verification (Safety net if WebSocket briefly drops)
+  useEffect(() => {
+    if (!isAuthenticated || !user || !user.sessionId) return;
+    let cancelled = false;
+
+    const verifyWithServer = async () => {
+      if (cancelled || hasHandledKickRef.current) return;
+      if (user.loginTime && Date.now() - user.loginTime < 2500) return;
+      try {
+        const baseUrl = getActiveServerHttpUrl();
+        if (!baseUrl) return;
+        const staffId = encodeURIComponent(user.staffId || user.id || '');
+        const sessionId = encodeURIComponent(user.sessionId || '');
+        const deviceId = encodeURIComponent(DEVICE_ID);
+        const res = await fetch(
+          `${baseUrl}/api/auth/staff-session/verify?sessionId=${sessionId}&staffId=${staffId}&deviceId=${deviceId}`
+        );
+        if (!res.ok || cancelled) return;
+        const data = await res.json();
+        if (data && data.valid === false && data.revoked) {
+          triggerForcedLogout(
+            data.staffName || user.name,
+            data.reason || 'Doosri device par login kiya gaya hai',
+            data.timestamp
+          );
+        }
+      } catch {
+        // Offline / LAN unreachable — stay logged in safely
+      }
+    };
+
+    const interval = setInterval(verifyWithServer, 5000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [isAuthenticated, user?.sessionId, user?.staffId, user?.id, user?.name, user?.loginTime]);
 
   const handleDismiss = () => {
     setKickModalVisible(false);
