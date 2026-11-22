@@ -2596,9 +2596,25 @@ export const useRestaurantStore = create<RestaurantState>()(
       })),
 
       addStaff: (newStaff) => {
-        set((state) => ({
-          staff: [...(state.staff || []), { ...newStaff, id: `st${Date.now()}` }]
-        }));
+        set((state) => {
+          const existingList = state.staff || [];
+          const uniqueId = `st_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+          let autoUsername = (newStaff.username || '').trim().toLowerCase().replace(/\s+/g, '');
+          if (!autoUsername && newStaff.hasSystemAccess !== false && newStaff.name) {
+            const baseSlug = newStaff.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+            if (baseSlug) {
+              let candidate = baseSlug;
+              let n = 2;
+              while (existingList.some((s) => (s.username || '').toLowerCase() === candidate)) {
+                candidate = `${baseSlug}${n++}`;
+              }
+              autoUsername = candidate;
+            }
+          }
+          return {
+            staff: [...existingList, { ...newStaff, id: uniqueId, username: autoUsername || undefined }],
+          };
+        });
         notifySync();
       },
 
@@ -3027,10 +3043,21 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           } : {}),
           ...(remoteState.revokedDeviceIds ? {
-            revokedDeviceIds: {
-              ...(state.revokedDeviceIds || {}),
-              ...remoteState.revokedDeviceIds,
-            }
+            revokedDeviceIds: (() => {
+              const merged = {
+                ...(state.revokedDeviceIds || {}),
+                ...remoteState.revokedDeviceIds,
+              };
+              const nowClean = Date.now();
+              const clean: typeof merged = {};
+              for (const k of Object.keys(merged)) {
+                const entry = merged[k];
+                if (entry && entry.sessionId && nowClean - (entry.timestamp || 0) < 60 * 60 * 1000) {
+                  clean[k] = entry;
+                }
+              }
+              return clean;
+            })()
           } : {}),
           ...(remoteState.lastBillPaidAlert !== undefined ? {
             lastBillPaidAlert: (() => {

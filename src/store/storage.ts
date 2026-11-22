@@ -61,11 +61,69 @@ const webLocalStorage: StateStorage = {
   },
 };
 
-/** SSR-safe ultra-fast persistent storage shared by all Zustand stores. */
+/**
+ * Per-tab isolated web auth storage:
+ * - Each browser tab stores its own login exclusively in `window.sessionStorage`.
+ * - Refreshing a tab keeps that tab logged in, while opening Tab 2 starts cleanly at Login
+ *   so Junaid (Tab 1) and Zain (Tab 2) NEVER share, overwrite, or log out each other's sessions!
+ */
+const webPerTabAuthStorage: StateStorage = {
+  getItem: (name: string) => {
+    try {
+      if (typeof window === 'undefined') return null;
+      if (window.sessionStorage) {
+        return window.sessionStorage.getItem(name);
+      }
+      if (window.localStorage) {
+        return window.localStorage.getItem(name);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  },
+  setItem: (name: string, value: string) => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (window.sessionStorage) {
+        window.sessionStorage.setItem(name, value);
+        return;
+      }
+      if (window.localStorage) {
+        window.localStorage.setItem(name, value);
+      }
+    } catch {}
+  },
+  removeItem: (name: string) => {
+    try {
+      if (typeof window === 'undefined') return;
+      if (window.sessionStorage) {
+        window.sessionStorage.removeItem(name);
+        return;
+      }
+      if (window.localStorage) {
+        window.localStorage.removeItem(name);
+      }
+    } catch {}
+  },
+};
+
+/** SSR-safe ultra-fast persistent storage shared by all Zustand data stores. */
 export const appStorage = createJSONStorage(() => {
   if (Platform.OS === 'web') {
     if (typeof window !== 'undefined' && window.localStorage) {
       return webLocalStorage;
+    }
+    return noopStorage;
+  }
+  return AsyncStorage;
+});
+
+/** Per-tab isolated storage for `useAuthStore` so multi-tab / multi-account logins never overwrite each other. */
+export const authStorage = createJSONStorage(() => {
+  if (Platform.OS === 'web') {
+    if (typeof window !== 'undefined' && (window.sessionStorage || window.localStorage)) {
+      return webPerTabAuthStorage;
     }
     return noopStorage;
   }

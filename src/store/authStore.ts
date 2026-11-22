@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { Platform } from 'react-native';
-import { appStorage } from './storage';
+import { authStorage } from './storage';
 
 export type Role = 'admin' | 'manager' | 'floor_manager' | 'Floor Manager' | 'waiter' | 'kitchen' | 'juicebar' | 'playland' | string | null;
 
@@ -115,7 +115,7 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'auth-storage',
-      storage: appStorage,
+      storage: authStorage,
       // Only persist the session, not the runtime hydration flag
       partialize: (state) => ({ user: state.user, isAuthenticated: state.isAuthenticated }),
       onRehydrateStorage: () => (state) => {
