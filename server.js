@@ -6603,38 +6603,34 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             : null;
         } else if (key === 'staff') {
           const incStaff = Array.isArray(sanitized) ? sanitized : [];
-          if (incStaff.length <= 1 && Array.isArray(serverState.staff) && serverState.staff.length > 1) {
-            // Do not allow an un-seeded client with only master or empty staff to wipe the 53 real staff members
-            const masterOnly = INITIAL_STATE.staff[0];
-            if (!serverState.staff.some(s => s && s.id === 'st-master')) {
-              serverState.staff.unshift({ ...masterOnly });
-              const sMap = new Map();
-              for (const initSt of (INITIAL_STATE.staff || [])) {
-                sMap.set(initSt.id, { ...initSt });
-              }
-              for (const curr of (serverState.staff || [])) {
-                if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
-                  sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
-                }
-              } else {
-                const masterOnly = INITIAL_STATE.staff[0];
-                if (!incStaff.some(s => s && s.id === 'st-master')) {
-                  incStaff.unshift({ ...masterOnly });
-                }
-                for (const inc of incStaff) {
-                  if (inc && inc.id) {
-                    sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
-                  }
-                  serverState.staff = incStaff;
-                }
-                serverState.staff = Array.from(sMap.values());
-              } else {
-                serverState[key] = sanitized;
-              }
-              modified = true;
+          const masterOnly = INITIAL_STATE.staff[0];
+          const sMap = new Map();
+          for (const initSt of (INITIAL_STATE.staff || [])) {
+            if (initSt && initSt.id) sMap.set(initSt.id, { ...initSt });
+          }
+          for (const curr of (serverState.staff || [])) {
+            if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
+              sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
             }
           }
+          if (incStaff.length > 1) {
+            for (const inc of incStaff) {
+              if (inc && inc.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(inc.id))) {
+                sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+              }
+            }
+          }
+          if (!sMap.has('st-master') && masterOnly) {
+            sMap.set('st-master', { ...masterOnly });
+          }
+          serverState.staff = Array.from(sMap.values());
+        } else {
+          serverState[key] = sanitized;
         }
+        modified = true;
+      }
+    }
+  }
 
         if (modified) {
           // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
