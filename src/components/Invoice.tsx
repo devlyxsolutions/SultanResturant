@@ -28,7 +28,8 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   const brandTagline = (sysSettings.tagline || 'LUXURY DINING & BANQUET').trim();
   const brandAddress = (sysSettings.address || 'Food Street, Culinary District, Lahore').trim();
   const brandPhone = (sysSettings.phone || '0300-1234567').trim();
-  const brandNtn = (sysSettings.ntnOrTaxId || '8943120-4').trim();
+  const rawNtn = (sysSettings.ntnOrTaxId || '').trim();
+  const brandNtn = rawNtn === '8943120-4' ? '' : rawNtn;
   const brandFooter = (sysSettings.footerMessage || 'Thank you for dining with Sultan!').trim();
   const taxLabel = sysSettings.taxLabel || 'GST Tax';
   const taxRate = sysSettings.taxEnabled ? sysSettings.taxRatePercent : 0;
@@ -90,7 +91,9 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     if ((invoice.discount || 0) > 0) {
       text += `Discount: - Rs. ${(invoice.discount || 0).toLocaleString()}\n`;
     }
-    text += `${taxLabel} (${taxRate}%): ${currency} ${(invoice.tax || 0).toLocaleString()}\n`;
+    if (sysSettings.taxEnabled && (invoice.tax || 0) > 0) {
+      text += `${taxLabel} (${taxRate}%): ${currency} ${(invoice.tax || 0).toLocaleString()}\n`;
+    }
     if ((invoice.serviceCharge || 0) > 0) {
       text += `Service Charge: ${currency} ${(invoice.serviceCharge || 0).toLocaleString()}\n`;
     }
@@ -235,12 +238,11 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         }
 
         .logo-img {
-          width: 76px;
-          height: 72px;
+          width: 145px;
+          height: 135px;
           object-fit: contain;
           display: block;
-          margin: 0 auto 3px auto;
-          filter: grayscale(100%) contrast(300%) brightness(0);
+          margin: 0 auto 4px auto;
         }
 
         .brand-title {
@@ -415,11 +417,10 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
       <div class="receipt-container">
         <div class="header">
           ${sysSettings.showLogoOnReceipt !== false ? `<img src="${SULTAN_LOGO_BASE64}" alt="Logo" class="logo-img" />` : ''}
-          <h1 class="brand-title">${brandName}</h1>
           <div class="urdu-slogan">جہاں ہر مہمان ہے سلطان</div>
-          <div class="brand-sub">${brandTagline}</div>
-          <div class="contact">${brandAddress}</div>
-          <div class="contact">Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}</div>
+          ${brandTagline ? `<div class="brand-sub">${brandTagline}</div>` : ''}
+          ${brandAddress ? `<div class="contact">${brandAddress}</div>` : ''}
+          ${(brandPhone || brandNtn) ? `<div class="contact">${brandPhone ? `Tel: ${brandPhone}` : ''}${brandPhone && brandNtn ? ' • ' : ''}${brandNtn ? `NTN: ${brandNtn}` : ''}</div>` : ''}
         </div>
 
         <div class="dashed-line"></div>
@@ -502,10 +503,12 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
             <span style="font-weight: 800;">- Rs. ${(invoice.discount || 0).toLocaleString()}</span>
           </div>
         ` : ''}
-        <div class="summary-row">
-          <span>${taxLabel} (${taxRate}%):</span>
-          <span style="font-weight: 800;">${currency} ${(invoice.tax || 0).toLocaleString()}</span>
-        </div>
+        ${sysSettings.taxEnabled && (invoice.tax || 0) > 0 ? `
+          <div class="summary-row">
+            <span>${taxLabel} (${taxRate}%):</span>
+            <span style="font-weight: 800;">${currency} ${(invoice.tax || 0).toLocaleString()}</span>
+          </div>
+        ` : ''}
         ${(invoice.serviceCharge || 0) > 0 ? `
           <div class="summary-row">
             <span>Service Charge:</span>
@@ -542,8 +545,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 
         <div class="footer">
           <div style="font-weight: 800; margin-bottom: 2px;">${brandFooter}</div>
-          <div class="urdu-slogan" style="font-size: 13.5px; margin: 2px 0;">جہاں ہر مہمان ہے سلطان</div>
-          <div style="color: #000000; font-size: 9px; font-weight: 600; margin-top: 2px;">Software by Sultan POS System</div>
+          <div style="color: #000000; font-size: 9.5px; font-weight: 700; margin-top: 3px;">Powered & Designed by Nizaam Digital Solution</div>
         </div>
       </div>
     </body>
@@ -626,7 +628,8 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const brandTagline = (sysSettings.tagline || 'LUXURY DINING & BANQUET').trim();
   const brandAddress = (sysSettings.address || 'Food Street, Culinary District, Lahore').trim();
   const brandPhone = (sysSettings.phone || '0300-1234567').trim();
-  const brandNtn = (sysSettings.ntnOrTaxId || '8943120-4').trim();
+  const rawNtn = (sysSettings.ntnOrTaxId || '').trim();
+  const brandNtn = rawNtn === '8943120-4' ? '' : rawNtn;
   const brandFooter = (sysSettings.footerMessage || 'Thank you for dining with Sultan!').trim();
   const taxLabel = sysSettings.taxLabel || 'GST Tax';
   const taxRate = sysSettings.taxEnabled ? sysSettings.taxRatePercent : 0;
@@ -707,15 +710,16 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
         {/* Header with Big Logo */}
         <View style={styles.header}>
           {showLogo && (
-            <SultanLogo size="md" variant="bare" width={86} height={80} style={{ alignSelf: 'center', marginBottom: 6 }} />
+            <SultanLogo size="lg" variant="bare" width={140} height={130} style={{ alignSelf: 'center', marginBottom: 6 }} />
           )}
-          <Text style={[styles.brandTitle, isSmall && { fontSize: 17 }]}>{brandName}</Text>
           <Text style={styles.brandUrduSlogan}>جہاں ہر مہمان ہے سلطان</Text>
           {Boolean(brandTagline) && <Text style={styles.brandSub}>{brandTagline}</Text>}
           {Boolean(brandAddress) && <Text style={styles.contactText}>{brandAddress}</Text>}
-          <Text style={styles.contactText}>
-            Tel: {brandPhone}{brandNtn ? ` • NTN: ${brandNtn}` : ''}
-          </Text>
+          {(Boolean(brandPhone) || Boolean(brandNtn)) && (
+            <Text style={styles.contactText}>
+              {brandPhone ? `Tel: ${brandPhone}` : ''}{brandPhone && brandNtn ? ' • ' : ''}{brandNtn ? `NTN: ${brandNtn}` : ''}
+            </Text>
+          )}
         </View>
 
         <Text style={styles.dashedLine}>- - - - - - - - - - - - - - - - - - - - - -</Text>
@@ -815,10 +819,12 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
             <Text style={styles.summaryVal}>- {currency} {(invoice.discount || 0).toLocaleString()}</Text>
           </View>
         )}
-        <View style={styles.summaryRow}>
-          <Text style={styles.summaryKey}>{taxLabel} ({taxRate}%):</Text>
-          <Text style={styles.summaryVal}>{currency} {(invoice.tax || 0).toLocaleString()}</Text>
-        </View>
+        {sysSettings.taxEnabled && (invoice.tax || 0) > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>{taxLabel} ({taxRate}%):</Text>
+            <Text style={styles.summaryVal}>{currency} {(invoice.tax || 0).toLocaleString()}</Text>
+          </View>
+        )}
         {(invoice.serviceCharge || 0) > 0 && (
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Service Charge:</Text>
@@ -957,9 +963,8 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>{brandFooter}</Text>
-          <Text style={styles.brandUrduSlogan}>جہاں ہر مہمان ہے سلطان</Text>
           <Text style={styles.footerSub}>We look forward to serving you again.</Text>
-          <Text style={styles.footerSub}>Software by Sultan POS System</Text>
+          <Text style={[styles.footerSub, { fontWeight: '700', color: '#111827', marginTop: 2 }]}>Powered & Designed by Nizaam Digital Solution</Text>
         </View>
       </View>
 

@@ -39,6 +39,8 @@ import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
+import SultanLogo from '../components/SultanLogo';
+import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 
 const UNITS = ['kg', 'Liters', 'bottles', 'packs', 'grams', 'cylinders', 'pcs', 'cartons', 'crates', 'bags', 'Tins'];
 
@@ -64,12 +66,24 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
 
   const systemSettings = useSettingsStore((s) => s.settings);
   const inventory = useOpsStore((s) => s.inventory);
+  const storedCategories = useOpsStore((s) => s.inventoryCategories);
   const stockMovements = useOpsStore((s) => s.stockMovements);
   const suppliers = useOpsStore((s) => s.suppliers);
   const addInventoryItem = useOpsStore((s) => s.addInventoryItem);
   const updateInventoryItem = useOpsStore((s) => s.updateInventoryItem);
   const deleteInventoryItem = useOpsStore((s) => s.deleteInventoryItem);
+  const addInventoryCategory = useOpsStore((s) => s.addInventoryCategory);
+  const renameInventoryCategory = useOpsStore((s) => s.renameInventoryCategory);
+  const deleteInventoryCategory = useOpsStore((s) => s.deleteInventoryCategory);
   const recordStockMovement = useOpsStore((s) => s.recordStockMovement);
+
+  const allCategories = useMemo(() => {
+    const base = Array.isArray(storedCategories) && storedCategories.length > 0
+      ? storedCategories
+      : [...INVENTORY_CATEGORIES];
+    const used = inventory.map((i) => i.category).filter(Boolean);
+    return Array.from(new Set([...base, ...used]));
+  }, [storedCategories, inventory]);
 
   // Menu items from restaurant store for dishes stock tab
   const menuItems = useRestaurantStore((s) => s.menuItems);
@@ -105,6 +119,12 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   // Modals
   const [showAddModal, setShowAddModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [inlineNewCatInput, setInlineNewCatInput] = useState('');
+  const [showInlineCatCreator, setShowInlineCatCreator] = useState(false);
+  const [editingCatOldName, setEditingCatOldName] = useState<string | null>(null);
+  const [editingCatNewName, setEditingCatNewName] = useState('');
   const [showMovementModal, setShowMovementModal] = useState(false);
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showGrnModal, setShowGrnModal] = useState(false);
@@ -351,7 +371,9 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setFormItemCode(`SKU-RM-${String(nextCodeNum).padStart(3, '0')}`);
     setFormName('');
     setFormUrduName('');
-    setFormCategory(INVENTORY_CATEGORIES[0]);
+    setFormCategory(allCategories[0] || INVENTORY_CATEGORIES[0]);
+    setShowInlineCatCreator(false);
+    setInlineNewCatInput('');
     setFormLocation(STORAGE_LOCATIONS[0]);
     setFormUnit('kg');
     setFormStock('');
@@ -854,6 +876,21 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
           {(canAddInventory || canEditInventory) && (
             <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#D5A943' }]}
+              onPress={() => {
+                setNewCategoryInput('');
+                setEditingCatOldName(null);
+                setShowCategoryModal(true);
+              }}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="pricetags-outline" size={15} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+              <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>+ Categories ({allCategories.length})</Text>
+            </TouchableOpacity>
+          )}
+
+          {(canAddInventory || canEditInventory) && (
+            <TouchableOpacity
               style={[styles.addBtn, { backgroundColor: BRAND.success }]}
               onPress={() => handleOpenReceiveModal()}
               activeOpacity={0.85}
@@ -1182,7 +1219,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 label="Filter by Category"
                 options={[
                   { label: `All Categories (${inventory.length})`, value: 'All', badge: `${inventory.length}` },
-                  ...INVENTORY_CATEGORIES.map((cat) => ({
+                  ...allCategories.map((cat) => ({
                     label: cat,
                     value: cat,
                     badge: `${inventory.filter((i) => i.category === cat).length}`,
@@ -2580,15 +2617,60 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 onChangeText={setFormName}
               />
 
-              <RoyalDropdown
-                label="Category"
-                options={INVENTORY_CATEGORIES}
-                value={formCategory}
-                onSelect={(val) => setFormCategory(val)}
-                icon="pricetag-outline"
-                searchable
-                style={{ marginBottom: 12 }}
-              />
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <RoyalDropdown
+                    label="Category"
+                    options={allCategories}
+                    value={formCategory}
+                    onSelect={(val) => setFormCategory(val)}
+                    icon="pricetag-outline"
+                    searchable
+                  />
+                </View>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    borderWidth: 1,
+                    borderColor: '#D5A943',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => setShowInlineCatCreator(!showInlineCatCreator)}
+                >
+                  <Ionicons name="add-circle" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>+ New Category</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showInlineCatCreator && (
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0, backgroundColor: '#FFFFFF' }]}
+                    placeholder="Type new category name (e.g. Spices, Frozen, Sauces)..."
+                    value={inlineNewCatInput}
+                    onChangeText={setInlineNewCatInput}
+                  />
+                  <TouchableOpacity
+                    style={{ backgroundColor: BRAND.burgundy, paddingHorizontal: 14, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => {
+                      const clean = inlineNewCatInput.trim();
+                      if (!clean) return;
+                      addInventoryCategory(clean);
+                      setFormCategory(clean);
+                      setInlineNewCatInput('');
+                      setShowInlineCatCreator(false);
+                      broadcastImmediately();
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12.5 }}>Add & Select</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               <RoyalDropdown
                 label="Storage Location / Zone"
@@ -2885,7 +2967,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxWidth: 520 }]}>
             <View style={styles.grnVoucherHeader}>
-              <Text style={styles.grnVoucherBrand}>SULTAN RESTAURANT & BBQ</Text>
+              <SultanLogo size="md" variant="bare" width={115} height={105} style={{ alignSelf: 'center', marginBottom: 4 }} />
               <Text style={styles.grnVoucherTitle}>OFFICIAL GOODS RECEIPT NOTE (GRN)</Text>
               <Text style={styles.grnVoucherNo}>GRN #{lastGrn?.grnNo}</Text>
             </View>
@@ -2954,6 +3036,70 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               >
                 <Text style={styles.modalCancelBtnText}>Close</Text>
               </TouchableOpacity>
+              {Platform.OS === 'web' && (
+                <TouchableOpacity
+                  style={[styles.modalSaveBtn, { backgroundColor: '#D5A943' }]}
+                  onPress={() => {
+                    if (!lastGrn || typeof window === 'undefined') return;
+                    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>GRN #${lastGrn.grnNo}</title><style>
+                      @page { size: 72mm auto; margin: 0mm !important; }
+                      * { box-sizing: border-box; margin: 0; padding: 0; color: #000 !important; }
+                      html, body { margin: 0 !important; padding: 1.5mm 1.5mm 4mm 1mm !important; width: 66mm !important; max-width: 66mm !important; background: #fff !important; font-family: Arial, sans-serif; font-size: 11px; }
+                      .center { text-align: center; }
+                      .logo-img { width: 130px; height: 120px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
+                      .sub { font-size: 11px; font-weight: 900; margin-bottom: 3px; }
+                      .line { border-top: 1.5px dashed #000; margin: 5px 0; }
+                      .row { display: flex; justify-content: space-between; margin: 2.5px 0; font-size: 11px; }
+                      .bold { font-weight: 800; }
+                    </style></head><body>
+                      <div class="center">
+                        <img src="${SULTAN_LOGO_BASE64}" alt="Sultan Logo" class="logo-img" />
+                        <div style="font-size:13px;font-weight:700;margin:2px 0;">جہاں ہر مہمان ہے سلطان</div>
+                        <div class="sub">OFFICIAL GOODS RECEIPT (GRN)</div>
+                        <div class="bold">GRN #${lastGrn.grnNo}</div>
+                      </div>
+                      <div class="line"></div>
+                      <div class="row"><span>Date:</span><span>${lastGrn.at ? `${formatDay(lastGrn.at)} ${formatTime(lastGrn.at)}` : ''}</span></div>
+                      <div class="row"><span>Supplier:</span><span class="bold">${lastGrn.supplier}</span></div>
+                      <div class="row"><span>Invoice #:</span><span>${lastGrn.invoiceNo}</span></div>
+                      <div class="row"><span>Batch #:</span><span>${lastGrn.batchNumber}</span></div>
+                      <div class="row"><span>Location:</span><span>${lastGrn.location}</span></div>
+                      <div class="line"></div>
+                      <div class="row"><span>Item:</span><span class="bold">${lastGrn.itemName}</span></div>
+                      <div class="row"><span>Qty Verified:</span><span class="bold">${lastGrn.qty} ${lastGrn.unit}</span></div>
+                      <div class="row"><span>Unit Cost:</span><span>${money(lastGrn.unitCost)}</span></div>
+                      <div class="row" style="font-size:13px;"><span class="bold">Total Value:</span><span class="bold">${money(lastGrn.totalAmount)}</span></div>
+                      <div class="line"></div>
+                      <div class="row"><span>Verified By:</span><span>${lastGrn.receivedBy}</span></div>
+                      <div class="line"></div>
+                      <div class="center" style="font-size:9.5px;font-weight:700;margin-top:4px;">Powered & Designed by Nizaam Digital Solution</div>
+                    </body></html>`;
+                    const old = document.getElementById('grn-print-frame');
+                    if (old) old.remove();
+                    const iframe = document.createElement('iframe');
+                    iframe.id = 'grn-print-frame';
+                    iframe.style.position = 'fixed';
+                    iframe.style.top = '-9999px';
+                    iframe.style.left = '-9999px';
+                    iframe.style.width = '66mm';
+                    iframe.style.height = '600px';
+                    document.body.appendChild(iframe);
+                    const doc = iframe.contentWindow?.document;
+                    if (doc) {
+                      doc.open();
+                      doc.write(html);
+                      doc.close();
+                      setTimeout(() => {
+                        iframe.contentWindow?.focus();
+                        iframe.contentWindow?.print();
+                      }, 180);
+                    }
+                  }}
+                >
+                  <Ionicons name="print" size={18} color="#4a121a" style={{ marginRight: 6 }} />
+                  <Text style={[styles.modalSaveBtnText, { color: '#4a121a' }]}>Print GRN Slip</Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity
                 style={[styles.modalSaveBtn, { backgroundColor: BRAND.burgundy }]}
                 onPress={() => {
@@ -3120,15 +3266,60 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               <Text style={styles.inputLabel}>Item Name (English) *</Text>
               <TextInput style={styles.input} value={formName} onChangeText={setFormName} />
 
-              <RoyalDropdown
-                label="Category"
-                options={INVENTORY_CATEGORIES}
-                value={formCategory}
-                onSelect={(val) => setFormCategory(val)}
-                icon="pricetag-outline"
-                searchable
-                style={{ marginBottom: 12 }}
-              />
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
+                <View style={{ flex: 1 }}>
+                  <RoyalDropdown
+                    label="Category"
+                    options={allCategories}
+                    value={formCategory}
+                    onSelect={(val) => setFormCategory(val)}
+                    icon="pricetag-outline"
+                    searchable
+                  />
+                </View>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    borderWidth: 1,
+                    borderColor: '#D5A943',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    height: 44,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                  onPress={() => setShowInlineCatCreator(!showInlineCatCreator)}
+                >
+                  <Ionicons name="add-circle" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>+ New Category</Text>
+                </TouchableOpacity>
+              </View>
+
+              {showInlineCatCreator && (
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                  <TextInput
+                    style={[styles.input, { flex: 1, marginBottom: 0, backgroundColor: '#FFFFFF' }]}
+                    placeholder="Type new category name (e.g. Spices, Frozen, Sauces)..."
+                    value={inlineNewCatInput}
+                    onChangeText={setInlineNewCatInput}
+                  />
+                  <TouchableOpacity
+                    style={{ backgroundColor: BRAND.burgundy, paddingHorizontal: 14, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                    onPress={() => {
+                      const clean = inlineNewCatInput.trim();
+                      if (!clean) return;
+                      addInventoryCategory(clean);
+                      setFormCategory(clean);
+                      setInlineNewCatInput('');
+                      setShowInlineCatCreator(false);
+                      broadcastImmediately();
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12.5 }}>Add & Select</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
 
               <RoyalDropdown
                 label="Storage Location / Zone"
@@ -3210,13 +3401,167 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </View>
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEditModal(false)}>
-                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              <View style={styles.modalFooter}>
+                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowEditModal(false)}>
+                  <Text style={styles.modalCancelBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveEdit}>
+                  <Ionicons name="checkmark-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                  <Text style={styles.modalSaveBtnText}>Update SKU Details</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL 6: MANAGE INVENTORY CATEGORIES (ADD / RENAME / DELETE) */}
+      {/* ========================================================================= */}
+      <Modal visible={showCategoryModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Inventory Categories • انوینٹری کیٹیگریز</Text>
+                <Text style={styles.modalSubtitle}>
+                  Add new inventory categories, rename existing ones, or remove unused categories
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowCategoryModal(false)}>
+                <Ionicons name="close" size={24} color={BRAND.ink} />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveEdit}>
+            </View>
+
+            {/* Add New Category Bar */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Enter new category name (e.g. Spices, Frozen, Disposables)..."
+                value={newCategoryInput}
+                onChangeText={setNewCategoryInput}
+              />
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { paddingHorizontal: 16 }]}
+                onPress={() => {
+                  const clean = newCategoryInput.trim();
+                  if (!clean) {
+                    alertMsg('Missing Name', 'Please type a category name.');
+                    return;
+                  }
+                  if (allCategories.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+                    alertMsg('Already Exists', `"${clean}" is already in your categories list.`);
+                    return;
+                  }
+                  addInventoryCategory(clean);
+                  setNewCategoryInput('');
+                  broadcastImmediately();
+                }}
+              >
+                <Ionicons name="add-circle" size={18} color="#FFF" style={{ marginRight: 5 }} />
+                <Text style={styles.modalSaveBtnText}>Add Category</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={false}>
+              <View style={{ gap: 8 }}>
+                {allCategories.map((cat) => {
+                  const itemCount = inventory.filter((i) => i.category === cat).length;
+                  const isEditingThis = editingCatOldName === cat;
+
+                  return (
+                    <View
+                      key={cat}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 10,
+                        gap: 8,
+                      }}
+                    >
+                      {isEditingThis ? (
+                        <View style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          <TextInput
+                            style={[styles.input, { flex: 1, marginBottom: 0, height: 38, paddingVertical: 4 }]}
+                            value={editingCatNewName}
+                            onChangeText={setEditingCatNewName}
+                            autoFocus
+                          />
+                          <TouchableOpacity
+                            style={{ backgroundColor: BRAND.success, paddingHorizontal: 12, height: 36, borderRadius: 8, justifyContent: 'center' }}
+                            onPress={() => {
+                              const cleanNew = editingCatNewName.trim();
+                              if (cleanNew && cleanNew !== cat) {
+                                renameInventoryCategory(cat, cleanNew);
+                                if (selectedCategory === cat) setSelectedCategory(cleanNew);
+                                if (formCategory === cat) setFormCategory(cleanNew);
+                                broadcastImmediately();
+                              }
+                              setEditingCatOldName(null);
+                            }}
+                          >
+                            <Text style={{ color: '#FFF', fontWeight: '800', fontSize: 12 }}>Save</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 10, height: 36, borderRadius: 8, justifyContent: 'center' }}
+                            onPress={() => setEditingCatOldName(null)}
+                          >
+                            <Text style={{ color: '#475569', fontWeight: '700', fontSize: 12 }}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                            <Ionicons name="pricetag" size={15} color={BRAND.burgundy} />
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: BRAND.ink }}>{cat}</Text>
+                            <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 12 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>{itemCount} items</Text>
+                            </View>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <TouchableOpacity
+                              style={styles.stockRowIconBtn}
+                              onPress={() => {
+                                setEditingCatOldName(cat);
+                                setEditingCatNewName(cat);
+                              }}
+                            >
+                              <Ionicons name="pencil-outline" size={14} color="#475569" />
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                              style={[styles.stockRowIconBtn, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }]}
+                              onPress={() => {
+                                if (itemCount > 0) {
+                                  alertMsg('Category in Use', `"${cat}" has ${itemCount} inventory item(s). Please move or rename those items first.`);
+                                  return;
+                                }
+                                deleteInventoryCategory(cat);
+                                if (selectedCategory === cat) setSelectedCategory('All');
+                                broadcastImmediately();
+                              }}
+                            >
+                              <Ionicons name="trash-outline" size={14} color="#DC2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalSaveBtn} onPress={() => setShowCategoryModal(false)}>
                 <Ionicons name="checkmark-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.modalSaveBtnText}>Update SKU Details</Text>
+                <Text style={styles.modalSaveBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>

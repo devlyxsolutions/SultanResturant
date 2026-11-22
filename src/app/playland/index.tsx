@@ -20,6 +20,8 @@ import {
   useAuthStore,
 } from '../../store';
 import { useSettingsStore } from '../../store/settingsStore';
+import SultanLogo from '../../components/SultanLogo';
+import { SULTAN_LOGO_BASE64 } from '../../constants/logoBase64';
 
 const WRISTBAND_COLORS = [
   { name: 'Gold', hex: '#D5A943' },
@@ -191,8 +193,14 @@ export default function PlaylandCounterScreen() {
         .row { display: flex; justify-content: space-between; margin: 2px 0; font-size: 11px; }
         .bold { font-weight: 800; }
         .total { font-size: 14px; font-weight: 900; margin: 4px 0; }
+        .logo-img { width: 130px; height: 120px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
       </style></head><body>
-        <div class="center"><div class="title">SULTAN BASEMENT PLAYLAND</div><div class="sub">Official Kids & Rides Invoice</div></div>
+        <div class="center">
+          <img src="${SULTAN_LOGO_BASE64}" alt="Sultan Logo" class="logo-img" />
+          <div style="font-size:13px;font-weight:700;margin:2px 0;">جہاں ہر مہمان ہے سلطان</div>
+          <div class="title">BASEMENT PLAYLAND</div>
+          <div class="sub">Official Kids & Rides Invoice</div>
+        </div>
         <div class="line"></div>
         <div class="row"><span>TICKET #:</span><span class="bold">${completedTicket.ticketCode}</span></div>
         <div class="row"><span>DATE:</span><span>${new Date(completedTicket.issuedAt).toLocaleString('en-US')}</span></div>
@@ -207,6 +215,7 @@ export default function PlaylandCounterScreen() {
         <div class="row"><span>PAYMENT:</span><span class="bold">${(completedTicket.paymentMethod || 'CASH').toUpperCase()}</span></div>
         <div class="line"></div>
         <div class="center" style="font-size:9.5px;margin-top:4px;">Please wear wristband at all times. Valid for today only.</div>
+        <div class="center" style="font-size:9px;font-weight:700;margin-top:3px;">Powered & Designed by Nizaam Digital Solution</div>
       </body></html>`;
       const old = document.getElementById('playland-print-frame');
       if (old) old.remove();
@@ -622,7 +631,8 @@ export default function PlaylandCounterScreen() {
 
               {/* Clean White Thermal Slip */}
               <View style={styles.thermalPaper}>
-                <Text style={styles.thermalBrandName}>SULTAN BASEMENT PLAYLAND</Text>
+                <SultanLogo size="md" variant="bare" width={120} height={110} style={{ alignSelf: 'center', marginBottom: 4 }} />
+                <Text style={styles.thermalBrandName}>BASEMENT PLAYLAND</Text>
                 <Text style={styles.thermalBrandSub}>Official Kids & Rides Invoice</Text>
                 <View style={styles.thermalDivider} />
 

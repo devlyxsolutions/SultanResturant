@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useMemo, useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Modal,
@@ -13,10 +13,14 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import FullscreenButton from '../components/FullscreenButton';
+import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
+import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
+import { broadcastImmediately } from '../services/syncService';
 import { useAuthStore } from '../store/authStore';
-import { useRolePermissions } from '../store/roleStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
 import {
   CashDenominations,
   INITIAL_DENOMINATIONS,
@@ -25,9 +29,6 @@ import {
   calculateDenominationTotal,
   useShiftStore,
 } from '../store/shiftStore';
-import { broadcastImmediately } from '../services/syncService';
-import FullscreenButton from '../components/FullscreenButton';
-import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
 
 const REGISTER_OPTIONS = [
   'Counter #1 (Main Dining)',
@@ -257,8 +258,13 @@ export default function ShiftManagementScreen() {
         .line { border-top: 1.5px dashed #000; margin: 5px 0; }
         .row { display: flex; justify-content: space-between; margin: 2.5px 0; font-size: 11px; }
         .bold { font-weight: 800; }
+        .logo-img { width: 130px; height: 120px; object-fit: contain; display: block; margin: 0 auto 4px auto; }
       </style></head><body>
-        <div class="center"><div class="title">SULTAN RESTAURANT</div><div class="sub">${reportModalType} • SHIFT SUMMARY</div></div>
+        <div class="center">
+          <img src="${SULTAN_LOGO_BASE64}" alt="Sultan Logo" class="logo-img" />
+          <div style="font-size:13px;font-weight:700;margin:2px 0;">جہاں ہر مہمان ہے سلطان</div>
+          <div class="sub">${reportModalType} • SHIFT SUMMARY</div>
+        </div>
         <div class="line"></div>
         <div class="row"><span>Shift ID:</span><span class="bold">${targetShift?.id || 'N/A'}</span></div>
         <div class="row"><span>Cashier:</span><span class="bold">${targetShift?.cashierName || 'Staff'}</span></div>
@@ -272,7 +278,7 @@ export default function ShiftManagementScreen() {
         <div class="row" style="font-size:13px;"><span class="bold">Expected Cash:</span><span class="bold">Rs. ${expected}</span></div>
         ${selectedShiftForDetail?.actualCountedCash !== undefined ? `<div class="row"><span class="bold">Counted Cash:</span><span class="bold">Rs. ${selectedShiftForDetail.actualCountedCash.toLocaleString()}</span></div>` : ''}
         <div class="line"></div>
-        <div class="center" style="font-size:9.5px;margin-top:4px;">Sultan POS Official Audit Slip</div>
+        <div class="center" style="font-size:9.5px;font-weight:700;margin-top:4px;">Powered & Designed by Nizaam Digital Solution</div>
       </body></html>`;
       const old = document.getElementById('shift-print-frame');
       if (old) old.remove();
@@ -718,8 +724,8 @@ export default function ShiftManagementScreen() {
                         {difference === 0
                           ? 'Cash is 100% Balanced! (بیلنس برابر ہے)'
                           : difference < 0
-                          ? `Cash Shortage: -Rs. ${Math.abs(difference).toLocaleString()} (کمی ہے)`
-                          : `Cash Extra: +Rs. ${difference.toLocaleString()} (اضافی ہے)`}
+                            ? `Cash Shortage: -Rs. ${Math.abs(difference).toLocaleString()} (کمی ہے)`
+                            : `Cash Extra: +Rs. ${difference.toLocaleString()} (اضافی ہے)`}
                       </Text>
                     </View>
                   )}
@@ -883,10 +889,10 @@ export default function ShiftManagementScreen() {
                               s.status === 'open'
                                 ? styles.statusOpen
                                 : isBalanced
-                                ? styles.statusBalanced
-                                : isShortage
-                                ? styles.statusShort
-                                : styles.statusOver,
+                                  ? styles.statusBalanced
+                                  : isShortage
+                                    ? styles.statusShort
+                                    : styles.statusOver,
                             ]}
                           >
                             <Text
@@ -895,19 +901,19 @@ export default function ShiftManagementScreen() {
                                 s.status === 'open'
                                   ? { color: '#059669' }
                                   : isBalanced
-                                  ? { color: '#059669' }
-                                  : isShortage
-                                  ? { color: '#DC2626' }
-                                  : { color: '#2563EB' },
+                                    ? { color: '#059669' }
+                                    : isShortage
+                                      ? { color: '#DC2626' }
+                                      : { color: '#2563EB' },
                               ]}
                             >
                               {s.status === 'open'
                                 ? '● LIVE ACTIVE'
                                 : isBalanced
-                                ? 'BALANCED (0)'
-                                : isShortage
-                                ? `SHORT (-Rs. ${Math.abs(variance).toLocaleString()})`
-                                : `OVER (+Rs. ${variance.toLocaleString()})`}
+                                  ? 'BALANCED (0)'
+                                  : isShortage
+                                    ? `SHORT (-Rs. ${Math.abs(variance).toLocaleString()})`
+                                    : `OVER (+Rs. ${variance.toLocaleString()})`}
                             </Text>
                           </View>
                         </View>
@@ -1046,16 +1052,16 @@ export default function ShiftManagementScreen() {
                           (selectedShiftForDetail.cashVariance || 0) === 0
                             ? '#059669'
                             : (selectedShiftForDetail.cashVariance || 0) > 0
-                            ? '#2563EB'
-                            : '#DC2626',
+                              ? '#2563EB'
+                              : '#DC2626',
                       },
                     ]}
                   >
                     {(selectedShiftForDetail.cashVariance || 0) === 0
                       ? 'BALANCED (0)'
                       : (selectedShiftForDetail.cashVariance || 0) > 0
-                      ? `+ Rs. ${selectedShiftForDetail.cashVariance?.toLocaleString()} (Over)`
-                      : `- Rs. ${Math.abs(selectedShiftForDetail.cashVariance || 0).toLocaleString()} (Short)`}
+                        ? `+ Rs. ${selectedShiftForDetail.cashVariance?.toLocaleString()} (Over)`
+                        : `- Rs. ${Math.abs(selectedShiftForDetail.cashVariance || 0).toLocaleString()} (Short)`}
                   </Text>
                 </View>
               </>

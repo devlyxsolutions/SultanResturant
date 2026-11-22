@@ -479,6 +479,7 @@ export const INITIAL_DAMAGES: DamageRecord[] = [];
 export type OpsData = {
   serviceRequests: ServiceRequest[];
   inventory: InventoryItem[];
+  inventoryCategories?: string[];
   stockMovements: StockMovement[];
   expenses: Expense[];
   feedback: GuestFeedback[];
@@ -494,6 +495,7 @@ export type OpsData = {
 export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'serviceRequests',
   'inventory',
+  'inventoryCategories',
   'stockMovements',
   'expenses',
   'feedback',
@@ -526,6 +528,9 @@ type OpsState = OpsData & {
   addInventoryItem: (item: Omit<InventoryItem, 'id' | 'updatedAt'>) => void;
   updateInventoryItem: (id: string, patch: Partial<Omit<InventoryItem, 'id'>>) => void;
   deleteInventoryItem: (id: string) => void;
+  addInventoryCategory: (category: string) => void;
+  renameInventoryCategory: (oldName: string, newName: string) => void;
+  deleteInventoryCategory: (category: string) => void;
   recordStockMovement: (
     itemId: string,
     type: StockMovementType,
@@ -637,6 +642,7 @@ export const useOpsStore = create<OpsState>()(
     (set, get) => ({
       serviceRequests: [],
       inventory: INITIAL_INVENTORY,
+      inventoryCategories: [...INVENTORY_CATEGORIES],
       stockMovements: INITIAL_STOCK_MOVEMENTS,
       expenses: [],
       feedback: [],
@@ -685,23 +691,95 @@ export const useOpsStore = create<OpsState>()(
         set((state) => ({ serviceRequests: state.serviceRequests.filter(isActiveRequest) })),
 
       addInventoryItem: (item) => {
-        set((state) => ({
-          inventory: [...state.inventory, { ...item, id: uid('inv'), updatedAt: Date.now() }],
-        }));
+        set((state) => {
+          const cat = (item.category || '').trim();
+          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+            ? state.inventoryCategories
+            : [...INVENTORY_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+          return {
+            inventory: [...state.inventory, { ...item, id: uid('inv'), updatedAt: Date.now() }],
+            inventoryCategories: nextCats,
+          };
+        });
         notifySync();
       },
 
       updateInventoryItem: (id, patch) => {
-        set((state) => ({
-          inventory: state.inventory.map((i) =>
-            i.id === id ? { ...i, ...patch, updatedAt: Date.now() } : i
-          ),
-        }));
+        set((state) => {
+          const cat = (patch.category || '').trim();
+          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+            ? state.inventoryCategories
+            : [...INVENTORY_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === id ? { ...i, ...patch, updatedAt: Date.now() } : i
+            ),
+            inventoryCategories: nextCats,
+          };
+        });
         notifySync();
       },
 
       deleteInventoryItem: (id) => {
         set((state) => ({ inventory: state.inventory.filter((i) => i.id !== id) }));
+        notifySync();
+      },
+
+      addInventoryCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+            ? state.inventoryCategories
+            : [...INVENTORY_CATEGORIES];
+          if (currentCats.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+            return state;
+          }
+          return {
+            inventoryCategories: [...currentCats, clean],
+          };
+        });
+        notifySync();
+      },
+
+      renameInventoryCategory: (oldName, newName) => {
+        const cleanOld = (oldName || '').trim();
+        const cleanNew = (newName || '').trim();
+        if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+            ? state.inventoryCategories
+            : [...INVENTORY_CATEGORIES];
+          const updatedCats = currentCats.map((c) => (c === cleanOld ? cleanNew : c));
+          const dedupedCats = Array.from(new Set(updatedCats));
+          return {
+            inventoryCategories: dedupedCats,
+            inventory: state.inventory.map((item) =>
+              item.category === cleanOld ? { ...item, category: cleanNew, updatedAt: Date.now() } : item
+            ),
+          };
+        });
+        notifySync();
+      },
+
+      deleteInventoryCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+            ? state.inventoryCategories
+            : [...INVENTORY_CATEGORIES];
+          const filtered = currentCats.filter((c) => c !== clean);
+          return {
+            inventoryCategories: filtered.length > 0 ? filtered : [...INVENTORY_CATEGORIES],
+          };
+        });
         notifySync();
       },
 
@@ -1300,6 +1378,9 @@ export const useOpsStore = create<OpsState>()(
           const next: Partial<OpsState> = { dummyPurgeVersion: 1 };
           if (Array.isArray(remote.serviceRequests)) next.serviceRequests = remote.serviceRequests;
           if (Array.isArray(remote.inventory)) next.inventory = remote.inventory;
+          if (Array.isArray(remote.inventoryCategories) && remote.inventoryCategories.length > 0) {
+            next.inventoryCategories = remote.inventoryCategories;
+          }
           if (Array.isArray(remote.stockMovements)) {
             next.stockMovements = [...remote.stockMovements]
               .sort((a, b) => (b.at || 0) - (a.at || 0))
@@ -1348,6 +1429,7 @@ export function getOpsSyncState(): OpsData {
   return {
     serviceRequests: s.serviceRequests,
     inventory: s.inventory,
+    inventoryCategories: s.inventoryCategories,
     stockMovements: s.stockMovements,
     expenses: s.expenses,
     feedback: s.feedback,

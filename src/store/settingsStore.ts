@@ -120,8 +120,8 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   showQrOnReceipt: true,
 
   currencySymbol: 'Rs.',
-  taxEnabled: true,
-  taxRatePercent: 16,
+  taxEnabled: false,
+  taxRatePercent: 0,
   taxLabel: 'GST Tax',
   serviceChargeEnabled: false,
   serviceChargePercent: 0,

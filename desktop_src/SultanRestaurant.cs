@@ -286,6 +286,12 @@ namespace SultanRestaurantDesktop
         [DllImport("user32.dll")]
         private static extern bool IsWindowVisible(IntPtr hWnd);
 
+        [DllImport("user32.dll")]
+        private static extern bool SetForegroundWindow(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
         public static void ApplySultanIconToAppWindows()
         {
             try
@@ -295,9 +301,9 @@ namespace SultanRestaurantDesktop
                 if (appIcon == null) return;
                 IntPtr hIcon = appIcon.Handle;
 
-                for (int attempt = 0; attempt < 8; attempt++)
+                for (int attempt = 0; attempt < 6; attempt++)
                 {
-                    Thread.Sleep(250);
+                    Thread.Sleep(180);
                     bool found = false;
                     EnumWindows((hWnd, lParam) =>
                     {
@@ -309,11 +315,13 @@ namespace SultanRestaurantDesktop
                         {
                             SendMessage(hWnd, 0x0080, (IntPtr)0, hIcon); // ICON_SMALL
                             SendMessage(hWnd, 0x0080, (IntPtr)1, hIcon); // ICON_BIG
+                            ShowWindow(hWnd, 3); // SW_MAXIMIZE
+                            SetForegroundWindow(hWnd);
                             found = true;
                         }
                         return true;
                     }, IntPtr.Zero);
-                    if (found && attempt >= 3) break;
+                    if (found && attempt >= 2) break;
                 }
             }
             catch {}
@@ -348,7 +356,10 @@ namespace SultanRestaurantDesktop
             StringBuilder args = new StringBuilder();
             args.AppendFormat("--app=\"{0}\" ", targetUrl);
             args.AppendFormat("--user-data-dir=\"{0}\" ", profileDir);
+            args.Append("--new-window ");
             args.Append("--window-name=\"Sultan Restaurant POS\" ");
+            args.Append("--disable-background-mode ");
+            args.Append("--disable-backgrounding-occluded-windows ");
             args.Append("--disable-pinch ");
             args.Append("--overscroll-history-navigation=0 ");
             args.Append("--disable-features=Translate,OptimizationHints ");
@@ -1059,7 +1070,7 @@ namespace SultanRestaurantDesktop
             }
         }
 
-        private static bool CheckAndApplyAutoUpdate(SultanConfig config, string[] args)
+        private static void CheckAndApplyAutoUpdateInBackground(SultanConfig config)
         {
             try
             {
@@ -1071,41 +1082,36 @@ namespace SultanRestaurantDesktop
                     try { File.Delete(oldExe); } catch {}
                 }
 
-                if (args != null)
-                {
-                    foreach (string a in args)
-                    {
-                        if (a.ToLower() == "--updated") return false;
-                    }
-                }
-
                 string localHash = ComputeFileSha256(currentExe);
-                if (string.IsNullOrEmpty(localHash)) return false;
+                if (string.IsNullOrEmpty(localHash)) return;
 
-                // 1) Check Master Server HTTP OTA Update Endpoint (Works across all 5 PCs without Windows SMB password!)
+                // Fast HTTP OTA Update Check ONLY (No slow Windows SMB \\ServerPC network share lookups!)
                 string baseServer = (config != null && !string.IsNullOrEmpty(config.serverUrl)) ? config.serverUrl.TrimEnd('/') : "http://192.168.1.10:5050";
                 try
                 {
-                    Uri u = new Uri(baseServer);
-                    if (ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 500))
+                    HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseServer + "/api/desktop-update/info");
+                    req.Timeout = 700;
+                    req.ReadWriteTimeout = 700;
+                    using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                    using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
                     {
-                        HttpWebRequest req = (HttpWebRequest)WebRequest.Create(baseServer + "/api/desktop-update/info");
-                        req.Timeout = 1200;
-                        req.ReadWriteTimeout = 1200;
-                        using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
-                        using (StreamReader sr = new StreamReader(resp.GetResponseStream()))
+                        string json = sr.ReadToEnd();
+                        Match m = Regex.Match(json, "\"hash\"\\s*:\\s*\"([a-fA-F0-9]+)\"");
+                        if (m.Success)
                         {
-                            string json = sr.ReadToEnd();
-                            Match m = Regex.Match(json, "\"hash\"\\s*:\\s*\"([a-fA-F0-9]+)\"");
-                            if (m.Success)
+                            string remoteHash = m.Groups[1].Value.ToLower();
+                            if (!string.IsNullOrEmpty(remoteHash) && remoteHash != localHash)
                             {
-                                string remoteHash = m.Groups[1].Value.ToLower();
-                                if (!string.IsNullOrEmpty(remoteHash) && remoteHash != localHash)
+                                using (WebClient wc = new WebClient())
                                 {
-                                    using (WebClient wc = new WebClient())
+                                    byte[] newBytes = wc.DownloadData(baseServer + "/api/desktop-update/SultanRestaurant.exe");
+                                    if (newBytes != null && newBytes.Length >= 50000)
                                     {
-                                        byte[] newBytes = wc.DownloadData(baseServer + "/api/desktop-update/SultanRestaurant.exe");
-                                        if (ReplaceAndRestartWithNewExe(newBytes)) return true;
+                                        string newExe = Path.Combine(dir, "SultanRestaurant.new.exe");
+                                        File.WriteAllBytes(newExe, newBytes);
+                                        if (File.Exists(oldExe)) { try { File.Delete(oldExe); } catch {} }
+                                        File.Move(currentExe, oldExe);
+                                        File.Move(newExe, currentExe);
                                     }
                                 }
                             }
@@ -1113,32 +1119,8 @@ namespace SultanRestaurantDesktop
                     }
                 }
                 catch {}
-
-                // 2) Fallback: Check Shared Network Folder (\\192.168.1.10\Updates\SultanRestaurant.exe or \\ServerPC\Updates\SultanRestaurant.exe)
-                string[] sharePaths = new string[]
-                {
-                    @"\\192.168.1.10\Updates\SultanRestaurant.exe",
-                    @"\\ServerPC\Updates\SultanRestaurant.exe"
-                };
-                foreach (string sp in sharePaths)
-                {
-                    try
-                    {
-                        if (File.Exists(sp))
-                        {
-                            string shareHash = ComputeFileSha256(sp);
-                            if (!string.IsNullOrEmpty(shareHash) && shareHash != localHash)
-                            {
-                                byte[] newBytes = File.ReadAllBytes(sp);
-                                if (ReplaceAndRestartWithNewExe(newBytes)) return true;
-                            }
-                        }
-                    }
-                    catch {}
-                }
             }
             catch {}
-            return false;
         }
 
         [STAThread]
@@ -1148,12 +1130,6 @@ namespace SultanRestaurantDesktop
             Application.SetCompatibleTextRenderingDefault(false);
 
             SultanConfig config = SultanConfig.Load();
-
-            // Automatic 5-PC Self-Update Check before launching!
-            if (CheckAndApplyAutoUpdate(config, args))
-            {
-                return;
-            }
 
             bool forceSetup = false;
             foreach (string a in args)
@@ -1172,11 +1148,38 @@ namespace SultanRestaurantDesktop
 
             if (!forceSetup && config.autoLaunchApp)
             {
-                // Instant Direct App Mode Launch — open POS window and exit launcher cleanly
-                // so closing the POS window and reopening it NEVER says "already running"!
-                MainForm launcherForm = new MainForm(config, false);
-                launcherForm.LaunchStation(config.defaultStation);
-                launcherForm.CleanupTray();
+                // 1. Open the POS window IMMEDIATELY on the very first click (< 50ms) without building MainForm!
+                string route = "/";
+                string s = (config.defaultStation ?? "").ToLower();
+                if (s == "pos" || s == "billing" || s == "juice") route = "/pos";
+                else if (s == "kds" || s == "kitchen") route = "/kitchen/kds";
+                else if (s == "admin" || s == "dashboard") route = "/admin/dashboard";
+                else if (s == "tables" || s == "floor") route = "/tables";
+                else if (s == "playland") route = "/playland";
+
+                string baseServer = string.IsNullOrEmpty(config.serverUrl) ? "http://192.168.1.10:5050" : config.serverUrl.TrimEnd('/');
+                try
+                {
+                    Uri u = new Uri(baseServer);
+                    bool reachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 300);
+                    if (!reachable)
+                    {
+                        if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 150))
+                        {
+                            string err;
+                            ProcessHelper.StartHub(out err);
+                        }
+                        baseServer = "http://localhost:5050";
+                    }
+                }
+                catch {}
+
+                string fullUrl = baseServer + route;
+                string launchErr;
+                ProcessHelper.LaunchAppMode(fullUrl, config.kioskPrinting, true, out launchErr);
+
+                // 2. Check for .exe auto-update AFTER the window is already open on screen so user never waits!
+                CheckAndApplyAutoUpdateInBackground(config);
                 return;
             }
 

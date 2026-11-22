@@ -1,8 +1,7 @@
-import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import { Ticket } from '../store/restaurantStore';
 import SultanLogo from './SultanLogo';
-import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 
 type OrderSlipProps = {
   ticket: Ticket;
@@ -88,10 +87,10 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
           margin-bottom: 4px;
         }
         .logo-img {
-          width: 44px;
-          height: 38px;
+          width: 128px;
+          height: 118px;
           object-fit: contain;
-          margin: 0 auto 2px auto;
+          margin: 0 auto 3px auto;
           display: block;
         }
         .logo-title {
@@ -187,7 +186,7 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
         </tbody>
       </table>
       <div class="divider"></div>
-      <div class="footer">SULTAN RESTAURANT • AUTO KOT</div>
+      <div class="footer">Powered & Designed by Nizaam Digital Solution</div>
     </body>
     </html>
   `;
@@ -276,7 +275,7 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
       )}
       {/* Header */}
       <View style={styles.header}>
-        <SultanLogo size="sm" variant="bare" width={44} height={42} style={{ alignSelf: 'center', marginBottom: 4 }} />
+        <SultanLogo size="md" variant="bare" width={118} height={108} style={{ alignSelf: 'center', marginBottom: 4 }} />
         <Text style={styles.logoText}>KITCHEN SLIP</Text>
         <Text style={styles.logoSubText}>{ticket.isAddOn ? 'ADD-ON ORDER' : 'NEW ORDER'}</Text>
       </View>

@@ -155,7 +155,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
   // -------------------------------------------------------------
   // Splash & Transition States
   // -------------------------------------------------------------
-  const shouldSkipSplash = shouldAutoOpenLogin || hasSeenSplashSession;
+  const shouldSkipSplash = true;
 
   const [showSplash, setShowSplash] = useState(() => !shouldSkipSplash);
   const [splashFadeAnim] = useState(() => new Animated.Value(shouldSkipSplash ? 0 : 1));

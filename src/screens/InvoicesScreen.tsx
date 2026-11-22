@@ -1,31 +1,31 @@
-import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  Share,
-  useWindowDimensions,
-  ViewStyle,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useRestaurantStore, Invoice } from '../store/restaurantStore';
-import { broadcastImmediately } from '../services/syncService';
-import SultanLogo from '../components/SultanLogo';
+import { useMemo, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+  ViewStyle,
+} from 'react-native';
 import { printInvoiceReceipt } from '../components/Invoice';
-import { useAuthStore } from '../store/authStore';
-import { useRolePermissions } from '../store/roleStore';
-import { useSettingsStore } from '../store/settingsStore';
+import PaginationControl from '../components/PaginationControl';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
-import PaginationControl from '../components/PaginationControl';
+import SultanLogo from '../components/SultanLogo';
 import { usePagination } from '../hooks/usePagination';
+import { broadcastImmediately } from '../services/syncService';
+import { useAuthStore } from '../store/authStore';
+import { Invoice, useRestaurantStore } from '../store/restaurantStore';
+import { useRolePermissions } from '../store/roleStore';
+import { useSettingsStore } from '../store/settingsStore';
 
 interface InvoicesScreenProps {
   userRole: 'admin' | 'manager';
@@ -96,7 +96,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
   // Date Boundaries
   const dateRanges = useMemo(() => {
     const now = new Date();
-    
+
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
     const endOfYesterday = startOfToday - 1;
@@ -310,7 +310,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     text += `Date: ${formatDateTime(inv.timeSettled || inv.timePlaced)}\n`;
     text += `Order Type: ${inv.orderType.toUpperCase()}\n`;
     if (inv.tableName) text += `Table: ${inv.tableName}\n`;
-    
+
     const orderCreator = inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff');
     const cashierName = inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager');
     if (orderCreator === cashierName) {
@@ -319,7 +319,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       text += `Order Taken By: ${orderCreator}\n`;
       text += `Billed By (Cashier): ${cashierName}\n`;
     }
-    
+
     if (inv.customer) {
       text += `Customer: ${inv.customer.name} (${inv.customer.phone})\n`;
       if (inv.customer.address) text += `Address: ${inv.customer.address}\n`;
@@ -470,7 +470,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
         {/* KPI Financial Overview */}
         {/* KPI Financial Overview (Liquid Glass Info Boxes) */}
         <View style={styles.kpiContainer}>
-          <View 
+          <View
             style={[styles.kpiCard, styles.kpiCardEmerald, kpiCardResponsiveStyle]}
             {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
           >
@@ -486,7 +486,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
             </View>
           </View>
 
-          <View 
+          <View
             style={[styles.kpiCard, styles.kpiCardSapphire, kpiCardResponsiveStyle]}
             {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
           >
@@ -502,7 +502,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
             </View>
           </View>
 
-          <View 
+          <View
             style={[styles.kpiCard, styles.kpiCardAmber, kpiCardResponsiveStyle]}
             {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
           >
@@ -520,7 +520,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
             </View>
           </View>
 
-          <View 
+          <View
             style={[styles.kpiCard, styles.kpiCardRuby, kpiCardResponsiveStyle]}
             {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
           >
@@ -1266,7 +1266,8 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                     /* THERMAL 80MM RECEIPT PREVIEW */
                     <View style={styles.thermalContainer}>
                       {Platform.OS === 'web' && (
-                        <style dangerouslySetInnerHTML={{ __html: `
+                        <style dangerouslySetInnerHTML={{
+                          __html: `
                           @media print {
                             body * {
                               visibility: hidden !important;
@@ -1292,11 +1293,14 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
                       <View nativeID="thermal-printable-receipt" style={[styles.thermalPaper, isSmallMobile && styles.thermalPaperSmallMobile]}>
                         <View style={styles.thermalHeader}>
-                          <SultanLogo size="md" variant="bare" width={80} height={74} style={{ alignSelf: 'center', marginBottom: 6 }} />
-                          <Text style={[styles.thermalBrandTitle, isSmallMobile && { fontSize: 18, letterSpacing: 1.5 }]}>SULTAN RESTAURANT</Text>
-                          <Text style={styles.thermalBrandSub}>LUXURY DINING & BANQUET</Text>
-                          <Text style={styles.thermalContactText}>Food Street, Culinary District, Lahore</Text>
-                          <Text style={styles.thermalContactText}>Tel: 0300-1234567 • NTN: 8943120-4</Text>
+                          <SultanLogo size="lg" variant="bare" width={140} height={130} style={{ alignSelf: 'center', marginBottom: 6 }} />
+                          <Text style={styles.thermalBrandSub}>{systemSettings.tagline || 'LUXURY DINING & BANQUET'}</Text>
+                          {Boolean(systemSettings.address) && <Text style={styles.thermalContactText}>{systemSettings.address}</Text>}
+                          {(Boolean(systemSettings.phone) || (Boolean(systemSettings.ntnOrTaxId) && systemSettings.ntnOrTaxId !== '8943120-4')) && (
+                            <Text style={styles.thermalContactText}>
+                              {systemSettings.phone ? `Tel: ${systemSettings.phone}` : ''}{systemSettings.phone && systemSettings.ntnOrTaxId && systemSettings.ntnOrTaxId !== '8943120-4' ? ' • ' : ''}{systemSettings.ntnOrTaxId && systemSettings.ntnOrTaxId !== '8943120-4' ? `NTN: ${systemSettings.ntnOrTaxId}` : ''}
+                            </Text>
+                          )}
                         </View>
 
                         <Text style={[styles.thermalDashedLine, isSmallMobile && { fontSize: 10 }]}>- - - - - - - - - - - - - - - - - - - -</Text>
@@ -1389,10 +1393,12 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                             <Text style={[styles.thermalSummaryVal, isSmallMobile && { fontSize: 10 }]}>- Rs. {(selectedInvoice.discount || 0).toLocaleString()}</Text>
                           </View>
                         )}
-                        <View style={styles.thermalSummaryRow}>
-                          <Text style={[styles.thermalSummaryKey, isSmallMobile && { fontSize: 10 }]}>GST Tax (16%):</Text>
-                          <Text style={[styles.thermalSummaryVal, isSmallMobile && { fontSize: 10 }]}>Rs. {(selectedInvoice.tax || 0).toLocaleString()}</Text>
-                        </View>
+                        {(selectedInvoice.tax || 0) > 0 && (
+                          <View style={styles.thermalSummaryRow}>
+                            <Text style={[styles.thermalSummaryKey, isSmallMobile && { fontSize: 10 }]}>{systemSettings.taxLabel || 'GST Tax'}:</Text>
+                            <Text style={[styles.thermalSummaryVal, isSmallMobile && { fontSize: 10 }]}>Rs. {(selectedInvoice.tax || 0).toLocaleString()}</Text>
+                          </View>
+                        )}
 
                         <Text style={[styles.thermalDashedLine, isSmallMobile && { fontSize: 10 }]}>================================</Text>
 
@@ -1411,9 +1417,9 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                         ))}
 
                         <View style={styles.thermalFooter}>
-                          <Text style={[styles.thermalFooterText, isSmallMobile && { fontSize: 10 }]}>Thank you for dining with Sultan!</Text>
+                          <Text style={[styles.thermalFooterText, isSmallMobile && { fontSize: 10 }]}>{systemSettings.footerMessage || 'Thank you for dining with Sultan!'}</Text>
                           <Text style={[styles.thermalFooterSub, isSmallMobile && { fontSize: 8 }]}>We look forward to serving you again.</Text>
-                          <Text style={[styles.thermalFooterSub, isSmallMobile && { fontSize: 8 }]}>Software by Sultan POS System</Text>
+                          <Text style={[styles.thermalFooterSub, { fontWeight: '700' }, isSmallMobile && { fontSize: 8 }]}>Powered & Designed by Nizaam Digital Solution</Text>
                         </View>
                       </View>
                     </View>
