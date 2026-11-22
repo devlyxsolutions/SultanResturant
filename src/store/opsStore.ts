@@ -50,9 +50,15 @@ export type InventoryItem = {
   invoiceNo?: string;
   notes?: string;
   updatedAt: number;
+  /** Floor/Chiller-wise stock breakdown (e.g. { "Ground Floor": 24, "1st Floor": 12, "Rooftop": 18, "Main Store": 100 }) */
+  chillerStock?: Record<string, number>;
+  /** Minimum warning threshold for individual chillers */
+  chillerThreshold?: number;
+  /** Optional linked POS Menu Item ID for auto deduction upon beverage orders */
+  menuItemId?: string;
 };
 
-export type StockMovementType = 'receive' | 'usage' | 'wastage' | 'adjust';
+export type StockMovementType = 'receive' | 'usage' | 'wastage' | 'adjust' | 'transfer' | 'handover';
 
 export type StockMovement = {
   id: string;
@@ -74,6 +80,10 @@ export type StockMovement = {
   batchNumber?: string;
   unitCost?: number;
   expiryDate?: number;
+  fromLocation?: string;
+  toLocation?: string;
+  fromFloor?: string;
+  toFloor?: string;
 };
 
 export type ExpiryStatus = 'expired' | 'critical' | 'warning' | 'fresh' | 'none';
@@ -135,9 +145,41 @@ export const STORAGE_LOCATIONS = [
   'Dry Ration Store - Shelf B',
   'Spice & Masala Rack',
   'Beverage Cold Room',
+  'Ground Floor Chiller',
+  '1st Floor Chiller',
+  '2nd Floor Chiller',
+  '3rd Floor Chiller',
+  'Rooftop Chiller',
   'Cooking Line / Kitchen',
   'Packaging Store',
 ] as const;
+
+export const CHILLER_FLOORS = [
+  'Ground Floor',
+  '1st Floor',
+  '2nd Floor',
+  '3rd Floor',
+  'Rooftop',
+] as const;
+
+export type ChillerFloor = typeof CHILLER_FLOORS[number];
+
+export type ChillerHandoverRecord = {
+  id: string;
+  itemId: string;
+  itemName: string;
+  itemCode?: string;
+  unit: string;
+  qty: number;
+  fromLocation: string; // e.g. "Beverage Cold Room" / "Main Storage"
+  toFloor: string; // e.g. "Ground Floor"
+  toChiller: string; // e.g. "Ground Floor Chiller"
+  handedOverBy: string; // Manager / Storekeeper name
+  receivedByFloorManager: string; // Floor Manager name
+  at: number;
+  notes?: string;
+  status: 'transferred' | 'verified';
+};
 
 export type ExpenseMethod = 'cash' | 'online';
 
@@ -483,6 +525,7 @@ export type OpsData = {
   inventory: InventoryItem[];
   inventoryCategories?: string[];
   stockMovements: StockMovement[];
+  chillerHandovers: ChillerHandoverRecord[];
   expenses: Expense[];
   feedback: GuestFeedback[];
   unavailableItemIds: string[];
@@ -499,6 +542,7 @@ export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'inventory',
   'inventoryCategories',
   'stockMovements',
+  'chillerHandovers',
   'expenses',
   'feedback',
   'unavailableItemIds',
@@ -548,8 +592,36 @@ type OpsState = OpsData & {
       location?: string;
       unit?: string;
       grnNo?: string;
+      fromLocation?: string;
+      toLocation?: string;
+      fromFloor?: string;
+      toFloor?: string;
     }
   ) => void;
+  handoverBeveragesToFloor: (params: {
+    itemId: string;
+    qty: number;
+    toFloor: string;
+    fromLocation?: string;
+    handedOverBy: string;
+    receivedByFloorManager: string;
+    notes?: string;
+  }) => boolean;
+  deductFloorBeverageUsage: (params: {
+    floor: string;
+    items: { menuItemId?: string; name: string; qty: number }[];
+    tableId?: string;
+    tableName?: string;
+    orderId?: string;
+    by?: string;
+  }) => void;
+  adjustFloorChillerStock: (params: {
+    itemId: string;
+    floor: string;
+    newStock: number;
+    reason?: string;
+    by?: string;
+  }) => void;
 
   // Expenses
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
@@ -648,6 +720,7 @@ export const useOpsStore = create<OpsState>()(
       inventory: INITIAL_INVENTORY,
       inventoryCategories: [...INVENTORY_CATEGORIES],
       stockMovements: INITIAL_STOCK_MOVEMENTS,
+      chillerHandovers: [],
       expenses: [],
       feedback: [],
       unavailableItemIds: [],
@@ -815,6 +888,10 @@ export const useOpsStore = create<OpsState>()(
             batchNumber: meta?.batchNumber || item.batchNumber,
             unitCost: meta?.unitCost ?? item.costPerUnit,
             expiryDate: meta?.expiryDate ?? item.expiryDate,
+            fromLocation: meta?.fromLocation,
+            toLocation: meta?.toLocation,
+            fromFloor: meta?.fromFloor,
+            toFloor: meta?.toFloor,
           };
 
           return {
@@ -838,6 +915,186 @@ export const useOpsStore = create<OpsState>()(
           };
         });
         notifySync();
+      },
+
+      handoverBeveragesToFloor: ({
+        itemId,
+        qty,
+        toFloor,
+        fromLocation = 'Beverage Cold Room',
+        handedOverBy,
+        receivedByFloorManager,
+        notes,
+      }) => {
+        let success = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item || qty <= 0) return state;
+
+          const currentFloorStock = Number(item.chillerStock?.[toFloor] || 0);
+          const nextFloorStock = currentFloorStock + qty;
+
+          const updatedChillerStock = {
+            ...(item.chillerStock || {}),
+            [toFloor]: nextFloorStock,
+          };
+
+          const handoverId = uid('hnd');
+          const handoverRecord: ChillerHandoverRecord = {
+            id: handoverId,
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            unit: item.unit,
+            qty,
+            fromLocation,
+            toFloor,
+            toChiller: `${toFloor} Chiller`,
+            handedOverBy: handedOverBy || 'Store Manager',
+            receivedByFloorManager: receivedByFloorManager || 'Floor Manager',
+            at: Date.now(),
+            notes,
+            status: 'transferred',
+          };
+
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'handover',
+            qty,
+            delta: 0,
+            note: `Handover to ${toFloor} Chiller (${receivedByFloorManager ? `Received by ${receivedByFloorManager}` : 'Pending Reception'})`,
+            by: handedOverBy,
+            at: Date.now(),
+            fromLocation,
+            toLocation: `${toFloor} Chiller`,
+            toFloor,
+          };
+
+          success = true;
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === itemId
+                ? {
+                    ...i,
+                    chillerStock: updatedChillerStock,
+                    updatedAt: Date.now(),
+                  }
+                : i
+            ),
+            chillerHandovers: [handoverRecord, ...(state.chillerHandovers || [])].slice(0, 100),
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (success) notifySync();
+        return success;
+      },
+
+      deductFloorBeverageUsage: ({ floor, items, tableId, tableName, orderId, by }) => {
+        if (!items || items.length === 0) return;
+        set((state) => {
+          let hasChanged = false;
+          const newMovements: StockMovement[] = [];
+          const updatedInventory = state.inventory.map((invItem) => {
+            const target = items.find(
+              (it) =>
+                (invItem.menuItemId && it.menuItemId === invItem.menuItemId) ||
+                invItem.id === it.menuItemId ||
+                invItem.name.toLowerCase().trim() === it.name.toLowerCase().trim() ||
+                invItem.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
+                it.name.toLowerCase().includes(invItem.name.toLowerCase().trim())
+            );
+
+            if (!target || target.qty <= 0) return invItem;
+
+            hasChanged = true;
+            const currentFloorQty = Number(invItem.chillerStock?.[floor] || 0);
+            const deductFloorQty = Math.min(currentFloorQty, target.qty);
+            const nextFloorQty = Math.max(0, currentFloorQty - target.qty);
+            const nextTotalStock = Math.max(0, invItem.stock - target.qty);
+
+            newMovements.push({
+              id: uid('mv'),
+              itemId: invItem.id,
+              itemName: invItem.name,
+              itemCode: invItem.itemCode,
+              type: 'usage',
+              qty: target.qty,
+              delta: -target.qty,
+              note: `Floor Sale at ${tableName || tableId || floor}${orderId ? ` (#${orderId})` : ''} [${floor} Chiller: -${deductFloorQty}]`,
+              by: by || 'POS / Waiter',
+              at: Date.now(),
+              fromFloor: floor,
+              fromLocation: `${floor} Chiller`,
+            });
+
+            return {
+              ...invItem,
+              stock: nextTotalStock,
+              chillerStock: {
+                ...(invItem.chillerStock || {}),
+                [floor]: nextFloorQty,
+              },
+              updatedAt: Date.now(),
+            };
+          });
+
+          if (!hasChanged) return state;
+
+          return {
+            inventory: updatedInventory,
+            stockMovements: [...newMovements, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        notifySync();
+      },
+
+      adjustFloorChillerStock: ({ itemId, floor, newStock, reason, by }) => {
+        let hasChanged = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item) return state;
+
+          const oldFloorStock = Number(item.chillerStock?.[floor] || 0);
+          const safeNewStock = Math.max(0, Number(newStock) || 0);
+          const diff = safeNewStock - oldFloorStock;
+          if (diff === 0) return state;
+
+          hasChanged = true;
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'adjust',
+            qty: safeNewStock,
+            delta: diff,
+            note: `${floor} Chiller stock count audit: ${oldFloorStock} ➔ ${safeNewStock} (${reason || 'Physical Count'})`,
+            by: by || 'Floor Manager',
+            at: Date.now(),
+            toFloor: floor,
+            toLocation: `${floor} Chiller`,
+          };
+
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === itemId
+                ? {
+                    ...i,
+                    chillerStock: {
+                      ...(i.chillerStock || {}),
+                      [floor]: safeNewStock,
+                    },
+                    updatedAt: Date.now(),
+                  }
+                : i
+            ),
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (hasChanged) notifySync();
       },
 
       addExpense: (expense) => {
@@ -1393,6 +1650,19 @@ export const useOpsStore = create<OpsState>()(
               .sort((a, b) => (b.at || 0) - (a.at || 0))
               .slice(0, MAX_MOVEMENTS);
           }
+          // Stable Chiller Handovers Reconciliation
+          if (Array.isArray(remote.chillerHandovers)) {
+            const seen = new Set<string>();
+            const mergedHandovers: ChillerHandoverRecord[] = [];
+            [...(remote.chillerHandovers || []), ...(state.chillerHandovers || [])].forEach((h) => {
+              if (h && h.id && !seen.has(h.id)) {
+                seen.add(h.id);
+                mergedHandovers.push(h);
+              }
+            });
+            mergedHandovers.sort((a, b) => (b.at || 0) - (a.at || 0));
+            next.chillerHandovers = mergedHandovers.slice(0, 100);
+          }
           if (Array.isArray(remote.expenses)) {
             next.expenses = [...remote.expenses].sort((a, b) => (b.at || 0) - (a.at || 0));
           }
@@ -1438,6 +1708,7 @@ export function getOpsSyncState(): OpsData {
     inventory: s.inventory,
     inventoryCategories: s.inventoryCategories,
     stockMovements: s.stockMovements,
+    chillerHandovers: s.chillerHandovers || [],
     expenses: s.expenses,
     feedback: s.feedback,
     unavailableItemIds: s.unavailableItemIds,

@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { usePortalBase } from '../hooks/usePortalBase';
 import {
   useOpsStore,
   InventoryItem,
@@ -23,6 +22,7 @@ import {
   StockMovementType,
   INVENTORY_CATEGORIES,
   STORAGE_LOCATIONS,
+  CHILLER_FLOORS,
   getStockLevel,
   getExpiryStatus,
   StockLevel,
@@ -34,10 +34,11 @@ import { money, formatTime, formatDay, toWhatsAppNumber } from '../utils/format'
 import { useAuthStore } from '../store/authStore';
 import { useRolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
+import PaginationControl from '../components/PaginationControl';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import RoyalDropdown from '../components/RoyalDropdown';
-import PaginationControl from '../components/PaginationControl';
 import { usePagination } from '../hooks/usePagination';
+import { usePortalBase } from '../hooks/usePortalBase';
 import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
 import SultanLogo from '../components/SultanLogo';
@@ -49,7 +50,7 @@ interface Props {
   backRoute?: string;
 }
 
-type TabType = 'raw' | 'receiving' | 'expiries' | 'lowstock' | 'movements' | 'dishes';
+type TabType = 'raw' | 'beverages' | 'receiving' | 'expiries' | 'lowstock' | 'movements' | 'dishes';
 
 export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Props) {
   const router = useRouter();
@@ -77,6 +78,9 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const renameInventoryCategory = useOpsStore((s) => s.renameInventoryCategory);
   const deleteInventoryCategory = useOpsStore((s) => s.deleteInventoryCategory);
   const recordStockMovement = useOpsStore((s) => s.recordStockMovement);
+  const chillerHandovers = useOpsStore((s) => s.chillerHandovers || []);
+  const handoverBeveragesToFloor = useOpsStore((s) => s.handoverBeveragesToFloor);
+  const adjustFloorChillerStock = useOpsStore((s) => s.adjustFloorChillerStock);
 
   const allCategories = useMemo(() => {
     const base = Array.isArray(storedCategories) && storedCategories.length > 0
@@ -193,6 +197,17 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       expiryDate?: number;
     }[];
   } | null>(null);
+
+  // Beverages & Floor Chiller Transfer State
+  const [showHandoverModal, setShowHandoverModal] = useState(false);
+  const [handoverItemId, setHandoverItemId] = useState('');
+  const [handoverQty, setHandoverQty] = useState('');
+  const [handoverFloor, setHandoverFloor] = useState<string>(CHILLER_FLOORS[0]);
+  const [handoverFromLoc, setHandoverFromLoc] = useState('Beverage Cold Room');
+  const [handoverGivenBy, setHandoverGivenBy] = useState(user?.name || 'Inventory Manager');
+  const [handoverReceivedBy, setHandoverReceivedBy] = useState('');
+  const [handoverNotes, setHandoverNotes] = useState('');
+  const [selectedChillerFloorView, setSelectedChillerFloorView] = useState<string>('All');
 
   // Analytics & Summary Metrics
   const metrics = useMemo(() => {
@@ -412,6 +427,29 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       return matchType && matchSearch;
     });
   }, [stockMovements, movementFilter, searchQuery]);
+
+  // Filtered Beverages & Chiller Items
+  const beverageInventory = useMemo(() => {
+    return inventory.filter((item) => {
+      const isBev =
+        (item.category || '').toLowerCase() === 'beverages' ||
+        (item.category || '').toLowerCase() === 'drinks' ||
+        (item.category || '').toLowerCase().includes('juice') ||
+        (item.name || '').toLowerCase().includes('pepsi') ||
+        (item.name || '').toLowerCase().includes('coke') ||
+        (item.name || '').toLowerCase().includes('water') ||
+        (item.name || '').toLowerCase().includes('sprite');
+      if (!isBev) return false;
+
+      const q = searchQuery.toLowerCase().trim();
+      const matchSearch =
+        !q ||
+        item.name.toLowerCase().includes(q) ||
+        (item.itemCode && item.itemCode.toLowerCase().includes(q)) ||
+        (item.location && item.location.toLowerCase().includes(q));
+      return matchSearch;
+    });
+  }, [inventory, searchQuery]);
 
   // Tracked Dishes in Menu
   const trackedDishes = useMemo(() => {
@@ -690,10 +728,10 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       movementType === 'receive'
         ? `Added +${qtyNum} ${selectedItem.unit}`
         : movementType === 'usage'
-        ? `Deducted -${qtyNum} ${selectedItem.unit} (Kitchen Usage)`
-        : movementType === 'wastage'
-        ? `Deducted -${qtyNum} ${selectedItem.unit} (Wastage)`
-        : `Adjusted to ${qtyNum} ${selectedItem.unit}`;
+          ? `Deducted -${qtyNum} ${selectedItem.unit} (Kitchen Usage)`
+          : movementType === 'wastage'
+            ? `Deducted -${qtyNum} ${selectedItem.unit} (Wastage)`
+            : `Adjusted to ${qtyNum} ${selectedItem.unit}`;
 
     alertMsg('Stock Recorded', `${selectedItem.name}: ${actionLabel}`);
   };
@@ -1007,8 +1045,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 isConnected
                   ? styles.syncStatusPillConnected
                   : isOffline
-                  ? styles.syncStatusPillOffline
-                  : styles.syncStatusPillConnecting,
+                    ? styles.syncStatusPillOffline
+                    : styles.syncStatusPillConnecting,
               ]}
             >
               <View
@@ -1017,8 +1055,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   isConnected
                     ? styles.syncStatusDotConnected
                     : isOffline
-                    ? styles.syncStatusDotOffline
-                    : styles.syncStatusDotConnecting,
+                      ? styles.syncStatusDotOffline
+                      : styles.syncStatusDotConnecting,
                 ]}
               />
               <Text
@@ -1027,15 +1065,15 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   isConnected
                     ? styles.syncStatusTextConnected
                     : isOffline
-                    ? styles.syncStatusTextOffline
-                    : styles.syncStatusTextConnecting,
+                      ? styles.syncStatusTextOffline
+                      : styles.syncStatusTextConnecting,
                 ]}
               >
                 {isConnected
                   ? `Cloud Synced${lastSyncedAt ? ` • ${formatTime(lastSyncedAt)}` : ''}`
                   : isOffline
-                  ? 'Offline'
-                  : 'Syncing...'}
+                    ? 'Offline'
+                    : 'Syncing...'}
               </Text>
             </View>
 
@@ -1103,7 +1141,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
       {/* KPI Cards Row (Liquid Glass Info Boxes) */}
       <View style={styles.kpiGrid}>
-        <View 
+        <View
           style={[styles.kpiCard, styles.kpiCardGold]}
           {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
         >
@@ -1116,7 +1154,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           </View>
         </View>
 
-        <View 
+        <View
           style={[styles.kpiCard, styles.kpiCardSapphire]}
           {...(Platform.OS === 'web' ? { className: 'interactive-card' } : {})}
         >
@@ -1185,6 +1223,22 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             />
             <Text style={[styles.tabBtnText, activeTab === 'raw' && styles.tabBtnTextActive]}>
               Directory ({inventory.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'beverages' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('beverages')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="wine"
+              size={15}
+              color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
+              Beverages & Chillers ({beverageInventory.length})
             </Text>
           </TouchableOpacity>
 
@@ -1287,6 +1341,22 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           </TouchableOpacity>
 
           <TouchableOpacity
+            style={[styles.tabBtn, activeTab === 'beverages' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('beverages')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="wine"
+              size={16}
+              color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
+              Beverages & Chillers ({beverageInventory.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
             style={[styles.tabBtn, activeTab === 'receiving' && styles.tabBtnActive]}
             onPress={() => setActiveTab('receiving')}
             activeOpacity={0.7}
@@ -1378,14 +1448,14 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               activeTab === 'raw'
                 ? 'Search SKU code, item name, Urdu name, location, supplier...'
                 : activeTab === 'receiving'
-                ? 'Search invoice #, supplier, batch #, item...'
-                : activeTab === 'expiries'
-                ? 'Search expiring items or batches...'
-                : activeTab === 'lowstock'
-                ? 'Search low stock shortages...'
-                : activeTab === 'movements'
-                ? 'Search movement history, notes, staff...'
-                : 'Search menu dishes...'
+                  ? 'Search invoice #, supplier, batch #, item...'
+                  : activeTab === 'expiries'
+                    ? 'Search expiring items or batches...'
+                    : activeTab === 'lowstock'
+                      ? 'Search low stock shortages...'
+                      : activeTab === 'movements'
+                        ? 'Search movement history, notes, staff...'
+                        : 'Search menu dishes...'
             }
             placeholderTextColor={BRAND.muted}
             value={searchQuery}
@@ -1762,131 +1832,130 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <>
               {/* BOX / CARD GRID VIEW (ALTERNATIVE VIEW) */}
               <View style={styles.itemsGrid}>
-              {rawPagination.paginatedData.map((item) => {
-                const badge = getStatusBadge(item);
-                const expiry = getExpiryStatus(item);
-                const isLow = item.stock <= item.threshold;
-                const totalItemVal = item.stock * (item.costPerUnit || 0);
-                const percentLeft = Math.min(100, Math.round((item.stock / (item.threshold * 2 || 1)) * 100));
+                {rawPagination.paginatedData.map((item) => {
+                  const badge = getStatusBadge(item);
+                  const expiry = getExpiryStatus(item);
+                  const isLow = item.stock <= item.threshold;
+                  const totalItemVal = item.stock * (item.costPerUnit || 0);
+                  const percentLeft = Math.min(100, Math.round((item.stock / (item.threshold * 2 || 1)) * 100));
 
-                return (
-                  <View key={item.id} style={styles.itemCard}>
-                    {/* Item Card Header */}
-                    <View style={styles.itemCardHeader}>
-                      <View style={{ flex: 1, marginRight: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                          {item.itemCode ? (
-                            <View style={styles.skuBadge}>
-                              <Text style={styles.skuBadgeText}>{item.itemCode}</Text>
+                  return (
+                    <View key={item.id} style={styles.itemCard}>
+                      {/* Item Card Header */}
+                      <View style={styles.itemCardHeader}>
+                        <View style={{ flex: 1, marginRight: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            {item.itemCode ? (
+                              <View style={styles.skuBadge}>
+                                <Text style={styles.skuBadgeText}>{item.itemCode}</Text>
+                              </View>
+                            ) : null}
+                            <Text style={styles.categoryTagText}>{item.category}</Text>
+                          </View>
+                          <Text style={styles.itemCardTitle}>{item.name}</Text>
+                          {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
+                        </View>
+
+                        <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                          <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
+                            <Ionicons
+                              name={badge.icon as any}
+                              size={12}
+                              color={badge.text}
+                              style={{ marginRight: 4 }}
+                            />
+                            <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
+                          </View>
+                          {expiry.status !== 'none' ? (
+                            <View style={[styles.expiryMiniBadge, { backgroundColor: expiry.bgColor }]}>
+                              <Text style={[styles.expiryMiniBadgeText, { color: expiry.color }]}>
+                                {expiry.label}
+                              </Text>
                             </View>
                           ) : null}
-                          <Text style={styles.categoryTagText}>{item.category}</Text>
                         </View>
-                        <Text style={styles.itemCardTitle}>{item.name}</Text>
-                        {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
                       </View>
 
-                      <View style={{ alignItems: 'flex-end', gap: 4 }}>
-                        <View style={[styles.statusBadge, { backgroundColor: badge.bg }]}>
-                          <Ionicons
-                            name={badge.icon as any}
-                            size={12}
-                            color={badge.text}
-                            style={{ marginRight: 4 }}
-                          />
-                          <Text style={[styles.statusBadgeText, { color: badge.text }]}>{badge.label}</Text>
+                      {/* Storage Location & Batch Info */}
+                      <View style={styles.locationMetaBox}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Ionicons name="location" size={13} color={BRAND.burgundy} />
+                          <Text style={styles.locationMetaText}>{item.location || 'Dry Ration Store'}</Text>
                         </View>
-                        {expiry.status !== 'none' ? (
-                          <View style={[styles.expiryMiniBadge, { backgroundColor: expiry.bgColor }]}>
-                            <Text style={[styles.expiryMiniBadgeText, { color: expiry.color }]}>
-                              {expiry.label}
-                            </Text>
-                          </View>
+                        {item.batchNumber ? (
+                          <Text style={styles.batchMetaText}>Batch: #{item.batchNumber}</Text>
                         ) : null}
                       </View>
-                    </View>
 
-                    {/* Storage Location & Batch Info */}
-                    <View style={styles.locationMetaBox}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                        <Ionicons name="location" size={13} color={BRAND.burgundy} />
-                        <Text style={styles.locationMetaText}>{item.location || 'Dry Ration Store'}</Text>
+                      {/* Stock Numbers & Progress Bar */}
+                      <View style={styles.stockDetailsBox}>
+                        <View style={styles.stockStatRow}>
+                          <View>
+                            <Text style={styles.stockStatLabel}>Current Stock</Text>
+                            <Text style={[styles.stockStatValue, isLow && { color: badge.text }]}>
+                              {item.stock} <Text style={{ fontSize: 13, fontWeight: '500' }}>{item.unit}</Text>
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={styles.stockStatLabel}>Reorder Alert Level</Text>
+                            <Text style={styles.stockStatValue}>
+                              {item.threshold} <Text style={{ fontSize: 13, fontWeight: '500' }}>{item.unit}</Text>
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={styles.progressBarBg}>
+                          <View
+                            style={[
+                              styles.progressBarFill,
+                              {
+                                width: `${percentLeft}%`,
+                                backgroundColor: item.stock <= 0 ? BRAND.danger : isLow ? BRAND.warn : BRAND.success,
+                              },
+                            ]}
+                          />
+                        </View>
                       </View>
-                      {item.batchNumber ? (
-                        <Text style={styles.batchMetaText}>Batch: #{item.batchNumber}</Text>
-                      ) : null}
-                    </View>
 
-                    {/* Stock Numbers & Progress Bar */}
-                    <View style={styles.stockDetailsBox}>
-                      <View style={styles.stockStatRow}>
+                      {/* Valuation & Cost */}
+                      <View style={styles.valuationRow}>
                         <View>
-                          <Text style={styles.stockStatLabel}>Current Stock</Text>
-                          <Text style={[styles.stockStatValue, isLow && { color: badge.text }]}>
-                            {item.stock} <Text style={{ fontSize: 13, fontWeight: '500' }}>{item.unit}</Text>
+                          <Text style={styles.valLabel}>Unit Purchase Cost</Text>
+                          <Text style={styles.valValue}>
+                            {item.costPerUnit ? money(item.costPerUnit) : 'N/A'}{' '}
+                            <Text style={{ fontSize: 11, color: BRAND.muted }}>/{item.unit}</Text>
                           </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={styles.stockStatLabel}>Reorder Alert Level</Text>
-                          <Text style={styles.stockStatValue}>
-                            {item.threshold} <Text style={{ fontSize: 13, fontWeight: '500' }}>{item.unit}</Text>
-                          </Text>
+                          <Text style={styles.valLabel}>Stock Valuation</Text>
+                          <Text style={[styles.valValue, { color: BRAND.burgundy }]}>{money(totalItemVal)}</Text>
                         </View>
                       </View>
 
-                      <View style={styles.progressBarBg}>
-                        <View
-                          style={[
-                            styles.progressBarFill,
-                            {
-                              width: `${percentLeft}%`,
-                              backgroundColor: item.stock <= 0 ? BRAND.danger : isLow ? BRAND.warn : BRAND.success,
-                            },
-                          ]}
-                        />
-                      </View>
-                    </View>
+                      {/* Supplier Box */}
+                      {item.supplier ? (
+                        <View style={styles.supplierRow}>
+                          <Ionicons name="business-outline" size={14} color={BRAND.muted} style={{ marginRight: 6 }} />
+                          <Text style={styles.supplierName} numberOfLines={1}>
+                            {item.supplier}
+                          </Text>
+                          {item.supplierPhone ? (
+                            <TouchableOpacity
+                              style={styles.supplierCallBtn}
+                              onPress={() => {
+                                const num = toWhatsAppNumber(item.supplierPhone!);
+                                Linking.openURL(`https://wa.me/${num}`);
+                              }}
+                            >
+                              <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
+                              <Text style={styles.supplierCallText}>WhatsApp</Text>
+                            </TouchableOpacity>
+                          ) : null}
+                        </View>
+                      ) : null}
 
-                    {/* Valuation & Cost */}
-                    <View style={styles.valuationRow}>
-                      <View>
-                        <Text style={styles.valLabel}>Unit Purchase Cost</Text>
-                        <Text style={styles.valValue}>
-                          {item.costPerUnit ? money(item.costPerUnit) : 'N/A'}{' '}
-                          <Text style={{ fontSize: 11, color: BRAND.muted }}>/{item.unit}</Text>
-                        </Text>
-                      </View>
-                      <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={styles.valLabel}>Stock Valuation</Text>
-                        <Text style={[styles.valValue, { color: BRAND.burgundy }]}>{money(totalItemVal)}</Text>
-                      </View>
-                    </View>
-
-                    {/* Supplier Box */}
-                    {item.supplier ? (
-                      <View style={styles.supplierRow}>
-                        <Ionicons name="business-outline" size={14} color={BRAND.muted} style={{ marginRight: 6 }} />
-                        <Text style={styles.supplierName} numberOfLines={1}>
-                          {item.supplier}
-                        </Text>
-                        {item.supplierPhone ? (
-                          <TouchableOpacity
-                            style={styles.supplierCallBtn}
-                            onPress={() => {
-                              const num = toWhatsAppNumber(item.supplierPhone!);
-                              Linking.openURL(`https://wa.me/${num}`);
-                            }}
-                          >
-                            <Ionicons name="logo-whatsapp" size={13} color="#25D366" />
-                            <Text style={styles.supplierCallText}>WhatsApp</Text>
-                          </TouchableOpacity>
-                        ) : null}
-                      </View>
-                    ) : null}
-
-                    {/* Action Buttons */}
-                    <View style={styles.cardActionsRow}>
-                      {(canAddInventory || canEditInventory) && (
+                      {/* Action Buttons */}
+                      <View style={styles.cardActionsRow}>
                         <TouchableOpacity
                           style={styles.quickMovementBtn}
                           onPress={() => handleOpenReceiveModal(item)}
@@ -1894,9 +1963,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                           <Ionicons name="arrow-down-circle" size={16} color={BRAND.success} />
                           <Text style={[styles.quickMovementBtnText, { color: BRAND.success }]}>Receive</Text>
                         </TouchableOpacity>
-                      )}
 
-                      {canEditInventory && (
                         <TouchableOpacity
                           style={styles.quickUsageBtn}
                           onPress={() => handleOpenMovement(item, 'usage')}
@@ -1904,9 +1971,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                           <Ionicons name="restaurant" size={15} color={BRAND.info} />
                           <Text style={styles.quickUsageBtnText}>Usage (-)</Text>
                         </TouchableOpacity>
-                      )}
 
-                      {canEditInventory && (
                         <TouchableOpacity
                           style={[styles.iconActionBtn, { backgroundColor: '#F3F4F6' }]}
                           onPress={() => handleOpenMovement(item, 'adjust')}
@@ -1914,9 +1979,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                         >
                           <Ionicons name="options-outline" size={16} color={BRAND.ink} />
                         </TouchableOpacity>
-                      )}
 
-                      {canEditInventory && (
                         <TouchableOpacity
                           style={styles.iconActionBtn}
                           onPress={() => handleOpenEdit(item)}
@@ -1924,9 +1987,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                         >
                           <Ionicons name="pencil-outline" size={16} color={BRAND.ink} />
                         </TouchableOpacity>
-                      )}
 
-                      {canDeleteInventory && (
                         <TouchableOpacity
                           style={[styles.iconActionBtn, { backgroundColor: BRAND.dangerSoft }]}
                           onPress={() => handleDelete(item)}
@@ -1934,24 +1995,281 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                         >
                           <Ionicons name="trash-outline" size={16} color={BRAND.danger} />
                         </TouchableOpacity>
-                      )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+              <PaginationControl
+                currentPage={rawPagination.currentPage}
+                totalPages={rawPagination.totalPages}
+                pageSize={rawPagination.pageSize}
+                totalItems={rawPagination.totalItems}
+                pageSizeOptions={[12, 24, 48, 96]}
+                onPageChange={rawPagination.goToPage}
+                onPageSizeChange={rawPagination.setPageSize}
+                itemName="inventory items"
+              />
+            </>
+          )}
+        </View>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB 1.5: BEVERAGES & CHILLERS INVENTORY */}
+      {/* ========================================================================= */}
+      {activeTab === 'beverages' && (
+        <View>
+          <View style={styles.sectionHeaderRow}>
+            <View>
+              <Text style={styles.sectionTitle}>Beverages & Floor Chiller Stocks</Text>
+              <Text style={styles.sectionDesc}>
+                Track cold drinks, juices and mineral waters floor-wise across chillers. Dispatch and hand over cartons to floor managers.
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: '#0284C7' }]}
+              onPress={() => {
+                if (beverageInventory.length > 0) {
+                  setHandoverItemId(beverageInventory[0].id);
+                }
+                setHandoverQty('12');
+                setHandoverFloor(CHILLER_FLOORS[0]);
+                setHandoverFromLoc('Beverage Cold Room');
+                setHandoverGivenBy(user?.name || 'Inventory Manager');
+                setHandoverReceivedBy('');
+                setHandoverNotes('');
+                setShowHandoverModal(true);
+              }}
+            >
+              <Ionicons name="swap-horizontal" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>Hand Over to Floor Chiller</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Floor Chiller Filter Selector */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            {['All', ...CHILLER_FLOORS].map((fl) => (
+              <TouchableOpacity
+                key={fl}
+                onPress={() => setSelectedChillerFloorView(fl)}
+                style={[
+                  {
+                    paddingHorizontal: 14,
+                    paddingVertical: 7,
+                    borderRadius: 20,
+                    backgroundColor: selectedChillerFloorView === fl ? '#0284C7' : '#F1F5F9',
+                    borderWidth: 1,
+                    borderColor: selectedChillerFloorView === fl ? '#0284C7' : '#E2E8F0',
+                  },
+                ]}
+              >
+                <Text
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: '700',
+                    color: selectedChillerFloorView === fl ? '#FFFFFF' : '#475569',
+                  }}
+                >
+                  {fl === 'All' ? '🏢 All Floor Chillers' : `❄️ ${fl} Chiller`}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {beverageInventory.length === 0 ? (
+            <View style={styles.emptyCard}>
+              <Ionicons name="wine-outline" size={48} color={BRAND.muted} />
+              <Text style={styles.emptyTitle}>No Beverage Items Found</Text>
+              <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory to track chiller levels.</Text>
+            </View>
+          ) : (
+            <View style={styles.itemsGrid}>
+              {beverageInventory.map((item) => {
+                const totalStock = item.stock || 0;
+                const chillers = item.chillerStock || {};
+                const totalInChillers = Object.values(chillers).reduce((s, v) => s + (Number(v) || 0), 0);
+                const warehouseStock = Math.max(0, totalStock - totalInChillers);
+
+                return (
+                  <View key={item.id} style={styles.itemCard}>
+                    <View style={styles.itemCardHeader}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                          <View style={[styles.skuBadge, { backgroundColor: '#E0F2FE' }]}>
+                            <Text style={[styles.skuBadgeText, { color: '#0369A1' }]}>{item.itemCode || 'BEV'}</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>
+                            {item.category || 'Beverages'}
+                          </Text>
+                        </View>
+                        <Text style={styles.itemCardTitle}>{item.name}</Text>
+                        {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.stockStatValue, { color: totalStock <= 10 ? '#DC2626' : '#0F172A' }]}>
+                          {totalStock} <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>Total Balance</Text>
+                      </View>
+                    </View>
+
+                    {/* Floor Wise Chiller Distribution Grid */}
+                    <View
+                      style={{
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 10,
+                        padding: 10,
+                        marginTop: 10,
+                        borderWidth: 1,
+                        borderColor: '#E2E8F0',
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>
+                          ❄️ CHILLER STOCK BREAKDOWN:
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          Main Store: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{warehouseStock} {item.unit}</Text>
+                        </Text>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {CHILLER_FLOORS.map((floor) => {
+                          const qty = chillers[floor] || 0;
+                          const isLow = qty <= (item.chillerThreshold || 5);
+                          const isSelectedFloor = selectedChillerFloorView === floor;
+
+                          if (selectedChillerFloorView !== 'All' && !isSelectedFloor) return null;
+
+                          return (
+                            <View
+                              key={floor}
+                              style={{
+                                flex: selectedChillerFloorView === 'All' ? (isMobile ? 1 : undefined) : 1,
+                                minWidth: isMobile ? 100 : 120,
+                                backgroundColor: isLow ? '#FEF2F2' : '#FFFFFF',
+                                borderRadius: 8,
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderWidth: 1,
+                                borderColor: isLow ? '#FCA5A5' : '#E2E8F0',
+                              }}
+                            >
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: isLow ? '#991B1B' : '#475569' }} numberOfLines={1}>
+                                {floor}
+                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '900', color: isLow ? '#DC2626' : '#0284C7' }}>
+                                  {qty} <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B' }}>{item.unit}</Text>
+                                </Text>
+                                {isLow && (
+                                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#DC2626' }}>LOW</Text>
+                                )}
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+
+                    {/* Quick Handover Button per item */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                      <TouchableOpacity
+                        style={[styles.quickMovementBtn, { flex: 1, backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
+                        onPress={() => {
+                          setHandoverItemId(item.id);
+                          setHandoverQty('12');
+                          setHandoverFloor(CHILLER_FLOORS[0]);
+                          setHandoverFromLoc('Beverage Cold Room');
+                          setHandoverGivenBy(user?.name || 'Inventory Manager');
+                          setHandoverReceivedBy('');
+                          setHandoverNotes('');
+                          setShowHandoverModal(true);
+                        }}
+                      >
+                        <Ionicons name="arrow-forward-circle-outline" size={15} color="#0284C7" />
+                        <Text style={[styles.quickMovementBtnText, { color: '#0284C7', fontWeight: '700' }]}>
+                          Hand Over to Chiller
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[styles.quickMovementBtn, { paddingHorizontal: 12 }]}
+                        onPress={() => {
+                          setSelectedItem(item);
+                          setShowMovementModal(true);
+                        }}
+                      >
+                        <Ionicons name="pencil-outline" size={14} color={BRAND.ink} />
+                        <Text style={styles.quickMovementBtnText}>Adjust</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
                 );
               })}
             </View>
-            <PaginationControl
-              currentPage={rawPagination.currentPage}
-              totalPages={rawPagination.totalPages}
-              pageSize={rawPagination.pageSize}
-              totalItems={rawPagination.totalItems}
-              pageSizeOptions={[12, 24, 48, 96]}
-              onPageChange={rawPagination.goToPage}
-              onPageSizeChange={rawPagination.setPageSize}
-              itemName="inventory items"
-            />
-          </>
-        )}
+          )}
+
+          {/* Recent Chiller Handover Logs */}
+          <View style={{ marginTop: 28, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="list" size={18} color="#0284C7" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                  Floor Handover Dispatch History
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                {chillerHandovers.length} Records Transferred
+              </Text>
+            </View>
+
+            {chillerHandovers.length === 0 ? (
+              <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                No beverage handovers logged yet. Use the Hand Over button above to issue beverages to a floor chiller.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                {chillerHandovers.slice(0, 15).map((h) => (
+                  <View
+                    key={h.id}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                          {h.itemName}
+                        </Text>
+                        <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                            ❄️ {h.toFloor} Chiller
+                          </Text>
+                        </View>
+                      </View>
+                      <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                        Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text> • Received by: <Text style={{ fontWeight: '600' }}>{h.receivedByFloorManager || 'Floor Manager'}</Text>
+                        {h.notes ? ` • Note: "${h.notes}"` : ''}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
+                        +{h.qty} {h.unit}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
         </View>
       )}
 
@@ -2233,8 +2551,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     ? 'Urgent (3d)'
                     : ef === 'warning'
                     ? 'Within 7 Days'
-                    : 'Fresh'}
-                </Text>
+                    : 'Fresh'}                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -2401,8 +2718,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               itemName="dated batches"
             />
           </>
-        )}
-        </View>
+        )}        </View>
       )}
 
       {/* ========================================================================= */}
@@ -2560,8 +2876,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                     ? 'Kitchen Usage'
                     : mType === 'wastage'
                     ? 'Spoilage / Wastage'
-                    : 'Physical Adjustments'}
-                </Text>
+                    : 'Physical Adjustments'}                </Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -2577,80 +2892,80 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           ) : (
             <>
               <View style={styles.movementsList}>
-              {movementsPagination.paginatedData.map((m) => {
-                const isPositive = (m.delta ?? 0) > 0;
-                const typeConfig = getMovementConfig(m.type);
+                {movementsPagination.paginatedData.map((m) => {
+                  const isPositive = (m.delta ?? 0) > 0;
+                  const typeConfig = getMovementConfig(m.type);
 
-                return (
-                  <View key={m.id} style={styles.movementCard}>
-                    <View style={[styles.movementIconBox, { backgroundColor: typeConfig.bg }]}>
-                      <Ionicons name={typeConfig.icon as any} size={20} color={typeConfig.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={styles.movementHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          {m.itemCode ? (
-                            <View style={styles.skuBadge}>
-                              <Text style={styles.skuBadgeText}>{m.itemCode}</Text>
-                            </View>
-                          ) : null}
-                          <Text style={styles.movementItemName}>{m.itemName}</Text>
-                        </View>
-                        <Text
-                          style={[
-                            styles.movementDelta,
-                            { color: isPositive ? BRAND.success : m.type === 'wastage' ? BRAND.danger : BRAND.info },
-                          ]}
-                        >
-                          {isPositive ? `+${m.qty}` : `-${m.qty}`}
-                        </Text>
+                  return (
+                    <View key={m.id} style={styles.movementCard}>
+                      <View style={[styles.movementIconBox, { backgroundColor: typeConfig.bg }]}>
+                        <Ionicons name={typeConfig.icon as any} size={20} color={typeConfig.color} />
                       </View>
-
-                      <View style={styles.movementMetaRow}>
-                        <View style={[styles.movementTypeBadge, { backgroundColor: typeConfig.bg }]}>
-                          <Text style={[styles.movementTypeBadgeText, { color: typeConfig.color }]}>
-                            {typeConfig.label}
+                      <View style={{ flex: 1 }}>
+                        <View style={styles.movementHeader}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            {m.itemCode ? (
+                              <View style={styles.skuBadge}>
+                                <Text style={styles.skuBadgeText}>{m.itemCode}</Text>
+                              </View>
+                            ) : null}
+                            <Text style={styles.movementItemName}>{m.itemName}</Text>
+                          </View>
+                          <Text
+                            style={[
+                              styles.movementDelta,
+                              { color: isPositive ? BRAND.success : m.type === 'wastage' ? BRAND.danger : BRAND.info },
+                            ]}
+                          >
+                            {isPositive ? `+${m.qty}` : `-${m.qty}`}
                           </Text>
                         </View>
-                        {m.invoiceNo ? (
-                          <Text style={styles.movementInvoice}>Inv: #{m.invoiceNo}</Text>
+
+                        <View style={styles.movementMetaRow}>
+                          <View style={[styles.movementTypeBadge, { backgroundColor: typeConfig.bg }]}>
+                            <Text style={[styles.movementTypeBadgeText, { color: typeConfig.color }]}>
+                              {typeConfig.label}
+                            </Text>
+                          </View>
+                          {m.invoiceNo ? (
+                            <Text style={styles.movementInvoice}>Inv: #{m.invoiceNo}</Text>
+                          ) : null}
+                          {m.batchNumber ? (
+                            <Text style={styles.movementInvoice}>Batch: #{m.batchNumber}</Text>
+                          ) : null}
+                          <Text style={styles.movementTime}>
+                            {formatDay(m.at)} • {formatTime(m.at)}
+                          </Text>
+                        </View>
+
+                        {m.note ? (
+                          <Text style={styles.movementNote}>
+                            <Ionicons name="document-text-outline" size={13} color={BRAND.muted} /> {`"${m.note}"`}
+                          </Text>
                         ) : null}
-                        {m.batchNumber ? (
-                          <Text style={styles.movementInvoice}>Batch: #{m.batchNumber}</Text>
+
+                        {m.by ? (
+                          <Text style={styles.movementStaff}>
+                            Recorded by: <Text style={{ fontWeight: '700', color: BRAND.ink }}>{m.by}</Text>
+                          </Text>
                         ) : null}
-                        <Text style={styles.movementTime}>
-                          {formatDay(m.at)} • {formatTime(m.at)}
-                        </Text>
                       </View>
-
-                      {m.note ? (
-                        <Text style={styles.movementNote}>
-                          <Ionicons name="document-text-outline" size={13} color={BRAND.muted} /> {`"${m.note}"`}
-                        </Text>
-                      ) : null}
-
-                      {m.by ? (
-                        <Text style={styles.movementStaff}>
-                          Recorded by: <Text style={{ fontWeight: '700', color: BRAND.ink }}>{m.by}</Text>
-                        </Text>
-                      ) : null}
                     </View>
-                  </View>
-                );
-              })}
-            </View>
-            <PaginationControl
-              currentPage={movementsPagination.currentPage}
-              totalPages={movementsPagination.totalPages}
-              pageSize={movementsPagination.pageSize}
-              totalItems={movementsPagination.totalItems}
-              pageSizeOptions={[15, 30, 50, 100]}
-              onPageChange={movementsPagination.goToPage}
-              onPageSizeChange={movementsPagination.setPageSize}
-              itemName="movement logs"
-            />
-          </>
-        )}
+                  );
+                })}
+              </View>
+              <PaginationControl
+                currentPage={movementsPagination.currentPage}
+                totalPages={movementsPagination.totalPages}
+                pageSize={movementsPagination.pageSize}
+                totalItems={movementsPagination.totalItems}
+                pageSizeOptions={[15, 30, 50, 100]}
+                onPageChange={movementsPagination.goToPage}
+                onPageSizeChange={movementsPagination.setPageSize}
+                itemName="movement logs"
+              />
+            </>
+          )}
         </View>
       )}
 
@@ -3306,8 +3621,160 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL 3: MULTI-ITEM GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}
+      {/* HANDOVER TO FLOOR CHILLER MODAL */}
       {/* ========================================================================= */}
+      <Modal visible={showHandoverModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Hand Over to Floor Chiller</Text>
+                <Text style={styles.modalSubtitle}>
+                  Issue cold drinks / beverages from cold storage to floor manager chiller
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowHandoverModal(false)}>
+                <Ionicons name="close" size={24} color={BRAND.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+              {/* Beverage Item Selection */}
+              <Text style={styles.inputLabel}>Select Beverage / Drink *</Text>
+              <RoyalDropdown
+                options={beverageInventory.map((i) => ({
+                  label: `${i.name} (Balance: ${i.stock} ${i.unit})`,
+                  value: i.id,
+                }))}
+                value={handoverItemId}
+                onSelect={(val) => setHandoverItemId(val)}
+                icon="wine-outline"
+                searchable
+                style={{ marginBottom: 12 }}
+              />
+
+              {/* Destination Floor Chiller */}
+              <Text style={styles.inputLabel}>Destination Floor Chiller *</Text>
+              <RoyalDropdown
+                options={CHILLER_FLOORS.map((fl) => ({
+                  label: `❄️ ${fl} Chiller`,
+                  value: fl,
+                }))}
+                value={handoverFloor}
+                onSelect={(val) => setHandoverFloor(val)}
+                icon="snow-outline"
+                style={{ marginBottom: 12 }}
+              />
+
+              {/* Quantity */}
+              <View style={styles.formRow2}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.inputLabel}>Handover Quantity *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 24"
+                    keyboardType="numeric"
+                    value={handoverQty}
+                    onChangeText={setHandoverQty}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.inputLabel}>From Storage Source</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Beverage Cold Room"
+                    value={handoverFromLoc}
+                    onChangeText={setHandoverFromLoc}
+                  />
+                </View>
+              </View>
+
+              {/* Handover Accountability */}
+              <View style={styles.formRow2}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.inputLabel}>Handed Over By (Storekeeper / Manager)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Storekeeper / Manager"
+                    value={handoverGivenBy}
+                    onChangeText={setHandoverGivenBy}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.inputLabel}>Received By Floor Manager *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Hamza / Ali (Floor Manager)"
+                    value={handoverReceivedBy}
+                    onChangeText={setHandoverReceivedBy}
+                  />
+                </View>
+              </View>
+
+              {/* Notes */}
+              <Text style={styles.inputLabel}>Handover Notes / Batch Details (Optional)</Text>
+              <TextInput
+                style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+                multiline
+                placeholder="e.g. 1 Crates (24 Cans) transferred, chilled, verified undamaged"
+                value={handoverNotes}
+                onChangeText={setHandoverNotes}
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowHandoverModal(false)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#0284C7' }]}
+                onPress={() => {
+                  const numQty = Number(handoverQty);
+                  if (!handoverItemId) {
+                    alertMsg('Select Item', 'Please select a beverage item to hand over.');
+                    return;
+                  }
+                  if (!numQty || numQty <= 0) {
+                    alertMsg('Invalid Quantity', 'Please enter a valid positive quantity.');
+                    return;
+                  }
+                  if (!handoverReceivedBy.trim()) {
+                    alertMsg('Floor Manager Name', 'Please specify the name of the Floor Manager receiving the stock.');
+                    return;
+                  }
+
+                  const ok = handoverBeveragesToFloor({
+                    itemId: handoverItemId,
+                    qty: numQty,
+                    toFloor: handoverFloor,
+                    fromLocation: handoverFromLoc.trim() || 'Beverage Cold Room',
+                    handedOverBy: handoverGivenBy.trim() || user?.name || 'Inventory Manager',
+                    receivedByFloorManager: handoverReceivedBy.trim(),
+                    notes: handoverNotes.trim(),
+                  });
+
+                  if (ok) {
+                    setShowHandoverModal(false);
+                    alertMsg(
+                      'Handover Complete',
+                      `Successfully handed over ${numQty} units to ${handoverFloor} Chiller. Floor Manager will now see this updated stock.`
+                    );
+                  } else {
+                    alertMsg('Error', 'Failed to execute handover. Check stock levels.');
+                  }
+                }}
+              >
+                <Ionicons name="checkmark-done-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalSaveBtnText}>Confirm Floor Handover</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+
+      {/* ========================================================================= */}
+      {/* MODAL 3: MULTI-ITEM GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}      {/* ========================================================================= */}
       <Modal visible={showGrnModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxWidth: 560 }]}>
@@ -3569,10 +4036,10 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 movementType === 'receive'
                   ? 'e.g. Morning delivery invoice #402'
                   : movementType === 'usage'
-                  ? 'e.g. Dinner Karahi prep'
-                  : movementType === 'wastage'
-                  ? 'e.g. Expired batch or spillage'
-                  : 'e.g. Weekly physical inventory audit'
+                    ? 'e.g. Dinner Karahi prep'
+                    : movementType === 'wastage'
+                      ? 'e.g. Expired batch or spillage'
+                      : 'e.g. Weekly physical inventory audit'
               }
               value={movementNote}
               onChangeText={setMovementNote}
@@ -3585,8 +4052,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   {movementType === 'receive'
                     ? `${selectedItem.stock + (parseFloat(movementQty) || 0)} ${selectedItem.unit}`
                     : movementType === 'adjust'
-                    ? `${parseFloat(movementQty) || 0} ${selectedItem.unit}`
-                    : `${Math.max(0, selectedItem.stock - (parseFloat(movementQty) || 0))} ${selectedItem.unit}`}
+                      ? `${parseFloat(movementQty) || 0} ${selectedItem.unit}`
+                      : `${Math.max(0, selectedItem.stock - (parseFloat(movementQty) || 0))} ${selectedItem.unit}`}
                 </Text>
               </View>
             ) : null}

@@ -903,7 +903,7 @@ export default function StaffManagementScreen({
                     <TouchableOpacity
                       onPress={() => {
                         setModalVisible(false);
-                        router.push('/admin/settings');
+                        router.push('/admin/settings' as any);
                       }}
                     >
                       <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>

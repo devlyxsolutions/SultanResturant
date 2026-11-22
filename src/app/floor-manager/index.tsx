@@ -14,12 +14,47 @@ import {
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useAuthStore } from '../../store/authStore';
-import { useRestaurantStore, Table, Ticket, OnlineOrder, OrderItem, Invoice } from '../../store/restaurantStore';
+import { useRestaurantStore, Table, Ticket, OnlineOrder, OrderItem, Invoice, BeverageOrderAlert } from '../../store/restaurantStore';
+import { useOpsStore, InventoryItem } from '../../store/opsStore';
 import { printInvoiceReceipt } from '../../components/Invoice';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
 
 // Note: Pending digital menu order audio & modal popups are handled universally by FloorManagerNotificationHost in root _layout.tsx.
+
+function playFloorAttentionChime() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioCtx) {
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+        const osc1 = ctx.createOscillator();
+        const gain1 = ctx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(880, now);
+        osc1.frequency.exponentialRampToValueAtTime(1320, now + 0.15);
+        gain1.gain.setValueAtTime(0.35, now);
+        gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.45);
+        osc1.connect(gain1);
+        gain1.connect(ctx.destination);
+        osc1.start(now);
+        osc1.stop(now + 0.45);
+
+        const osc2 = ctx.createOscillator();
+        const gain2 = ctx.createGain();
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(1760, now + 0.18);
+        gain2.gain.setValueAtTime(0.25, now + 0.18);
+        gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.65);
+        osc2.connect(gain2);
+        gain2.connect(ctx.destination);
+        osc2.start(now + 0.18);
+        osc2.stop(now + 0.65);
+      }
+    } catch (_) {}
+  }
+}
 
 export default function FloorManagerScreen() {
   const router = useRouter();
@@ -88,10 +123,22 @@ export default function FloorManagerScreen() {
   const markTableBilled = useRestaurantStore((s) => s.markTableBilled);
   const confirmOnlineOrder = useRestaurantStore((s) => s.confirmOnlineOrder);
   const rejectOnlineOrder = useRestaurantStore((s) => s.rejectOnlineOrder);
+  const lastBeverageOrderAlert = useRestaurantStore((s) => s.lastBeverageOrderAlert);
+  const clearBeverageOrderAlert = useRestaurantStore((s) => s.clearBeverageOrderAlert);
 
-  // View Mode: 'tables' (Floor tables & seating) or 'kds' (Live Kitchen & Juice cooking)
-  const [activeView, setActiveView] = useState<'tables' | 'kds'>('tables');
+  // Ops Inventory Store for Floor Chiller Management
+  const inventory = useOpsStore((s) => s.inventory || []);
+  const chillerHandovers = useOpsStore((s) => s.chillerHandovers || []);
+  const adjustFloorChillerStock = useOpsStore((s) => s.adjustFloorChillerStock);
+
+  // View Mode: 'tables' | 'kds' | 'chiller'
+  const [activeView, setActiveView] = useState<'tables' | 'kds' | 'chiller'>('tables');
   const [kdsFilter, setKdsFilter] = useState<'all' | 'cooking' | 'ready' | 'pending'>('all');
+
+  // Quick Chiller Adjust Modal State
+  const [chillerAdjustItem, setChillerAdjustItem] = useState<InventoryItem | null>(null);
+  const [chillerAdjustStockVal, setChillerAdjustStockVal] = useState('');
+  const [chillerAdjustReason, setChillerAdjustReason] = useState('Stock Count Verification');
 
   // Identify manager's assigned floor(s)
   const userAssignedFloors = useMemo<string[]>(() => {
@@ -381,6 +428,84 @@ export default function FloorManagerScreen() {
   }, [onlineOrders, selectedFloor, tables]);
 
 
+  // Filter beverages for current floor's chiller
+  const floorBeverages = useMemo(() => {
+    return inventory.filter((item) => {
+      const isBev =
+        (item.category || '').toLowerCase() === 'beverages' ||
+        (item.category || '').toLowerCase() === 'drinks' ||
+        (item.category || '').toLowerCase().includes('juice') ||
+        (item.name || '').toLowerCase().includes('pepsi') ||
+        (item.name || '').toLowerCase().includes('coke') ||
+        (item.name || '').toLowerCase().includes('water') ||
+        (item.name || '').toLowerCase().includes('sprite');
+      return isBev;
+    });
+  }, [inventory]);
+
+  // Floor Chiller summary stats
+  const chillerStats = useMemo(() => {
+    let totalCans = 0;
+    let lowCount = 0;
+    floorBeverages.forEach((b) => {
+      const qty = Number(b.chillerStock?.[selectedFloor] || 0);
+      totalCans += qty;
+      if (qty <= (b.chillerThreshold || 5)) lowCount++;
+    });
+    return { totalCans, lowCount, variety: floorBeverages.length };
+  }, [floorBeverages, selectedFloor]);
+
+  // Active beverage orders for this floor (from live tickets placed recently or alert)
+  const floorActiveBeverageOrders = useMemo(() => {
+    const activeBevTickets: {
+      ticketId: string;
+      tableName: string;
+      server?: string;
+      items: OrderItem[];
+      timePlaced: number;
+    }[] = [];
+
+    floorTickets.forEach((tk) => {
+      if (tk.status === 'served') return;
+      const bevItems = (tk.items || []).filter(
+        (it) =>
+          (it.station || '') === 'juice' ||
+          it.name.toLowerCase().includes('water') ||
+          it.name.toLowerCase().includes('coke') ||
+          it.name.toLowerCase().includes('pepsi') ||
+          it.name.toLowerCase().includes('soda')
+      );
+      if (bevItems.length > 0) {
+        activeBevTickets.push({
+          ticketId: tk.id,
+          tableName: tk.tableName || 'Table',
+          server: tk.server,
+          items: bevItems,
+          timePlaced: tk.timePlaced || Date.now(),
+        });
+      }
+    });
+
+    return activeBevTickets;
+  }, [floorTickets]);
+
+  // Check if there is an active Beverage Order Alert for this floor
+  const isMatchingFloorBeverageAlert = useMemo(() => {
+    if (!lastBeverageOrderAlert || lastBeverageOrderAlert.status !== 'pending') return false;
+    const alertFloor = (lastBeverageOrderAlert.floor || '').trim().toLowerCase();
+    const currFloor = selectedFloor.trim().toLowerCase();
+    const isFloorMatch = alertFloor === currFloor || alertFloor.includes(currFloor) || currFloor.includes(alertFloor);
+    const isRecent = Date.now() - (lastBeverageOrderAlert.time || 0) < 15 * 60 * 1000;
+    return isFloorMatch && isRecent;
+  }, [lastBeverageOrderAlert, selectedFloor]);
+
+  // Audio chime when a new beverage order hits this floor's chiller
+  useEffect(() => {
+    if (isMatchingFloorBeverageAlert) {
+      playFloorAttentionChime();
+    }
+  }, [isMatchingFloorBeverageAlert, lastBeverageOrderAlert?.id]);
+
   // Floor KPIs
   const kpis = useMemo(() => {
     const total = floorTables.length;
@@ -457,6 +582,29 @@ export default function FloorManagerScreen() {
     broadcastImmediately();
     setTransferModalTable(null);
     setSelectedTargetTableId('');
+  };
+
+  // Quick Chiller Adjust / Physical Audit Action
+  const handleSaveChillerAdjust = () => {
+    if (!chillerAdjustItem) return;
+    const newQty = Number(chillerAdjustStockVal);
+    if (isNaN(newQty) || newQty < 0) {
+      const msg = 'Please enter a valid non-negative quantity for chiller stock.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Invalid Quantity', msg);
+      return;
+    }
+    adjustFloorChillerStock({
+      itemId: chillerAdjustItem.id,
+      floor: selectedFloor,
+      newStock: newQty,
+      reason: chillerAdjustReason || 'Stock Count Verification',
+      by: user?.name || 'Floor Manager',
+    });
+    broadcastImmediately();
+    setChillerAdjustItem(null);
+    setChillerAdjustStockVal('');
+    setChillerAdjustReason('Stock Count Verification');
   };
 
   return (
@@ -613,7 +761,105 @@ export default function FloorManagerScreen() {
             </View>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.viewTab,
+            activeView === 'chiller' && { backgroundColor: '#F0F9FF', borderColor: '#0284C7' },
+            isMobile && { flex: 1, justifyContent: 'center', paddingHorizontal: 8 },
+          ]}
+          onPress={() => setActiveView('chiller')}
+        >
+          <MaterialCommunityIcons
+            name="snowflake"
+            size={18}
+            color={activeView === 'chiller' ? '#0284C7' : '#9CA3AF'}
+          />
+          <Text
+            style={[
+              styles.viewTabText,
+              activeView === 'chiller' && { color: '#0369A1', fontWeight: '900' },
+            ]}
+            numberOfLines={1}
+          >
+            {isSmallMobile ? `Chiller (${chillerStats.totalCans})` : `Floor Chiller (${chillerStats.totalCans})`}
+          </Text>
+          {chillerStats.lowCount > 0 && (
+            <View style={[styles.kdsLiveBadge, { backgroundColor: '#DC2626' }]}>
+              <Text style={styles.kdsBadgeText}>⚠️ {chillerStats.lowCount} Low</Text>
+            </View>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* 2C. LIVE BEVERAGE ORDER ALERT BANNER (CHILLER NOTIFICATION) */}
+      {isMatchingFloorBeverageAlert && lastBeverageOrderAlert && (
+        <View
+          style={{
+            marginHorizontal: isMobile ? 12 : 20,
+            marginBottom: 12,
+            backgroundColor: '#0284C7',
+            borderRadius: 12,
+            padding: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            shadowColor: '#0284C7',
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 8,
+            elevation: 4,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 12 }}>
+            <View
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                backgroundColor: 'rgba(255,255,255,0.2)',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginRight: 12,
+              }}
+            >
+              <MaterialCommunityIcons name="glass-cocktail" size={26} color="#FFFFFF" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '800', color: '#BAE6FD', letterSpacing: 0.5 }}>
+                  NEW BEVERAGE ORDER • {lastBeverageOrderAlert.floor.toUpperCase()} CHILLER
+                </Text>
+                <View style={{ backgroundColor: '#FFFFFF', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '900', color: '#0369A1' }}>DISPENSE NOW</Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '900', color: '#FFFFFF', marginTop: 2 }}>
+                Table {lastBeverageOrderAlert.tableName} — {lastBeverageOrderAlert.itemsSummary}
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#E0F2FE', marginTop: 1 }}>
+                Order taken by: {lastBeverageOrderAlert.server || 'Waiter'} • Auto-deducted from {lastBeverageOrderAlert.floor} Chiller stock
+              </Text>
+            </View>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              style={{
+                backgroundColor: '#FFFFFF',
+                paddingHorizontal: 14,
+                paddingVertical: 8,
+                borderRadius: 8,
+              }}
+              onPress={() => clearBeverageOrderAlert(lastBeverageOrderAlert.id)}
+            >
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#0369A1' }}>
+                ✓ Served / Dismiss
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      )}
 
       {/* 3. URGENT PENDING DIGITAL MENU ORDERS QUEUE */}
       {pendingFloorOrders.length > 0 && (
@@ -1084,7 +1330,7 @@ export default function FloorManagerScreen() {
             })}
           </View>
         </ScrollView>
-      ) : (
+      ) : activeView === 'kds' ? (
         /* ========================================================
            6B. LIVE FLOOR KDS & COOKING MONITOR VIEW
            ======================================================== */
@@ -1275,6 +1521,289 @@ export default function FloorManagerScreen() {
               })}
             </View>
           )}
+        </ScrollView>
+      ) : (
+        /* ========================================================
+           6C. FLOOR BEVERAGES & CHILLER MONITOR VIEW
+           ======================================================== */
+        <ScrollView contentContainerStyle={[styles.tablesScroll, isMobile && { paddingHorizontal: 12, paddingBottom: 60 }]}>
+          {/* Chiller Summary / Status Header */}
+          <View
+            style={{
+              backgroundColor: '#0369A1',
+              borderRadius: 12,
+              padding: 16,
+              marginBottom: 16,
+              flexDirection: isMobile ? 'column' : 'row',
+              justifyContent: 'space-between',
+              alignItems: isMobile ? 'flex-start' : 'center',
+              gap: 12,
+            }}
+          >
+            <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="snowflake" size={24} color="#BAE6FD" />
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFFFFF', letterSpacing: 0.5 }}>
+                  {selectedFloor.toUpperCase()} BEVERAGE CHILLER
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#E0F2FE', marginTop: 4 }}>
+                Live cold drinks & water bottles stock for this floor • Auto-deducts when waiters place beverage orders
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, flexWrap: 'wrap' }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#BAE6FD' }}>TOTAL IN CHILLER</Text>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF' }}>{chillerStats.totalCans}</Text>
+              </View>
+              <View style={{ backgroundColor: chillerStats.lowCount > 0 ? '#DC2626' : 'rgba(255,255,255,0.15)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#BAE6FD' }}>LOW STOCK ITEMS</Text>
+                <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF' }}>{chillerStats.lowCount}</Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Active Orders with Beverages Queue for This Floor */}
+          {floorActiveBeverageOrders.length > 0 && (
+            <View style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                <MaterialCommunityIcons name="clock-fast" size={18} color="#0284C7" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A', letterSpacing: 0.3 }}>
+                  ACTIVE BEVERAGE ORDERS TO DISPENSE ({floorActiveBeverageOrders.length})
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {floorActiveBeverageOrders.map((ord) => (
+                  <View
+                    key={ord.ticketId}
+                    style={{
+                      backgroundColor: '#F0F9FF',
+                      borderWidth: 1.5,
+                      borderColor: '#38BDF8',
+                      borderRadius: 10,
+                      padding: 12,
+                      minWidth: isMobile ? '100%' : 260,
+                      flex: 1,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '900', color: '#0369A1' }}>
+                        Table {ord.tableName}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748B' }}>
+                        Waiter: {ord.server || 'Staff'}
+                      </Text>
+                    </View>
+                    <View style={{ gap: 4 }}>
+                      {ord.items.map((it, idx) => (
+                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            {it.qty}x {it.name}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#0284C7', fontWeight: '800' }}>
+                            🧊 Serve Cold
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Beverages Inventory Cards */}
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+            <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+              CHILLER BEVERAGE INVENTORY ({floorBeverages.length} Items)
+            </Text>
+            <Text style={{ fontSize: 11, color: '#64748B' }}>
+              Tap "Audit / Adjust" to reconcile physical bottles
+            </Text>
+          </View>
+
+          {floorBeverages.length === 0 ? (
+            <View style={styles.kdsEmptyBox}>
+              <MaterialCommunityIcons name="snowflake-off" size={48} color="#94A3B8" style={{ marginBottom: 10 }} />
+              <Text style={styles.kdsEmptyTitle}>NO BEVERAGES CONFIGURED</Text>
+              <Text style={styles.kdsEmptySubtitle}>
+                Add beverage items in the main Inventory module and hand them over to {selectedFloor} chiller.
+              </Text>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+              {floorBeverages.map((bev) => {
+                const floorCount = Number(bev.chillerStock?.[selectedFloor] || 0);
+                const isLow = floorCount <= (bev.chillerThreshold || 5);
+                const storeStock = Number(bev.stock || 0);
+
+                return (
+                  <View
+                    key={bev.id}
+                    style={{
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 12,
+                      borderWidth: 1.5,
+                      borderColor: isLow ? '#FCA5A5' : '#E2E8F0',
+                      padding: 14,
+                      width: isMobile ? '100%' : '31.5%',
+                      minWidth: 260,
+                      shadowColor: '#0F172A',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.05,
+                      shadowRadius: 3,
+                      elevation: 1,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }} numberOfLines={1}>
+                          {bev.name}
+                        </Text>
+                        {bev.urduName && (
+                          <Text style={{ fontSize: 13, color: '#64748B', fontFamily: Platform.OS === 'android' ? 'serif' : undefined }}>
+                            {bev.urduName}
+                          </Text>
+                        )}
+                        <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
+                          Unit: {bev.unit || 'Can/Bottle'} • Category: {bev.category}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={{
+                          backgroundColor: isLow ? '#FEE2E2' : '#F0FDF4',
+                          borderWidth: 1,
+                          borderColor: isLow ? '#EF4444' : '#10B981',
+                          paddingHorizontal: 8,
+                          paddingVertical: 3,
+                          borderRadius: 6,
+                        }}
+                      >
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: isLow ? '#DC2626' : '#059669' }}>
+                          {isLow ? '⚠️ LOW STOCK' : '✓ OK'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Stock Numbers */}
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        backgroundColor: '#F8FAFC',
+                        borderRadius: 8,
+                        padding: 10,
+                        marginVertical: 12,
+                        justifyContent: 'space-between',
+                      }}
+                    >
+                      <View>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>THIS CHILLER</Text>
+                        <Text style={{ fontSize: 22, fontWeight: '900', color: isLow ? '#DC2626' : '#0284C7' }}>
+                          {floorCount}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B' }}>STORE TOTAL</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#334155' }}>
+                          {storeStock} {bev.unit || 'pcs'}
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>
+                          Min Alert: {bev.chillerThreshold || 5}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Audit / Adjust Button */}
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#F0F9FF',
+                        borderWidth: 1,
+                        borderColor: '#0284C7',
+                        paddingVertical: 8,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        setChillerAdjustItem(bev);
+                        setChillerAdjustStockVal(String(floorCount));
+                        setChillerAdjustReason('Physical Stock Count');
+                      }}
+                    >
+                      <MaterialCommunityIcons name="clipboard-check-outline" size={15} color="#0284C7" />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#0369A1' }}>
+                        Audit / Physical Count
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* Recent Handovers Received For This Floor */}
+          <View style={{ marginTop: 24, marginBottom: 30 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+              <MaterialCommunityIcons name="history" size={18} color="#64748B" />
+              <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>
+                RECENT HANDOVERS RECEIVED ON {selectedFloor.toUpperCase()}
+              </Text>
+            </View>
+
+            {(() => {
+              const floorHandovers = chillerHandovers
+                .filter((h) => (h.toFloor || '').toLowerCase() === selectedFloor.toLowerCase())
+                .slice(0, 8);
+
+              if (floorHandovers.length === 0) {
+                return (
+                  <View style={{ backgroundColor: '#FFFFFF', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12, color: '#94A3B8' }}>No handovers recorded yet for {selectedFloor}.</Text>
+                  </View>
+                );
+              }
+
+              return (
+                <View style={{ backgroundColor: '#FFFFFF', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0', overflow: 'hidden' }}>
+                  {floorHandovers.map((h, idx) => (
+                    <View
+                      key={h.id || idx}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingHorizontal: 14,
+                        paddingVertical: 10,
+                        borderBottomWidth: idx < floorHandovers.length - 1 ? 1 : 0,
+                        borderBottomColor: '#F1F5F9',
+                      }}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                          +{h.qty} {h.itemName}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          From: {h.fromLocation || 'Main Store'} • By: {h.handedOverBy || 'Store Manager'}
+                          {h.receivedByFloorManager ? ` • Received: ${h.receivedByFloorManager}` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>
+                          {new Date(h.at).toLocaleDateString()} {new Date(h.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                        {h.notes ? <Text style={{ fontSize: 10.5, color: '#64748B', fontStyle: 'italic' }}>{h.notes}</Text> : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              );
+            })()}
+          </View>
         </ScrollView>
       )}
 
@@ -1473,6 +2002,94 @@ export default function FloorManagerScreen() {
       )}
 
 
+      {/* 11. MODAL: CHILLER STOCK AUDIT / RECONCILIATION */}
+      {!!chillerAdjustItem && (
+        <Modal transparent animationType="fade" visible={!!chillerAdjustItem} onRequestClose={() => setChillerAdjustItem(null)}>
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { maxWidth: isMobile ? Math.min(width - 24, 460) : 460 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <MaterialCommunityIcons name="snowflake" size={22} color="#0284C7" />
+                <Text style={styles.modalTitle}>
+                  AUDIT {selectedFloor.toUpperCase()} CHILLER
+                </Text>
+              </View>
+              <Text style={styles.modalSubtitle}>
+                Physical count reconciliation for {chillerAdjustItem.name}
+              </Text>
+
+              <View style={{ backgroundColor: '#F0F9FF', borderRadius: 8, padding: 12, marginVertical: 12 }}>
+                <Text style={{ fontSize: 12, color: '#0369A1' }}>
+                  Current System Count on {selectedFloor}:{' '}
+                  <Text style={{ fontWeight: '900', fontSize: 14 }}>
+                    {Number(chillerAdjustItem.chillerStock?.[selectedFloor] || 0)} {chillerAdjustItem.unit || 'pcs'}
+                  </Text>
+                </Text>
+              </View>
+
+              <View style={{ marginBottom: 12 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                  Actual Physical Count in Chiller:
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1.5,
+                    borderColor: '#0284C7',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 10,
+                    fontSize: 16,
+                    fontWeight: '800',
+                    color: '#0F172A',
+                  }}
+                  keyboardType="numeric"
+                  value={chillerAdjustStockVal}
+                  onChangeText={setChillerAdjustStockVal}
+                  placeholder="Enter count (e.g. 18)"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginBottom: 4 }}>
+                  Audit Reason / Notes:
+                </Text>
+                <TextInput
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 13,
+                    color: '#0F172A',
+                  }}
+                  value={chillerAdjustReason}
+                  onChangeText={setChillerAdjustReason}
+                  placeholder="e.g. Daily shift audit, broken bottle, recount"
+                  placeholderTextColor="#94A3B8"
+                />
+              </View>
+
+              <View style={styles.modalActions}>
+                <TouchableOpacity
+                  style={styles.modalBtnCancel}
+                  onPress={() => setChillerAdjustItem(null)}
+                >
+                  <Text style={styles.modalBtnCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.modalBtnSave, { backgroundColor: '#0284C7' }]}
+                  onPress={handleSaveChillerAdjust}
+                >
+                  <Text style={styles.modalBtnSaveText}>Save Audit Count</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 }
