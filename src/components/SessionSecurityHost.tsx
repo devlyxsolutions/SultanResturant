@@ -69,7 +69,7 @@ export default function SessionSecurityHost() {
     silentLogout();
   };
 
-  // 1. Exact Session-Scoped Revocation Check (ZERO false kicks on other users or fresh logins!)
+  // 1. STRICT Session-Scoped Revocation Check (NEVER kicks a different user or different sessionId!)
   useEffect(() => {
     if (!isAuthenticated || !user) {
       hasHandledKickRef.current = false;
@@ -79,30 +79,30 @@ export default function SessionSecurityHost() {
     const now = Date.now();
     const mySessionId = user.sessionId || '';
     const myStaffId = (user.staffId || user.id || '').toLowerCase().trim();
-    const myLoginTime = user.loginTime || 0;
+    if (!mySessionId) return;
 
-    // 1a. Primary exact check: was THIS exact sessionId revoked?
-    if (mySessionId && revokedSessions && revokedSessions[mySessionId]) {
+    // 1a. Primary exact check: was THIS exact sessionId revoked for THIS exact account?
+    if (revokedSessions && revokedSessions[mySessionId]) {
       const rev = revokedSessions[mySessionId];
-      if (now - (rev.timestamp || 0) < 60 * 60 * 1000) {
+      const revStaffId = (rev.staffId || '').toLowerCase().trim();
+      const sameAccount = !revStaffId || !myStaffId || revStaffId === myStaffId;
+      if (sameAccount && now - (rev.timestamp || 0) < 60 * 60 * 1000) {
         triggerForcedLogout(rev.staffName || user.name, rev.reason, rev.timestamp);
         return;
       }
     }
 
-    // 1b. Backward-compatible device revocation check — ONLY if it matches THIS sessionId or THIS staffId after loginTime
+    // 1b. Device revocation check — STRICTLY require exact sessionId match (never kick on legacy session-less entries!)
     if (revokedDeviceIds && revokedDeviceIds[DEVICE_ID]) {
       const rev = revokedDeviceIds[DEVICE_ID];
       const revStaffId = (rev.staffId || '').toLowerCase().trim();
-      const matchesThisSession = Boolean(rev.sessionId && mySessionId && rev.sessionId === mySessionId);
-      const matchesLegacySameAccount = Boolean(
-        !rev.sessionId &&
-          (!revStaffId || revStaffId === myStaffId) &&
-          rev.timestamp >= myLoginTime &&
-          now - rev.timestamp < 15 * 60 * 1000
+      const matchesExactSession = Boolean(
+        rev.sessionId &&
+          rev.sessionId === mySessionId &&
+          (!revStaffId || !myStaffId || revStaffId === myStaffId)
       );
 
-      if (matchesThisSession || matchesLegacySameAccount) {
+      if (matchesExactSession) {
         triggerForcedLogout(rev.staffName || user.name, rev.reason, rev.timestamp);
         useRestaurantStore.setState((state) => {
           const next = { ...(state.revokedDeviceIds || {}) };
@@ -113,7 +113,7 @@ export default function SessionSecurityHost() {
     }
   }, [revokedSessions, revokedDeviceIds, isAuthenticated, user, silentLogout]);
 
-  // 2. Active-Sessions Eviction Check (STRICTLY scoped to exact same staffId — never cross-account!)
+  // 2. Active-Sessions Eviction Check (STRICTLY scoped to exact same staffId + newer login — NEVER cross-account!)
   useEffect(() => {
     if (!isAuthenticated || !user || !user.sessionId) return;
     if (!activeStaffSessions || activeStaffSessions.length === 0) return;
@@ -128,15 +128,17 @@ export default function SessionSecurityHost() {
       (s) => s.sessionId === user.sessionId
     );
 
+    // Must be a NEWER login on a DIFFERENT device for the EXACT SAME staffId
+    const myLoginTs = user.loginTime || 0;
     const otherSessForExactSameAccount = activeStaffSessions.find(
       (s) =>
         s.sessionId !== user.sessionId &&
         s.deviceId !== DEVICE_ID &&
         s.staffId &&
-        s.staffId.toLowerCase().trim() === normStaffId
+        s.staffId.toLowerCase().trim() === normStaffId &&
+        (s.loginTime || 0) >= myLoginTs
     );
 
-    // Only log out if OUR exact sessionId is gone AND another device holds an active session for OUR exact staffId
     if (!mySessionStillActive && otherSessForExactSameAccount && !hasHandledKickRef.current) {
       triggerForcedLogout(
         user.name,
@@ -157,6 +159,7 @@ export default function SessionSecurityHost() {
       try {
         const baseUrl = getActiveServerHttpUrl();
         if (!baseUrl) return;
+        const myStaffId = (user.staffId || user.id || '').toLowerCase().trim();
         const staffId = encodeURIComponent(user.staffId || user.id || '');
         const sessionId = encodeURIComponent(user.sessionId || '');
         const deviceId = encodeURIComponent(DEVICE_ID);
@@ -165,7 +168,9 @@ export default function SessionSecurityHost() {
         );
         if (!res.ok || cancelled) return;
         const data = await res.json();
-        if (data && data.valid === false && data.revoked) {
+        const respStaffId = (data?.staffId || '').toLowerCase().trim();
+        const sameAccount = !respStaffId || !myStaffId || respStaffId === myStaffId;
+        if (data && data.valid === false && data.revoked && sameAccount) {
           triggerForcedLogout(
             data.staffName || user.name,
             data.reason || 'Doosri device par login kiya gaya hai',

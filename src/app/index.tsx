@@ -35,6 +35,7 @@ import {
   getDeviceFriendlyName,
   getActiveServerHttpUrl,
   broadcastImmediately,
+  markApplyingRemoteUpdate,
 } from '../services/syncService';
 
 // Session-wide splash skip flag for instant navigation after initial launch
@@ -278,6 +279,7 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
           }
           if (res.ok && data?.success) {
             handledByServer = true;
+            markApplyingRemoteUpdate(350);
             useRestaurantStore.setState((s) => ({
               ...(Array.isArray(data.activeStaffSessions)
                 ? { activeStaffSessions: data.activeStaffSessions }

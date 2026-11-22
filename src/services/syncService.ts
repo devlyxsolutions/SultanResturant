@@ -434,7 +434,11 @@ export async function resolveDefaultServerIp(): Promise<string> {
 export function getActiveServerHttpUrl(): string {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location) {
     const loc = window.location;
-    if (loc.port === '8081' || loc.port === '5050' || loc.port === '5000' || loc.port === '80' || !loc.port) {
+    // Port 8081 is Expo Metro dev server (no backend API routes); always point API calls to Central Hub on port 5050!
+    if (loc.port === '8081') {
+      return `${loc.protocol}//${loc.hostname}:${SERVER_PORT}`;
+    }
+    if (loc.port === '5050' || loc.port === '5000' || loc.port === '80' || !loc.port) {
       return loc.origin;
     }
     return `${loc.protocol}//${loc.hostname}:${SERVER_PORT}`;
