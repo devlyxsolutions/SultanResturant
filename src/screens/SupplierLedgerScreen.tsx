@@ -56,7 +56,7 @@ export type LedgerEntry = {
   invoiceNo?: string;
   supplierId: string;
   supplierName: string;
-  category?: SupplierCategory;
+  category?: string;
   title: string;
   subtitle: string;
   debit: number; // Procurement bill amount (adds to payable)
@@ -170,12 +170,13 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
 
     suppliers.forEach((s) => {
       const due = s.currentBalance || 0;
+      const theme = CATEGORY_THEMES[s.category as SupplierCategory] || CATEGORY_THEMES['Other'];
       list.push({
         label: s.name,
         value: s.id,
-        icon: CATEGORY_THEMES[s.category]?.icon || 'business-outline',
+        icon: theme.icon || 'business-outline',
         badge: due > 0 ? `Due: Rs. ${due.toLocaleString()}` : 'Cleared ✓',
-        sublabel: `${s.contactPerson || 'Vendor'} • ${s.city || 'Lahore'} • ${CATEGORY_THEMES[s.category]?.urdu || s.category}`,
+        sublabel: `${s.contactPerson || 'Vendor'} • ${s.city || 'Lahore'} • ${theme.urdu || s.category}`,
       });
     });
 
@@ -886,23 +887,25 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
       {/* ========================================================
           4. SELECTED SUPPLIER DOSSIER PROFILE STRIP
           ======================================================== */}
-      {selectedSupplier && (
+      {selectedSupplier && (() => {
+        const supTheme = CATEGORY_THEMES[selectedSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'];
+        return (
         <View style={styles.supplierDossierBanner}>
           <View style={styles.dossierLeft}>
-            <View style={[styles.dossierAvatar, { backgroundColor: CATEGORY_THEMES[selectedSupplier.category]?.bg || '#F1F5F9' }]}>
+            <View style={[styles.dossierAvatar, { backgroundColor: supTheme.bg || '#F1F5F9' }]}>
               <Ionicons
-                name={CATEGORY_THEMES[selectedSupplier.category]?.icon || 'business'}
+                name={supTheme.icon || 'business'}
                 size={22}
-                color={CATEGORY_THEMES[selectedSupplier.category]?.accent || '#52141C'}
+                color={supTheme.accent || '#52141C'}
               />
             </View>
 
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <Text style={styles.dossierTitle}>{selectedSupplier.name}</Text>
-                <View style={[styles.categoryBadge, { backgroundColor: CATEGORY_THEMES[selectedSupplier.category]?.bg }]}>
-                  <Text style={[styles.categoryBadgeText, { color: CATEGORY_THEMES[selectedSupplier.category]?.text }]}>
-                    {selectedSupplier.category} ({CATEGORY_THEMES[selectedSupplier.category]?.urdu})
+                <View style={[styles.categoryBadge, { backgroundColor: supTheme.bg }]}>
+                  <Text style={[styles.categoryBadgeText, { color: supTheme.text }]}>
+                    {selectedSupplier.category} {supTheme.urdu ? `(${supTheme.urdu})` : ''}
                   </Text>
                 </View>
                 <View style={[styles.termsBadge]}>
@@ -945,7 +948,8 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
             </TouchableOpacity>
           </View>
         </View>
-      )}
+        );
+      })()}
 
       {/* ========================================================
           5. NAVIGATION TABS (LEDGER vs INVOICES vs PAYMENTS)
@@ -1404,7 +1408,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                   value: s.id,
                   badge: `Due: Rs. ${(s.currentBalance || 0).toLocaleString()}`,
                   sublabel: `${s.contactPerson || ''} (${s.phone})`,
-                  icon: CATEGORY_THEMES[s.category]?.icon || 'business-outline',
+                  icon: CATEGORY_THEMES[s.category as SupplierCategory]?.icon || 'business-outline',
                 }))}
                 value={payTargetSupplierId}
                 onSelect={(val) => setPayTargetSupplierId(val)}
@@ -1558,7 +1562,7 @@ export default function SupplierLedgerScreen({ backRoute = '/admin/suppliers' }:
                   label: s.name,
                   value: s.id,
                   sublabel: `${s.category} • ${s.city || 'Lahore'}`,
-                  icon: CATEGORY_THEMES[s.category]?.icon || 'business-outline',
+                  icon: CATEGORY_THEMES[s.category as SupplierCategory]?.icon || 'business-outline',
                 }))}
                 value={billSupplierId}
                 onSelect={(val) => setBillSupplierId(val)}

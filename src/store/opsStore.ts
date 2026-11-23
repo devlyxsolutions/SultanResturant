@@ -294,10 +294,13 @@ export const SUPPLIER_CATEGORIES: SupplierCategory[] = [
   'Other',
 ];
 
+export type SupplierType = 'inventory' | 'assets';
+
 export type Supplier = {
   id: string;
   name: string;
-  category: SupplierCategory;
+  category: SupplierCategory | AssetCategory | string;
+  supplierType?: SupplierType;
   contactPerson: string;
   phone: string;
   whatsapp?: string;
@@ -337,6 +340,7 @@ export type PurchaseOrder = {
   poNumber: string;
   supplierId: string;
   supplierName: string;
+  supplierType?: SupplierType;
   invoiceNo?: string;
   orderDate: number;
   deliveryDate?: number;
@@ -1224,10 +1228,55 @@ export const useOpsStore = create<OpsState>()(
             );
           }
 
-          // 2. Auto Receive to inventory if marked received/ordered with option
+          // 2. Auto Receive to inventory or assets if marked received/ordered with option
           let nextInventory = state.inventory;
           let nextMovements = state.stockMovements;
-          if (autoReceiveToInventory && (po.status === 'received' || po.status === 'partial')) {
+          let nextAssets = state.assets;
+          const isAssetPurchase = po.supplierType === 'assets' || supplier?.supplierType === 'assets';
+
+          if (isAssetPurchase && (po.status === 'received' || po.status === 'partial')) {
+            po.items.forEach((item) => {
+              const qtyToAdd = item.qtyReceived > 0 ? item.qtyReceived : item.qtyOrdered;
+              if (qtyToAdd > 0) {
+                const existing = nextAssets.find(
+                  (a) => a.name.toLowerCase() === item.name.toLowerCase()
+                );
+                if (existing) {
+                  const newQty = existing.quantity + qtyToAdd;
+                  const newCost = item.unitCost || existing.cost;
+                  const newTotal = newQty * newCost;
+                  nextAssets = nextAssets.map((a) =>
+                    a.id === existing.id
+                      ? { ...a, quantity: newQty, cost: newCost, totalCost: newTotal, currentValue: newTotal, updatedAt: now }
+                      : a
+                  );
+                } else {
+                  const total = qtyToAdd * (item.unitCost || 0);
+                  const newAsset: Asset = {
+                    id: uid('ast'),
+                    assetCode: `AST-${Date.now().toString().slice(-4)}`,
+                    name: item.name,
+                    category: (item.category as AssetCategory) || (supplier?.category as AssetCategory) || 'Other Capital Assets',
+                    purchaseDate: now,
+                    cost: item.unitCost || 0,
+                    quantity: qtyToAdd,
+                    totalCost: total,
+                    currentValue: total,
+                    vendor: po.supplierName,
+                    vendorPhone: supplier?.phone,
+                    invoiceNo: po.invoiceNo,
+                    location: 'Main Store / Restaurant',
+                    condition: 'brand_new',
+                    status: 'active',
+                    maintenanceLogs: [],
+                    createdAt: now,
+                    updatedAt: now,
+                  };
+                  nextAssets = [newAsset, ...nextAssets];
+                }
+              }
+            });
+          } else if (autoReceiveToInventory && (po.status === 'received' || po.status === 'partial')) {
             po.items.forEach((item) => {
               const qtyToAdd = item.qtyReceived > 0 ? item.qtyReceived : item.qtyOrdered;
               if (qtyToAdd > 0) {
@@ -1263,12 +1312,24 @@ export const useOpsStore = create<OpsState>()(
           // 3. Auto Record Expense if amount paid > 0
           let nextExpenses = state.expenses;
           if (autoRecordExpense && po.amountPaid > 0) {
+            let expenseCategory: any = 'Groceries & Produce';
+            if (isAssetPurchase) {
+              expenseCategory = 'Maintenance & Repair';
+            } else if (supplier?.category === 'Meat & Poultry') {
+              expenseCategory = 'Meat & Poultry';
+            } else if (supplier?.category === 'Dairy & Bakery') {
+              expenseCategory = 'Dairy & Bakery';
+            } else if (supplier?.category === 'Fuel & Charcoal') {
+              expenseCategory = 'Gas / LPG / Charcoal';
+            } else if (supplier?.category === 'Packaging & Disposables') {
+              expenseCategory = 'Packaging & Supplies';
+            }
             nextExpenses = [
               {
                 id: uid('ex'),
-                category: supplier?.category ? (supplier.category === 'Meat & Poultry' ? 'Meat & Poultry' : 'Groceries & Produce') : 'Groceries & Produce',
+                category: expenseCategory,
                 amount: po.amountPaid,
-                note: `PO #${po.poNumber} Payment to ${po.supplierName}`,
+                note: `PO #${po.poNumber} Payment to ${po.supplierName}${isAssetPurchase ? ' (Asset Purchase)' : ''}`,
                 method: po.paymentMethod === 'online' ? 'online' : 'cash',
                 paidBy: receivedBy || po.receivedBy || 'Admin',
                 at: now,
@@ -1304,6 +1365,7 @@ export const useOpsStore = create<OpsState>()(
             suppliers: updatedSuppliers,
             inventory: nextInventory,
             stockMovements: nextMovements.slice(0, MAX_MOVEMENTS),
+            assets: nextAssets,
             expenses: nextExpenses,
             supplierPayments: nextPayments,
           };

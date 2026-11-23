@@ -28,6 +28,10 @@ import {
   SUPPLIER_CATEGORIES,
   SupplierCategory,
   SupplierPayment,
+  SupplierType,
+  ASSET_CATEGORIES,
+  AssetCategory,
+  Asset,
   useOpsStore,
 } from '../store/opsStore';
 import { formatTime, toWhatsAppNumber } from '../utils/format';
@@ -47,6 +51,139 @@ const CATEGORY_THEMES: Record<
   'Cleaning & Kitchen Supplies': { accent: '#0D9488', bg: '#CCFBF1', text: '#115E59', icon: 'sparkles', urdu: 'صفائی سامان' },
   'Equipment & Maintenance': { accent: '#475569', bg: '#E2E8F0', text: '#334155', icon: 'construct', urdu: 'مشینیں و مرمت' },
   'Other': { accent: '#64748B', bg: '#F1F5F9', text: '#1E293B', icon: 'ellipsis-horizontal-circle', urdu: 'متفرق' },
+};
+
+const ASSET_THEMES: Record<
+  string,
+  { accent: string; bg: string; text: string; icon: keyof typeof Ionicons.glyphMap; urdu: string }
+> = {
+  'Crockery (Plates & Bowls)': { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'restaurant-outline', urdu: 'پلیٹیں و پیالیاں' },
+  'Glassware & Tumblers': { accent: '#0284C7', bg: '#E0F2FE', text: '#0369A1', icon: 'wine-outline', urdu: 'گلاس و جگ' },
+  'Cutlery & Utensils': { accent: '#4B5563', bg: '#F3F4F6', text: '#374151', icon: 'cut-outline', urdu: 'چمچ، کانٹے و چھری' },
+  'Clayware & Specialty Pots': { accent: '#B45309', bg: '#FEF3C7', text: '#92400E', icon: 'flame-outline', urdu: 'مٹی کی ہانڈی و مٹکے' },
+  'Kitchen Machinery & Heavy Line': { accent: '#DC2626', bg: '#FEE2E2', text: '#991B1B', icon: 'hardware-chip-outline', urdu: 'بھاری کچن مشینیں' },
+  'Kitchen Equipment & Tools': { accent: '#D97706', bg: '#FEF3C7', text: '#B45309', icon: 'construct-outline', urdu: 'کچن اوزار و ڈشنگ' },
+  'Refrigeration & Cold Storage': { accent: '#06B6D4', bg: '#CFFAFE', text: '#0E7490', icon: 'snow-outline', urdu: 'فریزر و چلر' },
+  'Dining Furniture & Decor': { accent: '#8B5CF6', bg: '#EDE9FE', text: '#6D28D9', icon: 'bed-outline', urdu: 'فرنیچر و ڈیکور' },
+  'Dining Furniture & Seating': { accent: '#8B5CF6', bg: '#EDE9FE', text: '#6D28D9', icon: 'easel-outline', urdu: 'ڈائننگ میزیں و کرسیاں' },
+  'Crockery & Cutlery (Bulk Assets)': { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'layers-outline', urdu: 'تھوک کراکری اثاثے' },
+  'HVAC, Electrical & Generators': { accent: '#EA580C', bg: '#FFEDD5', text: '#C2410C', icon: 'flash-outline', urdu: 'جنریٹر و اے سی' },
+  'IT, POS & Surveillance Hardware': { accent: '#10B981', bg: '#D1FAE5', text: '#065F46', icon: 'desktop-outline', urdu: 'پی او ایس، پرنٹر و کیمرے' },
+  'Amusement & Playland Rides': { accent: '#EC4899', bg: '#FCE7F3', text: '#9D174D', icon: 'game-controller-outline', urdu: 'پلے لینڈ جھولے و گیمز' },
+  'Playland Assets & Rides': { accent: '#EC4899', bg: '#FCE7F3', text: '#9D174D', icon: 'game-controller-outline', urdu: 'پلے لینڈ سامان' },
+  'Interior, Signage & Royal Decor': { accent: '#F59E0B', bg: '#FEF3C7', text: '#B45309', icon: 'color-palette-outline', urdu: 'شاہی انٹیریئر و سائن بورڈ' },
+  'Other Capital Assets': { accent: '#64748B', bg: '#F1F5F9', text: '#334155', icon: 'cube-outline', urdu: 'دیگر کیپیٹل اثاثے' },
+};
+
+const COMMON_ASSETS_BY_CATEGORY: Record<string, string[]> = {
+  'Crockery (Plates & Bowls)': [
+    'Dinner Plates 10" (Full Plate)',
+    'Quarter Plates 7" (Half Plate)',
+    'Handi Bowls (Small / Medium / Large)',
+    'Karahi Wok Serving Bowl',
+    'Soup Bowls with Saucers',
+    'Raita & Chutney Bowls',
+    'Salad Bowls',
+    'Rice Platters (Biryani Dish)',
+  ],
+  'Glassware & Tumblers': [
+    'Water Tumbler Glasses',
+    'Juice & Shake Highball Glasses',
+    'Hot Tea Cups & Saucers',
+    'Green Tea (Qahwa) Glass Cups',
+    'Water Pitchers / Jugs',
+  ],
+  'Cutlery & Utensils': [
+    'Table Spoons (Stainless Steel)',
+    'Forks (Stainless Steel)',
+    'Steak / Table Knives',
+    'Dessert Spoons',
+    'Large Serving Spoons / Ladles',
+    'Karahi & Rice Serving Tongs',
+    'BBQ Skewers (Seekhein)',
+  ],
+  'Kitchen Machinery & Heavy Line': [
+    'Commercial Gas Shawarma Machine',
+    'Double Tank Commercial Deep Fryer',
+    'Commercial Dough Kneader (Aata Machine)',
+    'Commercial Meat Mincer / Keema Machine',
+    'Charcoal BBQ Grill Station (Heavy Line)',
+    'Tandoor (Gas / Mud Heavy Duty)',
+    'Commercial Microwave Oven',
+    'Commercial Salamander Grill',
+  ],
+  'Kitchen Equipment & Tools': [
+    'Stainless Steel Work Table (Prep Counter)',
+    'Double Sink Dishwashing Unit',
+    'Heavy Chef Knives & Chopping Boards',
+    'Large Aluminium / Steel Deg & Deghchas',
+    'Exhaust Hood & Grease Filters',
+    'Commercial Spice Grinder',
+  ],
+  'Refrigeration & Cold Storage': [
+    'Commercial Double Door Deep Freezer',
+    'Salad & Sandwich Chiller Counter',
+    'Upright Beverage Display Refrigerator',
+    'Under-Counter Storage Chiller',
+    'Ice Cube Maker Machine',
+  ],
+  'Dining Furniture & Seating': [
+    'Royal 4-Seater Wooden Dining Table',
+    'Royal 6-Seater Family Dining Table',
+    'Cushioned Banquet Dining Chairs',
+    'Luxury Sofa Booth (Family Section)',
+    'Baby High Dining Chairs',
+  ],
+  'Dining Furniture & Decor': [
+    'Royal 4-Seater Wooden Dining Table',
+    'Royal 6-Seater Family Dining Table',
+    'Cushioned Banquet Dining Chairs',
+    'Luxury Sofa Booth (Family Section)',
+  ],
+  'Crockery & Cutlery (Bulk Assets)': [
+    'Dinner Plates 10" (Full Plate)',
+    'Quarter Plates 7" (Half Plate)',
+    'Table Spoons (Stainless Steel)',
+    'Forks (Stainless Steel)',
+  ],
+  'IT, POS & Surveillance Hardware': [
+    '80mm Thermal Receipt Printers (LAN/USB)',
+    'Touchscreen POS Terminal System',
+    'Android Waiter Order Tablets 10"',
+    'Kitchen Display Screen (KDS Smart TV 32")',
+    'CCTV Cameras & NVR Security System',
+    'Cash Drawer (Heavy Duty Auto-Kick)',
+    'Dual-Band Commercial Wi-Fi Routers',
+  ],
+  'Amusement & Playland Rides': [
+    'Kids Indoor Trampoline Unit',
+    'Soft Play Modular Slide & Ball Pool',
+    'Coin-Operated Kids Carousel Ride',
+    'Air Hockey Gaming Table',
+    'Foosball Gaming Table',
+  ],
+  'Playland Assets & Rides': [
+    'Kids Indoor Trampoline Unit',
+    'Soft Play Modular Slide & Ball Pool',
+    'Coin-Operated Kids Carousel Ride',
+    'Air Hockey Gaming Table',
+  ],
+  'HVAC, Electrical & Generators': [
+    'Heavy Diesel Backup Generator (25 kVA)',
+    'Inverter Floor Standing AC (4 Ton)',
+    'Commercial Ceiling Fans & Exhausts',
+    'Solar & UPS Battery Bank System',
+  ],
+  'Interior, Signage & Royal Decor': [
+    'Digital LED Display Signboard',
+    'Sound System & Ceiling Speakers',
+    'Royal Wall Canvas & Chandeliers',
+  ],
+  'Other Capital Assets': [
+    'Digital LED Display Signboard',
+    'Sound System & Ceiling Speakers',
+    'Emergency Lights & Fire Extinguishers',
+  ],
 };
 
 export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
@@ -75,6 +212,8 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     suppliers,
     purchaseOrders,
     supplierPayments,
+    inventory,
+    assets,
     addSupplier,
     updateSupplier,
     deleteSupplier,
@@ -84,7 +223,8 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   // Filter & Search States
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<'All' | SupplierCategory>('All');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'inventory' | 'assets'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<'All' | string>('All');
   const [balanceFilter, setBalanceFilter] = useState<'all' | 'due' | 'clear'>('all');
   const [sortBy, setSortBy] = useState<'balance' | 'purchases' | 'recent' | 'name'>('balance');
 
@@ -96,8 +236,9 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   // 2. Add / Edit Supplier Modal
   const [isSupplierModalOpen, setIsSupplierModalOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
+  const [formSupplierType, setFormSupplierType] = useState<SupplierType>('inventory');
   const [formName, setFormName] = useState('');
-  const [formCategory, setFormCategory] = useState<SupplierCategory>('Meat & Poultry');
+  const [formCategory, setFormCategory] = useState<string>('Meat & Poultry');
   const [formContactPerson, setFormContactPerson] = useState('');
   const [formPhone, setFormPhone] = useState('');
   const [formWhatsapp, setFormWhatsapp] = useState('');
@@ -114,13 +255,54 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const [formNotes, setFormNotes] = useState('');
 
   const supplierCategoryOptions = useMemo(() => {
+    if (formSupplierType === 'assets') {
+      return ASSET_CATEGORIES.map((cat) => ({
+        label: cat,
+        value: cat,
+        icon: (ASSET_THEMES[cat]?.icon || 'business-outline') as keyof typeof Ionicons.glyphMap,
+        sublabel: ASSET_THEMES[cat]?.urdu,
+      }));
+    }
     return SUPPLIER_CATEGORIES.map((cat) => ({
       label: cat,
       value: cat,
-      icon: CATEGORY_THEMES[cat]?.icon || 'pricetag-outline',
-      sublabel: CATEGORY_THEMES[cat]?.urdu,
+      icon: (CATEGORY_THEMES[cat as SupplierCategory]?.icon || 'pricetag-outline') as keyof typeof Ionicons.glyphMap,
+      sublabel: CATEGORY_THEMES[cat as SupplierCategory]?.urdu,
     }));
-  }, []);
+  }, [formSupplierType]);
+
+  // Existing items available to pick based on supplier type
+  const availableItemsForSupplier = useMemo(() => {
+    if (formSupplierType === 'assets') {
+      const fromExistingAssets = assets.map((a) => a.name);
+      const fromSuggestions = COMMON_ASSETS_BY_CATEGORY[formCategory] || [];
+      return Array.from(new Set([...fromExistingAssets, ...fromSuggestions]));
+    }
+    // Inventory
+    return inventory.map((inv) => inv.name);
+  }, [formSupplierType, formCategory, assets, inventory]);
+
+  const formSuppliedItemsArray = useMemo(() => {
+    return formSuppliedItems
+      .split(',')
+      .map((s) => s.trim().toLowerCase())
+      .filter(Boolean);
+  }, [formSuppliedItems]);
+
+  const toggleSuppliedItem = (itemName: string) => {
+    const current = formSuppliedItems
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const exists = current.some((s) => s.toLowerCase() === itemName.toLowerCase());
+    let updated: string[];
+    if (exists) {
+      updated = current.filter((s) => s.toLowerCase() !== itemName.toLowerCase());
+    } else {
+      updated = [...current, itemName];
+    }
+    setFormSuppliedItems(updated.join(', '));
+  };
 
   // 3. Quick Payment Voucher Modal
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -143,6 +325,11 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     { name: '', category: 'Meat', unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 500, totalCost: 5000 },
   ]);
 
+  // Multi-Item Selector Modal inside PO Builder
+  const [isMultiItemPickerOpen, setIsMultiItemPickerOpen] = useState(false);
+  const [pickerSearchQuery, setPickerSearchQuery] = useState('');
+  const [pickerSelectedItems, setPickerSelectedItems] = useState<string[]>([]);
+
   // 5. Payment Voucher Thermal / Print Modal
   const [isVoucherModalOpen, setIsVoucherModalOpen] = useState(false);
   const [voucherPayment, setVoucherPayment] = useState<SupplierPayment | null>(null);
@@ -164,6 +351,15 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   );
   const totalOrdersCount = useMemo(() => purchaseOrders.length, [purchaseOrders]);
 
+  const inventorySuppliersCount = useMemo(
+    () => suppliers.filter((s) => (s.supplierType || 'inventory') === 'inventory').length,
+    [suppliers]
+  );
+  const assetSuppliersCount = useMemo(
+    () => suppliers.filter((s) => s.supplierType === 'assets').length,
+    [suppliers]
+  );
+
   // Responsive KPI card width styling
   const kpiCardResponsiveStyle = useMemo<ViewStyle>(() => {
     if (width < 380) return { width: '100%', minWidth: '100%' };
@@ -177,6 +373,10 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   // ----------------------------------------------------
   const filteredSuppliers = useMemo(() => {
     let result = [...suppliers];
+
+    if (typeFilter !== 'all') {
+      result = result.filter((s) => (s.supplierType || 'inventory') === typeFilter);
+    }
 
     if (categoryFilter !== 'All') {
       result = result.filter((s) => s.category === categoryFilter);
@@ -312,6 +512,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       return;
     }
     setEditingSupplier(null);
+    setFormSupplierType('inventory');
     setFormName('');
     setFormCategory('Meat & Poultry');
     setFormContactPerson('');
@@ -339,6 +540,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       return;
     }
     setEditingSupplier(sup);
+    setFormSupplierType(sup.supplierType || 'inventory');
     setFormName(sup.name);
     setFormCategory(sup.category);
     setFormContactPerson(sup.contactPerson || '');
@@ -395,6 +597,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       updateSupplier(editingSupplier.id, {
         name: formName.trim(),
         category: formCategory,
+        supplierType: formSupplierType,
         contactPerson: formContactPerson.trim(),
         phone: formPhone.trim(),
         whatsapp: formWhatsapp.trim() || formPhone.trim(),
@@ -413,6 +616,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
           ...dossierSupplier,
           name: formName.trim(),
           category: formCategory,
+          supplierType: formSupplierType,
           contactPerson: formContactPerson.trim(),
           phone: formPhone.trim(),
           whatsapp: formWhatsapp.trim() || formPhone.trim(),
@@ -430,6 +634,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       addSupplier({
         name: formName.trim(),
         category: formCategory,
+        supplierType: formSupplierType,
         contactPerson: formContactPerson.trim(),
         phone: formPhone.trim(),
         whatsapp: formWhatsapp.trim() || formPhone.trim(),
@@ -563,19 +768,170 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     setPODiscount('0');
     setPONotes('');
 
-    // Prepopulate first item from supplied items if available
-    const firstItemName = sup.suppliedItems?.[0] || 'Raw Ingredients';
+    const isAsset = sup.supplierType === 'assets';
+    const firstItemName = sup.suppliedItems?.[0] || (isAsset ? 'Dining Asset / Tool' : 'Raw Ingredients');
+    const defaultUnit = isAsset ? 'pcs' : 'kg';
+    const defaultCost = isAsset ? 1200 : 650;
     setPOItems([
-      { name: firstItemName, category: sup.category, unit: 'kg', qtyOrdered: 10, qtyReceived: 10, unitCost: 650, totalCost: 6500 },
+      {
+        name: firstItemName,
+        category: sup.category,
+        unit: defaultUnit,
+        qtyOrdered: isAsset ? 1 : 10,
+        qtyReceived: isAsset ? 1 : 10,
+        unitCost: defaultCost,
+        totalCost: isAsset ? defaultCost : defaultCost * 10,
+      },
     ]);
     setIsPOModalOpen(true);
   };
 
   const handleAddPOItem = () => {
+    const isAsset = poTargetSupplier?.supplierType === 'assets';
     setPOItems([
       ...poItems,
-      { name: '', category: poTargetSupplier?.category || 'Meat', unit: 'kg', qtyOrdered: 5, qtyReceived: 5, unitCost: 500, totalCost: 2500 },
+      {
+        name: '',
+        category: poTargetSupplier?.category || (isAsset ? 'Other Capital Assets' : 'Meat'),
+        unit: isAsset ? 'pcs' : 'kg',
+        qtyOrdered: 1,
+        qtyReceived: 1,
+        unitCost: 0,
+        totalCost: 0,
+      },
     ]);
+  };
+
+  const handleAddMultipleEmptyRows = (count: number = 5) => {
+    const isAsset = poTargetSupplier?.supplierType === 'assets';
+    const newRows: PurchaseOrderItem[] = Array.from({ length: count }).map(() => ({
+      name: '',
+      category: poTargetSupplier?.category || (isAsset ? 'Other Capital Assets' : 'Meat'),
+      unit: isAsset ? 'pcs' : 'kg',
+      qtyOrdered: 1,
+      qtyReceived: 1,
+      unitCost: 0,
+      totalCost: 0,
+    }));
+    setPOItems([...poItems, ...newRows]);
+  };
+
+  const handleOpenMultiItemPicker = () => {
+    setPickerSearchQuery('');
+    setPickerSelectedItems([]);
+    setIsMultiItemPickerOpen(true);
+  };
+
+  const handleConfirmMultiItems = (selectedItemObjects: { name: string; category: string; unit: string; cost: number }[]) => {
+    if (selectedItemObjects.length === 0) {
+      setIsMultiItemPickerOpen(false);
+      return;
+    }
+    const newItems: PurchaseOrderItem[] = selectedItemObjects.map((item) => ({
+      name: item.name,
+      category: item.category || poTargetSupplier?.category || 'General',
+      unit: item.unit || (poTargetSupplier?.supplierType === 'assets' ? 'pcs' : 'kg'),
+      qtyOrdered: 1,
+      qtyReceived: 1,
+      unitCost: item.cost || 0,
+      totalCost: item.cost || 0,
+    }));
+
+    const isSingleEmpty = poItems.length === 1 && !poItems[0].name.trim();
+    if (isSingleEmpty) {
+      setPOItems(newItems);
+    } else {
+      setPOItems([...poItems, ...newItems]);
+    }
+    setIsMultiItemPickerOpen(false);
+  };
+
+  const pickerFilteredItems = useMemo(() => {
+    const isAsset = poTargetSupplier?.supplierType === 'assets';
+    let rawItems: { name: string; category: string; unit: string; cost: number }[] = [];
+
+    if (isAsset) {
+      const existingMap = new Map<string, { name: string; category: string; unit: string; cost: number }>();
+      assets.forEach((a) => {
+        existingMap.set(a.name.toLowerCase(), {
+          name: a.name,
+          category: a.category,
+          unit: 'pcs',
+          cost: a.cost || 0,
+        });
+      });
+      (poTargetSupplier?.suppliedItems || []).forEach((itemStr) => {
+        if (!existingMap.has(itemStr.toLowerCase())) {
+          existingMap.set(itemStr.toLowerCase(), {
+            name: itemStr,
+            category: poTargetSupplier?.category || 'Other Capital Assets',
+            unit: 'pcs',
+            cost: 0,
+          });
+        }
+      });
+      const catSuggestions = COMMON_ASSETS_BY_CATEGORY[poTargetSupplier?.category || ''] || [];
+      catSuggestions.forEach((sugg) => {
+        if (!existingMap.has(sugg.toLowerCase())) {
+          existingMap.set(sugg.toLowerCase(), {
+            name: sugg,
+            category: poTargetSupplier?.category || 'Other Capital Assets',
+            unit: 'pcs',
+            cost: 0,
+          });
+        }
+      });
+      rawItems = Array.from(existingMap.values());
+    } else {
+      const existingMap = new Map<string, { name: string; category: string; unit: string; cost: number }>();
+      inventory.forEach((inv) => {
+        existingMap.set(inv.name.toLowerCase(), {
+          name: inv.name,
+          category: inv.category,
+          unit: inv.unit || 'kg',
+          cost: inv.costPerUnit || 0,
+        });
+      });
+      (poTargetSupplier?.suppliedItems || []).forEach((itemStr) => {
+        if (!existingMap.has(itemStr.toLowerCase())) {
+          existingMap.set(itemStr.toLowerCase(), {
+            name: itemStr,
+            category: poTargetSupplier?.category || 'Meat',
+            unit: 'kg',
+            cost: 0,
+          });
+        }
+      });
+      rawItems = Array.from(existingMap.values());
+    }
+
+    if (pickerSearchQuery.trim()) {
+      const q = pickerSearchQuery.toLowerCase().trim();
+      rawItems = rawItems.filter(
+        (item) => item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+      );
+    }
+
+    return rawItems;
+  }, [poTargetSupplier, assets, inventory, pickerSearchQuery]);
+
+  const togglePickerItem = (name: string) => {
+    if (pickerSelectedItems.includes(name)) {
+      setPickerSelectedItems(pickerSelectedItems.filter((i) => i !== name));
+    } else {
+      setPickerSelectedItems([...pickerSelectedItems, name]);
+    }
+  };
+
+  const handleSelectAllVisiblePickerItems = () => {
+    const visibleNames = pickerFilteredItems.map((i) => i.name);
+    const combined = Array.from(new Set([...pickerSelectedItems, ...visibleNames]));
+    setPickerSelectedItems(combined);
+  };
+
+  const handleConfirmMultiItemsSelection = () => {
+    const selectedObjs = pickerFilteredItems.filter((i) => pickerSelectedItems.includes(i.name));
+    handleConfirmMultiItems(selectedObjs);
   };
 
   const handleRemovePOItem = (index: number) => {
@@ -629,6 +985,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         poNumber,
         supplierId: poTargetSupplier.id,
         supplierName: poTargetSupplier.name,
+        supplierType: poTargetSupplier.supplierType || 'inventory',
         invoiceNo: poInvoiceNo.trim() || undefined,
         orderDate: now,
         deliveryDate: now,
@@ -660,7 +1017,9 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       });
     }
 
-    const successMsg = `خریداری بل #${poNumber} موصول اور اسٹاک میں شامل ہو گیا۔`;
+    const successMsg = poTargetSupplier.supplierType === 'assets'
+      ? `اثاثہ خریداری بل #${poNumber} موصول اور اثاثہ جات (Assets) میں شامل ہو گیا۔`
+      : `خریداری بل #${poNumber} موصول اور اسٹاک میں شامل ہو گیا۔`;
     if (Platform.OS === 'web') window.alert(successMsg);
     else Alert.alert('Purchase Order Created', successMsg);
   };
@@ -928,6 +1287,48 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             </View>
           </View>
 
+          {/* Supplier Type Tabs: All vs Inventory vs Assets */}
+          <View style={{ flexDirection: 'row', gap: 6, marginBottom: 8, flexWrap: 'wrap' }}>
+            <TouchableOpacity
+              style={[styles.typeFilterPill, typeFilter === 'all' && styles.typeFilterPillActiveAll]}
+              onPress={() => {
+                setTypeFilter('all');
+                setCategoryFilter('All');
+              }}
+            >
+              <Ionicons name="apps" size={13} color={typeFilter === 'all' ? '#FFFFFF' : '#475569'} style={{ marginRight: 3 }} />
+              <Text style={[styles.typeFilterPillText, typeFilter === 'all' && { color: '#FFFFFF', fontWeight: '800' }]}>
+                All Types ({suppliers.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.typeFilterPill, typeFilter === 'inventory' && styles.typeFilterPillActiveInv]}
+              onPress={() => {
+                setTypeFilter('inventory');
+                setCategoryFilter('All');
+              }}
+            >
+              <Ionicons name="cube" size={13} color={typeFilter === 'inventory' ? '#FFFFFF' : '#059669'} style={{ marginRight: 3 }} />
+              <Text style={[styles.typeFilterPillText, typeFilter === 'inventory' && { color: '#FFFFFF', fontWeight: '800' }]}>
+                📦 Raw Inventory ({inventorySuppliersCount})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.typeFilterPill, typeFilter === 'assets' && styles.typeFilterPillActiveAst]}
+              onPress={() => {
+                setTypeFilter('assets');
+                setCategoryFilter('All');
+              }}
+            >
+              <Ionicons name="business" size={13} color={typeFilter === 'assets' ? '#FFFFFF' : '#2563EB'} style={{ marginRight: 3 }} />
+              <Text style={[styles.typeFilterPillText, typeFilter === 'assets' && { color: '#FFFFFF', fontWeight: '800' }]}>
+                🏢 Capital Assets ({assetSuppliersCount})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Quick Balance Status Pills */}
           <View style={styles.balancePillsRow}>
             <TouchableOpacity
@@ -968,12 +1369,14 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
               activeOpacity={0.7}
             >
               <Text style={[styles.categoryTabText, categoryFilter === 'All' && styles.categoryTabTextSelected]}>
-                All Categories ({suppliers.length})
+                All Categories ({typeFilter === 'all' ? suppliers.length : typeFilter === 'inventory' ? inventorySuppliersCount : assetSuppliersCount})
               </Text>
             </TouchableOpacity>
 
-            {SUPPLIER_CATEGORIES.map((cat) => {
-              const theme = CATEGORY_THEMES[cat];
+            {(typeFilter === 'assets' ? ASSET_CATEGORIES : SUPPLIER_CATEGORIES).map((cat) => {
+              const theme = typeFilter === 'assets'
+                ? (ASSET_THEMES[cat] || { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'business' as any, urdu: '' })
+                : (CATEGORY_THEMES[cat as SupplierCategory] || CATEGORY_THEMES['Other']);
               const count = suppliers.filter((s) => s.category === cat).length;
               const isSelected = categoryFilter === cat;
 
@@ -1067,7 +1470,10 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             )}
 
             {supplierPagination.paginatedData.map((sup) => {
-              const theme = CATEGORY_THEMES[sup.category] || CATEGORY_THEMES['Other'];
+              const isAsset = sup.supplierType === 'assets';
+              const theme = isAsset
+                ? (ASSET_THEMES[sup.category] || { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'business' as any, urdu: '' })
+                : (CATEGORY_THEMES[sup.category as SupplierCategory] || CATEGORY_THEMES['Other']);
               const hasBalance = (sup.currentBalance || 0) > 0;
               const poCount = purchaseOrders.filter((po) => po.supplierId === sup.id).length;
 
@@ -1088,10 +1494,22 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.rowSupName} numberOfLines={1}>{sup.name}</Text>
-                          <View style={[styles.categoryBadgeCompact, { backgroundColor: theme.bg, borderColor: theme.accent, alignSelf: 'flex-start', marginTop: 2 }]}>
-                            <Text style={[styles.categoryBadgeCompactText, { color: theme.text }]}>
-                              {sup.category}
-                            </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap', marginTop: 2 }}>
+                            <View style={[styles.typeBadge, isAsset ? styles.typeBadgeAsset : styles.typeBadgeInventory]}>
+                              <Ionicons
+                                name={isAsset ? 'business' : 'cube'}
+                                size={10}
+                                color={isAsset ? '#1E40AF' : '#065F46'}
+                              />
+                              <Text style={[styles.typeBadgeText, isAsset ? styles.typeBadgeTextAsset : styles.typeBadgeTextInventory]}>
+                                {isAsset ? 'Assets' : 'Inventory'}
+                              </Text>
+                            </View>
+                            <View style={[styles.categoryBadgeCompact, { backgroundColor: theme.bg, borderColor: theme.accent }]}>
+                              <Text style={[styles.categoryBadgeCompactText, { color: theme.text }]}>
+                                {sup.category}
+                              </Text>
+                            </View>
                           </View>
                         </View>
                       </View>
@@ -1197,7 +1615,17 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.rowSupName} numberOfLines={1}>{sup.name}</Text>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 2 }}>
+                        <View style={[styles.typeBadge, isAsset ? styles.typeBadgeAsset : styles.typeBadgeInventory]}>
+                          <Ionicons
+                            name={isAsset ? 'business' : 'cube'}
+                            size={10}
+                            color={isAsset ? '#1E40AF' : '#065F46'}
+                          />
+                          <Text style={[styles.typeBadgeText, isAsset ? styles.typeBadgeTextAsset : styles.typeBadgeTextInventory]}>
+                            {isAsset ? 'Assets' : 'Inventory'}
+                          </Text>
+                        </View>
                         <View style={[styles.categoryBadgeCompact, { backgroundColor: theme.bg, borderColor: theme.accent }]}>
                           <Text style={[styles.categoryBadgeCompactText, { color: theme.text }]}>
                             {sup.category}
@@ -1344,18 +1772,28 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 {/* Dossier Header */}
                 <View style={styles.dossierHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                    <View style={[styles.dossierAvatar, { backgroundColor: CATEGORY_THEMES[dossierSupplier.category]?.bg || '#F1F5F9' }]}>
+                    <View style={[styles.dossierAvatar, { backgroundColor: (ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.bg || '#F1F5F9' }]}>
                       <Ionicons
-                        name={CATEGORY_THEMES[dossierSupplier.category]?.icon || 'business'}
+                        name={(ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.icon || 'business'}
                         size={22}
-                        color={CATEGORY_THEMES[dossierSupplier.category]?.accent || '#52141C'}
+                        color={(ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.accent || '#52141C'}
                       />
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text style={styles.dossierName}>{dossierSupplier.name}</Text>
-                        <View style={[styles.categoryBadgeCompact, { backgroundColor: CATEGORY_THEMES[dossierSupplier.category]?.bg, borderColor: CATEGORY_THEMES[dossierSupplier.category]?.accent }]}>
-                          <Text style={[styles.categoryBadgeCompactText, { color: CATEGORY_THEMES[dossierSupplier.category]?.text }]}>
+                        <View style={[styles.typeBadge, dossierSupplier.supplierType === 'assets' ? styles.typeBadgeAsset : styles.typeBadgeInventory]}>
+                          <Ionicons
+                            name={dossierSupplier.supplierType === 'assets' ? 'business' : 'cube'}
+                            size={10}
+                            color={dossierSupplier.supplierType === 'assets' ? '#1E40AF' : '#065F46'}
+                          />
+                          <Text style={[styles.typeBadgeText, dossierSupplier.supplierType === 'assets' ? styles.typeBadgeTextAsset : styles.typeBadgeTextInventory]}>
+                            {dossierSupplier.supplierType === 'assets' ? 'Assets' : 'Inventory'}
+                          </Text>
+                        </View>
+                        <View style={[styles.categoryBadgeCompact, { backgroundColor: (ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.bg, borderColor: (ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.accent }]}>
+                          <Text style={[styles.categoryBadgeCompactText, { color: (ASSET_THEMES[dossierSupplier.category] || CATEGORY_THEMES[dossierSupplier.category as SupplierCategory] || CATEGORY_THEMES['Other'])?.text }]}>
                             {dossierSupplier.category}
                           </Text>
                         </View>
@@ -1808,12 +2246,32 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
               </View>
 
               {/* Items Table Builder */}
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 6 }}>
-                <Text style={[styles.formLabel, { marginBottom: 0 }]}>Procured Items (خرید کردہ اشیاء) *</Text>
-                <TouchableOpacity onPress={handleAddPOItem} style={styles.addItemBtn}>
-                  <Ionicons name="add-circle" size={15} color="#52141C" />
-                  <Text style={styles.addItemBtnText}>+ Add Item</Text>
-                </TouchableOpacity>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10, marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Text style={[styles.formLabel, { marginBottom: 0 }]}>
+                    {poTargetSupplier?.supplierType === 'assets' ? 'Procured Assets (اثاثہ جات) *' : 'Procured Items (خرید کردہ اشیاء) *'}
+                  </Text>
+                  <View style={[styles.typeBadge, poTargetSupplier?.supplierType === 'assets' ? styles.typeBadgeAsset : styles.typeBadgeInventory]}>
+                    <Text style={[styles.typeBadgeText, poTargetSupplier?.supplierType === 'assets' ? styles.typeBadgeTextAsset : styles.typeBadgeTextInventory]}>
+                      {poTargetSupplier?.supplierType === 'assets' ? 'Assets' : 'Inventory'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <TouchableOpacity onPress={handleOpenMultiItemPicker} style={styles.multiSelectBtn}>
+                    <Ionicons name="checkbox-outline" size={14} color="#FFFFFF" />
+                    <Text style={styles.multiSelectBtnText}>+ Multi-Select</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={() => handleAddMultipleEmptyRows(5)} style={styles.addItemBtn}>
+                    <Ionicons name="add" size={13} color="#52141C" />
+                    <Text style={styles.addItemBtnText}>+5 Rows</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleAddPOItem} style={styles.addItemBtn}>
+                    <Ionicons name="add-circle" size={13} color="#52141C" />
+                    <Text style={styles.addItemBtnText}>+1</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
               {poItems.map((item, idx) => (
@@ -1821,7 +2279,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                   <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', marginBottom: 6 }}>
                     <TextInput
                       style={[styles.formInput, { flex: 2 }]}
-                      placeholder="Item name (e.g. Boneless Chicken)"
+                      placeholder={poTargetSupplier?.supplierType === 'assets' ? 'Asset name (e.g. Deep Fryer, Plates)' : 'Item name (e.g. Boneless Chicken)'}
                       placeholderTextColor="#94A3B8"
                       value={item.name}
                       onChangeText={(val) => handleUpdatePOItem(idx, { name: val })}
@@ -1917,7 +2375,60 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 </View>
 
                 <View style={{ marginTop: 8 }}>
-                  <Text style={styles.poSmallLabel}>Amount Paid Upfront (نقد ادائیگی)</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={styles.poSmallLabel}>Payment Method & Upfront Amount</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: poCalculations.paid >= poCalculations.totalAmount && poCalculations.totalAmount > 0 ? '#047857' : '#DC2626' }}>
+                      {poCalculations.paid >= poCalculations.totalAmount && poCalculations.totalAmount > 0 ? '✓ Fully Paid on Cash' : `Due: Rs. ${poCalculations.balanceDue.toLocaleString()}`}
+                    </Text>
+                  </View>
+
+                  {/* 1-Tap Quick Cash vs Udhar Buttons */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginVertical: 6 }}>
+                    <TouchableOpacity
+                      style={[
+                        styles.quickPayOptionBtn,
+                        poCalculations.paid >= poCalculations.totalAmount && poCalculations.totalAmount > 0 && styles.quickPayOptionBtnActiveCash,
+                      ]}
+                      onPress={() => setPOAmountPaid(String(poCalculations.totalAmount))}
+                    >
+                      <Ionicons name="cash" size={14} color={poCalculations.paid >= poCalculations.totalAmount && poCalculations.totalAmount > 0 ? '#FFFFFF' : '#047857'} />
+                      <Text
+                        style={[
+                          styles.quickPayOptionText,
+                          poCalculations.paid >= poCalculations.totalAmount && poCalculations.totalAmount > 0 && styles.quickPayOptionTextActive,
+                        ]}
+                      >
+                        💵 Paid 100% Cash (نقد)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[
+                        styles.quickPayOptionBtn,
+                        poCalculations.paid === 0 && styles.quickPayOptionBtnActiveCredit,
+                      ]}
+                      onPress={() => setPOAmountPaid('0')}
+                    >
+                      <Ionicons name="receipt-outline" size={14} color={poCalculations.paid === 0 ? '#FFFFFF' : '#B91C1C'} />
+                      <Text
+                        style={[
+                          styles.quickPayOptionText,
+                          poCalculations.paid === 0 && styles.quickPayOptionTextActive,
+                        ]}
+                      >
+                        📝 100% Khata (ادھار)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.quickPayOptionBtn}
+                      onPress={() => setPOAmountPaid(String(Math.round(poCalculations.totalAmount / 2)))}
+                    >
+                      <Ionicons name="pie-chart-outline" size={14} color="#475569" />
+                      <Text style={styles.quickPayOptionText}>50% Split</Text>
+                    </TouchableOpacity>
+                  </View>
+
                   <TextInput
                     style={styles.formInputSmall}
                     keyboardType="numeric"
@@ -1945,6 +2456,115 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       </Modal>
 
       {/* ========================================================
+          3.5 MULTI-ITEM QUICK SELECTOR MODAL (BULK ITEM PICKER)
+          ======================================================== */}
+      <Modal visible={isMultiItemPickerOpen} transparent animationType="slide">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.pickerModalCard, isMobile && styles.modalContentMobile]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  {poTargetSupplier?.supplierType === 'assets'
+                    ? 'Select Multiple Assets (ایک ساتھ اثاثہ جات چنیں)'
+                    : 'Select Multiple Items (ایک ساتھ اشیاء چنیں)'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  Supplier: {poTargetSupplier?.name} ({poTargetSupplier?.category})
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsMultiItemPickerOpen(false)}>
+                <Ionicons name="close" size={24} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Search & Actions Bar */}
+            <View style={styles.pickerSearchRow}>
+              <View style={styles.pickerSearchBox}>
+                <Ionicons name="search" size={16} color="#94A3B8" />
+                <TextInput
+                  style={styles.pickerSearchInput}
+                  placeholder="Search items by name or category..."
+                  placeholderTextColor="#94A3B8"
+                  value={pickerSearchQuery}
+                  onChangeText={setPickerSearchQuery}
+                />
+                {pickerSearchQuery ? (
+                  <TouchableOpacity onPress={() => setPickerSearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 6 }}>
+                <TouchableOpacity
+                  style={styles.pickerActionBtn}
+                  onPress={handleSelectAllVisiblePickerItems}
+                >
+                  <Text style={styles.pickerActionBtnText}>Select All</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.pickerActionBtn}
+                  onPress={() => setPickerSelectedItems([])}
+                >
+                  <Text style={styles.pickerActionBtnText}>Clear</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Items Checklist Scroll */}
+            <ScrollView style={{ maxHeight: 380 }} showsVerticalScrollIndicator={true}>
+              {pickerFilteredItems.length === 0 ? (
+                <View style={{ padding: 30, alignItems: 'center' }}>
+                  <Ionicons name="alert-circle-outline" size={36} color="#CBD5E1" />
+                  <Text style={{ marginTop: 8, color: '#64748B', fontWeight: '600' }}>No items match your search</Text>
+                </View>
+              ) : (
+                pickerFilteredItems.map((item) => {
+                  const isChecked = pickerSelectedItems.includes(item.name);
+                  return (
+                    <TouchableOpacity
+                      key={item.name}
+                      style={[styles.pickerItemRow, isChecked && styles.pickerItemRowChecked]}
+                      onPress={() => togglePickerItem(item.name)}
+                    >
+                      <View style={[styles.pickerCheckbox, isChecked && styles.pickerCheckboxChecked]}>
+                        {isChecked && <Ionicons name="checkmark" size={14} color="#FFFFFF" />}
+                      </View>
+                      <View style={{ flex: 1, marginLeft: 10 }}>
+                        <Text style={[styles.pickerItemName, isChecked && { color: '#047857', fontWeight: '800' }]}>
+                          {item.name}
+                        </Text>
+                        <Text style={styles.pickerItemCategory}>
+                          {item.category} • {item.unit || 'unit'} {item.cost ? `• Rs. ${item.cost}` : ''}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </ScrollView>
+
+            {/* Confirm Footer */}
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setIsMultiItemPickerOpen(false)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.saveBtn, pickerSelectedItems.length === 0 && { opacity: 0.6 }]}
+                disabled={pickerSelectedItems.length === 0}
+                onPress={handleConfirmMultiItemsSelection}
+              >
+                <Ionicons name="checkmark-done" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.saveBtnText}>
+                  Add Selected ({pickerSelectedItems.length}) to Bill
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
           4. ADD / EDIT SUPPLIER MODAL
           ======================================================== */}
       <Modal visible={isSupplierModalOpen} transparent animationType="fade">
@@ -1960,23 +2580,97 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
             </View>
 
             <ScrollView style={{ maxHeight: 460 }} showsVerticalScrollIndicator={false}>
+              {/* 1. Supplier Type Toggle: Inventory vs Assets */}
+              <Text style={styles.formLabel}>Supplier Module Type (سپلائر کی نوعیت) *</Text>
+              <View style={styles.typeToggleContainer}>
+                <TouchableOpacity
+                  style={[
+                    styles.typeToggleBtn,
+                    formSupplierType === 'inventory' && styles.typeToggleBtnActiveInv,
+                  ]}
+                  onPress={() => {
+                    setFormSupplierType('inventory');
+                    setFormCategory('Meat & Poultry');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.typeToggleIconWrap, { backgroundColor: formSupplierType === 'inventory' ? '#059669' : '#E2E8F0' }]}>
+                    <Ionicons
+                      name="cube"
+                      size={18}
+                      color={formSupplierType === 'inventory' ? '#FFFFFF' : '#64748B'}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.typeToggleBtnTitle,
+                        formSupplierType === 'inventory' && styles.typeToggleBtnTitleActiveInv,
+                      ]}
+                    >
+                      📦 Raw Inventory (خام مال)
+                    </Text>
+                    <Text style={styles.typeToggleBtnSub}>
+                      چکن، گوشت، سبزی، راشن و گروسری
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.typeToggleBtn,
+                    formSupplierType === 'assets' && styles.typeToggleBtnActiveAst,
+                  ]}
+                  onPress={() => {
+                    setFormSupplierType('assets');
+                    setFormCategory(ASSET_CATEGORIES[0]);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.typeToggleIconWrap, { backgroundColor: formSupplierType === 'assets' ? '#2563EB' : '#E2E8F0' }]}>
+                    <Ionicons
+                      name="business"
+                      size={18}
+                      color={formSupplierType === 'assets' ? '#FFFFFF' : '#64748B'}
+                    />
+                  </View>
+                  <View style={{ marginLeft: 8, flex: 1 }}>
+                    <Text
+                      style={[
+                        styles.typeToggleBtnTitle,
+                        formSupplierType === 'assets' && styles.typeToggleBtnTitleActiveAst,
+                      ]}
+                    >
+                      🏢 Capital Assets (اثاثہ جات)
+                    </Text>
+                    <Text style={styles.typeToggleBtnSub}>
+                      مشینری، کراکری، فرنیچر و پلے لینڈ
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+
               <Text style={styles.formLabel}>Company / Supplier Name *</Text>
               <TextInput
                 style={styles.formInput}
-                placeholder="e.g. Al-Madina Fresh Poultry Ltd"
+                placeholder={formSupplierType === 'assets' ? 'e.g. Royal Crockery & Machinery Ltd' : 'e.g. Al-Madina Fresh Poultry Ltd'}
                 placeholderTextColor="#94A3B8"
                 value={formName}
                 onChangeText={setFormName}
               />
 
               <RoyalDropdown
-                label="Food / Supply Category"
+                label={formSupplierType === 'assets' ? 'Asset Category (اثاثہ کی کیٹیگری)' : 'Supply Category (خام مال کیٹیگری)'}
                 required
-                icon={CATEGORY_THEMES[formCategory]?.icon || 'restaurant'}
-                placeholder="Select supply category..."
+                icon={
+                  formSupplierType === 'assets'
+                    ? ((ASSET_THEMES[formCategory]?.icon || 'business-outline') as keyof typeof Ionicons.glyphMap)
+                    : ((CATEGORY_THEMES[formCategory as SupplierCategory]?.icon || 'restaurant') as keyof typeof Ionicons.glyphMap)
+                }
+                placeholder={formSupplierType === 'assets' ? 'Select asset category...' : 'Select supply category...'}
                 options={supplierCategoryOptions}
                 value={formCategory}
-                onSelect={(cat) => setFormCategory(cat as SupplierCategory)}
+                onSelect={(cat) => setFormCategory(cat)}
                 searchable
                 triggerStyle={{
                   backgroundColor: '#F8FAFC',
@@ -2049,14 +2743,64 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 keyboardType="numeric"
               />
 
-              <Text style={styles.formLabel}>Supplied Raw Materials (comma separated)</Text>
-              <TextInput
-                style={styles.formInput}
-                placeholder="e.g. Boneless Chicken, Whole Skinless, Wings"
-                placeholderTextColor="#94A3B8"
-                value={formSuppliedItems}
-                onChangeText={setFormSuppliedItems}
-              />
+              {/* Supplied Items / Assets with Interactive Quick Chips */}
+              <View style={{ marginBottom: 8 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                  <Text style={[styles.formLabel, { marginBottom: 0 }]}>
+                    {formSupplierType === 'assets'
+                      ? 'Supplied Assets (فراہم کردہ اثاثہ جات)'
+                      : 'Supplied Raw Materials (فراہم کردہ اشیاء)'}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B' }}>
+                    {availableItemsForSupplier.length > 0 ? 'Click chips to add/remove' : ''}
+                  </Text>
+                </View>
+
+                {availableItemsForSupplier.length > 0 && (
+                  <View style={styles.quickChipsBox}>
+                    <Text style={styles.quickChipsHeading}>
+                      {formSupplierType === 'assets'
+                        ? '👇 کلک کر کے اثاثے منتخب کریں (Select Assets):'
+                        : '👇 کلک کر کے آئٹمز منتخب کریں (Select Raw Inventory):'}
+                    </Text>
+                    <ScrollView style={{ maxHeight: 110 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 2 }}>
+                        {availableItemsForSupplier.map((itemName) => {
+                          const isSelected = formSuppliedItemsArray.includes(itemName.trim().toLowerCase());
+                          return (
+                            <TouchableOpacity
+                              key={itemName}
+                              onPress={() => toggleSuppliedItem(itemName)}
+                              style={[styles.itemChip, isSelected && styles.itemChipSelected]}
+                            >
+                              <Ionicons
+                                name={isSelected ? 'checkmark-circle' : 'add-circle-outline'}
+                                size={13}
+                                color={isSelected ? '#047857' : '#64748B'}
+                              />
+                              <Text style={[styles.itemChipText, isSelected && styles.itemChipTextSelected]}>
+                                {itemName}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </View>
+                )}
+
+                <TextInput
+                  style={[styles.formInput, { marginTop: 6 }]}
+                  placeholder={
+                    formSupplierType === 'assets'
+                      ? 'e.g. Karahi, Plates, Deep Fryer, Chiller (comma separated)'
+                      : 'e.g. Boneless Chicken, Whole Skinless, Wings (comma separated)'
+                  }
+                  placeholderTextColor="#94A3B8"
+                  value={formSuppliedItems}
+                  onChangeText={setFormSuppliedItems}
+                />
+              </View>
 
               <Text style={[styles.formLabel, { marginTop: 12, fontWeight: '800', color: '#52141C' }]}>
                 Bank Account Details (بینک اکاؤنٹ - برائے آن لائن ادائیگی)
@@ -3539,5 +4283,267 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 13,
+  },
+  // Supplier Type Toggle & Filter Badges
+  typeFilterPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeFilterPillActiveAll: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  typeFilterPillActiveInv: {
+    backgroundColor: '#059669',
+    borderColor: '#059669',
+  },
+  typeFilterPillActiveAst: {
+    backgroundColor: '#2563EB',
+    borderColor: '#2563EB',
+  },
+  typeFilterPillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  typeToggleContainer: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  typeToggleBtn: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  typeToggleBtnActiveInv: {
+    borderColor: '#059669',
+    backgroundColor: '#ECFDF5',
+  },
+  typeToggleBtnActiveAst: {
+    borderColor: '#2563EB',
+    backgroundColor: '#EFF6FF',
+  },
+  typeToggleIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  typeToggleBtnTitle: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  typeToggleBtnTitleActiveInv: {
+    color: '#065F46',
+  },
+  typeToggleBtnTitleActiveAst: {
+    color: '#1E40AF',
+  },
+  typeToggleBtnSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  typeBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+  },
+  typeBadgeInventory: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+    borderWidth: 1,
+  },
+  typeBadgeAsset: {
+    backgroundColor: '#DBEAFE',
+    borderColor: '#93C5FD',
+    borderWidth: 1,
+  },
+  typeBadgeText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+  },
+  typeBadgeTextInventory: {
+    color: '#166534',
+  },
+  typeBadgeTextAsset: {
+    color: '#1E40AF',
+  },
+  quickChipsBox: {
+    backgroundColor: '#F8FAFC',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginTop: 4,
+  },
+  quickChipsHeading: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B',
+    marginBottom: 4,
+  },
+  itemChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  itemChipSelected: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#16A34A',
+  },
+  itemChipText: {
+    fontSize: 11,
+    color: '#334155',
+    fontWeight: '600',
+  },
+  itemChipTextSelected: {
+    color: '#166534',
+    fontWeight: '800',
+  },
+  multiSelectBtn: {
+    backgroundColor: '#52141C',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  multiSelectBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  quickPayOptionBtn: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  quickPayOptionBtnActiveCash: {
+    backgroundColor: '#059669',
+    borderColor: '#047857',
+  },
+  quickPayOptionBtnActiveCredit: {
+    backgroundColor: '#DC2626',
+    borderColor: '#B91C1C',
+  },
+  quickPayOptionText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickPayOptionTextActive: {
+    color: '#FFFFFF',
+  },
+  pickerModalCard: {
+    width: '92%',
+    maxWidth: 580,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    elevation: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+  },
+  pickerSearchRow: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  pickerSearchBox: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    height: 38,
+  },
+  pickerSearchInput: {
+    flex: 1,
+    marginLeft: 6,
+    fontSize: 13,
+    color: '#0F172A',
+  },
+  pickerActionBtn: {
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#E2E8F0',
+    borderRadius: 6,
+  },
+  pickerActionBtnText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  pickerItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  pickerItemRowChecked: {
+    backgroundColor: '#F0FDF4',
+  },
+  pickerCheckbox: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#94A3B8',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerCheckboxChecked: {
+    backgroundColor: '#059669',
+    borderColor: '#047857',
+  },
+  pickerItemName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1E293B',
+  },
+  pickerItemCategory: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
   },
 });
