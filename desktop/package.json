@@ -1,0 +1,57 @@
+{
+  "name": "sultan-restaurant-pos-desktop",
+  "version": "1.0.0",
+  "description": "Sultan Restaurant Royal Dining & Smart POS Desktop Application",
+  "main": "main.js",
+  "author": "Devlyx Solutions",
+  "license": "MIT",
+  "scripts": {
+    "prepare-bundle": "node prepare-bundle.js",
+    "start": "npm run prepare-bundle && electron .",
+    "build": "npm run prepare-bundle && electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.sultan.pos.desktop",
+    "productName": "Sultan POS",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "server.js",
+      "server-data.seed.json",
+      "app-dist/**/*",
+      "build/icon.png",
+      "build/icon.ico",
+      "node_modules/ws/**/*"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "app-dist/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "Sultan_POS_Desktop.exe"
+    },
+    "portable": {
+      "artifactName": "Sultan_POS_Desktop.exe"
+    }
+  }
+}
+

@@ -116,6 +116,13 @@ function getDefaultItemPrepMins(name?: string, category?: string, explicitPrep?:
   return 15;
 }
 
+function formatCountdownMMSS(totalSeconds: number): string {
+  const safeSecs = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(safeSecs / 60);
+  const secs = safeSecs % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+}
+
 function estimateOrderPrepTime(
   items: { id?: string; name?: string; qty?: number; prepTimeMin?: number; category?: string }[],
   menuCatalog: MenuItem[],
@@ -123,10 +130,23 @@ function estimateOrderPrepTime(
   nowMs: number = Date.now()
 ) {
   if (!items || items.length === 0) {
-    return { totalPrepMins: 0, elapsedMins: 0, remainingMins: 0, progressPct: 0, itemBreakdowns: [] as { name: string; qty: number; prepMins: number }[] };
+    return {
+      totalPrepMins: 0,
+      totalPrepSeconds: 0,
+      elapsedMins: 0,
+      elapsedSeconds: 0,
+      remainingMins: 0,
+      remainingSeconds: 0,
+      countdownText: '00:00',
+      elapsedText: '00:00',
+      progressPct: 0,
+      itemBreakdowns: [] as { name: string; qty: number; prepMins: number; remainingSecs: number; countdown: string }[],
+    };
   }
   let maxPrep = 0;
   let totalPortions = 0;
+  const elapsedSeconds = timePlaced ? Math.max(0, Math.floor((nowMs - timePlaced) / 1000)) : 0;
+
   const itemBreakdowns = items.map((it) => {
     const baseId = (it.id || '').split('-')[0];
     const catalogMatch = menuCatalog.find((m) => m.id === it.id || m.id === baseId || m.name === it.name);
@@ -138,17 +158,39 @@ function estimateOrderPrepTime(
     const qty = Number(it.qty) || 1;
     totalPortions += qty;
     if (prepMins > maxPrep) maxPrep = prepMins;
-    return { name: it.name || 'Dish', qty, prepMins };
+    const itemTotalSecs = prepMins * 60;
+    const itemRemSecs = Math.max(0, itemTotalSecs - elapsedSeconds);
+    return {
+      name: it.name || 'Dish',
+      qty,
+      prepMins,
+      remainingSecs: itemRemSecs,
+      countdown: formatCountdownMMSS(itemRemSecs),
+    };
   });
 
   // Parallel kitchen stations: longest dish + 2 mins buffer per extra portion beyond first (max +12 mins buffer)
   const extraBuffer = Math.min(12, Math.max(0, totalPortions - 1) * 2);
   const totalPrepMins = maxPrep + extraBuffer;
-  const elapsedMins = timePlaced ? Math.max(0, Math.floor((nowMs - timePlaced) / 60000)) : 0;
-  const remainingMins = Math.max(0, totalPrepMins - elapsedMins);
-  const progressPct = totalPrepMins > 0 ? Math.min(100, Math.round((elapsedMins / totalPrepMins) * 100)) : 0;
+  const totalPrepSeconds = totalPrepMins * 60;
+  const remainingSeconds = Math.max(0, totalPrepSeconds - elapsedSeconds);
+  const elapsedMins = Math.floor(elapsedSeconds / 60);
+  const remainingMins = Math.ceil(remainingSeconds / 60);
+  const progressPct =
+    totalPrepSeconds > 0 ? Math.min(100, Math.round((elapsedSeconds / totalPrepSeconds) * 100)) : 0;
 
-  return { totalPrepMins, elapsedMins, remainingMins, progressPct, itemBreakdowns };
+  return {
+    totalPrepMins,
+    totalPrepSeconds,
+    elapsedMins,
+    elapsedSeconds,
+    remainingMins,
+    remainingSeconds,
+    countdownText: formatCountdownMMSS(remainingSeconds),
+    elapsedText: formatCountdownMMSS(elapsedSeconds),
+    progressPct,
+    itemBreakdowns,
+  };
 }
 
 interface POSTerminalScreenProps {
@@ -183,7 +225,7 @@ export default function POSTerminalScreen({
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNowTick(Date.now()), 15000);
+    const timer = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
 
@@ -1531,7 +1573,7 @@ export default function POSTerminalScreen({
             color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
           />
           <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order Dena / Menu ({filteredItems.length})
+            1. Order / Menu Dishes ({filteredItems.length})
           </Text>
         </TouchableOpacity>
 
@@ -2204,7 +2246,7 @@ export default function POSTerminalScreen({
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Ionicons name="time" size={18} color="#B45309" />
                       <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E' }}>
-                        EST. KITCHEN PREP TIME (تیاری کا وقت)
+                        EST. KITCHEN PREP TIME
                       </Text>
                     </View>
                     <View
@@ -2370,7 +2412,7 @@ export default function POSTerminalScreen({
                   Running Kitchen Orders & Pending Bills ({tickets.length})
                 </Text>
                 <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
-                  Har order ke khane ko tayyar hone main kitna time lage ga aur kitna time baqi hai yahan live dekhein
+                  Live second-by-second kitchen preparation countdown timer for all active orders
                 </Text>
               </View>
 
@@ -2410,7 +2452,7 @@ export default function POSTerminalScreen({
                   const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
                   const prepEst = estimateOrderPrepTime(t.items, menuItems, t.timePlaced, nowTick);
                   const isReady = t.status === 'ready';
-                  const isOverdue = !isReady && prepEst.remainingMins === 0 && prepEst.elapsedMins >= prepEst.totalPrepMins;
+                  const isOverdue = !isReady && prepEst.remainingSeconds === 0 && prepEst.elapsedSeconds >= prepEst.totalPrepSeconds;
 
                   return (
                     <View
@@ -2517,24 +2559,35 @@ export default function POSTerminalScreen({
                                 color: isReady ? '#15803D' : isOverdue ? '#DC2626' : '#92400E',
                               }}
                             >
-                              Total Kitchen Prep Time: ~{prepEst.totalPrepMins} Mins (پورا کھانا تیار ہونے کا وقت)
+                              Total Kitchen Prep Time: {prepEst.totalPrepMins} Mins • Elapsed: {prepEst.elapsedText}
                             </Text>
                           </View>
 
                           <View
                             style={{
                               backgroundColor: isReady ? '#16A34A' : isOverdue ? '#DC2626' : '#D97706',
-                              paddingHorizontal: 12,
-                              paddingVertical: 5,
+                              paddingHorizontal: 14,
+                              paddingVertical: 6,
                               borderRadius: 8,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
                             }}
                           >
-                            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
+                            <Ionicons name={isReady ? 'checkmark-done' : 'timer-outline'} size={16} color="#FFFFFF" />
+                            <Text
+                              style={{
+                                color: '#FFFFFF',
+                                fontSize: 14,
+                                fontWeight: '900',
+                                fontVariant: ['tabular-nums'],
+                              }}
+                            >
                               {isReady
-                                ? '✅ KHANA TAYYAR HAI (READY TO SERVE)'
-                                : prepEst.remainingMins > 0
-                                  ? `⏳ ~${prepEst.remainingMins} Mins Remaining (${prepEst.elapsedMins}m elapsed)`
-                                  : `⚠️ ${prepEst.elapsedMins}m Elapsed • Ready Soon`}
+                                ? 'ORDER READY TO SERVE'
+                                : prepEst.remainingSeconds > 0
+                                  ? `TIME LEFT: ${prepEst.countdownText}`
+                                  : `OVERDUE (${prepEst.elapsedText} ELAPSED)`}
                             </Text>
                           </View>
                         </View>
@@ -2557,7 +2610,7 @@ export default function POSTerminalScreen({
                           />
                         </View>
 
-                        {/* Per-Dish Prep Time Breakdown */}
+                        {/* Per-Dish Prep Time Breakdown with Live Second Countdown */}
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                           {prepEst.itemBreakdowns.map((b, bIdx) => (
                             <View
@@ -2565,15 +2618,17 @@ export default function POSTerminalScreen({
                               style={{
                                 backgroundColor: '#FFFFFF',
                                 paddingHorizontal: 10,
-                                paddingVertical: 4,
+                                paddingVertical: 5,
                                 borderRadius: 6,
                                 borderWidth: 1,
                                 borderColor: '#E2E8F0',
                               }}
                             >
-                              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1E293B' }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1E293B', fontVariant: ['tabular-nums'] }}>
                                 {b.qty}× {b.name}{' '}
-                                <Text style={{ color: '#B45309', fontWeight: '900' }}>({b.prepMins} min)</Text>
+                                <Text style={{ color: isReady || b.remainingSecs === 0 ? '#16A34A' : '#B45309', fontWeight: '900' }}>
+                                  ({isReady || b.remainingSecs === 0 ? 'Ready' : `${b.countdown} left / ${b.prepMins}m`})
+                                </Text>
                               </Text>
                             </View>
                           ))}
@@ -2590,7 +2645,7 @@ export default function POSTerminalScreen({
                     No Running Kitchen Orders Right Now
                   </Text>
                   <Text style={{ fontSize: 13.5, color: '#94A3B8', marginTop: 4 }}>
-                    Jab aap POS se "Send KOT (F8)" karein ge to order aur us ka preparation time yahan live show hoga.
+                    Orders dispatched via "Send KOT (F8)" will appear here with a live preparation countdown timer.
                   </Text>
                 </View>
               )}
@@ -2611,7 +2666,7 @@ export default function POSTerminalScreen({
               <Text style={styles.mobileFloatingQtyText}>{totalCartQty}</Text>
             </View>
             <Text style={styles.mobileFloatingLabel}>
-              Cart & Bill Dekhein ({totalCartQty} {totalCartQty === 1 ? 'Item' : 'Items'} Added)
+              View Cart & Bill ({totalCartQty} {totalCartQty === 1 ? 'Item' : 'Items'} Added)
             </Text>
           </View>
           <Text style={styles.mobileFloatingTotal}>
@@ -3232,11 +3287,12 @@ export default function POSTerminalScreen({
                                   fontSize: 11.5,
                                   fontWeight: '900',
                                   color: isReady ? '#15803D' : '#B45309',
+                                  fontVariant: ['tabular-nums'],
                                 }}
                               >
                                 {isReady
                                   ? 'Ready to Serve!'
-                                  : `Est. Prep: ~${prepEst.totalPrepMins}m (${prepEst.remainingMins > 0 ? `${prepEst.remainingMins}m left` : 'Due now'})`}
+                                  : `Prep: ${prepEst.totalPrepMins}m • Time Left: ${prepEst.remainingSeconds > 0 ? prepEst.countdownText : 'Due now'}`}
                               </Text>
                             </View>
                             <Text style={{ fontSize: 12, color: '#64748B' }}>#{t.id.slice(-5)}</Text>

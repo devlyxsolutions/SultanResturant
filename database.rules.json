@@ -1,0 +1,10 @@
+{
+  "rules": {
+    ".read": true,
+    ".write": true,
+    "sultan_restaurant": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}

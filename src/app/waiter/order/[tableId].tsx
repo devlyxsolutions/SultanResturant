@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
   Image,
@@ -37,7 +37,7 @@ const NOTE_PRESETS = [
   'No Onion',
   'Extra Crispy',
   'Starter First',
-  'Jaldi / Rush',
+  'Rush Order',
   'Low Salt',
   'Pack To-Go',
   'Less Sugar',
@@ -95,6 +95,13 @@ function getDefaultItemPrepMins(name: string, category?: string, explicitPrep?: 
   if (c.includes('bakery') || c.includes('dessert') || c.includes('kunafa') || c.includes('salad') || c.includes('brunch')) return 10;
   if (c.includes('drink') || c.includes('beverage') || c.includes('mocktail') || c.includes('shake') || c.includes('coffee') || c.includes('juice') || c.includes('tea')) return 6;
   return 15;
+}
+
+function formatCountdownMMSS(totalSeconds: number): string {
+  const safeSecs = Math.max(0, Math.floor(totalSeconds));
+  const mins = Math.floor(safeSecs / 60);
+  const secs = safeSecs % 60;
+  return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
 }
 
 function estimateOrderPrepTime(
@@ -155,7 +162,12 @@ export default function TableOrderScreen() {
   // Table Operations Modals
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [runningItemsModalVisible, setRunningItemsModalVisible] = useState(false);
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Store bindings
   const tables = useRestaurantStore((state) => state.tables) || [];
@@ -407,7 +419,7 @@ export default function TableOrderScreen() {
     const kotItems = newCart.map((c) => ({
       item: c.item,
       qty: c.qty,
-      notes: [c.notes, isRushOrder ? 'RUSH / JALDI' : ''].filter(Boolean).join(' • ') || undefined,
+      notes: [c.notes, isRushOrder ? 'RUSH PRIORITY' : ''].filter(Boolean).join(' • ') || undefined,
     }));
 
     placeOrder(
@@ -562,7 +574,7 @@ export default function TableOrderScreen() {
         >
           <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
           <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order Dena / Menu Dishes ({filteredItems.length})
+            1. Order / Menu Dishes ({filteredItems.length})
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -917,7 +929,7 @@ export default function TableOrderScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 12, fontWeight: '900', color: '#92400E' }}>
-                        ⏱️ EST. KITCHEN PREP TIME (کھانا تیار ہونے کا وقت)
+                        ⏱️ EST. KITCHEN PREP TIME
                       </Text>
                       <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#B45309' }} numberOfLines={1}>
                         Longest Dish: {cartPrepEstimate.maxItemName} • {totalNewQty} Portions
@@ -946,7 +958,7 @@ export default function TableOrderScreen() {
               >
                 <Ionicons name="flash" size={15} color={isRushOrder ? '#DC2626' : '#64748B'} />
                 <Text style={[styles.rushToggleText, isRushOrder && { color: '#DC2626', fontWeight: '900' }]}>
-                  {isRushOrder ? 'RUSH / PRIORITY ORDER ACTIVE' : 'Mark as Rush Order (Jaldi)'}
+                  {isRushOrder ? 'RUSH / PRIORITY ORDER ACTIVE' : 'Mark as Rush / Priority Order'}
                 </Text>
               </TouchableOpacity>
 
@@ -988,40 +1000,58 @@ export default function TableOrderScreen() {
         {/* TAB 3: FULL-PAGE RUNNING KDS & PREP TIME */}
         {mobileTab === 'running' && (
           <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0, padding: 16 }]}>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: '#FFFBEB',
-                borderWidth: 1.5,
-                borderColor: '#F59E0B',
-                borderRadius: 12,
-                padding: 14,
-                marginBottom: 14,
-              }}
-            >
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '900', color: '#92400E' }}>
-                  🔥 Running Kitchen KDS Orders on {tableName}
-                </Text>
-                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#B45309', marginTop: 2 }}>
-                  Total Kitchen Prep Time (پورا کھانا تیار ہونے کا وقت): ~{runningPrepEstimate.totalMins} Minutes
-                </Text>
-              </View>
-              <View
-                style={{
-                  backgroundColor: '#D97706',
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 10,
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>
-                  ⏱️ ~{runningPrepEstimate.totalMins} Mins
-                </Text>
-              </View>
-            </View>
+            {(() => {
+              const earliestPlaced =
+                alreadyOrderedItems.length > 0
+                  ? Math.min(...alreadyOrderedItems.map((i) => i.timePlaced || now))
+                  : now;
+              const totalPrepSecs = runningPrepEstimate.totalMins * 60;
+              const elapsedSecs = Math.max(0, Math.floor((now - earliestPlaced) / 1000));
+              const remainingSecs = Math.max(0, totalPrepSecs - elapsedSecs);
+              const allReady =
+                alreadyOrderedItems.length > 0 &&
+                alreadyOrderedItems.every((i) => i.status === 'ready' || i.status === 'served');
+              return (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: allReady ? '#F0FDF4' : '#FFFBEB',
+                    borderWidth: 1.5,
+                    borderColor: allReady ? '#22C55E' : '#F59E0B',
+                    borderRadius: 12,
+                    padding: 14,
+                    marginBottom: 14,
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '900', color: allReady ? '#15803D' : '#92400E' }}>
+                      🔥 Running Kitchen KDS Orders on {tableName}
+                    </Text>
+                    <Text style={{ fontSize: 12.5, fontWeight: '700', color: allReady ? '#15803D' : '#B45309', marginTop: 2 }}>
+                      Total Kitchen Prep Time: {runningPrepEstimate.totalMins} Minutes • Elapsed: {formatCountdownMMSS(elapsedSecs)}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: allReady ? '#16A34A' : '#D97706',
+                      paddingHorizontal: 14,
+                      paddingVertical: 8,
+                      borderRadius: 10,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', fontVariant: ['tabular-nums'] }}>
+                      {allReady
+                        ? 'ORDER READY TO SERVE'
+                        : remainingSecs > 0
+                          ? `⏱️ TIME LEFT: ${formatCountdownMMSS(remainingSecs)}`
+                          : '⏱️ DUE NOW'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })()}
 
             <ScrollView style={{ flex: 1 }}>
               {alreadyOrderedItems.length === 0 ? (
@@ -1038,21 +1068,21 @@ export default function TableOrderScreen() {
                   const dishMins =
                     getDefaultItemPrepMins(it.name, matched?.category, matched?.prepTimeMin) +
                     Math.max(0, (it.qty - 1) * 2);
-                  const elapsedMins = Math.max(0, Math.floor((Date.now() - (it.timePlaced || now)) / 60000));
-                  const remainingMins = Math.max(0, dishMins - elapsedMins);
+                  const elapsedSecs = Math.max(0, Math.floor((now - (it.timePlaced || now)) / 1000));
+                  const remainingSecs = Math.max(0, dishMins * 60 - elapsedSecs);
                   return (
                     <View key={`${it.ticketId}-${it.id}-${idx}`} style={styles.runningOrderCard}>
                       <View style={{ flex: 1 }}>
                         <Text style={styles.runningOrderTitle}>
                           {it.qty}× {it.name}
                         </Text>
-                        <Text style={styles.runningOrderItems}>
-                          Status: {it.status.toUpperCase()} • Est. Prep: ~{dishMins}m (
+                        <Text style={[styles.runningOrderItems, { fontVariant: ['tabular-nums'] }]}>
+                          Status: {it.status.toUpperCase()} • Prep: {dishMins}m (
                           {it.status === 'ready' || it.status === 'served'
-                            ? '✅ Ready'
-                            : remainingMins > 0
-                              ? `⏳ ~${remainingMins}m remaining`
-                              : '🔥 Finalizing'}
+                            ? 'Ready'
+                            : remainingSecs > 0
+                              ? `Time Left: ${formatCountdownMMSS(remainingSecs)}`
+                              : 'Finalizing'}
                           ) {it.notes ? `• ${it.notes}` : ''}
                         </Text>
                       </View>
@@ -1087,7 +1117,7 @@ export default function TableOrderScreen() {
             <View style={styles.mobileFloatingQtyCircle}>
               <Text style={styles.mobileFloatingQtyText}>{totalNewQty}</Text>
             </View>
-            <Text style={styles.mobileFloatingLabel}>Cart Dekhein & Kitchen Bhejein</Text>
+            <Text style={styles.mobileFloatingLabel}>View Cart & Send to Kitchen</Text>
           </View>
           <Text style={styles.mobileFloatingTotal}>{totalNewQty} Portions • Open Cart ➔</Text>
         </TouchableOpacity>

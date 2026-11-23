@@ -1,0 +1,10 @@
+[
+    {
+        "merged": "com.sultan.calldetector.call-detector-release-50:/layout-watch-v20/abc_alert_dialog_button_bar_material.xml",
+        "source": "com.sultan.calldetector.call-detector-appcompat-1.7.0-5:/layout-watch-v20/abc_alert_dialog_button_bar_material.xml"
+    },
+    {
+        "merged": "com.sultan.calldetector.call-detector-release-50:/layout-watch-v20/abc_alert_dialog_title_material.xml",
+        "source": "com.sultan.calldetector.call-detector-appcompat-1.7.0-5:/layout-watch-v20/abc_alert_dialog_title_material.xml"
+    }
+]
