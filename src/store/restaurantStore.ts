@@ -387,16 +387,27 @@ export type Reservation = {
   id: string;
   tableId: string;
   tableName: string;
+  /** Floor where this reservation / group arrangement is hosted (e.g. "Rooftop"). */
+  floor?: string;
   /** Extra available tables merged with the primary table for large parties. */
   linkedTableIds?: string[];
+  bookingType?: 'regular' | 'group_event';
+  occasion?: string;
+  arrangementStyle?: string;
+  advanceDeposit?: number;
+  perHeadBudget?: number;
+  extraChairsNeeded?: number;
+  isFullFloor?: boolean;
   customerName: string;
   phone: string;
   guestsCount: number;
   reservationDate: string; // YYYY-MM-DD
   timeSlot: string; // e.g. "08:00 PM"
-  status: 'confirmed' | 'seated' | 'cancelled';
+  status: 'confirmed' | 'seated' | 'completed' | 'cancelled';
   notes?: string;
   createdAt: number;
+  updatedAt?: number;
+  seatedAt?: number;
 };
 
 export type Floor = {
@@ -837,8 +848,16 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
       };
     }
 
-    // If a table is marked 'occupied' but has ZERO active tickets left (e.g. tickets were cleared or cancelled), release it to 'available'
-    if (table.status === 'occupied' && tableTickets.length === 0 && !table.mergedInto) {
+    // If a table is marked 'occupied' but has ZERO active tickets left (e.g. tickets were cleared or cancelled),
+    // release it to 'available' — UNLESS it is a seated reservation / merged group primary waiting for its first KOT.
+    const hasMergedChildren = sanitizedTables.some((other) => other.mergedInto === table.id);
+    if (
+      table.status === 'occupied' &&
+      tableTickets.length === 0 &&
+      !table.mergedInto &&
+      !table.reservationId &&
+      !hasMergedChildren
+    ) {
       return {
         ...table,
         status: 'available',
@@ -1963,6 +1982,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
         const now = Date.now();
         const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
+        const linkedReservationId = targetTable?.reservationId;
 
         notifySync();
         return {
@@ -1972,6 +1992,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               status: 'available',
               billTotal: 0,
               server: undefined,
+              serverId: undefined,
               orders: [],
               isPaid: false,
               lastInvoiceId: undefined,
@@ -1981,6 +2002,12 @@ export const useRestaurantStore = create<RestaurantState>()(
               reservationId: undefined,
             } : t
           ),
+          reservations: (state.reservations || []).map(r => {
+            if (r.status === 'seated' && (r.id === linkedReservationId || r.tableId === tableId)) {
+              return { ...r, status: 'completed' as const, updatedAt: now };
+            }
+            return r;
+          }),
           tickets: state.tickets.filter(t => t.tableId !== tableId),
           deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
           lastBillPaidAlert: matchesAlert ? null : state.lastBillPaidAlert,
@@ -2095,231 +2122,276 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
       },
 
-      transferTable: (fromTableId, toTableId) => set((state) => {
-        const fromTable = state.tables.find(t => t.id === fromTableId);
-        const toTable = state.tables.find(t => t.id === toTableId);
-        if (!fromTable || !toTable || toTable.status === 'occupied' || toTable.status === 'billed') {
-          return state;
-        }
-
-        const updatedTables = state.tables.map(t => {
-          if (t.id === toTableId) {
-            return {
-              ...t,
-              status: fromTable.status,
-              billTotal: fromTable.billTotal || 0,
-              orders: fromTable.orders ? [...fromTable.orders] : [],
-              server: fromTable.server,
-              isPaid: fromTable.isPaid,
-              lastInvoiceId: fromTable.lastInvoiceId,
-              occupiedSince: fromTable.occupiedSince || Date.now(),
-            };
+      transferTable: (fromTableId, toTableId) => {
+        set((state) => {
+          const fromTable = state.tables.find(t => t.id === fromTableId);
+          const toTable = state.tables.find(t => t.id === toTableId);
+          if (!fromTable || !toTable || toTable.status === 'occupied' || toTable.status === 'billed') {
+            return state;
           }
-          if (t.id === fromTableId) {
-            return {
-              ...t,
-              status: 'available' as const,
-              billTotal: 0,
-              orders: [],
-              server: undefined,
-              isPaid: false,
-              lastInvoiceId: undefined,
-              occupiedSince: undefined,
-            };
-          }
-          return t;
-        });
 
-        const updatedTickets = state.tickets.map(tk => {
-          if (tk.tableId === fromTableId) {
-            return {
-              ...tk,
-              tableId: toTableId,
-              tableName: `${toTable.name} (from ${fromTable.name})`
-            };
-          }
-          return tk;
-        });
-
-        let updatedAlert = state.lastBillPaidAlert;
-        if (updatedAlert && updatedAlert.tableId === fromTableId) {
-          updatedAlert = {
-            ...updatedAlert,
-            tableId: toTableId,
-            tableName: toTable.name
-          };
-        }
-
-        return {
-          tables: updatedTables,
-          tickets: updatedTickets,
-          lastBillPaidAlert: updatedAlert
-        };
-      }),
-
-      mergeTables: (primaryTableId, secondaryTableId) => set((state) => {
-        const primary = state.tables.find(t => t.id === primaryTableId);
-        const secondary = state.tables.find(t => t.id === secondaryTableId);
-        if (!primary || !secondary) return state;
-
-        // Combine orders
-        const combinedOrders = (primary.orders || []).map(o => ({ ...o }));
-        (secondary.orders || []).forEach(secItem => {
-          const found = combinedOrders.find(o => o.id === secItem.id);
-          if (found) {
-            found.qty += secItem.qty;
-          } else {
-            combinedOrders.push({ ...secItem });
-          }
-        });
-
-        const newBillTotal = (primary.billTotal || 0) + (secondary.billTotal || 0);
-
-        const updatedTables = state.tables.map(t => {
-          if (t.id === primaryTableId) {
-            return {
-              ...t,
-              orders: combinedOrders,
-              billTotal: newBillTotal,
-              status: (primary.status === 'billed' && secondary.status === 'billed') ? 'billed' as const : 'occupied' as const,
-            };
-          }
-          if (t.id === secondaryTableId) {
-            return {
-              ...t,
-              status: 'available' as const,
-              billTotal: 0,
-              orders: [],
-              server: undefined,
-              isPaid: false,
-              lastInvoiceId: undefined,
-              occupiedSince: undefined,
-            };
-          }
-          return t;
-        });
-
-        const updatedTickets = state.tickets.map(tk => {
-          if (tk.tableId === secondaryTableId) {
-            return {
-              ...tk,
-              tableId: primaryTableId,
-              tableName: `${primary.name} (Merged ${secondary.name})`
-            };
-          }
-          return tk;
-        });
-
-        return {
-          tables: updatedTables,
-          tickets: updatedTickets
-        };
-      }),
-
-      assignTableServer: (tableId, serverName) => set((state) => ({
-        tables: state.tables.map(t => t.id === tableId ? { ...t, server: serverName } : t)
-      })),
-
-      addReservation: (res) => set((state) => {
-        const newId = `res-${Date.now()}`;
-        const linked = (res.linkedTableIds || []).filter(id => id !== res.tableId);
-        const newReservation: Reservation = {
-          ...res,
-          linkedTableIds: linked,
-          id: newId,
-          status: res.status || 'confirmed',
-          createdAt: Date.now()
-        };
-
-        const updatedTables = state.tables.map(t => {
-          if (t.id === res.tableId) {
-            return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: undefined };
-          }
-          if (linked.includes(t.id)) {
-            return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: res.tableId };
-          }
-          return t;
-        });
-
-        return {
-          reservations: [newReservation, ...state.reservations],
-          tables: updatedTables
-        };
-      }),
-
-      updateReservation: (id, updates) => set((state) => {
-        const targetRes = state.reservations.find(r => r.id === id);
-        if (!targetRes) return state;
-
-        const updatedRes: Reservation = { ...targetRes, ...updates };
-        updatedRes.linkedTableIds = (updatedRes.linkedTableIds || []).filter(tid => tid !== updatedRes.tableId);
-
-        const tablesChanged = updates.tableId !== undefined || updates.linkedTableIds !== undefined;
-        let updatedTables = state.tables;
-        if (tablesChanged && targetRes.status === 'confirmed') {
-          // Release all previously held tables for this reservation, then reserve the new set
-          updatedTables = updatedTables.map(t => {
-            if (t.reservationId === id && t.status === 'reserved') {
-              return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+          const updatedTables = state.tables.map(t => {
+            if (t.id === toTableId) {
+              return {
+                ...t,
+                status: fromTable.status,
+                billTotal: fromTable.billTotal || 0,
+                orders: fromTable.orders ? [...fromTable.orders] : [],
+                server: fromTable.server,
+                serverId: fromTable.serverId,
+                isPaid: fromTable.isPaid,
+                lastInvoiceId: fromTable.lastInvoiceId,
+                occupiedSince: fromTable.occupiedSince || Date.now(),
+                reservationId: fromTable.reservationId,
+              };
             }
-            return t;
-          }).map(t => {
-            if (t.id === updatedRes.tableId) {
-              return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: undefined };
+            if (t.id === fromTableId) {
+              return {
+                ...t,
+                status: 'available' as const,
+                billTotal: 0,
+                orders: [],
+                server: undefined,
+                serverId: undefined,
+                isPaid: false,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                reservationId: undefined,
+              };
             }
-            if (updatedRes.linkedTableIds!.includes(t.id)) {
-              return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: updatedRes.tableId };
+            if (t.mergedInto === fromTableId) {
+              return {
+                ...t,
+                mergedInto: toTableId,
+              };
             }
             return t;
           });
-        }
 
-        return {
-          reservations: state.reservations.map(r => r.id === id ? updatedRes : r),
-          tables: updatedTables
-        };
-      }),
+          const updatedTickets = state.tickets.map(tk => {
+            if (tk.tableId === fromTableId) {
+              return {
+                ...tk,
+                tableId: toTableId,
+                tableName: `${toTable.name} (from ${fromTable.name})`
+              };
+            }
+            return tk;
+          });
 
-      cancelReservation: (id) => set((state) => {
-        const targetRes = state.reservations.find(r => r.id === id);
-        if (!targetRes) return state;
-        const allIds = [targetRes.tableId, ...(targetRes.linkedTableIds || [])];
-
-        const updatedTables = state.tables.map(t => {
-          if (allIds.includes(t.id) && t.status === 'reserved') {
-            return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+          let updatedAlert = state.lastBillPaidAlert;
+          if (updatedAlert && updatedAlert.tableId === fromTableId) {
+            updatedAlert = {
+              ...updatedAlert,
+              tableId: toTableId,
+              tableName: toTable.name
+            };
           }
-          return t;
+
+          return {
+            tables: updatedTables,
+            tickets: updatedTickets,
+            lastBillPaidAlert: updatedAlert
+          };
         });
+        notifySync();
+      },
 
-        return {
-          reservations: state.reservations.map(r => r.id === id ? { ...r, status: 'cancelled' as const } : r),
-          tables: updatedTables
-        };
-      }),
+      mergeTables: (primaryTableId, secondaryTableId) => {
+        set((state) => {
+          const primary = state.tables.find(t => t.id === primaryTableId);
+          const secondary = state.tables.find(t => t.id === secondaryTableId);
+          if (!primary || !secondary) return state;
 
-      seatReservation: (reservationId) => set((state) => {
-        const targetRes = state.reservations.find(r => r.id === reservationId);
-        if (!targetRes) return state;
-        const linked = targetRes.linkedTableIds || [];
-        const now = Date.now();
+          // Combine orders
+          const combinedOrders = (primary.orders || []).map(o => ({ ...o }));
+          (secondary.orders || []).forEach(secItem => {
+            const found = combinedOrders.find(o => o.id === secItem.id);
+            if (found) {
+              found.qty += secItem.qty;
+            } else {
+              combinedOrders.push({ ...secItem });
+            }
+          });
 
-        const updatedTables = state.tables.map(t => {
-          if (t.id === targetRes.tableId) {
-            return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: undefined, mergedInto: undefined };
-          }
-          if (linked.includes(t.id)) {
-            // Linked tables stay blocked as part of the primary table's party
-            return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: undefined, mergedInto: targetRes.tableId };
-          }
-          return t;
+          const newBillTotal = (primary.billTotal || 0) + (secondary.billTotal || 0);
+
+          const updatedTables = state.tables.map(t => {
+            if (t.id === primaryTableId) {
+              return {
+                ...t,
+                orders: combinedOrders,
+                billTotal: newBillTotal,
+                status: (primary.status === 'billed' && secondary.status === 'billed') ? 'billed' as const : 'occupied' as const,
+              };
+            }
+            if (t.id === secondaryTableId) {
+              return {
+                ...t,
+                status: 'available' as const,
+                billTotal: 0,
+                orders: [],
+                server: undefined,
+                serverId: undefined,
+                isPaid: false,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                mergedInto: undefined,
+                reservationId: undefined,
+              };
+            }
+            return t;
+          });
+
+          const updatedTickets = state.tickets.map(tk => {
+            if (tk.tableId === secondaryTableId) {
+              return {
+                ...tk,
+                tableId: primaryTableId,
+                tableName: `${primary.name} (Merged ${secondary.name})`
+              };
+            }
+            return tk;
+          });
+
+          return {
+            tables: updatedTables,
+            tickets: updatedTickets
+          };
         });
+        notifySync();
+      },
 
-        return {
-          reservations: state.reservations.map(r => r.id === reservationId ? { ...r, status: 'seated' as const } : r),
-          tables: updatedTables
-        };
-      }),
+      assignTableServer: (tableId, serverName) => {
+        set((state) => ({
+          tables: state.tables.map(t => t.id === tableId ? { ...t, server: serverName } : t)
+        }));
+        notifySync();
+      },
+
+      addReservation: (res) => {
+        set((state) => {
+          const now = Date.now();
+          const newId = `res-${now}-${Math.random().toString(36).slice(2, 6)}`;
+          const linked = (res.linkedTableIds || []).filter(id => id !== res.tableId);
+          const primaryTable = state.tables.find(t => t.id === res.tableId);
+          const inferredFloor = res.floor || (primaryTable ? getTableFloor(primaryTable) : undefined);
+          const newReservation: Reservation = {
+            ...res,
+            floor: inferredFloor,
+            bookingType: res.bookingType || (res.guestsCount >= 10 || linked.length > 0 ? 'group_event' : 'regular'),
+            linkedTableIds: linked,
+            id: newId,
+            status: res.status || 'confirmed',
+            createdAt: now,
+            updatedAt: now,
+          };
+
+          const updatedTables = state.tables.map(t => {
+            if (t.id === res.tableId) {
+              return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: undefined };
+            }
+            if (linked.includes(t.id)) {
+              return { ...t, status: 'reserved' as const, reservationId: newId, mergedInto: res.tableId };
+            }
+            return t;
+          });
+
+          return {
+            reservations: [newReservation, ...(state.reservations || [])],
+            tables: updatedTables
+          };
+        });
+        notifySync();
+      },
+
+      updateReservation: (id, updates) => {
+        set((state) => {
+          const targetRes = (state.reservations || []).find(r => r.id === id);
+          if (!targetRes) return state;
+
+          const now = Date.now();
+          const updatedRes: Reservation = { ...targetRes, ...updates, updatedAt: now };
+          updatedRes.linkedTableIds = (updatedRes.linkedTableIds || []).filter(tid => tid !== updatedRes.tableId);
+
+          const prevAllIds = [targetRes.tableId, ...(targetRes.linkedTableIds || [])];
+          const tablesChanged = updates.tableId !== undefined || updates.linkedTableIds !== undefined;
+          let updatedTables = state.tables;
+          if (tablesChanged && targetRes.status === 'confirmed') {
+            // Release all previously held tables for this reservation, then reserve the new set
+            updatedTables = updatedTables.map(t => {
+              if ((t.reservationId === id || prevAllIds.includes(t.id)) && t.status === 'reserved') {
+                return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+              }
+              return t;
+            }).map(t => {
+              if (t.id === updatedRes.tableId) {
+                return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: undefined };
+              }
+              if (updatedRes.linkedTableIds!.includes(t.id)) {
+                return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: updatedRes.tableId };
+              }
+              return t;
+            });
+          }
+
+          return {
+            reservations: (state.reservations || []).map(r => r.id === id ? updatedRes : r),
+            tables: updatedTables
+          };
+        });
+        notifySync();
+      },
+
+      cancelReservation: (id) => {
+        set((state) => {
+          const targetRes = (state.reservations || []).find(r => r.id === id);
+          if (!targetRes) return state;
+          const allIds = [targetRes.tableId, ...(targetRes.linkedTableIds || [])];
+
+          const updatedTables = state.tables.map(t => {
+            if ((allIds.includes(t.id) || t.reservationId === id) && t.status === 'reserved') {
+              return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+            }
+            return t;
+          });
+
+          return {
+            reservations: (state.reservations || []).map(r => r.id === id ? { ...r, status: 'cancelled' as const, updatedAt: Date.now() } : r),
+            tables: updatedTables
+          };
+        });
+        notifySync();
+      },
+
+      seatReservation: (reservationId) => {
+        set((state) => {
+          const targetRes = (state.reservations || []).find(r => r.id === reservationId);
+          if (!targetRes) return state;
+          const linked = targetRes.linkedTableIds || [];
+          const now = Date.now();
+
+          const updatedTables = state.tables.map(t => {
+            if (t.id === targetRes.tableId) {
+              // Keep reservationId so POS, Waiter, Floor Manager & Blueprint know this seated table belongs to the Group/Reservation
+              return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: targetRes.id, mergedInto: undefined };
+            }
+            if (linked.includes(t.id)) {
+              // Linked tables stay blocked as part of the primary table's party
+              return { ...t, status: 'occupied' as const, occupiedSince: now, reservationId: targetRes.id, mergedInto: targetRes.tableId };
+            }
+            return t;
+          });
+
+          return {
+            reservations: (state.reservations || []).map(r =>
+              r.id === reservationId ? { ...r, status: 'seated' as const, seatedAt: now, updatedAt: now } : r
+            ),
+            tables: updatedTables
+          };
+        });
+        notifySync();
+      },
 
       saveInvoice: (invoice) => set((state) => {
         let updatedCustomers = state.customers;
@@ -2659,9 +2731,19 @@ export const useRestaurantStore = create<RestaurantState>()(
         notifySync();
       },
 
-      addTable: (table) => set((state) => ({
-        tables: [...state.tables, { ...table, status: table.status || 'available', id: `t${Date.now()}` }]
-      })),
+      addTable: (table) => {
+        set((state) => ({
+          tables: [
+            ...state.tables,
+            {
+              ...table,
+              status: table.status || 'available',
+              id: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            },
+          ],
+        }));
+        notifySync();
+      },
 
       updateTable: (id, updatedTable) => {
         set((state) => {
@@ -2683,103 +2765,128 @@ export const useRestaurantStore = create<RestaurantState>()(
         notifySync();
       },
 
-      deleteTable: (id) => set((state) => ({
-        tables: state.tables.filter(t => t.id !== id)
-      })),
+      deleteTable: (id) => {
+        set((state) => ({
+          tables: state.tables.filter(t => t.id !== id)
+        }));
+        notifySync();
+      },
 
-      addFloor: (floor) => set((state) => {
-        const newId = `fl-${Date.now()}`;
-        const newFloor: Floor = {
-          ...floor,
-          id: newId,
-          order: (state.floors || []).length + 1,
-        };
-        const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
-        const updatedFloors = [...currentFloors, newFloor];
-        const updatedZones = state.zones.includes(floor.name) ? state.zones : [...state.zones, floor.name];
-        return {
-          floors: updatedFloors,
-          zones: updatedZones,
-        };
-      }),
+      addFloor: (floor) => {
+        set((state) => {
+          const newId = `fl-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`;
+          const newFloor: Floor = {
+            ...floor,
+            id: newId,
+            order: (state.floors || []).length + 1,
+          };
+          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const updatedFloors = [...currentFloors, newFloor];
+          const updatedZones = state.zones.includes(floor.name) ? state.zones : [...state.zones, floor.name];
+          return {
+            floors: updatedFloors,
+            zones: updatedZones,
+          };
+        });
+        notifySync();
+      },
 
-      updateFloor: (id, updates) => set((state) => {
-        const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
-        const target = currentFloors.find((f) => f.id === id);
-        if (!target) return state;
+      updateFloor: (id, updates) => {
+        set((state) => {
+          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const target = currentFloors.find((f) => f.id === id);
+          if (!target) return state;
 
-        const oldName = target.name;
-        const newName = updates.name ? updates.name.trim() : oldName;
-        const nameChanged = newName && newName.toLowerCase() !== oldName.toLowerCase();
+          const oldName = target.name;
+          const newName = updates.name ? updates.name.trim() : oldName;
+          const nameChanged = newName && newName.toLowerCase() !== oldName.toLowerCase();
 
-        const updatedFloors = currentFloors.map((f) => (f.id === id ? { ...f, ...updates, name: newName } : f));
+          const updatedFloors = currentFloors.map((f) => (f.id === id ? { ...f, ...updates, name: newName } : f));
 
-        // Cascade floor name rename to tables, zones, and staff assignedZones
-        const updatedTables = nameChanged
-          ? state.tables.map((t) => {
-            const matchesFloor = (t.floor && t.floor.toLowerCase() === oldName.toLowerCase()) ||
-              (t.zone && t.zone.toLowerCase() === oldName.toLowerCase());
-            if (matchesFloor) {
-              return {
-                ...t,
-                floor: newName,
-                zone: newName,
-              };
-            }
-            return t;
-          })
-          : state.tables;
+          // Cascade floor name rename to tables, zones, reservations, and staff assignedZones
+          const updatedTables = nameChanged
+            ? state.tables.map((t) => {
+              const matchesFloor = (t.floor && t.floor.toLowerCase() === oldName.toLowerCase()) ||
+                (t.zone && t.zone.toLowerCase() === oldName.toLowerCase());
+              if (matchesFloor) {
+                return {
+                  ...t,
+                  floor: newName,
+                  zone: newName,
+                };
+              }
+              return t;
+            })
+            : state.tables;
 
-        const updatedZones = nameChanged
-          ? state.zones.map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z))
-          : state.zones;
+          const updatedZones = nameChanged
+            ? state.zones.map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z))
+            : state.zones;
 
-        const updatedStaff = nameChanged
-          ? (state.staff || []).map((s) => ({
-            ...s,
-            assignedZone: s.assignedZone && s.assignedZone.toLowerCase() === oldName.toLowerCase() ? newName : s.assignedZone,
-            assignedZones: (s.assignedZones || []).map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z)),
-          }))
-          : state.staff;
+          const updatedReservations = nameChanged
+            ? (state.reservations || []).map((r) =>
+                r.floor && r.floor.toLowerCase() === oldName.toLowerCase() ? { ...r, floor: newName } : r
+              )
+            : state.reservations;
 
-        return {
-          floors: updatedFloors,
-          tables: updatedTables,
-          zones: updatedZones,
-          staff: updatedStaff,
-        };
-      }),
+          const updatedStaff = nameChanged
+            ? (state.staff || []).map((s) => ({
+              ...s,
+              assignedZone: s.assignedZone && s.assignedZone.toLowerCase() === oldName.toLowerCase() ? newName : s.assignedZone,
+              assignedZones: (s.assignedZones || []).map((z) => (z.toLowerCase() === oldName.toLowerCase() ? newName : z)),
+            }))
+            : state.staff;
 
-      deleteFloor: (id, cascadeDeleteTables = false) => set((state) => {
-        const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
-        const target = currentFloors.find((f) => f.id === id);
-        if (!target) return state;
+          return {
+            floors: updatedFloors,
+            tables: updatedTables,
+            zones: updatedZones,
+            reservations: updatedReservations,
+            staff: updatedStaff,
+          };
+        });
+        notifySync();
+      },
 
-        const floorName = target.name.toLowerCase();
-        const updatedFloors = currentFloors.filter((f) => f.id !== id);
-        const updatedZones = state.zones.filter((z) => z.toLowerCase() !== floorName);
+      deleteFloor: (id, cascadeDeleteTables = false) => {
+        set((state) => {
+          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const target = currentFloors.find((f) => f.id === id);
+          if (!target) return state;
 
-        const updatedTables = cascadeDeleteTables
-          ? state.tables.filter((t) => {
-            const tFloor = (t.floor || t.zone || '').toLowerCase();
-            return tFloor !== floorName;
-          })
-          : state.tables;
+          const floorName = target.name.toLowerCase();
+          const updatedFloors = currentFloors.filter((f) => f.id !== id);
+          const updatedZones = state.zones.filter((z) => z.toLowerCase() !== floorName);
 
-        return {
-          floors: updatedFloors,
-          zones: updatedZones,
-          tables: updatedTables,
-        };
-      }),
+          const updatedTables = cascadeDeleteTables
+            ? state.tables.filter((t) => {
+              const tFloor = (t.floor || t.zone || '').toLowerCase();
+              return tFloor !== floorName;
+            })
+            : state.tables;
 
-      addZone: (zoneName) => set((state) => ({
-        zones: [...state.zones, zoneName]
-      })),
+          return {
+            floors: updatedFloors,
+            zones: updatedZones,
+            tables: updatedTables,
+          };
+        });
+        notifySync();
+      },
 
-      deleteZone: (zoneName) => set((state) => ({
-        zones: state.zones.filter(z => z !== zoneName)
-      })),
+      addZone: (zoneName) => {
+        set((state) => ({
+          zones: [...state.zones, zoneName]
+        }));
+        notifySync();
+      },
+
+      deleteZone: (zoneName) => {
+        set((state) => ({
+          zones: state.zones.filter(z => z !== zoneName)
+        }));
+        notifySync();
+      },
 
       addStaff: (newStaff) => {
         set((state) => {
@@ -3270,7 +3377,22 @@ export const useRestaurantStore = create<RestaurantState>()(
           ...(remoteState.attendance ? { attendance: remoteState.attendance } : {}),
           ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
           ...(remoteState.customers ? { customers: remoteState.customers } : {}),
-          ...(remoteState.reservations ? { reservations: remoteState.reservations } : {}),
+          ...(Array.isArray(remoteState.reservations) ? {
+            reservations: (() => {
+              const resMap = new Map<string, Reservation>();
+              for (const localR of (state.reservations || [])) {
+                if (localR && localR.id) resMap.set(localR.id, localR);
+              }
+              for (const remR of remoteState.reservations) {
+                if (!remR || !remR.id) continue;
+                const prev = resMap.get(remR.id);
+                if (!prev || (remR.updatedAt || remR.createdAt || 0) >= (prev.updatedAt || prev.createdAt || 0)) {
+                  resMap.set(remR.id, remR);
+                }
+              }
+              return Array.from(resMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            })()
+          } : {}),
           ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
           ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
           ...(remoteState.lastBeverageOrderAlert !== undefined ? { lastBeverageOrderAlert: remoteState.lastBeverageOrderAlert } : {}),

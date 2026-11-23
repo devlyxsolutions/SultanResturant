@@ -19,6 +19,12 @@ import { broadcastImmediately } from '../../services/syncService';
 import { useAuthStore } from '../../store/authStore';
 import { InventoryItem, useOpsStore } from '../../store/opsStore';
 import { Invoice, OrderItem, Table, useRestaurantStore } from '../../store/restaurantStore';
+import {
+  findTableReservation,
+  getFloorActiveReservations,
+  getReservationTableCount,
+  isGroupReservation,
+} from '../../utils/reservationHelpers';
 
 // Note: Pending digital menu order audio & modal popups are handled universally by FloorManagerNotificationHost in root _layout.tsx.
 
@@ -113,6 +119,7 @@ export default function FloorManagerScreen() {
   const tickets = useRestaurantStore((s) => s.tickets || []);
   const staff = useRestaurantStore((s) => s.staff || []);
   const floors = useRestaurantStore((s) => s.floors || []);
+  const reservations = useRestaurantStore((s) => s.reservations || []);
   const onlineOrders = useRestaurantStore((s) => s.onlineOrders || []);
   const invoices = useRestaurantStore((s) => s.invoices || []);
 
@@ -120,6 +127,7 @@ export default function FloorManagerScreen() {
   const transferTable = useRestaurantStore((s) => s.transferTable);
   const serveTableTickets = useRestaurantStore((s) => s.serveTableTickets);
   const settleBill = useRestaurantStore((s) => s.settleBill);
+  const seatReservation = useRestaurantStore((s) => s.seatReservation);
   const markTableBilled = useRestaurantStore((s) => s.markTableBilled);
   const confirmOnlineOrder = useRestaurantStore((s) => s.confirmOnlineOrder);
   const rejectOnlineOrder = useRestaurantStore((s) => s.rejectOnlineOrder);
@@ -174,7 +182,7 @@ export default function FloorManagerScreen() {
   }, [userAssignedFloors, canSwitchFloors]);
 
   // Filters & Search
-  const [statusFilter, setStatusFilter] = useState<'all' | 'occupied' | 'ready' | 'available' | 'billed'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'occupied' | 'ready' | 'available' | 'billed' | 'reserved'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Modals state
@@ -507,10 +515,16 @@ export default function FloorManagerScreen() {
   }, [isMatchingFloorBeverageAlert, lastBeverageOrderAlert?.id]);
 
   // Floor KPIs
+  const floorReservations = useMemo(
+    () => getFloorActiveReservations(reservations, tables, selectedFloor),
+    [reservations, tables, selectedFloor]
+  );
+
   const kpis = useMemo(() => {
     const total = floorTables.length;
     const occupied = floorTables.filter((t) => t.status === 'occupied').length;
     const billed = floorTables.filter((t) => t.status === 'billed').length;
+    const reserved = floorTables.filter((t) => t.status === 'reserved').length;
     const available = floorTables.filter((t) => t.status === 'available').length;
 
     // Check which tables have food ready at pass
@@ -536,7 +550,7 @@ export default function FloorManagerScreen() {
       })
       .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
-    return { total, occupied, billed, available, readyCount, occupancyRate, floorSales };
+    return { total, occupied, billed, reserved, available, readyCount, occupancyRate, floorSales };
   }, [floorTables, tickets, invoices]);
 
   // Filtered tables for display
@@ -545,10 +559,12 @@ export default function FloorManagerScreen() {
       // Search
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
+        const res = findTableReservation(t, reservations);
         const matchName = t.name.toLowerCase().includes(q);
         const matchServer = (t.server || '').toLowerCase().includes(q);
         const matchType = (t.seatingType || '').toLowerCase().includes(q);
-        if (!matchName && !matchServer && !matchType) return false;
+        const matchGuest = Boolean(res?.customerName?.toLowerCase().includes(q));
+        if (!matchName && !matchServer && !matchType && !matchGuest) return false;
       }
 
       // Status
@@ -556,6 +572,7 @@ export default function FloorManagerScreen() {
       if (statusFilter === 'occupied') return t.status === 'occupied';
       if (statusFilter === 'available') return t.status === 'available';
       if (statusFilter === 'billed') return t.status === 'billed';
+      if (statusFilter === 'reserved') return t.status === 'reserved';
       if (statusFilter === 'ready') {
         const tableTickets = tickets.filter((tk) => tk.tableId === t.id && tk.status !== 'served');
         return tableTickets.some(
@@ -564,7 +581,7 @@ export default function FloorManagerScreen() {
       }
       return true;
     });
-  }, [floorTables, searchQuery, statusFilter, tickets]);
+  }, [floorTables, reservations, searchQuery, statusFilter, tickets]);
 
   // Quick Reassign Waiter Action
   const handleReassign = () => {
@@ -986,6 +1003,104 @@ export default function FloorManagerScreen() {
         </View>
       </View>
 
+      {/* 4B. UPCOMING RESERVATIONS & GROUP ARRANGEMENTS ON THIS FLOOR */}
+      {floorReservations.length > 0 && (
+        <View
+          style={{
+            marginHorizontal: isMobile ? 12 : 20,
+            marginBottom: 10,
+            backgroundColor: '#FAF5FF',
+            borderRadius: 12,
+            borderWidth: 1.5,
+            borderColor: '#DDD6FE',
+            padding: 12,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+            <MaterialCommunityIcons name="calendar-star" size={18} color="#6D28D9" />
+            <Text style={{ fontSize: 13, fontWeight: '900', color: '#4C1D95' }}>
+              {selectedFloor.toUpperCase()} BOOKINGS & GROUP ARRANGEMENTS ({floorReservations.length})
+            </Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            {floorReservations.map((res) => {
+              const isGroup = isGroupReservation(res);
+              const isSeated = res.status === 'seated';
+              return (
+                <View
+                  key={res.id}
+                  style={{
+                    width: 280,
+                    backgroundColor: isSeated ? '#F0FDF4' : '#FFFFFF',
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: isSeated ? '#86EFAC' : '#C4B5FD',
+                    padding: 10,
+                    gap: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '900', color: isSeated ? '#15803D' : '#6D28D9' }}>
+                      {isGroup ? (res.isFullFloor ? 'FULL FLOOR' : 'GROUP EVENT') : 'RESERVED'} • {res.guestsCount} GUESTS
+                    </Text>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>{res.timeSlot}</Text>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }} numberOfLines={1}>
+                    {res.customerName} {res.occasion ? `• ${res.occasion}` : ''}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
+                    {getReservationTableCount(res)} Unit(s): {res.tableName}
+                  </Text>
+                  {!!res.arrangementStyle && (
+                    <Text style={{ fontSize: 11, color: '#6D28D9', fontWeight: '700' }} numberOfLines={1}>
+                      Setup: {res.arrangementStyle}
+                      {res.extraChairsNeeded ? ` • +${res.extraChairsNeeded} extra chairs` : ''}
+                    </Text>
+                  )}
+                  {!!res.notes && (
+                    <Text style={{ fontSize: 11, color: '#64748B', fontStyle: 'italic' }} numberOfLines={1}>
+                      “{res.notes}”
+                    </Text>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 4 }}>
+                    {!isSeated ? (
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#15803D',
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => {
+                          seatReservation(res.id);
+                          broadcastImmediately();
+                        }}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>✓ Check-In / Seat Party</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          backgroundColor: '#0F766E',
+                          paddingVertical: 7,
+                          borderRadius: 7,
+                          alignItems: 'center',
+                        }}
+                        onPress={() => router.push({ pathname: '/floor-manager/pos' as any, params: { tableId: res.tableId } })}
+                      >
+                        <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>Open Group in POS</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
       {/* 5. CONTROLS: SEARCH & VIEW-SPECIFIC FILTERS */}
       <View style={[styles.controlsBar, isMobile && { paddingHorizontal: 12, gap: 10 }]}>
         <View style={[styles.searchBox, isMobile && { minWidth: '100%', width: '100%' }]}>
@@ -1015,7 +1130,7 @@ export default function FloorManagerScreen() {
             contentContainerStyle={styles.filterPillsScroll}
             style={isMobile ? { width: '100%' } : undefined}
           >
-            {(['all', 'occupied', 'ready', 'available', 'billed'] as const).map((filter) => {
+            {(['all', 'occupied', 'ready', 'reserved', 'available', 'billed'] as const).map((filter) => {
               const isActive = statusFilter === filter;
               const count =
                 filter === 'all'
@@ -1024,9 +1139,11 @@ export default function FloorManagerScreen() {
                     ? kpis.occupied
                     : filter === 'ready'
                       ? kpis.readyCount
-                      : filter === 'available'
-                        ? kpis.available
-                        : kpis.billed;
+                      : filter === 'reserved'
+                        ? kpis.reserved
+                        : filter === 'available'
+                          ? kpis.available
+                          : kpis.billed;
 
               return (
                 <TouchableOpacity
@@ -1038,6 +1155,7 @@ export default function FloorManagerScreen() {
                     {filter === 'all' && 'All Tables'}
                     {filter === 'occupied' && 'Occupied'}
                     {filter === 'ready' && 'Food Ready'}
+                    {filter === 'reserved' && 'Reserved'}
                     {filter === 'available' && 'Available'}
                     {filter === 'billed' && 'Billed'}
                   </Text>
@@ -1119,8 +1237,16 @@ export default function FloorManagerScreen() {
                 );
 
               // Determine status badge color
+              const tableRes = findTableReservation(table, reservations, ['confirmed', 'seated']);
+              const isTableGroupRes = isGroupReservation(tableRes);
+              const primaryGroupTable = table.mergedInto ? tables.find((x) => x.id === table.mergedInto) : undefined;
+
               let statusBadge = { bg: '#ECFDF5', label: 'AVAILABLE', text: '#065F46', border: '#A7F3D0' };
-              if (table.status === 'occupied') {
+              if (table.status === 'reserved') {
+                statusBadge = isTableGroupRes
+                  ? { bg: '#F3E8FF', label: `GROUP ${tableRes?.guestsCount}G`, text: '#6D28D9', border: '#C4B5FD' }
+                  : { bg: '#F3E8FF', label: 'RESERVED', text: '#7C3AED', border: '#D8B4FE' };
+              } else if (table.status === 'occupied') {
                 statusBadge = hasReadyFood
                   ? { bg: '#FEF3C7', label: 'FOOD READY', text: '#92400E', border: '#FCD34D' }
                   : { bg: '#FEE2E2', label: 'OCCUPIED', text: '#DC2626', border: '#FCA5A5' };
@@ -1195,7 +1321,23 @@ export default function FloorManagerScreen() {
                         </TouchableOpacity>
                       </View>
 
-                      {table.status !== 'available' && (
+                      {table.status === 'reserved' && tableRes && (
+                        <View style={{ backgroundColor: '#FAF5FF', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#DDD6FE', gap: 2 }}>
+                          <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#5B21B6' }} numberOfLines={1}>
+                            {tableRes.customerName} ({tableRes.guestsCount} Guests)
+                          </Text>
+                          <Text style={{ fontSize: 11.5, color: '#6D28D9', fontWeight: '700' }} numberOfLines={1}>
+                            {tableRes.timeSlot} {tableRes.occasion ? `• ${tableRes.occasion}` : ''}
+                          </Text>
+                          {primaryGroupTable && (
+                            <Text style={{ fontSize: 11, color: '#4F46E5', fontWeight: '700' }}>
+                              Joined with {primaryGroupTable.name}
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      {table.status !== 'available' && table.status !== 'reserved' && (
                         <>
                           <View style={styles.detailRow}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -1253,6 +1395,19 @@ export default function FloorManagerScreen() {
                       >
                         <MaterialCommunityIcons name="plus-circle" size={16} color="#FFF" />
                         <Text style={styles.btnPunchText}>Seat & Punch Order</Text>
+                      </TouchableOpacity>
+                    ) : table.status === 'reserved' && tableRes ? (
+                      <TouchableOpacity
+                        style={[styles.actionBtn, { backgroundColor: '#6D28D9' }]}
+                        onPress={() => {
+                          seatReservation(tableRes.id);
+                          broadcastImmediately();
+                        }}
+                      >
+                        <MaterialCommunityIcons name="account-check" size={16} color="#FFF" />
+                        <Text style={styles.btnPunchText}>
+                          Seat {isTableGroupRes ? `Group (${tableRes.guestsCount}G)` : 'Reserved Party'}
+                        </Text>
                       </TouchableOpacity>
                     ) : (
                       <View style={styles.occupiedActionsCol}>

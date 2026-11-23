@@ -36,6 +36,11 @@ import {
   isOrderTakerUser,
   isTableOwnedByUser,
 } from '../../utils/orderTakerScope';
+import {
+  findTableReservation,
+  getReservationTableCount,
+  isGroupReservation,
+} from '../../utils/reservationHelpers';
 
 const BRAND = BRAND_PALETTE.burgundy;
 
@@ -72,6 +77,7 @@ export default function OrderTakerScreen() {
   // Stores
   const tables = useRestaurantStore((state) => state.tables) || [];
   const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const reservations = useRestaurantStore((state) => state.reservations) || [];
   const staff = useRestaurantStore((state) => state.staff) || [];
   const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
   const settleBill = useRestaurantStore((state) => state.settleBill);
@@ -135,8 +141,8 @@ export default function OrderTakerScreen() {
   const [selectedFloor, setSelectedFloor] = useState<string>('All');
   // Active Seating Zone Filter (All, Tables, Couches, Majlis Cabins)
   const [seatingTypeFilter, setSeatingTypeFilter] = useState<'all' | SeatingZoneType>('all');
-  // Active Status Filter Tab (All, Free, Occupied, Food Ready, Billed)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied' | 'ready' | 'billed'>('all');
+  // Active Status Filter Tab (All, Free, Occupied, Food Ready, Billed, Reserved)
+  const [statusFilter, setStatusFilter] = useState<'all' | 'available' | 'occupied' | 'ready' | 'billed' | 'reserved'>('all');
   // Search query
   const [search, setSearch] = useState<string>('');
   // Manual sync feedback state
@@ -373,6 +379,7 @@ export default function OrderTakerScreen() {
     let occupied = 0;
     let ready = 0;
     let billed = 0;
+    let reserved = 0;
 
     scopedByFloorTables.forEach((table) => {
       const tableTickets = scopedTickets.filter((t) => t.tableId === table.id);
@@ -380,11 +387,12 @@ export default function OrderTakerScreen() {
       const isTableBilled = table.status === 'billed' || table.isPaid;
       if (isFoodReady) ready++;
       else if (isTableBilled) billed++;
+      else if (table.status === 'reserved') reserved++;
       else if (table.status === 'occupied') occupied++;
       else if (table.status === 'available') free++;
     });
 
-    return { free, occupied, ready, billed };
+    return { free, occupied, ready, billed, reserved };
   }, [scopedByFloorTables, scopedTickets]);
 
   // 5. Final Visible Tables filtered by Seating Type, Status Tab & Search
@@ -394,8 +402,12 @@ export default function OrderTakerScreen() {
       if (seatingTypeFilter !== 'all' && tType !== seatingTypeFilter) {
         return false;
       }
-      if (search.trim() && !t.name.toLowerCase().includes(search.trim().toLowerCase())) {
-        return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const res = findTableReservation(t, reservations);
+        const matchName = t.name.toLowerCase().includes(q);
+        const matchGuest = Boolean(res?.customerName?.toLowerCase().includes(q));
+        if (!matchName && !matchGuest) return false;
       }
       if (statusFilter !== 'all') {
         const tableTickets = scopedTickets.filter((tk) => tk.tableId === t.id);
@@ -405,12 +417,13 @@ export default function OrderTakerScreen() {
 
         if (statusFilter === 'ready' && !isFoodReady) return false;
         if (statusFilter === 'billed' && !isTableBilled) return false;
+        if (statusFilter === 'reserved' && t.status !== 'reserved') return false;
         if (statusFilter === 'occupied' && (!isOccupied || isFoodReady || isTableBilled)) return false;
         if (statusFilter === 'available' && t.status !== 'available') return false;
       }
       return true;
     });
-  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, scopedTickets]);
+  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, scopedTickets, reservations]);
 
   // 6. Filter ready tickets strictly to THIS Order Taker's orders (or authorized floors for Admin/Manager)
   const readyTickets = scopedTickets.filter((t) => {
@@ -431,12 +444,37 @@ export default function OrderTakerScreen() {
   }, [scopedTickets]);
 
   const handleTablePress = (id: string) => {
-    router.push(`/waiter/order/${id}`);
+    const tapped = tables.find((t) => t.id === id);
+    if (!tapped) {
+      router.push(`/waiter/order/${id}`);
+      return;
+    }
+    const res = findTableReservation(tapped, reservations, ['confirmed', 'seated']);
+    if (tapped.status === 'reserved' && res && res.status === 'confirmed') {
+      const msg = `${tapped.name} is RESERVED for ${res.customerName} (${res.guestsCount} Guests at ${res.timeSlot}${
+        res.occasion ? ` • ${res.occasion}` : ''
+      }).\n\nPlease confirm with the Floor Manager before seating walk-in guests. Open order anyway?`;
+      if (Platform.OS === 'web') {
+        if (!window.confirm(msg)) return;
+      } else {
+        Alert.alert('Reserved Table Notice', msg, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Open Order', onPress: () => router.push(`/waiter/order/${tapped.mergedInto || id}`) },
+        ]);
+        return;
+      }
+    }
+    // Route secondary joined tables to their primary table so the group order stays unified
+    router.push(`/waiter/order/${tapped.mergedInto || id}`);
   };
 
   const renderTable = ({ item }: { item: typeof tables[0] }) => {
     const isOccupied = item.status === 'occupied';
     const isBilled = item.status === 'billed' || item.isPaid;
+    const isReserved = item.status === 'reserved';
+    const tableRes = findTableReservation(item, reservations, ['confirmed', 'seated']);
+    const isGroupRes = isGroupReservation(tableRes);
+    const primaryGroupTable = item.mergedInto ? tables.find((t) => t.id === item.mergedInto) : undefined;
 
     const tableTickets = scopedTickets.filter((t) => t.tableId === item.id);
     const isFoodReady = tableTickets.some(isTicketReadyForPickup);
@@ -537,6 +575,8 @@ export default function OrderTakerScreen() {
                     ? '#E8F2FF'
                     : statusColor === '#E67E22'
                     ? '#FEF5E7'
+                    : statusColor === '#7D3C98'
+                    ? '#F3E8FF'
                     : '#FDEDEC',
                 borderColor: statusColor + '55',
               },
@@ -544,7 +584,13 @@ export default function OrderTakerScreen() {
           >
             <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
             <Text style={[styles.statusIndicatorText, { color: statusColor }]}>
-              {isFoodReady ? 'READY' : isBilled ? 'BILLED' : item.status.toUpperCase()}
+              {isFoodReady
+                ? 'READY'
+                : isBilled
+                ? 'BILLED'
+                : isReserved && isGroupRes
+                ? `GROUP ${tableRes?.guestsCount}G`
+                : item.status.toUpperCase()}
             </Text>
           </View>
         </View>
@@ -576,11 +622,29 @@ export default function OrderTakerScreen() {
 
           {/* Status Pill and Server Assigned (No Prices for Order Taker) */}
           <View style={styles.billServerRow}>
-            {item.status === 'occupied' || item.status === 'billed' ? (
+            {isReserved && tableRes ? (
+              <View style={[styles.freeNoticePill, { backgroundColor: '#F3E8FF', flex: 1 }]}>
+                <Ionicons name="calendar" size={12} color="#6D28D9" />
+                <Text style={[styles.freeNoticeText, { color: '#5B21B6', fontWeight: '800' }]} numberOfLines={1}>
+                  {tableRes.customerName} • {tableRes.guestsCount}G • {tableRes.timeSlot}
+                  {primaryGroupTable
+                    ? ` (Joined ${primaryGroupTable.name})`
+                    : getReservationTableCount(tableRes) > 1
+                    ? ` (${getReservationTableCount(tableRes)} units)`
+                    : ''}
+                </Text>
+              </View>
+            ) : item.status === 'occupied' || item.status === 'billed' ? (
               <View style={[styles.freeNoticePill, { backgroundColor: 'rgba(217, 119, 6, 0.12)' }]}>
                 <Ionicons name="restaurant" size={12} color="#D97706" />
                 <Text style={[styles.freeNoticeText, { color: '#D97706', fontWeight: '800' }]}>
-                  {item.status === 'billed' ? 'Bill Requested' : 'Active Order'}
+                  {primaryGroupTable
+                    ? `Joined with ${primaryGroupTable.name}`
+                    : item.status === 'billed'
+                    ? 'Bill Requested'
+                    : tableRes && isGroupRes
+                    ? `Seated Group (${tableRes.guestsCount}G)`
+                    : 'Active Order'}
                 </Text>
               </View>
             ) : (
@@ -957,6 +1021,50 @@ export default function OrderTakerScreen() {
                 ]}
               >
                 {statusCounts.free}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.filterPill,
+              { borderColor: '#C4B5FD', backgroundColor: '#FAF5FF' },
+              statusFilter === 'reserved' && { backgroundColor: '#6D28D9', borderColor: '#6D28D9' },
+            ]}
+            onPress={() => setStatusFilter('reserved')}
+            activeOpacity={0.75}
+          >
+            <View
+              style={[
+                styles.filterDot,
+                { backgroundColor: statusFilter === 'reserved' ? '#fff' : '#7C3AED' },
+              ]}
+            />
+            <Text
+              style={[
+                styles.filterPillText,
+                { color: '#6D28D9' },
+                statusFilter === 'reserved' && styles.filterPillTextActive,
+              ]}
+            >
+              Reserved
+            </Text>
+            <View
+              style={[
+                styles.pillCountBadge,
+                statusFilter === 'reserved'
+                  ? styles.pillCountBadgeActive
+                  : { backgroundColor: '#EDE9FE' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.pillCountBadgeText,
+                  { color: '#6D28D9' },
+                  statusFilter === 'reserved' && styles.pillCountBadgeTextActive,
+                ]}
+              >
+                {statusCounts.reserved}
               </Text>
             </View>
           </TouchableOpacity>
