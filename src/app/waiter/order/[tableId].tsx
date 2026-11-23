@@ -1,34 +1,34 @@
-import React, { useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   Alert,
-  StatusBar,
-  TextInput,
-  useWindowDimensions,
-  Modal,
   Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import {
-  useRestaurantStore,
-  MenuItem,
-  useAuthStore,
-  useOpsStore,
-  Table,
-  Invoice,
-} from '../../../store';
-import { getTableFloor, getTableSeatingType } from '../../../constants/floors';
+import { printInvoiceReceipt } from '../../../components/Invoice';
 import SeatingTypeIcon from '../../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
+import { getTableFloor, getTableSeatingType } from '../../../constants/floors';
 import { broadcastImmediately } from '../../../services/syncService';
-import { printInvoiceReceipt } from '../../../components/Invoice';
+import {
+  Invoice,
+  MenuItem,
+  Table,
+  useAuthStore,
+  useOpsStore,
+  useRestaurantStore,
+} from '../../../store';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
 
 const NOTE_PRESETS = [
@@ -64,6 +64,73 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   return 'restaurant-outline';
 }
 
+const CATEGORY_COLOR_PALETTE = [
+  { bg: '#ECFDF5', border: '#10B981', text: '#065F46', iconBg: '#D1FAE5', iconColor: '#059669', activeBg: '#047857' },
+  { bg: '#FFFBEB', border: '#F59E0B', text: '#92400E', iconBg: '#FEF3C7', iconColor: '#D97706', activeBg: '#B45309' },
+  { bg: '#EFF6FF', border: '#3B82F6', text: '#1E40AF', iconBg: '#DBEAFE', iconColor: '#2563EB', activeBg: '#1D4ED8' },
+  { bg: '#FDF2F8', border: '#EC4899', text: '#9D174D', iconBg: '#FCE7F3', iconColor: '#DB2777', activeBg: '#BE185D' },
+  { bg: '#F5F3FF', border: '#8B5CF6', text: '#5B21B6', iconBg: '#EDE9FE', iconColor: '#7C3AED', activeBg: '#6D28D9' },
+  { bg: '#FFF7ED', border: '#F97316', text: '#9A3412', iconBg: '#FFEDD5', iconColor: '#EA580C', activeBg: '#C2410C' },
+  { bg: '#F0FDFA', border: '#14B8A6', text: '#115E59', iconBg: '#CCFBF1', iconColor: '#0D9488', activeBg: '#0F766E' },
+  { bg: '#EEF2FF', border: '#6366F1', text: '#3730A3', iconBg: '#E0E7FF', iconColor: '#4F46E5', activeBg: '#4338CA' },
+  { bg: '#FEF2F2', border: '#EF4444', text: '#991B1B', iconBg: '#FEE2E2', iconColor: '#DC2626', activeBg: '#B91C1C' },
+  { bg: '#FAF5FF', border: '#A855F7', text: '#6B21A8', iconBg: '#F3E8FF', iconColor: '#9333EA', activeBg: '#7E22CE' },
+];
+
+function getCategoryTheme(catName: string, index: number) {
+  let hash = index;
+  for (let i = 0; i < catName.length; i++) {
+    hash = (hash * 31 + catName.charCodeAt(i)) % CATEGORY_COLOR_PALETTE.length;
+  }
+  return CATEGORY_COLOR_PALETTE[Math.abs(hash) % CATEGORY_COLOR_PALETTE.length];
+}
+
+function getDefaultItemPrepMins(name: string, category?: string, explicitPrep?: number): number {
+  if (typeof explicitPrep === 'number' && explicitPrep > 0) return explicitPrep;
+  const c = `${name} ${category || ''}`.toLowerCase();
+  if (c.includes('mandi') || c.includes('sajji') || c.includes('dumpukht') || c.includes('platter')) return 25;
+  if (c.includes('karahi') || c.includes('handi') || c.includes('bbq') || c.includes('tikka') || c.includes('kebab') || c.includes('steak')) return 22;
+  if (c.includes('pizza') || c.includes('biryani') || c.includes('pulao') || c.includes('pasta') || c.includes('chinese')) return 18;
+  if (c.includes('burger') || c.includes('sandwich') || c.includes('wrap') || c.includes('roll') || c.includes('soup') || c.includes('appetizer')) return 14;
+  if (c.includes('bakery') || c.includes('dessert') || c.includes('kunafa') || c.includes('salad') || c.includes('brunch')) return 10;
+  if (c.includes('drink') || c.includes('beverage') || c.includes('mocktail') || c.includes('shake') || c.includes('coffee') || c.includes('juice') || c.includes('tea')) return 6;
+  return 15;
+}
+
+function estimateOrderPrepTime(
+  items: { name: string; qty: number; category?: string; prepTimeMin?: number }[],
+  menuLookup?: MenuItem[]
+): { totalMins: number; maxItemName: string; itemBreakdown: { name: string; qty: number; mins: number }[] } {
+  if (!items || items.length === 0) return { totalMins: 0, maxItemName: '', itemBreakdown: [] };
+  let maxMins = 0;
+  let maxItemName = '';
+  let totalPortions = 0;
+  const itemBreakdown: { name: string; qty: number; mins: number }[] = [];
+
+  items.forEach((it) => {
+    const matched = menuLookup?.find((m) => m.name === it.name || it.name.startsWith(m.name));
+    const baseMins = getDefaultItemPrepMins(
+      it.name,
+      it.category || matched?.category,
+      it.prepTimeMin ?? matched?.prepTimeMin
+    );
+    const itemTotal = baseMins + Math.max(0, (it.qty - 1) * 2);
+    itemBreakdown.push({ name: it.name, qty: it.qty, mins: itemTotal });
+    totalPortions += it.qty;
+    if (itemTotal > maxMins) {
+      maxMins = itemTotal;
+      maxItemName = it.name;
+    }
+  });
+
+  const batchBuffer = Math.min(12, Math.floor(Math.max(0, totalPortions - 2) * 1.5));
+  return {
+    totalMins: maxMins + batchBuffer,
+    maxItemName,
+    itemBreakdown,
+  };
+}
+
 export default function TableOrderScreen() {
   const { tableId } = useLocalSearchParams();
   const router = useRouter();
@@ -71,8 +138,9 @@ export default function TableOrderScreen() {
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1120;
 
-  const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
+  const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -136,12 +204,12 @@ export default function TableOrderScreen() {
         const itemEffectiveStatus: 'pending' | 'cooking' | 'ready' | 'served' = it.itemStatus
           ? it.itemStatus
           : ticket.status === 'served' || (it.completed && stationStatus === 'served')
-          ? 'served'
-          : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
-          ? 'ready'
-          : stationStatus === 'cooking' || ticket.status === 'cooking'
-          ? 'cooking'
-          : 'pending';
+            ? 'served'
+            : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
+              ? 'ready'
+              : stationStatus === 'cooking' || ticket.status === 'cooking'
+                ? 'cooking'
+                : 'pending';
 
         alreadyOrderedItems.push({
           id: it.id,
@@ -192,6 +260,34 @@ export default function TableOrderScreen() {
     });
     return counts;
   }, [menuItems]);
+
+  const filteredCategories = useMemo(() => {
+    const q = categorySearchQuery.trim().toLowerCase();
+    if (!q) return categoryList;
+    return categoryList.filter((c) => c.toLowerCase().includes(q));
+  }, [categoryList, categorySearchQuery]);
+
+  const cartPrepEstimate = useMemo(() => {
+    return estimateOrderPrepTime(
+      newCart.map((c) => ({
+        name: c.item.name,
+        qty: c.qty,
+        category: c.item.category,
+        prepTimeMin: c.item.prepTimeMin,
+      })),
+      menuItems
+    );
+  }, [newCart, menuItems]);
+
+  const runningPrepEstimate = useMemo(() => {
+    return estimateOrderPrepTime(
+      alreadyOrderedItems.map((it) => ({
+        name: it.name,
+        qty: it.qty,
+      })),
+      menuItems
+    );
+  }, [alreadyOrderedItems, menuItems]);
 
   const availableTransferTables = useMemo(
     () => tables.filter((t) => t.id !== tableId && t.status === 'available'),
@@ -458,43 +554,67 @@ export default function TableOrderScreen() {
         </View>
       </View>
 
-      {/* Mobile Tab Switcher */}
-      {isMobile && (
-        <View style={styles.mobileTabBar}>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('menu')}
-          >
-            <Ionicons name="grid-outline" size={16} color={mobileTab === 'menu' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              Menu ({filteredItems.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('cart')}
-          >
-            <Ionicons name="cart-outline" size={16} color={mobileTab === 'cart' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              New KOT ({totalNewQty})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Full-Page Mode Switcher (All Devices: Menu vs Cart vs Running KDS Prep Time) */}
+      <View style={styles.mobileTabBar}>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('menu')}
+        >
+          <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+            1. Order Dena / Menu Dishes ({filteredItems.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('cart')}
+        >
+          <Ionicons name="cart" size={18} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+            2. Current Cart & KOT ({totalNewQty} Items{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('running')}
+        >
+          <Ionicons name="flame" size={18} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
+            3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* ========================================================
-          2. MAIN 3-COLUMN WORKSPACE
+          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: CART | TAB 3: RUNNING KDS)
           ======================================================== */}
       <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
         {/* LEFT: Category Rail */}
-        {(!isMobile || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isTablet && { width: 175 }, isMobile && styles.categoryRailMobile]}>
-            {!isMobile && (
-              <View style={styles.categoryRailHeader}>
-                <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
-                <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
+        {mobileTab === 'menu' && (
+          <View style={[styles.categoryRail, isTablet && { width: 230 }, isMobile && styles.categoryRailMobile]}>
+            <View style={styles.categoryRailHeader}>
+              {!isMobile && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
+                  <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
+                </View>
+              )}
+              <View style={styles.categorySearchWrap}>
+                <Ionicons name="search" size={15} color="#64748B" />
+                <TextInput
+                  style={[styles.categorySearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                  placeholder="Search category..."
+                  placeholderTextColor="#94A3B8"
+                  value={categorySearchQuery}
+                  onChangeText={setCategorySearchQuery}
+                />
+                {categorySearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setCategorySearchQuery('')}>
+                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                  </TouchableOpacity>
+                )}
               </View>
-            )}
+            </View>
             <ScrollView
               horizontal={isMobile}
               showsVerticalScrollIndicator={false}
@@ -508,14 +628,19 @@ export default function TableOrderScreen() {
                     style={[
                       styles.categoryItem,
                       isMobile && styles.categoryItemMobile,
-                      isAll && styles.categoryItemActive,
+                      {
+                        backgroundColor: isAll ? '#52141C' : '#FFFDF9',
+                        borderColor: isAll ? '#D4AF37' : '#D4AF37',
+                        borderWidth: 1.5,
+                        borderLeftWidth: 5,
+                      },
                     ]}
                     onPress={() => setActiveCategory('ALL')}
                   >
                     <View style={[styles.categoryIconBox, isAll && styles.categoryIconBoxActive]}>
-                      <Ionicons name="apps" size={16} color={isAll ? '#24050A' : '#52141C'} />
+                      <Ionicons name="apps" size={18} color={isAll ? '#24050A' : '#52141C'} />
                     </View>
-                    <Text style={[styles.categoryName, isAll && styles.categoryNameActive]} numberOfLines={1}>
+                    <Text style={[styles.categoryName, isAll && styles.categoryNameActive]} numberOfLines={2}>
                       All Dishes
                     </Text>
                     <View style={[styles.categoryBadge, isAll && styles.categoryBadgeActive]}>
@@ -527,27 +652,58 @@ export default function TableOrderScreen() {
                 );
               })()}
 
-              {categoryList.map((cat) => {
+              {filteredCategories.map((cat, idx) => {
                 const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
                 const count = categoryCounts[cat] || 0;
+                const theme = getCategoryTheme(cat, idx);
                 return (
                   <TouchableOpacity
                     key={cat}
                     style={[
                       styles.categoryItem,
                       isMobile && styles.categoryItemMobile,
-                      isActive && styles.categoryItemActive,
+                      {
+                        backgroundColor: isActive ? theme.activeBg : theme.bg,
+                        borderColor: theme.border,
+                        borderWidth: 1.5,
+                        borderLeftWidth: 5,
+                      },
                     ]}
                     onPress={() => setActiveCategory(cat)}
                   >
-                    <View style={[styles.categoryIconBox, isActive && styles.categoryIconBoxActive]}>
-                      <Ionicons name={getCategoryIcon(cat)} size={16} color={isActive ? '#24050A' : '#52141C'} />
+                    <View
+                      style={[
+                        styles.categoryIconBox,
+                        { backgroundColor: isActive ? '#FFFFFF' : theme.iconBg },
+                      ]}
+                    >
+                      <Ionicons
+                        name={getCategoryIcon(cat)}
+                        size={18}
+                        color={isActive ? theme.activeBg : theme.iconColor}
+                      />
                     </View>
-                    <Text style={[styles.categoryName, isActive && styles.categoryNameActive]} numberOfLines={1}>
+                    <Text
+                      style={[
+                        styles.categoryName,
+                        { color: isActive ? '#FFFFFF' : theme.text, fontWeight: isActive ? '900' : '800' },
+                      ]}
+                      numberOfLines={2}
+                    >
                       {cat}
                     </Text>
-                    <View style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}>
-                      <Text style={[styles.categoryBadgeText, isActive && styles.categoryBadgeTextActive]}>
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: isActive ? 'rgba(255,255,255,0.24)' : '#FFFFFF' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryBadgeText,
+                          { color: isActive ? '#FFFFFF' : theme.text },
+                        ]}
+                      >
                         {count}
                       </Text>
                     </View>
@@ -559,7 +715,7 @@ export default function TableOrderScreen() {
         )}
 
         {/* CENTER: Dish Grid */}
-        {(!isMobile || mobileTab === 'menu') && (
+        {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
             <View style={styles.catalogFilterBar}>
               <Text style={styles.activeCatTitle}>
@@ -667,9 +823,9 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* RIGHT: Order KOT Ticket Panel */}
-        {(!isMobile || mobileTab === 'cart') && (
-          <View style={[styles.ticketPanel, isTablet && { width: 340 }, isMobile && { width: '100%', flex: 1 }]}>
+        {/* FULL-PAGE CART: Order KOT Ticket Panel */}
+        {mobileTab === 'cart' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
             <View style={styles.ticketItemsHeader}>
               <Text style={styles.ticketItemsHeaderTitle}>
                 NEW KOT ITEMS ({totalNewQty})
@@ -732,6 +888,57 @@ export default function TableOrderScreen() {
 
             {/* Footer Controls */}
             <View style={styles.ticketFooter}>
+              {newCart.length > 0 && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: '#FFFBEB',
+                    borderWidth: 1.5,
+                    borderColor: '#F59E0B',
+                    borderRadius: 10,
+                    paddingHorizontal: 14,
+                    paddingVertical: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                    <View
+                      style={{
+                        width: 34,
+                        height: 34,
+                        borderRadius: 8,
+                        backgroundColor: '#FEF3C7',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Ionicons name="timer-outline" size={20} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#92400E' }}>
+                        ⏱️ EST. KITCHEN PREP TIME (کھانا تیار ہونے کا وقت)
+                      </Text>
+                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#B45309' }} numberOfLines={1}>
+                        Longest Dish: {cartPrepEstimate.maxItemName} • {totalNewQty} Portions
+                      </Text>
+                    </View>
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: '#D97706',
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 8,
+                    }}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '900' }}>
+                      ~{cartPrepEstimate.totalMins} Mins
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {/* Rush Order Toggle */}
               <TouchableOpacity
                 style={[styles.rushToggleBtn, isRushOrder && styles.rushToggleBtnActive]}
@@ -747,11 +954,11 @@ export default function TableOrderScreen() {
                 <View style={styles.secondaryActionsRow}>
                   <TouchableOpacity
                     style={[styles.secActionBtn, styles.secActionKot]}
-                    onPress={() => setRunningItemsModalVisible(true)}
+                    onPress={() => setMobileTab('running')}
                   >
                     <Ionicons name="list" size={15} color="#B45309" />
                     <Text style={styles.secActionKotText}>
-                      Running ({alreadyOrderedItems.length})
+                      Running KDS ({alreadyOrderedItems.length} • ~{runningPrepEstimate.totalMins}m)
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
@@ -771,16 +978,106 @@ export default function TableOrderScreen() {
               >
                 <Ionicons name="paper-plane" size={18} color="#24050A" />
                 <Text style={styles.primaryPayBtnText}>
-                  PUNCH ORDER TO KITCHEN ({totalNewQty} ITEMS)
+                  PUNCH ORDER TO KITCHEN ({totalNewQty} ITEMS • ~{cartPrepEstimate.totalMins} MIN PREP)
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
+
+        {/* TAB 3: FULL-PAGE RUNNING KDS & PREP TIME */}
+        {mobileTab === 'running' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0, padding: 16 }]}>
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: '#FFFBEB',
+                borderWidth: 1.5,
+                borderColor: '#F59E0B',
+                borderRadius: 12,
+                padding: 14,
+                marginBottom: 14,
+              }}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '900', color: '#92400E' }}>
+                  🔥 Running Kitchen KDS Orders on {tableName}
+                </Text>
+                <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#B45309', marginTop: 2 }}>
+                  Total Kitchen Prep Time (پورا کھانا تیار ہونے کا وقت): ~{runningPrepEstimate.totalMins} Minutes
+                </Text>
+              </View>
+              <View
+                style={{
+                  backgroundColor: '#D97706',
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900' }}>
+                  ⏱️ ~{runningPrepEstimate.totalMins} Mins
+                </Text>
+              </View>
+            </View>
+
+            <ScrollView style={{ flex: 1 }}>
+              {alreadyOrderedItems.length === 0 ? (
+                <View style={styles.emptyTicketBox}>
+                  <Ionicons name="flame-outline" size={42} color="#CBD5E1" />
+                  <Text style={styles.emptyTicketTitle}>No Running KDS Dishes on {tableName}</Text>
+                  <Text style={styles.emptyTicketSub}>
+                    Punch an order to KDS to track live preparation time for each dish.
+                  </Text>
+                </View>
+              ) : (
+                alreadyOrderedItems.map((it, idx) => {
+                  const matched = menuItems.find((m) => m.name === it.name || it.name.startsWith(m.name));
+                  const dishMins =
+                    getDefaultItemPrepMins(it.name, matched?.category, matched?.prepTimeMin) +
+                    Math.max(0, (it.qty - 1) * 2);
+                  const elapsedMins = Math.max(0, Math.floor((Date.now() - (it.timePlaced || now)) / 60000));
+                  const remainingMins = Math.max(0, dishMins - elapsedMins);
+                  return (
+                    <View key={`${it.ticketId}-${it.id}-${idx}`} style={styles.runningOrderCard}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.runningOrderTitle}>
+                          {it.qty}× {it.name}
+                        </Text>
+                        <Text style={styles.runningOrderItems}>
+                          Status: {it.status.toUpperCase()} • Est. Prep: ~{dishMins}m (
+                          {it.status === 'ready' || it.status === 'served'
+                            ? '✅ Ready'
+                            : remainingMins > 0
+                              ? `⏳ ~${remainingMins}m remaining`
+                              : '🔥 Finalizing'}
+                          ) {it.notes ? `• ${it.notes}` : ''}
+                        </Text>
+                      </View>
+                      {it.status === 'ready' && (
+                        <TouchableOpacity
+                          style={[styles.modalPrimaryBtn, { backgroundColor: '#16A34A', height: 34 }]}
+                          onPress={() => {
+                            markItemServed(it.ticketId, it.id);
+                            broadcastImmediately();
+                          }}
+                        >
+                          <Text style={styles.modalPrimaryBtnText}>Mark Served</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  );
+                })
+              )}
+            </ScrollView>
+          </View>
+        )}
       </View>
 
-      {/* Mobile Floating Bar */}
-      {isMobile && mobileTab === 'menu' && totalNewQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (All Devices) */}
+      {mobileTab === 'menu' && totalNewQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}
@@ -790,9 +1087,9 @@ export default function TableOrderScreen() {
             <View style={styles.mobileFloatingQtyCircle}>
               <Text style={styles.mobileFloatingQtyText}>{totalNewQty}</Text>
             </View>
-            <Text style={styles.mobileFloatingLabel}>Review & Send to Kitchen</Text>
+            <Text style={styles.mobileFloatingLabel}>Cart Dekhein & Kitchen Bhejein</Text>
           </View>
-          <Text style={styles.mobileFloatingTotal}>{totalNewQty} Portions →</Text>
+          <Text style={styles.mobileFloatingTotal}>{totalNewQty} Portions • Open Cart ➔</Text>
         </TouchableOpacity>
       )}
 
@@ -1047,33 +1344,35 @@ const styles = StyleSheet.create({
   mobileTabBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-    gap: 6,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 12,
   },
   mobileTabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    gap: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
   },
   mobileTabBtnActive: {
-    backgroundColor: '#FDF2F4',
-    borderWidth: 1,
-    borderColor: '#52141C',
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
   },
   mobileTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#334155',
   },
   mobileTabTextActive: {
-    color: '#52141C',
+    color: '#F3D179',
     fontWeight: '900',
   },
   workspace: {
@@ -1082,45 +1381,61 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   categoryRail: {
-    width: 210,
+    width: 265,
     backgroundColor: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#E2E8F0',
+    borderRightWidth: 1.5,
+    borderRightColor: '#CBD5E1',
   },
   categoryRailMobile: {
     width: '100%',
-    height: 54,
+    height: 112,
     borderRightWidth: 0,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#CBD5E1',
   },
   categoryRailHeader: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  categorySearchWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    height: 38,
+    gap: 6,
+  },
+  categorySearchInput: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
+    paddingVertical: 0,
   },
   categoryRailTitle: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '900',
-    color: '#64748B',
+    color: '#475569',
     letterSpacing: 0.8,
   },
   categoryRailCount: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 11.5,
+    fontWeight: '900',
     color: '#52141C',
     backgroundColor: '#FDF2F4',
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
   },
   categoryRailScroll: {
-    padding: 8,
-    gap: 5,
+    padding: 10,
+    gap: 8,
   },
   categoryRailScrollMobile: {
     paddingHorizontal: 10,
@@ -1130,24 +1445,24 @@ const styles = StyleSheet.create({
   categoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
+    borderRadius: 12,
     backgroundColor: '#F8FAFC',
-    gap: 9,
+    gap: 10,
   },
   categoryItemMobile: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    height: 38,
+    paddingVertical: 9,
+    paddingHorizontal: 14,
+    height: 46,
   },
   categoryItemActive: {
     backgroundColor: '#52141C',
   },
   categoryIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     backgroundColor: '#FDF2F4',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1157,9 +1472,10 @@ const styles = StyleSheet.create({
   },
   categoryName: {
     flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
+    fontSize: 14,
+    fontWeight: '800',
     color: '#1E293B',
+    lineHeight: 18,
   },
   categoryNameActive: {
     color: '#FFFFFF',
@@ -1167,17 +1483,17 @@ const styles = StyleSheet.create({
   },
   categoryBadge: {
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   categoryBadgeActive: {
     backgroundColor: 'rgba(212, 175, 55, 0.25)',
   },
   categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#475569',
+    fontSize: 12,
+    fontWeight: '900',
+    color: '#334155',
   },
   categoryBadgeTextActive: {
     color: '#F3D179',
