@@ -6818,6 +6818,8 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       let isPushingToFirestore = false;
       let isApplyingCloudUpdate = false;
       let firestorePushTimer = null;
+      let lastFirestorePushTime = 0;
+      const FIRESTORE_PUSH_INTERVAL = 90 * 1000; // 90 seconds (1.5 minutes) batch interval
 
       function decodeFirestoreValue(val) {
         if (!val || typeof val !== 'object') return val;
@@ -6860,12 +6862,30 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         return { stringValue: String(val) };
       }
 
-      function pushToFirestoreCloud() {
+      function pushToFirestoreCloud(forceImmediate = false) {
         if (isApplyingCloudUpdate) return;
-        if (firestorePushTimer) clearTimeout(firestorePushTimer);
+        const now = Date.now();
+        // If not forced and recently pushed within the interval, debounce to the next interval window
+        if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
+          if (!firestorePushTimer) {
+            const delay = FIRESTORE_PUSH_INTERVAL - (now - lastFirestorePushTime);
+            firestorePushTimer = setTimeout(() => {
+              firestorePushTimer = null;
+              pushToFirestoreCloud(true);
+            }, delay);
+          }
+          return;
+        }
+
+        if (firestorePushTimer) {
+          clearTimeout(firestorePushTimer);
+          firestorePushTimer = null;
+        }
+
         firestorePushTimer = setTimeout(async () => {
           if (isPushingToFirestore) return;
           isPushingToFirestore = true;
+          lastFirestorePushTime = Date.now();
           try {
             const now = Date.now();
             lastProcessedCloudTimestamp = now;
@@ -6926,7 +6946,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           } finally {
             isPushingToFirestore = false;
           }
-        }, 400);
+        }, 1500);
       }
 
       // Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429

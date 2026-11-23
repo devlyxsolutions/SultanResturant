@@ -619,9 +619,9 @@ function initFirebaseSync() {
   // 2. Browser SSE Stream for zero-latency instant updates (<100ms)
   initWebSSE();
 
-  // 3. Real-time Cloud Firestore listener (onSnapshot)
+  // 3. Real-time Cloud Firestore listener (onSnapshot) - Only attach if NOT connected to LAN server
   const firestoreDb = getFirestoreDb();
-  if (firestoreDb) {
+  if (firestoreDb && !isLanConnected) {
     if (firestoreUnsubscribe) {
       try {
         firestoreUnsubscribe();
@@ -659,9 +659,9 @@ function initFirebaseSync() {
     }
   }
 
-  // 4. Real-time Firebase Realtime DB SDK WebSocket listener
+  // 4. Real-time Firebase Realtime DB SDK WebSocket listener - Only attach if NOT connected to LAN server
   const db = getFirebaseDb();
-  if (db) {
+  if (db && !isLanConnected) {
     const stateRef = ref(db, 'sultan_restaurant/live_state');
 
     onValue(stateRef, (snapshot) => {
@@ -1045,8 +1045,10 @@ function broadcastLocalState(force = false) {
     } catch {}
   }
 
-  // 3. Parallel Cloud Firebase Broadcast (Firestore & Realtime Database)
-  if (isFirebaseConfigured) {
+  // 3. Cloud Firebase (Fallback only when LAN is disconnected / offline)
+  // When connected to local LAN Server, clients do NOT send writes or attach listeners to Firebase,
+  // because the local server authoritatively manages all clients and syncs to Firebase periodically.
+  if (isFirebaseConfigured && !isLanConnected) {
     // Abort any older in-flight HTTP PUT so an older packet can never finish after a newer packet
     if (activePutAbortController) {
       try {
