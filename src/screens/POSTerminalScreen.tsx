@@ -68,8 +68,8 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   if (c.includes('appetizer') || c.includes('starter') || c.includes('snack') || c.includes('fries')) return 'fast-food-outline';
   if (c.includes('main') || c.includes('karahi') || c.includes('handi') || c.includes('curry')) return 'flame-outline';
   if (c.includes('bbq') || c.includes('grill') || c.includes('kebab') || c.includes('tikka')) return 'bonfire-outline';
-  if (c.includes('dessert') || c.includes('sweet') || c.includes('kunafa') || c.includes('ice')) return 'ice-cream-outline';
-  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('tea')) return 'wine-outline';
+  if (c.includes('dessert') || c.includes('sweet') || c.includes('kunafa') || c.includes('ice') || c.includes('bakery')) return 'ice-cream-outline';
+  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('tea') || c.includes('mocktail') || c.includes('coffee')) return 'wine-outline';
   if (c.includes('deal') || c.includes('combo') || c.includes('special') || c.includes('platter')) return 'pricetags-outline';
   if (c.includes('rice') || c.includes('biryani') || c.includes('pulao') || c.includes('mandi')) return 'restaurant-outline';
   if (c.includes('bread') || c.includes('naan') || c.includes('roti')) return 'nutrition-outline';
@@ -78,6 +78,77 @@ function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   if (c.includes('fish') || c.includes('seafood') || c.includes('prawn')) return 'fish-outline';
   if (c.includes('salad') || c.includes('soup')) return 'leaf-outline';
   return 'restaurant-outline';
+}
+
+const CATEGORY_COLOR_PALETTE = [
+  { primary: '#059669', softBg: '#ECFDF5', iconBg: '#D1FAE5', border: '#A7F3D0' }, // Emerald
+  { primary: '#D97706', softBg: '#FFFBEB', iconBg: '#FEF3C7', border: '#FDE68A' }, // Amber
+  { primary: '#0284C7', softBg: '#F0F9FF', iconBg: '#E0F2FE', border: '#BAE6FD' }, // Sky Blue
+  { primary: '#E11D48', softBg: '#FFF1F2', iconBg: '#FFE4E6', border: '#FECDD3' }, // Rose
+  { primary: '#7C3AED', softBg: '#F5F3FF', iconBg: '#EDE9FE', border: '#DDD6FE' }, // Purple
+  { primary: '#EA580C', softBg: '#FFF7ED', iconBg: '#FFEDD5', border: '#FED7AA' }, // Orange
+  { primary: '#0D9488', softBg: '#F0FDFA', iconBg: '#CCFBF1', border: '#99F6E4' }, // Teal
+  { primary: '#4F46E5', softBg: '#EEF2FF', iconBg: '#E0E7FF', border: '#C7D2FE' }, // Indigo
+  { primary: '#DC2626', softBg: '#FEF2F2', iconBg: '#FEE2E2', border: '#FECACA' }, // Red
+  { primary: '#9333EA', softBg: '#FAF5FF', iconBg: '#F3E8FF', border: '#E9D5FF' }, // Violet
+];
+
+function getCategoryTheme(catName: string, index: number) {
+  const c = (catName || '').toLowerCase();
+  if (c.includes('karahi') || c.includes('bbq') || c.includes('main')) return CATEGORY_COLOR_PALETTE[8];
+  if (c.includes('salad') || c.includes('green') || c.includes('soup')) return CATEGORY_COLOR_PALETTE[0];
+  if (c.includes('mocktail') || c.includes('beverage') || c.includes('drink') || c.includes('juice')) return CATEGORY_COLOR_PALETTE[2];
+  if (c.includes('bakery') || c.includes('dessert') || c.includes('sweet')) return CATEGORY_COLOR_PALETTE[3];
+  if (c.includes('pizza') || c.includes('burger') || c.includes('appetizer')) return CATEGORY_COLOR_PALETTE[5];
+  if (c.includes('continental') || c.includes('steak')) return CATEGORY_COLOR_PALETTE[4];
+  if (c.includes('chinese') || c.includes('rice')) return CATEGORY_COLOR_PALETTE[1];
+  return CATEGORY_COLOR_PALETTE[index % CATEGORY_COLOR_PALETTE.length];
+}
+
+function getDefaultItemPrepMins(name?: string, category?: string, explicitPrep?: number): number {
+  if (typeof explicitPrep === 'number' && explicitPrep > 0) return explicitPrep;
+  const text = `${name || ''} ${category || ''}`.toLowerCase();
+  if (text.includes('drink') || text.includes('beverage') || text.includes('mocktail') || text.includes('shake') || text.includes('coffee') || text.includes('salad')) return 8;
+  if (text.includes('soup') || text.includes('appetizer') || text.includes('fries') || text.includes('bakery') || text.includes('dessert')) return 12;
+  if (text.includes('chinese') || text.includes('burger') || text.includes('sandwich') || text.includes('pasta')) return 16;
+  if (text.includes('pizza') || text.includes('continental') || text.includes('steak') || text.includes('fish')) return 20;
+  if (text.includes('karahi') || text.includes('handi') || text.includes('bbq') || text.includes('mandi') || text.includes('platter')) return 25;
+  return 15;
+}
+
+function estimateOrderPrepTime(
+  items: { id?: string; name?: string; qty?: number; prepTimeMin?: number; category?: string }[],
+  menuCatalog: MenuItem[],
+  timePlaced?: number,
+  nowMs: number = Date.now()
+) {
+  if (!items || items.length === 0) {
+    return { totalPrepMins: 0, elapsedMins: 0, remainingMins: 0, progressPct: 0, itemBreakdowns: [] as { name: string; qty: number; prepMins: number }[] };
+  }
+  let maxPrep = 0;
+  let totalPortions = 0;
+  const itemBreakdowns = items.map((it) => {
+    const baseId = (it.id || '').split('-')[0];
+    const catalogMatch = menuCatalog.find((m) => m.id === it.id || m.id === baseId || m.name === it.name);
+    const prepMins = getDefaultItemPrepMins(
+      it.name,
+      it.category || catalogMatch?.category,
+      it.prepTimeMin ?? catalogMatch?.prepTimeMin
+    );
+    const qty = Number(it.qty) || 1;
+    totalPortions += qty;
+    if (prepMins > maxPrep) maxPrep = prepMins;
+    return { name: it.name || 'Dish', qty, prepMins };
+  });
+
+  // Parallel kitchen stations: longest dish + 2 mins buffer per extra portion beyond first (max +12 mins buffer)
+  const extraBuffer = Math.min(12, Math.max(0, totalPortions - 1) * 2);
+  const totalPrepMins = maxPrep + extraBuffer;
+  const elapsedMins = timePlaced ? Math.max(0, Math.floor((nowMs - timePlaced) / 60000)) : 0;
+  const remainingMins = Math.max(0, totalPrepMins - elapsedMins);
+  const progressPct = totalPrepMins > 0 ? Math.min(100, Math.round((elapsedMins / totalPrepMins) * 100)) : 0;
+
+  return { totalPrepMins, elapsedMins, remainingMins, progressPct, itemBreakdowns };
 }
 
 interface POSTerminalScreenProps {
@@ -104,10 +175,17 @@ export default function POSTerminalScreen({
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1120;
 
-  const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
+  const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
+  const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [pendingOrderSearchQuery, setPendingOrderSearchQuery] = useState('');
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTick(Date.now()), 15000);
+    return () => clearInterval(timer);
+  }, []);
 
   const user = useAuthStore((state) => state.user);
   const { can, roleName, permissions } = useRolePermissions();
@@ -392,8 +470,12 @@ export default function POSTerminalScreen({
     if (systemSettings.posShowDealsTab === false) {
       list = list.filter((c) => !c.toLowerCase().includes('deal'));
     }
+    if (categorySearchQuery.trim()) {
+      const q = categorySearchQuery.toLowerCase().trim();
+      list = list.filter((c) => c.toLowerCase().includes(q));
+    }
     return list;
-  }, [menuItems, systemSettings.posShowDealsTab]);
+  }, [menuItems, systemSettings.posShowDealsTab, categorySearchQuery]);
 
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = { ALL: menuItems.length };
@@ -925,6 +1007,10 @@ export default function POSTerminalScreen({
     const hasMain = kotItems.some((k) => (k.item.station || 'main') === 'main');
     const hasJuice = kotItems.some((k) => (k.item.station || 'main') === 'juice');
     const stationSummary = hasMain && hasJuice ? 'Kitchen + Juice KDS' : hasJuice ? 'Juice Bar KDS' : 'Kitchen KDS';
+    const sentPrepEst = estimateOrderPrepTime(
+      kotItems.map((k) => ({ id: k.item.id, name: k.item.name, qty: k.qty, prepTimeMin: k.item.prepTimeMin, category: k.item.category })),
+      menuItems
+    );
 
     placeOrder(tId, serverLabel, kotItems, isAddOn);
     broadcastImmediately();
@@ -971,8 +1057,8 @@ export default function POSTerminalScreen({
 
     showKdsToast(
       isAddOn
-        ? `Add-on sent to ${stationSummary} • Slip printed`
-        : `Order sent to ${stationSummary} (${targetTableName})`
+        ? `Add-on sent to ${stationSummary} • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
+        : `Order sent to ${stationSummary} (${targetTableName}) • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
     );
   };
 
@@ -1299,6 +1385,10 @@ export default function POSTerminalScreen({
   }
 
   const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
+  const cartPrepEstimate = useMemo(
+    () => estimateOrderPrepTime(cart, menuItems, undefined, nowTick),
+    [cart, menuItems, nowTick]
+  );
 
   return (
     <View style={styles.screen}>
@@ -1427,7 +1517,7 @@ export default function POSTerminalScreen({
       </View>
 
       {/* ========================================================
-          FULL-PAGE MODE SWITCHER (ON ALL DEVICES: MENU vs CART)
+          FULL-PAGE MODE SWITCHER (ON ALL DEVICES: MENU vs CART vs RUNNING KDS)
           ======================================================== */}
       <View style={styles.mobileTabBar}>
         <TouchableOpacity
@@ -1438,10 +1528,10 @@ export default function POSTerminalScreen({
           <Ionicons
             name="restaurant"
             size={18}
-            color={mobileTab === 'menu' ? '#FFFFFF' : '#475569'}
+            color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
           />
           <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order Dena / Menu Dishes ({filteredItems.length})
+            1. Order Dena / Menu ({filteredItems.length})
           </Text>
         </TouchableOpacity>
 
@@ -1453,10 +1543,10 @@ export default function POSTerminalScreen({
           <Ionicons
             name="cart"
             size={19}
-            color={mobileTab === 'cart' ? '#FFFFFF' : '#475569'}
+            color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
           />
           <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-            2. Current Cart & Bill Dekhna ({totalCartQty} {totalCartQty === 1 ? 'Item' : 'Items'}
+            2. Current Cart & Bill ({totalCartQty}
             {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
           </Text>
           {totalCartQty > 0 && (
@@ -1476,6 +1566,51 @@ export default function POSTerminalScreen({
                 }}
               >
                 {totalCartQty}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.mobileTabBtn,
+            mobileTab === 'running' && { backgroundColor: '#B45309', borderColor: '#F59E0B' },
+          ]}
+          onPress={() => setMobileTab('running')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="flame"
+            size={19}
+            color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
+          />
+          <Text
+            style={[
+              styles.mobileTabText,
+              mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
+            ]}
+          >
+            3. Running KDS & Prep Time ({tickets.length})
+          </Text>
+          {tickets.length > 0 && (
+            <View
+              style={{
+                backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#F59E0B',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#B45309',
+                  fontSize: 12,
+                  fontWeight: '900',
+                }}
+              >
+                {tickets.length} Live
               </Text>
             </View>
           )}
@@ -1501,11 +1636,44 @@ export default function POSTerminalScreen({
             TAB 1 (MENU): LEFT CATEGORY RAIL + FULL-WIDTH DISHES GRID
             -------------------------------------------------------- */}
         {mobileTab === 'menu' && (
-          <View style={[styles.categoryRail, isTablet && { width: 200 }, isMobile && styles.categoryRailMobile]}>
+          <View style={[styles.categoryRail, isTablet && { width: 230 }, isMobile && styles.categoryRailMobile]}>
             {!isMobile && (
-              <View style={styles.categoryRailHeader}>
-                <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
-                <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
+              <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
+                  <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
+                </View>
+                {/* Category Search Box */}
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    backgroundColor: '#F8FAFC',
+                    borderRadius: 9,
+                    borderWidth: 1.5,
+                    borderColor: '#CBD5E1',
+                    paddingHorizontal: 10,
+                    height: 38,
+                    gap: 6,
+                  }}
+                >
+                  <Ionicons name="search" size={15} color="#52141C" />
+                  <TextInput
+                    style={[
+                      { flex: 1, fontSize: 13, fontWeight: '700', color: '#0F172A', paddingVertical: 0 },
+                      Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
+                    ]}
+                    placeholder="Search category..."
+                    placeholderTextColor="#94A3B8"
+                    value={categorySearchQuery}
+                    onChangeText={setCategorySearchQuery}
+                  />
+                  {categorySearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setCategorySearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
             )}
             <ScrollView
@@ -1521,23 +1689,42 @@ export default function POSTerminalScreen({
                   <TouchableOpacity
                     style={[
                       styles.categoryItem,
+                      {
+                        backgroundColor: isAll ? '#52141C' : '#FDF2F4',
+                        borderColor: isAll ? '#D4AF37' : '#FBCFE8',
+                        borderLeftColor: '#52141C',
+                      },
                       isMobile && styles.categoryItemMobile,
-                      isAll && styles.categoryItemActive,
                     ]}
                     onPress={() => setActiveCategory('ALL')}
                     activeOpacity={0.8}
                   >
-                    <View style={[styles.categoryIconBox, isAll && styles.categoryIconBoxActive]}>
-                      <Ionicons name="apps" size={16} color={isAll ? '#24050A' : '#52141C'} />
+                    <View
+                      style={[
+                        styles.categoryIconBox,
+                        { backgroundColor: isAll ? '#D4AF37' : '#FCE7F3' },
+                      ]}
+                    >
+                      <Ionicons name="apps" size={18} color={isAll ? '#24050A' : '#52141C'} />
                     </View>
                     <Text
                       style={[styles.categoryName, isAll && styles.categoryNameActive]}
-                      numberOfLines={1}
+                      numberOfLines={2}
                     >
                       All Dishes
                     </Text>
-                    <View style={[styles.categoryBadge, isAll && styles.categoryBadgeActive]}>
-                      <Text style={[styles.categoryBadgeText, isAll && styles.categoryBadgeTextActive]}>
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: isAll ? 'rgba(212, 175, 55, 0.28)' : '#FCE7F3' },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryBadgeText,
+                          { color: isAll ? '#F3D179' : '#52141C' },
+                        ]}
+                      >
                         {menuItems.length}
                       </Text>
                     </View>
@@ -1545,36 +1732,60 @@ export default function POSTerminalScreen({
                 );
               })()}
 
-              {/* Category List */}
-              {categoryList.map((cat) => {
+              {/* Colorful Larger Category Rows */}
+              {categoryList.map((cat, idx) => {
                 const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
                 const count = categoryCounts[cat] || 0;
+                const theme = getCategoryTheme(cat, idx);
                 return (
                   <TouchableOpacity
                     key={cat}
                     style={[
                       styles.categoryItem,
+                      {
+                        backgroundColor: isActive ? theme.primary : theme.softBg,
+                        borderColor: isActive ? theme.primary : theme.border,
+                        borderLeftColor: theme.primary,
+                      },
                       isMobile && styles.categoryItemMobile,
-                      isActive && styles.categoryItemActive,
                     ]}
                     onPress={() => setActiveCategory(cat)}
-                    activeOpacity={0.8}
+                    activeOpacity={0.82}
                   >
-                    <View style={[styles.categoryIconBox, isActive && styles.categoryIconBoxActive]}>
+                    <View
+                      style={[
+                        styles.categoryIconBox,
+                        { backgroundColor: isActive ? '#FFFFFF' : theme.iconBg },
+                      ]}
+                    >
                       <Ionicons
                         name={getCategoryIcon(cat)}
-                        size={16}
-                        color={isActive ? '#24050A' : '#52141C'}
+                        size={18}
+                        color={theme.primary}
                       />
                     </View>
                     <Text
-                      style={[styles.categoryName, isActive && styles.categoryNameActive]}
-                      numberOfLines={1}
+                      style={[
+                        styles.categoryName,
+                        { color: isActive ? '#FFFFFF' : '#0F172A' },
+                        isActive && styles.categoryNameActive,
+                      ]}
+                      numberOfLines={2}
                     >
                       {cat}
                     </Text>
-                    <View style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}>
-                      <Text style={[styles.categoryBadgeText, isActive && styles.categoryBadgeTextActive]}>
+                    <View
+                      style={[
+                        styles.categoryBadge,
+                        { backgroundColor: isActive ? 'rgba(255,255,255,0.24)' : theme.iconBg },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.categoryBadgeText,
+                          { color: isActive ? '#FFFFFF' : theme.primary },
+                        ]}
+                      >
                         {count}
                       </Text>
                     </View>
@@ -1977,6 +2188,45 @@ export default function POSTerminalScreen({
 
               {/* RIGHT SIDE OF FULL-PAGE CART: Large Financial Summary & Big Action Buttons */}
               <View style={[styles.ticketFooter, !isMobile && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
+              {/* Estimated Kitchen Preparation Time Banner */}
+              {cart.length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: '#FFFBEB',
+                    borderWidth: 1.5,
+                    borderColor: '#F59E0B',
+                    borderRadius: 12,
+                    padding: 12,
+                    gap: 4,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Ionicons name="time" size={18} color="#B45309" />
+                      <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E' }}>
+                        EST. KITCHEN PREP TIME (تیاری کا وقت)
+                      </Text>
+                    </View>
+                    <View
+                      style={{
+                        backgroundColor: '#B45309',
+                        paddingHorizontal: 10,
+                        paddingVertical: 3,
+                        borderRadius: 8,
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '900' }}>
+                        ~{cartPrepEstimate.totalPrepMins} Mins
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: '#B45309', fontWeight: '600' }} numberOfLines={2}>
+                    {cartPrepEstimate.itemBreakdowns
+                      .map((b) => `${b.qty}x ${b.name} (${b.prepMins}m)`)
+                      .join(' • ')}
+                  </Text>
+                </View>
+              )}
               {!hidePrices && (
                 <View style={styles.summaryBox}>
                   <View style={styles.summaryLine}>
@@ -2097,6 +2347,254 @@ export default function POSTerminalScreen({
               )}
             </View>
             </View>
+          </View>
+        )}
+
+        {/* --------------------------------------------------------
+            TAB 3 (RUNNING KDS & PENDING BILLS): FULL-PAGE VIEW WITH PREP TIME & LIVE COUNTDOWN
+            -------------------------------------------------------- */}
+        {mobileTab === 'running' && (
+          <View style={{ flex: 1, backgroundColor: '#F8FAFC', padding: 16 }}>
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                marginBottom: 14,
+                gap: 10,
+              }}
+            >
+              <View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>
+                  Running Kitchen Orders & Pending Bills ({tickets.length})
+                </Text>
+                <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
+                  Har order ke khane ko tayyar hone main kitna time lage ga aur kitna time baqi hai yahan live dekhein
+                </Text>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                <View style={[styles.modalSearchBox, { minWidth: 240, backgroundColor: '#FFFFFF' }]}>
+                  <Ionicons name="search" size={16} color="#94A3B8" />
+                  <TextInput
+                    style={[styles.modalSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                    placeholder="Search table, ticket or dish..."
+                    value={pendingOrderSearchQuery}
+                    onChangeText={setPendingOrderSearchQuery}
+                  />
+                </View>
+                {tickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
+                  <TouchableOpacity
+                    style={[styles.filterChip, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', paddingVertical: 9 }]}
+                    onPress={handleClearAllOrphanTickets}
+                  >
+                    <Text style={[styles.filterChipText, { color: '#DC2626' }]}>Clear All Running</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+
+            <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+              {tickets
+                .filter((t) => {
+                  const q = pendingOrderSearchQuery.toLowerCase().trim();
+                  if (!q) return true;
+                  return (
+                    t.id.toLowerCase().includes(q) ||
+                    (t.tableName && t.tableName.toLowerCase().includes(q)) ||
+                    t.items.some((i) => i.name.toLowerCase().includes(q))
+                  );
+                })
+                .map((t) => {
+                  const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
+                  const prepEst = estimateOrderPrepTime(t.items, menuItems, t.timePlaced, nowTick);
+                  const isReady = t.status === 'ready';
+                  const isOverdue = !isReady && prepEst.remainingMins === 0 && prepEst.elapsedMins >= prepEst.totalPrepMins;
+
+                  return (
+                    <View
+                      key={t.id}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 14,
+                        borderWidth: 1.5,
+                        borderColor: isReady ? '#22C55E' : isOverdue ? '#EF4444' : '#E2E8F0',
+                        padding: 16,
+                        gap: 12,
+                      }}
+                    >
+                      {/* Top Row: Table / Order Name + Status + Total Prep & Remaining Countdown */}
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                          <Text style={{ fontSize: 17, fontWeight: '900', color: '#0F172A' }}>
+                            {t.tableName || t.tableId?.toUpperCase() || 'TAKEAWAY'}
+                          </Text>
+                          <View
+                            style={{
+                              backgroundColor: isReady ? '#DCFCE7' : '#FEF3C7',
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 12,
+                                fontWeight: '900',
+                                color: isReady ? '#15803D' : '#B45309',
+                              }}
+                            >
+                              {(t.status || 'pending').toUpperCase()}
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
+                            Ticket #{t.id.slice(-5)}
+                          </Text>
+                          {!hidePrices && (
+                            <Text style={{ fontSize: 16, fontWeight: '900', color: '#52141C' }}>
+                              • Rs. {tSub.toLocaleString()}
+                            </Text>
+                          )}
+                        </View>
+
+                        {/* Action Buttons */}
+                        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          <TouchableOpacity
+                            style={[styles.runningActionBtn, { paddingHorizontal: 12, height: 38, flexDirection: 'row', gap: 6 }]}
+                            onPress={() => handlePrintPendingSlipForTicket(t)}
+                          >
+                            <Ionicons name="print-outline" size={16} color="#334155" />
+                            <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#334155' }}>Print Slip</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.runningActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', paddingHorizontal: 14, height: 38 }]}
+                            onPress={() => handleCreateBillFromTicket(t, false)}
+                          >
+                            <Text style={{ fontSize: 13, fontWeight: '900', color: '#1D4ED8' }}>Load in Cart</Text>
+                          </TouchableOpacity>
+                          {!hidePrices && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C', paddingHorizontal: 16, height: 38 }]}
+                              onPress={() => handleCreateBillFromTicket(t, true)}
+                            >
+                              <Text style={{ fontSize: 13, fontWeight: '900', color: '#F3D179' }}>Settle & Pay Bill</Text>
+                            </TouchableOpacity>
+                          )}
+                          {(role === 'admin' || can('posCanDismissTicket')) && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', height: 38, width: 38 }]}
+                              onPress={() => handleCancelRunningOrder(t.id)}
+                            >
+                              <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+
+                      {/* Kitchen Preparation Time & Live Progress Box */}
+                      <View
+                        style={{
+                          backgroundColor: isReady ? '#F0FDF4' : isOverdue ? '#FEF2F2' : '#FFFBEB',
+                          borderRadius: 10,
+                          padding: 12,
+                          borderWidth: 1,
+                          borderColor: isReady ? '#BBF7D0' : isOverdue ? '#FECACA' : '#FDE68A',
+                          gap: 8,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons
+                              name={isReady ? 'checkmark-circle' : 'stopwatch'}
+                              size={20}
+                              color={isReady ? '#15803D' : isOverdue ? '#DC2626' : '#B45309'}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 14,
+                                fontWeight: '900',
+                                color: isReady ? '#15803D' : isOverdue ? '#DC2626' : '#92400E',
+                              }}
+                            >
+                              Total Kitchen Prep Time: ~{prepEst.totalPrepMins} Mins (پورا کھانا تیار ہونے کا وقت)
+                            </Text>
+                          </View>
+
+                          <View
+                            style={{
+                              backgroundColor: isReady ? '#16A34A' : isOverdue ? '#DC2626' : '#D97706',
+                              paddingHorizontal: 12,
+                              paddingVertical: 5,
+                              borderRadius: 8,
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
+                              {isReady
+                                ? '✅ KHANA TAYYAR HAI (READY TO SERVE)'
+                                : prepEst.remainingMins > 0
+                                  ? `⏳ ~${prepEst.remainingMins} Mins Remaining (${prepEst.elapsedMins}m elapsed)`
+                                  : `⚠️ ${prepEst.elapsedMins}m Elapsed • Ready Soon`}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Live Visual Progress Bar */}
+                        <View
+                          style={{
+                            height: 8,
+                            backgroundColor: 'rgba(0,0,0,0.08)',
+                            borderRadius: 4,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <View
+                            style={{
+                              width: `${isReady ? 100 : prepEst.progressPct}%`,
+                              height: '100%',
+                              backgroundColor: isReady ? '#16A34A' : isOverdue ? '#DC2626' : '#F59E0B',
+                            }}
+                          />
+                        </View>
+
+                        {/* Per-Dish Prep Time Breakdown */}
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {prepEst.itemBreakdowns.map((b, bIdx) => (
+                            <View
+                              key={bIdx}
+                              style={{
+                                backgroundColor: '#FFFFFF',
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 6,
+                                borderWidth: 1,
+                                borderColor: '#E2E8F0',
+                              }}
+                            >
+                              <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#1E293B' }}>
+                                {b.qty}× {b.name}{' '}
+                                <Text style={{ color: '#B45309', fontWeight: '900' }}>({b.prepMins} min)</Text>
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+
+              {tickets.length === 0 && (
+                <View style={{ alignItems: 'center', paddingVertical: 60 }}>
+                  <Ionicons name="checkmark-done-circle-outline" size={54} color="#CBD5E1" />
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: '#475569', marginTop: 10 }}>
+                    No Running Kitchen Orders Right Now
+                  </Text>
+                  <Text style={{ fontSize: 13.5, color: '#94A3B8', marginTop: 4 }}>
+                    Jab aap POS se "Send KOT (F8)" karein ge to order aur us ka preparation time yahan live show hoga.
+                  </Text>
+                </View>
+              )}
+            </ScrollView>
           </View>
         )}
       </View>
@@ -2699,20 +3197,52 @@ export default function POSTerminalScreen({
                   })
                   .map((t) => {
                     const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
+                    const prepEst = estimateOrderPrepTime(t.items, menuItems, t.timePlaced, nowTick);
+                    const isReady = t.status === 'ready';
                     return (
                       <View key={t.id} style={styles.runningOrderCard}>
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ flex: 1, gap: 4 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                             <Text style={styles.runningOrderTitle}>
                               {t.tableName || t.tableId?.toUpperCase() || 'TAKEAWAY'}
                             </Text>
                             <View style={styles.runningStatusPill}>
                               <Text style={styles.runningStatusText}>{(t.status || 'pending').toUpperCase()}</Text>
                             </View>
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 4,
+                                backgroundColor: isReady ? '#DCFCE7' : '#FFFBEB',
+                                borderWidth: 1,
+                                borderColor: isReady ? '#22C55E' : '#F59E0B',
+                                paddingHorizontal: 8,
+                                paddingVertical: 2,
+                                borderRadius: 6,
+                              }}
+                            >
+                              <Ionicons
+                                name="time-outline"
+                                size={13}
+                                color={isReady ? '#15803D' : '#B45309'}
+                              />
+                              <Text
+                                style={{
+                                  fontSize: 11.5,
+                                  fontWeight: '900',
+                                  color: isReady ? '#15803D' : '#B45309',
+                                }}
+                              >
+                                {isReady
+                                  ? 'Ready to Serve!'
+                                  : `Est. Prep: ~${prepEst.totalPrepMins}m (${prepEst.remainingMins > 0 ? `${prepEst.remainingMins}m left` : 'Due now'})`}
+                              </Text>
+                            </View>
                             <Text style={{ fontSize: 12, color: '#64748B' }}>#{t.id.slice(-5)}</Text>
                           </View>
                           <Text style={styles.runningOrderItems} numberOfLines={2}>
-                            {t.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
+                            {prepEst.itemBreakdowns.map((b) => `${b.qty}x ${b.name} (${b.prepMins}m)`).join(', ')}
                           </Text>
                           {!hidePrices && (
                             <Text style={styles.runningOrderAmount}>Rs. {tSub.toLocaleString()}</Text>
@@ -3119,14 +3649,14 @@ const styles = StyleSheet.create({
 
   /* LEFT CATEGORY RAIL */
   categoryRail: {
-    width: 210,
+    width: 265,
     backgroundColor: '#FFFFFF',
     borderRightWidth: 1,
     borderRightColor: '#E2E8F0',
   },
   categoryRailMobile: {
     width: '100%',
-    height: 54,
+    height: 62,
     borderRightWidth: 0,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
@@ -3141,23 +3671,23 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F1F5F9',
   },
   categoryRailTitle: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '900',
-    color: '#64748B',
+    color: '#334155',
     letterSpacing: 0.8,
   },
   categoryRailCount: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
     color: '#52141C',
     backgroundColor: '#FDF2F4',
-    paddingHorizontal: 7,
+    paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
   },
   categoryRailScroll: {
-    padding: 8,
-    gap: 5,
+    padding: 10,
+    gap: 8,
   },
   categoryRailScrollMobile: {
     paddingHorizontal: 10,
@@ -3167,24 +3697,27 @@ const styles = StyleSheet.create({
   categoryItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 13,
+    borderRadius: 12,
     backgroundColor: '#F8FAFC',
-    gap: 9,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderLeftWidth: 5,
+    gap: 10,
   },
   categoryItemMobile: {
-    paddingVertical: 7,
-    paddingHorizontal: 12,
-    height: 38,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    height: 44,
   },
   categoryItemActive: {
     backgroundColor: '#52141C',
   },
   categoryIconBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 7,
+    width: 36,
+    height: 36,
+    borderRadius: 9,
     backgroundColor: '#FDF2F4',
     alignItems: 'center',
     justifyContent: 'center',
@@ -3194,9 +3727,10 @@ const styles = StyleSheet.create({
   },
   categoryName: {
     flex: 1,
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 18,
   },
   categoryNameActive: {
     color: '#FFFFFF',
@@ -3204,16 +3738,16 @@ const styles = StyleSheet.create({
   },
   categoryBadge: {
     backgroundColor: '#E2E8F0',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   categoryBadgeActive: {
     backgroundColor: 'rgba(212, 175, 55, 0.25)',
   },
   categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '800',
+    fontSize: 12,
+    fontWeight: '900',
     color: '#475569',
   },
   categoryBadgeTextActive: {
