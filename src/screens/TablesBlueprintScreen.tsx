@@ -1595,101 +1595,111 @@ export default function TablesBlueprintScreen({
 
   return (
     <View style={styles.container}>
-      {/* Compact Single-Row Command Bar (Title + Inline Tabs + Clean Actions) */}
-      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 12, paddingVertical: 10 }]}>
-        <View style={styles.headerLeftGroup}>
-          <TouchableOpacity
-            style={styles.backBtn}
-            onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
-          >
-            <Ionicons name="arrow-back" size={18} color="#F3D179" />
-          </TouchableOpacity>
-          <View style={{ flexShrink: 1 }}>
-            <Text style={[styles.title, isMobile && { fontSize: 16 }]} numberOfLines={1}>
-              Table Blueprint
-            </Text>
+      <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 10 }]} showsVerticalScrollIndicator={false}>
+        {/* Clean Floating Light Executive Command Bar (Eliminates Heavy Double Dark Bar) */}
+        <View style={[styles.topCommandCard, isMobile && { flexDirection: 'column', alignItems: 'stretch', padding: 10 }]}>
+          <View style={styles.headerLeftGroup}>
+            <TouchableOpacity
+              style={styles.backBtn}
+              onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
+            >
+              <Ionicons name="arrow-back" size={17} color={BRAND} />
+            </TouchableOpacity>
+            <View style={styles.titleIconBadge}>
+              <Ionicons name="grid" size={16} color="#F3D179" />
+            </View>
+            <View style={{ flexShrink: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={[styles.title, isMobile && { fontSize: 16 }]} numberOfLines={1}>
+                  Table Blueprint
+                </Text>
+                {!isSmallMobile && (
+                  <View style={styles.liveSummaryBadge}>
+                    <View style={styles.liveSummaryDot} />
+                    <Text style={styles.liveSummaryText}>
+                      {counts.available} FREE • {totalSeats} SEATS
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            {/* Clean Inline Segmented Tab Control */}
+            {!isMobile && (
+              <View style={styles.headerTabsWrap}>
+                {TABS.map((tab) => {
+                  const active = activeTab === tab.key;
+                  return (
+                    <TouchableOpacity
+                      key={tab.key}
+                      style={[styles.headerTabPill, active && styles.headerTabPillActive]}
+                      onPress={() => setActiveTab(tab.key)}
+                    >
+                      <Ionicons
+                        name={active ? tab.icon : (`${tab.icon}-outline` as IconName)}
+                        size={14}
+                        color={active ? '#F3D179' : '#64748B'}
+                      />
+                      <Text style={[styles.headerTabText, active && styles.headerTabTextActive]} numberOfLines={1}>
+                        {tab.label}
+                      </Text>
+                      {!!tab.badge && (
+                        <View style={[styles.segmentBadge, active && { backgroundColor: GOLD }]}>
+                          <Text style={[styles.segmentBadgeText, active && { color: '#24050A' }]}>{tab.badge}</Text>
+                        </View>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
           </View>
 
-          {/* Inline Segmented Tabs on Desktop — eliminates an entire extra vertical row */}
-          {!isMobile && (
-            <View style={styles.headerTabsWrap}>
-              {TABS.map((tab) => {
-                const active = activeTab === tab.key;
-                return (
-                  <TouchableOpacity
-                    key={tab.key}
-                    style={[styles.headerTabPill, active && styles.headerTabPillActive]}
-                    onPress={() => setActiveTab(tab.key)}
-                  >
-                    <Ionicons
-                      name={active ? tab.icon : (`${tab.icon}-outline` as IconName)}
-                      size={14}
-                      color={active ? '#24050A' : 'rgba(255,255,255,0.78)'}
-                    />
-                    <Text style={[styles.headerTabText, active && styles.headerTabTextActive]} numberOfLines={1}>
-                      {tab.label}
-                    </Text>
-                    {!!tab.badge && (
-                      <View style={[styles.segmentBadge, active && { backgroundColor: '#24050A' }]}>
-                        <Text style={styles.segmentBadgeText}>{tab.badge}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.headerActions}
+            style={isMobile ? { marginTop: 8 } : { flexGrow: 0 }}
+          >
+            <TouchableOpacity
+              style={[styles.cmdBtn, styles.cmdBtnGroup]}
+              onPress={() =>
+                openReservationModal({
+                  mode: 'group_event',
+                  prefillFloor: floorFilter !== 'all' ? floorFilter : undefined,
+                  defaultGuests: 25,
+                })
+              }
+            >
+              <Ionicons name="sparkles" size={14} color="#fff" />
+              <Text style={[styles.cmdBtnText, { color: '#fff' }]}>Group / Event</Text>
+            </TouchableOpacity>
+
+            {canAddTables && (
+              <TouchableOpacity
+                style={[styles.cmdBtn, styles.cmdBtnPrimary]}
+                onPress={() => openAddTableModal()}
+              >
+                <Ionicons name="add" size={15} color="#F3D179" />
+                <Text style={[styles.cmdBtnText, { color: '#F3D179' }]}>Add Unit</Text>
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity style={[styles.cmdBtn, styles.cmdBtnOutline]} onPress={openBatchQrModal}>
+              <Ionicons name="qr-code-outline" size={14} color={BRAND} />
+              <Text style={[styles.cmdBtnText, { color: BRAND }]}>QRs</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.cmdBtn, styles.cmdBtnOutline]}
+              onPress={() => router.push(floorsRoute as any)}
+            >
+              <Ionicons name="layers-outline" size={14} color={BRAND} />
+              <Text style={[styles.cmdBtnText, { color: BRAND }]}>Floors</Text>
+            </TouchableOpacity>
+          </ScrollView>
         </View>
 
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.headerActions}
-          style={isMobile ? { marginTop: 8 } : { flexGrow: 0 }}
-        >
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: '#7C3AED', borderColor: '#C4B5FD' }]}
-            onPress={() =>
-              openReservationModal({
-                mode: 'group_event',
-                prefillFloor: floorFilter !== 'all' ? floorFilter : undefined,
-                defaultGuests: 25,
-              })
-            }
-          >
-            <Ionicons name="sparkles" size={14} color="#fff" />
-            <Text style={[styles.headerBtnText, { color: '#fff' }]}>+ Group / Event</Text>
-          </TouchableOpacity>
-
-          {canAddTables && (
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: GOLD, borderColor: '#FDE68A' }]}
-              onPress={() => openAddTableModal()}
-            >
-              <Ionicons name="add" size={15} color="#24050A" />
-              <Text style={[styles.headerBtnText, { color: '#24050A' }]}>Add Unit</Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: 'rgba(212, 175, 55, 0.16)' }]}
-            onPress={openBatchQrModal}
-          >
-            <Ionicons name="qr-code-outline" size={14} color="#F3D179" />
-            <Text style={styles.headerBtnText}>QRs</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.headerBtn, styles.headerBtnGhost]}
-            onPress={() => router.push(floorsRoute as any)}
-          >
-            <Ionicons name="layers-outline" size={14} color="#fff" />
-            <Text style={[styles.headerBtnText, { color: '#fff' }]}>Floors</Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </View>
-
-      <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 10 }]} showsVerticalScrollIndicator={false}>
         {/* Mobile-only Tabs */}
         {isMobile && (
           <View style={[styles.segment, { alignSelf: 'stretch', width: '100%', marginBottom: 10 }]}>
@@ -3472,36 +3482,59 @@ export default function TablesBlueprintScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F4F2EE' },
-  header: {
+  topCommandCard: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 10,
-    paddingHorizontal: 18,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #380A11 0%, #200408 100%)',
-      },
-      default: {
-        backgroundColor: '#24050A',
-      },
-    }),
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.35)',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+    shadowColor: '#24050A',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 },
+  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 9, flex: 1, minWidth: 260, flexWrap: 'wrap' },
+  titleIconBadge: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: '#3B0B12',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.45)',
+  },
+  liveSummaryBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 99,
+  },
+  liveSummaryDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+  liveSummaryText: { fontSize: 10.5, fontWeight: '900', color: '#047857', letterSpacing: 0.3 },
   headerTabsWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(255,255,255,0.08)',
+    gap: 3,
+    backgroundColor: '#F4F2EE',
     borderRadius: 10,
     padding: 3,
-    marginLeft: 8,
+    marginLeft: 6,
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.22)',
+    borderColor: '#E5E1DA',
   },
   headerTabPill: {
     flexDirection: 'row',
@@ -3512,39 +3545,50 @@ const styles = StyleSheet.create({
     borderRadius: 7,
   },
   headerTabPillActive: {
-    ...Platform.select({
-      web: { backgroundImage: 'linear-gradient(90deg, #F3D179 0%, #D4AF37 100%)' },
-      default: { backgroundColor: '#D4AF37' },
-    }),
+    backgroundColor: '#4A121A',
+    shadowColor: '#4A121A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.18,
+    shadowRadius: 3,
+    elevation: 2,
   },
-  headerTabText: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.82)' },
-  headerTabTextActive: { color: '#24050A', fontWeight: '900' },
+  headerTabText: { fontSize: 12.5, fontWeight: '700', color: '#475569' },
+  headerTabTextActive: { color: '#F3D179', fontWeight: '900' },
   backBtn: {
-    width: 34,
-    height: 34,
+    width: 32,
+    height: 32,
     borderRadius: 9,
-    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    backgroundColor: '#FAF7F2',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.32)',
+    borderColor: '#E5E1DA',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 18, fontWeight: '900', color: '#F3D179', letterSpacing: -0.2 },
-  subtitle: { fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 1 },
+  title: { fontSize: 17.5, fontWeight: '900', color: '#24050A', letterSpacing: -0.2 },
+  subtitle: { fontSize: 12, color: '#64748B', marginTop: 1 },
   headerActions: { flexDirection: 'row', gap: 7, alignItems: 'center' },
-  headerBtn: {
+  cmdBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    backgroundColor: 'rgba(212, 175, 55, 0.16)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
+    paddingHorizontal: 12,
+    paddingVertical: 7.5,
     borderRadius: 9,
+    borderWidth: 1,
   },
-  headerBtnGhost: { backgroundColor: 'rgba(255, 255, 255, 0.09)', borderColor: 'rgba(255, 255, 255, 0.2)' },
-  headerBtnText: { color: '#F3D179', fontWeight: '800', fontSize: 12.5 },
+  cmdBtnGroup: {
+    backgroundColor: '#6D28D9',
+    borderColor: '#5B21B6',
+  },
+  cmdBtnPrimary: {
+    backgroundColor: '#4A121A',
+    borderColor: '#3B0B12',
+  },
+  cmdBtnOutline: {
+    backgroundColor: '#FAF8F4',
+    borderColor: '#DDD6CA',
+  },
+  cmdBtnText: { fontWeight: '800', fontSize: 12.5 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 70 },
 
   // Full-Width Slim Executive KPI Strip
