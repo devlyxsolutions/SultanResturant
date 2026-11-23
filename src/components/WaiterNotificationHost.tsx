@@ -16,6 +16,7 @@ import { useAuthStore } from '../store';
 import { getTableFloor } from '../constants/floors';
 import { broadcastImmediately } from '../services/syncService';
 import { playNotificationSound } from '../../modules/call-detector/src';
+import { doesOrderBelongToUser, isOrderTakerUser } from '../utils/orderTakerScope';
 
 // Reusable Web Audio synth context
 let sharedAudioCtx: AudioContext | null = null;
@@ -108,6 +109,7 @@ export default function WaiterNotificationHost() {
 
   // Stores
   const lastFoodReadyAlert = useRestaurantStore((state) => state.lastFoodReadyAlert);
+  const foodReadyAlerts = useRestaurantStore((state) => state.foodReadyAlerts) || [];
   const clearFoodReadyAlert = useRestaurantStore((state) => state.clearFoodReadyAlert);
   const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
   const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
@@ -143,6 +145,11 @@ export default function WaiterNotificationHost() {
       (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
   );
 
+  const isOrderTaker = useMemo(() => isOrderTakerUser(user, currentStaff), [user, currentStaff]);
+  const userRoleLower = (user?.role || '').toLowerCase();
+  const isKitchenOrNonServiceRole =
+    userRoleLower === 'kitchen' || userRoleLower === 'juicebar' || userRoleLower === 'playland';
+
   const assignedZonesList: string[] = useMemo(() => {
     return currentStaff?.assignedZones && currentStaff.assignedZones.length > 0
       ? currentStaff.assignedZones
@@ -158,31 +165,40 @@ export default function WaiterNotificationHost() {
   const isAllFloors =
     assignedZonesList.includes('All Floors') || assignedZonesList.length === 0;
 
-  const isTableAuthorized = useCallback(
-    (tableId: string, tableName?: string, serverName?: string): boolean => {
-      // 1. If current staff or logged in user took this order, ALWAYS notify!
-      const currentUserName = (user?.name || currentStaff?.name || '').trim().toLowerCase();
-      if (serverName && currentUserName && (serverName.trim().toLowerCase() === currentUserName || currentUserName.includes(serverName.trim().toLowerCase()) || serverName.trim().toLowerCase().includes(currentUserName))) {
-        return true;
+  // Strict authorization check:
+  // - For Order Takers: ONLY notify for KDS updates on orders THEY personally placed (never other Order Takers' orders!).
+  // - For Admin / Manager / Floor Manager / Cashier: floor-scoped notifications.
+  const isFoodAlertAuthorized = useCallback(
+    (alert: FoodReadyAlert): boolean => {
+      if (!user || isKitchenOrNonServiceRole) return false;
+
+      if (isOrderTaker) {
+        if (doesOrderBelongToUser({ server: alert.server, serverId: alert.serverId }, user, staff)) {
+          return true;
+        }
+        const matchedTicket = tickets.find((t) => t.id === alert.ticketId);
+        if (matchedTicket && doesOrderBelongToUser({ server: matchedTicket.server, serverId: matchedTicket.serverId }, user, staff)) {
+          return true;
+        }
+        return false;
       }
-      // 2. Admins, Cashiers, Managers, Floor Managers or users assigned to All Floors get all alerts
-      const userRole = (user?.role || '').toLowerCase();
+
       if (
         isAllFloors ||
-        userRole === 'admin' ||
-        userRole.includes('manager') ||
-        userRole === 'cashier' ||
-        userRole.includes('floor')
+        userRoleLower === 'admin' ||
+        userRoleLower.includes('manager') ||
+        userRoleLower === 'cashier' ||
+        userRoleLower.includes('floor')
       ) {
         return true;
       }
-      // 3. Fallback table zone/floor authorization
+
       const target = tables.find(
         (t) =>
-          t.id === tableId ||
-          (tableName && t.name.trim().toLowerCase() === tableName.trim().toLowerCase())
+          t.id === alert.tableId ||
+          (alert.tableName && t.name.trim().toLowerCase() === alert.tableName.trim().toLowerCase())
       );
-      if (!target) return true;
+      if (!target) return false;
       const floor = getTableFloor(target);
       return assignedZonesList.some(
         (af) =>
@@ -190,7 +206,56 @@ export default function WaiterNotificationHost() {
           af.toLowerCase() === (target.zone || '').toLowerCase()
       );
     },
-    [isAllFloors, tables, assignedZonesList, user, currentStaff]
+    [user, isKitchenOrNonServiceRole, isOrderTaker, staff, tickets, isAllFloors, userRoleLower, tables, assignedZonesList]
+  );
+
+  // Pick the latest KDS alert authorized for THIS user (prevents another Order Taker's alert from hiding ours!)
+  const latestAuthorizedFoodAlert = useMemo(() => {
+    const candidates: FoodReadyAlert[] = [];
+    if (lastFoodReadyAlert) candidates.push(lastFoodReadyAlert);
+    for (const a of foodReadyAlerts) {
+      if (a && !candidates.some((c) => c.id === a.id)) {
+        candidates.push(a);
+      }
+    }
+    candidates.sort((a, b) => (b.time || 0) - (a.time || 0));
+    const nowMs = Date.now();
+    return (
+      candidates.find((a) => {
+        if (!a || !a.id) return false;
+        if (a.time && Math.abs(nowMs - a.time) > 15 * 60 * 1000) return false;
+        return isFoodAlertAuthorized(a);
+      }) || null
+    );
+  }, [lastFoodReadyAlert, foodReadyAlerts, isFoodAlertAuthorized]);
+
+  const isTableAuthorizedForBill = useCallback(
+    (tableId: string, tableName?: string): boolean => {
+      // Order Takers ONLY receive KDS status notifications for their own placed orders — NEVER Bill Paid alerts!
+      if (!user || isOrderTaker || isKitchenOrNonServiceRole) return false;
+      if (
+        isAllFloors ||
+        userRoleLower === 'admin' ||
+        userRoleLower.includes('manager') ||
+        userRoleLower === 'cashier' ||
+        userRoleLower.includes('floor')
+      ) {
+        return true;
+      }
+      const target = tables.find(
+        (t) =>
+          t.id === tableId ||
+          (tableName && t.name.trim().toLowerCase() === tableName.trim().toLowerCase())
+      );
+      if (!target) return false;
+      const floor = getTableFloor(target);
+      return assignedZonesList.some(
+        (af) =>
+          af.toLowerCase() === floor.toLowerCase() ||
+          af.toLowerCase() === (target.zone || '').toLowerCase()
+      );
+    },
+    [user, isOrderTaker, isKitchenOrNonServiceRole, isAllFloors, userRoleLower, tables, assignedZonesList]
   );
 
   // 1. One-touch Audio & Web Notification Unlocker
@@ -221,18 +286,13 @@ export default function WaiterNotificationHost() {
     });
   }, [slideAnim]);
 
-  // 2. Watch for Food Ready Alerts
+  // 2. Watch for KDS Status / Food Ready Alerts strictly scoped to this user
   useEffect(() => {
-    if (!lastFoodReadyAlert) return;
-    if (lastFoodReadyAlert.id === lastProcessedFoodAlertId.current) return;
+    const alert = latestAuthorizedFoodAlert;
+    if (!alert) return;
+    if (alert.id === lastProcessedFoodAlertId.current) return;
 
-    // Check if alert is fresh (< 15 mins with skew buffer)
-    if (Math.abs(Date.now() - lastFoodReadyAlert.time) > 15 * 60 * 1000) return;
-
-    // Check floor authorization
-    if (!isTableAuthorized(lastFoodReadyAlert.tableId, lastFoodReadyAlert.tableName, lastFoodReadyAlert.server)) return;
-
-    lastProcessedFoodAlertId.current = lastFoodReadyAlert.id;
+    lastProcessedFoodAlertId.current = alert.id;
 
     // Play pleasant doorbell service chime
     playFoodReadyChime();
@@ -245,46 +305,46 @@ export default function WaiterNotificationHost() {
       Notification.permission === 'granted'
     ) {
       try {
-        const isCook = lastFoodReadyAlert.type === 'cooking_started';
-        const isReadyItem = lastFoodReadyAlert.type === 'item_ready';
+        const isCook = alert.type === 'cooking_started';
+        const isReadyItem = alert.type === 'item_ready';
         const notifTitle = isCook
-          ? `${lastFoodReadyAlert.stationLabel}: Cooking Started!`
+          ? `KDS ${alert.stationLabel}: Cooking Started`
           : isReadyItem
-          ? `Fast Serve: ${lastFoodReadyAlert.tableName}`
-          : `Food Ready: ${lastFoodReadyAlert.tableName}`;
+          ? `KDS Item Ready: ${alert.tableName}`
+          : `KDS Order Ready: ${alert.tableName}`;
 
         new Notification(notifTitle, {
-          body: `${lastFoodReadyAlert.tableName} • ${lastFoodReadyAlert.itemsSummary}`,
+          body: `${alert.tableName} • ${alert.itemsSummary}`,
           icon: '/favicon.ico',
         });
       } catch {}
     }
 
     // Show interactive top toast
-    const isJuice = lastFoodReadyAlert.station === 'juice';
-    const isCooking = lastFoodReadyAlert.type === 'cooking_started';
-    const isItemReady = lastFoodReadyAlert.type === 'item_ready';
+    const isJuice = alert.station === 'juice';
+    const isCooking = alert.type === 'cooking_started';
+    const isItemReady = alert.type === 'item_ready';
 
-    let title = isJuice ? 'Juice Bar: Drinks Ready!' : 'Kitchen: Food Ready!';
-    let badge = isJuice ? 'DRINKS READY' : 'FOOD READY';
+    let title = isJuice ? 'Juice Bar KDS: Drinks Ready!' : 'Kitchen KDS: Order Ready!';
+    let badge = isJuice ? 'KDS DRINKS READY' : 'KDS ORDER READY';
     if (isCooking) {
-      title = `${lastFoodReadyAlert.stationLabel}: Cooking Started!`;
-      badge = 'COOKING STARTED';
+      title = `${alert.stationLabel} KDS: Cooking Started`;
+      badge = 'KDS COOKING';
     } else if (isItemReady) {
-      title = `Fast Serve: ${lastFoodReadyAlert.tableName}`;
-      badge = 'ITEM READY - SERVE NOW';
+      title = `KDS Dish Ready: ${alert.tableName}`;
+      badge = 'KDS ITEM READY';
     }
 
     const toastTimer = setTimeout(() => {
       setActiveToast({
-        id: lastFoodReadyAlert.id,
+        id: alert.id,
         type: isCooking ? 'cooking' : isItemReady ? 'item_ready' : 'food',
-        tableId: lastFoodReadyAlert.tableId,
-        tableName: lastFoodReadyAlert.tableName,
+        tableId: alert.tableId,
+        tableName: alert.tableName,
         title,
-        subtitle: `${lastFoodReadyAlert.tableName} • ${lastFoodReadyAlert.itemsSummary}`,
+        subtitle: `${alert.tableName} • ${alert.itemsSummary}`,
         badge,
-        station: lastFoodReadyAlert.station,
+        station: alert.station,
       });
 
       Animated.spring(slideAnim, {
@@ -300,15 +360,15 @@ export default function WaiterNotificationHost() {
     }, 12000);
 
     return () => clearTimeout(toastTimer);
-  }, [lastFoodReadyAlert, isTableAuthorized, slideAnim, hideToast]);
+  }, [latestAuthorizedFoodAlert, slideAnim, hideToast]);
 
-  // 3. Watch for Bill Paid Alerts
+  // 3. Watch for Bill Paid Alerts (Admin / Manager / Cashier / Floor Manager ONLY — NEVER Order Takers)
   useEffect(() => {
     if (!lastBillPaidAlert) return;
     const alertId = lastBillPaidAlert.id || `bill_${lastBillPaidAlert.tableId}_${lastBillPaidAlert.time}`;
     if (alertId === lastProcessedBillAlertId.current) return;
     if (lastBillPaidAlert.time && Math.abs(Date.now() - lastBillPaidAlert.time) > 15 * 60 * 1000) return;
-    if (!isTableAuthorized(lastBillPaidAlert.tableId, lastBillPaidAlert.tableName)) return;
+    if (!isTableAuthorizedForBill(lastBillPaidAlert.tableId, lastBillPaidAlert.tableName)) return;
 
     lastProcessedBillAlertId.current = alertId;
 
@@ -339,7 +399,7 @@ export default function WaiterNotificationHost() {
     }, 14000);
 
     return () => clearTimeout(toastTimer);
-  }, [lastBillPaidAlert, isTableAuthorized, slideAnim, hideToast]);
+  }, [lastBillPaidAlert, isTableAuthorizedForBill, slideAnim, hideToast]);
 
   const handleServeNow = () => {
     if (!activeToast) return;
@@ -375,7 +435,6 @@ export default function WaiterNotificationHost() {
       clearBillPaidAlert();
     } else {
       clearFoodReadyAlert(activeToast.id);
-      clearFoodReadyAlert(activeToast.tableId);
     }
     broadcastImmediately();
     hideToast();

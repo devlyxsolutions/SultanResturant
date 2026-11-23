@@ -852,6 +852,10 @@ function connectWebSocket(forceReconnect = false) {
           if (data.lastFoodReadyAlert) {
             useRestaurantStore.setState((s) => ({
               lastFoodReadyAlert: data.lastFoodReadyAlert,
+              foodReadyAlerts: [
+                data.lastFoodReadyAlert,
+                ...(s.foodReadyAlerts || []).filter((a) => a && a.id !== data.lastFoodReadyAlert.id),
+              ].slice(0, 25),
               tickets: s.tickets.map((t) => (t.id === data.ticketId && data.ticket ? { ...t, ...data.ticket } : t)),
             }));
           }
@@ -859,11 +863,16 @@ function connectWebSocket(forceReconnect = false) {
           useRestaurantStore.setState((s) => ({
             tickets: s.tickets.map((t) => (t.id === data.ticketId && data.ticket ? { ...t, ...data.ticket } : t)),
             lastFoodReadyAlert: s.lastFoodReadyAlert?.ticketId === data.ticketId ? null : s.lastFoodReadyAlert,
+            foodReadyAlerts: (s.foodReadyAlerts || []).filter((a) => a.ticketId !== data.ticketId),
           }));
         } else if (data.type === 'COOKING_STARTED_ALERT') {
           if (data.lastFoodReadyAlert) {
             useRestaurantStore.setState((s) => ({
               lastFoodReadyAlert: data.lastFoodReadyAlert,
+              foodReadyAlerts: [
+                data.lastFoodReadyAlert,
+                ...(s.foodReadyAlerts || []).filter((a) => a && a.id !== data.lastFoodReadyAlert.id),
+              ].slice(0, 25),
               tickets: s.tickets.map((t) => (t.id === data.ticketId && data.ticket ? { ...t, ...data.ticket } : t)),
             }));
           }
@@ -974,6 +983,7 @@ function broadcastLocalState(force = false) {
       pendingFloorOrderAlert: state.pendingFloorOrderAlert,
       lastBillPaidAlert: state.lastBillPaidAlert,
       lastFoodReadyAlert: state.lastFoodReadyAlert,
+      foodReadyAlerts: state.foodReadyAlerts || [],
       roles: roleState.roles,
       shifts: shiftState.shifts,
       activeShiftId: shiftState.activeShiftId,

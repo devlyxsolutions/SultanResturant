@@ -14,9 +14,11 @@ import {
   ScrollView,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
+import { useAuthStore } from '../store/authStore';
 import { useCallStore, CallRecord } from '../store/callStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { isOrderTakerUser } from '../utils/orderTakerScope';
 import {
   getCustomerByPhone,
   createCustomer,
@@ -39,9 +41,12 @@ const BRAND = {
 
 export default function IncomingCallHost() {
   const router = useRouter();
+  const pathname = usePathname();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
+  const user = useAuthStore((state) => state.user);
+  const isOrderTaker = isOrderTakerUser(user) || Boolean(pathname && pathname.startsWith('/waiter'));
   const enableCallDetector = useSettingsStore((state) => state.settings.enableCallDetector);
   const activeIncomingCall = useCallStore((state) => state.activeIncomingCall);
   const dismissActiveCall = useCallStore((state) => state.dismissActiveCall);
@@ -67,7 +72,7 @@ export default function IncomingCallHost() {
   }, [customer]);
 
   useEffect(() => {
-    if (enableCallDetector === false) return;
+    if (isOrderTaker || enableCallDetector === false) return;
     if (activeIncomingCall) {
       setQuickName('');
       setQuickAddress('');
@@ -114,7 +119,7 @@ export default function IncomingCallHost() {
     }
   }, [activeIncomingCall, enableCallDetector]);
 
-  if (enableCallDetector === false || !activeIncomingCall) {
+  if (isOrderTaker || enableCallDetector === false || !activeIncomingCall) {
     return null;
   }
 

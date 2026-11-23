@@ -22,6 +22,7 @@ import { useKitchenStore } from '../store/kitchenStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions } from '../store/roleStore';
 import { buildAlerts, type AlertSeverity, type StockAlert } from '../utils/kitchenForecast';
+import { isOrderTakerUser } from '../utils/orderTakerScope';
 
 /**
  * Royal-Tech Global Alarm Host (Mounted once in Root Layout).
@@ -154,12 +155,16 @@ export default function StockAlarmHost() {
   const isMobile = width < 768;
   const bottomOffset = (isMobile ? 76 : 24) + insets.bottom;
   const isPosScreen = Boolean(pathname && (pathname === '/admin/pos' || pathname.endsWith('/pos')));
+  const isWaiterScreen = Boolean(pathname && pathname.startsWith('/waiter'));
   const isCustomerMenu = Boolean(pathname && (pathname === '/menu' || pathname.startsWith('/menu')));
   const isCustomerDisplay = Boolean(pathname && (pathname === '/customer-display' || pathname.includes('customer-display')));
 
   const user = useAuthStore((s) => s.user);
   const role = user?.role;
   const { roleName, activeStaff, canAccessInventory, canAccessKitchenHandover } = useRolePermissions();
+
+  // Order Takers / Waiters only receive KDS status notifications for their own placed orders — NEVER low stock alarms!
+  const isOrderTaker = isOrderTakerUser(user, activeStaff, roleName);
 
   // Cashiers handle billing/shifts only — never show low-stock alerts or play stock alarm beeps for them
   const isCashier =
@@ -169,12 +174,13 @@ export default function StockAlarmHost() {
     (role || '').toLowerCase() === 'cashier';
 
   const isStockRelevantRole =
+    !isOrderTaker &&
     !isCashier &&
     (role === 'admin' ||
       role === 'kitchen' ||
       (role === 'manager' && (canAccessInventory || canAccessKitchenHandover)));
 
-  const isSuppressedScreen = isPosScreen || isCustomerMenu || isCustomerDisplay;
+  const isSuppressedScreen = isPosScreen || isWaiterScreen || isCustomerMenu || isCustomerDisplay;
   const enabled = isStockRelevantRole && !isSuppressedScreen;
 
   const sessions = useKitchenStore((s) => s.kitchenSessions);
@@ -509,7 +515,7 @@ export default function StockAlarmHost() {
                 </View>
                 <View>
                   <Text style={styles.panelTitle}>Stock & Kitchen Alarms</Text>
-                  <Text style={styles.panelUrduSub}>اسٹاک اور کچن الرٹ مانیٹر</Text>
+                  <Text style={styles.panelUrduSub}>Live Stock & Kitchen Alert Monitor</Text>
                 </View>
               </View>
 
@@ -680,7 +686,7 @@ export default function StockAlarmHost() {
                   <Text style={styles.emptySubtitle}>
                     {selectedTab === 'snoozed'
                       ? 'No active alarms have been silenced.'
-                      : 'تمام اسٹاک اور کچن شیڈولز محفوظ اور برقرار ہیں۔'}
+                      : 'All store and kitchen stock levels are healthy.'}
                   </Text>
 
                   {snoozedAlerts.length > 0 && selectedTab !== 'snoozed' && (

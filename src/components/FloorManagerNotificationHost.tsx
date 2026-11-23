@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Modal, Vibration, Platform, S
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useAuthStore } from '../store/authStore';
 import { useRestaurantStore, OnlineOrder } from '../store/restaurantStore';
+import { isOrderTakerUser } from '../utils/orderTakerScope';
 
 /**
  * High-urgency Web Audio chime generator for browser environments
@@ -52,9 +53,9 @@ export function FloorManagerNotificationHost() {
   const [pulse, setPulse] = useState(false);
   const alertIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Check if current logged-in user is a Floor Manager, Manager, or Admin
+  // Check if current logged-in user is a Floor Manager, Manager, or Admin (NEVER Order Taker)
   const isFloorStaff = useMemo(() => {
-    if (!user) return false;
+    if (!user || isOrderTakerUser(user)) return false;
     const roleLower = (user.role || '').toLowerCase();
     return (
       roleLower.includes('floor') ||

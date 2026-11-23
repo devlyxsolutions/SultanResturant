@@ -180,7 +180,7 @@ export default function CentralUpdateHost() {
                 New Sultan POS Update (v{Math.max(serverVersion, INSTALLED_APK_VERSION + 1)}) Ready
               </Text>
               <Text style={styles.bannerSubtitle}>
-                Master Server par naya update available hai (Current: {APP_VERSION_LABEL}). Update Now par tap karein.
+                A new update is available on the Master Server (Current: {APP_VERSION_LABEL}). Tap Update Now to install.
               </Text>
             </View>
             <TouchableOpacity

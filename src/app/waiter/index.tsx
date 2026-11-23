@@ -31,6 +31,11 @@ import FullscreenButton from '../../components/FullscreenButton';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
 import { BRAND as BRAND_PALETTE } from '../../constants/brand';
+import {
+  doesOrderBelongToUser,
+  isOrderTakerUser,
+  isTableOwnedByUser,
+} from '../../utils/orderTakerScope';
 
 const BRAND = BRAND_PALETTE.burgundy;
 
@@ -74,6 +79,7 @@ export default function OrderTakerScreen() {
   const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
   const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
   const lastFoodReadyAlert = useRestaurantStore((state) => state.lastFoodReadyAlert);
+  const foodReadyAlerts = useRestaurantStore((state) => state.foodReadyAlerts) || [];
   const clearFoodReadyAlert = useRestaurantStore((state) => state.clearFoodReadyAlert);
 
   const user = useAuthStore((state) => state.user);
@@ -85,6 +91,17 @@ export default function OrderTakerScreen() {
       (user?.staffId && s.id === user.staffId) ||
       (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
   );
+
+  // Strict per-Order-Taker scoping: Order Takers ONLY see their own placed orders & KDS status alerts
+  const isOrderTaker = useMemo(() => isOrderTakerUser(user, currentStaff), [user, currentStaff]);
+
+  // Scoped tickets: for Order Takers, strictly ONLY tickets they personally placed
+  const scopedTickets = useMemo(() => {
+    if (!isOrderTaker) return tickets;
+    return tickets.filter((t) =>
+      doesOrderBelongToUser({ server: t.server, serverId: t.serverId }, user, staff)
+    );
+  }, [tickets, isOrderTaker, user, staff]);
 
   // 2. Resolve assigned floors
   const assignedZonesList: string[] =
@@ -195,7 +212,9 @@ export default function OrderTakerScreen() {
   };
 
   // Determine if the bill-paid alert banner should actually be shown
+  // Order Takers ONLY receive KDS status notifications for their own orders — NEVER Bill Paid or other alerts
   const shouldShowBillPaidAlert = useMemo(() => {
+    if (isOrderTaker) return false;
     if (!lastBillPaidAlert) return false;
 
     const alertKey = lastBillPaidAlert.id || (lastBillPaidAlert.time ? `bill_${lastBillPaidAlert.tableId}_${lastBillPaidAlert.time}` : '');
@@ -234,35 +253,57 @@ export default function OrderTakerScreen() {
     }
 
     return true;
-  }, [lastBillPaidAlert, dismissedAlerts, tables, isAllFloors, authorizedFloors]);
+  }, [isOrderTaker, lastBillPaidAlert, dismissedAlerts, tables, isAllFloors, authorizedFloors]);
 
-  // Check if Food Ready alert applies to this waiter's floor
-  const shouldShowFoodReadyAlert = useMemo(() => {
-    if (!lastFoodReadyAlert) return false;
-    if (lastFoodReadyAlert.time && Math.abs(Date.now() - lastFoodReadyAlert.time) > 25 * 60 * 1000) {
-      return false;
-    }
-    const matchingTable = tables.find(
-      (t) =>
-        t.id === lastFoodReadyAlert.tableId ||
-        t.name.trim().toLowerCase() === (lastFoodReadyAlert.tableName || '').trim().toLowerCase()
+  // Pick the latest KDS Status alert strictly belonging to THIS Order Taker (never another Order Taker's order!)
+  const activeKdsAlert = useMemo(() => {
+    const candidates = [
+      ...(lastFoodReadyAlert ? [lastFoodReadyAlert] : []),
+      ...foodReadyAlerts,
+    ].filter((a, idx, arr) => a && a.id && arr.findIndex((x) => x.id === a.id) === idx);
+
+    candidates.sort((a, b) => (b.time || 0) - (a.time || 0));
+    const nowMs = Date.now();
+
+    return (
+      candidates.find((alert) => {
+        if (alert.time && Math.abs(nowMs - alert.time) > 25 * 60 * 1000) return false;
+
+        if (isOrderTaker) {
+          if (doesOrderBelongToUser({ server: alert.server, serverId: alert.serverId }, user, staff)) {
+            return true;
+          }
+          const matchedTicket = scopedTickets.find((tk) => tk.id === alert.ticketId);
+          return Boolean(matchedTicket);
+        }
+
+        const isNonTable = alert.tableId === 'takeaway' || alert.tableId === 'delivery';
+        if (isNonTable) return true;
+        const matchingTable = tables.find(
+          (t) =>
+            t.id === alert.tableId ||
+            t.name.trim().toLowerCase() === (alert.tableName || '').trim().toLowerCase()
+        );
+        if (!matchingTable) return false;
+        if (!isAllFloors) {
+          const tableFloor = getTableFloor(matchingTable);
+          if (!authorizedFloors.some((af) => af.toLowerCase() === tableFloor.toLowerCase())) {
+            return false;
+          }
+        }
+        return true;
+      }) || null
     );
-    if (!matchingTable) return false;
-    if (!isAllFloors) {
-      const tableFloor = getTableFloor(matchingTable);
-      if (!authorizedFloors.some((af) => af.toLowerCase() === tableFloor.toLowerCase())) {
-        return false;
-      }
-    }
-    return true;
-  }, [lastFoodReadyAlert, tables, isAllFloors, authorizedFloors]);
+  }, [lastFoodReadyAlert, foodReadyAlerts, isOrderTaker, user, staff, scopedTickets, tables, isAllFloors, authorizedFloors]);
 
-  // Audio chime when kitchen/juice bar marks food ready
+  const shouldShowFoodReadyAlert = Boolean(activeKdsAlert);
+
+  // Audio chime when kitchen/juice bar updates KDS status on THIS user's order
   useEffect(() => {
-    if (shouldShowFoodReadyAlert && lastFoodReadyAlert) {
+    if (shouldShowFoodReadyAlert && activeKdsAlert) {
       playFoodReadyChime();
     }
-  }, [lastFoodReadyAlert?.id, lastFoodReadyAlert?.time]);
+  }, [activeKdsAlert?.id, activeKdsAlert?.time]);
 
   // Effective active floor
   const activeFloor =
@@ -272,7 +313,8 @@ export default function OrderTakerScreen() {
       ? selectedFloor
       : 'All';
 
-  // 3. Scoped tables by Floor authorization, seating zone toggles & selected floor tab
+  // 3. Scoped tables by Floor authorization, seating zone toggles, selected floor tab & Order Taker ownership
+  // Order Takers see Available tables (to take new orders) + ONLY Occupied/Billed tables where THEY placed the order!
   const scopedByFloorTables = useMemo(() => {
     return tables.filter((t) => {
       const tType = getTableSeatingType(t);
@@ -285,9 +327,12 @@ export default function OrderTakerScreen() {
       if (activeFloor !== 'All' && tableFloor.toLowerCase() !== activeFloor.toLowerCase()) {
         return false;
       }
+      if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
+        return isTableOwnedByUser(t, scopedTickets, user, staff);
+      }
       return true;
     });
-  }, [tables, isAllFloors, authorizedFloors, activeFloor, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
+  }, [tables, isAllFloors, authorizedFloors, activeFloor, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating, isOrderTaker, scopedTickets, user, staff]);
 
   // 4. Zone Breakdown Summary (how many Tables, Couches, Majlis Cabins on this floor)
   const zoneSummary = useMemo(() => {
@@ -322,7 +367,7 @@ export default function OrderTakerScreen() {
     return false;
   };
 
-  // Status breakdown counts on this scoped floor
+  // Status breakdown counts on this scoped floor (strictly using scopedTickets for Order Takers)
   const statusCounts = useMemo(() => {
     let free = 0;
     let occupied = 0;
@@ -330,7 +375,7 @@ export default function OrderTakerScreen() {
     let billed = 0;
 
     scopedByFloorTables.forEach((table) => {
-      const tableTickets = tickets.filter((t) => t.tableId === table.id);
+      const tableTickets = scopedTickets.filter((t) => t.tableId === table.id);
       const isFoodReady = tableTickets.some(isTicketReadyForPickup);
       const isTableBilled = table.status === 'billed' || table.isPaid;
       if (isFoodReady) ready++;
@@ -340,7 +385,7 @@ export default function OrderTakerScreen() {
     });
 
     return { free, occupied, ready, billed };
-  }, [scopedByFloorTables, tickets]);
+  }, [scopedByFloorTables, scopedTickets]);
 
   // 5. Final Visible Tables filtered by Seating Type, Status Tab & Search
   const visibleTables = useMemo(() => {
@@ -353,7 +398,7 @@ export default function OrderTakerScreen() {
         return false;
       }
       if (statusFilter !== 'all') {
-        const tableTickets = tickets.filter((tk) => tk.tableId === t.id);
+        const tableTickets = scopedTickets.filter((tk) => tk.tableId === t.id);
         const isFoodReady = tableTickets.some(isTicketReadyForPickup);
         const isTableBilled = t.status === 'billed' || t.isPaid;
         const isOccupied = t.status === 'occupied';
@@ -365,17 +410,25 @@ export default function OrderTakerScreen() {
       }
       return true;
     });
-  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, tickets]);
+  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, scopedTickets]);
 
-  // 6. Filter ready tickets to only tables belonging to authorized floors
-  const readyTickets = tickets.filter((t) => {
+  // 6. Filter ready tickets strictly to THIS Order Taker's orders (or authorized floors for Admin/Manager)
+  const readyTickets = scopedTickets.filter((t) => {
     if (!isTicketReadyForPickup(t)) return false;
+    if (isOrderTaker) return true;
     const targetTable = tables.find((tab) => tab.id === t.tableId);
     if (!targetTable) return true;
     const tableFloor = getTableFloor(targetTable);
     if (!isAllFloors && !authorizedFloors.some((af) => af.toLowerCase() === tableFloor.toLowerCase())) return false;
     return true;
   });
+
+  // Active KDS tickets for the "My Placed Orders (Live KDS Status)" tracker strip
+  const myActiveKdsTickets = useMemo(() => {
+    return scopedTickets
+      .filter((t) => t.status !== 'served')
+      .sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+  }, [scopedTickets]);
 
   const handleTablePress = (id: string) => {
     router.push(`/waiter/order/${id}`);
@@ -385,7 +438,7 @@ export default function OrderTakerScreen() {
     const isOccupied = item.status === 'occupied';
     const isBilled = item.status === 'billed' || item.isPaid;
 
-    const tableTickets = tickets.filter((t) => t.tableId === item.id);
+    const tableTickets = scopedTickets.filter((t) => t.tableId === item.id);
     const isFoodReady = tableTickets.some(isTicketReadyForPickup);
     const isCooking = tableTickets.some((t) => (t.status === 'pending' || t.status === 'cooking') && !isFoodReady);
     const roundCount = tableTickets.length;
@@ -770,12 +823,24 @@ export default function OrderTakerScreen() {
                   activeFloor === 'All' && styles.floorTabTextActive,
                 ]}
               >
-                All Floors ({tables.filter((t) => isAllFloors || authorizedFloors.includes(getTableFloor(t))).length})
+                All Floors ({tables.filter((t) => {
+                  if (!isAllFloors && !authorizedFloors.includes(getTableFloor(t))) return false;
+                  if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
+                    return isTableOwnedByUser(t, scopedTickets, user, staff);
+                  }
+                  return true;
+                }).length})
               </Text>
             </TouchableOpacity>
 
             {authorizedFloors.map((floor) => {
-              const count = tables.filter((t) => getTableFloor(t).toLowerCase() === floor.toLowerCase()).length;
+              const count = tables.filter((t) => {
+                if (getTableFloor(t).toLowerCase() !== floor.toLowerCase()) return false;
+                if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
+                  return isTableOwnedByUser(t, scopedTickets, user, staff);
+                }
+                return true;
+              }).length;
               const meta = getFloorMeta(floor, dynamicFloors);
               const isActive = activeFloor.toLowerCase() === floor.toLowerCase();
               return (
@@ -1118,42 +1183,163 @@ export default function OrderTakerScreen() {
         </ScrollView>
       </View>
 
-        {/* Real-time Food Ready Alert Banner */}
-        {shouldShowFoodReadyAlert && lastFoodReadyAlert && (
-          <View style={[styles.billPaidAlertBanner, { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' }]}>
-            <View style={[styles.billPaidIconBox, { backgroundColor: '#DCFCE7' }]}>
-              <Ionicons name="restaurant" size={20} color="#16A34A" />
+        {/* Real-time KDS Status Alert Banner (Strictly ONLY for this Order Taker's own orders) */}
+        {shouldShowFoodReadyAlert && activeKdsAlert && (
+          <View
+            style={[
+              styles.billPaidAlertBanner,
+              activeKdsAlert.type === 'cooking_started'
+                ? { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }
+                : { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+            ]}
+          >
+            <View
+              style={[
+                styles.billPaidIconBox,
+                activeKdsAlert.type === 'cooking_started'
+                  ? { backgroundColor: '#FEF3C7' }
+                  : { backgroundColor: '#DCFCE7' },
+              ]}
+            >
+              <Ionicons
+                name={activeKdsAlert.type === 'cooking_started' ? 'flame' : 'restaurant'}
+                size={20}
+                color={activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A'}
+              />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.billPaidAlertTitle, { color: '#15803D' }]}>
-                Dish Ready: {lastFoodReadyAlert.tableName}!
+              <Text
+                style={[
+                  styles.billPaidAlertTitle,
+                  { color: activeKdsAlert.type === 'cooking_started' ? '#B45309' : '#15803D' },
+                ]}
+              >
+                {activeKdsAlert.type === 'cooking_started'
+                  ? `KDS Cooking Started: ${activeKdsAlert.tableName}`
+                  : activeKdsAlert.type === 'item_ready'
+                    ? `KDS Dish Ready: ${activeKdsAlert.tableName}`
+                    : `KDS Order Ready: ${activeKdsAlert.tableName}`}
               </Text>
-              <Text style={[styles.billPaidAlertDesc, { color: '#166534' }]}>
-                {lastFoodReadyAlert.station === 'juice' ? 'Juice Bar' : 'Kitchen'} marked{' '}
+              <Text
+                style={[
+                  styles.billPaidAlertDesc,
+                  { color: activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534' },
+                ]}
+              >
+                {activeKdsAlert.station === 'juice' ? 'Juice Bar KDS' : 'Kitchen KDS'}:{' '}
                 <Text style={{ fontWeight: '700' }}>
-                  {lastFoodReadyAlert.singleItemName || lastFoodReadyAlert.itemsSummary}
-                </Text>{' '}
-                ready. Tap to view table.
+                  {activeKdsAlert.singleItemName || activeKdsAlert.itemsSummary}
+                </Text>
               </Text>
             </View>
             <TouchableOpacity
               style={{
-                backgroundColor: '#16A34A',
+                backgroundColor: activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A',
                 paddingHorizontal: 12,
                 paddingVertical: 7,
                 borderRadius: 8,
                 marginRight: 6,
               }}
-              onPress={() => router.push(`/waiter/order/${lastFoodReadyAlert.tableId}` as any)}
+              onPress={() => router.push(`/waiter/order/${activeKdsAlert.tableId}` as any)}
             >
               <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>View ➔</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={styles.billPaidDismissBtn}
-              onPress={() => clearFoodReadyAlert(lastFoodReadyAlert.id || lastFoodReadyAlert.tableId)}
+              onPress={() => clearFoodReadyAlert(activeKdsAlert.id)}
             >
-              <Ionicons name="close" size={18} color="#166534" />
+              <Ionicons
+                name="close"
+                size={18}
+                color={activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534'}
+              />
             </TouchableOpacity>
+          </View>
+        )}
+
+        {/* My Placed Orders — Live KDS Status Tracker (Strictly this Order Taker's own orders) */}
+        {myActiveKdsTickets.length > 0 && (
+          <View
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              borderWidth: 1.5,
+              borderColor: '#E2E8F0',
+              padding: 10,
+              marginBottom: 8,
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Ionicons name="flame" size={16} color="#D97706" />
+                <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#0F172A' }}>
+                  {isOrderTaker ? 'MY PLACED ORDERS — LIVE KDS STATUS' : 'ACTIVE ORDERS — LIVE KDS STATUS'} ({myActiveKdsTickets.length})
+                </Text>
+              </View>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+                Live Kitchen Updates
+              </Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+              {myActiveKdsTickets.map((tk) => {
+                const tkReady = isTicketReadyForPickup(tk);
+                const tkCooking = !tkReady && (tk.status === 'cooking' || tk.stationStatuses?.main === 'cooking' || tk.stationStatuses?.juice === 'cooking');
+                const statusBg = tkReady ? '#DCFCE7' : tkCooking ? '#FEF3C7' : '#F1F5F9';
+                const statusColor = tkReady ? '#15803D' : tkCooking ? '#B45309' : '#475569';
+                const statusLabel = tkReady ? 'READY AT PASS' : tkCooking ? 'COOKING IN KDS' : 'PENDING IN KDS';
+                const itemsPreview = (tk.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ');
+                const elapsedMin = Math.max(0, Math.floor((Date.now() - (tk.timePlaced || Date.now())) / 60000));
+                return (
+                  <TouchableOpacity
+                    key={tk.id}
+                    style={{
+                      width: 240,
+                      backgroundColor: tkReady ? '#F0FDF4' : '#F8FAFC',
+                      borderWidth: 1.5,
+                      borderColor: tkReady ? '#22C55E' : tkCooking ? '#F59E0B' : '#CBD5E1',
+                      borderRadius: 10,
+                      padding: 10,
+                      gap: 5,
+                    }}
+                    onPress={() => router.push(`/waiter/order/${tk.tableId}` as any)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0F172A', flex: 1 }} numberOfLines={1}>
+                        {tk.tableName}
+                      </Text>
+                      <View style={{ backgroundColor: statusBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '900', color: statusColor }}>
+                          {statusLabel}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 11.5, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
+                      {itemsPreview}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700' }}>
+                        #{tk.id.slice(-4)} • {elapsedMin}m ago
+                      </Text>
+                      {tkReady && (
+                        <TouchableOpacity
+                          style={{ backgroundColor: '#16A34A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}
+                          onPress={(e) => {
+                            e.stopPropagation?.();
+                            serveTableTickets(tk.tableId);
+                            clearFoodReadyAlert(tk.id);
+                            broadcastImmediately();
+                          }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Serve Now</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
         )}
 

@@ -30,6 +30,7 @@ import {
   useRestaurantStore,
 } from '../../../store';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
+import { doesOrderBelongToUser, isOrderTakerUser } from '../../../utils/orderTakerScope';
 
 const NOTE_PRESETS = [
   'Less Spicy',
@@ -172,6 +173,7 @@ export default function TableOrderScreen() {
   // Store bindings
   const tables = useRestaurantStore((state) => state.tables) || [];
   const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const staff = useRestaurantStore((state) => state.staff) || [];
   const menuItems = useRestaurantStore((state) => state.menuItems) || [];
   const storeCategories = useRestaurantStore((state) => state.categories) || [];
   const regions = useRestaurantStore((state) => state.regions) || [];
@@ -185,6 +187,12 @@ export default function TableOrderScreen() {
   const unavailableIds = useOpsStore((state) => state.unavailableItemIds) || [];
   const unavailableSet = useMemo(() => new Set(unavailableIds), [unavailableIds]);
   const user = useAuthStore((state) => state.user);
+  const currentStaff = staff.find(
+    (s) =>
+      (user?.staffId && s.id === user.staffId) ||
+      (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
+  );
+  const isOrderTaker = isOrderTakerUser(user, currentStaff);
 
   const isTakeaway = tableId === 'takeaway';
   const table = tables.find((t) => t.id === tableId);
@@ -192,7 +200,13 @@ export default function TableOrderScreen() {
   const seatingType = table ? getTableSeatingType(table) : 'tables';
   const floorName = isTakeaway ? 'Express Counter' : table ? getTableFloor(table) : 'Ground Floor';
 
-  const activeTickets = tickets.filter((t) => t.tableId === tableId);
+  const activeTickets = tickets.filter((t) => {
+    if (t.tableId !== tableId) return false;
+    if (isOrderTaker) {
+      return doesOrderBelongToUser({ server: t.server, serverId: t.serverId }, user, staff);
+    }
+    return true;
+  });
   const isExistingOrderActive = activeTickets.length > 0 || table?.status === 'occupied' || table?.status === 'billed';
 
   const alreadyOrderedItems: {
@@ -237,7 +251,12 @@ export default function TableOrderScreen() {
         });
       });
     });
-  } else if (table && table.orders && table.orders.length > 0) {
+  } else if (
+    table &&
+    table.orders &&
+    table.orders.length > 0 &&
+    (!isOrderTaker || doesOrderBelongToUser({ server: table.server, serverId: table.serverId }, user, staff))
+  ) {
     table.orders.forEach((it) => {
       alreadyOrderedItems.push({
         id: it.id,
@@ -422,22 +441,35 @@ export default function TableOrderScreen() {
       notes: [c.notes, isRushOrder ? 'RUSH PRIORITY' : ''].filter(Boolean).join(' • ') || undefined,
     }));
 
+    const orderServerName =
+      table && table.status !== 'available' && table.server
+        ? table.server
+        : currentStaff?.name || user?.name || 'Order Taker';
+    const orderServerId =
+      table && table.status !== 'available' && table.serverId
+        ? table.serverId
+        : currentStaff?.id || user?.staffId || user?.id;
+
     placeOrder(
       tableId as string,
-      table?.server || user?.name || 'Staff (Order Taker)',
+      orderServerName,
       kotItems,
-      isAddOn
+      isAddOn,
+      orderServerId
     );
 
     if (table && table.status !== 'occupied') {
       updateTable(table.id, {
         status: 'occupied',
         occupiedSince: table.occupiedSince || Date.now(),
-        server: table.server || user?.name || 'Order Taker',
+        server: orderServerName,
+        serverId: orderServerId,
         billTotal: totalBillSoFar,
       });
     } else if (table) {
       updateTable(table.id, {
+        server: orderServerName,
+        serverId: orderServerId,
         billTotal: totalBillSoFar,
       });
     }

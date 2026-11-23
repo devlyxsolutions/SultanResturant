@@ -20,6 +20,7 @@ export type Table = {
   seats: number;
   status: 'available' | 'occupied' | 'billed' | 'reserved';
   server?: string;
+  serverId?: string;
   billTotal?: number;
   orders?: OrderItem[];
   isPaid?: boolean;
@@ -59,6 +60,7 @@ export type FoodReadyAlert = {
   tableId: string;
   tableName: string;
   server?: string;
+  serverId?: string;
   station: 'main' | 'juice' | 'all';
   stationLabel: string;
   itemsSummary: string;
@@ -149,6 +151,7 @@ export type Ticket = {
   tableId: string;
   tableName: string;
   server: string;
+  serverId?: string;
   timePlaced: number;
   cookingStartedAt?: number;
   readyAt?: number;
@@ -428,13 +431,14 @@ type RestaurantState = {
   lastBeverageOrderAlert?: BeverageOrderAlert | null;
   lastBillPaidAlert?: { id?: string; tableId: string; tableName: string; billTotal: number; time: number } | null;
   lastFoodReadyAlert?: FoodReadyAlert | null;
+  foodReadyAlerts?: FoodReadyAlert[];
 
   confirmOnlineOrder: (orderId: string, assignedWaiter?: string) => Promise<void>;
   rejectOnlineOrder: (orderId: string, reason?: string) => Promise<void>;
   clearPendingFloorOrderAlert: (orderId?: string) => void;
   clearBeverageOrderAlert: (alertId?: string) => void;
 
-  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean) => void;
+  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean, serverId?: string) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   markItemReady: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
   markItemServed: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
@@ -1072,10 +1076,21 @@ export const useRestaurantStore = create<RestaurantState>()(
         return state;
       }),
 
-      placeOrder: (tableId, serverName, orderItems, isAddOn) => {
+      placeOrder: (tableId, serverName, orderItems, isAddOn, serverId) => {
         const sysSettings = useSettingsStore.getState().settings;
         const autoRouteBev = sysSettings.kdsAutoRouteBeverages !== false;
         const targetMainPrep = sysSettings.kdsTargetPrepMinutes || 15;
+        let resolvedServerId = serverId;
+        if (!resolvedServerId) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useAuthStore } = require('./authStore');
+            const activeUser = useAuthStore?.getState()?.user;
+            if (activeUser && (!serverName || activeUser.name?.trim().toLowerCase() === serverName.trim().toLowerCase())) {
+              resolvedServerId = activeUser.staffId || activeUser.id;
+            }
+          } catch {}
+        }
         set((state) => {
           const table = state.tables.find(t => t.id === tableId);
           const existingTickets = state.tickets.filter(t => t.tableId === tableId);
@@ -1097,11 +1112,14 @@ export const useRestaurantStore = create<RestaurantState>()(
             10
           );
 
+          const finalServerId = resolvedServerId || table?.serverId;
+
           const newTicket: Ticket = {
             id: newTicketId,
             tableId, // can be dummy like 'takeaway' or actual tableId
             tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
             server: serverName,
+            serverId: finalServerId,
             timePlaced: Date.now(),
             cookingStartedAt: undefined,
             estimatedPrepTime: maxPrepTime,
@@ -1224,6 +1242,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1, Date.now()),
                   isPaid: false,
                   server: serverName,
+                  serverId: finalServerId,
                   billTotal: (t.billTotal || 0) + itemsTotal,
                   orders: mergedOrders
                 };
@@ -1283,6 +1302,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           tableId: ticket.tableId,
           tableName: ticket.tableName,
           server: ticket.server,
+          serverId: ticket.serverId,
           station: station || 'all',
           stationLabel,
           itemsSummary: `Cooking started! (Timer: ${maxPrep} mins)`,
@@ -1315,6 +1335,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
 
         notifySync();
+        const prevAlerts = (state.foodReadyAlerts || []).filter(a => a && a.id !== cookingAlert.id && now - a.time < 30 * 60 * 1000);
         return {
           tickets: state.tickets.map(t => t.id === ticketId ? {
             ...t,
@@ -1325,6 +1346,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           } : t),
           onlineOrders: updatedOnlineOrders,
           lastFoodReadyAlert: cookingAlert,
+          foodReadyAlerts: [cookingAlert, ...prevAlerts].slice(0, 25),
         };
       }),
 
@@ -1377,6 +1399,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           tableId: ticket.tableId,
           tableName: ticket.tableName,
           server: ticket.server,
+          serverId: ticket.serverId,
           station: itemStation,
           stationLabel: itemStation === 'juice' ? 'Juice Bar' : 'Kitchen',
           itemsSummary: `${targetItem.qty}x ${targetItem.name} (Ready to Serve Now!)`,
@@ -1386,6 +1409,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
 
         notifySync();
+        const prevAlerts = (state.foodReadyAlerts || []).filter(a => a && a.id !== alert.id && now - a.time < 30 * 60 * 1000);
         return {
           tickets: state.tickets.map(t => t.id === ticketId ? {
             ...t,
@@ -1394,6 +1418,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             stationStatuses: currentStationStatuses,
           } : t),
           lastFoodReadyAlert: alert,
+          foodReadyAlerts: [alert, ...prevAlerts].slice(0, 25),
         };
       }),
 
@@ -1484,9 +1509,11 @@ export const useRestaurantStore = create<RestaurantState>()(
                 tableId: t.tableId,
                 tableName: t.tableName,
                 server: t.server,
+                serverId: t.serverId,
                 station: itemStation,
                 stationLabel: itemStation === 'juice' ? 'Juice Bar' : 'Kitchen',
                 itemsSummary: summary || 'Items Ready for Pickup',
+                type: 'ready',
                 time: Date.now(),
               };
             } else if (!allStationCompleted && currentStationStatuses[itemStation] === 'ready') {
@@ -1517,9 +1544,14 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
 
         notifySync();
+        const nextAlertsList =
+          updatedAlert && updatedAlert.id !== state.lastFoodReadyAlert?.id
+            ? [updatedAlert, ...(state.foodReadyAlerts || []).filter(a => a && a.id !== updatedAlert!.id && Date.now() - a.time < 30 * 60 * 1000)].slice(0, 25)
+            : (state.foodReadyAlerts || []);
         return {
           tickets: updatedTickets,
-          lastFoodReadyAlert: updatedAlert
+          lastFoodReadyAlert: updatedAlert,
+          foodReadyAlerts: nextAlertsList,
         };
       }),
 
@@ -1639,9 +1671,29 @@ export const useRestaurantStore = create<RestaurantState>()(
                 tableId: t.tableId,
                 tableName: t.tableName,
                 server: t.server,
+                serverId: t.serverId,
                 station,
                 stationLabel: station === 'juice' ? 'Juice Bar' : 'Kitchen',
                 itemsSummary: stationItems || 'Items Ready for Pickup',
+                type: 'ready',
+                time: Date.now(),
+              };
+            } else if (status === 'cooking') {
+              const stationItems = t.items
+                .filter(i => (i.station || 'main') === station)
+                .map(i => `${i.qty}x ${i.name}`)
+                .join(', ');
+              updatedAlert = {
+                id: `cook_${t.id}_${station}_${Date.now()}`,
+                ticketId: t.id,
+                tableId: t.tableId,
+                tableName: t.tableName,
+                server: t.server,
+                serverId: t.serverId,
+                station,
+                stationLabel: station === 'juice' ? 'Juice Bar' : 'Kitchen',
+                itemsSummary: stationItems ? `Cooking: ${stationItems}` : 'Cooking started in KDS',
+                type: 'cooking_started',
                 time: Date.now(),
               };
             } else if (status === 'served') {
@@ -1671,9 +1723,26 @@ export const useRestaurantStore = create<RestaurantState>()(
               tableId: t.tableId,
               tableName: t.tableName,
               server: t.server,
+              serverId: t.serverId,
               station: 'all',
               stationLabel: 'Kitchen',
               itemsSummary: allItemsSummary || 'Order Ready for Pickup',
+              type: 'ready',
+              time: Date.now(),
+            };
+          } else if (status === 'cooking') {
+            const allItemsSummary = t.items.map(i => `${i.qty}x ${i.name}`).join(', ');
+            updatedAlert = {
+              id: `cook_${t.id}_all_${Date.now()}`,
+              ticketId: t.id,
+              tableId: t.tableId,
+              tableName: t.tableName,
+              server: t.server,
+              serverId: t.serverId,
+              station: 'all',
+              stationLabel: 'Kitchen',
+              itemsSummary: allItemsSummary ? `Cooking: ${allItemsSummary}` : 'Cooking started in KDS',
+              type: 'cooking_started',
               time: Date.now(),
             };
           } else if (status === 'served') {
@@ -1697,9 +1766,14 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
 
         notifySync();
+        const nextAlertsList =
+          updatedAlert && updatedAlert.id !== state.lastFoodReadyAlert?.id
+            ? [updatedAlert, ...(state.foodReadyAlerts || []).filter(a => a && a.id !== updatedAlert!.id && Date.now() - a.time < 30 * 60 * 1000)].slice(0, 25)
+            : (state.foodReadyAlerts || []);
         return {
           tickets: updatedTickets,
-          lastFoodReadyAlert: updatedAlert
+          lastFoodReadyAlert: updatedAlert,
+          foodReadyAlerts: nextAlertsList,
         };
       }),
 
@@ -1795,15 +1869,18 @@ export const useRestaurantStore = create<RestaurantState>()(
           notifySync();
           return { lastFoodReadyAlert: null };
         }
-        const current = state.lastFoodReadyAlert;
-        if (!current) return { lastFoodReadyAlert: null };
         const query = alertIdOrTableId.trim().toLowerCase();
-        const matches =
-          current.id === alertIdOrTableId ||
-          current.tableId.trim().toLowerCase() === query ||
-          current.tableName.trim().toLowerCase() === query;
+        const matchesAlert = (a: FoodReadyAlert) =>
+          a.id === alertIdOrTableId ||
+          a.ticketId === alertIdOrTableId ||
+          a.tableId.trim().toLowerCase() === query ||
+          a.tableName.trim().toLowerCase() === query;
+
+        const current = state.lastFoodReadyAlert;
+        const nextLast = current && matchesAlert(current) ? null : current;
+        const nextList = (state.foodReadyAlerts || []).filter((a) => !matchesAlert(a));
         notifySync();
-        return { lastFoodReadyAlert: matches ? null : current };
+        return { lastFoodReadyAlert: nextLast, foodReadyAlerts: nextList };
       }),
 
       settleBill: (tableId) => set((state) => {
@@ -3241,6 +3318,24 @@ export const useRestaurantStore = create<RestaurantState>()(
               })()
             } : {}
           )),
+          foodReadyAlerts: (() => {
+            const combined = [
+              ...(Array.isArray(remoteState.foodReadyAlerts) ? remoteState.foodReadyAlerts : []),
+              ...(remoteState.lastFoodReadyAlert ? [remoteState.lastFoodReadyAlert] : []),
+              ...(Array.isArray(state.foodReadyAlerts) ? state.foodReadyAlerts : []),
+              ...(state.lastFoodReadyAlert ? [state.lastFoodReadyAlert] : []),
+            ];
+            const map = new Map<string, FoodReadyAlert>();
+            const nowMs = Date.now();
+            for (const a of combined) {
+              if (!a || !a.id) continue;
+              if (a.time && Math.abs(nowMs - a.time) > 30 * 60 * 1000) continue;
+              if (!map.has(a.id)) map.set(a.id, a);
+            }
+            return Array.from(map.values())
+              .sort((a, b) => (b.time || 0) - (a.time || 0))
+              .slice(0, 25);
+          })(),
         };
       });
       },
