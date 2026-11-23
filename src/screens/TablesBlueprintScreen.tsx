@@ -246,21 +246,29 @@ export default function TablesBlueprintScreen({
 
   const tableById = (id?: string) => tables.find((t) => t.id === id);
 
-  // Floors list: configured floors + any extra floor with tables
+  // Floors list: strictly case-insensitive deduplicated & ordered (prevents "Rooftop" + "ROOFTOP" duplicates)
   const availableFloors = useMemo(() => {
-    const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);
-    if (configured.length > 0) {
-      const extraWithTables = Array.from(
-        new Set(
-          tables
-            .map((t) => getTableFloor(t).trim())
-            .filter((fl) => fl && !configured.some((c) => c.toLowerCase() === fl.toLowerCase()))
-        )
-      );
-      return [...configured, ...extraWithTables];
-    }
-    const discovered = Array.from(new Set(tables.map((t) => getTableFloor(t)).filter(Boolean)));
-    return sortFloors(discovered.length > 0 ? discovered : FLOOR_ORDER);
+    const floorMap = new Map<string, string>();
+    const addUnique = (raw?: string) => {
+      const cleaned = (raw || '').trim();
+      if (!cleaned) return;
+      const key = cleaned.toLowerCase();
+      if (!floorMap.has(key)) {
+        floorMap.set(key, cleaned);
+      } else {
+        // Prefer Title Case (e.g. "Rooftop") over ALL CAPS ("ROOFTOP")
+        const existing = floorMap.get(key)!;
+        if (existing === existing.toUpperCase() && cleaned !== cleaned.toUpperCase()) {
+          floorMap.set(key, cleaned);
+        }
+      }
+    };
+
+    (dynamicFloors || []).forEach((f) => addUnique(f?.name));
+    tables.forEach((t) => addUnique(getTableFloor(t)));
+
+    const list = Array.from(floorMap.values());
+    return sortFloors(list.length > 0 ? list : FLOOR_ORDER);
   }, [dynamicFloors, tables]);
 
   // Visible seating units respecting system settings
@@ -277,7 +285,8 @@ export default function TablesBlueprintScreen({
   const counts = useMemo(() => {
     const c = { available: 0, occupied: 0, billed: 0, reserved: 0 };
     enabledTables.forEach((t) => {
-      c[t.status] += 1;
+      if (t.status in c) c[t.status] += 1;
+      else c.available += 1;
     });
     return c;
   }, [enabledTables]);
@@ -1020,7 +1029,7 @@ export default function TablesBlueprintScreen({
 
   // ---------- Render Tile ----------
   const renderTile = (table: Table, index?: number) => {
-    const meta = STATUS_META[table.status];
+    const meta = STATUS_META[table.status] || STATUS_META.available;
     const isBusy = table.status === 'occupied' || table.status === 'billed';
     const kotCount = tickets.filter((t) => t.tableId === table.id && t.status !== 'served').length;
     const res = findTableReservation(table, reservations, ['confirmed', 'seated']);
@@ -1274,7 +1283,7 @@ export default function TablesBlueprintScreen({
   const renderActionSheet = () => {
     if (!actionTable) return null;
     const t = actionTable;
-    const meta = STATUS_META[t.status];
+    const meta = STATUS_META[t.status] || STATUS_META.available;
     const isBusy = t.status === 'occupied' || t.status === 'billed';
     const res = findTableReservation(t, reservations, ['confirmed', 'seated']);
     const isGroup = isGroupReservation(res);
@@ -1579,30 +1588,57 @@ export default function TablesBlueprintScreen({
   ];
 
   const TABS: { key: TabKey; label: string; icon: IconName; badge?: number }[] = [
-    { key: 'tables', label: 'Floor Blueprint', icon: 'grid' },
-    { key: 'reservations', label: 'Bookings & Group Events', icon: 'calendar', badge: upcomingConfirmedCount },
+    { key: 'tables', label: 'Blueprint', icon: 'grid' },
+    { key: 'reservations', label: 'Bookings & Events', icon: 'calendar', badge: upcomingConfirmedCount },
     { key: 'zones', label: 'Floors & Cabins', icon: 'layers' },
   ];
 
   return (
     <View style={styles.container}>
-      {/* Clean Executive Header */}
-      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 14, paddingVertical: 12 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+      {/* Compact Single-Row Command Bar (Title + Inline Tabs + Clean Actions) */}
+      <View style={[styles.header, isMobile && { flexDirection: 'column', alignItems: 'stretch', paddingHorizontal: 12, paddingVertical: 10 }]}>
+        <View style={styles.headerLeftGroup}>
           <TouchableOpacity
             style={styles.backBtn}
             onPress={() => (router.canGoBack() ? router.back() : router.replace(backRoute as any))}
           >
-            <Ionicons name="arrow-back" size={20} color="#F3D179" />
+            <Ionicons name="arrow-back" size={18} color="#F3D179" />
           </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.title, isMobile && { fontSize: 18 }]}>Table Blueprint & Group Arrangements</Text>
-            {!isSmallMobile && (
-              <Text style={styles.subtitle} numberOfLines={1}>
-                Live multi-floor seating, party bookings & synced table operations
-              </Text>
-            )}
+          <View style={{ flexShrink: 1 }}>
+            <Text style={[styles.title, isMobile && { fontSize: 16 }]} numberOfLines={1}>
+              Table Blueprint
+            </Text>
           </View>
+
+          {/* Inline Segmented Tabs on Desktop — eliminates an entire extra vertical row */}
+          {!isMobile && (
+            <View style={styles.headerTabsWrap}>
+              {TABS.map((tab) => {
+                const active = activeTab === tab.key;
+                return (
+                  <TouchableOpacity
+                    key={tab.key}
+                    style={[styles.headerTabPill, active && styles.headerTabPillActive]}
+                    onPress={() => setActiveTab(tab.key)}
+                  >
+                    <Ionicons
+                      name={active ? tab.icon : (`${tab.icon}-outline` as IconName)}
+                      size={14}
+                      color={active ? '#24050A' : 'rgba(255,255,255,0.78)'}
+                    />
+                    <Text style={[styles.headerTabText, active && styles.headerTabTextActive]} numberOfLines={1}>
+                      {tab.label}
+                    </Text>
+                    {!!tab.badge && (
+                      <View style={[styles.segmentBadge, active && { backgroundColor: '#24050A' }]}>
+                        <Text style={styles.segmentBadgeText}>{tab.badge}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
         </View>
 
         <ScrollView
@@ -1621,8 +1657,8 @@ export default function TablesBlueprintScreen({
               })
             }
           >
-            <Ionicons name="sparkles" size={15} color="#fff" />
-            <Text style={[styles.headerBtnText, { color: '#fff' }]}>+ Group / Event Booking</Text>
+            <Ionicons name="sparkles" size={14} color="#fff" />
+            <Text style={[styles.headerBtnText, { color: '#fff' }]}>+ Group / Event</Text>
           </TouchableOpacity>
 
           {canAddTables && (
@@ -1630,32 +1666,58 @@ export default function TablesBlueprintScreen({
               style={[styles.headerBtn, { backgroundColor: GOLD, borderColor: '#FDE68A' }]}
               onPress={() => openAddTableModal()}
             >
-              <Ionicons name="add-circle" size={16} color="#24050A" />
+              <Ionicons name="add" size={15} color="#24050A" />
               <Text style={[styles.headerBtnText, { color: '#24050A' }]}>Add Unit</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
-            style={[styles.headerBtn, { backgroundColor: 'rgba(212, 175, 55, 0.18)' }]}
+            style={[styles.headerBtn, { backgroundColor: 'rgba(212, 175, 55, 0.16)' }]}
             onPress={openBatchQrModal}
           >
-            <Ionicons name="qr-code-outline" size={15} color="#F3D179" />
-            <Text style={styles.headerBtnText}>Table QRs</Text>
+            <Ionicons name="qr-code-outline" size={14} color="#F3D179" />
+            <Text style={styles.headerBtnText}>QRs</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={[styles.headerBtn, styles.headerBtnGhost]}
             onPress={() => router.push(floorsRoute as any)}
           >
-            <Ionicons name="layers-outline" size={15} color="#fff" />
+            <Ionicons name="layers-outline" size={14} color="#fff" />
             <Text style={[styles.headerBtnText, { color: '#fff' }]}>Floors</Text>
           </TouchableOpacity>
         </ScrollView>
       </View>
 
-      <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 12 }]} showsVerticalScrollIndicator={false}>
-        {/* Interactive KPI Strip */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.statsRow}>
+      <ScrollView contentContainerStyle={[styles.content, isMobile && { padding: 10 }]} showsVerticalScrollIndicator={false}>
+        {/* Mobile-only Tabs */}
+        {isMobile && (
+          <View style={[styles.segment, { alignSelf: 'stretch', width: '100%', marginBottom: 10 }]}>
+            {TABS.map((tab) => {
+              const active = activeTab === tab.key;
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={[styles.segmentItem, { flex: 1, justifyContent: 'center', paddingHorizontal: 6 }, active && styles.segmentItemActive]}
+                  onPress={() => setActiveTab(tab.key)}
+                >
+                  <Ionicons name={active ? tab.icon : (`${tab.icon}-outline` as IconName)} size={14} color={active ? '#24050A' : '#64748B'} />
+                  <Text style={[styles.segmentText, active && styles.segmentTextActive, isSmallMobile && { fontSize: 11.5 }]} numberOfLines={1}>
+                    {tab.label}
+                  </Text>
+                  {!!tab.badge && (
+                    <View style={[styles.segmentBadge, active && { backgroundColor: '#24050A' }]}>
+                      <Text style={styles.segmentBadgeText}>{tab.badge}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Full-Width Edge-to-Edge Slim Executive KPI Bar (No Awkward Right Gap) */}
+        <View style={[styles.kpiGridRow, isMobile && { gap: 6 }]}>
           {STATS.map((s) => {
             const isFilterable = s.key === 'available' || s.key === 'occupied' || s.key === 'reserved';
             const isActiveFilter = isFilterable && activeTab === 'tables' && statusFilter === s.key;
@@ -1669,56 +1731,28 @@ export default function TablesBlueprintScreen({
                   setStatusFilter(statusFilter === s.key ? 'all' : (s.key as StatusFilter));
                 }}
                 style={[
-                  styles.statCard,
-                  { backgroundColor: s.bg, borderColor: isActiveFilter ? s.color : s.border },
-                  isActiveFilter && { borderWidth: 2 },
+                  styles.kpiSlimCard,
+                  { borderLeftColor: s.color },
+                  isActiveFilter && { borderColor: s.color, backgroundColor: s.bg, borderWidth: 1.5, borderLeftWidth: 4 },
                 ]}
               >
-                <View style={[styles.statIcon, { backgroundColor: s.iconBg }]}>
-                  <Ionicons name={s.icon} size={18} color={s.color} />
+                <View style={[styles.kpiSlimIcon, { backgroundColor: s.iconBg }]}>
+                  <Ionicons name={s.icon} size={17} color={s.color} />
                 </View>
-                <View>
-                  <Text style={[styles.statValue, { color: s.color }]}>{s.value}</Text>
-                  <Text style={[styles.statLabel, { color: s.color }]}>{s.label}</Text>
-                  <Text style={styles.statSub}>{s.sub}</Text>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <Text style={[styles.kpiSlimLabel, { color: s.color }]} numberOfLines={1}>
+                    {s.label}
+                  </Text>
+                  <Text style={[styles.kpiSlimValue, { color: '#0F172A' }]} numberOfLines={1}>
+                    {s.value}
+                  </Text>
+                  <Text style={styles.kpiSlimSub} numberOfLines={1}>
+                    {s.sub}
+                  </Text>
                 </View>
               </TouchableOpacity>
             );
           })}
-        </ScrollView>
-
-        {/* Segmented Tabs + Quick Group Action */}
-        <View style={styles.tabRowHeader}>
-          <View style={[styles.segment, isMobile && { alignSelf: 'stretch', flex: 1 }]}>
-            {TABS.map((tab) => {
-              const active = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  key={tab.key}
-                  style={[
-                    styles.segmentItem,
-                    isMobile && { flex: 1, justifyContent: 'center', paddingHorizontal: 8 },
-                    active && styles.segmentItemActive,
-                  ]}
-                  onPress={() => setActiveTab(tab.key)}
-                >
-                  <Ionicons
-                    name={active ? tab.icon : (`${tab.icon}-outline` as IconName)}
-                    size={15}
-                    color={active ? '#24050A' : '#64748B'}
-                  />
-                  <Text style={[styles.segmentText, active && styles.segmentTextActive, isSmallMobile && { fontSize: 12 }]} numberOfLines={1}>
-                    {tab.label}
-                  </Text>
-                  {!!tab.badge && (
-                    <View style={[styles.segmentBadge, active && { backgroundColor: '#24050A' }]}>
-                      <Text style={styles.segmentBadgeText}>{tab.badge}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
         </View>
 
         {/* ============================================================
@@ -1726,12 +1760,12 @@ export default function TablesBlueprintScreen({
            ============================================================ */}
         {activeTab === 'tables' && (
           <>
-            {/* Live Group / Event Arrangements Banner (shows immediately if any group event is active) */}
+            {/* Live Group / Event Arrangements Banner (only appears when group bookings exist) */}
             {activeGroupBookings.length > 0 && (
               <View style={styles.groupStripContainer}>
                 <View style={styles.groupStripHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="sparkles" size={16} color={GROUP_ACCENT} />
+                    <Ionicons name="sparkles" size={15} color={GROUP_ACCENT} />
                     <Text style={styles.groupStripTitle}>
                       Active Group & Floor Arrangements ({activeGroupBookings.length})
                     </Text>
@@ -1799,73 +1833,76 @@ export default function TablesBlueprintScreen({
               </View>
             )}
 
-            {/* Floor Selector Pills with Live Free Seat Counts */}
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.floorPillsRow}
-              style={{ marginBottom: 10 }}
-            >
-              <TouchableOpacity
-                style={[styles.floorPill, floorFilter === 'all' && styles.floorPillActive]}
-                onPress={() => setFloorFilter('all')}
-              >
-                <Ionicons name="layers" size={14} color={floorFilter === 'all' ? '#24050A' : '#64748B'} />
-                <Text style={[styles.floorPillText, floorFilter === 'all' && styles.floorPillTextActive]}>
-                  All Floors
-                </Text>
-                <View style={[styles.floorPillBadge, floorFilter === 'all' && styles.floorPillBadgeActive]}>
-                  <Text style={[styles.floorPillBadgeText, floorFilter === 'all' && { color: '#F3D179' }]}>
-                    {availableSeats} free
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {availableFloors.map((fl) => {
-                const active = floorFilter.toLowerCase() === fl.toLowerCase();
-                const cap = floorCapacityMap[fl.toLowerCase()];
-                const meta = getFloorMeta(fl, dynamicFloors);
-                return (
+            {/* Ultra-Clean Unified 2-Row Filter & Floor Toolbar */}
+            <View style={styles.controlCard}>
+              {/* Row 1: Floor Tabs (left) + Search Box (right) */}
+              <View style={[styles.controlTopRow, isMobile && { flexDirection: 'column', alignItems: 'stretch' }]}>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 6, alignItems: 'center' }}
+                  style={{ flex: 1 }}
+                >
                   <TouchableOpacity
-                    key={fl}
-                    style={[styles.floorPill, active && styles.floorPillActive]}
-                    onPress={() => setFloorFilter(fl)}
+                    style={[styles.floorPill, floorFilter === 'all' && styles.floorPillActive]}
+                    onPress={() => setFloorFilter('all')}
                   >
-                    <Ionicons
-                      name={(meta?.icon as any) || 'business-outline'}
-                      size={14}
-                      color={active ? '#24050A' : meta?.color || '#64748B'}
-                    />
-                    <Text style={[styles.floorPillText, active && styles.floorPillTextActive]}>{fl}</Text>
-                    <View style={[styles.floorPillBadge, active && styles.floorPillBadgeActive]}>
-                      <Text style={[styles.floorPillBadgeText, active && { color: '#F3D179' }]}>
-                        {cap?.availableSeats || 0}s free
+                    <Ionicons name="layers" size={13} color={floorFilter === 'all' ? '#24050A' : '#64748B'} />
+                    <Text style={[styles.floorPillText, floorFilter === 'all' && styles.floorPillTextActive]}>
+                      All Floors
+                    </Text>
+                    <View style={[styles.floorPillBadge, floorFilter === 'all' && styles.floorPillBadgeActive]}>
+                      <Text style={[styles.floorPillBadgeText, floorFilter === 'all' && { color: '#F3D179' }]}>
+                        {availableSeats}s
                       </Text>
                     </View>
                   </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
 
-            {/* Sleek Unified Control Bar: Search + Status Pills + Seating Zone Filter */}
-            <View style={styles.controlCard}>
-              <View style={[styles.controlTopRow, isMobile && { flexDirection: 'column', alignItems: 'stretch' }]}>
-                <View style={[styles.searchBox, { flex: 1, minWidth: 200 }]}>
-                  <Ionicons name="search" size={16} color="#94A3B8" />
+                  {availableFloors.map((fl) => {
+                    const active = floorFilter.toLowerCase() === fl.toLowerCase();
+                    const cap = floorCapacityMap[fl.toLowerCase()];
+                    const meta = getFloorMeta(fl, dynamicFloors);
+                    return (
+                      <TouchableOpacity
+                        key={fl}
+                        style={[styles.floorPill, active && styles.floorPillActive]}
+                        onPress={() => setFloorFilter(fl)}
+                      >
+                        <Ionicons
+                          name={(meta?.icon as any) || 'business-outline'}
+                          size={13}
+                          color={active ? '#24050A' : meta?.color || '#64748B'}
+                        />
+                        <Text style={[styles.floorPillText, active && styles.floorPillTextActive]}>{fl}</Text>
+                        <View style={[styles.floorPillBadge, active && styles.floorPillBadgeActive]}>
+                          <Text style={[styles.floorPillBadgeText, active && { color: '#F3D179' }]}>
+                            {cap?.availableSeats || 0}s
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <View style={[styles.searchBox, !isMobile && { width: 210 }]}>
+                  <Ionicons name="search" size={14} color="#94A3B8" />
                   <TextInput
                     style={[styles.searchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
-                    placeholder="Search table, cabin, floor, guest name or event…"
+                    placeholder="Search table, guest…"
                     placeholderTextColor="#94A3B8"
                     value={search}
                     onChangeText={setSearch}
                   />
                   {!!search && (
                     <TouchableOpacity onPress={() => setSearch('')}>
-                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                      <Ionicons name="close-circle" size={15} color="#94A3B8" />
                     </TouchableOpacity>
                   )}
                 </View>
+              </View>
 
+              {/* Row 2: Status Filter Pills (left) + Seating Zone Chips (right) */}
+              <View style={styles.capacityStripRow}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
                   {(['all', 'available', 'occupied', 'billed', 'reserved'] as const).map((st) => {
                     const active = statusFilter === st;
@@ -1892,18 +1929,15 @@ export default function TablesBlueprintScreen({
                       </TouchableOpacity>
                     );
                   })}
-                </ScrollView>
-              </View>
 
-              {/* Compact Capacity & Seating Type Strip */}
-              <View style={styles.capacityStripRow}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center' }}>
+                  <View style={styles.toolbarDivider} />
+
                   <TouchableOpacity
                     style={[styles.typeMiniChip, seatingTypeFilter === 'all' && styles.typeMiniChipActive]}
                     onPress={() => setSeatingTypeFilter('all')}
                   >
                     <Text style={[styles.typeMiniChipText, seatingTypeFilter === 'all' && { color: '#fff' }]}>
-                      All Units ({scopedTables.length})
+                      All Units
                     </Text>
                   </TouchableOpacity>
 
@@ -1914,12 +1948,12 @@ export default function TablesBlueprintScreen({
                   }).map((type) => {
                     const active = seatingTypeFilter === type;
                     const meta = SEATING_ZONES[type];
-                    const stat =
+                    const countVal =
                       type === 'tables'
-                        ? `${zoneSummary.tables.count} (${zoneSummary.tables.seats}s)`
+                        ? zoneSummary.tables.count
                         : type === 'couches'
-                        ? `${zoneSummary.couches.count} (${zoneSummary.couches.seats}s)`
-                        : `${zoneSummary.majlis.cabinsCount} (${zoneSummary.majlis.sittingCapacity}s)`;
+                        ? zoneSummary.couches.count
+                        : zoneSummary.majlis.cabinsCount;
                     return (
                       <TouchableOpacity
                         key={type}
@@ -1929,9 +1963,9 @@ export default function TablesBlueprintScreen({
                         ]}
                         onPress={() => setSeatingTypeFilter(type)}
                       >
-                        <SeatingTypeIcon type={type} size={13} color={active ? '#fff' : meta.color} />
+                        <SeatingTypeIcon type={type} size={12} color={active ? '#fff' : meta.color} />
                         <Text style={[styles.typeMiniChipText, active && { color: '#fff' }]}>
-                          {meta.label}: {stat}
+                          {meta.label} ({countVal})
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1949,8 +1983,8 @@ export default function TablesBlueprintScreen({
                       })
                     }
                   >
-                    <Ionicons name="sparkles" size={13} color="#fff" />
-                    <Text style={styles.inlineArrangeBtnText}>Arrange Group on {floorFilter}</Text>
+                    <Ionicons name="sparkles" size={12} color="#fff" />
+                    <Text style={styles.inlineArrangeBtnText}>Book Group on {floorFilter}</Text>
                   </TouchableOpacity>
                 )}
               </View>
@@ -3443,9 +3477,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
-    gap: 12,
-    paddingHorizontal: 22,
-    paddingVertical: 14,
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
     ...Platform.select({
       web: {
         backgroundImage: 'linear-gradient(135deg, #380A11 0%, #200408 100%)',
@@ -3457,33 +3491,93 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1.5,
     borderBottomColor: 'rgba(212, 175, 55, 0.35)',
   },
-  backBtn: {
-    width: 38,
-    height: 38,
+  headerLeftGroup: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1, minWidth: 260 },
+  headerTabsWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderRadius: 10,
-    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    padding: 3,
+    marginLeft: 8,
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
+    borderColor: 'rgba(212, 175, 55, 0.22)',
+  },
+  headerTabPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
+    borderRadius: 7,
+  },
+  headerTabPillActive: {
+    ...Platform.select({
+      web: { backgroundImage: 'linear-gradient(90deg, #F3D179 0%, #D4AF37 100%)' },
+      default: { backgroundColor: '#D4AF37' },
+    }),
+  },
+  headerTabText: { fontSize: 12.5, fontWeight: '700', color: 'rgba(255,255,255,0.82)' },
+  headerTabTextActive: { color: '#24050A', fontWeight: '900' },
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 9,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.32)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  title: { fontSize: 21, fontWeight: '900', color: '#F3D179', letterSpacing: -0.3 },
-  subtitle: { fontSize: 12.5, color: 'rgba(255, 255, 255, 0.72)', marginTop: 2 },
-  headerActions: { flexDirection: 'row', gap: 8, alignItems: 'center' },
+  title: { fontSize: 18, fontWeight: '900', color: '#F3D179', letterSpacing: -0.2 },
+  subtitle: { fontSize: 12, color: 'rgba(255, 255, 255, 0.72)', marginTop: 1 },
+  headerActions: { flexDirection: 'row', gap: 7, alignItems: 'center' },
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.18)',
+    gap: 5,
+    backgroundColor: 'rgba(212, 175, 55, 0.16)',
     borderWidth: 1,
     borderColor: 'rgba(212, 175, 55, 0.35)',
-    paddingHorizontal: 13,
-    paddingVertical: 9,
-    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 9,
   },
-  headerBtnGhost: { backgroundColor: 'rgba(255, 255, 255, 0.1)', borderColor: 'rgba(255, 255, 255, 0.22)' },
-  headerBtnText: { color: '#F3D179', fontWeight: '800', fontSize: 13 },
-  content: { padding: 18, paddingBottom: 80 },
+  headerBtnGhost: { backgroundColor: 'rgba(255, 255, 255, 0.09)', borderColor: 'rgba(255, 255, 255, 0.2)' },
+  headerBtnText: { color: '#F3D179', fontWeight: '800', fontSize: 12.5 },
+  content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 70 },
+
+  // Full-Width Slim Executive KPI Strip
+  kpiGridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+    marginBottom: 10,
+  },
+  kpiSlimCard: {
+    flex: 1,
+    minWidth: 165,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  kpiSlimIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  kpiSlimValue: { fontSize: 16, fontWeight: '900', color: '#0F172A' },
+  kpiSlimLabel: { fontSize: 10.5, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 0.3 },
+  kpiSlimSub: { fontSize: 11, color: '#64748B', fontWeight: '600', marginTop: 1 },
+  toolbarDivider: { width: 1, height: 20, backgroundColor: '#E2E8F0', marginHorizontal: 4 },
 
   statsRow: { gap: 10, paddingBottom: 4 },
   statCard: {
@@ -3556,67 +3650,68 @@ const styles = StyleSheet.create({
   miniPillBtnText: { fontSize: 11.5, fontWeight: '800' },
 
   // Floor Pills
-  floorPillsRow: { gap: 8, paddingVertical: 2 },
+  floorPillsRow: { gap: 6, paddingVertical: 2 },
   floorPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    gap: 5,
     backgroundColor: '#fff',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 10,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
   },
   floorPillActive: { backgroundColor: '#F3D179', borderColor: '#B8860B' },
-  floorPillText: { fontSize: 13, fontWeight: '800', color: '#334155' },
+  floorPillText: { fontSize: 12.5, fontWeight: '800', color: '#334155' },
   floorPillTextActive: { color: '#24050A', fontWeight: '900' },
-  floorPillBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+  floorPillBadge: { backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1.5, borderRadius: 7 },
   floorPillBadgeActive: { backgroundColor: '#24050A' },
-  floorPillBadgeText: { fontSize: 11, fontWeight: '800', color: '#475569' },
+  floorPillBadgeText: { fontSize: 10.5, fontWeight: '800', color: '#475569' },
 
   // Unified Control Card
   controlCard: {
     backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 12,
+    borderRadius: 13,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
     borderWidth: 1,
     borderColor: '#E5E1DA',
-    marginBottom: 14,
+    marginBottom: 12,
   },
-  controlTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' },
+  controlTopRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   searchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 7,
     backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    paddingHorizontal: 12,
+    borderRadius: 9,
+    paddingHorizontal: 10,
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  searchInput: { flex: 1, paddingVertical: 9, fontSize: 13.5, color: '#0F172A' },
+  searchInput: { flex: 1, paddingVertical: 6.5, fontSize: 13, color: '#0F172A' },
   chip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    borderRadius: 20,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 18,
     backgroundColor: '#F8FAFC',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  chipDot: { width: 7, height: 7, borderRadius: 4 },
-  chipText: { fontSize: 12.5, fontWeight: '700', color: '#475569' },
+  chipDot: { width: 6, height: 6, borderRadius: 3 },
+  chipText: { fontSize: 12, fontWeight: '700', color: '#475569' },
   capacityStripRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     flexWrap: 'wrap',
     gap: 8,
-    marginTop: 10,
-    paddingTop: 10,
+    marginTop: 8,
+    paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
   },

@@ -294,6 +294,11 @@ async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
     if (timer) clearTimeout(timer);
     if (!res.ok) return false;
     const data = await res.json();
+    const serverName = String(data?.server || '').toLowerCase();
+    // Reject unrelated POS apps (e.g., Kanaf Cafe running on the same dev machine)
+    if (serverName && !serverName.includes('sultan')) {
+      return false;
+    }
     return Boolean(data && (data.status === 'online' || data.server));
   } catch {
     return false;
