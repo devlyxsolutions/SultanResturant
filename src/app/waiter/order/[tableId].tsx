@@ -1,34 +1,34 @@
-import React, { useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Platform,
   Alert,
-  StatusBar,
-  TextInput,
-  useWindowDimensions,
-  Modal,
   Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import {
-  useRestaurantStore,
-  MenuItem,
-  useAuthStore,
-  useOpsStore,
-  Table,
-  Invoice,
-} from '../../../store';
-import { getTableFloor, getTableSeatingType } from '../../../constants/floors';
+import { printInvoiceReceipt } from '../../../components/Invoice';
 import SeatingTypeIcon from '../../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
+import { getTableFloor, getTableSeatingType } from '../../../constants/floors';
 import { broadcastImmediately } from '../../../services/syncService';
-import { printInvoiceReceipt } from '../../../components/Invoice';
+import {
+  Invoice,
+  MenuItem,
+  Table,
+  useAuthStore,
+  useOpsStore,
+  useRestaurantStore,
+} from '../../../store';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
 
 const NOTE_PRESETS = [
@@ -136,12 +136,12 @@ export default function TableOrderScreen() {
         const itemEffectiveStatus: 'pending' | 'cooking' | 'ready' | 'served' = it.itemStatus
           ? it.itemStatus
           : ticket.status === 'served' || (it.completed && stationStatus === 'served')
-          ? 'served'
-          : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
-          ? 'ready'
-          : stationStatus === 'cooking' || ticket.status === 'cooking'
-          ? 'cooking'
-          : 'pending';
+            ? 'served'
+            : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
+              ? 'ready'
+              : stationStatus === 'cooking' || ticket.status === 'cooking'
+                ? 'cooking'
+                : 'pending';
 
         alreadyOrderedItems.push({
           id: it.id,
@@ -458,36 +458,34 @@ export default function TableOrderScreen() {
         </View>
       </View>
 
-      {/* Mobile Tab Switcher */}
-      {isMobile && (
-        <View style={styles.mobileTabBar}>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('menu')}
-          >
-            <Ionicons name="grid-outline" size={16} color={mobileTab === 'menu' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              Menu ({filteredItems.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('cart')}
-          >
-            <Ionicons name="cart-outline" size={16} color={mobileTab === 'cart' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              New KOT ({totalNewQty})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* Full-Page Mode Switcher (All Devices: Menu vs Cart) */}
+      <View style={styles.mobileTabBar}>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('menu')}
+        >
+          <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+            1. Order Dena / Menu Dishes ({filteredItems.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('cart')}
+        >
+          <Ionicons name="cart" size={18} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+            2. Current Cart & KOT Dekhna ({totalNewQty} Items)
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* ========================================================
-          2. MAIN 3-COLUMN WORKSPACE
+          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: FULL-PAGE CART)
           ======================================================== */}
       <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
         {/* LEFT: Category Rail */}
-        {(!isMobile || mobileTab === 'menu') && (
+        {mobileTab === 'menu' && (
           <View style={[styles.categoryRail, isTablet && { width: 175 }, isMobile && styles.categoryRailMobile]}>
             {!isMobile && (
               <View style={styles.categoryRailHeader}>
@@ -559,7 +557,7 @@ export default function TableOrderScreen() {
         )}
 
         {/* CENTER: Dish Grid */}
-        {(!isMobile || mobileTab === 'menu') && (
+        {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
             <View style={styles.catalogFilterBar}>
               <Text style={styles.activeCatTitle}>
@@ -667,9 +665,9 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* RIGHT: Order KOT Ticket Panel */}
-        {(!isMobile || mobileTab === 'cart') && (
-          <View style={[styles.ticketPanel, isTablet && { width: 340 }, isMobile && { width: '100%', flex: 1 }]}>
+        {/* FULL-PAGE CART: Order KOT Ticket Panel */}
+        {mobileTab === 'cart' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
             <View style={styles.ticketItemsHeader}>
               <Text style={styles.ticketItemsHeaderTitle}>
                 NEW KOT ITEMS ({totalNewQty})
@@ -779,8 +777,8 @@ export default function TableOrderScreen() {
         )}
       </View>
 
-      {/* Mobile Floating Bar */}
-      {isMobile && mobileTab === 'menu' && totalNewQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (All Devices) */}
+      {mobileTab === 'menu' && totalNewQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}
@@ -790,9 +788,9 @@ export default function TableOrderScreen() {
             <View style={styles.mobileFloatingQtyCircle}>
               <Text style={styles.mobileFloatingQtyText}>{totalNewQty}</Text>
             </View>
-            <Text style={styles.mobileFloatingLabel}>Review & Send to Kitchen</Text>
+            <Text style={styles.mobileFloatingLabel}>Cart Dekhein & Kitchen Bhejein</Text>
           </View>
-          <Text style={styles.mobileFloatingTotal}>{totalNewQty} Portions →</Text>
+          <Text style={styles.mobileFloatingTotal}>{totalNewQty} Portions • Open Cart ➔</Text>
         </TouchableOpacity>
       )}
 
@@ -1047,33 +1045,35 @@ const styles = StyleSheet.create({
   mobileTabBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-    gap: 6,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 12,
   },
   mobileTabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    gap: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
   },
   mobileTabBtnActive: {
-    backgroundColor: '#FDF2F4',
-    borderWidth: 1,
-    borderColor: '#52141C',
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
   },
   mobileTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#334155',
   },
   mobileTabTextActive: {
-    color: '#52141C',
+    color: '#F3D179',
     fontWeight: '900',
   },
   workspace: {
@@ -1280,11 +1280,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   soldOutOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(15, 23, 42, 0.72)',
     alignItems: 'center',
     justifyContent: 'center',

@@ -319,7 +319,7 @@ export default function POSTerminalScreen({
     if (combinedItems.length > 0) {
       setCart(combinedItems);
       setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
-      if (isMobile) setMobileTab('cart');
+      setMobileTab('cart');
     } else {
       setCart([]);
       setLoadedCart([]);
@@ -1426,29 +1426,61 @@ export default function POSTerminalScreen({
         </View>
       </View>
 
-      {/* Mobile Tab Switcher (Menu vs Cart) */}
-      {isMobile && (
-        <View style={styles.mobileTabBar}>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('menu')}
-          >
-            <Ionicons name="grid-outline" size={16} color={mobileTab === 'menu' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              Menu ({filteredItems.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('cart')}
-          >
-            <Ionicons name="cart-outline" size={16} color={mobileTab === 'cart' ? '#52141C' : '#64748B'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              Order Bill ({totalCartQty})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* ========================================================
+          FULL-PAGE MODE SWITCHER (ON ALL DEVICES: MENU vs CART)
+          ======================================================== */}
+      <View style={styles.mobileTabBar}>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('menu')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="restaurant"
+            size={18}
+            color={mobileTab === 'menu' ? '#FFFFFF' : '#475569'}
+          />
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+            1. Order Dena / Menu Dishes ({filteredItems.length})
+          </Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('cart')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="cart"
+            size={19}
+            color={mobileTab === 'cart' ? '#FFFFFF' : '#475569'}
+          />
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+            2. Current Cart & Bill Dekhna ({totalCartQty} {totalCartQty === 1 ? 'Item' : 'Items'}
+            {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
+          </Text>
+          {totalCartQty > 0 && (
+            <View
+              style={{
+                backgroundColor: mobileTab === 'cart' ? '#D4AF37' : '#52141C',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+              }}
+            >
+              <Text
+                style={{
+                  color: mobileTab === 'cart' ? '#24050A' : '#FFFFFF',
+                  fontSize: 12,
+                  fontWeight: '900',
+                }}
+              >
+                {totalCartQty}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Toast Notification */}
       {kdsStatusToast && (
@@ -1462,15 +1494,14 @@ export default function POSTerminalScreen({
       )}
 
       {/* ========================================================
-          2. MAIN 3-COLUMN POS WORKSPACE
-          [LEFT: Categories Rail] [CENTER: Dishes Grid] [RIGHT: Order Ticket]
+          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: FULL-PAGE CART)
           ======================================================== */}
       <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
         {/* --------------------------------------------------------
-            LEFT: CLEAN VERTICAL CATEGORY RAIL (Horizontal on Mobile)
+            TAB 1 (MENU): LEFT CATEGORY RAIL + FULL-WIDTH DISHES GRID
             -------------------------------------------------------- */}
-        {(!isMobile || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isTablet && { width: 175 }, isMobile && styles.categoryRailMobile]}>
+        {mobileTab === 'menu' && (
+          <View style={[styles.categoryRail, isTablet && { width: 200 }, isMobile && styles.categoryRailMobile]}>
             {!isMobile && (
               <View style={styles.categoryRailHeader}>
                 <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
@@ -1555,9 +1586,9 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            CENTER: SPACIOUS DISHES CATALOG GRID
+            TAB 1 (MENU): SPACIOUS FULL-WIDTH DISHES CATALOG GRID
             -------------------------------------------------------- */}
-        {(!isMobile || mobileTab === 'menu') && (
+        {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
             {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
             <View style={styles.catalogFilterBar}>
@@ -1603,7 +1634,7 @@ export default function POSTerminalScreen({
             {/* Dish Grid */}
             <ScrollView
               style={{ flex: 1 }}
-              contentContainerStyle={[styles.dishGridContent, isMobile && totalCartQty > 0 && { paddingBottom: 90 }]}
+              contentContainerStyle={[styles.dishGridContent, totalCartQty > 0 && { paddingBottom: 96 }]}
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.dishGrid}>
@@ -1707,29 +1738,82 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            RIGHT: CLEAN HIGH-SPEED ORDER TICKET & BILLING PANEL
+            TAB 2 (CART): FULL-PAGE SPACIOUS ORDER CART & BILLING VIEW
             -------------------------------------------------------- */}
-        {(!isMobile || mobileTab === 'cart') && (
-          <View style={[styles.ticketPanel, isTablet && { width: 340 }, isMobile && { width: '100%', flex: 1 }]}>
-            {/* Mobile Order Type Selector */}
-            {isMobile && (
-              <View style={styles.mobileOrderTypeRow}>
+        {mobileTab === 'cart' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
+            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher */}
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                backgroundColor: '#FFFFFF',
+                borderBottomWidth: 1,
+                borderBottomColor: '#E2E8F0',
+                gap: 12,
+              }}
+            >
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: '#F1F5F9',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                }}
+                onPress={() => setMobileTab('menu')}
+              >
+                <Ionicons name="arrow-back" size={18} color="#52141C" />
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
+                  + Add More Dishes (Menu)
+                </Text>
+              </TouchableOpacity>
+
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                 {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
                   const active = orderType === t;
                   return (
                     <TouchableOpacity
                       key={t}
-                      style={[styles.mobileOrderTypeBtn, active && styles.mobileOrderTypeBtnActive]}
+                      style={[
+                        {
+                          paddingHorizontal: 18,
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          backgroundColor: active ? '#52141C' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: active ? '#52141C' : '#CBD5E1',
+                        },
+                      ]}
                       onPress={() => handleOrderTypeChange(t)}
                     >
-                      <Text style={[styles.mobileOrderTypeText, active && styles.mobileOrderTypeTextActive]}>
+                      <Text
+                        style={{
+                          fontSize: 13.5,
+                          fontWeight: '900',
+                          color: active ? '#F3D179' : '#334155',
+                        }}
+                      >
                         {t.toUpperCase()}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            )}
+            </View>
+
+            {/* Full-Page Cart Main Body: 2 Wide Columns on Desktop/Tablet, Stacked on Mobile */}
+            <View style={{ flex: 1, flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
+              {/* LEFT SIDE OF FULL-PAGE CART: Table/Customer Context + Large Cart Item Rows */}
+              <View style={{ flex: 1.4, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#E2E8F0', display: 'flex', flexDirection: 'column' }}>
 
             {/* 1. Order Context Header (Table or Customer Selector) */}
             <View style={styles.ticketContextCard}>
@@ -1889,9 +1973,10 @@ export default function POSTerminalScreen({
                 ))
               )}
             </ScrollView>
+              </View>
 
-            {/* 4. Streamlined Summary & Action Footer */}
-            <View style={styles.ticketFooter}>
+              {/* RIGHT SIDE OF FULL-PAGE CART: Large Financial Summary & Big Action Buttons */}
+              <View style={[styles.ticketFooter, !isMobile && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
               {!hidePrices && (
                 <View style={styles.summaryBox}>
                   <View style={styles.summaryLine}>
@@ -2011,25 +2096,28 @@ export default function POSTerminalScreen({
                 </View>
               )}
             </View>
+            </View>
           </View>
         )}
       </View>
 
-      {/* Mobile Floating Cart Bar */}
-      {isMobile && mobileTab === 'menu' && totalCartQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (All Devices) to Jump to Full-Page Cart */}
+      {mobileTab === 'menu' && totalCartQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}
           activeOpacity={0.9}
         >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
             <View style={styles.mobileFloatingQtyCircle}>
               <Text style={styles.mobileFloatingQtyText}>{totalCartQty}</Text>
             </View>
-            <Text style={styles.mobileFloatingLabel}>View Order & Checkout</Text>
+            <Text style={styles.mobileFloatingLabel}>
+              Cart & Bill Dekhein ({totalCartQty} {totalCartQty === 1 ? 'Item' : 'Items'} Added)
+            </Text>
           </View>
           <Text style={styles.mobileFloatingTotal}>
-            {hidePrices ? `${totalCartQty} Items` : `Rs. ${Math.round(total).toLocaleString()} →`}
+            {hidePrices ? `Open Cart (${totalCartQty}) ➔` : `Rs. ${Math.round(total).toLocaleString()} • Open Cart ➔`}
           </Text>
         </TouchableOpacity>
       )}
@@ -2969,37 +3057,39 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 
-  /* MOBILE SWITCHER */
+  /* FULL-PAGE MODE SWITCHER */
   mobileTabBar: {
     flexDirection: 'row',
     backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-    padding: 6,
-    gap: 6,
+    borderBottomWidth: 1.5,
+    borderBottomColor: '#CBD5E1',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    gap: 12,
   },
   mobileTabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 9,
-    borderRadius: 8,
-    backgroundColor: '#F8FAFC',
+    gap: 10,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
   },
   mobileTabBtnActive: {
-    backgroundColor: '#FDF2F4',
-    borderWidth: 1,
-    borderColor: '#52141C',
+    backgroundColor: '#52141C',
+    borderColor: '#D4AF37',
   },
   mobileTabText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#64748B',
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#334155',
   },
   mobileTabTextActive: {
-    color: '#52141C',
+    color: '#F3D179',
     fontWeight: '900',
   },
 
@@ -3480,81 +3570,89 @@ const styles = StyleSheet.create({
     maxWidth: 220,
   },
 
-  /* COMPACT SINGLE-ROW TICKET ITEM */
+  /* SPACIOUS FULL-PAGE TICKET ITEM ROW */
   ticketRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 7,
-    paddingHorizontal: 8,
-    borderRadius: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
-    borderColor: '#F1F5F9',
-    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    gap: 12,
   },
   ticketRowLeft: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 10,
   },
   ticketRowIndex: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#94A3B8',
-    width: 18,
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#64748B',
+    width: 24,
   },
   ticketRowName: {
-    fontSize: 13,
-    fontWeight: '800',
+    fontSize: 15.5,
+    fontWeight: '900',
     color: '#0F172A',
   },
   ticketRowUnit: {
-    fontSize: 11,
+    fontSize: 12.5,
     color: '#64748B',
-    fontWeight: '600',
+    fontWeight: '700',
+    marginTop: 2,
   },
   ticketRowRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 14,
   },
   qtyStepper: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 7,
-    borderWidth: 1,
+    borderRadius: 10,
+    borderWidth: 1.5,
     borderColor: '#CBD5E1',
   },
   qtyBtn: {
-    width: 25,
-    height: 25,
+    width: 38,
+    height: 38,
     alignItems: 'center',
     justifyContent: 'center',
   },
   qtyBtnPlus: {
     backgroundColor: '#52141C',
-    borderTopRightRadius: 6,
-    borderBottomRightRadius: 6,
+    borderTopRightRadius: 8,
+    borderBottomRightRadius: 8,
   },
   qtyValText: {
-    minWidth: 24,
+    minWidth: 36,
     textAlign: 'center',
-    fontSize: 12.5,
+    fontSize: 15,
     fontWeight: '900',
     color: '#0F172A',
   },
   ticketRowSubtotal: {
-    minWidth: 56,
+    minWidth: 80,
     textAlign: 'right',
-    fontSize: 13,
+    fontSize: 15.5,
     fontWeight: '900',
-    color: '#0F172A',
+    color: '#52141C',
   },
   removeRowBtn: {
-    padding: 2,
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   /* FOOTER & TOTALS */
