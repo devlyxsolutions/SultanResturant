@@ -3,43 +3,53 @@ import { Platform } from 'react-native';
 import { useRestaurantStore } from '../store/restaurantStore';
 
 /**
- * Local Wi-Fi IPv4 address of the host machine.
- * Accessible by any mobile device on the same restaurant Wi-Fi router / mobile hotspot.
+ * Public HTTPS Cloud URL for Sultan Restaurant's Customer Digital Menu & Feedback Portal.
+ * Accessible from ANY customer mobile phone on 4G/5G mobile data or any Wi-Fi network!
  */
+export const PUBLIC_ONLINE_URL = 'https://sultanresturant092.netlify.app';
 export const DEFAULT_LAN_IP = '192.168.1.14';
 export const DEFAULT_PORT = '8081';
-export const DEFAULT_STABLE_URL = `http://${DEFAULT_LAN_IP}:${DEFAULT_PORT}`;
+export const DEFAULT_STABLE_URL = PUBLIC_ONLINE_URL;
 
 /**
- * Validates that a feedback URL is reachable and not a dead placeholder, dropped tunnel, or localhost.
+ * Returns true if the URL points to a private/local-only address (unreachable on mobile 4G/5G).
+ */
+function isPrivateLanUrl(url: string): boolean {
+  const clean = url.trim().toLowerCase();
+  return (
+    clean.includes('localhost') ||
+    clean.includes('127.0.0.1') ||
+    clean.includes('0.0.0.0') ||
+    /https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(clean)
+  );
+}
+
+/**
+ * Validates that a customer QR URL is publicly reachable over mobile networks (4G/5G)
+ * and not localhost, a private LAN IP, or a dead placeholder.
  */
 function isValidFeedbackUrl(url?: string): boolean {
   if (!url || !url.trim()) return false;
   const clean = url.trim().toLowerCase();
-  if (clean.includes('localhost') || clean.includes('127.0.0.1')) return false;
-  // Discard dropped/dead ephemeral tunnels, dead IP, and 404 placeholders
-  if (clean.includes('192.168.1.17') || clean.includes('sultan-resturant.web.app') || clean.includes('.lhr.life')) return false;
-  return true;
+  if (isPrivateLanUrl(clean)) return false;
+  if (clean.includes('sultan-resturant.web.app') || clean.includes('.lhr.life')) return false;
+  return clean.startsWith('http://') || clean.startsWith('https://');
 }
 
 /**
- * Resolves the online or local network base address for customer-facing portals
- * (QR Codes, WhatsApp Links, Invoices).
+ * Resolves the public HTTPS online base URL for all customer-facing QR codes
+ * (Table Digital Menu QR Standees, Feedback QR Codes, WhatsApp Links).
  *
- * CRITICAL: Never generates 'localhost', dropped tunnels, or dead undeployed domains!
+ * CRITICAL: Always resolves to a public HTTPS URL (default: https://sultanresturant092.netlify.app)
+ * so customers can scan on ANY mobile data network (4G/5G) without connecting to restaurant Wi-Fi!
  */
 export function getBaseFeedbackUrl(customOverride?: string): string {
-  // 1. Explicit override passed as argument
+  // 1. Explicit public override passed as argument
   if (customOverride && isValidFeedbackUrl(customOverride)) {
     return customOverride.trim().replace(/\/+$/, '');
   }
 
-  // 2. Check environment variable (.env)
-  if (process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL && isValidFeedbackUrl(process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL)) {
-    return process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL.trim().replace(/\/+$/, '');
-  }
-
-  // 3. Check user-configured URL stored in Zustand Store (persisted)
+  // 2. Check user-configured public URL stored in Zustand Store (persisted)
   try {
     const storeUrl = useRestaurantStore.getState().onlineFeedbackUrl;
     if (storeUrl && isValidFeedbackUrl(storeUrl)) {
@@ -49,40 +59,31 @@ export function getBaseFeedbackUrl(customOverride?: string): string {
     // Zustand store may not be ready during early init
   }
 
-  // 4. In Web Browser: Check localStorage
+  // 3. Check environment variable (.env)
+  if (process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL && isValidFeedbackUrl(process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL)) {
+    return process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL.trim().replace(/\/+$/, '');
+  }
+
+  // 4. In Web Browser: Check localStorage or current public origin
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const stored = window.localStorage.getItem('sultan_feedback_online_url');
       if (stored && isValidFeedbackUrl(stored)) {
         return stored.trim().replace(/\/+$/, '');
-      } else if (stored && (stored.includes('192.168.1.17') || stored.includes('sultan-resturant.web.app') || stored.includes('.lhr.life'))) {
+      } else if (stored && (isPrivateLanUrl(stored) || stored.includes('sultan-resturant.web.app') || stored.includes('.lhr.life'))) {
         window.localStorage.removeItem('sultan_feedback_online_url');
       }
     } catch {
       // Ignore
     }
 
-    // If page is accessed via an external public domain (e.g. *.ngrok*, *.exp.direct)
-    // or via a LAN IP (e.g. 192.168.x.x), use that exact origin!
-    if (window.location && window.location.hostname) {
-      const host = window.location.hostname;
-      if (
-        host !== 'localhost' &&
-        host !== '127.0.0.1' &&
-        host !== '0.0.0.0' &&
-        !host.includes('sultan-resturant.web.app') &&
-        !host.includes('.lhr.life')
-      ) {
-        return window.location.origin.replace(/\/+$/, '');
-      } else if (host === 'localhost' || host === '127.0.0.1') {
-        const port = window.location.port || '8081';
-        return `http://${DEFAULT_LAN_IP}:${port}`;
-      }
+    if (window.location && window.location.origin && isValidFeedbackUrl(window.location.origin)) {
+      return window.location.origin.replace(/\/+$/, '');
     }
   }
 
-  // 5. Default Fallback: Host Machine Network IP (accessible to all phones on Wi-Fi router)
-  return DEFAULT_STABLE_URL;
+  // 5. Default Public Cloud HTTPS URL (works on ALL 4G/5G mobile networks & Wi-Fi)
+  return PUBLIC_ONLINE_URL;
 }
 
 /**
@@ -319,7 +320,7 @@ export function printTableStandeeHtml(
             1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
             3. Choose Dishes • 4. Direct Sent to Kitchen!
           </div>
-          <div class="wifi-pill">Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
+          <div class="wifi-pill">Works on Any Mobile Data (4G/5G) &amp; Wi-Fi • No App Needed</div>
         </div>
       </div>
     </body>
@@ -391,7 +392,7 @@ export function printAllTablesStandeesHtml(
               1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
               3. Choose Dishes • 4. Direct Sent to Kitchen!
             </div>
-            <div class="wifi-pill">Guest Wi-Fi: <b>Sultan-Guest</b> | Key: <b>sultan123</b></div>
+            <div class="wifi-pill">Works on Any Mobile Data (4G/5G) &amp; Wi-Fi • No App Needed</div>
           </div>
         </div>
       </div>

@@ -22,6 +22,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import SultanLogo from '../../components/SultanLogo';
 import FullscreenButton from '../../components/FullscreenButton';
 import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
+import {
+  fetchPublicMenuFromCloud,
+  isPublicCloudHost,
+  submitCloudOnlineOrder,
+  subscribeToCloudOrderStatus,
+} from '../../services/cloudMenuBridge';
 import { useOpsStore } from '../../store/opsStore';
 import { MenuItem, OnlineOrder, Ticket, useRestaurantStore } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
@@ -373,6 +379,11 @@ export default function CustomerMenuScreen() {
     }
   }, [params.table, params.tableId, params.tableName, params.floor, tables]);
 
+  // Load live restaurant menu, categories, tables & sold-out status from Cloud Firestore (works on 4G/5G!)
+  useEffect(() => {
+    fetchPublicMenuFromCloud().catch(() => {});
+  }, []);
+
   // Load Saved Customer Profile & Order History
   useEffect(() => {
     (async () => {
@@ -500,73 +511,82 @@ export default function CustomerMenuScreen() {
     const orderQueryId = activeTrackingOrder.id || activeTrackingOrder.orderNumber;
     let isCancelled = false;
 
-    const pollOrderStatus = async () => {
-      try {
-        const res = await fetch(`${getBaseUrl()}/api/public/orders/${orderQueryId}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        const serverOrder = data.order || data.data;
-        if (!serverOrder || isCancelled) return;
+    const applyServerOrderUpdate = (serverOrder: Partial<OnlineOrder>) => {
+      if (!serverOrder || !serverOrder.status || isCancelled) return;
+      const curRank = ORDER_STATUS_RANK[currentStatus] ?? 0;
+      const serverRank = ORDER_STATUS_RANK[serverOrder.status] ?? 0;
 
-        const curRank = ORDER_STATUS_RANK[currentStatus] ?? 0;
-        const serverRank = ORDER_STATUS_RANK[serverOrder.status] ?? 0;
+      // Only update if server order is more advanced (or cancelled), preventing flickering
+      if (serverRank > curRank || serverOrder.status === 'CANCELLED') {
+        setActiveTrackingOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            status: serverOrder.status as any,
+            estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? prev.estimatedDeliveryMinutes,
+            riderName: serverOrder.riderName || prev.riderName,
+            riderPhone: serverOrder.riderPhone || prev.riderPhone,
+            assignedWaiter: serverOrder.assignedWaiter || prev.assignedWaiter,
+          };
+        });
 
-        // Only update if server order is more advanced (or cancelled), preventing flickering
-        if (serverRank > curRank || serverOrder.status === 'CANCELLED') {
-          setActiveTrackingOrder((prev) => {
-            if (!prev) return null;
-            return {
-              ...prev,
-              status: serverOrder.status,
-              estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? prev.estimatedDeliveryMinutes,
-              riderName: serverOrder.riderName || prev.riderName,
-              riderPhone: serverOrder.riderPhone || prev.riderPhone,
-              assignedWaiter: serverOrder.assignedWaiter || prev.assignedWaiter,
-            };
-          });
+        useRestaurantStore.setState((s) => ({
+          onlineOrders: (s.onlineOrders || []).map((o) =>
+            (o.id === serverOrder.id || o.orderNumber === serverOrder.orderNumber || o.id === orderQueryId)
+              ? { ...o, status: serverOrder.status as any }
+              : o
+          ),
+        }));
 
-          // Sync into store as well so store never lags behind polling
-          useRestaurantStore.setState((s) => ({
-            onlineOrders: (s.onlineOrders || []).map((o) =>
-              (o.id === serverOrder.id || o.orderNumber === serverOrder.orderNumber)
-                ? { ...o, status: serverOrder.status }
-                : o
-            ),
-          }));
-
-          if (serverOrder.status === 'CONFIRMED' || serverOrder.status === 'PREPARING' || serverOrder.status === 'READY' || serverOrder.status === 'SERVED') {
-            playChime('status_update');
-          }
-
-          setOrderHistory((prevHistory) => {
-            const updated = prevHistory.map((item) => {
-              if (item.id === serverOrder.id || item.orderNumber === serverOrder.orderNumber) {
-                return {
-                  ...item,
-                  status: serverOrder.status,
-                  estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? item.estimatedDeliveryMinutes,
-                  riderName: serverOrder.riderName || item.riderName,
-                  riderPhone: serverOrder.riderPhone || item.riderPhone,
-                  assignedWaiter: serverOrder.assignedWaiter || item.assignedWaiter,
-                };
-              }
-              return item;
-            });
-            AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated)).catch(() => {});
-            return updated;
-          });
+        if (serverOrder.status === 'CONFIRMED' || serverOrder.status === 'PREPARING' || serverOrder.status === 'READY' || serverOrder.status === 'SERVED') {
+          playChime('status_update');
         }
-      } catch {
-        // silent polling catch
+
+        setOrderHistory((prevHistory) => {
+          const updated = prevHistory.map((item) => {
+            if (item.id === serverOrder.id || item.orderNumber === serverOrder.orderNumber || item.id === orderQueryId) {
+              return {
+                ...item,
+                status: serverOrder.status as any,
+                estimatedDeliveryMinutes: serverOrder.estimatedDeliveryMinutes ?? item.estimatedDeliveryMinutes,
+                riderName: serverOrder.riderName || item.riderName,
+                riderPhone: serverOrder.riderPhone || item.riderPhone,
+                assignedWaiter: serverOrder.assignedWaiter || item.assignedWaiter,
+              };
+            }
+            return item;
+          });
+          AsyncStorage.setItem(STORAGE_KEY_ORDERS, JSON.stringify(updated)).catch(() => {});
+          return updated;
+        });
       }
     };
 
-    pollOrderStatus();
-    const interval = setInterval(pollOrderStatus, 2500);
+    // 1. Real-time Cloud Firestore live status subscription (works on ANY 4G/5G mobile network!)
+    const unsubCloud = subscribeToCloudOrderStatus(orderQueryId, applyServerOrderUpdate);
+
+    // 2. Local LAN HTTP Polling fallback (only when hosted on local restaurant LAN, never on Netlify)
+    let interval: ReturnType<typeof setInterval> | null = null;
+    if (!isPublicCloudHost()) {
+      const pollOrderStatus = async () => {
+        try {
+          const res = await fetch(`${getBaseUrl()}/api/public/orders/${orderQueryId}`);
+          if (!res.ok) return;
+          const data = await res.json();
+          const serverOrder = data.order || data.data;
+          if (serverOrder) applyServerOrderUpdate(serverOrder);
+        } catch {
+          // silent polling catch
+        }
+      };
+      pollOrderStatus();
+      interval = setInterval(pollOrderStatus, 2500);
+    }
 
     return () => {
       isCancelled = true;
-      clearInterval(interval);
+      unsubCloud();
+      if (interval) clearInterval(interval);
     };
   }, [activeTrackingOrder?.id, activeTrackingOrder?.orderNumber, activeTrackingOrder?.status]);
 
@@ -1106,112 +1126,164 @@ export default function CustomerMenuScreen() {
       let createdOrder: CustomerOrderHistory | null = null;
       let orderNum = `SLT-${Math.floor(1000 + Math.random() * 9000)}`;
 
-      // 1. Send to Backend
-      try {
-        const res = await fetch(`${getBaseUrl()}/api/public/orders`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(orderPayload),
-        });
-        const data = await res.json();
-        const returnedOrder = data.data || data.order;
-        if (data.success && returnedOrder) {
-          createdOrder = {
-            id: returnedOrder.id,
-            orderNumber: returnedOrder.orderNumber || orderNum,
-            orderType: orderMode,
-            tableId: selectedTable?.id,
-            tableName: orderPayload.tableName,
-            floor: selectedTable?.floor,
-            customerName: customerName.trim(),
-            customerPhone: customerPhone.trim(),
-            deliveryAddress: deliveryAddress.trim(),
-            items: cart.map((c) => ({
-              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
-              qty: c.qty,
-              price: c.unitPrice,
-              notes: c.notes,
-            })),
-            subtotal,
-            deliveryFee,
-            tax,
-            total: grandTotal,
-            status: returnedOrder.status || 'PENDING',
-            createdAt: returnedOrder.createdAt || Date.now(),
-            estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
-          };
-
-          const formattedOnlineOrder: OnlineOrder = {
-            id: returnedOrder.id,
-            orderNumber: returnedOrder.orderNumber || orderNum,
-            source: 'digital_menu',
-            orderType: orderMode as any,
-            floor: selectedTable?.floor,
-            tableId: selectedTable?.id,
-            tableName: orderPayload.tableName,
-            customer: {
-              name: customerName.trim(),
-              phone: customerPhone.trim(),
-              address: deliveryAddress.trim(),
-            },
-            paymentMethod: paymentMethod || 'pay_at_counter',
-            items: cart.map((c) => ({
-              id: c.item.id,
-              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
-              unitPrice: c.unitPrice,
-              price: c.unitPrice,
-              qty: c.qty,
-              quantity: c.qty,
-              totalPrice: c.unitPrice * c.qty,
-              notes: c.notes,
-              station: c.item.station || 'main',
-            })),
-            subtotal,
-            deliveryFee,
-            tax,
-            total: grandTotal,
-            status: (returnedOrder.status as any) || 'PENDING',
-          };
-
-          const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
-          useRestaurantStore.getState().syncFromServer({
-            onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
-            ...(data.pendingConfirmation ? {
-              pendingFloorOrderAlert: {
-                id: `alert-${Date.now()}`,
-                orderId: returnedOrder.id,
+      // 1. Send to Local LAN Backend (only when running on restaurant LAN / local host)
+      const isCloudGuest = isPublicCloudHost();
+      if (!isCloudGuest) {
+        try {
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          const timeout = controller ? setTimeout(() => controller.abort(), 3500) : null;
+          const res = await fetch(`${getBaseUrl()}/api/public/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload),
+            ...(controller ? { signal: controller.signal } : {}),
+          });
+          if (timeout) clearTimeout(timeout);
+          const contentType = res.headers.get('content-type') || '';
+          if (res.ok && contentType.includes('application/json')) {
+            const data = await res.json();
+            const returnedOrder = data.data || data.order;
+            if (data.success && returnedOrder) {
+              createdOrder = {
+                id: returnedOrder.id,
                 orderNumber: returnedOrder.orderNumber || orderNum,
-                floor: selectedTable?.floor || 'Ground Floor',
-                tableId: selectedTable?.id || '1',
-                tableName: orderPayload.tableName || 'Table',
+                orderType: orderMode,
+                tableId: selectedTable?.id,
+                tableName: orderPayload.tableName,
+                floor: selectedTable?.floor,
                 customerName: customerName.trim(),
                 customerPhone: customerPhone.trim(),
+                deliveryAddress: deliveryAddress.trim(),
+                items: cart.map((c) => ({
+                  name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
+                  qty: c.qty,
+                  price: c.unitPrice,
+                  notes: c.notes,
+                })),
+                subtotal,
+                deliveryFee,
+                tax,
                 total: grandTotal,
-                itemsCount: cart.length,
-                itemsSummary: cart.map(c => `${c.qty}x ${c.item.name}`).join(', '),
-                time: Date.now(),
-              }
-            } : {})
-          });
+                status: returnedOrder.status || 'PENDING',
+                createdAt: returnedOrder.createdAt || Date.now(),
+                estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
+              };
 
-          if (data.ticket) {
-            const currentTickets = useRestaurantStore.getState().tickets || [];
-            if (!currentTickets.some((t: Ticket) => t.id === data.ticket.id)) {
+              const formattedOnlineOrder: OnlineOrder = {
+                id: returnedOrder.id,
+                orderNumber: returnedOrder.orderNumber || orderNum,
+                source: 'digital_menu',
+                orderType: orderMode as any,
+                floor: selectedTable?.floor,
+                tableId: selectedTable?.id,
+                tableName: orderPayload.tableName,
+                customer: {
+                  name: customerName.trim(),
+                  phone: customerPhone.trim(),
+                  address: deliveryAddress.trim(),
+                },
+                paymentMethod: paymentMethod || 'pay_at_counter',
+                items: cart.map((c) => ({
+                  id: c.item.id,
+                  name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
+                  unitPrice: c.unitPrice,
+                  price: c.unitPrice,
+                  qty: c.qty,
+                  quantity: c.qty,
+                  totalPrice: c.unitPrice * c.qty,
+                  notes: c.notes,
+                  station: c.item.station || 'main',
+                })),
+                subtotal,
+                deliveryFee,
+                tax,
+                total: grandTotal,
+                status: (returnedOrder.status as any) || 'PENDING',
+              };
+
+              const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
               useRestaurantStore.getState().syncFromServer({
-                tickets: [data.ticket, ...currentTickets],
+                onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
+                ...(data.pendingConfirmation ? {
+                  pendingFloorOrderAlert: {
+                    id: `alert-${Date.now()}`,
+                    orderId: returnedOrder.id,
+                    orderNumber: returnedOrder.orderNumber || orderNum,
+                    floor: selectedTable?.floor || 'Ground Floor',
+                    tableId: selectedTable?.id || '1',
+                    tableName: orderPayload.tableName || 'Table',
+                    customerName: customerName.trim(),
+                    customerPhone: customerPhone.trim(),
+                    total: grandTotal,
+                    itemsCount: cart.length,
+                    itemsSummary: cart.map(c => `${c.qty}x ${c.item.name}`).join(', '),
+                    time: Date.now(),
+                  }
+                } : {})
               });
+
+              if (data.ticket) {
+                const currentTickets = useRestaurantStore.getState().tickets || [];
+                if (!currentTickets.some((t: Ticket) => t.id === data.ticket.id)) {
+                  useRestaurantStore.getState().syncFromServer({
+                    tickets: [data.ticket, ...currentTickets],
+                  });
+                }
+              }
             }
           }
+        } catch (err) {
+          console.warn('[Menu] LAN server unreachable, submitting via Cloud Firestore:', err);
         }
-      } catch (err) {
-        console.warn('[Menu] Server unreachable, using local fallback:', err);
       }
 
-      // 2. Offline fallback
+      // 2. Cloud Firestore Submission (Primary for 4G/5G Mobile Network Guests & Cloud Fallback)
       if (!createdOrder) {
-        const fallbackId = `ORD-LOC-${Date.now().toString().slice(-6)}`;
+        const cloudOrderId = `ORD-CLOUD-${Date.now().toString(36).toUpperCase()}-${Math.floor(100 + Math.random() * 900)}`;
+        const nowTs = Date.now();
+
+        const formattedOnlineOrder: OnlineOrder = {
+          id: cloudOrderId,
+          orderNumber: orderNum,
+          source: 'digital_menu',
+          orderType: orderMode as any,
+          floor: selectedTable?.floor || 'Ground Floor',
+          tableId: selectedTable?.id,
+          tableName: orderPayload.tableName || selectedTable?.name || 'Table',
+          customer: {
+            name: customerName.trim(),
+            phone: customerPhone.trim(),
+            address: deliveryAddress.trim(),
+          },
+          paymentMethod: paymentMethod || 'pay_at_counter',
+          items: cart.map((c) => ({
+            id: c.item.id,
+            name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
+            unitPrice: c.unitPrice,
+            price: c.unitPrice,
+            qty: c.qty,
+            quantity: c.qty,
+            totalPrice: c.unitPrice * c.qty,
+            notes: c.notes,
+            station: c.item.station || 'main',
+          })),
+          subtotal,
+          deliveryFee,
+          tax,
+          total: grandTotal,
+          status: 'PENDING',
+          estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
+          createdAt: nowTs,
+          updatedAt: nowTs,
+        };
+
+        const cloudSubmitted = await submitCloudOnlineOrder(formattedOnlineOrder);
+        if (!cloudSubmitted && isCloudGuest) {
+          throw new Error('Could not connect to Sultan Cloud Server. Please check your mobile internet and try again.');
+        }
+
         createdOrder = {
-          id: fallbackId,
+          id: cloudOrderId,
           orderNumber: orderNum,
           orderType: orderMode,
           tableId: selectedTable?.id,
@@ -1231,98 +1303,23 @@ export default function CustomerMenuScreen() {
           tax,
           total: grandTotal,
           status: 'PENDING',
-          createdAt: Date.now(),
+          createdAt: nowTs,
           estimatedDeliveryMinutes: orderMode === 'dine_in' ? 20 : 35,
         };
 
-        try {
-          const newTicket: Ticket = {
-            id: `KOT-${Math.floor(1000 + Math.random() * 9000)}`,
-            orderId: createdOrder.id,
-            orderNumber: createdOrder.orderNumber,
-            tableId: selectedTable?.id || 'dine-in-app',
-            tableName: orderPayload.tableName || 'Customer Table',
-            server:
-              orderMode === 'dine_in'
-                ? 'App Guest (Contactless QR)'
-                : 'Online Delivery',
-            timePlaced: Date.now(),
-            status: 'cooking',
-            items: cart.map((c) => ({
-              id: c.item.id,
-              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
-              price: c.unitPrice,
-              qty: c.qty,
-              notes: c.notes,
-              completed: false,
-              station: c.item.station || 'main',
-            })),
-          };
-
-          const formattedOnlineOrder: OnlineOrder = {
-            id: createdOrder.id,
-            orderNumber: createdOrder.orderNumber || orderNum,
-            source: 'digital_menu',
-            orderType: orderMode as any,
-            floor: selectedTable?.floor,
-            tableId: selectedTable?.id,
-            tableName: orderPayload.tableName,
-            customer: {
-              name: customerName.trim(),
-              phone: customerPhone.trim(),
-              address: deliveryAddress.trim(),
-            },
-            paymentMethod: paymentMethod || 'pay_at_counter',
-            items: cart.map((c) => ({
-              id: c.item.id,
-              name: c.portionLabel ? `${c.item.name} (${c.portionLabel})` : c.item.name,
-              unitPrice: c.unitPrice,
-              price: c.unitPrice,
-              qty: c.qty,
-              quantity: c.qty,
-              totalPrice: c.unitPrice * c.qty,
-              notes: c.notes,
-              station: c.item.station || 'main',
-            })),
-            subtotal,
-            deliveryFee,
-            tax,
-            total: grandTotal,
-            status: 'PENDING',
-          };
-
-          const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
-          useRestaurantStore.getState().syncFromServer({
-            onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
-            ...(orderMode === 'dine_in' ? {
-              pendingFloorOrderAlert: {
-                id: `alert-${Date.now()}`,
-                orderId: createdOrder.id,
-                orderNumber: createdOrder.orderNumber || orderNum,
-                floor: selectedTable?.floor || 'Ground Floor',
-                tableId: selectedTable?.id || '1',
-                tableName: orderPayload.tableName || 'Table',
-                customerName: customerName.trim(),
-                customerPhone: customerPhone.trim(),
-                total: grandTotal,
-                itemsCount: cart.length,
-                itemsSummary: cart.map(c => `${c.qty}x ${c.item.name}`).join(', '),
-                time: Date.now(),
-              }
-            } : {})
-          });
-          syncFromServer({
-            tickets: [newTicket, ...(useRestaurantStore.getState().tickets || [])],
-          });
-        } catch {
-          // ticket sync handled
-        }
+        // Keep local tracking store updated without overwriting restaurant POS live_state
+        const storeOnlineOrders = useRestaurantStore.getState().onlineOrders || [];
+        useRestaurantStore.getState().syncFromServer({
+          onlineOrders: [formattedOnlineOrder, ...storeOnlineOrders.filter(o => o.id !== formattedOnlineOrder.id)],
+        });
       }
 
-      try {
-        broadcastImmediately();
-      } catch {
-        // sync broadcast handled
+      if (!isCloudGuest) {
+        try {
+          broadcastImmediately();
+        } catch {
+          // sync broadcast handled
+        }
       }
 
       const updatedHistory = [createdOrder, ...orderHistory];

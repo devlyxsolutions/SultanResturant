@@ -1023,6 +1023,14 @@ export const useRestaurantStore = create<RestaurantState>()(
             pendingFloorOrderAlert: updatedAlert
           };
         });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+          syncCloudOrderStatus(orderId, {
+            status: 'CONFIRMED',
+            assignedWaiter: assignedWaiter || 'Floor Manager Confirmed',
+          });
+        } catch (_) {}
         notifySync();
       },
 
@@ -1059,6 +1067,14 @@ export const useRestaurantStore = create<RestaurantState>()(
             pendingFloorOrderAlert: updatedAlert
           };
         });
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-require-imports
+          const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+          syncCloudOrderStatus(orderId, {
+            status: 'CANCELLED',
+            managerNotes: reason || 'Rejected by Floor Manager',
+          });
+        } catch (_) {}
         notifySync();
       },
 
@@ -1331,6 +1347,11 @@ export const useRestaurantStore = create<RestaurantState>()(
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'PREPARING' })
             }).catch(() => {});
+          } catch (_) {}
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+            syncCloudOrderStatus(targetOrdId, { status: 'PREPARING', estimatedDeliveryMinutes: maxPrep });
           } catch (_) {}
         }
 
@@ -1678,6 +1699,13 @@ export const useRestaurantStore = create<RestaurantState>()(
                 type: 'ready',
                 time: Date.now(),
               };
+              if (t.orderId) {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                  syncCloudOrderStatus(t.orderId, { status: 'READY' });
+                } catch (_) {}
+              }
             } else if (status === 'cooking') {
               const stationItems = t.items
                 .filter(i => (i.station || 'main') === station)
@@ -1696,9 +1724,23 @@ export const useRestaurantStore = create<RestaurantState>()(
                 type: 'cooking_started',
                 time: Date.now(),
               };
+              if (t.orderId) {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                  syncCloudOrderStatus(t.orderId, { status: 'PREPARING' });
+                } catch (_) {}
+              }
             } else if (status === 'served') {
               if (updatedAlert && updatedAlert.ticketId === t.id && (updatedAlert.station === station || updatedAlert.station === 'all')) {
                 updatedAlert = null;
+              }
+              if (t.orderId) {
+                try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
+                  const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                  syncCloudOrderStatus(t.orderId, { status: 'SERVED' });
+                } catch (_) {}
               }
             }
 
@@ -1730,6 +1772,13 @@ export const useRestaurantStore = create<RestaurantState>()(
               type: 'ready',
               time: Date.now(),
             };
+            if (t.orderId) {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                syncCloudOrderStatus(t.orderId, { status: 'READY' });
+              } catch (_) {}
+            }
           } else if (status === 'cooking') {
             const allItemsSummary = t.items.map(i => `${i.qty}x ${i.name}`).join(', ');
             updatedAlert = {
@@ -1745,9 +1794,23 @@ export const useRestaurantStore = create<RestaurantState>()(
               type: 'cooking_started',
               time: Date.now(),
             };
+            if (t.orderId) {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                syncCloudOrderStatus(t.orderId, { status: 'PREPARING' });
+              } catch (_) {}
+            }
           } else if (status === 'served') {
             if (updatedAlert && updatedAlert.ticketId === t.id) {
               updatedAlert = null;
+            }
+            if (t.orderId) {
+              try {
+                // eslint-disable-next-line @typescript-eslint/no-require-imports
+                const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
+                syncCloudOrderStatus(t.orderId, { status: 'SERVED' });
+              } catch (_) {}
             }
           }
 

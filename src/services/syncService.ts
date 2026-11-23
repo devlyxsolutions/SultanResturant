@@ -10,6 +10,13 @@ import { useSettingsStore } from '../store/settingsStore';
 import { isFirebaseConfigured, getFirebaseDb, getFirestoreDb, FIREBASE_REST_BASE_URL } from './firebase';
 import { ref, onValue, set } from 'firebase/database';
 import { doc, getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import {
+  fetchPublicMenuFromCloud,
+  isCustomerPortalRoute,
+  isPublicCloudHost,
+  publishPublicMenuToCloud,
+  startCloudOrdersListener,
+} from './cloudMenuBridge';
 
 export type SyncStatus = 'connected' | 'connecting' | 'offline';
 
@@ -944,7 +951,13 @@ export function reconnect() {
 /** Broadcast local state changes to Firebase Cloud Database or WebSocket server */
 function broadcastLocalState(force = false) {
   if (!force && isApplyingRemoteUpdate) return;
+  // Never allow public customer browsers on Netlify/4G (/menu or /feedback) to overwrite POS live_state!
+  if (isCustomerPortalRoute() && isPublicCloudHost()) return;
   hasUnsyncedLocalChanges = true;
+  // Keep public cloud menu snapshot fresh for customer phones scanning QR codes over 4G/5G
+  if (!isCustomerPortalRoute()) {
+    publishPublicMenuToCloud();
+  }
 
   const state = useRestaurantStore.getState();
   const opsState = getOpsSyncState();
@@ -1152,17 +1165,47 @@ export async function initSyncService() {
   if (isInitialized) return;
   isInitialized = true;
 
+  // Public customer portal on Netlify / Cloud (4G/5G mobile phones scanning QR codes):
+  // Skip all private LAN probes & live_state writes — hydrate lightweight public menu directly from Firestore!
+  if (isCustomerPortalRoute() && isPublicCloudHost()) {
+    syncStatus = 'connecting';
+    notifyListeners();
+    fetchPublicMenuFromCloud()
+      .then((ok) => {
+        if (ok) {
+          isCloudConnected = true;
+          syncStatus = 'connected';
+          lastSyncedAt = Date.now();
+          hasReceivedInitialSync = true;
+          notifyListeners();
+        }
+      })
+      .catch(() => {});
+    return;
+  }
+
   try {
     currentServerAddress = await resolveDefaultServerIp();
   } catch {}
-  connectWebSocket();
-  discoverLocalServerIp().catch(() => {});
-
-  if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
-  lanHttpPollTimer = setInterval(pollLocalLanFallback, 2200);
+  if (!isPublicCloudHost()) {
+    connectWebSocket();
+    discoverLocalServerIp().catch(() => {});
+    if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
+    lanHttpPollTimer = setInterval(pollLocalLanFallback, 2200);
+  }
 
   if (isFirebaseConfigured) {
     initFirebaseSync();
+    // Restaurant staff devices listen in real time for customer 4G/5G QR orders from Firestore
+    if (!isCustomerPortalRoute()) {
+      startCloudOrdersListener(() => {
+        broadcastImmediately();
+      });
+      // Publish live menu & table snapshot to Cloud Firestore so QR scans always see up-to-date menu
+      setTimeout(() => {
+        publishPublicMenuToCloud(true);
+      }, 2000);
+    }
   }
 
   const triggerDebouncedBroadcast = () => {
