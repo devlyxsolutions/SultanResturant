@@ -12,7 +12,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { getActiveServerHttpUrl } from '../services/syncService';
 
-export const INSTALLED_APK_VERSION = 18;
+export const INSTALLED_APK_VERSION = 19;
 export const APP_VERSION_LABEL = `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
