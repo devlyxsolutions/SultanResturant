@@ -486,25 +486,25 @@ async function fetchInitialFirebaseState() {
     }
   }
 
-  // 1. Direct Cloud Firestore state fetch (<100ms when internet is available)
-  const firestoreDb = getFirestoreDb();
-  if (firestoreDb) {
-    try {
-      const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data?.state) {
-          isCloudConnected = true;
-          if (!loadedRemotely) {
+  // 1. Direct Cloud Firestore state fetch (<100ms when internet is available, only if LAN didn't load)
+  if (!loadedRemotely) {
+    const firestoreDb = getFirestoreDb();
+    if (firestoreDb) {
+      try {
+        const docRef = doc(firestoreDb, 'sultan_restaurant', 'live_state');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data?.state) {
+            isCloudConnected = true;
             applyRemoteStateSafely(data.state, data.packetId, data.timestamp);
             loadedRemotely = true;
           }
         }
+      } catch (e) {
+        isCloudConnected = false;
+        console.warn('[SyncService] Initial Firestore fetch error:', e);
       }
-    } catch (e) {
-      isCloudConnected = false;
-      console.warn('[SyncService] Initial Firestore fetch error:', e);
     }
   }
 

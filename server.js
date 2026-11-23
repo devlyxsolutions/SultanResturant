@@ -6929,10 +6929,20 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         }, 400);
       }
 
+      // Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429
+      let firestorePollInterval = 60000; // poll every 60s instead of 2.5s (reduces reads by 96%)
+      let firestoreBackoffUntil = 0;
+
       async function pollFirestoreCloud() {
         if (isPushingToFirestore) return;
+        if (Date.now() < firestoreBackoffUntil) return;
         try {
           const res = await fetch(FIRESTORE_DOC_URL);
+          if (res.status === 429) {
+            // Quota exceeded: back off for 15 minutes before retrying
+            firestoreBackoffUntil = Date.now() + 15 * 60 * 1000;
+            return;
+          }
           if (!res.ok) return;
           const doc = await res.json();
           if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
@@ -6960,8 +6970,8 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
 
       // Start Cloud Firestore bridge pulse (publish clean authoritative local state first)
       pushToFirestoreCloud();
-      setInterval(pollFirestoreCloud, 2500);
-      setTimeout(pollFirestoreCloud, 2000);
+      setInterval(pollFirestoreCloud, firestorePollInterval);
+      setTimeout(pollFirestoreCloud, 5000);
 
       wss.on('connection', (ws, req) => {
         const remoteIp = req.socket.remoteAddress;
