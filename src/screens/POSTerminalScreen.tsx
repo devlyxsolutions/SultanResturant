@@ -1,29 +1,29 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  ScrollView, 
-  TouchableOpacity, 
-  TextInput, 
-  Modal, 
-  Alert, 
-  Platform, 
-  useWindowDimensions, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Modal,
+  Alert,
+  Platform,
+  useWindowDimensions,
   StatusBar,
-  Image
+  Image,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { 
-  useRestaurantStore, 
-  MenuItem, 
-  OrderItem, 
-  Payment, 
-  Invoice, 
-  useAuthStore, 
-  useDiscountStore, 
-  EventDiscount 
+import {
+  useRestaurantStore,
+  MenuItem,
+  OrderItem,
+  Payment,
+  Invoice,
+  useAuthStore,
+  useDiscountStore,
+  EventDiscount,
 } from '../store';
 import { useShiftStore } from '../store/shiftStore';
 import { useOpsStore } from '../store/opsStore';
@@ -46,11 +46,9 @@ import {
 import {
   getTableFloor,
   getTableSeatingType,
-  getFloorMeta,
   sortFloors,
   FLOOR_ORDER,
   SeatingZoneType,
-  SEATING_ZONES,
 } from '../constants/floors';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
@@ -66,65 +64,27 @@ function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSet
 
 function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   const c = (catName || '').toLowerCase().trim();
-  if (c === 'all') return 'grid';
-  if (c.includes('appetizer') || c.includes('starter') || c.includes('snack') || c.includes('fries') || c.includes('pita') || c.includes('hummus')) return 'pizza';
-  if (c.includes('main') || c.includes('karahi') || c.includes('handi') || c.includes('curry') || c.includes('gravy')) return 'flame';
-  if (c.includes('bbq') || c.includes('grill') || c.includes('kebab') || c.includes('tikka') || c.includes('ribs') || c.includes('shinwari')) return 'bonfire';
-  if (c.includes('dessert') || c.includes('sweet') || c.includes('cake') || c.includes('kunafa') || c.includes('ice') || c.includes('lava') || c.includes('halwa')) return 'ice-cream';
-  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('margarita') || c.includes('tea') || c.includes('coffee') || c.includes('soda')) return 'wine';
-  if (c.includes('deal') || c.includes('combo') || c.includes('special') || c.includes('feast') || c.includes('offer')) return 'pricetags';
-  if (c.includes('rice') || c.includes('biryani') || c.includes('pulao')) return 'restaurant';
-  if (c.includes('bread') || c.includes('naan') || c.includes('roti') || c.includes('kulcha')) return 'nutrition';
-  if (c.includes('burger') || c.includes('sandwich') || c.includes('wrap')) return 'fast-food';
-  if (c.includes('pizza')) return 'pizza';
-  if (c.includes('fish') || c.includes('seafood') || c.includes('prawn')) return 'fish';
-  if (c.includes('salad') || c.includes('diet') || c.includes('green')) return 'leaf';
-  return 'restaurant';
+  if (c === 'all') return 'apps';
+  if (c.includes('appetizer') || c.includes('starter') || c.includes('snack') || c.includes('fries')) return 'fast-food-outline';
+  if (c.includes('main') || c.includes('karahi') || c.includes('handi') || c.includes('curry')) return 'flame-outline';
+  if (c.includes('bbq') || c.includes('grill') || c.includes('kebab') || c.includes('tikka')) return 'bonfire-outline';
+  if (c.includes('dessert') || c.includes('sweet') || c.includes('kunafa') || c.includes('ice')) return 'ice-cream-outline';
+  if (c.includes('drink') || c.includes('beverage') || c.includes('juice') || c.includes('shake') || c.includes('tea')) return 'wine-outline';
+  if (c.includes('deal') || c.includes('combo') || c.includes('special') || c.includes('platter')) return 'pricetags-outline';
+  if (c.includes('rice') || c.includes('biryani') || c.includes('pulao') || c.includes('mandi')) return 'restaurant-outline';
+  if (c.includes('bread') || c.includes('naan') || c.includes('roti')) return 'nutrition-outline';
+  if (c.includes('burger') || c.includes('sandwich') || c.includes('wrap')) return 'fast-food-outline';
+  if (c.includes('pizza') || c.includes('pasta')) return 'pizza-outline';
+  if (c.includes('fish') || c.includes('seafood') || c.includes('prawn')) return 'fish-outline';
+  if (c.includes('salad') || c.includes('soup')) return 'leaf-outline';
+  return 'restaurant-outline';
 }
-
-const getCuisineMeta = (name: string) => {
-  const lower = name.toLowerCase();
-  if (lower.includes('pakistan') || lower.includes('desi') || lower.includes('karahi') || lower.includes('bbq')) {
-    return { icon: 'flame', color: '#16A34A' };
-  }
-  if (lower.includes('chinese') || lower.includes('asian')) {
-    return { icon: 'restaurant', color: '#DC2626' };
-  }
-  if (lower.includes('continental') || lower.includes('steak')) {
-    return { icon: 'wine', color: '#9333EA' };
-  }
-  if (lower.includes('arabic') || lower.includes('middle') || lower.includes('mandi')) {
-    return { icon: 'moon', color: '#D97706' };
-  }
-  if (lower.includes('turkish') || lower.includes('kebab')) {
-    return { icon: 'sparkles', color: '#E11D48' };
-  }
-  if (lower.includes('fast') || lower.includes('burger')) {
-    return { icon: 'fast-food', color: '#EA580C' };
-  }
-  if (lower.includes('italian') || lower.includes('pizza') || lower.includes('pasta')) {
-    return { icon: 'pizza', color: '#059669' };
-  }
-  return { icon: 'earth', color: '#B45309' };
-};
 
 interface POSTerminalScreenProps {
   role?: 'admin' | 'manager' | 'floor_manager';
   backRoute?: string;
   shiftRoute?: string;
 }
-
-const LivePOSClock = React.memo(() => {
-  const [time, setTime] = useState(() => new Date().toLocaleTimeString('en-GB'));
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTime(new Date().toLocaleTimeString('en-GB'));
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-  return <Text style={styles.clockText}>{time}</Text>;
-});
-LivePOSClock.displayName = 'LivePOSClock';
 
 export default function POSTerminalScreen({
   role = 'admin',
@@ -139,35 +99,31 @@ export default function POSTerminalScreen({
   const prefillCustomerName = searchParams.prefillCustomerName as string | undefined;
   const prefillCustomerAddress = searchParams.prefillCustomerAddress as string | undefined;
   const paramOrderType = searchParams.orderType as string | undefined;
+
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1200;
+  const isTablet = width >= 768 && width < 1120;
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart'>('menu');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
-  const [categorySearchQuery, setCategorySearchQuery] = useState('');
-  const [categoryViewMode, setCategoryViewMode] = useState<'grid' | 'list'>('grid');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [pendingOrderSearchQuery, setPendingOrderSearchQuery] = useState('');
-  const [isFullscreen, setIsFullscreen] = useState(false);
 
-  const user = useAuthStore(state => state.user);
-  const { can, canApplyCustomDiscount, roleName, permissions } = useRolePermissions();
+  const user = useAuthStore((state) => state.user);
+  const { can, roleName, permissions } = useRolePermissions();
 
   const requirePosPerm = (permKey: keyof RolePermissions, actionLabel: string): boolean => {
     if (role === 'admin' || can(permKey)) return true;
-    const msg = `Permission Restricted: Your cashier account (${user?.name || roleName}) is not authorized to ${actionLabel}. Please contact Admin in System Settings.`;
+    const msg = `Permission Restricted: Your account (${user?.name || roleName}) is not authorized to ${actionLabel}. Please contact Admin in System Settings.`;
     if (Platform.OS === 'web') window.alert(msg);
     else Alert.alert('Permission Restricted', msg);
     return false;
   };
 
-  // Check if current user is an Order Taker (Waiter or dedicated Order Taker)
   const isOrderTakerRole = useMemo(() => {
     const userRole = (user?.role || '').toLowerCase();
     const posRole = (role || '').toString().toLowerCase();
     const customRole = (user?.customRoleId || '').toLowerCase();
-    
     return (
       userRole === 'waiter' ||
       userRole === 'order_taker' ||
@@ -179,77 +135,54 @@ export default function POSTerminalScreen({
     );
   }, [user?.role, user?.customRoleId, role]);
 
-  // Check if current user is Cashier, Manager, Floor Manager, or Admin (staff who must see product prices & order totals)
   const isCashierOrManagement = useMemo(() => {
     if (isOrderTakerRole) return false;
     const userRole = (user?.role || '').toLowerCase();
     const posRole = (role || '').toString().toLowerCase();
     const customRole = (user?.customRoleId || '').toLowerCase();
-
     if (posRole === 'admin' || posRole === 'manager' || posRole === 'floor_manager') return true;
     if (userRole === 'admin' || userRole === 'manager' || userRole === 'cashier' || userRole.includes('floor')) return true;
     if (customRole === 'role-admin' || customRole === 'role-manager' || customRole === 'role-cashier' || customRole.includes('floor')) return true;
-
     return can('canAccessPOS') || can('canAccessInvoices');
   }, [isOrderTakerRole, user?.role, user?.customRoleId, role, can]);
 
-  // Order Taker Mode:
-  // - Cashier, Manager, and Admin MUST see product prices and bill totals (default = FALSE, i.e. prices visible).
-  // - Order Takers MUST NEVER see prices or totals (strictly locked to TRUE).
   const [orderTakerMode, setOrderTakerMode] = useState<boolean>(false);
+  const hidePrices = isOrderTakerRole ? true : isCashierOrManagement ? orderTakerMode : true;
 
-  // Clear any legacy localStorage value that previously forced hide_prices=true for Cashier/Manager/Admin
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-      if (isCashierOrManagement) {
-        window.localStorage.removeItem('sultan_pos_hide_prices');
-      }
-    }
-  }, [isCashierOrManagement]);
+  // Stores
+  const menuItems = useRestaurantStore((state) => state.menuItems) || [];
+  const regions = useRestaurantStore((state) => state.regions) || [];
+  const customers = useRestaurantStore((state) => state.customers) || [];
+  const tables = useRestaurantStore((state) => state.tables) || [];
+  const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
+  const addCustomer = useRestaurantStore((state) => state.addCustomer);
+  const updateCustomer = useRestaurantStore((state) => state.updateCustomer);
+  const saveInvoice = useRestaurantStore((state) => state.saveInvoice);
+  const placeOrder = useRestaurantStore((state) => state.placeOrder);
+  const settleBill = useRestaurantStore((state) => state.settleBill);
+  const markTableBilled = useRestaurantStore((state) => state.markTableBilled);
+  const dismissTicket = useRestaurantStore((state) => state.dismissTicket);
+  const clearTableTickets = useRestaurantStore((state) => state.clearTableTickets);
+  const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
+  const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const invoices = useRestaurantStore((state) => state.invoices) || [];
 
-  // Final price visibility determination:
-  // - Order Takers: ALWAYS TRUE (Prices & Totals hidden)
-  // - Cashier, Manager, Admin: FALSE by default (Prices & Totals visible)
-  const hidePrices = isOrderTakerRole ? true : (isCashierOrManagement ? orderTakerMode : true);
-
-  // Restaurant Store
-  const menuItems = useRestaurantStore(state => state.menuItems);
-  const categories = useRestaurantStore(state => state.categories);
-  const regions = useRestaurantStore(state => state.regions) || [];
-  const customers = useRestaurantStore(state => state.customers);
-  const tables = useRestaurantStore(state => state.tables);
-  const zones = useRestaurantStore(state => state.zones);
-  const addCustomer = useRestaurantStore(state => state.addCustomer);
-  const updateCustomer = useRestaurantStore(state => state.updateCustomer);
-  const saveInvoice = useRestaurantStore(state => state.saveInvoice);
-  const placeOrder = useRestaurantStore(state => state.placeOrder);
-  const settleBill = useRestaurantStore(state => state.settleBill);
-  const markTableBilled = useRestaurantStore(state => state.markTableBilled);
-  const dismissTicket = useRestaurantStore(state => state.dismissTicket);
-  const clearTableTickets = useRestaurantStore(state => state.clearTableTickets);
-  const clearAllOldTickets = useRestaurantStore(state => state.clearAllOldTickets);
-  const tickets = useRestaurantStore(state => state.tickets);
-  const invoices = useRestaurantStore(state => state.invoices) || [];
-
-  // Shift, Ops & System Settings Store
   const systemSettings = useSettingsStore((s) => s.settings);
-  const shifts = useShiftStore(state => state.shifts);
-  const activeShiftId = useShiftStore(state => state.activeShiftId);
-  const activeShift = shifts.find(s => s.id === activeShiftId && s.status === 'open');
-  const soldOutIds = useOpsStore(state => state.unavailableItemIds);
+  const shifts = useShiftStore((state) => state.shifts);
+  const activeShiftId = useShiftStore((state) => state.activeShiftId);
+  const activeShift = shifts.find((s) => s.id === activeShiftId && s.status === 'open');
+  const soldOutIds = useOpsStore((state) => state.unavailableItemIds);
 
-  // Menu State
+  // Catalog Filters
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
   const [activeRegion, setActiveRegion] = useState<string>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
   const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
 
-  // Cart & Order State
+  // Cart & Order Context
   const [cart, setCart] = useState<OrderItem[]>([]);
   const [loadedCart, setLoadedCart] = useState<OrderItem[]>([]);
   const [orderType, setOrderType] = useState<'takeaway' | 'dine-in' | 'delivery'>('takeaway');
-  
-  // Selection State
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
   const [selectedTableId, setSelectedTableId] = useState<string>('');
   const [selectedServer, setSelectedServer] = useState<string>('');
@@ -265,24 +198,34 @@ export default function POSTerminalScreen({
   const [discountModalVisible, setDiscountModalVisible] = useState(false);
   const [customDiscountInput, setCustomDiscountInput] = useState('');
 
-  // New Customer Form
+  // Customer Creation Form
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerAddress, setCustomerAddress] = useState('');
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
 
-  // Payment & Event Promo State
-  const campaigns = useDiscountStore(state => state.campaigns);
-  const recordRedemption = useDiscountStore(state => state.recordRedemption);
+  // Discounts & Payments
+  const campaigns = useDiscountStore((state) => state.campaigns) || [];
   const [selectedEventCampaign, setSelectedEventCampaign] = useState<EventDiscount | null>(null);
   const [discountAmount, setDiscountAmount] = useState('0');
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
   const [activePaymentIndex, setActivePaymentIndex] = useState<number>(0);
-  const [showCheckoutKeypad, setShowCheckoutKeypad] = useState<boolean>(true);
 
-  const dynamicFloors = useRestaurantStore(state => state.floors);
+  // Table Modal Filters
+  const [tableModalFloor, setTableModalFloor] = useState<string>('All');
+  const [tableModalSeatingType, setTableModalSeatingType] = useState<'all' | SeatingZoneType>('all');
+  const [tableModalStatus, setTableModalStatus] = useState<'all' | 'available' | 'occupied'>('all');
 
-  // Available floors computed identically to TablesBlueprintScreen (Sultan Architecture)
+  const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
+  const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
+  const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
+  const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
+  const [recentInvoicesModalVisible, setRecentInvoicesModalVisible] = useState(false);
+
+  const searchInputRef = useRef<any>(null);
+  const prefilledRef = useRef<string | null>(null);
+  const prefilledCustRef = useRef<string | null>(null);
+
   const availableFloors = useMemo(() => {
     const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);
     if (configured.length > 0) {
@@ -299,62 +242,29 @@ export default function POSTerminalScreen({
     return sortFloors(discovered.length > 0 ? discovered : FLOOR_ORDER);
   }, [dynamicFloors, tables]);
 
-  // Table & Cabin Modal Multi-dimensional Filters
-  const [tableModalFloor, setTableModalFloor] = useState<string>('All');
-  const [tableModalSeatingType, setTableModalSeatingType] = useState<'all' | SeatingZoneType>('all');
-  const [tableModalStatus, setTableModalStatus] = useState<'all' | 'available' | 'occupied'>('all');
-  const [floorDropdownOpen, setFloorDropdownOpen] = useState(false);
-  const [isSearchFocused, setIsSearchFocused] = useState(false);
-  const [isCatSearchFocused, setIsCatSearchFocused] = useState(false);
-  const [isTableSearchFocused, setIsTableSearchFocused] = useState(false);
-  const [isCustSearchFocused, setIsCustSearchFocused] = useState(false);
-  const [isPendingSearchFocused, setIsPendingSearchFocused] = useState(false);
-
-  // Filtered Tables & Cabins for Modal
   const filteredModalTables = useMemo(() => {
-    return tables.filter(t => {
-      // 1. Floor Filter
+    return tables.filter((t) => {
       const tFloor = getTableFloor(t);
-      if (tableModalFloor !== 'All' && tFloor.toLowerCase() !== tableModalFloor.toLowerCase()) {
-        return false;
-      }
-      // 2. Seating Type Filter ('tables' | 'couches' | 'majlis')
+      if (tableModalFloor !== 'All' && tFloor.toLowerCase() !== tableModalFloor.toLowerCase()) return false;
       const tType = getTableSeatingType(t);
       if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
       if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
-      if (tableModalSeatingType !== 'all' && tType !== tableModalSeatingType) {
-        return false;
-      }
-      // 3. Status Filter
+      if (tableModalSeatingType !== 'all' && tType !== tableModalSeatingType) return false;
       if (tableModalStatus !== 'all') {
         if (tableModalStatus === 'available' && t.status !== 'available') return false;
         if (tableModalStatus === 'occupied' && t.status !== 'occupied' && t.status !== 'billed') return false;
       }
-      // 4. Search Filter
       if (tableSearchQuery.trim()) {
         const q = tableSearchQuery.toLowerCase().trim();
         const matchesName = t.name.toLowerCase().includes(q);
         const matchesFloor = tFloor.toLowerCase().includes(q);
         const matchesServer = Boolean(t.server && t.server.toLowerCase().includes(q));
-        const matchesType = tType.toLowerCase().includes(q) || (tType === 'majlis' && ('majlis'.includes(q) || 'cabin'.includes(q)));
-        if (!matchesName && !matchesFloor && !matchesServer && !matchesType) {
-          return false;
-        }
+        if (!matchesName && !matchesFloor && !matchesServer) return false;
       }
       return true;
     });
-  }, [tables, tableModalFloor, tableModalSeatingType, tableModalStatus, tableSearchQuery]);
+  }, [tables, tableModalFloor, tableModalSeatingType, tableModalStatus, tableSearchQuery, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
-  // Print Preview & Post-Payment Table Decision
-  const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
-  const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
-  const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
-  const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
-  const [recentInvoicesModalVisible, setRecentInvoicesModalVisible] = useState(false);
-  const searchInputRef = useRef<any>(null);
-  const prefilledRef = useRef<string | null>(null);
-
-  // Privacy-safe Recent 8 Invoices for cashier quick reprint
   const recent8Invoices = useMemo(() => {
     return [...invoices]
       .filter((inv) => inv && inv.id && inv.status !== 'voided')
@@ -362,34 +272,25 @@ export default function POSTerminalScreen({
       .slice(0, 8);
   }, [invoices]);
 
-  // Toggle Fullscreen (Browser Kiosk)
-  const toggleFullscreen = () => {
-    if (Platform.OS === 'web' && typeof document !== 'undefined') {
-      if (!document.fullscreenElement) {
-        document.documentElement.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => {});
-      } else {
-        document.exitFullscreen().then(() => setIsFullscreen(false)).catch(() => {});
-      }
-    }
-  };
-
-  // Table Selection
+  // Select Table & Load Running Orders
   const handleTableSelect = (tId: string) => {
     setSelectedTableId(tId);
     setOrderType('dine-in');
     setTableModalVisible(false);
-    
-    const targetTable = tables.find(t => t.id === tId || t.name.toLowerCase() === tId.toLowerCase());
-    const tableTickets = tickets.filter(t => 
-      t.tableId === tId || 
-      (targetTable && (t.tableId === targetTable.id || t.tableName?.trim().toLowerCase() === targetTable.name.trim().toLowerCase()))
+
+    const targetTable = tables.find((t) => t.id === tId || t.name.toLowerCase() === tId.toLowerCase());
+    const tableTickets = tickets.filter(
+      (t) =>
+        t.tableId === tId ||
+        (targetTable &&
+          (t.tableId === targetTable.id || t.tableName?.trim().toLowerCase() === targetTable.name.trim().toLowerCase()))
     );
     let combinedItems: OrderItem[] = [];
 
     if (tableTickets.length > 0) {
-      tableTickets.forEach(ticket => {
-        ticket.items.forEach(ti => {
-          const existing = combinedItems.find(i => i.id === ti.id && i.name === ti.name);
+      tableTickets.forEach((ticket) => {
+        ticket.items.forEach((ti) => {
+          const existing = combinedItems.find((i) => i.id === ti.id && i.name === ti.name);
           if (existing) {
             existing.qty += ti.qty;
           } else {
@@ -397,13 +298,13 @@ export default function POSTerminalScreen({
           }
         });
       });
-    } 
+    }
     if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
       if (combinedItems.length === 0) {
-        combinedItems = targetTable.orders.map(o => ({ ...o }));
+        combinedItems = targetTable.orders.map((o) => ({ ...o }));
       } else {
-        targetTable.orders.forEach(to => {
-          const existing = combinedItems.find(i => i.id === to.id || i.name === to.name);
+        targetTable.orders.forEach((to) => {
+          const existing = combinedItems.find((i) => i.id === to.id || i.name === to.name);
           if (!existing) {
             combinedItems.push({ ...to });
           }
@@ -411,15 +312,14 @@ export default function POSTerminalScreen({
       }
     }
 
-    const foundWaiter = targetTable?.server || tableTickets.find(t => t.server && !t.server.toLowerCase().includes('pos'))?.server;
+    const foundWaiter =
+      targetTable?.server || tableTickets.find((t) => t.server && !t.server.toLowerCase().includes('pos'))?.server;
     setSelectedServer(foundWaiter || '');
 
     if (combinedItems.length > 0) {
       setCart(combinedItems);
       setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
-      if (isMobile || isTablet) {
-        setMobileTab('cart');
-      }
+      if (isMobile) setMobileTab('cart');
     } else {
       setCart([]);
       setLoadedCart([]);
@@ -429,8 +329,8 @@ export default function POSTerminalScreen({
   const handleClearSelectedTable = () => {
     if (!selectedTableId) return;
     if (!requirePosPerm('posCanReleaseTable', 'release occupied tables without billing')) return;
-    const targetTable = tables.find(t => t.id === selectedTableId);
-    const confirmMsg = `Are you sure you want to release ${targetTable ? targetTable.name : 'this table'}? Running bill will be reset.`;
+    const targetTable = tables.find((t) => t.id === selectedTableId);
+    const confirmMsg = `Release ${targetTable ? targetTable.name : 'this table'} and reset running bill?`;
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
         settleBill(selectedTableId);
@@ -442,17 +342,17 @@ export default function POSTerminalScreen({
     } else {
       Alert.alert('Release Table', confirmMsg, [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Release', 
-          style: 'destructive', 
+        {
+          text: 'Release',
+          style: 'destructive',
           onPress: () => {
             settleBill(selectedTableId);
             clearTableTickets(selectedTableId);
             setCart([]);
             setLoadedCart([]);
             setSelectedTableId('');
-          } 
-        }
+          },
+        },
       ]);
     }
   };
@@ -465,7 +365,6 @@ export default function POSTerminalScreen({
     }
   }, [prefillTableId]);
 
-  const prefilledCustRef = useRef<string | null>(null);
   useEffect(() => {
     const custKey = (prefillCustomerId || prefillCustomerPhone) as string | undefined;
     if (custKey && prefilledCustRef.current !== custKey) {
@@ -474,34 +373,17 @@ export default function POSTerminalScreen({
         setSelectedCustomerId(prefillCustomerId);
       }
       setSelectedTableId('');
-      setOrderType(
-        paramOrderType === 'takeaway' || paramOrderType === 'delivery'
-          ? paramOrderType
-          : 'delivery'
-      );
-      if (prefillCustomerName && typeof prefillCustomerName === 'string') {
-        setCustomerName(prefillCustomerName);
-      }
-      if (prefillCustomerPhone && typeof prefillCustomerPhone === 'string') {
-        setCustomerPhone(prefillCustomerPhone);
-      }
-      if (prefillCustomerAddress && typeof prefillCustomerAddress === 'string') {
-        setCustomerAddress(prefillCustomerAddress);
-      }
+      setOrderType(paramOrderType === 'takeaway' || paramOrderType === 'delivery' ? paramOrderType : 'delivery');
+      if (prefillCustomerName && typeof prefillCustomerName === 'string') setCustomerName(prefillCustomerName);
+      if (prefillCustomerPhone && typeof prefillCustomerPhone === 'string') setCustomerPhone(prefillCustomerPhone);
+      if (prefillCustomerAddress && typeof prefillCustomerAddress === 'string') setCustomerAddress(prefillCustomerAddress);
     }
-  }, [
-    prefillCustomerId,
-    prefillCustomerPhone,
-    prefillCustomerName,
-    prefillCustomerAddress,
-    paramOrderType,
-  ]);
+  }, [prefillCustomerId, prefillCustomerPhone, prefillCustomerName, prefillCustomerAddress, paramOrderType]);
 
-  // Categories list for 2-column sidebar (Auto-syncs dynamic categories from catalog)
-  const categoryTiles = useMemo(() => {
+  // Categories
+  const categoryList = useMemo(() => {
     const set = new Set<string>();
-    // Only display categories that actually contain active menu dishes
-    (menuItems || []).forEach(m => {
+    menuItems.forEach((m) => {
       if (m.category && m.category !== 'All' && m.category !== 'ALL') {
         set.add(m.category);
       }
@@ -510,43 +392,32 @@ export default function POSTerminalScreen({
     if (systemSettings.posShowDealsTab === false) {
       list = list.filter((c) => !c.toLowerCase().includes('deal'));
     }
-    if (!categorySearchQuery) return list;
-    const q = categorySearchQuery.toLowerCase().trim();
-    return list.filter(c => c.toLowerCase().includes(q));
-  }, [categories, menuItems, categorySearchQuery, systemSettings.posShowDealsTab]);
+    return list;
+  }, [menuItems, systemSettings.posShowDealsTab]);
 
-  // Live dish count map per category
   const categoryCounts = useMemo(() => {
-    const counts: Record<string, number> = {
-      ALL: (menuItems || []).length,
-    };
-    (menuItems || []).forEach(m => {
+    const counts: Record<string, number> = { ALL: menuItems.length };
+    menuItems.forEach((m) => {
       if (m.category) {
         const key = m.category.trim();
         counts[key] = (counts[key] || 0) + 1;
-        counts[key.toUpperCase()] = (counts[key.toUpperCase()] || 0) + 1;
       }
     });
     return counts;
   }, [menuItems]);
 
-  // Filtered Menu Items
   const filteredItems = useMemo(() => {
-    return (menuItems || []).filter(item => {
+    return menuItems.filter((item) => {
       const q = searchQuery.toLowerCase().trim();
-      const matchesSearch = !q || 
-        item.name.toLowerCase().includes(q) || 
+      const matchesSearch =
+        !q ||
+        item.name.toLowerCase().includes(q) ||
         (item.category && item.category.toLowerCase().includes(q)) ||
-        (item.region && item.region.toLowerCase().includes(q)) ||
-        (item.badge && item.badge.toLowerCase().includes(q));
-
+        (item.region && item.region.toLowerCase().includes(q));
       if (!matchesSearch) return false;
 
-      // Region / Cuisine filter
       if (activeRegion !== 'ALL') {
-        if ((item.region || '').trim().toLowerCase() !== activeRegion.trim().toLowerCase()) {
-          return false;
-        }
+        if ((item.region || '').trim().toLowerCase() !== activeRegion.trim().toLowerCase()) return false;
       }
 
       if (activeCategory === 'ALL' || activeCategory === 'All') return true;
@@ -557,29 +428,7 @@ export default function POSTerminalScreen({
     });
   }, [menuItems, searchQuery, activeCategory, activeRegion]);
 
-  // Real-time cuisine item counts for badges
-  const regionCounts = useMemo(() => {
-    const counts: Record<string, number> = { ALL: 0 };
-    (menuItems || []).forEach(item => {
-      const matchesCategory = 
-        activeCategory === 'ALL' || activeCategory === 'All' ? true :
-        (activeCategory === 'Deals & Combos' || activeCategory === 'Deals') ? Boolean(item.isDeal || (item.category && item.category.toLowerCase() === 'deals')) :
-        (item.category || '').trim().toLowerCase() === activeCategory.trim().toLowerCase();
-
-      if (!matchesCategory) return;
-
-      counts.ALL = (counts.ALL || 0) + 1;
-      const reg = (item.region || '').trim();
-      if (reg) {
-        const matched = regions.find(r => r.toLowerCase() === reg.toLowerCase()) || reg;
-        counts[matched] = (counts[matched] || 0) + 1;
-      }
-    });
-    return counts;
-  }, [menuItems, activeCategory, regions]);
-
   // Financial Calculations
-  // Auto-select first permitted order type if cashier's default tab is disabled
   useEffect(() => {
     const canTakeaway = systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway'));
     const canDineIn = systemSettings.enableDineIn !== false && (role === 'admin' || can('posCanDineIn'));
@@ -596,8 +445,9 @@ export default function POSTerminalScreen({
       else if (canDineIn) setOrderType('dine-in');
     }
   }, [orderType, systemSettings.enableTakeaway, systemSettings.enableDineIn, systemSettings.enableDelivery, role, permissions]);
+
   const effectiveTaxRate = systemSettings.taxEnabled ? (systemSettings.taxRatePercent || 0) / 100 : 0;
-  const subTotal = cart.reduce((sum, item) => sum + (item.price * item.qty), 0);
+  const subTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const discountVal = parseFloat(discountAmount) || 0;
   const afterDiscount = Math.max(0, subTotal - discountVal);
   const serviceCharge = systemSettings.serviceChargeEnabled
@@ -612,18 +462,21 @@ export default function POSTerminalScreen({
   const remaining = Math.max(0, total - totalPaid);
   const changeDue = Math.max(0, totalPaid - total);
 
+  const selectedCustomerObj = customers.find((c) => c.id === selectedCustomerId);
+  const selectedTableObj = tables.find((t) => t.id === selectedTableId);
+
   const handleSetFullPayment = () => {
     const exact = Math.round(total);
-    setPayments(prev => [{ type: prev[0]?.type || 'cash', amount: exact }]);
+    setPayments((prev) => [{ type: prev[0]?.type || 'cash', amount: exact }]);
   };
 
   const handleSetPaymentAmount = (amt: number) => {
-    setPayments(prev => [{ type: prev[0]?.type || 'cash', amount: amt }]);
+    setPayments((prev) => [{ type: prev[0]?.type || 'cash', amount: amt }]);
   };
 
   const handleCancelRunningOrder = (ticketId: string) => {
     if (!requirePosPerm('posCanDismissTicket', 'cancel or dismiss running kitchen orders')) return;
-    const confirmMsg = `Are you sure you want to cancel and remove Ticket #${ticketId}?`;
+    const confirmMsg = `Cancel and remove Ticket #${ticketId}?`;
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
         dismissTicket(ticketId);
@@ -632,23 +485,21 @@ export default function POSTerminalScreen({
     } else {
       Alert.alert('Cancel Order', confirmMsg, [
         { text: 'Keep Order', style: 'cancel' },
-        { 
-          text: 'Yes, Cancel', 
-          style: 'destructive', 
+        {
+          text: 'Yes, Cancel',
+          style: 'destructive',
           onPress: () => {
             dismissTicket(ticketId);
             if (loadedTicketId === ticketId) setLoadedTicketId(null);
-          }
-        }
+          },
+        },
       ]);
     }
   };
 
   const handleClearAllOrphanTickets = () => {
     if (!requirePosPerm('posCanDismissTicket', 'cancel or purge all running kitchen orders')) return;
-    const hasOccupied = (tables || []).some(t => t.status === 'occupied' || t.status === 'billed');
-    if ((tickets || []).length === 0 && !hasOccupied) return;
-    const confirmMsg = "Are you sure you want to clear all running tickets and release all occupied tables?";
+    const confirmMsg = 'Clear all running tickets and release all occupied tables?';
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
         clearAllOldTickets();
@@ -657,41 +508,37 @@ export default function POSTerminalScreen({
     } else {
       Alert.alert('Purge Running Orders', confirmMsg, [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Clear All', 
-          style: 'destructive', 
+        {
+          text: 'Clear All',
+          style: 'destructive',
           onPress: () => {
             clearAllOldTickets();
             setLoadedTicketId(null);
-          }
-        }
+          },
+        },
       ]);
     }
   };
 
-  const selectedCustomerObj = customers.find(c => c.id === selectedCustomerId);
-  const selectedTableObj = tables.find(t => t.id === selectedTableId);
-
-  // ------------------------------------------------------------------
-  // DUAL-SCREEN CUSTOMER-FACING DISPLAY (CFD) SYNCHRONIZATION
-  // ------------------------------------------------------------------
+  // Dual-Screen Customer Display Sync
   const isRecentlyPaidRef = useRef(false);
-
   const getCurrentCfdState = (): CustomerDisplayState => {
     const hasItems = cart.length > 0;
     return {
       isPosActive: true,
       status: hasItems ? 'active' : 'idle',
-      cart: hasItems ? cart.map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        qty: item.qty,
-        notes: item.notes,
-        selectedVariant: (item as any).selectedVariant,
-        selectedAddons: (item as any).selectedAddons,
-        subtotal: item.price * item.qty,
-      })) : [],
+      cart: hasItems
+        ? cart.map((item) => ({
+            id: item.id,
+            name: item.name,
+            price: item.price,
+            qty: item.qty,
+            notes: item.notes,
+            selectedVariant: (item as any).selectedVariant,
+            selectedAddons: (item as any).selectedAddons,
+            subtotal: item.price * item.qty,
+          }))
+        : [],
       itemCount: hasItems ? cart.reduce((s, i) => s + i.qty, 0) : 0,
       subTotal: hasItems ? subTotal : 0,
       discountVal: hasItems ? discountVal : 0,
@@ -709,10 +556,8 @@ export default function POSTerminalScreen({
     };
   };
 
-  // Mount/Unmount POS lifecycle: tell CFD that Cashier is actively on POS terminal
   useEffect(() => {
     publishCustomerDisplayState(getCurrentCfdState());
-
     return () => {
       try {
         publishCustomerDisplayState({
@@ -730,250 +575,121 @@ export default function POSTerminalScreen({
     } else if (isRecentlyPaidRef.current) {
       return;
     }
-
     const currentState = getCurrentCfdState();
     publishCustomerDisplayState(currentState);
-
     const unsubscribe = subscribeToCustomerDisplay(() => {}, () => getCurrentCfdState());
-    return () => {
-      unsubscribe();
-    };
-  }, [
-    cart,
-    subTotal,
-    discountVal,
-    tax,
-    serviceCharge,
-    deliveryCharges,
-    total,
-    totalPaid,
-    changeDue,
-    orderType,
-    selectedTableObj?.name,
-    selectedCustomerObj?.name,
-    user?.name,
-  ]);
+    return () => unsubscribe();
+  }, [cart, subTotal, discountVal, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, user?.name]);
 
   const handleOpenCustomerDisplay = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      const url = '/customer-display';
       const cfdWindow = window.open(
-        url,
+        '/customer-display',
         'SultanCustomerDisplay',
         'width=1280,height=800,menubar=no,toolbar=no,location=no,status=no'
       );
-      if (cfdWindow) {
-        cfdWindow.focus();
-      }
+      if (cfdWindow) cfdWindow.focus();
     } else {
-      Alert.alert(
-        'Dual Screen Customer Display',
-        'Customer Display is designed for Windows dual-monitor POS setups. Please open /customer-display in a browser on the customer-facing monitor.'
-      );
+      Alert.alert('Dual Screen Customer Display', 'Open /customer-display in a browser on the customer monitor.');
     }
   };
 
-  // ------------------------------------------------------------------
-  // GLOBAL POS KEYBOARD SHORTCUTS ENGINE
-  // ------------------------------------------------------------------
+  // Keyboard Shortcuts
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-
     const handleKeyDown = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement | null;
       const isInput = target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA');
 
-      // F1 or Ctrl+K / Ctrl+/: Focus Dish Search Bar
       if (e.key === 'F1' || (e.ctrlKey && (e.key === 'k' || e.key === 'K' || e.key === '/'))) {
         e.preventDefault();
         searchInputRef.current?.focus();
         return;
       }
-
-      // Escape: Close active modal or clear search
       if (e.key === 'Escape') {
-        if (shortcutsModalVisible) {
-          setShortcutsModalVisible(false);
-          return;
-        }
-        if (checkoutModalVisible) {
-          setCheckoutModalVisible(false);
-          return;
-        }
-        if (pendingOrdersModalVisible) {
-          setPendingOrdersModalVisible(false);
-          return;
-        }
-        if (tableModalVisible) {
-          setTableModalVisible(false);
-          return;
-        }
-        if (customerModalVisible) {
-          setCustomerModalVisible(false);
-          return;
-        }
-        if (discountModalVisible) {
-          setDiscountModalVisible(false);
-          return;
-        }
-        if (variantModalItem) {
-          setVariantModalItem(null);
-          return;
-        }
-        if (tableDecisionModal) {
-          setTableDecisionModal(null);
-          return;
-        }
-        if (searchQuery) {
-          setSearchQuery('');
-          return;
-        }
+        if (shortcutsModalVisible) return setShortcutsModalVisible(false);
+        if (checkoutModalVisible) return setCheckoutModalVisible(false);
+        if (pendingOrdersModalVisible) return setPendingOrdersModalVisible(false);
+        if (tableModalVisible) return setTableModalVisible(false);
+        if (customerModalVisible) return setCustomerModalVisible(false);
+        if (discountModalVisible) return setDiscountModalVisible(false);
+        if (variantModalItem) return setVariantModalItem(null);
+        if (tableDecisionModal) return setTableDecisionModal(null);
+        if (searchQuery) return setSearchQuery('');
         searchInputRef.current?.blur();
         return;
       }
-
-      // If Checkout Modal is open
       if (checkoutModalVisible) {
-        // F10 or Ctrl+F: Full Payment
         if (e.key === 'F10' || (e.ctrlKey && (e.key === 'f' || e.key === 'F'))) {
           e.preventDefault();
           handleSetFullPayment();
           return;
         }
-        // Enter: Finalize and Confirm Payment
         if (e.key === 'Enter') {
           e.preventDefault();
           handleFinalizeOrder();
           return;
         }
       }
+      if (isInput && !e.key.startsWith('F')) return;
 
-      // If typing inside an input/search, don't trigger regular navigation keys unless using F-keys
-      if (isInput && !e.key.startsWith('F')) {
-        return;
-      }
-
-      // F2: Dine-in Mode / Select Table
       if (e.key === 'F2') {
         e.preventDefault();
         handleOrderTypeChange('dine-in');
-        return;
-      }
-
-      // F3: Takeaway Mode
-      if (e.key === 'F3') {
+      } else if (e.key === 'F3') {
         e.preventDefault();
         handleOrderTypeChange('takeaway');
-        return;
-      }
-
-      // F4: Delivery Mode
-      if (e.key === 'F4') {
+      } else if (e.key === 'F4') {
         e.preventDefault();
         handleOrderTypeChange('delivery');
-        return;
-      }
-
-      // F6 or Ctrl+R: Running Orders Modal
-      if (e.key === 'F6' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
+      } else if (e.key === 'F6' || (e.ctrlKey && (e.key === 'r' || e.key === 'R'))) {
         e.preventDefault();
-        setPendingOrdersModalVisible(prev => !prev);
-        return;
-      }
-
-      // F7 or Ctrl+D: Apply Discount Modal
-      if (e.key === 'F7' || (e.ctrlKey && (e.key === 'd' || e.key === 'D'))) {
+        setPendingOrdersModalVisible((prev) => !prev);
+      } else if (e.key === 'F7' || (e.ctrlKey && (e.key === 'd' || e.key === 'D'))) {
         e.preventDefault();
         if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
         setDiscountModalVisible(true);
-        return;
-      }
-
-      // F8 or Ctrl+H: Hold / Send KOT to Kitchen
-      if (e.key === 'F8' || (e.ctrlKey && (e.key === 'h' || e.key === 'H'))) {
+      } else if (e.key === 'F8' || (e.ctrlKey && (e.key === 'h' || e.key === 'H'))) {
         e.preventDefault();
-        if (cart.length > 0) {
-          sendToKitchen();
-        }
-        return;
-      }
-
-      // F9 or Ctrl+Enter: Proceed to Payment / Checkout
-      if (e.key === 'F9' || (e.ctrlKey && e.key === 'Enter')) {
+        if (cart.length > 0) sendToKitchen();
+      } else if (e.key === 'F9' || (e.ctrlKey && e.key === 'Enter')) {
         e.preventDefault();
-        if (cart.length > 0) {
-          openCheckout();
-        }
-        return;
-      }
-
-      // F10 or Ctrl+I: Recent 8 Invoices Modal (Quick Reprint)
-      if (e.key === 'F10' || (e.ctrlKey && (e.key === 'i' || e.key === 'I'))) {
+        if (cart.length > 0) openCheckout();
+      } else if (e.key === 'F10' || (e.ctrlKey && (e.key === 'i' || e.key === 'I'))) {
         e.preventDefault();
-        setRecentInvoicesModalVisible(prev => !prev);
-        return;
-      }
-
-      // F11 or '?' key: Open Shortcuts Cheat Sheet
-      if (e.key === 'F11' || (!isInput && e.key === '?')) {
+        setRecentInvoicesModalVisible((prev) => !prev);
+      } else if (e.key === 'F11' || (!isInput && e.key === '?')) {
         e.preventDefault();
-        setShortcutsModalVisible(prev => !prev);
-        return;
-      }
-
-      // F12 or Ctrl+Delete: Clear Cart / New Order
-      if (e.key === 'F12' || (e.ctrlKey && e.key === 'Delete')) {
+        setShortcutsModalVisible((prev) => !prev);
+      } else if (e.key === 'F12' || (e.ctrlKey && e.key === 'Delete')) {
         e.preventDefault();
-        if (cart.length > 0) {
-          clearCart();
-        }
-        return;
+        if (cart.length > 0) clearCart();
       }
     };
-
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [
-    checkoutModalVisible,
-    pendingOrdersModalVisible,
-    tableModalVisible,
-    customerModalVisible,
-    discountModalVisible,
-    variantModalItem,
-    tableDecisionModal,
-    shortcutsModalVisible,
-    cart,
-    total,
-    remaining,
-    searchQuery,
-    orderType,
-    permissions,
-  ]);
+  });
 
-  // Recalculate Promo Discount
+  // Recalculate Event Campaign Discount
   useEffect(() => {
     if (selectedEventCampaign) {
       if (cart.length === 0) {
         setDiscountAmount('0');
         return;
       }
-      const cartWithCat = cart.map(ci => {
+      const cartWithCat = cart.map((ci) => {
         const baseId = ci.id.split('-')[0];
-        const mi = menuItems.find(m => m.id === baseId || m.id === ci.id);
+        const mi = menuItems.find((m) => m.id === baseId || m.id === ci.id);
         return {
           id: ci.id,
           name: ci.name,
           price: ci.price,
           qty: ci.qty,
-          category: mi?.category || 'Mains'
+          category: mi?.category || 'Mains',
         };
       });
       const res = calculateOrderDiscount(selectedEventCampaign, cartWithCat, subTotal);
-      if (res.eligible && res.discountAmount > 0) {
-        setDiscountAmount(res.discountAmount.toString());
-      } else {
-        setDiscountAmount('0');
-      }
+      setDiscountAmount(res.eligible && res.discountAmount > 0 ? res.discountAmount.toString() : '0');
     }
   }, [cart, selectedEventCampaign, subTotal, menuItems]);
 
@@ -984,12 +700,14 @@ export default function POSTerminalScreen({
     setOrderType(type);
     if (type === 'dine-in') {
       setSelectedCustomerId('');
-      setTableModalVisible(true);
+      if (!selectedTableId) setTableModalVisible(true);
     } else {
       setSelectedTableId('');
-      setCustomerSearchQuery('');
-      setIsCreatingNewCustomer(false);
-      setCustomerModalVisible(true);
+      if (type === 'delivery' && !selectedCustomerId) {
+        setCustomerSearchQuery('');
+        setIsCreatingNewCustomer(false);
+        setCustomerModalVisible(true);
+      }
     }
   };
 
@@ -1008,97 +726,85 @@ export default function POSTerminalScreen({
       else Alert.alert('Sold Out', msg);
       return;
     }
-
     if (item.variants && item.variants.length > 0) {
       setVariantModalItem(item);
       return;
     }
-
-    setCart(prev => {
-      const existing = prev.find(i => i.id === item.id);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === item.id);
       if (existing) {
-        return prev.map(i => i.id === item.id ? { ...i, qty: i.qty + 1 } : i);
+        return prev.map((i) => (i.id === item.id ? { ...i, qty: i.qty + 1 } : i));
       }
       return [
-        ...prev, 
-        { 
-          id: item.id, 
-          name: item.name, 
-          price: item.price, 
-          qty: 1, 
-          completed: false, 
-          station: item.station || 'main' 
-        }
+        ...prev,
+        {
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          qty: 1,
+          completed: false,
+          station: item.station || 'main',
+        },
       ];
     });
   };
 
   const handleVariantSelect = (variant: { name: string; price: number }) => {
     if (!variantModalItem) return;
-    if (isPosItemBlocked(variantModalItem)) {
-      const msg = `"${variantModalItem.name}" is currently Sold Out.`;
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Sold Out', msg);
-      setVariantModalItem(null);
-      return;
-    }
-
     const variantId = `${variantModalItem.id}-${variant.name}`;
     const variantName = `${variantModalItem.name} (${variant.name})`;
-
-    setCart(prev => {
-      const existing = prev.find(i => i.id === variantId);
+    setCart((prev) => {
+      const existing = prev.find((i) => i.id === variantId);
       if (existing) {
-        return prev.map(i => i.id === variantId ? { ...i, qty: i.qty + 1 } : i);
+        return prev.map((i) => (i.id === variantId ? { ...i, qty: i.qty + 1 } : i));
       }
       return [
-        ...prev, 
-        { 
-          id: variantId, 
-          name: variantName, 
-          price: variant.price, 
-          qty: 1, 
-          completed: false, 
-          station: variantModalItem.station || 'main' 
-        }
+        ...prev,
+        {
+          id: variantId,
+          name: variantName,
+          price: variant.price,
+          qty: 1,
+          completed: false,
+          station: variantModalItem.station || 'main',
+        },
       ];
     });
-
     setVariantModalItem(null);
   };
 
   const updateQty = (id: string, delta: number) => {
-    setCart(prev => prev.map(i => {
-      if (i.id === id) {
-        return { ...i, qty: Math.max(1, i.qty + delta) };
-      }
-      return i;
-    }));
+    setCart((prev) =>
+      prev
+        .map((i) => (i.id === id ? { ...i, qty: i.qty + delta } : i))
+        .filter((i) => i.qty > 0)
+    );
   };
 
-  const removeFromCart = (id: string) => setCart(prev => prev.filter(i => i.id !== id));
+  const removeFromCart = (id: string) => setCart((prev) => prev.filter((i) => i.id !== id));
+
   const clearCart = () => {
     setCart([]);
     setLoadedCart([]);
     setSelectedCustomerId('');
     setSelectedTableId('');
+    setSelectedEventCampaign(null);
     setDiscountAmount('0');
   };
 
   const handleSaveNewCustomer = () => {
     if (!requirePosPerm('posCanManageCustomers', 'register or edit customer profiles')) return;
     if (!customerName || !customerPhone) {
-      if (Platform.OS === 'web') window.alert("Name and Phone required");
-      else Alert.alert("Error", "Name and Phone required");
+      if (Platform.OS === 'web') window.alert('Name and Phone required');
+      else Alert.alert('Error', 'Name and Phone required');
       return;
     }
-    const existing = customers.find(c => c.phone === customerPhone);
+    const existing = customers.find((c) => c.phone === customerPhone);
     if (existing) {
       updateCustomer(existing.id, { name: customerName, address: customerAddress });
       setSelectedCustomerId(existing.id);
     } else {
       addCustomer({ name: customerName, phone: customerPhone, address: customerAddress });
-      if (Platform.OS === 'web') window.alert("Customer registered successfully.");
     }
     setIsCreatingNewCustomer(false);
   };
@@ -1107,27 +813,30 @@ export default function POSTerminalScreen({
     setKdsStatusToast(msg);
     setTimeout(() => {
       setKdsStatusToast((prev) => (prev === msg ? null : prev));
-    }, 5000);
+    }, 4000);
   };
 
   const handlePrintPendingSlipForTicket = (ticket: typeof tickets[0]) => {
     if (!requirePosPerm('posCanPrintUnpaidBill', 'print pending order slips')) return;
     const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
-    const targetTable = isTable ? tables.find(tbl => tbl.id === ticket.tableId) : null;
+    const targetTable = isTable ? tables.find((tbl) => tbl.id === ticket.tableId) : null;
     const targetTableName = targetTable
       ? targetTable.name
-      : (ticket.tableName || (ticket.tableId ? ticket.tableId.toUpperCase() : 'TAKEAWAY'));
+      : ticket.tableName || (ticket.tableId ? ticket.tableId.toUpperCase() : 'TAKEAWAY');
     const derivedOrderType: 'dine-in' | 'takeaway' | 'delivery' = isTable
       ? 'dine-in'
-      : (ticket.tableId?.toLowerCase() === 'delivery' ? 'delivery' : 'takeaway');
+      : ticket.tableId?.toLowerCase() === 'delivery'
+      ? 'delivery'
+      : 'takeaway';
 
-    const ticketSub = (ticket.items || []).reduce((sum, it) => sum + (it.price * it.qty), 0);
+    const ticketSub = (ticket.items || []).reduce((sum, it) => sum + it.price * it.qty, 0);
     const ticketTax = ticketSub * effectiveTaxRate;
-    const ticketService = derivedOrderType === 'dine-in' && systemSettings.serviceChargeEnabled
-      ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
-      : 0;
-    const rawTotal = ticketSub + ticketTax + ticketService;
-    const ticketTotal = systemSettings.roundTotals ? Math.round(rawTotal) : rawTotal;
+    const ticketService =
+      derivedOrderType === 'dine-in' && systemSettings.serviceChargeEnabled
+        ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
+        : 0;
+    const rawTicketTotal = ticketSub + ticketTax + ticketService;
+    const ticketTotal = systemSettings.roundTotals ? Math.round(rawTicketTotal) : rawTicketTotal;
 
     const pendingInvoice: Invoice = {
       id: `PND-${ticket.id.replace(/^KOT-/, '')}`,
@@ -1148,51 +857,53 @@ export default function POSTerminalScreen({
       payments: [],
       status: 'unpaid',
       isUnpaidBill: true,
-      notes: `Pending Order Slip • KOT #${ticket.id} (Sent to KDS)`,
+      notes: `Pending Order Slip • KOT #${ticket.id}`,
     };
 
     printInvoiceReceipt(pendingInvoice);
-    showKdsToast(`Pending Slip printed for ${targetTableName} (${ticket.id})`);
+    showKdsToast(`Pending Slip printed for ${targetTableName}`);
   };
 
   const sendToKitchen = () => {
     if (!requirePosPerm('posCanSendKot', 'dispatch KOT tickets to Kitchen')) return;
     if (cart.length === 0) return;
     if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
-      if (Platform.OS === 'web') window.alert("Please assign a dining table first.");
-      else Alert.alert("Select Table", "Please assign a dining table first.");
+      setTableModalVisible(true);
       return;
     }
 
     const tId = orderType === 'dine-in' ? selectedTableId : orderType;
-    const targetTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
+    const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
     const targetTableName = targetTable
       ? targetTable.name
-      : (selectedCustomerObj?.name
-        ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
-        : (orderType === 'delivery' ? 'Delivery' : 'Takeaway'));
+      : selectedCustomerObj?.name
+      ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
+      : orderType === 'delivery'
+      ? 'Delivery'
+      : 'Takeaway';
 
     const kotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
-    cart.forEach(cartItem => {
-      const loadedItem = loadedCart.find(i => i.id === cartItem.id);
+    cart.forEach((cartItem) => {
+      const loadedItem = loadedCart.find((i) => i.id === cartItem.id);
       const loadedQty = loadedItem ? loadedItem.qty : 0;
       if (cartItem.qty > loadedQty) {
         const baseId = cartItem.id.split('-')[0];
-        const baseMenu = menuItems.find(m => m.id === baseId || m.id === cartItem.id);
-        const itemObj: MenuItem = baseMenu ? {
-          ...baseMenu,
-          id: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          station: cartItem.station || baseMenu.station || 'main'
-        } : {
-          id: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          category: 'Mains',
-          station: cartItem.station || 'main'
-        };
-
+        const baseMenu = menuItems.find((m) => m.id === baseId || m.id === cartItem.id);
+        const itemObj: MenuItem = baseMenu
+          ? {
+              ...baseMenu,
+              id: cartItem.id,
+              name: cartItem.name,
+              price: cartItem.price,
+              station: cartItem.station || baseMenu.station || 'main',
+            }
+          : {
+              id: cartItem.id,
+              name: cartItem.name,
+              price: cartItem.price,
+              category: 'Mains',
+              station: cartItem.station || 'main',
+            };
         kotItems.push({
           item: itemObj,
           qty: cartItem.qty - loadedQty,
@@ -1202,7 +913,7 @@ export default function POSTerminalScreen({
     });
 
     if (kotItems.length === 0) {
-      showKdsToast("All current items are already sent to KDS.");
+      showKdsToast('All items in cart are already sent to KDS.');
       return;
     }
 
@@ -1211,14 +922,13 @@ export default function POSTerminalScreen({
       ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
       : `${user?.name || 'Staff'} (POS)`;
 
-    const hasMain = kotItems.some(k => (k.item.station || 'main') === 'main');
-    const hasJuice = kotItems.some(k => (k.item.station || 'main') === 'juice');
-    const stationSummary = hasMain && hasJuice ? 'Kitchen + Juice KDS' : (hasJuice ? 'Juice Bar KDS' : 'Kitchen KDS');
+    const hasMain = kotItems.some((k) => (k.item.station || 'main') === 'main');
+    const hasJuice = kotItems.some((k) => (k.item.station || 'main') === 'juice');
+    const stationSummary = hasMain && hasJuice ? 'Kitchen + Juice KDS' : hasJuice ? 'Juice Bar KDS' : 'Kitchen KDS';
 
     placeOrder(tId, serverLabel, kotItems, isAddOn);
     broadcastImmediately();
 
-    // Immediately print Pending / Unpaid Order Slip on POS counter printer
     const latestTicket = useRestaurantStore.getState().tickets?.[0];
     const pendingSlipId = latestTicket?.id
       ? `PND-${latestTicket.id.replace(/^KOT-/, '')}`
@@ -1251,7 +961,6 @@ export default function POSTerminalScreen({
     if (orderType === 'dine-in') {
       setLoadedCart(JSON.parse(JSON.stringify(cart)));
     } else {
-      // Clear counter cart for Takeaway / Delivery so cashier can take the next order immediately
       setCart([]);
       setLoadedCart([]);
       setLoadedTicketId(null);
@@ -1262,8 +971,8 @@ export default function POSTerminalScreen({
 
     showKdsToast(
       isAddOn
-        ? `Add-on sent to ${stationSummary} • Pending Slip printed`
-        : `Order sent to ${stationSummary} (${targetTableName}) • Pending Slip printed`
+        ? `Add-on sent to ${stationSummary} • Slip printed`
+        : `Order sent to ${stationSummary} (${targetTableName})`
     );
   };
 
@@ -1277,9 +986,7 @@ export default function POSTerminalScreen({
       return;
     }
     if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
-      const msg = "Please select a table for Dine-in orders.";
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert("Select Table", msg);
+      setTableModalVisible(true);
       return;
     }
     if (
@@ -1287,27 +994,26 @@ export default function POSTerminalScreen({
       systemSettings.posRequireCustomerForDelivery !== false &&
       (!selectedCustomerObj || !selectedCustomerObj.phone)
     ) {
-      const msg = "Please select customer contact and address for delivery orders.";
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert("Customer Contact Required", msg);
+      setCustomerModalVisible(true);
       return;
     }
-    // Pre-fill payment with exact full amount
     setPayments([{ type: 'cash', amount: Math.round(total) }]);
+    setActivePaymentIndex(0);
     setCheckoutModalVisible(true);
   };
 
   const handleCreateBillFromTicket = (ticket: typeof tickets[0], autoOpenCheckout = true) => {
-    if (autoOpenCheckout && !requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) {
-      return;
-    }
+    if (autoOpenCheckout && !requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
     setLoadedTicketId(ticket.id);
 
     const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
-    const targetTable = isTable ? tables.find(t => 
-      t.id === ticket.tableId || 
-      (ticket.tableName && t.name.trim().toLowerCase() === ticket.tableName.trim().toLowerCase())
-    ) : null;
+    const targetTable = isTable
+      ? tables.find(
+          (t) =>
+            t.id === ticket.tableId ||
+            (ticket.tableName && t.name.trim().toLowerCase() === ticket.tableName.trim().toLowerCase())
+        )
+      : null;
 
     if (targetTable) {
       handleTableSelect(targetTable.id);
@@ -1316,8 +1022,7 @@ export default function POSTerminalScreen({
       setOrderType(isDelivery ? 'delivery' : 'takeaway');
       setSelectedTableId('');
       setSelectedServer(ticket.server || '');
-      
-      const itemsCopy = ticket.items.map(i => ({ ...i }));
+      const itemsCopy = ticket.items.map((i) => ({ ...i }));
       setCart(itemsCopy);
       setLoadedCart(JSON.parse(JSON.stringify(itemsCopy)));
     }
@@ -1326,7 +1031,7 @@ export default function POSTerminalScreen({
 
     if (autoOpenCheckout) {
       setTimeout(() => {
-        const ticketSub = ticket.items.reduce((s, it) => s + (it.price * it.qty), 0);
+        const ticketSub = ticket.items.reduce((s, it) => s + it.price * it.qty, 0);
         const ticketTax = ticketSub * effectiveTaxRate;
         const ticketService = systemSettings.serviceChargeEnabled
           ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
@@ -1335,8 +1040,8 @@ export default function POSTerminalScreen({
         const ticketTotal = systemSettings.roundTotals ? Math.round(rawTicketTotal) : rawTicketTotal;
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
-      }, 150);
-    } else if (isMobile || isTablet) {
+      }, 120);
+    } else if (isMobile) {
       setMobileTab('cart');
     }
   };
@@ -1347,9 +1052,9 @@ export default function POSTerminalScreen({
     const remainingToCollect = total - totalCollected;
 
     if (remainingToCollect > 0.01) {
-      const msg = `Please collect full payment. Remaining due: Rs. ${remainingToCollect.toFixed(2)}`;
+      const msg = `Please collect full payment. Remaining due: Rs. ${remainingToCollect.toFixed(0)}`;
       if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert("Incomplete Payment", msg);
+      else Alert.alert('Incomplete Payment', msg);
       return;
     }
 
@@ -1357,16 +1062,25 @@ export default function POSTerminalScreen({
     const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
     const wasDineIn = orderType === 'dine-in' && targetTableId;
 
-    const userRoleLabel = user?.role ? (user.role.charAt(0).toUpperCase() + user.role.slice(1)) : (role === 'admin' ? 'Admin' : role === 'floor_manager' ? 'Floor Manager' : 'Cashier');
-    const currentUserName = user?.name ? (user.name.includes(`(${userRoleLabel})`) ? user.name : `${user.name} (${userRoleLabel})`) : (role === 'admin' ? 'Junaid Ahsan (Admin)' : role === 'floor_manager' ? 'Floor Manager' : 'POS Cashier');
-    const orderCreator = selectedServer || (wasDineIn ? 'Sara Ahmed' : currentUserName);
+    const userRoleLabel = user?.role
+      ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
+      : role === 'admin'
+      ? 'Admin'
+      : role === 'floor_manager'
+      ? 'Floor Manager'
+      : 'Cashier';
+    const currentUserName = user?.name
+      ? user.name.includes(`(${userRoleLabel})`)
+        ? user.name
+        : `${user.name} (${userRoleLabel})`
+      : 'POS Cashier';
+    const orderCreator = selectedServer || currentUserName;
     const cashierName = currentUserName;
-
     const changeDueAmount = Math.max(0, totalCollected - total);
 
     const invoicePayments = payments
-      .filter(p => (Number(p.amount) || 0) > 0)
-      .map(p => {
+      .filter((p) => (Number(p.amount) || 0) > 0)
+      .map((p) => {
         if (p.type === 'cash' && changeDueAmount > 0) {
           return {
             ...p,
@@ -1398,23 +1112,25 @@ export default function POSTerminalScreen({
     });
 
     const unsentKotItems: { item: MenuItem; qty: number }[] = [];
-    cart.forEach(cartItem => {
-      const loadedQty = loadedCart.filter(lc => lc.id === cartItem.id).reduce((s, lc) => s + lc.qty, 0);
+    cart.forEach((cartItem) => {
+      const loadedQty = loadedCart.filter((lc) => lc.id === cartItem.id).reduce((s, lc) => s + lc.qty, 0);
       if (cartItem.qty > loadedQty) {
-        const baseMenu = menuItems.find(m => m.id === cartItem.id || cartItem.id.startsWith(`${m.id}-`));
-        const itemObj: MenuItem = baseMenu ? {
-          ...baseMenu,
-          id: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          station: cartItem.station || baseMenu.station || 'main'
-        } : {
-          id: cartItem.id,
-          name: cartItem.name,
-          price: cartItem.price,
-          category: 'Mains',
-          station: cartItem.station || 'main'
-        };
+        const baseMenu = menuItems.find((m) => m.id === cartItem.id || cartItem.id.startsWith(`${m.id}-`));
+        const itemObj: MenuItem = baseMenu
+          ? {
+              ...baseMenu,
+              id: cartItem.id,
+              name: cartItem.name,
+              price: cartItem.price,
+              station: cartItem.station || baseMenu.station || 'main',
+            }
+          : {
+              id: cartItem.id,
+              name: cartItem.name,
+              price: cartItem.price,
+              category: 'Mains',
+              station: cartItem.station || 'main',
+            };
         unsentKotItems.push({ item: itemObj, qty: cartItem.qty - loadedQty });
       }
     });
@@ -1426,7 +1142,6 @@ export default function POSTerminalScreen({
 
     saveInvoice(invoice);
 
-    // Clean up only the explicitly loaded ticket or settled dining table tickets
     if (loadedTicketId) {
       dismissTicket(loadedTicketId);
       setLoadedTicketId(null);
@@ -1444,19 +1159,16 @@ export default function POSTerminalScreen({
       });
     }
 
-    // Broadcast PAID celebration state to Customer-Facing Display before clearing cart
     isRecentlyPaidRef.current = true;
     publishCustomerDisplayState({
       isPosActive: true,
       status: 'paid',
-      cart: cart.map(item => ({
+      cart: cart.map((item) => ({
         id: item.id,
         name: item.name,
         price: item.price,
         qty: item.qty,
         notes: item.notes,
-        selectedVariant: (item as any).selectedVariant,
-        selectedAddons: (item as any).selectedAddons,
         subtotal: item.price * item.qty,
       })),
       itemCount: cart.reduce((s, i) => s + i.qty, 0),
@@ -1471,7 +1183,7 @@ export default function POSTerminalScreen({
       orderType,
       tableName: targetTableName,
       customerName: selectedCustomerObj?.name,
-      cashierName: cashierName,
+      cashierName,
       invoiceId: invoice.id,
       lastUpdated: Date.now(),
     });
@@ -1481,7 +1193,7 @@ export default function POSTerminalScreen({
         ...INITIAL_CFD_STATE,
         isPosActive: true,
         status: 'idle',
-        cashierName: cashierName,
+        cashierName,
         lastUpdated: Date.now(),
       });
     }, 5000);
@@ -1494,7 +1206,6 @@ export default function POSTerminalScreen({
     setSelectedCustomerId('');
     setSelectedTableId('');
 
-    // Always trigger receipt slip print immediately on payment
     printInvoiceReceipt(invoice);
 
     if (wasDineIn && systemSettings.posEnableTableReleaseConfirm !== false) {
@@ -1503,11 +1214,8 @@ export default function POSTerminalScreen({
         tableName: targetTableName,
         invoice,
       });
-    } else {
-      if (wasDineIn && targetTableId) {
-        settleBill(targetTableId);
-      }
-      // Do not open blocking invoice preview modal on completed order (receipt is already sent to print)
+    } else if (wasDineIn && targetTableId) {
+      settleBill(targetTableId);
     }
   };
 
@@ -1523,15 +1231,10 @@ export default function POSTerminalScreen({
 
   const handlePrintUnpaidBill = () => {
     if (!requirePosPerm('posCanPrintUnpaidBill', 'print provisional unpaid bills')) return;
-    if (cart.length === 0) {
-      const msg = "Please add items to cart before printing bill.";
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert("Empty Cart", msg);
-      return;
-    }
+    if (cart.length === 0) return;
 
-    const targetTable = selectedTableId ? tables.find(t => t.id === selectedTableId) : null;
-    const targetTableName = targetTable ? targetTable.name : (orderType === 'dine-in' ? 'Table' : orderType.toUpperCase());
+    const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
+    const targetTableName = targetTable ? targetTable.name : orderType === 'dine-in' ? 'Table' : orderType.toUpperCase();
 
     const unpaidInvoice: Invoice = {
       id: `CHK-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
@@ -1553,7 +1256,7 @@ export default function POSTerminalScreen({
       payments: [],
       status: 'unpaid',
       isUnpaidBill: true,
-      notes: 'Pending Order Slip / Provisional Unpaid Bill',
+      notes: 'Provisional Unpaid Bill',
     };
 
     if (selectedTableId) {
@@ -1561,11 +1264,9 @@ export default function POSTerminalScreen({
     }
     broadcastImmediately();
     printInvoiceReceipt(unpaidInvoice);
-
-    showKdsToast(`Pending Slip printed for ${targetTableName}`);
+    showKdsToast(`Pending Bill printed for ${targetTableName}`);
   };
 
-  // Permission & Module Guard (after all hooks so Rules of Hooks are respected)
   if (role !== 'admin' && !can('canAccessPOS')) {
     return (
       <PermissionDeniedScreen
@@ -1579,3000 +1280,1532 @@ export default function POSTerminalScreen({
 
   if (systemSettings.enablePosModule === false) {
     return (
-      <View style={[styles.fullscreenContainer, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
-        <Ionicons name="lock-closed-outline" size={58} color="#B45309" style={{ marginBottom: 14 }} />
-        <Text style={{ fontSize: 20, fontWeight: '900', color: '#4A121A', textAlign: 'center', marginBottom: 6 }}>
+      <View style={[styles.screen, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="lock-closed-outline" size={56} color="#B45309" style={{ marginBottom: 12 }} />
+        <Text style={{ fontSize: 20, fontWeight: '900', color: '#1E293B', marginBottom: 6 }}>
           POS Terminal Module Disabled
         </Text>
-        <Text style={{ fontSize: 13.5, color: '#64748B', textAlign: 'center', maxWidth: 420, marginBottom: 20 }}>
-          The POS Terminal module is currently turned off in System Settings (Modules Control). Enable it in Settings to resume billing.
+        <Text style={{ fontSize: 14, color: '#64748B', textAlign: 'center', maxWidth: 420, marginBottom: 20 }}>
+          Enable the POS module in System Settings to resume billing.
         </Text>
-        <View style={{ flexDirection: 'row', gap: 10 }}>
-          <TouchableOpacity
-            style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
-            onPress={() => router.replace(backRoute as any)}
-          >
-            <Text style={{ fontWeight: '800', color: '#1E293B' }}>Go Back</Text>
-          </TouchableOpacity>
-          {role === 'admin' && (
-            <TouchableOpacity
-              style={{ backgroundColor: '#52141C', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 }}
-              onPress={() => router.push('/admin/settings' as any)}
-            >
-              <Text style={{ fontWeight: '800', color: '#D4AF37' }}>Open System Settings</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+        <TouchableOpacity
+          style={{ backgroundColor: '#52141C', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 }}
+          onPress={() => router.replace(backRoute as any)}
+        >
+          <Text style={{ fontWeight: '800', color: '#FFFFFF' }}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
+  const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
+
   return (
-    <View style={styles.fullscreenContainer}>
+    <View style={styles.screen}>
       <StatusBar barStyle="light-content" />
 
       {/* ========================================================
-          1. BAITHAK TOP HEADER (Dark Maroon with Gold Accents)
+          1. CLEAN STREAMLINED TOP COMMAND BAR
           ======================================================== */}
-      <View style={[styles.topHeader, isMobile && { paddingHorizontal: 10, height: 48 }]}>
-        {/* Left Side: Back Arrow + Brand Calligraphy + Live Clock */}
-        <View style={[styles.headerLeft, isMobile && { gap: 8 }]}>
-          <TouchableOpacity 
-            style={styles.backBtn}
-            onPress={() => router.replace(backRoute as any)}
-            activeOpacity={0.7}
-          >
-            <Ionicons name="arrow-back" size={20} color="#D4AF37" />
+      <View style={[styles.topBar, isMobile && { paddingHorizontal: 10, height: 54 }]}>
+        {/* Left: Back + Brand + Order Type Switcher */}
+        <View style={styles.topBarLeft}>
+          <TouchableOpacity style={styles.backBtn} onPress={() => router.replace(backRoute as any)}>
+            <Ionicons name="arrow-back" size={18} color="#F3D179" />
           </TouchableOpacity>
 
-          <View style={styles.brandBox}>
-            <SultanLogo size="xs" width={22} height={22} style={{ marginRight: 6 }} />
-            <Text style={styles.brandTitle}>{isMobile || isTablet ? 'SULTAN POS' : 'SULTAN RESTAURANT'}</Text>
+          <View style={styles.brandWrap}>
+            <SultanLogo size="xs" width={24} height={24} />
+            {!isMobile && <Text style={styles.brandText}>SULTAN POS</Text>}
           </View>
 
-          {!isMobile && <LivePOSClock />}
+          {/* Order Type Pill Switcher directly in Top Bar on Desktop/Tablet */}
+          {!isMobile && (
+            <View style={styles.topOrderTypeGroup}>
+              {systemSettings.enableDineIn !== false && (role === 'admin' || can('posCanDineIn')) && (
+                <TouchableOpacity
+                  style={[styles.topOrderTypeBtn, orderType === 'dine-in' && styles.topOrderTypeBtnActive]}
+                  onPress={() => handleOrderTypeChange('dine-in')}
+                >
+                  <Ionicons name="restaurant-outline" size={14} color={orderType === 'dine-in' ? '#24050A' : '#E2E8F0'} />
+                  <Text style={[styles.topOrderTypeText, orderType === 'dine-in' && styles.topOrderTypeTextActive]}>
+                    Dine-In
+                  </Text>
+                  <Text style={[styles.topOrderKey, orderType === 'dine-in' && { color: '#24050A' }]}>F2</Text>
+                </TouchableOpacity>
+              )}
+              {systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway')) && (
+                <TouchableOpacity
+                  style={[styles.topOrderTypeBtn, orderType === 'takeaway' && styles.topOrderTypeBtnActive]}
+                  onPress={() => handleOrderTypeChange('takeaway')}
+                >
+                  <Ionicons name="bag-handle-outline" size={14} color={orderType === 'takeaway' ? '#24050A' : '#E2E8F0'} />
+                  <Text style={[styles.topOrderTypeText, orderType === 'takeaway' && styles.topOrderTypeTextActive]}>
+                    Takeaway
+                  </Text>
+                  <Text style={[styles.topOrderKey, orderType === 'takeaway' && { color: '#24050A' }]}>F3</Text>
+                </TouchableOpacity>
+              )}
+              {systemSettings.enableDelivery !== false && (role === 'admin' || can('posCanDelivery')) && (
+                <TouchableOpacity
+                  style={[styles.topOrderTypeBtn, orderType === 'delivery' && styles.topOrderTypeBtnActive]}
+                  onPress={() => handleOrderTypeChange('delivery')}
+                >
+                  <Ionicons name="bicycle-outline" size={14} color={orderType === 'delivery' ? '#24050A' : '#E2E8F0'} />
+                  <Text style={[styles.topOrderTypeText, orderType === 'delivery' && styles.topOrderTypeTextActive]}>
+                    Delivery
+                  </Text>
+                  <Text style={[styles.topOrderKey, orderType === 'delivery' && { color: '#24050A' }]}>F4</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
         </View>
 
-        {/* Right Side: Shift Status + Fullscreen + Admin Avatar */}
-        <View style={[styles.headerRight, isMobile && { gap: 6 }]}>
-          <TouchableOpacity 
-            style={[styles.shiftCapsule, (isMobile || isTablet) && { paddingHorizontal: 7, paddingVertical: 4 }]} 
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            onPress={() => router.push(shiftRoute as any)}
-            activeOpacity={0.8}
+        {/* Center: Clean Fast Search Input */}
+        <View style={[styles.topSearchWrap, isMobile && { flex: 1, marginHorizontal: 6 }]}>
+          <Ionicons name="search" size={16} color="#94A3B8" />
+          <TextInput
+            ref={searchInputRef}
+            style={[styles.topSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+            placeholder={isMobile ? 'Search dishes...' : 'Search dish name or category... (F1)'}
+            placeholderTextColor="#94A3B8"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+          {searchQuery.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close-circle" size={17} color="#94A3B8" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Right: Essential Quick Actions */}
+        <View style={styles.topBarRight}>
+          {/* Running KDS Orders */}
+          <TouchableOpacity
+            style={[styles.topActionBtn, tickets.length > 0 && styles.topActionBtnHighlight]}
+            onPress={() => setPendingOrdersModalVisible(true)}
           >
-            <View
-              {...(Platform.OS === 'web' ? ({ className: 'pulse-beacon' } as any) : {})}
-              style={styles.shiftDot}
-            />
-            <Text style={styles.shiftText}>
-              {activeShift ? `Shift #${activeShift.id.slice(-6)}` : 'Shift #Active'}
-            </Text>
+            <Ionicons name="flame" size={15} color={tickets.length > 0 ? '#F59E0B' : '#F3D179'} />
+            {!isMobile && <Text style={styles.topActionText}>Running</Text>}
+            <View style={styles.topCountBadge}>
+              <Text style={styles.topCountBadgeText}>{tickets.length}</Text>
+            </View>
           </TouchableOpacity>
 
-          {/* Order Taker Mode Toggle (Hides prices & order totals for order takers) */}
-          <TouchableOpacity 
-            style={[
-              styles.orderTakerModeToggle,
-              hidePrices && styles.orderTakerModeToggleActive
-            ]}
-            onPress={() => {
-              if (isOrderTakerRole) {
-                if (Platform.OS === 'web') {
-                  window.alert('Restricted: Role permissions lock prices as hidden for Order Takers.');
-                } else {
-                  Alert.alert('Restricted', 'Role permissions lock prices as hidden for Order Takers.');
-                }
-                return;
-              }
-              const userRole = (user?.role || '').toLowerCase();
-              const customRole = (user?.customRoleId || '').toLowerCase();
-              if (userRole === 'cashier' || customRole === 'role-cashier') {
-                if (Platform.OS === 'web') {
-                  window.alert('Cashier Terminal: Product prices and bill totals are locked as visible for billing operations.');
-                } else {
-                  Alert.alert('Cashier Terminal', 'Product prices and bill totals are locked as visible for billing operations.');
-                }
-                return;
-              }
-              setOrderTakerMode(prev => {
-                const next = !prev;
-                if (Platform.OS === 'web' && typeof window !== 'undefined' && window.localStorage) {
-                  if (next) {
-                    window.localStorage.setItem('sultan_pos_hide_prices', 'true');
-                  } else {
-                    window.localStorage.removeItem('sultan_pos_hide_prices');
-                  }
-                }
-                return next;
-              });
-            }}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: hidePrices ? 'Switch to Cashier Mode (Prices Visible)' : 'Switch to Order Taker Mode (Prices Hidden)' } as any) : {})}
-          >
-            <Ionicons 
-              name={hidePrices ? "eye-off" : "eye"} 
-              size={13} 
-              color={hidePrices ? "#F59E0B" : "#10B981"} 
-            />
-            <Text style={[styles.orderTakerModeText, hidePrices && styles.orderTakerModeTextActive]}>
-              {(isMobile || isTablet)
-                ? (hidePrices ? 'Hidden' : 'Prices')
-                : (hidePrices ? 'Prices: Hidden (Order Taker)' : 'Prices: Visible (Cashier/Admin)')}
-            </Text>
+          {/* Recent Bills Reprint */}
+          <TouchableOpacity style={styles.topActionBtn} onPress={() => setRecentInvoicesModalVisible(true)}>
+            <Ionicons name="receipt-outline" size={15} color="#F3D179" />
+            {!isMobile && !isTablet && <Text style={styles.topActionText}>Recents</Text>}
           </TouchableOpacity>
 
-          {/* Keyboard Shortcuts Capsule Button (Desktop only) */}
-          {!isMobile && !isTablet && (
-            <TouchableOpacity 
-              style={styles.keyboardCapsuleBtn}
-              onPress={() => setShortcutsModalVisible(true)}
-              activeOpacity={0.8}
-              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Keyboard Shortcuts (Press F11 or ?)' } as any) : {})}
-            >
-              <Ionicons name="keypad-outline" size={14} color="#D4AF37" />
-              <Text style={styles.keyboardCapsuleText}>Shortcuts</Text>
-              <View style={styles.keyInlinePill}>
-                <Text style={styles.keyInlinePillText}>F11</Text>
-              </View>
+          {/* Customer Display (Desktop/Tablet) */}
+          {!isMobile && (
+            <TouchableOpacity style={styles.topActionBtn} onPress={handleOpenCustomerDisplay}>
+              <Ionicons name="desktop-outline" size={15} color="#F3D179" />
+              {!isTablet && <Text style={styles.topActionText}>Customer Screen</Text>}
             </TouchableOpacity>
           )}
 
-          {/* Dual Screen Customer Display Popout Button */}
-          <TouchableOpacity 
-            style={styles.dualScreenBtn}
-            onPress={handleOpenCustomerDisplay}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Open Dual-Screen Customer Facing Display (کسٹمر ڈسپلے)' } as any) : {})}
-          >
-            <Ionicons name="desktop-outline" size={14} color="#D4AF37" />
-            <Text style={styles.dualScreenBtnText}>
-              {isMobile ? 'CFD' : isTablet ? 'Customer Display' : 'Dual Screen (کسٹمر ڈسپلے)'}
-            </Text>
-          </TouchableOpacity>
+          {/* Shift Status */}
+          {!isMobile && (
+            <TouchableOpacity style={styles.topShiftBtn} onPress={() => router.push(shiftRoute as any)}>
+              <View style={styles.shiftGreenDot} />
+              <Text style={styles.topShiftText}>{activeShift ? 'Shift Open' : 'Shift'}</Text>
+            </TouchableOpacity>
+          )}
 
-          {/* Recent 8 Invoices Button (Cashier Quick Reprint & Privacy Safe) */}
-          <TouchableOpacity 
-            style={styles.recentInvoicesCapsuleBtn}
-            onPress={() => setRecentInvoicesModalVisible(true)}
-            activeOpacity={0.8}
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Recent 8 Invoices (آخری 8 بل - ری پرنٹ) [F10]' } as any) : {})}
-          >
-            <Ionicons name="receipt-outline" size={14} color="#D4AF37" />
-            <Text style={styles.recentInvoicesCapsuleText}>
-              {isMobile ? 'Recents' : 'Recent (8)'}
-            </Text>
-            {!isMobile && !isTablet && (
-              <View style={styles.keyInlinePill}>
-                <Text style={styles.keyInlinePillText}>F10</Text>
-              </View>
-            )}
-          </TouchableOpacity>
+          {!isMobile && !isTablet && (
+            <TouchableOpacity style={styles.topActionBtn} onPress={() => setShortcutsModalVisible(true)}>
+              <Ionicons name="keypad-outline" size={15} color="#F3D179" />
+            </TouchableOpacity>
+          )}
 
-          <FullscreenButton variant={isMobile ? 'compact' : 'pill'} />
-
-          <View style={styles.userSection}>
-            {!isMobile && <Text style={styles.roleLabel}>{user?.name || 'admin'}</Text>}
-            <View style={styles.userAvatarCircle}>
-              <Text style={styles.userAvatarText}>
-                {(user?.name || 'A')[0].toUpperCase()}
-              </Text>
-            </View>
-          </View>
+          <FullscreenButton variant="compact" />
         </View>
       </View>
 
-      {/* Mobile Mode Switcher Bar */}
+      {/* Mobile Tab Switcher (Menu vs Cart) */}
       {isMobile && (
-        <View style={styles.mobileSwitcher}>
-          <TouchableOpacity 
-            style={[styles.mobileSwitchBtn, mobileTab === 'menu' && styles.mobileSwitchBtnActive]}
+        <View style={styles.mobileTabBar}>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
             onPress={() => setMobileTab('menu')}
           >
-            <Text style={[styles.mobileSwitchText, mobileTab === 'menu' && styles.mobileSwitchTextActive]}>
-              Menu Dishes ({filteredItems.length})
+            <Ionicons name="grid-outline" size={16} color={mobileTab === 'menu' ? '#52141C' : '#64748B'} />
+            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+              Menu ({filteredItems.length})
             </Text>
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={[styles.mobileSwitchBtn, mobileTab === 'cart' && styles.mobileSwitchBtnActive]}
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
             onPress={() => setMobileTab('cart')}
           >
-            <Text style={[styles.mobileSwitchText, mobileTab === 'cart' && styles.mobileSwitchTextActive]}>
-              Current Cart ({cart.reduce((s, i) => s + i.qty, 0)})
+            <Ionicons name="cart-outline" size={16} color={mobileTab === 'cart' ? '#52141C' : '#64748B'} />
+            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+              Order Bill ({totalCartQty})
             </Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* ========================================================
-          2. MAIN 3-SECTION WORKSPACE
-          [LEFT: 2-Col Categories] [CENTER: Dishes Grid] [RIGHT: Cart]
-          ======================================================== */}
-      <View style={[styles.mainWorkspace, isMobile && { flexDirection: 'column' }]}>
+      {/* Toast Notification */}
+      {kdsStatusToast && (
+        <View style={styles.toastBanner}>
+          <Ionicons name="checkmark-circle" size={18} color="#10B981" />
+          <Text style={styles.toastBannerText}>{kdsStatusToast}</Text>
+          <TouchableOpacity onPress={() => setKdsStatusToast(null)}>
+            <Ionicons name="close" size={18} color="#64748B" />
+          </TouchableOpacity>
+        </View>
+      )}
 
+      {/* ========================================================
+          2. MAIN 3-COLUMN POS WORKSPACE
+          [LEFT: Categories Rail] [CENTER: Dishes Grid] [RIGHT: Order Ticket]
+          ======================================================== */}
+      <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
         {/* --------------------------------------------------------
-            LEFT: CATEGORIES 2-COLUMN TILES (BAITHAK PATTERN)
+            LEFT: CLEAN VERTICAL CATEGORY RAIL (Horizontal on Mobile)
             -------------------------------------------------------- */}
         {(!isMobile || mobileTab === 'menu') && (
-          <View style={[styles.categorySidebar, isTablet && { width: 192, padding: 8 }, isMobile && styles.categorySidebarMobile]}>
-            {/* Header: Title + Total Badge + Grid/List Toggle (Desktop/Tablet only) */}
+          <View style={[styles.categoryRail, isTablet && { width: 175 }, isMobile && styles.categoryRailMobile]}>
             {!isMobile && (
-              <View style={[styles.categoryHeaderRow, isTablet && { marginBottom: 6, paddingHorizontal: 0 }]}>
-                <View style={[styles.categoryTitleGroup, isTablet && { gap: 4, flex: 1, marginRight: 4 }]}>
-                  <View style={[styles.categoryTitleIconOrb, isTablet && { width: 18, height: 18, borderRadius: 5 }]}>
-                    <Ionicons name="apps" size={isTablet ? 10 : 12} color="#E5B83B" />
-                  </View>
-                  <Text style={[styles.categoryHeading, isTablet && { fontSize: 9.5, letterSpacing: 0.4 }]} numberOfLines={1}>
-                    CATEGORIES
-                  </Text>
-                  <View style={[styles.categoryCountPill, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }]}>
-                    <Text style={[styles.categoryCountPillText, isTablet && { fontSize: 8.5 }]}>{categoryTiles.length + 1}</Text>
-                  </View>
-                </View>
-
-                {/* View Mode Switcher (Grid 2-col vs List 1-col) */}
-                <View style={[styles.categoryViewSwitcher, isTablet && { padding: 1.5, gap: 1.5, flexShrink: 0 }]}>
-                  <TouchableOpacity 
-                    style={[styles.viewSwitchBtn, isTablet && { width: 20, height: 18 }, categoryViewMode === 'grid' && styles.viewSwitchBtnActive]}
-                    onPress={() => setCategoryViewMode('grid')}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <Ionicons 
-                      name="grid" 
-                      size={isTablet ? 10 : 11} 
-                      color={categoryViewMode === 'grid' ? '#1E293B' : '#A38B7C'} 
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={[styles.viewSwitchBtn, isTablet && { width: 20, height: 18 }, categoryViewMode === 'list' && styles.viewSwitchBtnActive]}
-                    onPress={() => setCategoryViewMode('list')}
-                    activeOpacity={0.8}
-                    hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}
-                  >
-                    <Ionicons 
-                      name="list" 
-                      size={isTablet ? 12 : 13} 
-                      color={categoryViewMode === 'list' ? '#1E293B' : '#A38B7C'} 
-                    />
-                  </TouchableOpacity>
-                </View>
+              <View style={styles.categoryRailHeader}>
+                <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
+                <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
               </View>
             )}
-
-            {/* Quick Find Category Search Box (Desktop/Tablet only) */}
-            {!isMobile && (
-              <View 
-                style={[
-                  styles.quickFindBox, 
-                  isTablet && { height: 32, paddingHorizontal: 6, marginBottom: 6, gap: 5 },
-                  isCatSearchFocused && styles.quickFindBoxFocused
-                ]}
-                {...(Platform.OS === 'web' ? ({ className: 'quick-find-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-              >
-                <View style={[styles.quickFindIconOrb, isTablet && { width: 20, height: 20, borderRadius: 10 }, isCatSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)', borderColor: '#D4AF37' }]}>
-                  <Ionicons name="search" size={isTablet ? 11 : 12} color={isCatSearchFocused ? '#D4AF37' : '#52141C'} />
-                </View>
-                <TextInput
-                  style={[styles.quickFindInput, isTablet && { fontSize: 11 }]}
-                  placeholder="Find category..."
-                  placeholderTextColor="#64748B"
-                  value={categorySearchQuery}
-                  onFocus={() => setIsCatSearchFocused(true)}
-                  onBlur={() => setIsCatSearchFocused(false)}
-                  onChangeText={setCategorySearchQuery}
-                />
-                {categorySearchQuery ? (
-                  <TouchableOpacity onPress={() => setCategorySearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={15} color="#D4AF37" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            )}
-
-            {/* Categories Scrollable Container */}
-            <ScrollView 
-              style={[styles.categoriesScroll, isMobile && { flex: 0 }]}
-              contentContainerStyle={[
-                styles.categoriesContainer,
-                isMobile
-                  ? styles.categoriesScrollMobile
-                  : (categoryViewMode === 'grid' ? [styles.categoriesGrid, isTablet && { gap: 5 }] : [styles.categoriesList, isTablet && { gap: 4 }]),
-              ]}
+            <ScrollView
+              horizontal={isMobile}
               showsVerticalScrollIndicator={false}
               showsHorizontalScrollIndicator={false}
-              horizontal={isMobile}
+              contentContainerStyle={isMobile ? styles.categoryRailScrollMobile : styles.categoryRailScroll}
             >
-              {/* ALL Category Item */}
+              {/* All Items Button */}
               {(() => {
-                const isAllActive = activeCategory === 'ALL' || activeCategory === 'All';
-                const allCount = (menuItems || []).length;
-                const useGridTile = isMobile || categoryViewMode === 'grid';
+                const isAll = activeCategory === 'ALL' || activeCategory === 'All';
                 return (
                   <TouchableOpacity
-                    {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                     style={[
-                      useGridTile ? styles.categoryTile : styles.categoryListRow,
-                      isTablet && categoryViewMode === 'grid' && { width: '48.2%', height: 54, padding: 5, borderRadius: 10 },
-                      isTablet && categoryViewMode === 'list' && { height: 36, paddingHorizontal: 7 },
-                      isMobile && styles.categoryTileMobile,
-                      isAllActive && (useGridTile ? styles.categoryTileActive : styles.categoryListRowActive)
+                      styles.categoryItem,
+                      isMobile && styles.categoryItemMobile,
+                      isAll && styles.categoryItemActive,
                     ]}
-                    onPress={() => {
-                      setActiveCategory('ALL');
-                      if (isTablet && mobileTab === 'cart') setMobileTab('menu');
-                    }}
+                    onPress={() => setActiveCategory('ALL')}
                     activeOpacity={0.8}
                   >
-                    {useGridTile ? (
-                      <>
-                        <View style={[styles.tileTopRow, isMobile && { gap: 10 }]}>
-                          <View style={[styles.tileIconOrb, isTablet && { width: 21, height: 21, borderRadius: 6 }, isMobile && { width: 22, height: 22, borderRadius: 6 }, isAllActive && styles.tileIconOrbActive]}>
-                            <Ionicons 
-                              name="grid" 
-                              size={isTablet ? 11 : isMobile ? 12 : 13} 
-                              color={isAllActive ? '#1E293B' : '#E5B83B'} 
-                            />
-                          </View>
-                          <View style={[styles.tileCountBadge, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }, isAllActive && styles.tileCountBadgeActive]}>
-                            <Text style={[styles.tileCountText, isTablet && { fontSize: 8.5 }, isAllActive && styles.tileCountTextActive]}>
-                              {allCount}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text 
-                          style={[
-                            styles.categoryTileText, 
-                            isTablet && { fontSize: 8.5, letterSpacing: 0, lineHeight: 10.5 }, 
-                            isMobile && { fontSize: 11, fontWeight: '900', lineHeight: 14, letterSpacing: 0.3, marginTop: 2 },
-                            isAllActive && styles.categoryTileTextActive
-                          ]}
-                          numberOfLines={isMobile ? 1 : 2}
-                        >
-                          ALL
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <View style={[styles.listIconOrb, isTablet && { width: 22, height: 22 }, isAllActive && styles.listIconOrbActive]}>
-                          <Ionicons 
-                            name="grid" 
-                            size={isTablet ? 12 : 14} 
-                            color={isAllActive ? '#1E293B' : '#E5B83B'} 
-                          />
-                        </View>
-                        <Text style={[styles.categoryListText, isTablet && { fontSize: 10 }, isAllActive && styles.categoryListTextActive]} numberOfLines={1}>
-                          ALL ITEMS
-                        </Text>
-                        <View style={[styles.listCountBadge, isAllActive && styles.listCountBadgeActive]}>
-                          <Text style={[styles.listCountText, isAllActive && styles.listCountTextActive]}>
-                            {allCount}
-                          </Text>
-                        </View>
-                      </>
-                    )}
+                    <View style={[styles.categoryIconBox, isAll && styles.categoryIconBoxActive]}>
+                      <Ionicons name="apps" size={16} color={isAll ? '#24050A' : '#52141C'} />
+                    </View>
+                    <Text
+                      style={[styles.categoryName, isAll && styles.categoryNameActive]}
+                      numberOfLines={1}
+                    >
+                      All Dishes
+                    </Text>
+                    <View style={[styles.categoryBadge, isAll && styles.categoryBadgeActive]}>
+                      <Text style={[styles.categoryBadgeText, isAll && styles.categoryBadgeTextActive]}>
+                        {menuItems.length}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 );
               })()}
 
-              {/* Dynamic Categories */}
-              {categoryTiles.map(cat => {
+              {/* Category List */}
+              {categoryList.map((cat) => {
                 const isActive = activeCategory.toLowerCase() === cat.toLowerCase();
-                const count = categoryCounts[cat] || categoryCounts[cat.toUpperCase()] || 0;
-                const iconName = getCategoryIcon(cat);
-                const useGridTile = isMobile || categoryViewMode === 'grid';
-
+                const count = categoryCounts[cat] || 0;
                 return (
                   <TouchableOpacity
                     key={cat}
-                    {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
                     style={[
-                      useGridTile ? styles.categoryTile : styles.categoryListRow,
-                      isTablet && categoryViewMode === 'grid' && { width: '48.2%', height: 54, padding: 5, borderRadius: 10 },
-                      isTablet && categoryViewMode === 'list' && { height: 36, paddingHorizontal: 7 },
-                      isMobile && styles.categoryTileMobile,
-                      isActive && (useGridTile ? styles.categoryTileActive : styles.categoryListRowActive)
+                      styles.categoryItem,
+                      isMobile && styles.categoryItemMobile,
+                      isActive && styles.categoryItemActive,
                     ]}
-                    onPress={() => {
-                      setActiveCategory(cat);
-                      if (isTablet && mobileTab === 'cart') setMobileTab('menu');
-                    }}
+                    onPress={() => setActiveCategory(cat)}
                     activeOpacity={0.8}
                   >
-                    {useGridTile ? (
-                      <>
-                        <View style={[styles.tileTopRow, isMobile && { gap: 10 }]}>
-                          <View style={[styles.tileIconOrb, isTablet && { width: 21, height: 21, borderRadius: 6 }, isMobile && { width: 22, height: 22, borderRadius: 6 }, isActive && styles.tileIconOrbActive]}>
-                            <Ionicons 
-                              name={iconName} 
-                              size={isTablet ? 11 : isMobile ? 12 : 13} 
-                              color={isActive ? '#1E293B' : '#E5B83B'} 
-                            />
-                          </View>
-                          <View style={[styles.tileCountBadge, isTablet && { paddingHorizontal: 4, paddingVertical: 0.5 }, isActive && styles.tileCountBadgeActive]}>
-                            <Text style={[styles.tileCountText, isTablet && { fontSize: 8.5 }, isActive && styles.tileCountTextActive]}>
-                              {count}
-                            </Text>
-                          </View>
-                        </View>
-                        <Text 
-                          style={[
-                            styles.categoryTileText, 
-                            isTablet && { fontSize: 8.5, letterSpacing: 0, lineHeight: 10.5 }, 
-                            isMobile && { fontSize: 11, fontWeight: '900', lineHeight: 14, letterSpacing: 0.3, marginTop: 2 },
-                            isActive && styles.categoryTileTextActive
-                          ]}
-                          numberOfLines={isMobile ? 1 : 2}
-                        >
-                          {cat.toUpperCase()}
-                        </Text>
-                      </>
-                    ) : (
-                      <>
-                        <View style={[styles.listIconOrb, isTablet && { width: 22, height: 22 }, isActive && styles.listIconOrbActive]}>
-                          <Ionicons 
-                            name={iconName} 
-                            size={isTablet ? 12 : 14} 
-                            color={isActive ? '#1E293B' : '#E5B83B'} 
-                          />
-                        </View>
-                        <Text 
-                          style={[styles.categoryListText, isTablet && { fontSize: 10 }, isActive && styles.categoryListTextActive]}
-                          numberOfLines={1}
-                        >
-                          {cat.toUpperCase()}
-                        </Text>
-                        <View style={[styles.listCountBadge, isActive && styles.listCountBadgeActive]}>
-                          <Text style={[styles.listCountText, isActive && styles.listCountTextActive]}>
-                            {count}
-                          </Text>
-                        </View>
-                      </>
-                    )}
+                    <View style={[styles.categoryIconBox, isActive && styles.categoryIconBoxActive]}>
+                      <Ionicons
+                        name={getCategoryIcon(cat)}
+                        size={16}
+                        color={isActive ? '#24050A' : '#52141C'}
+                      />
+                    </View>
+                    <Text
+                      style={[styles.categoryName, isActive && styles.categoryNameActive]}
+                      numberOfLines={1}
+                    >
+                      {cat}
+                    </Text>
+                    <View style={[styles.categoryBadge, isActive && styles.categoryBadgeActive]}>
+                      <Text style={[styles.categoryBadgeText, isActive && styles.categoryBadgeTextActive]}>
+                        {count}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-
-            {/* Bottom Status & Quick Filter Panel */}
-            {!isMobile && (
-              <View style={[styles.categoryBottomPanel, isTablet && { marginTop: 4, paddingTop: 4, gap: 2 }]}>
-                {!isTablet && (
-                  <View style={styles.bottomStatusHeader}>
-                    <Text style={styles.bottomStatusTitle}>FILTER</Text>
-                    <Text style={styles.bottomStatusCount}>
-                      {(activeCategory === 'ALL' || activeCategory === 'All') 
-                        ? `${(menuItems || []).length} items` 
-                        : `${categoryCounts[activeCategory] || categoryCounts[activeCategory.toUpperCase()] || 0} items`}
-                    </Text>
-                  </View>
-                )}
-
-                <View style={[styles.bottomActiveCard, isTablet && { height: 26, paddingHorizontal: 6, paddingVertical: 2, gap: 4 }]}>
-                  <View style={[styles.bottomActiveIconOrb, isTablet && { width: 16, height: 16 }]}>
-                    <Ionicons name={getCategoryIcon(activeCategory)} size={10} color="#D4AF37" />
-                  </View>
-                  <Text style={[styles.bottomActiveName, isTablet && { fontSize: 9 }]} numberOfLines={1}>
-                    {activeCategory.toUpperCase()}
-                  </Text>
-                  {(activeCategory !== 'ALL' && activeCategory !== 'All') ? (
-                    <TouchableOpacity 
-                      style={styles.bottomResetPill}
-                      onPress={() => {
-                        setActiveCategory('ALL');
-                        if (isTablet && mobileTab === 'cart') setMobileTab('menu');
-                      }}
-                      activeOpacity={0.7}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <Ionicons name="close" size={10} color="#FFFFFF" />
-                      <Text style={styles.bottomResetText}>Reset</Text>
-                    </TouchableOpacity>
-                  ) : isTablet ? (
-                    <Text style={{ fontSize: 8.5, fontWeight: '800', color: '#E5B83B' }}>
-                      {(menuItems || []).length} items
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-            )}
           </View>
         )}
 
-        {/* RIGHT WORKSPACE CONTAINER (Holds Tablet Mode Switcher + Menu Catalog / Current Cart) */}
-        <View style={{ flex: 1, flexDirection: isTablet ? 'column' : 'row', height: '100%', position: 'relative', overflow: 'hidden' }}>
-
-          {/* Tablet Landscape Mode Switcher Bar (Portrait-style Menu / Cart Tabs) */}
-          {isTablet && (
-            <View style={styles.mobileSwitcher}>
-              <TouchableOpacity 
-                style={[styles.mobileSwitchBtn, mobileTab === 'menu' && styles.mobileSwitchBtnActive]}
-                onPress={() => setMobileTab('menu')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.mobileSwitchText, mobileTab === 'menu' && styles.mobileSwitchTextActive]}>
-                  Menu Dishes ({filteredItems.length})
+        {/* --------------------------------------------------------
+            CENTER: SPACIOUS DISHES CATALOG GRID
+            -------------------------------------------------------- */}
+        {(!isMobile || mobileTab === 'menu') && (
+          <View style={styles.catalogPane}>
+            {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
+            <View style={styles.catalogFilterBar}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.activeCatTitle}>
+                  {activeCategory === 'ALL' ? 'All Menu Dishes' : activeCategory}
                 </Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.mobileSwitchBtn, mobileTab === 'cart' && styles.mobileSwitchBtnActive]}
-                onPress={() => setMobileTab('cart')}
-                activeOpacity={0.85}
-              >
-                <Text style={[styles.mobileSwitchText, mobileTab === 'cart' && styles.mobileSwitchTextActive]}>
-                  Current Cart ({cart.reduce((s, i) => s + i.qty, 0)})
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* --------------------------------------------------------
-              CENTER: DISH CATALOG GRID (5 COLUMNS ON DESKTOP, 4 ON TABLET)
-              -------------------------------------------------------- */}
-          {((!isMobile && !isTablet) || mobileTab === 'menu') && (
-            <View style={styles.centerCatalog}>
-              {/* Catalog Top Subheader Bar */}
-              <View style={[
-                styles.catalogSubheader, 
-                isMobile && { flexDirection: 'column', alignItems: 'stretch', gap: 8, paddingHorizontal: 12, paddingVertical: 8 },
-                isTablet && { paddingHorizontal: 12, paddingVertical: 7, gap: 10 }
-              ]}>
-                <View style={[
-                  styles.catalogTitleRow, 
-                  isMobile && { justifyContent: 'space-between', width: '100%' },
-                  isTablet && { gap: 8 }
-                ]}>
-                  <Text style={[styles.catalogTitle, (isMobile || isTablet) && { fontSize: 13.5 }]}>
-                    {isMobile || isTablet ? 'Menu Catalog' : 'SULTAN RESTAURANT Menu'}
-                  </Text>
-
-                  {/* Sent to KDS / Running Orders Pill */}
-                  <TouchableOpacity 
-                    style={[
-                      styles.runningOrdersPill,
-                      (tickets || []).length > 0 && styles.runningOrdersPillActive,
-                      isTablet && { paddingHorizontal: 9, paddingVertical: 4 },
-                    ]}
-                    {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                    onPress={() => setPendingOrdersModalVisible(true)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="flame-outline" size={13} color="#B45309" />
-                    <Text style={[styles.runningOrdersText, isTablet && { fontSize: 11 }]}>Sent to KDS</Text>
-                    {!isMobile && !isTablet && <View style={styles.keyBadgeTiny}><Text style={styles.keyBadgeTinyText}>F6</Text></View>}
-                    <View style={styles.runningOrdersBadge}>
-                      <Text style={styles.runningOrdersBadgeText}>{(tickets || []).length}</Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Sultan Royal Luxury Search Bar */}
-                <View 
-                  style={[
-                    styles.searchPillBox, 
-                    isSearchFocused && styles.searchPillBoxFocused,
-                    isTablet && { minWidth: 220, maxWidth: 340, height: 36, paddingHorizontal: 8 },
-                    isMobile && { flex: 0, maxWidth: '100%', minWidth: 0, width: '100%', height: 42 }
-                  ]}
-                  {...(Platform.OS === 'web' ? ({ className: 'search-pill-box search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-                >
-                  <View style={[styles.searchIconOrb, isTablet && { width: 24, height: 24, borderRadius: 12 }, isSearchFocused && styles.searchIconOrbFocused]}>
-                    <Ionicons name="search" size={isTablet ? 12 : 14} color={isSearchFocused ? '#D4AF37' : '#52141C'} />
-                  </View>
-                  <TextInput
-                    ref={searchInputRef}
-                    style={[styles.searchPillInput, isTablet && { fontSize: 12 }]}
-                    placeholder={isMobile || isTablet ? "Search dishes or code..." : "Search dishes, codes, or categories... (Press F1)"}
-                    placeholderTextColor="#8A7A70"
-                    value={searchQuery}
-                    onFocus={() => setIsSearchFocused(true)}
-                    onBlur={() => setIsSearchFocused(false)}
-                    onChangeText={setSearchQuery}
-                  />
-                  {searchQuery ? (
-                    <TouchableOpacity 
-                      onPress={() => setSearchQuery('')}
-                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                      style={styles.searchClearBtn}
-                    >
-                      <Ionicons name="close-circle" size={16} color="#D4AF37" />
-                    </TouchableOpacity>
-                  ) : (
-                    !isMobile && !isTablet && (
-                      <View style={styles.searchShortcutBadge}>
-                        <Text style={styles.searchShortcutText}>F1</Text>
-                      </View>
-                    )
-                  )}
+                <View style={styles.activeCatCountPill}>
+                  <Text style={styles.activeCatCountText}>{filteredItems.length} items</Text>
                 </View>
               </View>
 
-              {/* Region / Cuisine Quick Filter Pills */}
               {regions.length > 0 && systemSettings.posShowCuisineFilter !== false && (
-                <View style={[styles.posRegionFilterRow, isTablet && { paddingHorizontal: 12, paddingVertical: 6, gap: 6 }]}>
-                  <View style={[styles.posRegionFilterLead, isTablet && { paddingHorizontal: 7, paddingVertical: 3.5, gap: 4 }]}>
-                    <View style={[styles.posRegionLeadIconWrap, isTablet && { width: 16, height: 16 }]}>
-                      <Ionicons name="restaurant" size={10} color="#D4AF37" />
-                    </View>
-                    <Text style={[styles.posRegionFilterLeadText, isTablet && { fontSize: 9.5 }]}>CUISINE</Text>
-                  </View>
-                  <ScrollView 
-                    horizontal 
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={[styles.posRegionScroll, isTablet && { gap: 6, paddingRight: 10 }]}
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={styles.cuisinePillsRow}
+                >
+                  <TouchableOpacity
+                    style={[styles.cuisinePill, activeRegion === 'ALL' && styles.cuisinePillActive]}
+                    onPress={() => setActiveRegion('ALL')}
                   >
-                    <TouchableOpacity
-                      style={[
-                        styles.posRegionChip,
-                        isTablet && { paddingHorizontal: 9, paddingVertical: 4, gap: 4 },
-                        activeRegion === 'ALL' && styles.posRegionChipActive,
-                      ]}
-                      onPress={() => setActiveRegion('ALL')}
-                      activeOpacity={0.75}
-                    >
-                      <Ionicons 
-                        name="globe-outline" 
-                        size={isTablet ? 11 : 13} 
-                        color={activeRegion === 'ALL' ? '#D4AF37' : '#8A7A70'} 
-                        style={{ marginRight: 1 }} 
-                      />
-                      <Text style={[
-                        styles.posRegionChipText,
-                        isTablet && { fontSize: 11 },
-                        activeRegion === 'ALL' && styles.posRegionChipTextActive,
-                      ]}>
-                        All Cuisines
-                      </Text>
-                      <View style={[
-                        styles.posRegionChipBadge,
-                        isTablet && { paddingHorizontal: 5, paddingVertical: 1 },
-                        activeRegion === 'ALL' && styles.posRegionChipBadgeActive
-                      ]}>
-                        <Text style={[
-                          styles.posRegionChipBadgeText,
-                          isTablet && { fontSize: 9 },
-                          activeRegion === 'ALL' && styles.posRegionChipBadgeTextActive
-                        ]}>
-                          {regionCounts['ALL'] ?? 0}
-                        </Text>
-                      </View>
-                    </TouchableOpacity>
-
-                    {regions.map(r => {
-                      const isSelected = activeRegion.toLowerCase() === r.toLowerCase();
-                      const meta = getCuisineMeta(r);
-                      const count = regionCounts[r] || 0;
-
-                      return (
-                        <TouchableOpacity
-                          key={r}
-                          style={[
-                            styles.posRegionChip,
-                            isTablet && { paddingHorizontal: 9, paddingVertical: 4, gap: 4 },
-                            isSelected && styles.posRegionChipActive,
-                          ]}
-                          onPress={() => setActiveRegion(isSelected ? 'ALL' : r)}
-                          activeOpacity={0.75}
-                        >
-                          <Ionicons name={meta.icon as any} size={isTablet ? 12 : 14} color={isSelected ? '#FFFFFF' : meta.color} />
-                          <Text style={[
-                            styles.posRegionChipText,
-                            isTablet && { fontSize: 11 },
-                            isSelected && styles.posRegionChipTextActive,
-                          ]}>
-                            {r}
-                          </Text>
-                          {count > 0 && (
-                            <View style={[
-                              styles.posRegionChipBadge,
-                              isTablet && { paddingHorizontal: 5, paddingVertical: 1 },
-                              isSelected && styles.posRegionChipBadgeActive
-                            ]}>
-                              <Text style={[
-                                styles.posRegionChipBadgeText,
-                                isTablet && { fontSize: 9 },
-                                isSelected && styles.posRegionChipBadgeTextActive
-                              ]}>
-                                {count}
-                              </Text>
-                            </View>
-                          )}
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Live KDS Dispatch Toast Banner */}
-              {kdsStatusToast && (
-                <View style={styles.kdsToastBar}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                    <Ionicons name="checkmark-circle" size={16} color="#059669" />
-                    <Text style={styles.kdsToastText} numberOfLines={2}>{kdsStatusToast}</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => setKdsStatusToast(null)} hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}>
-                    <Ionicons name="close" size={16} color="#065F46" />
+                    <Text style={[styles.cuisinePillText, activeRegion === 'ALL' && styles.cuisinePillTextActive]}>
+                      All Cuisines
+                    </Text>
                   </TouchableOpacity>
-                </View>
-              )}
-
-              {/* Live Sent-to-KDS Active Queue Strip (Directly visible on POS screen) */}
-              {(tickets || []).length > 0 && (
-                <View style={styles.kdsLiveStripWrapper}>
-                  <View style={styles.kdsLiveStripHeader}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={styles.kdsLiveDot} />
-                      <Text style={styles.kdsLiveStripTitle}>
-                        SENT TO KDS ({(tickets || []).length})
-                      </Text>
-                    </View>
-                    <TouchableOpacity
-                      style={styles.kdsLiveViewAllBtn}
-                      onPress={() => setPendingOrdersModalVisible(true)}
-                      activeOpacity={0.75}
-                    >
-                      <Text style={styles.kdsLiveViewAllText}>Manage All [F6]</Text>
-                      <Ionicons name="chevron-forward" size={12} color="#52141C" />
-                    </TouchableOpacity>
-                  </View>
-
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.kdsLiveStripScroll}
-                  >
-                    {(tickets || []).map((t) => {
-                      const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
-                      const targetTable = isTable ? tables.find(tbl => tbl.id === t.tableId) : null;
-                      const targetLabel = targetTable
-                        ? targetTable.name
-                        : (t.tableName || (t.tableId ? t.tableId.toUpperCase() : 'TAKEAWAY'));
-                      const itemsArr = Array.isArray(t.items) ? t.items : [];
-                      const itemCount = itemsArr.reduce((s, it) => s + (it.qty || 1), 0);
-                      const tSub = itemsArr.reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0);
-                      const hasMain = itemsArr.some(it => (it.station || 'main') === 'main');
-                      const hasJuice = itemsArr.some(it => (it.station || 'main') === 'juice');
-                      const stationTag = hasMain && hasJuice ? 'Kitchen + Juice' : (hasJuice ? 'Juice Bar' : 'Kitchen');
-                      const statusColors: Record<string, { bg: string; text: string; border: string }> = {
-                        pending: { bg: '#FEF3C7', text: '#B45309', border: '#F59E0B' },
-                        cooking: { bg: '#FFEDD5', text: '#C2410C', border: '#FB923C' },
-                        ready: { bg: '#DBEAFE', text: '#1D4ED8', border: '#60A5FA' },
-                        served: { bg: '#D1FAE5', text: '#047857', border: '#34D399' },
-                      };
-                      const st = statusColors[t.status] || statusColors.pending;
-
-                      return (
-                        <View key={t.id} style={styles.kdsStripCard}>
-                          <TouchableOpacity
-                            style={{ flex: 1 }}
-                            onPress={() => handleCreateBillFromTicket(t, false)}
-                            activeOpacity={0.8}
-                          >
-                            <View style={styles.kdsStripTopRow}>
-                              <Text style={styles.kdsStripTarget} numberOfLines={1}>
-                                {targetLabel}
-                              </Text>
-                              <View style={[styles.kdsStripStatusPill, { backgroundColor: st.bg, borderColor: st.border }]}>
-                                <Text style={[styles.kdsStripStatusText, { color: st.text }]}>
-                                  {(t.status || 'pending').toUpperCase()}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={styles.kdsStripMetaRow}>
-                              <Text style={styles.kdsStripStation}>{stationTag}</Text>
-                              <Text style={styles.kdsStripMetaSep}>•</Text>
-                              <Text style={styles.kdsStripTicketId}>#{t.id.slice(-5).toUpperCase()}</Text>
-                              <Text style={styles.kdsStripMetaSep}>•</Text>
-                              <Text style={styles.kdsStripMetaCount}>
-                                {itemCount}x{!hidePrices ? ` • Rs. ${tSub.toLocaleString()}` : ''}
-                              </Text>
-                            </View>
-                          </TouchableOpacity>
-
-                          <View style={styles.kdsStripActions}>
-                            <TouchableOpacity
-                              style={styles.kdsStripSlipBtn}
-                              onPress={() => handlePrintPendingSlipForTicket(t)}
-                              activeOpacity={0.75}
-                              {...(Platform.OS === 'web' ? ({ title: 'Print Pending Slip' } as any) : {})}
-                            >
-                              <Ionicons name="print-outline" size={12} color="#52141C" />
-                              <Text style={styles.kdsStripSlipText}>Slip</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.kdsStripPayBtn}
-                              onPress={() => handleCreateBillFromTicket(t, true)}
-                              activeOpacity={0.75}
-                              {...(Platform.OS === 'web' ? ({ title: 'Bill & Settle Payment' } as any) : {})}
-                            >
-                              <Ionicons name="card-outline" size={12} color="#FFFFFF" />
-                              <Text style={styles.kdsStripPayText}>Pay</Text>
-                            </TouchableOpacity>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </ScrollView>
-                </View>
-              )}
-
-              {/* Dishes Grid */}
-              <ScrollView 
-                style={styles.dishesScrollView}
-                contentContainerStyle={[
-                  styles.dishesGridContainer, 
-                  isTablet && { padding: 10 },
-                  (isMobile || isTablet) && cart.length > 0 && { paddingBottom: 88 }
-                ]}
-                showsVerticalScrollIndicator={false}
-              >
-                <View style={[styles.dishesGrid, isTablet && { gap: 10 }]}>
-                  {filteredItems.map(item => {
-                    const inCartQty = cart
-                      .filter(c => c.id === item.id || c.id.startsWith(`${item.id}-`))
-                      .reduce((sum, c) => sum + c.qty, 0);
-                    const isItemInCart = inCartQty > 0;
-                    const isOutOfStock = Boolean(item.trackStock && typeof item.stockQty === 'number' && item.stockQty <= 0);
-
+                  {regions.map((r) => {
+                    const active = activeRegion.toLowerCase() === r.toLowerCase();
                     return (
                       <TouchableOpacity
-                        key={item.id}
-                        {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
-                        style={[
-                          styles.dishCard,
-                          isItemInCart && styles.dishCardInCart,
-                          isOutOfStock && { opacity: 0.65 },
-                          isTablet && { 
-                            width: '23.6%', 
-                            minWidth: 155, 
-                            flexGrow: 1,
-                            paddingVertical: 8,
-                            paddingHorizontal: 8,
-                            minHeight: 136,
-                            borderRadius: 13,
-                          },
-                          isMobile && { 
-                            width: width < 360 ? '100%' : width < 560 ? '47%' : '31%', 
-                            minWidth: 0,
-                            flexGrow: 1,
-                            paddingVertical: 10, 
-                            paddingHorizontal: 8,
-                            minHeight: 125,
-                          }
-                        ]}
-                        onPress={() => addToCart(item)}
-                        activeOpacity={0.75}
-                        disabled={isOutOfStock}
+                        key={r}
+                        style={[styles.cuisinePill, active && styles.cuisinePillActive]}
+                        onPress={() => setActiveRegion(active ? 'ALL' : r)}
                       >
-                        {/* Floating M3 In-Cart Badge */}
-                        {isItemInCart && (
-                          <View style={styles.inCartBadge}>
-                            <Ionicons name="checkmark" size={10} color="#FFFFFF" style={{ marginRight: 2 }} />
-                            <Text style={styles.inCartBadgeText}>{inCartQty}</Text>
+                        <Text style={[styles.cuisinePillText, active && styles.cuisinePillTextActive]}>{r}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Dish Grid */}
+            <ScrollView
+              style={{ flex: 1 }}
+              contentContainerStyle={[styles.dishGridContent, isMobile && totalCartQty > 0 && { paddingBottom: 90 }]}
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={styles.dishGrid}>
+                {filteredItems.map((item) => {
+                  const inCartQty = cart
+                    .filter((c) => c.id === item.id || c.id.startsWith(`${item.id}-`))
+                    .reduce((sum, c) => sum + c.qty, 0);
+                  const isInCart = inCartQty > 0;
+                  const isOutOfStock = isPosItemBlocked(item);
+                  const hasVariants = Boolean(item.variants && item.variants.length > 0);
+                  const imageUri = resolveMenuImageUri(item);
+
+                  return (
+                    <TouchableOpacity
+                      key={item.id}
+                      style={[
+                        styles.dishCard,
+                        isTablet && { width: '31.5%' },
+                        isMobile && { width: width < 380 ? '100%' : '48%' },
+                        isInCart && styles.dishCardActive,
+                        isOutOfStock && { opacity: 0.55 },
+                      ]}
+                      onPress={() => addToCart(item)}
+                      activeOpacity={0.78}
+                      disabled={isOutOfStock}
+                    >
+                      {/* Dish Image */}
+                      <View style={styles.dishImgBox}>
+                        {imageUri && !failedImages[item.id] ? (
+                          <Image
+                            source={{ uri: imageUri }}
+                            style={styles.dishImg}
+                            resizeMode="cover"
+                            onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                          />
+                        ) : (
+                          <View style={styles.dishImgFallback}>
+                            <Ionicons
+                              name={item.isDeal ? 'gift-outline' : 'restaurant-outline'}
+                              size={26}
+                              color="#D4AF37"
+                            />
                           </View>
                         )}
 
-                        {/* Top: Dish Photo or Fallback Icon */}
-                        <View style={[
-                          styles.dishCardImageWrapper, 
-                          isTablet && { height: 74, marginBottom: 5, borderRadius: 10 },
-                          isMobile && { height: 76 }
-                        ]}>
-                          {resolveMenuImageUri(item) && !failedImages[item.id] ? (
-                            <Image 
-                              source={{ uri: resolveMenuImageUri(item)! }} 
-                              style={styles.dishCardImage} 
-                              resizeMode="cover"
-                              onError={() => setFailedImages(prev => ({ ...prev, [item.id]: true }))}
-                            />
-                          ) : (
-                            <View style={styles.dishCardPlaceholderBox}>
-                              <Ionicons 
-                                name={item.isDeal ? "gift" : "restaurant-outline"} 
-                                size={isTablet ? 24 : 26} 
-                                color="#D4AF37" 
-                              />
-                            </View>
-                          )}
-
-                          {/* Category Chip (Top-Left) */}
-                          <View style={styles.dishCardChipsRow}>
-                            <View style={[styles.dishCardCategoryChip, isTablet && { paddingHorizontal: 5, paddingVertical: 1.5 }]}>
-                              <Text style={[styles.dishCardCategory, isTablet && { fontSize: 8 }]} numberOfLines={1}>
-                                {(item.category || 'Mains').toUpperCase()}
-                              </Text>
-                            </View>
-                          </View>
-
-                          {/* Region Chip (Bottom-Left) */}
-                          {item.region ? (
-                            <View style={[styles.dishCardRegionChip, { position: 'absolute', bottom: 4, left: 4, zIndex: 4 }, isTablet && { paddingHorizontal: 5, paddingVertical: 1.5 }]}>
-                              <Ionicons name="globe-outline" size={8} color="#D4AF37" style={{ marginRight: 2 }} />
-                              <Text style={[styles.dishCardRegionText, isTablet && { fontSize: 8 }]} numberOfLines={1}>
-                                {item.region}
-                              </Text>
-                            </View>
-                          ) : null}
-
-                          {/* Special Badge tag (Top-Right) */}
-                          {item.badge ? (
-                            <View style={[styles.dishCardBadgeTag, isTablet && { top: 4, right: 4, paddingHorizontal: 5, paddingVertical: 1.5 }]}>
-                              <Text style={[styles.dishCardBadgeText, isTablet && { fontSize: 8 }]} numberOfLines={1}>
-                                {item.badge}
-                              </Text>
-                            </View>
-                          ) : null}
-
-                          {/* Out of Stock Overlay */}
-                          {isOutOfStock && (
-                            <View style={styles.dishSoldOutOverlay}>
-                              <Text style={styles.dishSoldOutText}>SOLD OUT</Text>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* Middle: Dish Name */}
-                        <Text style={[styles.dishCardTitle, isTablet && { fontSize: 11.5, lineHeight: 14.5, marginVertical: 3 }]} numberOfLines={2}>
-                          {item.name}
-                        </Text>
-
-                        {/* Bottom: Warm Cream Price Capsule OR Order Taker Selector Capsule */}
-                        {hidePrices ? (
-                          <View style={[styles.dishCardOrderPill, isTablet && { paddingHorizontal: 8, paddingVertical: 4, marginTop: 3 }, isItemInCart && styles.dishCardOrderPillActive]}>
-                            <Ionicons 
-                              name={isItemInCart ? "checkmark-circle" : "add-circle-outline"} 
-                              size={12} 
-                              color={isItemInCart ? "#10B981" : "#B45309"} 
-                              style={{ marginRight: 3 }}
-                            />
-                            <Text style={[styles.dishCardOrderText, isTablet && { fontSize: 11 }, isItemInCart && styles.dishCardOrderTextActive]}>
-                              {isItemInCart ? `${inCartQty} in Cart` : 'Add Dish'}
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={[styles.dishCardPricePill, isTablet && { paddingHorizontal: 10, paddingVertical: 4, marginTop: 3, borderRadius: 10 }, isItemInCart && styles.dishCardPricePillActive]}>
-                            <Text style={[styles.dishCardPriceText, isTablet && { fontSize: 11.5 }, isItemInCart && styles.dishCardPriceTextActive]}>
+                        {/* Single Clean Price Badge or Variant Tag */}
+                        {!hidePrices && (
+                          <View style={[styles.dishPriceTag, isInCart && styles.dishPriceTagActive]}>
+                            <Text style={[styles.dishPriceTagText, isInCart && { color: '#24050A' }]}>
                               Rs. {item.price.toLocaleString()}
                             </Text>
                           </View>
                         )}
-                      </TouchableOpacity>
-                    );
-                  })}
 
-                  {filteredItems.length === 0 && (
-                    <View style={styles.noItemsBox}>
-                      <Ionicons name="search" size={40} color="#CBD5E1" />
-                      <Text style={styles.noItemsText}>No items found matching your filter</Text>
-                    </View>
-                  )}
-                </View>
-              </ScrollView>
-            </View>
-          )}
-
-          {/* --------------------------------------------------------
-              RIGHT: CURRENT CART (FULL-WIDTH PORTRAIT-STYLE ON MOBILE & TABLET)
-              -------------------------------------------------------- */}
-          {((!isMobile && !isTablet) || mobileTab === 'cart') && (
-            <View style={[
-              styles.cartSidebar, 
-              (isMobile || isTablet) && styles.cartSidebarMobile
-            ]}>
-              {/* Header: Title + Item Count + Clear */}
-              <View style={[styles.cartHeaderRow, isTablet && { paddingVertical: 8, paddingHorizontal: 14 }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-                  <View style={[styles.cartHeaderIconCircle, isTablet && { width: 30, height: 30, borderRadius: 15 }]}>
-                    <Ionicons name="bag-handle" size={isTablet ? 14 : 15} color="#FFFFFF" />
-                  </View>
-                  <View>
-                    <Text style={[styles.cartHeaderTitle, isTablet && { fontSize: 14 }]}>Current Order</Text>
-                    <Text style={[styles.cartHeaderSub, isTablet && { fontSize: 10, marginTop: 0 }]}>
-                      {cart.length === 0 ? 'No items in order' : `${cart.reduce((s, i) => s + i.qty, 0)} ${cart.reduce((s, i) => s + i.qty, 0) === 1 ? 'item' : 'items'} selected`}
-                    </Text>
-                  </View>
-                </View>
-
-                {cart.length > 0 && (
-                  <TouchableOpacity 
-                    style={[styles.cartResetBtn, isTablet && { paddingHorizontal: 10, paddingVertical: 5 }]}
-                    onPress={clearCart}
-                    activeOpacity={0.7}
-                    {...(Platform.OS === 'web' ? ({ title: 'Clear entire cart' } as any) : {})}
-                  >
-                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
-                    <Text style={[styles.cartResetBtnText, isTablet && { fontSize: 11 }]}>Clear</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Order Type Switcher + Table/Customer Bar (Side-by-side on Tablet Landscape to maximize Cart items height) */}
-              <View style={[isTablet && { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, marginTop: 7 }]}>
-                {/* Order Type Segmented Switcher (Takeaway / Dine-in / Delivery) */}
-                <View style={[styles.orderTypeTabs, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, padding: 3 }]}>
-                  {systemSettings.enableTakeaway !== false && (role === 'admin' || can('posCanTakeaway')) && (
-                    <TouchableOpacity
-                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'takeaway' && styles.orderTypeTabActive]}
-                      onPress={() => handleOrderTypeChange('takeaway')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="bag-handle" size={12} color={orderType === 'takeaway' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'takeaway' && styles.orderTypeTabTextActive]}>
-                        Takeaway
-                      </Text>
-                      {!isMobile && !isTablet && (
-                        <View style={[styles.tabKeyBadge, orderType === 'takeaway' && styles.tabKeyBadgeActive]}>
-                          <Text style={[styles.tabKeyBadgeText, orderType === 'takeaway' && styles.tabKeyBadgeTextActive]}>F3</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  )}
-
-                  {systemSettings.enableDineIn !== false && (role === 'admin' || can('posCanDineIn')) && (
-                    <TouchableOpacity
-                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'dine-in' && styles.orderTypeTabActive]}
-                      onPress={() => handleOrderTypeChange('dine-in')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="restaurant" size={12} color={orderType === 'dine-in' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'dine-in' && styles.orderTypeTabTextActive]}>
-                        Dine-in
-                      </Text>
-                      {!isMobile && !isTablet && (
-                        <View style={[styles.tabKeyBadge, orderType === 'dine-in' && styles.tabKeyBadgeActive]}>
-                          <Text style={[styles.tabKeyBadgeText, orderType === 'dine-in' && styles.tabKeyBadgeTextActive]}>F2</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  )}
-
-                  {systemSettings.enableDelivery !== false && (role === 'admin' || can('posCanDelivery')) && (
-                    <TouchableOpacity
-                      style={[styles.orderTypeTab, isTablet && { paddingVertical: 6.5 }, orderType === 'delivery' && styles.orderTypeTabActive]}
-                      onPress={() => handleOrderTypeChange('delivery')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="bicycle" size={12} color={orderType === 'delivery' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
-                      <Text style={[styles.orderTypeTabText, isTablet && { fontSize: 11.5 }, orderType === 'delivery' && styles.orderTypeTabTextActive]}>
-                        Delivery
-                      </Text>
-                      {!isMobile && !isTablet && (
-                        <View style={[styles.tabKeyBadge, orderType === 'delivery' && styles.tabKeyBadgeActive]}>
-                          <Text style={[styles.tabKeyBadgeText, orderType === 'delivery' && styles.tabKeyBadgeTextActive]}>F4</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Table or Customer Bar depending on Order Type */}
-                {orderType === 'dine-in' ? (
-                  <View style={[styles.tableCabinBar, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, paddingVertical: 6, paddingHorizontal: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                      <View style={[styles.statusIconOrb, isTablet && { width: 26, height: 26, borderRadius: 13 }]}>
-                        <Ionicons name="restaurant" size={12} color="#D97706" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.tableCabinLabel, isTablet && { fontSize: 8.5 }]}>Table / Cabin</Text>
-                        <View style={styles.tableCabinPill}>
-                          <Text style={[styles.tableCabinPillText, isTablet && { fontSize: 11.5 }]} numberOfLines={1}>
-                            {selectedTableObj ? selectedTableObj.name : 'No Table Selected'}
-                          </Text>
-                          {selectedTableObj && (
-                            <Text style={[styles.tableCabinPillSub, isTablet && { fontSize: 9.5 }]}>
-                              • {getTableFloor(selectedTableObj)} ({getTableSeatingType(selectedTableObj) === 'majlis' ? 'Majlis' : getTableSeatingType(selectedTableObj) === 'couches' ? 'Couch' : 'Table'})
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity 
-                      style={[styles.changeTablePill, isTablet && { paddingHorizontal: 9, paddingVertical: 5 }]}
-                      onPress={() => setTableModalVisible(true)}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="swap-horizontal" size={12} color="#475569" style={{ marginRight: 3 }} />
-                      <Text style={[styles.changeTablePillText, isTablet && { fontSize: 10.5 }]}>Change</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View style={[styles.tableCabinBar, isTablet && { flex: 1, marginTop: 0, marginHorizontal: 0, paddingVertical: 6, paddingHorizontal: 12 }]}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, marginRight: 8 }}>
-                      <View style={[styles.statusIconOrb, isTablet && { width: 26, height: 26, borderRadius: 13 }]}>
-                        <Ionicons name="person" size={12} color="#D97706" />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.tableCabinLabel, isTablet && { fontSize: 8.5 }]}>Customer Details</Text>
-                        <View style={styles.tableCabinPill}>
-                          <Text style={[styles.tableCabinPillText, isTablet && { fontSize: 11.5 }]} numberOfLines={1}>
-                            {selectedCustomerObj ? selectedCustomerObj.name : 'Walk-in Guest'}
-                          </Text>
-                          {selectedCustomerObj?.phone && (
-                            <Text style={[styles.tableCabinPillSub, isTablet && { fontSize: 9.5 }]}>
-                              • {selectedCustomerObj.phone}
-                            </Text>
-                          )}
-                        </View>
-                      </View>
-                    </View>
-
-                    <TouchableOpacity 
-                      style={[styles.changeTablePill, isTablet && { paddingHorizontal: 9, paddingVertical: 5 }]}
-                      onPress={() => {
-                        setCustomerSearchQuery('');
-                        setIsCreatingNewCustomer(false);
-                        setCustomerModalVisible(true);
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons name="person-add-outline" size={12} color="#475569" style={{ marginRight: 3 }} />
-                      <Text style={[styles.changeTablePillText, isTablet && { fontSize: 10.5 }]}>
-                        {selectedCustomerObj ? 'Change' : 'Select'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </View>
-
-              {/* Columns Subheader */}
-              <View style={[styles.cartColumnSubheader, isTablet && { paddingVertical: 5, paddingHorizontal: 14, marginTop: 6 }]}>
-                <Text style={[styles.cartColLabel, isTablet && { fontSize: 9.5 }]}>
-                  ITEMS IN ORDER ({cart.length})
-                </Text>
-                <Text style={[styles.cartColLabel, isTablet && { fontSize: 9.5 }]}>
-                  {hidePrices ? 'PORTIONS' : 'QTY & SUBTOTAL'}
-                </Text>
-              </View>
-
-              {/* Cart Items or Empty Bag View */}
-              <ScrollView 
-                style={[styles.cartItemsScroll, isTablet && { minHeight: 160, flex: 1 }]}
-                contentContainerStyle={[styles.cartItemsScrollContent, isTablet && { paddingVertical: 8, paddingHorizontal: 14, gap: 7 }]}
-                showsVerticalScrollIndicator={true}
-              >
-                {cart.length === 0 ? (
-                  <View style={[styles.emptyCartBox, isTablet && { minHeight: 130, paddingVertical: 14 }]}>
-                    <View style={[styles.emptyCartOrb, isTablet && { width: 52, height: 52, marginBottom: 8 }]}>
-                      <Ionicons name="basket-outline" size={isTablet ? 28 : 38} color="#94A3B8" />
-                    </View>
-                    <Text style={[styles.emptyCartText, isTablet && { fontSize: 13 }]}>Cart is currently empty</Text>
-                    <Text style={[styles.emptyCartSub, isTablet && { fontSize: 11, marginTop: 3 }]}>
-                      {isTablet ? 'Switch to Menu Dishes tab or tap a category on the left to add items' : 'Tap any dish card on the left to add items'}
-                    </Text>
-                  </View>
-                ) : (
-                  cart.map(item => (
-                    <View key={item.id} style={[styles.cartItemCard, isTablet && { paddingVertical: 9, paddingHorizontal: 14, borderRadius: 12 }]}>
-                      {/* Top Row: Dish Name + Trash Button */}
-                      <View style={[styles.cartItemTopRow, isTablet && { marginBottom: 5, alignItems: 'center' }]}>
-                        <View style={{ flex: 1, paddingRight: 8 }}>
-                          <Text style={[styles.cartItemName, isTablet && { fontSize: 13.5, lineHeight: 17 }]} numberOfLines={1}>{item.name}</Text>
-                          {!hidePrices && (
-                            <Text style={[styles.cartItemUnit, isTablet && { fontSize: 10.5, marginTop: 1 }]}>
-                              Rs. {item.price.toLocaleString()} / unit
-                            </Text>
-                          )}
-                        </View>
-
-                        <TouchableOpacity 
-                          style={[styles.cartItemTrashBtn, isTablet && { padding: 5 }]}
-                          onPress={() => removeFromCart(item.id)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          activeOpacity={0.7}
-                          {...(Platform.OS === 'web' ? ({ title: 'Remove item' } as any) : {})}
-                        >
-                          <Ionicons name="trash-outline" size={14} color="#DC2626" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Bottom Row: Controls & Line Total */}
-                      <View style={[styles.cartItemBottomRow, isTablet && { paddingTop: 5 }]}>
-                        {/* Stepper Controls */}
-                        <View style={styles.cartStepperBox}>
-                          <TouchableOpacity 
-                            style={[styles.cartStepBtn, isTablet && { width: 28, height: 28 }]} 
-                            onPress={() => updateQty(item.id, -1)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="remove" size={14} color="#1E293B" />
-                          </TouchableOpacity>
-                          <View style={[styles.cartStepQtyBox, isTablet && { minWidth: 28 }]}>
-                            <Text style={[styles.cartStepQty, isTablet && { fontSize: 12.5 }]}>{item.qty}</Text>
+                        {/* Quantity Badge when in Cart */}
+                        {isInCart && (
+                          <View style={styles.dishQtyBadge}>
+                            <Text style={styles.dishQtyBadgeText}>{inCartQty}×</Text>
                           </View>
-                          <TouchableOpacity 
-                            style={[styles.cartStepBtn, styles.cartStepBtnAdd, isTablet && { width: 28, height: 28 }]} 
-                            onPress={() => updateQty(item.id, 1)}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="add" size={14} color="#FFFFFF" />
-                          </TouchableOpacity>
-                        </View>
+                        )}
 
-                        {/* Line Total OR Portion Badge in Order Taker mode */}
-                        {hidePrices ? (
-                          <View style={[styles.portionPill, isTablet && { paddingHorizontal: 10, paddingVertical: 4 }]}>
-                            <Text style={[styles.portionPillText, isTablet && { fontSize: 11 }]}>
-                              {item.qty} {item.qty > 1 ? 'portions' : 'portion'}
-                            </Text>
-                          </View>
-                        ) : (
-                          <View style={styles.cartItemTotalBox}>
-                            <Text style={[styles.cartItemTotalLabel, isTablet && { fontSize: 8.5 }]}>LINE TOTAL</Text>
-                            <Text style={[styles.cartItemTotal, isTablet && { fontSize: 13.5 }]}>
-                              Rs. {(item.price * item.qty).toLocaleString()}
-                            </Text>
+                        {isOutOfStock && (
+                          <View style={styles.soldOutOverlay}>
+                            <Text style={styles.soldOutOverlayText}>SOLD OUT</Text>
                           </View>
                         )}
                       </View>
-                    </View>
-                  ))
-                )}
-              </ScrollView>
 
-              {/* Settlement Bottom Section */}
-              <View style={[styles.cartBottomSettlement, isTablet && { paddingVertical: 8, paddingHorizontal: 14 }]}>
-                {/* Financial Lines OR Order Summary */}
-                {hidePrices ? (
-                  <View style={[styles.orderTakerSummaryBox, isTablet && { padding: 8, marginBottom: 6 }]}>
-                    <View style={styles.orderTakerSummaryRow}>
-                      <View style={styles.orderTakerSummaryItem}>
-                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Dishes</Text>
-                        <Text style={[styles.orderTakerSummaryValue, isTablet && { fontSize: 13.5 }]}>{cart.length}</Text>
-                      </View>
-                      <View style={styles.orderTakerSummaryDivider} />
-                      <View style={styles.orderTakerSummaryItem}>
-                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Portions</Text>
-                        <Text style={[styles.orderTakerSummaryValue, isTablet && { fontSize: 13.5 }]}>
-                          {cart.reduce((s, i) => s + i.qty, 0)}
+                      {/* Dish Info */}
+                      <View style={styles.dishBody}>
+                        <Text style={styles.dishTitle} numberOfLines={2}>
+                          {item.name}
                         </Text>
-                      </View>
-                      <View style={styles.orderTakerSummaryDivider} />
-                      <View style={styles.orderTakerSummaryItem}>
-                        <Text style={[styles.orderTakerSummaryLabel, isTablet && { fontSize: 9.5 }]}>Dining Type</Text>
-                        <Text style={[styles.orderTakerSummaryValue, { textTransform: 'capitalize', color: '#52141C' }, isTablet && { fontSize: 13.5 }]}>
-                          {orderType}
-                        </Text>
-                      </View>
-                    </View>
-                    <View style={[styles.orderTakerNoticeBanner, isTablet && { marginTop: 4, paddingVertical: 3, paddingHorizontal: 6 }]}>
-                      <Ionicons name="information-circle-outline" size={12} color="#B45309" />
-                      <Text style={[styles.orderTakerNoticeText, isTablet && { fontSize: 9.5 }]}>
-                        Order Taker Mode: Prices & totals are hidden.
-                      </Text>
-                    </View>
-                  </View>
-                ) : (
-                  <>
-                    <View style={[styles.mathSummaryLines, isTablet && { paddingVertical: 5, paddingHorizontal: 12, marginBottom: 6, gap: 2.5 }]}>
-                      <View style={styles.mathLine}>
-                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Subtotal</Text>
-                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>Rs. {subTotal.toFixed(0)}</Text>
-                      </View>
-
-                      <View style={styles.mathLine}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                          <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>Discount-</Text>
-                          <TouchableOpacity
-                            style={[
-                              styles.discountBadgePill,
-                              isTablet && { paddingHorizontal: 6, paddingVertical: 1 },
-                              ((role !== 'admin' && !can('canApplyCustomDiscount')) ||
-                                (systemSettings.allowCustomDiscount === false &&
-                                  systemSettings.enableDiscountsModule === false)) && { opacity: 0.5 },
-                            ]}
-                            onPress={() => {
-                              if (
-                                systemSettings.allowCustomDiscount === false &&
-                                systemSettings.enableDiscountsModule === false
-                              ) {
-                                const msg = 'Discounts & promotions are disabled in System Settings.';
-                                if (Platform.OS === 'web') window.alert(msg);
-                                else Alert.alert('Discounts Disabled', msg);
-                                return;
-                              }
-                              if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
-                              setCustomDiscountInput(discountAmount);
-                              setDiscountModalVisible(true);
-                            }}
-                            activeOpacity={0.7}
-                          >
-                            <Ionicons name="pricetag" size={9} color="#059669" />
-                            <Text style={[styles.discountBadgeText, isTablet && { fontSize: 9 }]}>
-                              {selectedEventCampaign ? selectedEventCampaign.title : (discountVal > 0 ? `Rs. ${discountVal}` : '+ Promo')}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                        <Text style={[styles.mathValue, { color: '#059669' }, isTablet && { fontSize: 11 }]}>Rs. {discountVal.toFixed(0)}</Text>
-                      </View>
-
-                      <View style={styles.mathLine}>
-                        <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>
-                          {systemSettings.taxLabel || 'GST'} ({systemSettings.taxEnabled ? systemSettings.taxRatePercent : 0}%)+
-                        </Text>
-                        <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>{systemSettings.currencySymbol || 'Rs.'} {tax.toFixed(0)}</Text>
-                      </View>
-
-                      {systemSettings.serviceChargeEnabled && serviceCharge > 0 && (
-                        <View style={styles.mathLine}>
-                          <Text style={[styles.mathLabel, isTablet && { fontSize: 10.5 }]}>
-                            Service ({systemSettings.serviceChargePercent || 0}%)+
+                        <View style={styles.dishFooterRow}>
+                          <Text style={styles.dishCategoryLabel} numberOfLines={1}>
+                            {hasVariants ? `${item.variants?.length} Sizes` : item.category}
                           </Text>
-                          <Text style={[styles.mathValue, isTablet && { fontSize: 11 }]}>
-                            {systemSettings.currencySymbol || 'Rs.'} {serviceCharge.toFixed(0)}
-                          </Text>
+                          <View style={[styles.dishAddIcon, isInCart && styles.dishAddIconActive]}>
+                            <Ionicons
+                              name={isInCart ? 'add' : 'add'}
+                              size={15}
+                              color={isInCart ? '#FFFFFF' : '#52141C'}
+                            />
+                          </View>
                         </View>
-                      )}
-
-                      {orderType === 'delivery' && (
-                        <View style={styles.mathLine}>
-                          <Text style={[styles.mathLabel, { color: '#0284C7' }, isTablet && { fontSize: 10.5 }]}>Delivery+</Text>
-                          <Text style={[styles.mathValue, { color: '#0284C7' }, isTablet && { fontSize: 11 }]}>Rs. {deliveryCharges.toFixed(0)}</Text>
-                        </View>
-                      )}
-                    </View>
-
-                    {/* Payable Grand Total Banner */}
-                    <View style={[styles.payableCard, isTablet && { paddingVertical: 7, paddingHorizontal: 14, marginBottom: 7, borderRadius: 11 }]}>
-                      <View style={styles.payableLabelCol}>
-                        <Text style={[styles.payableLabel, isTablet && { fontSize: 10 }]}>TOTAL PAYABLE</Text>
-                        <Text style={[styles.payableSub, isTablet && { fontSize: 8.5, marginTop: 0 }]}>Net Order Total</Text>
-                      </View>
-                      <Text style={[styles.payableAmount, isTablet && { fontSize: 19 }]}>Rs. {Math.round(total).toLocaleString()}</Text>
-                    </View>
-                  </>
-                )}
-
-                {/* Action Buttons: on Tablet Landscape, place side by side at full Portrait size */}
-                <View style={[isTablet && { flexDirection: 'row', gap: 10, alignItems: 'center' }]}>
-                  {hidePrices ? (
-                    <TouchableOpacity 
-                      style={[
-                        styles.proceedPayBtn, 
-                        isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                        (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.55 }
-                      ]}
-                      {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                      onPress={sendToKitchen}
-                      disabled={cart.length === 0}
-                      activeOpacity={0.85}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="paper-plane" size={15} color="#FFFFFF" style={{ marginRight: 7 }} />
-                        <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>PUNCH ORDER (SEND TO KITCHEN)</Text>
-                      </View>
-                      <View style={styles.btnShortcutBadge}>
-                        <Text style={styles.btnShortcutBadgeText}>F8</Text>
                       </View>
                     </TouchableOpacity>
-                  ) : (
-                    <>
-                      <TouchableOpacity 
-                        style={[
-                          styles.proceedPayBtn, 
-                          isTablet && { flex: 1, marginBottom: 0, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                          (cart.length === 0 || (role !== 'admin' && !can('posCanSettleBill'))) && { opacity: 0.55 }
-                        ]}
-                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                        onPress={openCheckout}
-                        disabled={cart.length === 0}
-                        activeOpacity={0.85}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons
-                            name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'card-outline'}
-                            size={16}
-                            color="#FFFFFF"
-                            style={{ marginRight: 7 }}
-                          />
-                          <Text style={[styles.proceedPayBtnText, isTablet && { fontSize: 12.5 }]}>
-                            {role !== 'admin' && !can('posCanSettleBill') ? 'PAYMENT RESTRICTED' : 'PROCEED TO PAYMENT'}
-                          </Text>
-                        </View>
-                        <View style={styles.btnShortcutBadge}>
-                          <Text style={styles.btnShortcutBadgeText}>F9</Text>
-                        </View>
-                      </TouchableOpacity>
+                  );
+                })}
 
-                      <TouchableOpacity 
-                        style={[
-                          styles.sendKdsBtn, 
-                          isTablet && { flex: 1, paddingVertical: 11, paddingHorizontal: 14, borderRadius: 11 },
-                          (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.55 }
-                        ]}
-                        {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Send order directly to Kitchen / Juice Bar KDS and print Pending Slip' } as any) : {})}
-                        onPress={sendToKitchen}
-                        disabled={cart.length === 0}
-                        activeOpacity={0.85}
-                      >
-                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                          <Ionicons name="flame-outline" size={16} color="#92400E" style={{ marginRight: 6 }} />
-                          <Text style={[styles.sendKdsBtnText, isTablet && { fontSize: 12 }]}>
-                            SEND TO KDS + PENDING SLIP
-                          </Text>
-                        </View>
-                        <View style={[styles.btnShortcutBadge, { backgroundColor: 'rgba(146, 64, 14, 0.12)', borderColor: 'rgba(180, 83, 9, 0.35)' }]}>
-                          <Text style={[styles.btnShortcutBadgeText, { color: '#92400E' }]}>F8</Text>
-                        </View>
-                      </TouchableOpacity>
-
-                      {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
-                        <TouchableOpacity 
-                          style={[
-                            styles.unpaidBillBtn,
-                            cart.length === 0 && { opacity: 0.55 }
-                          ]}
-                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Print Pending / Unpaid Slip without resending KOT' } as any) : {})}
-                          onPress={handlePrintUnpaidBill}
-                          disabled={cart.length === 0}
-                          activeOpacity={0.85}
-                        >
-                          <Ionicons name="print-outline" size={15} color="#B91C1C" style={{ marginRight: 6 }} />
-                          <Text style={styles.unpaidBillBtnText}>PRINT PENDING SLIP (غیر ادا شدہ بل)</Text>
-                        </TouchableOpacity>
-                      )}
-                    </>
-                  )}
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Floating Bottom Quick Cart Bar on Mobile Portrait & Tablet Landscape */}
-          {(isMobile || isTablet) && mobileTab === 'menu' && cart.length > 0 && (
-            <View style={styles.mobileFloatingCartContainer}>
-              <TouchableOpacity
-                style={styles.mobileFloatingCartBtn}
-                onPress={() => setMobileTab('cart')}
-                activeOpacity={0.88}
-              >
-                <View style={styles.mobileFloatingCartLeft}>
-                  <View style={styles.mobileFloatingCartBadge}>
-                    <Text style={styles.mobileFloatingCartBadgeText}>
-                      {cart.reduce((s, i) => s + i.qty, 0)}
-                    </Text>
+                {filteredItems.length === 0 && (
+                  <View style={styles.emptyCatalogBox}>
+                    <Ionicons name="search-outline" size={44} color="#CBD5E1" />
+                    <Text style={styles.emptyCatalogTitle}>No dishes found</Text>
+                    <Text style={styles.emptyCatalogSub}>Try clearing the search or choosing another category</Text>
                   </View>
-                  <View>
-                    <Text style={styles.mobileFloatingCartTitle}>View Current Cart</Text>
-                    <Text style={styles.mobileFloatingCartSub}>
-                      {cart.length} {cart.length === 1 ? 'item' : 'items'} in order
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.mobileFloatingCartRight}>
-                  <Text style={styles.mobileFloatingCartTotal}>
-                    {hidePrices
-                      ? `${cart.reduce((s, i) => s + i.qty, 0)} Portions`
-                      : `Rs. ${Math.round(total).toLocaleString()}`}
-                  </Text>
-                  <Ionicons name="arrow-forward-circle" size={24} color="#D4AF37" />
-                </View>
-              </TouchableOpacity>
-            </View>
-          )}
-        </View>
-      </View>
-
-      {/* ========================================================
-          MODAL: DINING TABLE & CABIN SELECTION (SULTAN ARCHITECTURE)
-          ======================================================== */}
-      <Modal visible={tableModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 760, maxHeight: '90%' }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.modalHeaderTitle}>Select Table / Cabin</Text>
-                <View style={styles.modalCountBadge}>
-                  <Text style={styles.modalCountBadgeText}>
-                    {filteredModalTables.length} {filteredModalTables.length === 1 ? 'Unit' : 'Units'}
-                  </Text>
-                </View>
+                )}
               </View>
-              <TouchableOpacity 
-                onPress={() => {
-                  setTableModalVisible(false);
-                  setFloorDropdownOpen(false);
-                }} 
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Ionicons name="close" size={22} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-
-            {/* Control Toolbar Container */}
-            <View style={styles.modalControlToolbar}>
-              {/* Row 1: Search Input & Floor Dropdown */}
-              <View style={styles.modalToolbarTopRow}>
-                {/* Search Bar */}
-                <View 
-                  style={[styles.modalSearchBar, isTableSearchFocused && styles.modalSearchBarFocused]}
-                  {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-                >
-                  <Ionicons name="search" size={15} color={isTableSearchFocused ? '#D4AF37' : '#52141C'} style={{ marginLeft: 2 }} />
-                  <TextInput 
-                    style={styles.modalSearchInput}
-                    placeholder="Search table, server or majlis..."
-                    placeholderTextColor="#94A3B8"
-                    value={tableSearchQuery}
-                    onFocus={() => setIsTableSearchFocused(true)}
-                    onBlur={() => setIsTableSearchFocused(false)}
-                    onChangeText={setTableSearchQuery}
-                  />
-                  {tableSearchQuery ? (
-                    <TouchableOpacity onPress={() => setTableSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                    </TouchableOpacity>
-                  ) : null}
-                </View>
-
-                {/* Floor Dropdown Trigger */}
-                <View style={{ position: 'relative' }}>
-                  <TouchableOpacity
-                    style={[styles.floorDropdownBtn, floorDropdownOpen && styles.floorDropdownBtnActive]}
-                    onPress={() => setFloorDropdownOpen(prev => !prev)}
-                    activeOpacity={0.85}
-                  >
-                    <View style={[
-                      styles.floorDropdownBadge,
-                      tableModalFloor !== 'All' && getFloorMeta(tableModalFloor, dynamicFloors)?.color 
-                        ? { backgroundColor: getFloorMeta(tableModalFloor, dynamicFloors).color } 
-                        : null
-                    ]}>
-                      <Text style={styles.floorDropdownBadgeText}>
-                        {tableModalFloor === 'All' ? 'ALL' : (getFloorMeta(tableModalFloor, dynamicFloors)?.short || tableModalFloor.slice(0, 2).toUpperCase())}
-                      </Text>
-                    </View>
-                    <Text style={styles.floorDropdownSelectedText} numberOfLines={1}>
-                      {tableModalFloor === 'All' ? 'All Floors' : tableModalFloor}
-                    </Text>
-                    <View style={styles.floorDropdownCountPill}>
-                      <Text style={styles.floorDropdownCountText}>
-                        {tableModalFloor === 'All' ? tables.length : tables.filter(t => getTableFloor(t).toLowerCase() === tableModalFloor.toLowerCase()).length}
-                      </Text>
-                    </View>
-                    <Ionicons name={floorDropdownOpen ? "chevron-up" : "chevron-down"} size={13} color="#52141C" />
-                  </TouchableOpacity>
-
-                  {/* Floor Dropdown Floating Popover */}
-                  {floorDropdownOpen && (
-                    <View style={styles.floorDropdownMenu}>
-                      <View style={styles.floorDropdownMenuHeader}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Ionicons name="business" size={13} color="#52141C" />
-                          <Text style={styles.floorDropdownMenuHeaderTitle}>Select Restaurant Floor</Text>
-                        </View>
-                        <TouchableOpacity onPress={() => setFloorDropdownOpen(false)}>
-                          <Ionicons name="close-circle" size={17} color="#94A3B8" />
-                        </TouchableOpacity>
-                      </View>
-                      <ScrollView style={{ maxHeight: 220 }} nestedScrollEnabled>
-                        {['All', ...availableFloors].map(fl => {
-                          const isActive = tableModalFloor === fl;
-                          const isAll = fl === 'All';
-                          const meta = !isAll ? getFloorMeta(fl, dynamicFloors) : null;
-                          const count = isAll
-                            ? tables.length
-                            : tables.filter(t => getTableFloor(t).toLowerCase() === fl.toLowerCase()).length;
-
-                          return (
-                            <TouchableOpacity
-                              key={fl}
-                              style={[styles.floorDropdownOption, isActive && styles.floorDropdownOptionActive]}
-                              onPress={() => {
-                                setTableModalFloor(fl);
-                                setFloorDropdownOpen(false);
-                              }}
-                            >
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
-                                <View style={[
-                                  styles.floorOptionBadge,
-                                  meta?.color ? { backgroundColor: meta.color } : isAll ? { backgroundColor: '#52141C' } : null
-                                ]}>
-                                  <Text style={styles.floorOptionBadgeText}>
-                                    {isAll ? 'ALL' : meta?.short || fl.slice(0, 2).toUpperCase()}
-                                  </Text>
-                                </View>
-                                <View style={{ flex: 1 }}>
-                                  <Text style={[styles.floorOptionName, isActive && styles.floorOptionNameActive]}>
-                                    {isAll ? 'All Floors / Zones' : fl}
-                                  </Text>
-                                </View>
-                              </View>
-
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <View style={[styles.floorOptionCountPill, isActive && styles.floorOptionCountPillActive]}>
-                                  <Text style={[styles.floorOptionCountText, isActive && styles.floorOptionCountTextActive]}>
-                                    {count}
-                                  </Text>
-                                </View>
-                                {isActive && (
-                                  <Ionicons name="checkmark-circle" size={16} color="#D4AF37" />
-                                )}
-                              </View>
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </ScrollView>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Row 2: Sub-Filter Controls */}
-              <View style={styles.modalSubFilterRow}>
-                {/* Seating Type Segmented Filter */}
-                <View style={styles.seatingTypeFilterBox}>
-                  {(
-                    [
-                      { id: 'all', label: 'All Units' },
-                      { id: 'tables', label: 'Tables' },
-                      { id: 'couches', label: 'Couches' },
-                      { id: 'majlis', label: 'Majlis' },
-                    ] as const
-                  )
-                    .filter((st) => {
-                      if (st.id === 'couches' && systemSettings.enableCouchSeating === false) return false;
-                      if (st.id === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
-                      return true;
-                    })
-                    .map(st => {
-                    const active = tableModalSeatingType === st.id;
-                    return (
-                      <TouchableOpacity
-                        key={st.id}
-                        style={[styles.seatingTypeBtn, active && styles.seatingTypeBtnActive]}
-                        onPress={() => setTableModalSeatingType(st.id)}
-                      >
-                        <Text style={[styles.seatingTypeBtnText, active && styles.seatingTypeBtnTextActive]}>
-                          {st.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {/* Status Segmented Filter */}
-                <View style={styles.statusFilterBox}>
-                  {(
-                    [
-                      { id: 'all', label: 'All' },
-                      { id: 'available', label: 'Free' },
-                      { id: 'occupied', label: 'Busy' },
-                    ] as const
-                  ).map(st => {
-                    const active = tableModalStatus === st.id;
-                    return (
-                      <TouchableOpacity
-                        key={st.id}
-                        style={[styles.statusFilterBtn, active && styles.statusFilterBtnActive]}
-                        onPress={() => setTableModalStatus(st.id)}
-                      >
-                        <Text style={[styles.statusFilterBtnText, active && styles.statusFilterBtnTextActive]}>
-                          {st.label}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            </View>
-
-            {/* Tier 3: Grid of Sultan Tables & Cabins */}
-            <ScrollView style={{ maxHeight: 380, padding: 14 }}>
-              {filteredModalTables.length === 0 ? (
-                <View style={styles.emptyTablesModalBox}>
-                  <Ionicons name="search-outline" size={36} color="#CBD5E1" />
-                  <Text style={styles.emptyTablesModalTitle}>No Tables or Cabins Match</Text>
-                  <Text style={styles.emptyTablesModalSub}>Try resetting the floor, seating type, or search query.</Text>
-                  <TouchableOpacity
-                    style={styles.resetModalFiltersBtn}
-                    onPress={() => {
-                      setTableModalFloor('All');
-                      setTableModalSeatingType('all');
-                      setTableModalStatus('all');
-                      setTableSearchQuery('');
-                      setFloorDropdownOpen(false);
-                    }}
-                  >
-                    <Text style={styles.resetModalFiltersBtnText}>Reset All Filters</Text>
-                  </TouchableOpacity>
-                </View>
-              ) : (
-                <View style={styles.tablesModalGrid}>
-                  {filteredModalTables.map(t => {
-                    const tFloor = getTableFloor(t);
-                    const tType = getTableSeatingType(t);
-                    const isSelected = selectedTableId === t.id;
-                    const isOccupied = t.status === 'occupied' || t.status === 'billed';
-                    const isMajlis = tType === 'majlis';
-                    const isCouch = tType === 'couches';
-                    const meta = getFloorMeta(tFloor, dynamicFloors);
-
-                    return (
-                      <TouchableOpacity
-                        key={t.id}
-                        style={[
-                          styles.tableModalCard,
-                          isOccupied && styles.tableModalCardBusy,
-                          t.status === 'available' && styles.tableModalCardAvail,
-                          isMajlis && styles.tableModalCardMajlis,
-                          isSelected && styles.tableModalCardSelected
-                        ]}
-                        onPress={() => handleTableSelect(t.id)}
-                        activeOpacity={0.85}
-                      >
-                        {/* Top Strip with Floor Accent */}
-                        <View style={[styles.tableCardTopStrip, { backgroundColor: meta.color || '#D4AF37' }]} />
-
-                        {/* Header Row: Type Icon + Name + Status */}
-                        <View style={styles.tableCardHeaderRow}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, marginRight: 6 }}>
-                            <View style={[
-                              styles.tableTypeIconOrb,
-                              isMajlis && { backgroundColor: 'rgba(217, 119, 6, 0.12)', borderColor: 'rgba(217, 119, 6, 0.3)' },
-                              isCouch && { backgroundColor: 'rgba(99, 102, 241, 0.12)', borderColor: 'rgba(99, 102, 241, 0.3)' }
-                            ]}>
-                              <SeatingTypeIcon type={tType} size={13} color={isMajlis ? '#B45309' : isCouch ? '#4F46E5' : '#52141C'} />
-                            </View>
-                            <Text style={styles.tableModalCardName} numberOfLines={1}>
-                              {t.name}
-                            </Text>
-                          </View>
-
-                          <View style={[
-                            styles.tableStatusBadge,
-                            t.status === 'available' ? styles.tableStatusBadgeAvail :
-                            t.status === 'billed' ? styles.tableStatusBadgeBilled :
-                            styles.tableStatusBadgeOccupied
-                          ]}>
-                            <Text style={[
-                              styles.tableStatusBadgeText,
-                              t.status === 'available' ? { color: '#059669' } :
-                              t.status === 'billed' ? { color: '#D97706' } :
-                              { color: '#DC2626' }
-                            ]}>
-                              {t.status.toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Floor and Type Badges */}
-                        <View style={styles.tableCardTagsRow}>
-                          <View style={styles.tableModalCardFloorTag}>
-                            <Text style={styles.tableModalCardFloorTagText}>{tFloor}</Text>
-                          </View>
-                          <View style={[
-                            styles.tableTypePill,
-                            isMajlis && { backgroundColor: '#FEF3C7' },
-                            isCouch && { backgroundColor: '#EEF2FF' }
-                          ]}>
-                            <Text style={[
-                              styles.tableTypePillText,
-                              isMajlis && { color: '#92400E' },
-                              isCouch && { color: '#3730A3' }
-                            ]}>
-                              {isMajlis ? 'Majlis Cabin' : isCouch ? 'VIP Couch' : 'Dining Table'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Capacity Row */}
-                        <View style={styles.tableCardCapacityRow}>
-                          <Ionicons name="people-outline" size={12} color="#64748B" />
-                          <Text style={styles.tableCardCapacityText}>
-                            {isMajlis ? `Cabin: ${t.seats} Guests` : `${t.seats} Seats`}
-                          </Text>
-                        </View>
-
-                        {/* Active Bill / Waiter Footer if Busy */}
-                        {isOccupied && (
-                          <View style={styles.tableCardBillFooter}>
-                            {t.billTotal && t.billTotal > 0 ? (
-                              <Text style={styles.tableCardBillText}>Rs. {t.billTotal.toLocaleString()}</Text>
-                            ) : null}
-                            <Text style={styles.tableCardServerText} numberOfLines={1}>
-                              Waiter: {t.server || 'Assigned'}
-                            </Text>
-                          </View>
-                        )}
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              )}
             </ScrollView>
           </View>
-        </View>
-      </Modal>
+        )}
 
-      {/* ========================================================
-          MODAL: CUSTOMER SELECTOR
-          ======================================================== */}
-      <Modal visible={customerModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 500 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalHeaderTitle}>Select or Register Customer</Text>
-              <TouchableOpacity onPress={() => setCustomerModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ padding: 16 }}>
-              {isCreatingNewCustomer ? (
-                <View>
-                  <Text style={styles.inputLabel}>Customer Name</Text>
-                  <TextInput 
-                    style={styles.modalInput}
-                    placeholder="e.g. Tariq Khan"
-                    value={customerName}
-                    onChangeText={setCustomerName}
-                  />
-
-                  <Text style={styles.inputLabel}>Mobile Phone</Text>
-                  <TextInput 
-                    style={styles.modalInput}
-                    placeholder="0300-1234567"
-                    keyboardType="phone-pad"
-                    value={customerPhone}
-                    onChangeText={setCustomerPhone}
-                  />
-
-                  <Text style={styles.inputLabel}>Delivery Address</Text>
-                  <TextInput 
-                    style={[styles.modalInput, { height: 60 }]}
-                    placeholder="Full street address..."
-                    multiline
-                    value={customerAddress}
-                    onChangeText={setCustomerAddress}
-                  />
-
-                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                    <TouchableOpacity 
-                      style={[styles.modalSecondaryBtn, { flex: 1 }]}
-                      onPress={() => setIsCreatingNewCustomer(false)}
+        {/* --------------------------------------------------------
+            RIGHT: CLEAN HIGH-SPEED ORDER TICKET & BILLING PANEL
+            -------------------------------------------------------- */}
+        {(!isMobile || mobileTab === 'cart') && (
+          <View style={[styles.ticketPanel, isTablet && { width: 340 }, isMobile && { width: '100%', flex: 1 }]}>
+            {/* Mobile Order Type Selector */}
+            {isMobile && (
+              <View style={styles.mobileOrderTypeRow}>
+                {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
+                  const active = orderType === t;
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      style={[styles.mobileOrderTypeBtn, active && styles.mobileOrderTypeBtnActive]}
+                      onPress={() => handleOrderTypeChange(t)}
                     >
-                      <Text style={styles.modalSecondaryBtnText}>Back</Text>
+                      <Text style={[styles.mobileOrderTypeText, active && styles.mobileOrderTypeTextActive]}>
+                        {t.toUpperCase()}
+                      </Text>
                     </TouchableOpacity>
+                  );
+                })}
+              </View>
+            )}
 
-                    <TouchableOpacity 
-                      style={[styles.modalPrimaryBtn, { flex: 1 }]}
-                      onPress={handleSaveNewCustomer}
-                    >
-                      <Text style={styles.modalPrimaryBtnText}>Save</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View>
-                  <View 
-                    style={[styles.modalSearchBar, isCustSearchFocused && styles.modalSearchBarFocused, { marginBottom: 12 }]}
-                    {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
+            {/* 1. Order Context Header (Table or Customer Selector) */}
+            <View style={styles.ticketContextCard}>
+              {orderType === 'dine-in' ? (
+                <View style={styles.contextRow}>
+                  <TouchableOpacity
+                    style={styles.contextSelectBtn}
+                    onPress={() => setTableModalVisible(true)}
+                    activeOpacity={0.8}
                   >
-                    <View style={[styles.modalSearchIconOrb, isCustSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.2)', borderColor: '#D4AF37' }]}>
-                      <Ionicons name="search" size={14} color={isCustSearchFocused ? '#D4AF37' : '#52141C'} />
+                    <View style={[styles.contextIconOrb, selectedTableObj && { backgroundColor: '#DCFCE7' }]}>
+                      <Ionicons
+                        name="restaurant"
+                        size={16}
+                        color={selectedTableObj ? '#15803D' : '#B45309'}
+                      />
                     </View>
-                    <TextInput 
-                      style={styles.modalSearchInput}
-                      placeholder="Search customer by name or phone..."
-                      placeholderTextColor="#8A7A70"
-                      value={customerSearchQuery}
-                      onFocus={() => setIsCustSearchFocused(true)}
-                      onBlur={() => setIsCustSearchFocused(false)}
-                      onChangeText={setCustomerSearchQuery}
-                    />
-                    {customerSearchQuery ? (
-                      <TouchableOpacity onPress={() => setCustomerSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={16} color="#D4AF37" />
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-
-                  <TouchableOpacity 
-                    style={[
-                      styles.addNewCustBar,
-                      role !== 'admin' && !can('posCanManageCustomers') && { opacity: 0.5 },
-                    ]}
-                    onPress={() => {
-                      if (!requirePosPerm('posCanManageCustomers', 'register or edit customer profiles')) return;
-                      setIsCreatingNewCustomer(true);
-                    }}
-                  >
-                    <Ionicons name="person-add" size={14} color="#BE123C" style={{ marginRight: 6 }} />
-                    <Text style={styles.addNewCustBarText}>+ Register New Customer</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contextSmallLabel}>DINE-IN TABLE / CABIN</Text>
+                      <Text style={styles.contextMainValue} numberOfLines={1}>
+                        {selectedTableObj
+                          ? `${selectedTableObj.name} • ${getTableFloor(selectedTableObj)}`
+                          : 'Tap to Select Table'}
+                      </Text>
+                    </View>
+                    <View style={styles.contextActionPill}>
+                      <Text style={styles.contextActionPillText}>
+                        {selectedTableObj ? 'Change' : 'Select'}
+                      </Text>
+                    </View>
                   </TouchableOpacity>
 
-                  <ScrollView style={{ maxHeight: 220 }}>
-                    {customers
-                      .filter(c => !customerSearchQuery || c.name.toLowerCase().includes(customerSearchQuery.toLowerCase()) || c.phone.includes(customerSearchQuery))
-                      .map(cust => (
-                        <TouchableOpacity
-                          key={cust.id}
-                          style={styles.custRow}
-                          onPress={() => {
-                            setSelectedCustomerId(cust.id);
-                            setCustomerModalVisible(false);
-                          }}
-                        >
-                          <View>
-                            <Text style={styles.custRowName}>{cust.name}</Text>
-                            <Text style={styles.custRowPhone}>{cust.phone}</Text>
-                          </View>
-                          <Ionicons name="checkmark-circle" size={18} color="#D4AF37" />
-                        </TouchableOpacity>
-                      ))}
-                  </ScrollView>
-                </View>
-              )}
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================
-          MODAL: CHECKOUT & MULTI-PAYMENT SPLIT
-          ======================================================== */}
-      <Modal visible={checkoutModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: width >= 860 ? 840 : 540, maxHeight: '92%' }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Text style={styles.modalHeaderTitle}>Settle & Pay Bill • بل وصولی</Text>
-                <TouchableOpacity
-                  style={[styles.keypadToggleChip, showCheckoutKeypad && styles.keypadToggleChipActive]}
-                  onPress={() => setShowCheckoutKeypad(!showCheckoutKeypad)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="keypad" size={13} color={showCheckoutKeypad ? '#52171B' : '#64748B'} />
-                  <Text style={[styles.keypadToggleChipText, showCheckoutKeypad && styles.keypadToggleChipTextActive]}>
-                    {showCheckoutKeypad ? 'Touch Keypad (آن)' : 'Touch Keypad'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity onPress={() => setCheckoutModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ padding: 18 }}>
-              <View style={width >= 860 ? { flexDirection: 'row', gap: 18, alignItems: 'flex-start' } : undefined}>
-                <View style={width >= 860 ? { flex: 1.1 } : undefined}>
-              <View style={styles.checkoutTotalCard}>
-                <Text style={styles.checkoutTotalCardLabel}>TOTAL AMOUNT DUE (کل بل رقم)</Text>
-                <Text style={styles.checkoutTotalCardVal}>Rs. {total.toFixed(2)}</Text>
-              </View>
-
-              {/* Full Payment Quick Action Button */}
-              <TouchableOpacity
-                style={styles.fullPaymentBtn}
-                {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                onPress={handleSetFullPayment}
-                activeOpacity={0.85}
-              >
-                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                  <Ionicons name="flash" size={17} color="#D4AF37" style={{ marginRight: 6 }} />
-                  <Text style={styles.fullPaymentBtnText}>
-                    FULL PAYMENT (Exact Rs. {Math.round(total).toLocaleString()})
-                  </Text>
-                </View>
-                <View style={styles.keyInlinePill}>
-                  <Text style={styles.keyInlinePillText}>F10</Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* Payment Method & Cash Tendered Input */}
-              <View style={{ marginVertical: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                  <Text style={styles.paymentInputSectionLabel}>Payment Method & Cash Tendered:</Text>
-                  {systemSettings.posAllowSplitPayment !== false && (role === 'admin' || can('posCanSplitPayment')) && payments.length < 3 && (
+                  {selectedTableObj && (
                     <TouchableOpacity
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 4,
-                        backgroundColor: '#FAF6EE',
-                        borderWidth: 1,
-                        borderColor: '#D4AF37',
-                        paddingHorizontal: 9,
-                        paddingVertical: 4,
-                        borderRadius: 8,
-                      }}
-                      onPress={() => {
-                        if (!requirePosPerm('posCanSplitPayment', 'split payments across multiple methods')) return;
-                        const nextType = payments.some((x) => x.type === 'card') ? 'online' : 'card';
-                        setPayments((prev) => [...prev, { type: nextType, amount: Math.max(0, Math.round(remaining)) }]);
-                      }}
+                      style={styles.releaseTableIconBtn}
+                      onPress={handleClearSelectedTable}
+                      {...(Platform.OS === 'web' ? ({ title: 'Release Table' } as any) : {})}
                     >
-                      <Ionicons name="git-branch-outline" size={12} color="#52171B" />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#52171B' }}>+ Split Payment</Text>
+                      <Ionicons name="refresh-outline" size={16} color="#DC2626" />
                     </TouchableOpacity>
                   )}
                 </View>
-                {payments.map((p, idx) => (
-                  <View key={idx} style={{ marginBottom: 10 }}>
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                      <View style={styles.payTypeSelector}>
-                        {(['cash', 'card', 'online'] as const).map(m => (
-                          <TouchableOpacity
-                            key={m}
-                            style={[styles.payTypePill, p.type === m && styles.payTypePillActive]}
-                            onPress={() => updatePayment(idx, 'type', m)}
-                          >
-                            <Text style={[styles.payTypePillText, p.type === m && styles.payTypePillTextActive]}>
-                              {m.toUpperCase()}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      <View style={{ flex: 1, position: 'relative' }}>
-                        <TextInput 
-                          style={[
-                            styles.payAmountInput,
-                            activePaymentIndex === idx && { borderColor: '#52171B', backgroundColor: '#FFFBEB' }
-                          ]}
-                          keyboardType="numeric"
-                          showSoftInputOnFocus={false}
-                          {...({ inputMode: 'none' } as any)}
-                          placeholder="Amount received..."
-                          placeholderTextColor="#94A3B8"
-                          value={p.amount > 0 ? p.amount.toString() : ''}
-                          onChangeText={v => updatePayment(idx, 'amount', v)}
-                          onFocus={() => setActivePaymentIndex(idx)}
-                        />
-                        {p.amount > 0 && (
-                          <TouchableOpacity 
-                            style={styles.payInputClearBtn}
-                            onPress={() => updatePayment(idx, 'amount', '0')}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-
-                      {idx > 0 && (
-                        <TouchableOpacity
-                          onPress={() => setPayments((prev) => prev.filter((_, i) => i !== idx))}
-                          style={{ padding: 6 }}
-                        >
-                          <Ionicons name="trash-outline" size={16} color="#DC2626" />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-
-                    {/* Quick Cash Note Chips */}
-                    {p.type === 'cash' && (
-                      <View style={styles.quickNotesRow}>
-                        <Text style={styles.quickNotesLabel}>Quick Notes:</Text>
-                        <TouchableOpacity 
-                          style={styles.quickNoteChip} 
-                          onPress={() => handleSetPaymentAmount(Math.round(total))}
-                        >
-                          <Text style={styles.quickNoteChipText}>Exact</Text>
-                        </TouchableOpacity>
-                        {total <= 500 && (
-                          <TouchableOpacity 
-                            style={styles.quickNoteChip} 
-                            onPress={() => handleSetPaymentAmount(500)}
-                          >
-                            <Text style={styles.quickNoteChipText}>500</Text>
-                          </TouchableOpacity>
-                        )}
-                        {total <= 1000 && (
-                          <TouchableOpacity 
-                            style={styles.quickNoteChip} 
-                            onPress={() => handleSetPaymentAmount(1000)}
-                          >
-                            <Text style={styles.quickNoteChipText}>1,000</Text>
-                          </TouchableOpacity>
-                        )}
-                        <TouchableOpacity 
-                          style={styles.quickNoteChip} 
-                          onPress={() => handleSetPaymentAmount(total <= 2000 ? 2000 : Math.ceil(total / 1000) * 1000)}
-                        >
-                          <Text style={styles.quickNoteChipText}>
-                            {total <= 2000 ? '2,000' : `${(Math.ceil(total / 1000) * 1000).toLocaleString()}`}
-                          </Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity 
-                          style={styles.quickNoteChip} 
-                          onPress={() => handleSetPaymentAmount(5000)}
-                        >
-                          <Text style={styles.quickNoteChipText}>5,000</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )}
+              ) : (
+                <TouchableOpacity
+                  style={styles.contextSelectBtn}
+                  onPress={() => {
+                    setCustomerSearchQuery('');
+                    setIsCreatingNewCustomer(false);
+                    setCustomerModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <View style={[styles.contextIconOrb, selectedCustomerObj && { backgroundColor: '#DBEAFE' }]}>
+                    <Ionicons
+                      name={orderType === 'delivery' ? 'bicycle' : 'person'}
+                      size={16}
+                      color={selectedCustomerObj ? '#1D4ED8' : '#52141C'}
+                    />
                   </View>
-                ))}
-              </View>
-
-              {/* Dynamic Change to Return / Remaining Status Card */}
-              {changeDue > 0.01 ? (
-                <View style={styles.changeReturnCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                    <Ionicons name="cash-outline" size={18} color="#059669" />
-                    <Text style={styles.changeReturnTitle}>CHANGE TO RETURN (گاہک کو واپس کرنی رقم)</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.contextSmallLabel}>
+                      {orderType === 'delivery' ? 'DELIVERY CUSTOMER' : 'TAKEAWAY GUEST'}
+                    </Text>
+                    <Text style={styles.contextMainValue} numberOfLines={1}>
+                      {selectedCustomerObj
+                        ? `${selectedCustomerObj.name} (${selectedCustomerObj.phone})`
+                        : orderType === 'delivery'
+                        ? 'Select Delivery Customer *'
+                        : 'Walk-in Guest (Optional)'}
+                    </Text>
                   </View>
-                  <Text style={styles.changeReturnAmount}>Rs. {changeDue.toFixed(2)}</Text>
-                  <Text style={styles.changeReturnSubtitle}>
-                    Customer gave: Rs. {totalPaid.toLocaleString()}  •  Net Bill: Rs. {total.toFixed(2)}
+                  <View style={styles.contextActionPill}>
+                    <Text style={styles.contextActionPillText}>
+                      {selectedCustomerObj ? 'Change' : 'Customer'}
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 2. Cart Header Bar */}
+            <View style={styles.ticketItemsHeader}>
+              <Text style={styles.ticketItemsHeaderTitle}>
+                ORDER ITEMS ({totalCartQty})
+              </Text>
+              {cart.length > 0 && (
+                <TouchableOpacity style={styles.clearCartLink} onPress={clearCart}>
+                  <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                  <Text style={styles.clearCartLinkText}>Clear All</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* 3. Compact Single-Row Order Items List (Fits 8-10 items without scrolling) */}
+            <ScrollView
+              style={styles.ticketItemsScroll}
+              contentContainerStyle={styles.ticketItemsContent}
+              showsVerticalScrollIndicator={true}
+            >
+              {cart.length === 0 ? (
+                <View style={styles.emptyTicketBox}>
+                  <Ionicons name="receipt-outline" size={38} color="#CBD5E1" />
+                  <Text style={styles.emptyTicketTitle}>No Items Added Yet</Text>
+                  <Text style={styles.emptyTicketSub}>
+                    Tap any dish on the menu grid to add it to this bill
                   </Text>
                 </View>
-              ) : remaining > 0.01 ? (
-                <View style={styles.remainingCard}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Ionicons name="alert-circle-outline" size={17} color="#D97706" />
-                    <Text style={styles.remainingText}>
-                      Remaining to Collect: <Text style={{ fontWeight: '900', color: '#B45309' }}>Rs. {remaining.toFixed(2)}</Text>
+              ) : (
+                cart.map((item, idx) => (
+                  <View key={item.id} style={styles.ticketRow}>
+                    <View style={styles.ticketRowLeft}>
+                      <Text style={styles.ticketRowIndex}>{idx + 1}.</Text>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.ticketRowName} numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        {!hidePrices && (
+                          <Text style={styles.ticketRowUnit}>
+                            Rs. {item.price.toLocaleString()} each
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+
+                    <View style={styles.ticketRowRight}>
+                      <View style={styles.qtyStepper}>
+                        <TouchableOpacity
+                          style={styles.qtyBtn}
+                          onPress={() => updateQty(item.id, -1)}
+                        >
+                          <Ionicons name="remove" size={13} color="#1E293B" />
+                        </TouchableOpacity>
+                        <Text style={styles.qtyValText}>{item.qty}</Text>
+                        <TouchableOpacity
+                          style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                          onPress={() => updateQty(item.id, 1)}
+                        >
+                          <Ionicons name="add" size={13} color="#FFFFFF" />
+                        </TouchableOpacity>
+                      </View>
+
+                      {!hidePrices && (
+                        <Text style={styles.ticketRowSubtotal}>
+                          {(item.price * item.qty).toLocaleString()}
+                        </Text>
+                      )}
+
+                      <TouchableOpacity
+                        style={styles.removeRowBtn}
+                        onPress={() => removeFromCart(item.id)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons name="close" size={15} color="#94A3B8" />
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))
+              )}
+            </ScrollView>
+
+            {/* 4. Streamlined Summary & Action Footer */}
+            <View style={styles.ticketFooter}>
+              {!hidePrices && (
+                <View style={styles.summaryBox}>
+                  <View style={styles.summaryLine}>
+                    <Text style={styles.summaryLabel}>Subtotal</Text>
+                    <Text style={styles.summaryVal}>Rs. {subTotal.toLocaleString()}</Text>
+                  </View>
+
+                  <View style={styles.summaryLine}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.summaryLabel}>Discount</Text>
+                      <TouchableOpacity
+                        style={styles.promoMiniBtn}
+                        onPress={() => {
+                          if (!requirePosPerm('canApplyCustomDiscount', 'apply custom discounts')) return;
+                          setCustomDiscountInput(discountAmount);
+                          setDiscountModalVisible(true);
+                        }}
+                      >
+                        <Ionicons name="pricetag" size={10} color="#059669" />
+                        <Text style={styles.promoMiniBtnText}>
+                          {selectedEventCampaign
+                            ? selectedEventCampaign.title
+                            : discountVal > 0
+                            ? 'Edit'
+                            : '+ Add'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                    <Text style={[styles.summaryVal, { color: '#059669' }]}>
+                      - Rs. {discountVal.toLocaleString()}
+                    </Text>
+                  </View>
+
+                  {systemSettings.taxEnabled && (
+                    <View style={styles.summaryLine}>
+                      <Text style={styles.summaryLabel}>
+                        {systemSettings.taxLabel || 'GST'} ({systemSettings.taxRatePercent || 0}%)
+                      </Text>
+                      <Text style={styles.summaryVal}>Rs. {Math.round(tax).toLocaleString()}</Text>
+                    </View>
+                  )}
+
+                  {orderType === 'delivery' && (
+                    <View style={styles.summaryLine}>
+                      <Text style={styles.summaryLabel}>Delivery Fee</Text>
+                      <Text style={styles.summaryVal}>Rs. {deliveryCharges.toLocaleString()}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.grandTotalRow}>
+                    <Text style={styles.grandTotalLabel}>TOTAL PAYABLE</Text>
+                    <Text style={styles.grandTotalAmount}>
+                      Rs. {Math.round(total).toLocaleString()}
                     </Text>
                   </View>
                 </View>
-              ) : (
-                <View style={styles.exactPaidCard}>
-                  <Ionicons name="checkmark-circle" size={16} color="#059669" style={{ marginRight: 6 }} />
-                  <Text style={styles.exactPaidText}>Exact Amount Paid — No Change Due</Text>
-                </View>
               )}
 
-              <TouchableOpacity 
-                style={[styles.proceedPayBtn, remaining > 0.01 && { opacity: 0.55 }, { marginTop: 12 }]}
-                onPress={handleFinalizeOrder}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.proceedPayBtnText}>
-                  {remaining > 0.01 
-                    ? `COLLECT REMAINING (Rs. ${remaining.toFixed(0)})` 
-                    : changeDue > 0 
-                      ? `CONFIRM PAYMENT & PRINT (Return: Rs. ${changeDue.toFixed(0)})`
-                      : 'CONFIRM PAYMENT & PRINT BILL'}
-                </Text>
-              </TouchableOpacity>
-            </View>
+              {/* Clean Action Buttons */}
+              {hidePrices ? (
+                <TouchableOpacity
+                  style={[styles.primaryPayBtn, cart.length === 0 && { opacity: 0.5 }]}
+                  onPress={sendToKitchen}
+                  disabled={cart.length === 0}
+                >
+                  <Ionicons name="paper-plane" size={17} color="#FFFFFF" />
+                  <Text style={styles.primaryPayBtnText}>SEND ORDER TO KITCHEN (F8)</Text>
+                </TouchableOpacity>
+              ) : (
+                <View style={{ gap: 8 }}>
+                  {/* Secondary Actions Row: Send KOT & Print Unpaid Bill side-by-side */}
+                  <View style={styles.secondaryActionsRow}>
+                    <TouchableOpacity
+                      style={[
+                        styles.secActionBtn,
+                        styles.secActionKot,
+                        (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.5 },
+                      ]}
+                      onPress={sendToKitchen}
+                      disabled={cart.length === 0}
+                    >
+                      <Ionicons name="flame" size={15} color="#B45309" />
+                      <Text style={styles.secActionKotText}>Send KOT (F8)</Text>
+                    </TouchableOpacity>
 
-            {/* Right Column (or Inline on small screens): Non-blocking Touch Keypad */}
-            {showCheckoutKeypad && (
-              <View style={width >= 860 ? { width: 330, marginTop: 0 } : { marginTop: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#52171B' }}>
-                    Touch Numpad • {((payments[activePaymentIndex] || payments[0])?.type || 'cash').toUpperCase()}
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>
-                    Tender Cash Keypad
-                  </Text>
+                    {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
+                      <TouchableOpacity
+                        style={[styles.secActionBtn, styles.secActionSlip, cart.length === 0 && { opacity: 0.5 }]}
+                        onPress={handlePrintUnpaidBill}
+                        disabled={cart.length === 0}
+                      >
+                        <Ionicons name="print-outline" size={15} color="#475569" />
+                        <Text style={styles.secActionSlipText}>Pending Bill</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+
+                  {/* Primary Checkout Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryPayBtn,
+                      (cart.length === 0 || (role !== 'admin' && !can('posCanSettleBill'))) && { opacity: 0.5 },
+                    ]}
+                    onPress={openCheckout}
+                    disabled={cart.length === 0}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="card" size={18} color="#24050A" />
+                      <Text style={styles.primaryPayBtnText}>
+                        COLLECT PAYMENT & PRINT BILL
+                      </Text>
+                    </View>
+                    <View style={styles.payBtnF9Badge}>
+                      <Text style={styles.payBtnF9Text}>F9</Text>
+                    </View>
+                  </TouchableOpacity>
                 </View>
-                <TouchNumericKeypad
-                  value={(payments[activePaymentIndex] || payments[0])?.amount > 0 ? String((payments[activePaymentIndex] || payments[0]).amount) : ''}
-                  onChangeText={(val) => updatePayment(activePaymentIndex, 'amount', val)}
-                  exactAmount={Math.round(total)}
-                  quickAmounts={[500, 1000, 5000]}
-                  compact={width < 860}
-                  replaceOnFirstInput={true}
-                />
-              </View>
-            )}
+              )}
+            </View>
           </View>
-        </ScrollView>
+        )}
       </View>
-    </View>
-  </Modal>
+
+      {/* Mobile Floating Cart Bar */}
+      {isMobile && mobileTab === 'menu' && totalCartQty > 0 && (
+        <TouchableOpacity
+          style={styles.mobileFloatingBar}
+          onPress={() => setMobileTab('cart')}
+          activeOpacity={0.9}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            <View style={styles.mobileFloatingQtyCircle}>
+              <Text style={styles.mobileFloatingQtyText}>{totalCartQty}</Text>
+            </View>
+            <Text style={styles.mobileFloatingLabel}>View Order & Checkout</Text>
+          </View>
+          <Text style={styles.mobileFloatingTotal}>
+            {hidePrices ? `${totalCartQty} Items` : `Rs. ${Math.round(total).toLocaleString()} →`}
+          </Text>
+        </TouchableOpacity>
+      )}
 
       {/* ========================================================
-          MODAL: SENT TO KDS / RUNNING ORDERS
+          MODAL 1: TABLE & CABIN SELECTION
           ======================================================== */}
-      <Modal visible={pendingOrdersModalVisible} transparent animationType="slide">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 640 }]}>
+      <Modal visible={tableModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 820, maxHeight: '88%' }]}>
             <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="flame-outline" size={18} color="#B45309" />
-                <Text style={styles.modalHeaderTitle}>Sent to KDS Orders ({(tickets || []).length})</Text>
-                {(tickets || []).length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
-                  <TouchableOpacity
-                    style={styles.clearAllTicketsBtn}
-                    onPress={handleClearAllOrphanTickets}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                  >
-                    <Ionicons name="trash-outline" size={13} color="#DC2626" />
-                    <Text style={styles.clearAllTicketsBtnText}>Clear All</Text>
-                  </TouchableOpacity>
-                )}
+              <View>
+                <Text style={styles.modalTitle}>Select Dining Table or Majlis Cabin</Text>
+                <Text style={styles.modalSub}>{filteredModalTables.length} seating units shown</Text>
               </View>
-              <TouchableOpacity onPress={() => setPendingOrdersModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#1E293B" />
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setTableModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
               </TouchableOpacity>
             </View>
 
-            {/* Running Orders Search Bar */}
-            <View style={{ paddingHorizontal: 14, paddingTop: 10 }}>
-              <View 
-                style={[styles.modalSearchBar, isPendingSearchFocused && styles.modalSearchBarFocused]}
-                {...(Platform.OS === 'web' ? ({ className: 'modal-search-bar search-bar-pop', 'data-search-box': 'true' } as any) : {})}
-              >
-                <View style={[styles.modalSearchIconOrb, isPendingSearchFocused && { backgroundColor: 'rgba(212, 175, 55, 0.25)' }]}>
-                  <Ionicons name="search" size={14} color={isPendingSearchFocused ? '#D4AF37' : '#52141C'} />
-                </View>
-                <TextInput 
-                  style={styles.modalSearchInput}
-                  placeholder="Search ticket #, table, dish, or server..."
-                  placeholderTextColor="#8A7A70"
-                  value={pendingOrderSearchQuery}
-                  onFocus={() => setIsPendingSearchFocused(true)}
-                  onBlur={() => setIsPendingSearchFocused(false)}
-                  onChangeText={setPendingOrderSearchQuery}
-                />
-                {pendingOrderSearchQuery ? (
-                  <TouchableOpacity onPress={() => setPendingOrderSearchQuery('')} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Ionicons name="close-circle" size={16} color="#D4AF37" />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-
-              {/* KDS Filter Tabs */}
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginTop: 8 }}
-                contentContainerStyle={{ gap: 6, paddingBottom: 2 }}
-              >
-                {(
-                  [
-                    { id: 'all', label: 'All' },
-                    { id: 'pending', label: 'Pending' },
-                    { id: 'cooking', label: 'Cooking' },
-                    { id: 'ready', label: 'Ready' },
-                    { id: 'takeaway', label: 'Takeaway' },
-                    { id: 'dine-in', label: 'Dine-In' },
-                    { id: 'delivery', label: 'Delivery' },
-                  ] as const
-                ).map((tab) => {
-                  const active = kdsModalFilter === tab.id;
+            {/* Filters Bar */}
+            <View style={styles.tableModalFilters}>
+              {/* Floor Tabs */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {['All', ...availableFloors].map((fl) => {
+                  const active = tableModalFloor.toLowerCase() === fl.toLowerCase();
                   return (
                     <TouchableOpacity
-                      key={tab.id}
-                      style={[styles.kdsFilterChip, active && styles.kdsFilterChipActive]}
-                      onPress={() => setKdsModalFilter(tab.id)}
-                      activeOpacity={0.75}
+                      key={fl}
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() => setTableModalFloor(fl)}
                     >
-                      <Text style={[styles.kdsFilterChipText, active && styles.kdsFilterChipTextActive]}>
-                        {tab.label}
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                        {fl === 'All' ? 'All Floors' : fl}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </ScrollView>
-            </View>
 
-            <ScrollView style={{ maxHeight: 440, padding: 14 }}>
-              {(() => {
-                const filteredTickets = (tickets || []).filter((t) => {
-                  const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
-                  if (kdsModalFilter === 'pending' && t.status !== 'pending') return false;
-                  if (kdsModalFilter === 'cooking' && t.status !== 'cooking') return false;
-                  if (kdsModalFilter === 'ready' && t.status !== 'ready') return false;
-                  if (kdsModalFilter === 'takeaway' && t.tableId !== 'takeaway') return false;
-                  if (kdsModalFilter === 'delivery' && t.tableId !== 'delivery') return false;
-                  if (kdsModalFilter === 'dine-in' && !isTable) return false;
-                  if (pendingOrderSearchQuery.trim()) {
-                    const q = pendingOrderSearchQuery.toLowerCase();
-                    const matchesId = t.id.toLowerCase().includes(q);
-                    const matchesTable = (t.tableId || '').toLowerCase().includes(q) || (t.tableName || '').toLowerCase().includes(q);
-                    const matchesServer = (t.server || '').toLowerCase().includes(q);
-                    const matchesItem = (t.items || []).some((it) => (it.name || '').toLowerCase().includes(q));
-                    if (!matchesId && !matchesTable && !matchesServer && !matchesItem) return false;
-                  }
-                  return true;
-                });
+              {/* Search + Status & Seating Type */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+                <View style={[styles.modalSearchBox, { flex: 1, minWidth: 180 }]}>
+                  <Ionicons name="search" size={15} color="#94A3B8" />
+                  <TextInput
+                    style={[styles.modalSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                    placeholder="Search table or cabin..."
+                    value={tableSearchQuery}
+                    onChangeText={setTableSearchQuery}
+                  />
+                </View>
 
-                if (filteredTickets.length === 0) {
+                {(['all', 'available', 'occupied'] as const).map((st) => {
+                  const active = tableModalStatus === st;
                   return (
-                    <View style={{ padding: 30, alignItems: 'center' }}>
-                      <Ionicons name="receipt-outline" size={36} color="#CBD5E1" style={{ marginBottom: 6 }} />
-                      <Text style={{ color: '#64748B', fontWeight: '700' }}>No matching KDS orders found.</Text>
-                    </View>
-                  );
-                }
-
-                return filteredTickets.map(t => {
-                    const ticketSubtotal = (t.items || []).reduce((sum, it) => sum + (it.price * it.qty), 0);
-                    const isTable = t.tableId && t.tableId !== 'takeaway' && t.tableId !== 'delivery';
-                    const targetTable = isTable ? tables.find(tbl => tbl.id === t.tableId) : null;
-                    const tableNameDisplay = targetTable ? targetTable.name : (t.tableName || (t.tableId ? t.tableId.toUpperCase() : 'TAKEAWAY'));
-                    const statusStyleMap: Record<string, { color: string; bg: string }> = {
-                      pending: { color: '#B45309', bg: '#FEF3C7' },
-                      cooking: { color: '#C2410C', bg: '#FFEDD5' },
-                      ready: { color: '#1D4ED8', bg: '#DBEAFE' },
-                      served: { color: '#047857', bg: '#D1FAE5' },
-                    };
-                    const stStyle = statusStyleMap[t.status] || statusStyleMap.pending;
-                    const hasMain = (t.items || []).some(it => (it.station || 'main') === 'main');
-                    const hasJuice = (t.items || []).some(it => (it.station || 'main') === 'juice');
-                    const mainStatus = t.stationStatuses?.main || t.status;
-                    const juiceStatus = t.stationStatuses?.juice || t.status;
-                    const placedTimeStr = t.timePlaced
-                      ? new Date(t.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                      : '';
-
-                    return (
-                      <View key={t.id} style={styles.ticketCard}>
-                        {/* Top Row: Ticket ID + Table & Status Badge */}
-                        <View style={styles.ticketCardHeader}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
-                            <Ionicons name="receipt-outline" size={16} color="#52141C" />
-                            <Text style={styles.ticketCardNumber}>{t.id}</Text>
-                            <View style={styles.ticketTablePill}>
-                              <Ionicons name={isTable ? "restaurant-outline" : "bag-handle-outline"} size={11} color="#52141C" />
-                              <Text style={styles.ticketTableText}>{tableNameDisplay}</Text>
-                            </View>
-                          </View>
-
-                          <View style={[styles.ticketStatusPill, { backgroundColor: stStyle.bg, borderColor: stStyle.color }]}>
-                            <Text style={[styles.ticketStatusText, { color: stStyle.color }]}>
-                              {(t.status || 'pending').toUpperCase()}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* KDS Stations Dispatched Badges */}
-                        <View style={styles.ticketStationRow}>
-                          {hasMain && (
-                            <View style={styles.ticketStationBadge}>
-                              <Ionicons name="flame-outline" size={11} color="#92400E" />
-                              <Text style={styles.ticketStationBadgeText}>
-                                Kitchen KDS: {(mainStatus || 'pending').toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                          {hasJuice && (
-                            <View style={[styles.ticketStationBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
-                              <Ionicons name="wine-outline" size={11} color="#1D4ED8" />
-                              <Text style={[styles.ticketStationBadgeText, { color: '#1D4ED8' }]}>
-                                Juice Bar KDS: {(juiceStatus || 'pending').toUpperCase()}
-                              </Text>
-                            </View>
-                          )}
-                          {placedTimeStr ? (
-                            <Text style={styles.ticketPlacedTimeText}>Sent {placedTimeStr}</Text>
-                          ) : null}
-                        </View>
-
-                        {/* Meta info: Server, Items Count, Running Total */}
-                        <View style={styles.ticketMetaRow}>
-                          <Text style={styles.ticketMetaText}>
-                            By: <Text style={{ fontWeight: '700', color: '#1E293B' }}>{t.server || 'Staff'}</Text> • {(t.items || []).reduce((s, i) => s + i.qty, 0)} items
-                          </Text>
-                          {!hidePrices && (
-                            <Text style={styles.ticketSubtotalText}>
-                              Rs. {ticketSubtotal.toLocaleString()}
-                            </Text>
-                          )}
-                        </View>
-
-                        {/* Items preview list */}
-                        <View style={styles.ticketItemsList}>
-                          {(t.items || []).map((it, idx) => (
-                            <View key={idx} style={styles.ticketItemRow}>
-                              <Text style={styles.ticketItemQty}>{it.qty}x</Text>
-                              <Text style={styles.ticketItemName} numberOfLines={1}>{it.name}</Text>
-                              {!hidePrices && (
-                                <Text style={styles.ticketItemPrice}>Rs. {(it.price * it.qty).toLocaleString()}</Text>
-                              )}
-                            </View>
-                          ))}
-                        </View>
-
-                        {/* Interactive Action Row: Cancel / Pending Slip / Load Cart / Create Bill & Settle */}
-                        <View style={styles.ticketActionRow}>
-                          {(role === 'admin' || can('posCanDismissTicket')) && (
-                            <TouchableOpacity
-                              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                              style={styles.ticketCancelBtn}
-                              onPress={() => handleCancelRunningOrder(t.id)}
-                              activeOpacity={0.8}
-                            >
-                              <Ionicons name="trash-outline" size={13} color="#DC2626" style={{ marginRight: 3 }} />
-                              <Text style={styles.ticketCancelBtnText}>Cancel</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
-                            <TouchableOpacity
-                              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                              style={styles.ticketSlipBtn}
-                              onPress={() => handlePrintPendingSlipForTicket(t)}
-                              activeOpacity={0.8}
-                            >
-                              <Ionicons name="print-outline" size={13} color="#92400E" style={{ marginRight: 4 }} />
-                              <Text style={styles.ticketSlipBtnText}>Pending Slip</Text>
-                            </TouchableOpacity>
-                          )}
-
-                          <TouchableOpacity
-                            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                            style={styles.ticketCartBtn}
-                            onPress={() => handleCreateBillFromTicket(t, false)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons name="cart-outline" size={14} color="#475569" style={{ marginRight: 4 }} />
-                            <Text style={styles.ticketCartBtnText}>Load Cart</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-                            style={[
-                              styles.ticketBillBtn,
-                              role !== 'admin' && !can('posCanSettleBill') && { opacity: 0.5 },
-                            ]}
-                            onPress={() => handleCreateBillFromTicket(t, true)}
-                            activeOpacity={0.8}
-                          >
-                            <Ionicons
-                              name={role !== 'admin' && !can('posCanSettleBill') ? 'lock-closed-outline' : 'card-outline'}
-                              size={14}
-                              color="#FFFFFF"
-                              style={{ marginRight: 4 }}
-                            />
-                            <Text style={styles.ticketBillBtnText}>Bill & Settle</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  });
-              })()}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Post-Payment Table Decision Modal */}
-      {tableDecisionModal && (
-        <Modal visible transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalBox, { maxWidth: 460, padding: 18 }]}>
-              <Text style={{ fontSize: 15, fontWeight: '900', color: '#1E293B', marginBottom: 6 }}>
-                Bill Settled for {tableDecisionModal.tableName}
-              </Text>
-              <Text style={{ fontSize: 12, color: '#64748B', lineHeight: 18, marginBottom: 14 }}>
-                Would you like to release this table now, or are guests still seated?
-              </Text>
-
-              <TouchableOpacity 
-                style={[styles.proceedPayBtn, { marginBottom: 8 }]}
-                onPress={() => {
-                  settleBill(tableDecisionModal.tableId);
-                  clearTableTickets(tableDecisionModal.tableId);
-                  setTableDecisionModal(null);
-                }}
-              >
-                <Text style={styles.proceedPayBtnText}>Release Table Now</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity 
-                style={styles.holdOrderBtn}
-                onPress={() => {
-                  markTableBilled(tableDecisionModal.tableId);
-                  clearTableTickets(tableDecisionModal.tableId);
-                  setTableDecisionModal(null);
-                }}
-              >
-                <Text style={styles.holdOrderBtnText}>Keep Seated as Billed</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* ========================================================
-          MODAL: KEYBOARD SHORTCUTS CHEAT SHEET
-          ======================================================== */}
-      <Modal visible={shortcutsModalVisible} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalBox, { maxWidth: 540, padding: 20 }]}>
-            <View style={styles.modalHeader}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="keypad" size={20} color="#D4AF37" />
-                <Text style={styles.modalHeaderTitle}>Keyboard Shortcuts (شارٹ کٹ کیز)</Text>
-              </View>
-              <TouchableOpacity onPress={() => setShortcutsModalVisible(false)}>
-                <Ionicons name="close" size={22} color="#1E293B" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ maxHeight: 460, marginTop: 10 }}>
-              <Text style={styles.shortcutSectionHeading}>ORDER & POS NAVIGATION</Text>
-              
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F1 / Ctrl+K</Text></View>
-                <Text style={styles.shortcutDescText}>Focus Dish Search Bar</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F2</Text></View>
-                <Text style={styles.shortcutDescText}>Dine-in Mode / Select Table</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F3</Text></View>
-                <Text style={styles.shortcutDescText}>Takeaway Order Mode</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F4</Text></View>
-                <Text style={styles.shortcutDescText}>Delivery Order Mode</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F6 / Ctrl+R</Text></View>
-                <Text style={styles.shortcutDescText}>Open Running / Pending Orders</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F7 / Ctrl+D</Text></View>
-                <Text style={styles.shortcutDescText}>Apply Discount / Event Promo</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F8 / Ctrl+H</Text></View>
-                <Text style={styles.shortcutDescText}>Hold / Send KOT to Kitchen</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F9 / Ctrl+Enter</Text></View>
-                <Text style={styles.shortcutDescText}>Proceed to Payment / Checkout</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F10 / Ctrl+I</Text></View>
-                <Text style={styles.shortcutDescText}>Recent 8 Invoices (Quick Reprint)</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>F12</Text></View>
-                <Text style={styles.shortcutDescText}>Clear Cart / Reset Order</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>Esc</Text></View>
-                <Text style={styles.shortcutDescText}>Close Modal / Clear Search</Text>
-              </View>
-
-              <Text style={[styles.shortcutSectionHeading, { marginTop: 16 }]}>PAYMENT / CHECKOUT MODAL</Text>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={[styles.keyBadge, { backgroundColor: '#35080E', borderColor: '#D4AF37' }]}><Text style={[styles.keyBadgeText, { color: '#D4AF37' }]}>F10</Text></View>
-                <Text style={styles.shortcutDescText}>Full Payment (Fill exact bill amount)</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={[styles.keyBadge, { backgroundColor: '#059669', borderColor: '#10B981' }]}><Text style={[styles.keyBadgeText, { color: '#FFFFFF' }]}>Enter</Text></View>
-                <Text style={styles.shortcutDescText}>Confirm Payment & Print Receipt</Text>
-              </View>
-
-              <View style={styles.shortcutItemRow}>
-                <View style={styles.keyBadge}><Text style={styles.keyBadgeText}>Esc</Text></View>
-                <Text style={styles.shortcutDescText}>Cancel & Close Checkout Modal</Text>
-              </View>
-            </ScrollView>
-
-            <TouchableOpacity 
-              style={[styles.modalPrimaryBtn, { marginTop: 14 }]} 
-              onPress={() => setShortcutsModalVisible(false)}
-            >
-              <Text style={styles.modalPrimaryBtnText}>Close (Esc)</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ========================================================
-          MODAL: VARIANT / PORTION SELECTION (GLASSMORPHIC)
-          ======================================================== */}
-      {variantModalItem && (
-        <Modal visible transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalBox, { maxWidth: 440 }]}>
-              <View style={styles.modalHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="options-outline" size={18} color="#D4AF37" />
-                  <Text style={styles.modalHeaderTitle}>Select Portion / Variant</Text>
-                </View>
-                <TouchableOpacity onPress={() => setVariantModalItem(null)}>
-                  <Ionicons name="close" size={22} color="#1E293B" />
-                </TouchableOpacity>
-              </View>
-
-              <View style={{ padding: 18 }}>
-                <Text style={{ fontSize: 15, fontWeight: '900', color: '#1E293B', marginBottom: 4 }}>
-                  {variantModalItem.name}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 14 }}>
-                  Category: {variantModalItem.category} • Choose serving portion
-                </Text>
-
-                <View style={{ gap: 8 }}>
-                  {variantModalItem.variants?.map((v, idx) => (
                     <TouchableOpacity
-                      key={idx}
-                      style={styles.variantOptionRow}
-                      onPress={() => handleVariantSelect(v)}
-                      activeOpacity={0.75}
+                      key={st}
+                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      onPress={() => setTableModalStatus(st)}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <View style={styles.variantDot} />
-                        <Text style={styles.variantOptionName}>{v.name}</Text>
-                      </View>
-                      {hidePrices ? (
-                        <View style={[styles.variantPricePill, { backgroundColor: 'rgba(212, 175, 55, 0.12)' }]}>
-                          <Text style={[styles.variantPriceText, { color: '#B45309' }]}>Select</Text>
-                        </View>
-                      ) : (
-                        <View style={styles.variantPricePill}>
-                          <Text style={styles.variantPriceText}>Rs. {v.price.toLocaleString()}</Text>
-                        </View>
-                      )}
+                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                        {st.charAt(0).toUpperCase() + st.slice(1)}
+                      </Text>
                     </TouchableOpacity>
-                  ))}
-                </View>
+                  );
+                })}
               </View>
             </View>
+
+            <ScrollView contentContainerStyle={styles.tableGridWrap}>
+              {filteredModalTables.map((t) => {
+                const isSelected = selectedTableId === t.id;
+                const isBusy = t.status === 'occupied' || t.status === 'billed';
+                const sType = getTableSeatingType(t);
+                const tTickets = tickets.filter((tk) => tk.tableId === t.id);
+                const runningBill =
+                  t.billTotal ||
+                  tTickets.reduce(
+                    (sum, tk) => sum + tk.items.reduce((s, i) => s + i.price * i.qty, 0),
+                    0
+                  );
+
+                return (
+                  <TouchableOpacity
+                    key={t.id}
+                    style={[
+                      styles.tablePickerCard,
+                      isBusy && styles.tablePickerCardBusy,
+                      isSelected && styles.tablePickerCardSelected,
+                    ]}
+                    onPress={() => handleTableSelect(t.id)}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <SeatingTypeIcon type={sType} size={16} color={isBusy ? '#DC2626' : '#15803D'} />
+                        <Text style={styles.tablePickerName}>{t.name}</Text>
+                      </View>
+                      <View
+                        style={[
+                          styles.tableStatusDot,
+                          { backgroundColor: isBusy ? '#DC2626' : '#16A34A' },
+                        ]}
+                      />
+                    </View>
+                    <Text style={styles.tablePickerMeta}>
+                      {getTableFloor(t)} • {t.seats} Seats
+                    </Text>
+                    <Text
+                      style={[
+                        styles.tablePickerStatus,
+                        { color: isBusy ? '#DC2626' : '#15803D' },
+                      ]}
+                    >
+                      {isBusy
+                        ? !hidePrices && runningBill > 0
+                          ? `Occupied • Rs. ${runningBill.toLocaleString()}`
+                          : 'Occupied'
+                        : 'Available'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
           </View>
-        </Modal>
-      )}
+        </View>
+      </Modal>
 
       {/* ========================================================
-          MODAL: DISCOUNT & EVENT PROMO SELECTOR (GLASSMORPHIC)
+          MODAL 2: CUSTOMER SELECTION & REGISTRATION
           ======================================================== */}
-      {discountModalVisible && (
-        <Modal visible transparent animationType="fade">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalBox, { maxWidth: 480 }]}>
-              <View style={styles.modalHeader}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Ionicons name="pricetags-outline" size={18} color="#059669" />
-                  <Text style={styles.modalHeaderTitle}>Apply Discount or Promo</Text>
+      <Modal visible={customerModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 540 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Customer Profile</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setCustomerModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            {isCreatingNewCustomer ? (
+              <View style={{ padding: 16, gap: 12 }}>
+                <Text style={styles.inputLabel}>Full Name *</Text>
+                <TextInput
+                  style={styles.textInputField}
+                  placeholder="Enter customer name"
+                  value={customerName}
+                  onChangeText={setCustomerName}
+                />
+                <Text style={styles.inputLabel}>Phone Number *</Text>
+                <TextInput
+                  style={styles.textInputField}
+                  placeholder="03XX-XXXXXXX"
+                  keyboardType="phone-pad"
+                  value={customerPhone}
+                  onChangeText={setCustomerPhone}
+                />
+                <Text style={styles.inputLabel}>Delivery Address</Text>
+                <TextInput
+                  style={[styles.textInputField, { height: 70 }]}
+                  placeholder="House #, Street, Sector / Area"
+                  multiline
+                  value={customerAddress}
+                  onChangeText={setCustomerAddress}
+                />
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                  <TouchableOpacity
+                    style={[styles.modalSecBtn, { flex: 1 }]}
+                    onPress={() => setIsCreatingNewCustomer(false)}
+                  >
+                    <Text style={styles.modalSecBtnText}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.modalPrimaryBtn, { flex: 1 }]}
+                    onPress={handleSaveNewCustomer}
+                  >
+                    <Text style={styles.modalPrimaryBtnText}>Save & Select</Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity onPress={() => setDiscountModalVisible(false)}>
-                  <Ionicons name="close" size={22} color="#1E293B" />
-                </TouchableOpacity>
               </View>
+            ) : (
+              <View style={{ padding: 16, gap: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={[styles.modalSearchBox, { flex: 1 }]}>
+                    <Ionicons name="search" size={16} color="#94A3B8" />
+                    <TextInput
+                      style={styles.modalSearchInput}
+                      placeholder="Search name or phone..."
+                      value={customerSearchQuery}
+                      onChangeText={setCustomerSearchQuery}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    style={styles.modalPrimaryBtn}
+                    onPress={() => {
+                      setCustomerName('');
+                      setCustomerPhone(customerSearchQuery);
+                      setCustomerAddress('');
+                      setIsCreatingNewCustomer(true);
+                    }}
+                  >
+                    <Ionicons name="add" size={16} color="#FFFFFF" />
+                    <Text style={styles.modalPrimaryBtnText}>New</Text>
+                  </TouchableOpacity>
+                </View>
 
-              <View style={{ padding: 18 }}>
-                {/* Active Event Campaigns */}
-                {systemSettings.enableDiscountsModule !== false && (
-                  <>
-                    <Text style={styles.inputLabel}>Active Promotional Campaigns</Text>
-                    {campaigns.filter(c => c.status === 'active').length === 0 ? (
-                      <Text style={{ fontSize: 11, color: '#94A3B8', fontStyle: 'italic', marginBottom: 12 }}>
-                        No automated event promos currently active.
-                      </Text>
-                    ) : (
-                      <View style={{ gap: 6, marginBottom: 14 }}>
-                        {campaigns.filter(c => c.status === 'active').map(camp => {
-                          const isSelected = selectedEventCampaign?.id === camp.id;
-                          return (
-                            <TouchableOpacity
-                              key={camp.id}
-                              style={[styles.promoCampaignCard, isSelected && styles.promoCampaignCardActive]}
-                              onPress={() => {
-                                if (isSelected) {
-                                  setSelectedEventCampaign(null);
-                                  setDiscountAmount('0');
-                                } else {
-                                  setSelectedEventCampaign(camp);
-                                }
-                                setDiscountModalVisible(false);
-                              }}
-                            >
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.promoCampaignTitle, isSelected && { color: '#059669' }]}>
-                                  {camp.title}
-                                </Text>
-                                <Text style={styles.promoCampaignSub}>
-                                  {camp.type === 'percentage' ? `${camp.value}% Off` : `Rs. ${camp.value} Off`}
-                                  {camp.minSpend ? ` • Min Order: Rs. ${camp.minSpend}` : ''}
-                                </Text>
-                              </View>
-                              {isSelected && <Ionicons name="checkmark-circle" size={18} color="#059669" />}
-                            </TouchableOpacity>
-                          );
-                        })}
-                      </View>
-                    )}
-                  </>
-                )}
-
-                {/* Custom Discount Input (Role + System Settings Guarded) */}
-                {canApplyCustomDiscount && systemSettings.allowCustomDiscount !== false ? (
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={styles.inputLabel}>Manual Discount Amount ({systemSettings.currencySymbol || 'Rs.'})</Text>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TextInput
-                        style={[styles.modalInput, { flex: 1, marginBottom: 0 }]}
-                        placeholder="0"
-                        keyboardType="numeric"
-                        value={customDiscountInput}
-                        onChangeText={setCustomDiscountInput}
-                      />
+                <ScrollView style={{ maxHeight: 340 }}>
+                  {customers
+                    .filter((c) => {
+                      const q = customerSearchQuery.toLowerCase().trim();
+                      return !q || c.name.toLowerCase().includes(q) || c.phone.includes(q);
+                    })
+                    .map((c) => (
                       <TouchableOpacity
-                        style={[styles.modalPrimaryBtn, { paddingHorizontal: 16 }]}
+                        key={c.id}
+                        style={[
+                          styles.custListRow,
+                          selectedCustomerId === c.id && styles.custListRowActive,
+                        ]}
                         onPress={() => {
-                          setSelectedEventCampaign(null);
-                          setDiscountAmount(customDiscountInput || '0');
-                          setDiscountModalVisible(false);
+                          setSelectedCustomerId(c.id);
+                          setCustomerModalVisible(false);
                         }}
                       >
-                        <Text style={styles.modalPrimaryBtnText}>Apply</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.custListName}>{c.name}</Text>
+                          <Text style={styles.custListPhone}>
+                            {c.phone} {c.address ? `• ${c.address}` : ''}
+                          </Text>
+                        </View>
+                        <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                       </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : (
-                  <View style={{ marginTop: 8, padding: 8, backgroundColor: '#F1F5F9', borderRadius: 8 }}>
-                    <Text style={{ fontSize: 10.5, color: '#64748B' }}>
-                      {systemSettings.allowCustomDiscount === false
-                        ? 'Custom discounts are currently disabled in System Settings.'
-                        : 'Manual custom discount requires Admin or Manager authorization.'}
-                    </Text>
-                  </View>
-                )}
+                    ))}
+                </ScrollView>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
 
-                {/* Reset Discount Button */}
-                {discountVal > 0 && (
+      {/* ========================================================
+          MODAL 3: VARIANT / PORTION SIZE PICKER
+          ======================================================== */}
+      <Modal visible={!!variantModalItem} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 440 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{variantModalItem?.name}</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setVariantModalItem(null)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 16, gap: 10 }}>
+              <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
+                Select portion size / variant:
+              </Text>
+              {(variantModalItem?.variants || []).map((v) => (
+                <TouchableOpacity
+                  key={v.name}
+                  style={styles.variantChoiceBtn}
+                  onPress={() => handleVariantSelect(v)}
+                >
+                  <Text style={styles.variantChoiceName}>{v.name}</Text>
+                  {!hidePrices && (
+                    <Text style={styles.variantChoicePrice}>Rs. {v.price.toLocaleString()}</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 4: DISCOUNT & PROMO CAMPAIGN PICKER
+          ======================================================== */}
+      <Modal visible={discountModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 480 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Apply Discount or Promotion</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setDiscountModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16, gap: 14 }}>
+              <Text style={styles.inputLabel}>Custom Discount Amount (Rs.)</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TextInput
+                  style={[styles.textInputField, { flex: 1 }]}
+                  keyboardType="numeric"
+                  placeholder="0"
+                  value={customDiscountInput}
+                  onChangeText={setCustomDiscountInput}
+                />
+                <TouchableOpacity
+                  style={styles.modalPrimaryBtn}
+                  onPress={() => {
+                    setSelectedEventCampaign(null);
+                    setDiscountAmount(String(Math.max(0, parseFloat(customDiscountInput) || 0)));
+                    setDiscountModalVisible(false);
+                  }}
+                >
+                  <Text style={styles.modalPrimaryBtnText}>Apply</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Quick Percentage Buttons */}
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {[5, 10, 15, 20].map((pct) => (
                   <TouchableOpacity
-                    style={{ marginTop: 12, alignItems: 'center' }}
+                    key={pct}
+                    style={[styles.filterChip, { flex: 1, alignItems: 'center' }]}
                     onPress={() => {
+                      const amt = Math.round((subTotal * pct) / 100);
                       setSelectedEventCampaign(null);
-                      setDiscountAmount('0');
-                      setCustomDiscountInput('0');
+                      setDiscountAmount(String(amt));
                       setDiscountModalVisible(false);
                     }}
                   >
-                    <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#DC2626' }}>
-                      Remove Discount
-                    </Text>
+                    <Text style={styles.filterChipText}>{pct}% Off</Text>
                   </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-      {/* ========================================================
-          RECENT 8 INVOICES MODAL (CASHIER REPRINT & PRIVACY SAFE)
-          ======================================================== */}
-      {recentInvoicesModalVisible && (
-        <Modal
-          visible={recentInvoicesModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setRecentInvoicesModalVisible(false)}
-        >
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalBox, { maxWidth: 680, maxHeight: '88%', padding: 0, overflow: 'hidden' }]}>
-              {/* Header */}
-              <View style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                backgroundColor: '#260509',
-                paddingHorizontal: 18,
-                paddingVertical: 14,
-                borderBottomWidth: 1.5,
-                borderBottomColor: '#3E0C13',
-              }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                  <View style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: 'rgba(212, 175, 55, 0.15)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderWidth: 1,
-                    borderColor: 'rgba(212, 175, 55, 0.4)',
-                  }}>
-                    <Ionicons name="receipt" size={17} color="#D4AF37" />
-                  </View>
-                  <View>
-                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#D4AF37', letterSpacing: 0.5 }}>
-                      Recent Invoices (آخری 8 انوائسز)
-                    </Text>
-                    <Text style={{ fontSize: 11, fontWeight: '600', color: '#E5C158' }}>
-                      Quick Receipt Reprint • Privacy Protected
-                    </Text>
-                  </View>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setRecentInvoicesModalVisible(false)}
-                  style={{
-                    width: 32,
-                    height: 32,
-                    borderRadius: 16,
-                    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Ionicons name="close" size={20} color="#FFFFFF" />
-                </TouchableOpacity>
+                ))}
               </View>
 
-              {/* Invoices List */}
-              <ScrollView style={{ flex: 1, padding: 14, backgroundColor: '#F8FAFC' }}>
-                {recent8Invoices.length === 0 ? (
-                  <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 40 }}>
-                    <Ionicons name="receipt-outline" size={48} color="#94A3B8" style={{ marginBottom: 10 }} />
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#64748B' }}>
-                      No recent invoices found
-                    </Text>
-                    <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 4 }}>
-                      Settled orders will appear here for fast re-printing.
-                    </Text>
-                  </View>
-                ) : (
-                  <View style={{ gap: 10 }}>
-                    {recent8Invoices.map((inv, idx) => {
-                      const invTime = new Date(inv.timeSettled || inv.timePlaced || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                      const invDate = new Date(inv.timeSettled || inv.timePlaced || Date.now()).toLocaleDateString();
-                      const totalItemsCount = (inv.items || []).reduce((s, it) => s + (it.qty || 1), 0);
-                      const itemsSummary = (inv.items || []).map(it => `${it.qty}x ${it.name}`).slice(0, 3).join(', ') + ((inv.items || []).length > 3 ? '...' : '');
-
-                      return (
-                        <View
-                          key={inv.id || idx}
-                          style={{
-                            backgroundColor: '#FFFFFF',
-                            borderRadius: 12,
-                            borderWidth: 1,
-                            borderColor: '#E2E8F0',
-                            padding: 12,
-                            shadowColor: '#000',
-                            shadowOffset: { width: 0, height: 2 },
-                            shadowOpacity: 0.05,
-                            shadowRadius: 4,
-                            elevation: 2,
+              {campaigns.filter((c) => c.status === 'active').length > 0 && (
+                <>
+                  <Text style={styles.inputLabel}>Active Promotional Campaigns</Text>
+                  <ScrollView style={{ maxHeight: 200 }}>
+                    {campaigns
+                      .filter((c) => c.status === 'active')
+                      .map((camp) => (
+                        <TouchableOpacity
+                          key={camp.id}
+                          style={[
+                            styles.custListRow,
+                            selectedEventCampaign?.id === camp.id && styles.custListRowActive,
+                          ]}
+                          onPress={() => {
+                            setSelectedEventCampaign(camp);
+                            setDiscountModalVisible(false);
                           }}
                         >
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
-                                #{inv.id}
-                              </Text>
-                              <View style={{
-                                backgroundColor: inv.orderType === 'dine-in' ? '#EFF6FF' : inv.orderType === 'delivery' ? '#FEF3C7' : '#F0FDF4',
-                                paddingHorizontal: 8,
-                                paddingVertical: 2,
-                                borderRadius: 6,
-                                borderWidth: 1,
-                                borderColor: inv.orderType === 'dine-in' ? '#BFDBFE' : inv.orderType === 'delivery' ? '#FDE68A' : '#BBF7D0',
-                              }}>
-                                <Text style={{
-                                  fontSize: 10.5,
-                                  fontWeight: '800',
-                                  color: inv.orderType === 'dine-in' ? '#1D4ED8' : inv.orderType === 'delivery' ? '#B45309' : '#15803D',
-                                  textTransform: 'uppercase',
-                                }}>
-                                  {inv.orderType === 'dine-in' ? `Dine-In • ${inv.tableName || 'Table'}` : inv.orderType}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <Ionicons name="time-outline" size={12} color="#64748B" />
-                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>
-                                {invTime} • {invDate}
-                              </Text>
-                            </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.custListName}>{camp.title}</Text>
+                            <Text style={styles.custListPhone}>{camp.description || camp.type}</Text>
                           </View>
+                          <Ionicons name="pricetag" size={16} color="#059669" />
+                        </TouchableOpacity>
+                      ))}
+                  </ScrollView>
+                </>
+              )}
 
-                          {/* Items & Guest info */}
-                          <View style={{ marginBottom: 8 }}>
-                            <Text style={{ fontSize: 12, color: '#334155', fontWeight: '500' }} numberOfLines={1}>
-                              <Text style={{ fontWeight: '700', color: '#0F172A' }}>{totalItemsCount} items:</Text> {itemsSummary}
+              {discountVal > 0 && (
+                <TouchableOpacity
+                  style={[styles.modalSecBtn, { borderColor: '#FCA5A5', backgroundColor: '#FEF2F2' }]}
+                  onPress={() => {
+                    setSelectedEventCampaign(null);
+                    setDiscountAmount('0');
+                    setCustomDiscountInput('0');
+                    setDiscountModalVisible(false);
+                  }}
+                >
+                  <Text style={[styles.modalSecBtnText, { color: '#DC2626' }]}>Remove Discount</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 5: CLEAN FAST CHECKOUT & PAYMENT SETTLEMENT
+          ======================================================== */}
+      <Modal visible={checkoutModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 820 }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Settle Bill & Print Receipt</Text>
+                <Text style={styles.modalSub}>
+                  {orderType.toUpperCase()}{' '}
+                  {selectedTableObj ? `• ${selectedTableObj.name}` : ''}{' '}
+                  {selectedCustomerObj ? `• ${selectedCustomerObj.name}` : ''}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setCheckoutModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={[styles.checkoutBody, isMobile && { flexDirection: 'column' }]}>
+              {/* Left Column: Totals, Payment Method, Denomination Pills */}
+              <View style={styles.checkoutLeftCol}>
+                {/* Total Banner */}
+                <View style={styles.checkoutTotalBanner}>
+                  <View>
+                    <Text style={styles.checkoutTotalLabel}>NET PAYABLE</Text>
+                    <Text style={styles.checkoutTotalItems}>{totalCartQty} items</Text>
+                  </View>
+                  <Text style={styles.checkoutTotalValue}>
+                    Rs. {Math.round(total).toLocaleString()}
+                  </Text>
+                </View>
+
+                {/* Payment Lines */}
+                {payments.map((p, idx) => (
+                  <View key={idx} style={styles.paymentLineCard}>
+                    <View style={styles.paymentMethodTabs}>
+                      {(['cash', 'card', 'online'] as const).map((method) => {
+                        const active = p.type === method;
+                        return (
+                          <TouchableOpacity
+                            key={method}
+                            style={[styles.payMethodTab, active && styles.payMethodTabActive]}
+                            onPress={() => updatePayment(idx, 'type', method)}
+                          >
+                            <Ionicons
+                              name={
+                                method === 'cash'
+                                  ? 'cash-outline'
+                                  : method === 'card'
+                                  ? 'card-outline'
+                                  : 'phone-portrait-outline'
+                              }
+                              size={15}
+                              color={active ? '#FFFFFF' : '#475569'}
+                            />
+                            <Text style={[styles.payMethodTabText, active && { color: '#FFFFFF' }]}>
+                              {method.toUpperCase()}
                             </Text>
-                            {inv.customer?.name ? (
-                              <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
-                                Guest: {inv.customer.name} {inv.customer.phone ? `(${inv.customer.phone})` : ''}
-                              </Text>
-                            ) : null}
-                          </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
 
-                          {/* Bottom Row: Total & Action Buttons */}
-                          <View style={{
-                            flexDirection: 'row',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            borderTopWidth: 1,
-                            borderTopColor: '#F1F5F9',
-                            paddingTop: 8,
-                          }}>
-                            <View>
-                              <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>TOTAL AMOUNT</Text>
-                              <Text style={{ fontSize: 16, fontWeight: '900', color: '#059669' }}>
-                                Rs. {(inv.total || 0).toLocaleString()}
-                              </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Tendered Rs.</Text>
+                      <TextInput
+                        style={[styles.textInputField, { flex: 1, fontSize: 18, fontWeight: '900' }]}
+                        keyboardType="numeric"
+                        value={String(p.amount || '')}
+                        onFocus={() => setActivePaymentIndex(idx)}
+                        onChangeText={(val) => updatePayment(idx, 'amount', val)}
+                      />
+                      {payments.length > 1 && (
+                        <TouchableOpacity
+                          onPress={() => setPayments((prev) => prev.filter((_, i) => i !== idx))}
+                        >
+                          <Ionicons name="trash-outline" size={18} color="#DC2626" />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))}
+
+                {/* Split Payment Button */}
+                {systemSettings.posAllowSplitPayment !== false &&
+                  (role === 'admin' || can('posCanSplitPayment')) &&
+                  payments.length < 3 && (
+                    <TouchableOpacity
+                      style={styles.splitPayBtn}
+                      onPress={() =>
+                        setPayments((prev) => [...prev, { type: 'card', amount: Math.max(0, Math.round(remaining)) }])
+                      }
+                    >
+                      <Ionicons name="git-branch-outline" size={15} color="#52141C" />
+                      <Text style={styles.splitPayBtnText}>+ Add Split Payment Method</Text>
+                    </TouchableOpacity>
+                  )}
+
+                {/* Quick Cash Denominations */}
+                <View style={styles.quickCashRow}>
+                  <TouchableOpacity style={styles.quickCashPill} onPress={handleSetFullPayment}>
+                    <Text style={styles.quickCashText}>Exact ({Math.round(total)})</Text>
+                  </TouchableOpacity>
+                  {[500, 1000, 2000, 5000].map((amt) => (
+                    <TouchableOpacity
+                      key={amt}
+                      style={styles.quickCashPill}
+                      onPress={() => handleSetPaymentAmount(amt)}
+                    >
+                      <Text style={styles.quickCashText}>Rs. {amt}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                {/* Change Due / Balance Status */}
+                <View
+                  style={[
+                    styles.changeDueBanner,
+                    remaining > 0 ? { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' } : { backgroundColor: '#ECFDF5', borderColor: '#A7F3D0' },
+                  ]}
+                >
+                  <Text style={{ fontSize: 13, fontWeight: '800', color: remaining > 0 ? '#DC2626' : '#065F46' }}>
+                    {remaining > 0 ? 'REMAINING BALANCE DUE' : 'CHANGE TO RETURN'}
+                  </Text>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: remaining > 0 ? '#DC2626' : '#059669' }}>
+                    Rs. {Math.round(remaining > 0 ? remaining : changeDue).toLocaleString()}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Right Column: Touch Keypad + Finalize CTA */}
+              <View style={styles.checkoutRightCol}>
+                {!isMobile && (
+                  <TouchNumericKeypad
+                    value={String(payments[activePaymentIndex]?.amount || '')}
+                    onChangeText={(nextVal: string) => updatePayment(activePaymentIndex, 'amount', nextVal)}
+                    exactAmount={Math.round(total)}
+                    compact
+                  />
+                )}
+
+                <TouchableOpacity
+                  style={[styles.confirmSettleBtn, remaining > 0.01 && { opacity: 0.55 }]}
+                  onPress={handleFinalizeOrder}
+                >
+                  <Ionicons name="checkmark-circle" size={20} color="#24050A" />
+                  <Text style={styles.confirmSettleBtnText}>
+                    CONFIRM & PRINT RECEIPT (ENTER)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 6: RUNNING KDS ORDERS (F6)
+          ======================================================== */}
+      <Modal visible={pendingOrdersModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 760, maxHeight: '86%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>Running Kitchen Orders ({tickets.length})</Text>
+                <Text style={styles.modalSub}>Tap any order to load into POS for billing or add-ons</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                {tickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
+                  <TouchableOpacity
+                    style={[styles.filterChip, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
+                    onPress={handleClearAllOrphanTickets}
+                  >
+                    <Text style={[styles.filterChipText, { color: '#DC2626' }]}>Clear All</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setPendingOrdersModalVisible(false)}>
+                  <Ionicons name="close" size={20} color="#475569" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={{ padding: 14, gap: 10 }}>
+              <View style={styles.modalSearchBox}>
+                <Ionicons name="search" size={16} color="#94A3B8" />
+                <TextInput
+                  style={styles.modalSearchInput}
+                  placeholder="Search table, ticket ID, or dish..."
+                  value={pendingOrderSearchQuery}
+                  onChangeText={setPendingOrderSearchQuery}
+                />
+              </View>
+
+              <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 10 }}>
+                {tickets
+                  .filter((t) => {
+                    const q = pendingOrderSearchQuery.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      t.id.toLowerCase().includes(q) ||
+                      (t.tableName && t.tableName.toLowerCase().includes(q)) ||
+                      t.items.some((i) => i.name.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((t) => {
+                    const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
+                    return (
+                      <View key={t.id} style={styles.runningOrderCard}>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={styles.runningOrderTitle}>
+                              {t.tableName || t.tableId?.toUpperCase() || 'TAKEAWAY'}
+                            </Text>
+                            <View style={styles.runningStatusPill}>
+                              <Text style={styles.runningStatusText}>{(t.status || 'pending').toUpperCase()}</Text>
                             </View>
-
-                            <View style={{ flexDirection: 'row', gap: 8 }}>
-                              {/* Preview Slip Button */}
-                              <TouchableOpacity
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 5,
-                                  backgroundColor: '#F1F5F9',
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 7,
-                                  borderRadius: 8,
-                                  borderWidth: 1,
-                                  borderColor: '#CBD5E1',
-                                }}
-                                onPress={() => {
-                                  setGeneratedInvoice(inv);
-                                }}
-                                activeOpacity={0.7}
-                              >
-                                <Ionicons name="eye-outline" size={14} color="#475569" />
-                                <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155' }}>
-                                  Preview
-                                </Text>
-                              </TouchableOpacity>
-
-                              {/* Direct Print Button */}
-                              <TouchableOpacity
-                                style={{
-                                  flexDirection: 'row',
-                                  alignItems: 'center',
-                                  gap: 6,
-                                  backgroundColor: '#3E0C13',
-                                  paddingHorizontal: 14,
-                                  paddingVertical: 7,
-                                  borderRadius: 8,
-                                  borderWidth: 1,
-                                  borderColor: '#D4AF37',
-                                }}
-                                onPress={() => {
-                                  printInvoiceReceipt(inv);
-                                }}
-                                activeOpacity={0.7}
-                              >
-                                <Ionicons name="print" size={15} color="#D4AF37" />
-                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFFFFF' }}>
-                                  Print Receipt
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
+                            <Text style={{ fontSize: 12, color: '#64748B' }}>#{t.id.slice(-5)}</Text>
                           </View>
+                          <Text style={styles.runningOrderItems} numberOfLines={2}>
+                            {t.items.map((i) => `${i.qty}x ${i.name}`).join(', ')}
+                          </Text>
+                          {!hidePrices && (
+                            <Text style={styles.runningOrderAmount}>Rs. {tSub.toLocaleString()}</Text>
+                          )}
                         </View>
-                      );
-                    })}
+
+                        <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          <TouchableOpacity
+                            style={styles.runningActionBtn}
+                            onPress={() => handlePrintPendingSlipForTicket(t)}
+                          >
+                            <Ionicons name="print-outline" size={15} color="#475569" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.runningActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                            onPress={() => handleCreateBillFromTicket(t, false)}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#1D4ED8' }}>Load</Text>
+                          </TouchableOpacity>
+                          {!hidePrices && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C' }]}
+                              onPress={() => handleCreateBillFromTicket(t, true)}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: '#F3D179' }}>Pay Bill</Text>
+                            </TouchableOpacity>
+                          )}
+                          {(role === 'admin' || can('posCanDismissTicket')) && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
+                              onPress={() => handleCancelRunningOrder(t.id)}
+                            >
+                              <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                {tickets.length === 0 && (
+                  <View style={{ alignItems: 'center', padding: 36 }}>
+                    <Ionicons name="checkmark-done-circle-outline" size={44} color="#CBD5E1" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#64748B', marginTop: 8 }}>
+                      No active orders in kitchen
+                    </Text>
                   </View>
                 )}
               </ScrollView>
             </View>
           </View>
-        </Modal>
-      )}
+        </View>
+      </Modal>
 
-      {/* Invoice Print Preview Modal */}
+      {/* ========================================================
+          MODAL 7: RECENT 8 INVOICES (F10 QUICK REPRINT)
+          ======================================================== */}
+      <Modal visible={recentInvoicesModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 680 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Recent Settled Invoices (Quick Reprint)</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setRecentInvoicesModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={{ maxHeight: 440, padding: 16 }}>
+              {recent8Invoices.map((inv) => (
+                <View key={inv.id} style={styles.runningOrderCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.runningOrderTitle}>
+                      {inv.id} • {inv.tableName || inv.orderType?.toUpperCase()}
+                    </Text>
+                    <Text style={styles.runningOrderItems}>
+                      {new Date(inv.timeSettled || inv.timePlaced).toLocaleTimeString()} •{' '}
+                      {(inv.items || []).length} items
+                    </Text>
+                    {!hidePrices && (
+                      <Text style={styles.runningOrderAmount}>Rs. {Math.round(inv.total).toLocaleString()}</Text>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.modalPrimaryBtn, { paddingHorizontal: 14 }]}
+                    onPress={() => printInvoiceReceipt(inv)}
+                  >
+                    <Ionicons name="print-outline" size={15} color="#FFFFFF" />
+                    <Text style={styles.modalPrimaryBtnText}>Reprint</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {recent8Invoices.length === 0 && (
+                <Text style={{ textAlign: 'center', color: '#64748B', padding: 24 }}>
+                  No recent invoices found.
+                </Text>
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 8: POST-PAYMENT TABLE RELEASE DECISION
+          ======================================================== */}
+      <Modal visible={!!tableDecisionModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 440, padding: 20, gap: 14 }]}>
+            <Text style={styles.modalTitle}>Bill Settled for {tableDecisionModal?.tableName}</Text>
+            <Text style={{ fontSize: 13.5, color: '#475569' }}>
+              Would you like to release {tableDecisionModal?.tableName} and mark it Available now, or keep it occupied?
+            </Text>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                style={[styles.modalSecBtn, { flex: 1 }]}
+                onPress={() => setTableDecisionModal(null)}
+              >
+                <Text style={styles.modalSecBtnText}>Keep Occupied</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalPrimaryBtn, { flex: 1, backgroundColor: '#16A34A' }]}
+                onPress={() => {
+                  if (tableDecisionModal?.tableId) {
+                    settleBill(tableDecisionModal.tableId);
+                  }
+                  setTableDecisionModal(null);
+                }}
+              >
+                <Text style={styles.modalPrimaryBtnText}>Release Table</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 9: KEYBOARD SHORTCUTS (F11)
+          ======================================================== */}
+      <Modal visible={shortcutsModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 460 }]}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>POS Keyboard Shortcuts</Text>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setShortcutsModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+            <View style={{ padding: 16, gap: 10 }}>
+              {[
+                ['F1 / Ctrl+K', 'Focus Dish Search'],
+                ['F2', 'Switch to Dine-In & Select Table'],
+                ['F3', 'Switch to Takeaway'],
+                ['F4', 'Switch to Delivery'],
+                ['F6', 'Open Running Kitchen Orders'],
+                ['F7', 'Apply Discount / Promotion'],
+                ['F8', 'Send KOT to Kitchen & Print Pending Slip'],
+                ['F9 / Ctrl+Enter', 'Collect Payment & Checkout'],
+                ['F10', 'Recent 8 Invoices (Quick Reprint)'],
+                ['F12', 'Clear Current Order Cart'],
+              ].map(([key, desc]) => (
+                <View key={key} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 13, color: '#334155', fontWeight: '600' }}>{desc}</Text>
+                  <View style={{ backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: '#52141C' }}>{key}</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {generatedInvoice && (
-        <Modal visible transparent animationType="slide">
-          <View style={styles.modalOverlay}>
-            <View style={[styles.modalBox, { maxWidth: 650, maxHeight: '90%' }]}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalHeaderTitle}>Invoice #{generatedInvoice.id}</Text>
-                <TouchableOpacity onPress={() => setGeneratedInvoice(null)}>
-                  <Ionicons name="close" size={22} color="#1E293B" />
-                </TouchableOpacity>
-              </View>
-              <ScrollView style={{ flex: 1, padding: 14 }}>
-                <InvoiceComponent 
-                  invoice={generatedInvoice} 
-                  onClose={() => setGeneratedInvoice(null)} 
-                />
-              </ScrollView>
+        <Modal visible={!!generatedInvoice} transparent animationType="fade">
+          <View style={styles.modalBackdrop}>
+            <View style={[styles.modalCard, { maxWidth: 440, padding: 16 }]}>
+              <InvoiceComponent invoice={generatedInvoice} />
+              <TouchableOpacity
+                style={[styles.modalPrimaryBtn, { marginTop: 12 }]}
+                onPress={() => setGeneratedInvoice(null)}
+              >
+                <Text style={styles.modalPrimaryBtnText}>Done</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Modal>
@@ -4582,3375 +2815,1295 @@ export default function POSTerminalScreen({
 }
 
 const styles = StyleSheet.create({
-  fullscreenContainer: {
+  screen: {
     flex: 1,
-    backgroundColor: '#F5F1E8',
-    overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'radial-gradient(circle at 12% 18%, rgba(212, 175, 55, 0.08) 0%, transparent 45%), radial-gradient(circle at 88% 82%, rgba(82, 20, 28, 0.06) 0%, transparent 45%), linear-gradient(135deg, #FBF8F2 0%, #F3EDE2 50%, #ECE4D5 100%)',
-        minHeight: '100vh',
-      } as any
-    }),
+    backgroundColor: '#F1F5F9',
   },
 
-  /* --------------------------------------------------------
-     1. TOP HEADER (MODERN GLASSMORPHIC MAROON)
-     -------------------------------------------------------- */
-  topHeader: {
-    height: 50,
-    backgroundColor: 'rgba(38, 5, 9, 0.94)',
+  /* 1. TOP COMMAND BAR */
+  topBar: {
+    height: 54,
+    backgroundColor: '#24050A',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.35)',
-    zIndex: 20,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.22)',
-      } as any
-    }),
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(212, 175, 55, 0.3)',
+    gap: 10,
   },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any
-    }),
-  },
-  brandBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  brandTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  clockText: {
-    color: '#F59E0B',
-    fontSize: 12,
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    fontWeight: '800',
-    letterSpacing: 1.2,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 8,
-    backgroundColor: 'rgba(245, 158, 11, 0.12)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.3)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-      } as any
-    }),
-  },
-  headerRight: {
+  topBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-  shiftCapsule: {
+  backBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(212, 175, 55, 0.3)',
+  },
+  brandWrap: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.14)',
+    gap: 7,
+  },
+  brandText: {
+    color: '#F3D179',
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  topOrderTypeGroup: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderRadius: 9,
+    padding: 3,
+    gap: 3,
+    marginLeft: 6,
+  },
+  topOrderTypeBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+  topOrderTypeBtnActive: {
+    backgroundColor: '#D4AF37',
+  },
+  topOrderTypeText: {
+    color: '#E2E8F0',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  topOrderTypeTextActive: {
+    color: '#24050A',
+    fontWeight: '900',
+  },
+  topOrderKey: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    marginLeft: 2,
+  },
+  topSearchWrap: {
+    flex: 1,
+    maxWidth: 400,
+    height: 36,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 7,
+  },
+  topSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
+    fontWeight: '600',
+    paddingVertical: 0,
+  },
+  topBarRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+  topActionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(255,255,255,0.08)',
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.35)',
+    borderColor: 'rgba(212, 175, 55, 0.25)',
+  },
+  topActionBtnHighlight: {
+    backgroundColor: 'rgba(245, 158, 11, 0.18)',
+    borderColor: '#F59E0B',
+  },
+  topActionText: {
+    color: '#F8FAFC',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  topCountBadge: {
+    backgroundColor: '#D4AF37',
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
+  },
+  topCountBadgeText: {
+    color: '#24050A',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  topShiftBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    height: 34,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(16, 185, 129, 0.16)',
+    borderWidth: 1,
+    borderColor: 'rgba(16, 185, 129, 0.4)',
+  },
+  shiftGreenDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  topShiftText: {
+    color: '#A7F3D0',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  /* MOBILE SWITCHER */
+  mobileTabBar: {
+    flexDirection: 'row',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    padding: 6,
+    gap: 6,
+  },
+  mobileTabBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+  },
+  mobileTabBtnActive: {
+    backgroundColor: '#FDF2F4',
+    borderWidth: 1,
+    borderColor: '#52141C',
+  },
+  mobileTabText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#64748B',
+  },
+  mobileTabTextActive: {
+    color: '#52141C',
+    fontWeight: '900',
+  },
+
+  toastBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: '#ECFDF5',
+    borderBottomWidth: 1,
+    borderBottomColor: '#A7F3D0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  toastBannerText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#065F46',
+  },
+
+  /* 2. WORKSPACE */
+  workspace: {
+    flex: 1,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+
+  /* LEFT CATEGORY RAIL */
+  categoryRail: {
+    width: 210,
+    backgroundColor: '#FFFFFF',
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+  },
+  categoryRailMobile: {
+    width: '100%',
+    height: 54,
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  categoryRailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  categoryRailTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.8,
+  },
+  categoryRailCount: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#52141C',
+    backgroundColor: '#FDF2F4',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  categoryRailScroll: {
+    padding: 8,
+    gap: 5,
+  },
+  categoryRailScrollMobile: {
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    gap: 9,
+  },
+  categoryItemMobile: {
+    paddingVertical: 7,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  categoryItemActive: {
+    backgroundColor: '#52141C',
+  },
+  categoryIconBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#FDF2F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  categoryIconBoxActive: {
+    backgroundColor: '#D4AF37',
+  },
+  categoryName: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  categoryNameActive: {
+    color: '#FFFFFF',
+    fontWeight: '900',
+  },
+  categoryBadge: {
+    backgroundColor: '#E2E8F0',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  categoryBadgeActive: {
+    backgroundColor: 'rgba(212, 175, 55, 0.25)',
+  },
+  categoryBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  categoryBadgeTextActive: {
+    color: '#F3D179',
+  },
+
+  /* CENTER DISH CATALOG */
+  catalogPane: {
+    flex: 1,
+    backgroundColor: '#F8FAFC',
+  },
+  catalogFilterBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    gap: 10,
+  },
+  activeCatTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  activeCatCountPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  activeCatCountText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  cuisinePillsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  cuisinePill: {
     paddingHorizontal: 11,
     paddingVertical: 5,
     borderRadius: 20,
-    gap: 6,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  shiftDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  shiftText: {
-    color: '#FFFFFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  iconSquareBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 9,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    backgroundColor: '#F1F5F9',
     borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        cursor: 'pointer',
-      } as any
-    }),
+    borderColor: '#E2E8F0',
   },
-  userSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
+  cuisinePillActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
   },
-  roleLabel: {
-    color: 'rgba(255, 255, 255, 0.85)',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  userAvatarCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(229, 184, 59, 0.22)',
-    borderWidth: 1.5,
-    borderColor: '#E5B83B',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 8px rgba(229, 184, 59, 0.3)',
-      } as any
-    }),
-  },
-  userAvatarText: {
-    color: '#FFE082',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-
-  /* --------------------------------------------------------
-     MOBILE SWITCHER
-     -------------------------------------------------------- */
-  mobileSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(38, 5, 9, 0.96)',
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.35)',
-  },
-  mobileSwitchBtn: {
-    flex: 1,
-    paddingVertical: 9,
-    alignItems: 'center',
-  },
-  mobileSwitchBtnActive: {
-    borderBottomWidth: 3,
-    borderBottomColor: '#E5B83B',
-  },
-  mobileSwitchText: {
-    color: 'rgba(255,255,255,0.6)',
+  cuisinePillText: {
     fontSize: 12,
     fontWeight: '700',
+    color: '#475569',
   },
-  mobileSwitchTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-
-  /* --------------------------------------------------------
-     2. MAIN WORKSPACE
-     -------------------------------------------------------- */
-  mainWorkspace: {
-    flex: 1,
-    flexDirection: 'row',
+  cuisinePillTextActive: {
+    color: '#F3D179',
   },
 
-  /* --------------------------------------------------------
-     LEFT: CATEGORIES (2-COL FROSTED GLASS TILES)
-     -------------------------------------------------------- */
-  categorySidebar: {
-    width: 200,
-    backgroundColor: '#190306',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        backgroundImage: 'radial-gradient(circle at 50% 15%, rgba(212, 175, 55, 0.08) 0%, transparent 70%), linear-gradient(180deg, rgba(32, 5, 10, 0.98) 0%, rgba(18, 2, 5, 0.98) 100%)',
-        boxShadow: '4px 0 24px rgba(0, 0, 0, 0.25)',
-      } as any
-    }),
-    padding: 10,
-    borderRightWidth: 1.5,
-    borderRightColor: 'rgba(212, 175, 55, 0.28)',
+  dishGridContent: {
+    padding: 12,
   },
-  categorySidebarMobile: {
-    width: '100%',
-    height: 76,
-    minHeight: 76,
-    maxHeight: 76,
-    flexShrink: 0,
-    paddingVertical: 7,
-    paddingHorizontal: 10,
-    borderRightWidth: 0,
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.25)',
-  },
-  categoryHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-    paddingHorizontal: 2,
-  },
-  categoryTitleGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  categoryTitleIconOrb: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  categoryHeading: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#E5B83B',
-    letterSpacing: 1.1,
-  },
-  categoryCountPill: {
-    backgroundColor: 'rgba(212, 175, 55, 0.18)',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-  },
-  categoryCountPillText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FDE68A',
-  },
-  categoryViewSwitcher: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderRadius: 7,
-    padding: 2,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.12)',
-    gap: 2,
-  },
-  viewSwitchBtn: {
-    width: 22,
-    height: 20,
-    borderRadius: 5,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  viewSwitchBtnActive: {
-    backgroundColor: '#E5B83B',
-  },
-  quickFindBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.55)',
-    borderRadius: 22,
-    paddingHorizontal: 7,
-    paddingRight: 9,
-    height: 38,
-    marginBottom: 10,
-    gap: 7,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        boxShadow: '0 3px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
-        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any
-    }),
-  },
-  quickFindBoxFocused: {
-    borderColor: '#D4AF37',
-    backgroundColor: '#FFFFFF',
-    transform: [{ scale: 1.03 }, { translateY: -1.5 }],
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 24px rgba(212, 175, 55, 0.4), 0 0 0 2.5px rgba(212, 175, 55, 0.55)',
-      } as any
-    }),
-  },
-  quickFindIconOrb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickFindInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#1E293B',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 2,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        outlineWidth: 0,
-      } as any
-    }),
-  },
-  categoriesScroll: {
-    flex: 1,
-  },
-  categoriesContainer: {
-    paddingBottom: 10,
-  },
-  categoriesScrollMobile: {
-    flexDirection: 'row',
-    gap: 8,
-    paddingHorizontal: 4,
-    paddingRight: 16,
-    paddingBottom: 0,
-    alignItems: 'center',
-  },
-  categoriesGrid: {
+  dishGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 7,
-  },
-  categoriesList: {
-    flexDirection: 'column',
-    gap: 6,
-  },
-  categoryTile: {
-    width: '48%',
-    height: 72,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(212, 175, 55, 0.18)',
-    borderRadius: 12,
-    padding: 7,
-    justifyContent: 'space-between',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 3px 10px rgba(0,0,0,0.22), inset 0 1px 0 rgba(255,255,255,0.06)',
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any
-    }),
-  },
-  categoryTileMobile: {
-    width: 'auto',
-    minWidth: 108,
-    height: 60,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 12,
-  },
-  categoryTileActive: {
-    backgroundColor: '#E5B83B',
-    borderColor: '#FFE082',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
-        boxShadow: '0 8px 22px rgba(229, 184, 59, 0.45), inset 0 1px 0 rgba(255,255,255,0.8)',
-        transform: 'translateY(-1.5px)',
-      } as any
-    }),
-  },
-  tileTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  tileIconOrb: {
-    width: 25,
-    height: 25,
-    borderRadius: 7,
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tileIconOrbActive: {
-    backgroundColor: 'rgba(30, 41, 59, 0.15)',
-    borderColor: 'rgba(30, 41, 59, 0.3)',
-  },
-  tileCountBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 8,
-  },
-  tileCountBadgeActive: {
-    backgroundColor: '#1E293B',
-    borderColor: '#1E293B',
-  },
-  tileCountText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FDE68A',
-  },
-  tileCountTextActive: {
-    color: '#F8FAFC',
-  },
-  categoryTileText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#F1F5F9',
-    textAlign: 'left',
-    letterSpacing: 0.3,
-  },
-  categoryTileTextActive: {
-    color: '#1E293B',
-    fontWeight: '900',
-  },
-  categoryListRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    height: 44,
-    backgroundColor: 'rgba(255, 255, 255, 0.05)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(212, 175, 55, 0.18)',
-    borderRadius: 10,
-    paddingHorizontal: 9,
-    gap: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.06)',
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any
-    }),
-  },
-  categoryListRowActive: {
-    backgroundColor: '#E5B83B',
-    borderColor: '#FFE082',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #F3C44E 0%, #D4AF37 55%, #B3861E 100%)',
-        boxShadow: '0 6px 18px rgba(229, 184, 59, 0.4), inset 0 1px 0 rgba(255,255,255,0.8)',
-        transform: 'translateX(3px)',
-      } as any
-    }),
-  },
-  listIconOrb: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  listIconOrbActive: {
-    backgroundColor: 'rgba(30, 41, 59, 0.15)',
-    borderColor: 'rgba(30, 41, 59, 0.3)',
-  },
-  categoryListText: {
-    flex: 1,
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#F1F5F9',
-    letterSpacing: 0.3,
-  },
-  categoryListTextActive: {
-    color: '#1E293B',
-    fontWeight: '900',
-  },
-  listCountBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 10,
-  },
-  listCountBadgeActive: {
-    backgroundColor: '#1E293B',
-    borderColor: '#1E293B',
-  },
-  listCountText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: '#FDE68A',
-  },
-  listCountTextActive: {
-    color: '#F8FAFC',
-  },
-  categoryBottomPanel: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(212, 175, 55, 0.22)',
-    gap: 6,
-  },
-  bottomStatusHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 2,
-  },
-  bottomStatusTitle: {
-    fontSize: 8.5,
-    fontWeight: '900',
-    color: '#A38B7C',
-    letterSpacing: 0.9,
-  },
-  bottomStatusCount: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#E5B83B',
-  },
-  bottomActiveCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.45)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    borderRadius: 9,
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-    gap: 7,
-  },
-  bottomActiveIconOrb: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  bottomActiveName: {
-    flex: 1,
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: 0.4,
-  },
-  bottomResetPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(220, 38, 38, 0.85)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 2,
-  },
-  bottomResetText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FFFFFF',
-  },
-
-  /* --------------------------------------------------------
-     CENTER: MENU DISHES GRID (FROSTED GLASS)
-     -------------------------------------------------------- */
-  centerCatalog: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  catalogSubheader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.78)',
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.22)',
-    gap: 12,
-    zIndex: 10,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 2px 14px rgba(0, 0, 0, 0.03), inset 0 -1px 0 rgba(255, 255, 255, 0.8)',
-      } as any
-    }),
-  },
-  catalogTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  catalogTitle: {
-    fontSize: 16,
-    fontWeight: '900',
-    color: '#32070D',
-    letterSpacing: 0.3,
-  },
-  runningOrdersPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(254, 243, 199, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.5)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 16,
-    gap: 6,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 8px rgba(245, 158, 11, 0.15)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  runningOrdersText: {
-    color: '#B45309',
-    fontSize: 11,
-    fontWeight: '800',
-  },
-  runningOrdersBadge: {
-    backgroundColor: '#F59E0B',
-    paddingHorizontal: 6,
-    paddingVertical: 1,
-    borderRadius: 8,
-  },
-  runningOrdersBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 9.5,
-    fontWeight: '900',
-  },
-  searchPillBox: {
-    flex: 1,
-    minWidth: 280,
-    maxWidth: 440,
-    backgroundColor: 'rgba(255, 255, 255, 0.96)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.48)',
-    borderRadius: 28,
-    height: 44,
-    paddingHorizontal: 8,
-    paddingRight: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
-        boxShadow: '0 4px 18px rgba(82, 20, 28, 0.07), 0 2px 8px rgba(212, 175, 55, 0.15), inset 0 1px 0 rgba(255, 255, 255, 1)',
-        transition: 'all 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any
-    }),
-  },
-  searchPillBoxFocused: {
-    borderColor: '#D4AF37',
-    backgroundColor: '#FFFFFF',
-    transform: [{ scale: 1.025 }, { translateY: -2 }],
-    ...Platform.select({
-      web: {
-        boxShadow: '0 10px 28px rgba(212, 175, 55, 0.32), 0 0 0 2.5px rgba(212, 175, 55, 0.55)',
-      } as any
-    }),
-  },
-  searchIconOrb: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchIconOrbFocused: {
-    backgroundColor: 'rgba(212, 175, 55, 0.2)',
-    borderColor: '#D4AF37',
-  },
-  searchPillInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#1E293B',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    paddingHorizontal: 4,
-    paddingVertical: 0,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        outlineWidth: 0,
-      } as any
-    }),
-  },
-  searchClearBtn: {
-    padding: 4,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  searchShortcutBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(254, 243, 199, 0.85)',
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(245, 158, 11, 0.15)',
-      } as any
-    }),
-  },
-  searchShortcutText: {
-    color: '#92400E',
-    fontSize: 9.5,
-    fontWeight: '900',
-    letterSpacing: 0.8,
-  },
-  dishesScrollView: {
-    flex: 1,
-  },
-  dishesGridContainer: {
-    padding: 14,
-  },
-  dishesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   dishCard: {
-    width: '23.4%',
-    minWidth: 160,
+    width: '23.6%',
+    minWidth: 150,
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 10,
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 154,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 232, 240, 0.95)',
-    position: 'relative',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.04), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.16, 1, 0.3, 1)',
-      } as any
-    }),
-  },
-  dishCardInCart: {
-    borderColor: '#D4AF37',
-    borderWidth: 2,
-    backgroundColor: 'rgba(255, 251, 235, 0.95)',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 10px 24px rgba(212, 175, 55, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95)',
-        transform: 'translateY(-2px)',
-      } as any
-    }),
-  },
-  inCartBadge: {
-    position: 'absolute',
-    top: -7,
-    right: -7,
-    backgroundColor: '#52141C',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
-    zIndex: 5,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(82, 20, 28, 0.3)',
-      } as any
-    }),
-  },
-  inCartBadgeText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  dishCardImageWrapper: {
-    width: '100%',
-    height: 94,
     borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
     overflow: 'hidden',
+  },
+  dishCardActive: {
+    borderColor: '#52141C',
+    backgroundColor: '#FFFDF9',
+  },
+  dishImgBox: {
+    height: 92,
+    backgroundColor: '#1E080C',
     position: 'relative',
-    marginBottom: 8,
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.7)',
   },
-  dishCardImage: {
+  dishImg: {
     width: '100%',
     height: '100%',
   },
-  dishCardPlaceholderBox: {
-    width: '100%',
-    height: '100%',
+  dishImgFallback: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(254, 243, 199, 0.35)',
   },
-  dishCardBadgeTag: {
+  dishPriceTag: {
     position: 'absolute',
-    top: 5,
-    right: 5,
-    backgroundColor: 'rgba(82, 20, 28, 0.92)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    bottom: 6,
+    left: 6,
+    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
-    zIndex: 4,
   },
-  dishCardBadgeText: {
-    color: '#D4AF37',
-    fontSize: 8.5,
+  dishPriceTagActive: {
+    backgroundColor: '#D4AF37',
+  },
+  dishPriceTagText: {
+    color: '#FFFFFF',
+    fontSize: 12,
     fontWeight: '900',
-    letterSpacing: 0.3,
   },
-  dishSoldOutOverlay: {
+  dishQtyBadge: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: '#52141C',
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  dishQtyBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11.5,
+    fontWeight: '900',
+  },
+  soldOutOverlay: {
     position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: 'rgba(15, 23, 42, 0.72)',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 6,
   },
-  dishSoldOutText: {
+  soldOutOverlayText: {
     color: '#FFFFFF',
-    fontWeight: '900',
     fontSize: 11,
-    letterSpacing: 1,
+    fontWeight: '900',
     backgroundColor: '#DC2626',
     paddingHorizontal: 8,
     paddingVertical: 3,
-    borderRadius: 4,
+    borderRadius: 5,
   },
-  dishCardChipsRow: {
-    position: 'absolute',
-    top: 5,
-    left: 5,
-    right: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    zIndex: 4,
-    flexWrap: 'wrap',
-  },
-  dishCardRegionChip: {
-    backgroundColor: 'rgba(82, 20, 28, 0.88)',
-    borderRadius: 6,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-      } as any,
-    }),
-  },
-  dishCardRegionText: {
-    fontSize: 8,
-    fontWeight: '800',
-    color: '#FDE68A',
-  },
-  dishCardCategoryChip: {
-    backgroundColor: 'rgba(241, 245, 249, 0.85)',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-      } as any
-    }),
-  },
-  dishCardCategory: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  dishCardTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1E293B',
-    textAlign: 'center',
-    lineHeight: 17,
-    marginVertical: 4,
-  },
-  dishCardPricePill: {
-    backgroundColor: 'rgba(254, 243, 199, 0.75)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 12,
-    marginTop: 6,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(6px)',
-        WebkitBackdropFilter: 'blur(6px)',
-        boxShadow: '0 2px 6px rgba(245, 158, 11, 0.1)',
-      } as any
-    }),
-  },
-  dishCardPricePillActive: {
-    backgroundColor: '#52141C',
-    borderColor: '#52141C',
-  },
-  dishCardPriceText: {
-    fontSize: 12.5,
-    fontWeight: '900',
-    color: '#92400E',
-  },
-  dishCardPriceTextActive: {
-    color: '#FFFFFF',
-  },
-  noItemsBox: {
-    width: '100%',
-    padding: 50,
-    alignItems: 'center',
-  },
-  noItemsText: {
-    color: '#94A3B8',
-    marginTop: 8,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  /* --------------------------------------------------------
-     RIGHT: CURRENT CART (EXPANDED USER-FRIENDLY SPEC)
-     -------------------------------------------------------- */
-  cartSidebar: {
-    width: 430,
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 1.5,
-    borderLeftColor: 'rgba(212, 175, 55, 0.3)',
-    display: 'flex',
-    flexDirection: 'column',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
-        boxShadow: '-6px 0 32px rgba(0, 0, 0, 0.06), inset 1px 0 0 rgba(255, 255, 255, 0.9)',
-      } as any
-    }),
-  },
-  cartSidebarMobile: {
-    flex: 1,
-    width: '100%',
-    borderLeftWidth: 0,
-  },
-  cartHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 13,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.85)',
-    backgroundColor: '#FFFFFF',
-  },
-  cartHeaderIconCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#52141C',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.4)',
-  },
-  cartHeaderTitle: {
-    fontSize: 15,
-    fontWeight: '900',
-    color: '#0F172A',
-    letterSpacing: 0.2,
-  },
-  cartHeaderSub: {
-    fontSize: 10.5,
-    color: '#64748B',
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  cartCountPill: {
-    backgroundColor: '#52141C',
-    paddingHorizontal: 7,
-    paddingVertical: 1.5,
-    borderRadius: 10,
-  },
-  cartCountText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '900',
-  },
-  cartResetBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(254, 242, 242, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(254, 202, 202, 0.8)',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  cartResetBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  orderTypeTabs: {
-    flexDirection: 'row',
-    backgroundColor: '#F1F5F9',
-    marginHorizontal: 14,
-    marginTop: 10,
-    borderRadius: 12,
-    padding: 3.5,
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.8)',
-    gap: 4,
-  },
-  orderTypeTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    borderRadius: 9,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  orderTypeTabActive: {
-    backgroundColor: '#52141C',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 3px 10px rgba(82, 20, 28, 0.28)',
-      } as any
-    }),
-  },
-  orderTypeTabText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  orderTypeTabTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  tableCabinBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 9,
-    marginHorizontal: 14,
-    marginTop: 9,
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-  },
-  statusIconOrb: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: 'rgba(217, 119, 6, 0.12)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.3)',
-  },
-  tableCabinLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  tableCabinPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 1,
-  },
-  tableCabinPillText: {
-    color: '#0F172A',
-    fontSize: 12,
-    fontWeight: '900',
-  },
-  tableCabinPillSub: {
-    color: '#B45309',
-    fontSize: 11,
-    fontWeight: '700',
-    marginLeft: 3,
-  },
-  changeTablePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  changeTablePillText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#334155',
-  },
-  cartColumnSubheader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    marginTop: 9,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.85)',
-    backgroundColor: 'rgba(248, 250, 252, 0.75)',
-  },
-  cartColLabel: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-    letterSpacing: 0.5,
-  },
-  cartItemsScroll: {
-    flex: 1,
-  },
-  cartItemsScrollContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    gap: 8,
-    flexGrow: 1,
-  },
-  emptyCartBox: {
-    flex: 1,
-    minHeight: 220,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-  },
-  emptyCartOrb: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
-    backgroundColor: 'rgba(241, 245, 249, 0.9)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.6)',
-  },
-  emptyCartText: {
-    color: '#475569',
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  emptyCartSub: {
-    color: '#94A3B8',
-    fontSize: 11.5,
-    fontWeight: '600',
-    marginTop: 4,
-    textAlign: 'center',
-  },
-  cartItemCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+  dishBody: {
     padding: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.95)',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(0, 0, 0, 0.03)',
-        transition: 'all 0.15s ease',
-      } as any
-    }),
-  },
-  cartItemTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
     justifyContent: 'space-between',
-    gap: 8,
-    marginBottom: 8,
+    flex: 1,
+    gap: 6,
   },
-  cartItemName: {
-    fontSize: 13,
+  dishTitle: {
+    fontSize: 13.5,
     fontWeight: '800',
     color: '#0F172A',
     lineHeight: 18,
   },
-  cartItemUnit: {
-    fontSize: 10.5,
-    color: '#64748B',
-    marginTop: 2,
-    fontWeight: '600',
-  },
-  cartItemTrashBtn: {
-    padding: 5,
-    borderRadius: 7,
-    backgroundColor: 'rgba(254, 242, 242, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(254, 202, 202, 0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  cartItemBottomRow: {
+  dishFooterRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(241, 245, 249, 0.9)',
   },
-  cartStepperBox: {
+  dishCategoryLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+    flex: 1,
+  },
+  dishAddIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dishAddIconActive: {
+    backgroundColor: '#52141C',
+  },
+  emptyCatalogBox: {
+    width: '100%',
+    paddingVertical: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyCatalogTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#475569',
+    marginTop: 10,
+  },
+  emptyCatalogSub: {
+    fontSize: 13,
+    color: '#94A3B8',
+    marginTop: 4,
+  },
+
+  /* RIGHT ORDER TICKET PANEL */
+  ticketPanel: {
+    width: 390,
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E2E8F0',
+    display: 'flex',
+    flexDirection: 'column',
+  },
+  mobileOrderTypeRow: {
+    flexDirection: 'row',
+    padding: 8,
+    gap: 6,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  mobileOrderTypeBtn: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 7,
+    alignItems: 'center',
+    backgroundColor: '#E2E8F0',
+  },
+  mobileOrderTypeBtnActive: {
+    backgroundColor: '#52141C',
+  },
+  mobileOrderTypeText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  mobileOrderTypeTextActive: {
+    color: '#F3D179',
+  },
+  ticketContextCard: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.85)',
-    padding: 2,
-    gap: 2,
+    gap: 6,
   },
-  cartStepBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 6,
+  contextSelectBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
     backgroundColor: '#FFFFFF',
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
+    borderColor: '#CBD5E1',
+  },
+  contextIconOrb: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      } as any
-    }),
   },
-  cartStepBtnAdd: {
+  contextSmallLabel: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.4,
+  },
+  contextMainValue: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  contextActionPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  contextActionPillText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  releaseTableIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 8,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  ticketItemsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  ticketItemsHeaderTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748B',
+    letterSpacing: 0.6,
+  },
+  clearCartLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  clearCartLinkText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#DC2626',
+  },
+
+  ticketItemsScroll: {
+    flex: 1,
+  },
+  ticketItemsContent: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    gap: 4,
+  },
+  emptyTicketBox: {
+    paddingVertical: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyTicketTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#64748B',
+    marginTop: 8,
+  },
+  emptyTicketSub: {
+    fontSize: 12,
+    color: '#94A3B8',
+    marginTop: 2,
+    textAlign: 'center',
+    maxWidth: 220,
+  },
+
+  /* COMPACT SINGLE-ROW TICKET ITEM */
+  ticketRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 7,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+    gap: 8,
+  },
+  ticketRowLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  ticketRowIndex: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#94A3B8',
+    width: 18,
+  },
+  ticketRowName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  ticketRowUnit: {
+    fontSize: 11,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  ticketRowRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  qtyStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  qtyBtn: {
+    width: 25,
+    height: 25,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  qtyBtnPlus: {
     backgroundColor: '#52141C',
-    borderColor: '#52141C',
+    borderTopRightRadius: 6,
+    borderBottomRightRadius: 6,
   },
-  cartStepQtyBox: {
-    minWidth: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
+  qtyValText: {
+    minWidth: 24,
+    textAlign: 'center',
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#0F172A',
   },
-  cartStepQty: {
+  ticketRowSubtotal: {
+    minWidth: 56,
+    textAlign: 'right',
     fontSize: 13,
     fontWeight: '900',
     color: '#0F172A',
   },
-  cartItemTotalBox: {
-    alignItems: 'flex-end',
-    minWidth: 90,
-  },
-  cartItemTotalLabel: {
-    fontSize: 9,
-    color: '#94A3B8',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  cartItemTotal: {
-    fontSize: 13.5,
-    fontWeight: '900',
-    color: '#52141C',
-  },
-  cartItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241, 245, 249, 0.8)',
+  removeRowBtn: {
+    padding: 2,
   },
 
-  /* --------------------------------------------------------
-     SETTLEMENT BOTTOM (CLEAN & SPACIOUS)
-     -------------------------------------------------------- */
-  cartBottomSettlement: {
-    borderTopWidth: 2,
-    borderTopColor: 'rgba(212, 175, 55, 0.45)',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
+  /* FOOTER & TOTALS */
+  ticketFooter: {
+    padding: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
     backgroundColor: '#FFFFFF',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -4px 18px rgba(0, 0, 0, 0.05)',
-      } as any
-    }),
+    gap: 10,
   },
-  mathSummaryLines: {
+  summaryBox: {
     gap: 4,
-    marginBottom: 8,
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
-    padding: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.85)',
   },
-  mathLine: {
+  summaryLine: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  mathLabel: {
-    fontSize: 11.5,
+  summaryLabel: {
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
   },
-  mathValue: {
-    fontSize: 12,
-    color: '#0F172A',
-    fontWeight: '700',
-  },
-  discountBadgePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(240, 253, 244, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(187, 247, 208, 0.95)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 3,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  discountBadgeText: {
-    fontSize: 10,
-    color: '#059669',
+  summaryVal: {
+    fontSize: 12.5,
+    color: '#1E293B',
     fontWeight: '800',
   },
-  payableCard: {
+  promoMiniBtn: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'rgba(82, 20, 28, 0.05)',
-    borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    marginBottom: 10,
+    gap: 3,
+    backgroundColor: '#ECFDF5',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
   },
-  payableLabelCol: {
-    justifyContent: 'center',
+  promoMiniBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#059669',
   },
-  payableLabel: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#52141C',
-    letterSpacing: 0.8,
-  },
-  payableSub: {
-    fontSize: 9.5,
-    color: '#64748B',
-    fontWeight: '600',
-    marginTop: 1,
-  },
-  payableAmount: {
-    fontSize: 22,
-    fontWeight: '900',
-    color: '#52141C',
-    letterSpacing: -0.5,
-  },
-  payableRow: {
+  grandTotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginTop: 4,
-    paddingTop: 4,
+    paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(226, 232, 240, 0.8)',
+    borderTopColor: '#E2E8F0',
   },
-  proceedPayBtn: {
-    backgroundColor: '#35080E',
-    paddingVertical: 13,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.5)',
-    ...Platform.select({
-      web: {
-        backgroundImage: 'linear-gradient(135deg, #35080E 0%, #5E121C 50%, #440810 100%)',
-        boxShadow: '0 6px 18px rgba(53, 8, 14, 0.35)',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any
-    }),
-  },
-  proceedPayBtnText: {
-    color: '#FFFFFF',
-    fontSize: 13.5,
+  grandTotalLabel: {
+    fontSize: 13,
     fontWeight: '900',
-    letterSpacing: 0.5,
+    color: '#0F172A',
   },
-  holdOrderBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(203, 213, 225, 0.95)',
-    paddingVertical: 10,
-    borderRadius: 12,
+  grandTotalAmount: {
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+
+  secondaryActionsRow: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-        cursor: 'pointer',
-      } as any
-    }),
+    gap: 8,
   },
-  unpaidBillBtn: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1.5,
-    borderColor: '#EF4444',
-    borderStyle: 'dashed',
-    paddingVertical: 9.5,
-    borderRadius: 11,
+  secActionBtn: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 14,
-    marginTop: 8,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(239, 68, 68, 0.08)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  unpaidBillBtnText: {
-    color: '#B91C1C',
-    fontSize: 12,
-    fontWeight: '800',
-    letterSpacing: 0.4,
-  },
-  holdOrderBtnText: {
-    color: '#52141C',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-
-  /* --------------------------------------------------------
-     MODALS (FROSTED GLASS SURFACES)
-     -------------------------------------------------------- */
-  keypadToggleChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+    gap: 6,
+    height: 38,
+    borderRadius: 9,
     borderWidth: 1,
+  },
+  secActionKot: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FCD34D',
+  },
+  secActionKotText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  secActionSlip: {
+    backgroundColor: '#F8FAFC',
     borderColor: '#CBD5E1',
   },
-  keypadToggleChipActive: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FDE68A',
-  },
-  keypadToggleChipText: {
-    fontSize: 11,
+  secActionSlipText: {
+    fontSize: 12.5,
     fontWeight: '800',
-    color: '#64748B',
+    color: '#334155',
   },
-  keypadToggleChipTextActive: {
-    color: '#92400E',
+  primaryPayBtn: {
+    height: 46,
+    borderRadius: 10,
+    backgroundColor: '#D4AF37',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
   },
-  modalOverlay: {
+  primaryPayBtnText: {
+    color: '#24050A',
+    fontSize: 13.5,
+    fontWeight: '900',
+    letterSpacing: 0.3,
+  },
+  payBtnF9Badge: {
+    backgroundColor: 'rgba(36, 5, 10, 0.14)',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  payBtnF9Text: {
+    color: '#24050A',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+
+  /* MOBILE FLOATING CART BAR */
+  mobileFloatingBar: {
+    position: 'absolute',
+    bottom: 12,
+    left: 12,
+    right: 12,
+    height: 52,
+    borderRadius: 12,
+    backgroundColor: '#24050A',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    borderWidth: 1.5,
+    borderColor: '#D4AF37',
+  },
+  mobileFloatingQtyCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#D4AF37',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mobileFloatingQtyText: {
+    color: '#24050A',
+    fontSize: 13,
+    fontWeight: '900',
+  },
+  mobileFloatingLabel: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  mobileFloatingTotal: {
+    color: '#F3D179',
+    fontSize: 15,
+    fontWeight: '900',
+  },
+
+  /* MODALS */
+  modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    backgroundColor: 'rgba(15, 23, 42, 0.6)',
     alignItems: 'center',
     justifyContent: 'center',
     padding: 16,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-      } as any
-    }),
   },
-  modalBox: {
+  modalCard: {
     width: '100%',
-    backgroundColor: 'rgba(255, 255, 255, 0.94)',
-    borderRadius: 20,
-    borderWidth: 1.5,
-    borderColor: 'rgba(255, 255, 255, 0.85)',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     overflow: 'hidden',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(24px)',
-        WebkitBackdropFilter: 'blur(24px)',
-        boxShadow: '0 20px 50px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.9)',
-      } as any
-    }),
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
   modalHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.9)',
-    backgroundColor: 'rgba(248, 250, 252, 0.85)',
-  },
-  modalHeaderTitle: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-  modalControlToolbar: {
+    borderBottomColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(226, 232, 240, 0.9)',
-    paddingHorizontal: 14,
-    paddingTop: 12,
-    paddingBottom: 10,
-    gap: 10,
-    zIndex: 100,
   },
-  modalToolbarTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 10,
-    zIndex: 101,
-  },
-  modalSearchBar: {
-    flex: 1,
-    minWidth: 180,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: '#CBD5E1',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 38,
-    gap: 6,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 1px 4px rgba(0, 0, 0, 0.04)',
-      } as any
-    }),
-  },
-  modalSearchBarFocused: {
-    borderColor: '#D4AF37',
-    backgroundColor: '#FFFFFF',
-    transform: [{ scale: 1.02 }, { translateY: -1.5 }],
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 24px rgba(212, 175, 55, 0.3), 0 0 0 2px rgba(212, 175, 55, 0.5)',
-      } as any
-    }),
-  },
-  modalSearchIconOrb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalSearchInput: {
-    flex: 1,
-    height: '100%',
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: '#1E293B',
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    paddingVertical: 0,
-    paddingHorizontal: 2,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        outlineWidth: 0,
-      } as any
-    }),
-  },
-  modalCountBadge: {
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.3)',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  modalCountBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  floorDropdownBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.55)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 38,
-    minWidth: 175,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-        transition: 'all 0.15s ease',
-      } as any
-    }),
-  },
-  floorDropdownBtnActive: {
-    borderColor: '#D4AF37',
-    backgroundColor: '#FFFBEB',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 10px rgba(212, 175, 55, 0.25)',
-      } as any
-    }),
-  },
-  floorDropdownBadge: {
-    backgroundColor: '#52141C',
-    borderRadius: 5,
-    paddingHorizontal: 5,
-    paddingVertical: 2,
-  },
-  floorDropdownBadgeText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  floorDropdownSelectedText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
-    maxWidth: 95,
-  },
-  floorDropdownCountPill: {
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 8,
-  },
-  floorDropdownCountText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  floorDropdownMenu: {
-    position: 'absolute',
-    top: 44,
-    right: 0,
-    width: 250,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: '#D4AF37',
-    padding: 6,
-    zIndex: 9999,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 12px 30px rgba(0, 0, 0, 0.18)',
-      } as any,
-      default: {
-        elevation: 12,
-      }
-    }),
-  },
-  floorDropdownMenuHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241, 245, 249, 0.9)',
-    marginBottom: 4,
-  },
-  floorDropdownMenuHeaderTitle: {
-    fontSize: 11,
-    fontWeight: '900',
-    color: '#52141C',
-    letterSpacing: 0.3,
-  },
-  floorDropdownOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    marginVertical: 1.5,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'background-color 0.1s ease',
-      } as any
-    }),
-  },
-  floorDropdownOptionActive: {
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.5)',
-  },
-  floorOptionBadge: {
-    backgroundColor: '#52141C',
-    borderRadius: 6,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    minWidth: 26,
-    alignItems: 'center',
-  },
-  floorOptionBadgeText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    letterSpacing: 0.3,
-  },
-  floorOptionName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  floorOptionNameActive: {
-    color: '#52141C',
-    fontWeight: '900',
-  },
-  floorOptionCountPill: {
-    backgroundColor: '#F1F5F9',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
-  },
-  floorOptionCountPillActive: {
-    backgroundColor: 'rgba(82, 20, 28, 0.12)',
-  },
-  floorOptionCountText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  floorOptionCountTextActive: {
-    color: '#52141C',
-    fontWeight: '900',
-  },
-  modalSubFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-    flexWrap: 'wrap',
-  },
-  seatingTypeFilterBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    backgroundColor: '#EDF2F7',
-    borderRadius: 8,
-    padding: 2.5,
-    gap: 3,
-  },
-  seatingTypeBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 6,
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any
-    }),
-  },
-  seatingTypeBtnActive: {
-    backgroundColor: '#52141C',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 4px rgba(82, 20, 28, 0.25)' } as any
-    }),
-  },
-  seatingTypeBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  seatingTypeBtnTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  statusFilterBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EDF2F7',
-    borderRadius: 8,
-    padding: 2.5,
-    gap: 3,
-  },
-  statusFilterBtn: {
-    paddingHorizontal: 10,
-    paddingVertical: 4.5,
-    borderRadius: 6,
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any
-    }),
-  },
-  statusFilterBtnActive: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    ...Platform.select({
-      web: { boxShadow: '0 1px 3px rgba(0,0,0,0.08)' } as any
-    }),
-  },
-  statusFilterBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  statusFilterBtnTextActive: {
-    color: '#0F172A',
-    fontWeight: '900',
-  },
-  emptyTablesModalBox: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 16,
-  },
-  emptyTablesModalTitle: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#475569',
-    marginTop: 8,
-  },
-  emptyTablesModalSub: {
-    fontSize: 11,
-    color: '#94A3B8',
-    marginTop: 2,
-    textAlign: 'center',
-  },
-  resetModalFiltersBtn: {
-    marginTop: 12,
-    backgroundColor: '#35080E',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-  },
-  resetModalFiltersBtnText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  tablesModalGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 10,
-  },
-  tableModalCard: {
-    width: '31%',
-    minWidth: 145,
-    flexGrow: 1,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    overflow: 'hidden',
-    position: 'relative',
-    paddingBottom: 8,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-        cursor: 'pointer',
-        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-      } as any
-    }),
-  },
-  tableModalCardAvail: {
-    borderColor: 'rgba(16, 185, 129, 0.45)',
-    backgroundColor: 'rgba(240, 253, 244, 0.55)',
-  },
-  tableModalCardBusy: {
-    borderColor: 'rgba(220, 38, 38, 0.45)',
-    backgroundColor: 'rgba(254, 242, 242, 0.55)',
-  },
-  tableModalCardMajlis: {
-    borderColor: 'rgba(217, 119, 6, 0.45)',
-    backgroundColor: 'rgba(255, 251, 235, 0.65)',
-  },
-  tableModalCardSelected: {
-    borderColor: '#D4AF37',
-    borderWidth: 2,
-    backgroundColor: '#FEF3C7',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 0 0 2px #D4AF37, 0 4px 14px rgba(212, 175, 55, 0.25)',
-      } as any
-    }),
-  },
-  tableCardTopStrip: {
-    height: 4,
-    width: '100%',
-  },
-  tableCardHeaderRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 8,
-    paddingTop: 8,
-  },
-  tableTypeIconOrb: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(82, 20, 28, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tableModalCardName: {
-    fontSize: 12.5,
+  modalTitle: {
+    fontSize: 16,
     fontWeight: '900',
     color: '#0F172A',
   },
-  tableStatusBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  tableStatusBadgeAvail: {
-    backgroundColor: '#DCFCE7',
-    borderColor: '#86EFAC',
-  },
-  tableStatusBadgeBilled: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#FDE68A',
-  },
-  tableStatusBadgeOccupied: {
-    backgroundColor: '#FEE2E2',
-    borderColor: '#FECACA',
-  },
-  tableStatusBadgeText: {
-    fontSize: 8.5,
-    fontWeight: '900',
-    letterSpacing: 0.4,
-  },
-  tableCardTagsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    marginTop: 6,
-    flexWrap: 'wrap',
-  },
-  tableModalCardFloorTag: {
-    backgroundColor: '#F1F5F9',
-    borderRadius: 5,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-  },
-  tableModalCardFloorTagText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#475569',
-  },
-  tableTypePill: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 5,
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-  },
-  tableTypePillText: {
-    fontSize: 9,
-    fontWeight: '800',
+  modalSub: {
+    fontSize: 12,
     color: '#64748B',
-  },
-  tableCardCapacityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    marginTop: 6,
-  },
-  tableCardCapacityText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  tableCardBillFooter: {
-    marginTop: 6,
-    marginHorizontal: 8,
-    paddingTop: 4,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(226, 232, 240, 0.7)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  tableCardBillText: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#DC2626',
-  },
-  tableCardServerText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-    color: '#8A7A70',
-    maxWidth: 90,
-  },
-  inputLabel: {
-    fontSize: 11.5,
-    fontWeight: '700',
-    color: '#475569',
-    marginBottom: 4,
-    marginTop: 8,
-  },
-  modalInput: {
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    fontSize: 12,
-    marginBottom: 8,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        outlineWidth: 0,
-      } as any
-    }),
-  },
-  addNewCustBar: {
-    backgroundColor: 'rgba(255, 241, 242, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(254, 205, 211, 0.9)',
-    paddingVertical: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  addNewCustBarText: {
-    color: '#BE123C',
-    fontSize: 11.5,
-    fontWeight: '800',
-  },
-  custRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 9,
-    backgroundColor: 'rgba(248, 250, 252, 0.85)',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    marginBottom: 6,
-  },
-  custRowName: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#0F172A',
-  },
-  custRowPhone: {
-    fontSize: 10.5,
-    color: '#64748B',
-  },
-  modalPrimaryBtn: {
-    backgroundColor: '#35080E',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  modalPrimaryBtnText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '800',
-  },
-  modalSecondaryBtn: {
-    backgroundColor: 'rgba(241, 245, 249, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
-    paddingVertical: 10,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  modalSecondaryBtnText: {
-    color: '#475569',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  checkoutTotalCard: {
-    backgroundColor: 'rgba(53, 8, 14, 0.96)',
-    borderRadius: 14,
-    padding: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(229, 184, 59, 0.35)',
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 16px rgba(53, 8, 14, 0.25)',
-      } as any
-    }),
-  },
-  checkoutTotalCardLabel: {
-    color: '#E5B83B',
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-  },
-  checkoutTotalCardVal: {
-    color: '#FFFFFF',
-    fontSize: 22,
-    fontWeight: '900',
     marginTop: 2,
   },
-  payTypeSelector: {
-    flexDirection: 'row',
-    backgroundColor: 'rgba(241, 245, 249, 0.85)',
-    borderRadius: 10,
-    padding: 3,
-  },
-  payTypePill: {
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 8,
-  },
-  payTypePillActive: {
-    backgroundColor: '#35080E',
-  },
-  payTypePillText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#64748B',
-  },
-  payTypePillTextActive: {
-    color: '#FFFFFF',
-  },
-  payAmountInput: {
-    flex: 1,
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    fontSize: 13,
-    fontWeight: '700',
-    paddingRight: 28,
-    ...Platform.select({
-      web: {
-        outlineStyle: 'none',
-        outlineWidth: 0,
-      } as any
-    }),
-  },
-  payInputClearBtn: {
-    position: 'absolute',
-    right: 8,
-    top: 9,
-  },
-  fullPaymentBtn: {
-    flexDirection: 'row',
+  modalCloseBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#35080E',
-    borderWidth: 1.5,
-    borderColor: '#D4AF37',
-    paddingVertical: 10,
-    borderRadius: 10,
-    marginBottom: 4,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        boxShadow: '0 2px 8px rgba(53, 8, 14, 0.25)',
-      } as any
-    }),
   },
-  fullPaymentBtnText: {
-    color: '#FBF8F2',
-    fontSize: 12.5,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
-  paymentInputSectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#64748B',
-    marginBottom: 6,
-  },
-  quickNotesRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-  },
-  quickNotesLabel: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#94A3B8',
-    marginRight: 2,
-  },
-  quickNoteChip: {
-    backgroundColor: '#F1F5F9',
-    borderWidth: 1,
-    borderColor: '#CBD5E1',
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderRadius: 6,
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any
-    }),
-  },
-  quickNoteChipText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#334155',
-  },
-  changeReturnCard: {
-    backgroundColor: '#ECFDF5',
-    borderWidth: 1.5,
-    borderColor: '#10B981',
-    borderRadius: 12,
+  tableModalFilters: {
     padding: 12,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  changeReturnTitle: {
-    color: '#047857',
-    fontSize: 11,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
-  changeReturnAmount: {
-    color: '#065F46',
-    fontSize: 24,
-    fontWeight: '900',
-    marginVertical: 2,
-  },
-  changeReturnSubtitle: {
-    color: '#059669',
-    fontSize: 10.5,
-    fontWeight: '600',
-  },
-  remainingCard: {
-    backgroundColor: '#FFFBEB',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    borderRadius: 10,
-    padding: 10,
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  remainingText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#92400E',
-  },
-  exactPaidCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F0FDF4',
-    borderWidth: 1,
-    borderColor: '#86EFAC',
-    borderRadius: 10,
-    padding: 9,
-    marginTop: 4,
-  },
-  exactPaidText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#166534',
-  },
-  ticketCancelBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    borderRadius: 8,
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any
-    }),
-  },
-  ticketCancelBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#DC2626',
-  },
-  clearAllTicketsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FCA5A5',
-    paddingHorizontal: 7,
-    paddingVertical: 2.5,
-    borderRadius: 6,
-  },
-  clearAllTicketsBtnText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#DC2626',
-  },
-  ticketCard: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    padding: 12,
-    marginBottom: 10,
-    ...Platform.select({
-      web: {
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 4px 14px rgba(0,0,0,0.05)',
-      } as any
-    }),
-  },
-  ticketCardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingBottom: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241, 245, 249, 0.9)',
-  },
-  ticketCardNumber: {
-    fontWeight: '900',
-    color: '#0F172A',
-    fontSize: 12.5,
-  },
-  ticketTablePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(254, 243, 199, 0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 3,
-  },
-  ticketTableText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  ticketStatusPill: {
-    paddingHorizontal: 8,
-    paddingVertical: 2.5,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  ticketStatusText: {
-    fontWeight: '800',
-    fontSize: 10,
-    letterSpacing: 0.3,
-  },
-  ticketMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-  },
-  ticketMetaText: {
-    fontSize: 11,
-    color: '#64748B',
-  },
-  ticketSubtotalText: {
-    fontSize: 13,
-    fontWeight: '900',
-    color: '#52141C',
-  },
-  ticketItemsList: {
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    borderRadius: 8,
-    padding: 8,
-    marginVertical: 4,
-    gap: 4,
-  },
-  ticketItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  ticketItemQty: {
-    width: 24,
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  ticketItemName: {
-    flex: 1,
-    fontSize: 11.5,
-    color: '#334155',
-    fontWeight: '600',
-  },
-  ticketItemPrice: {
-    fontSize: 11,
-    color: '#64748B',
-    fontWeight: '700',
-  },
-  ticketActionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(241, 245, 249, 0.9)',
-  },
-  ticketCartBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(241, 245, 249, 0.95)',
-    borderWidth: 1,
-    borderColor: 'rgba(203, 213, 225, 0.9)',
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 8,
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any
-    }),
-  },
-  ticketCartBtnText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#475569',
-  },
-  ticketBillBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#52141C',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.4)',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(82, 20, 28, 0.25)',
-        cursor: 'pointer',
-      } as any
-    }),
-  },
-  ticketBillBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  variantOptionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 6px rgba(0,0,0,0.03)',
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any
-    }),
-  },
-  variantDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#52141C',
-  },
-  variantOptionName: {
-    fontSize: 13,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  variantPricePill: {
-    backgroundColor: 'rgba(254, 243, 199, 0.8)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.4)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  variantPriceText: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#92400E',
-  },
-  promoCampaignCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 10,
-    borderRadius: 10,
-    backgroundColor: 'rgba(248, 250, 252, 0.9)',
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-  },
-  promoCampaignCardActive: {
-    borderColor: '#10B981',
-    backgroundColor: 'rgba(240, 253, 244, 0.9)',
-  },
-  promoCampaignTitle: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#1E293B',
-  },
-  promoCampaignSub: {
-    fontSize: 10.5,
-    color: '#64748B',
-    marginTop: 2,
-  },
-
-  /* --------------------------------------------------------
-     DUAL-SCREEN CFD & KEYBOARD SHORTCUT BADGES
-     -------------------------------------------------------- */
-  dualScreenBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.16)',
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any,
-    }),
-  },
-  dualScreenBtnText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#D4AF37',
-    letterSpacing: 0.3,
-  },
-  recentInvoicesCapsuleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.16)',
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-    paddingHorizontal: 11,
-    paddingVertical: 5.5,
-    borderRadius: 20,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any,
-    }),
-  },
-  recentInvoicesCapsuleText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#D4AF37',
-    letterSpacing: 0.3,
-  },
-  recentInvoicesBadge: {
-    backgroundColor: '#D4AF37',
-    paddingHorizontal: 5,
-    paddingVertical: 1,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  recentInvoicesBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#1F0408',
-  },
-  keyboardCapsuleBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(212, 175, 55, 0.14)',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 20,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.15s ease',
-      } as any,
-    }),
-  },
-  keyboardCapsuleText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#D4AF37',
-  },
-  keyInlinePill: {
-    backgroundColor: 'rgba(212, 175, 55, 0.25)',
-    paddingHorizontal: 5,
-    paddingVertical: 1.5,
-    borderRadius: 4,
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.4)',
-  },
-  keyInlinePillText: {
-    fontSize: 9.5,
-    fontWeight: '900',
-    color: '#FDE68A',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  tabKeyBadge: {
-    backgroundColor: 'rgba(0, 0, 0, 0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.12)',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    marginLeft: 4,
-  },
-  tabKeyBadgeActive: {
-    backgroundColor: 'rgba(255, 255, 255, 0.25)',
-    borderColor: 'rgba(255, 255, 255, 0.4)',
-  },
-  tabKeyBadgeText: {
-    fontSize: 9,
-    fontWeight: '800',
-    color: '#64748B',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  tabKeyBadgeTextActive: {
-    color: '#FFFFFF',
-  },
-  btnShortcutBadge: {
-    backgroundColor: 'rgba(255, 255, 255, 0.22)',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.45)',
-    borderRadius: 5,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-  },
-  btnShortcutBadgeText: {
-    fontSize: 10,
-    fontWeight: '900',
-    color: '#FFFFFF',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  keyBadgeTiny: {
-    backgroundColor: 'rgba(217, 119, 6, 0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.35)',
-    borderRadius: 4,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    marginLeft: 3,
-    marginRight: 3,
-  },
-  keyBadgeTinyText: {
-    fontSize: 9,
-    fontWeight: '900',
-    color: '#B45309',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-  },
-  shortcutSectionHeading: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#8A7A70',
-    letterSpacing: 1.1,
-    marginBottom: 8,
-    paddingBottom: 4,
+    gap: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#E2E8F0',
   },
-  shortcutItemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 7,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(241, 245, 249, 0.7)',
-  },
-  keyBadge: {
-    backgroundColor: '#1E293B',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3.5,
-    borderWidth: 1,
-    borderColor: '#334155',
-    minWidth: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  keyBadgeText: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#F8FAFC',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
-    letterSpacing: 0.5,
-  },
-  shortcutDescText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#334155',
-    flex: 1,
-    marginLeft: 12,
-  },
-  posRegionFilterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1.5,
-    borderBottomColor: 'rgba(212, 175, 55, 0.22)',
-    gap: 10,
-    zIndex: 9,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 2px 8px rgba(82, 20, 28, 0.03)',
-      } as any,
-    }),
-  },
-  posRegionFilterLead: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FAF5ED',
-    borderWidth: 1,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-    borderRadius: 20,
-    gap: 6,
-    flexShrink: 0,
-  },
-  posRegionLeadIconWrap: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#52141C',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  posRegionFilterLeadText: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#52141C',
-    letterSpacing: 0.6,
-  },
-  posRegionScroll: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingRight: 16,
-  },
-  posRegionChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 11,
-    paddingVertical: 5.5,
-    borderRadius: 20,
-    backgroundColor: '#FFFDF9',
-    borderWidth: 1.2,
-    borderColor: '#E7DEC8',
-    gap: 6,
-    ...Platform.select({
-      web: {
-        cursor: 'pointer',
-        transition: 'all 0.18s cubic-bezier(0.4, 0, 0.2, 1)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.03)',
-      } as any,
-      default: {
-        elevation: 1,
-      },
-    }),
-  },
-  posRegionChipActive: {
-    backgroundColor: '#52141C',
-    borderColor: '#D4AF37',
-    borderWidth: 1.5,
-    ...Platform.select({
-      web: {
-        boxShadow: '0 3px 12px rgba(82, 20, 28, 0.28), 0 0 0 1px rgba(212, 175, 55, 0.4)',
-        transform: 'translateY(-1px)',
-      } as any,
-      default: {
-        elevation: 3,
-      },
-    }),
-  },
-  posRegionEmoji: {
-    fontSize: 13,
-    lineHeight: 16,
-  },
-  posRegionChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3D2E24',
-    letterSpacing: 0.2,
-  },
-  posRegionChipTextActive: {
-    color: '#FFFFFF',
-    fontWeight: '900',
-  },
-  posRegionChipBadge: {
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    borderRadius: 10,
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    minWidth: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  posRegionChipBadgeActive: {
-    backgroundColor: '#D4AF37',
-  },
-  posRegionChipBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#6B4F3B',
-  },
-  posRegionChipBadgeTextActive: {
-    color: '#32070D',
-    fontWeight: '900',
-  },
-  mobileFloatingCartContainer: {
-    position: 'absolute',
-    bottom: 16,
-    left: 12,
-    right: 12,
-    zIndex: 99,
-  },
-  mobileFloatingCartBtn: {
-    backgroundColor: '#32070D',
-    borderRadius: 24,
-    borderWidth: 1.5,
-    borderColor: 'rgba(212, 175, 55, 0.45)',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 8px 24px rgba(50, 7, 13, 0.45), 0 2px 8px rgba(212, 175, 55, 0.25)',
-        cursor: 'pointer',
-      } as any,
-      default: {
-        elevation: 8,
-      },
-    }),
-  },
-  mobileFloatingCartLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  mobileFloatingCartBadge: {
-    backgroundColor: '#D4AF37',
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mobileFloatingCartBadgeText: {
-    color: '#32070D',
-    fontSize: 13,
-    fontWeight: '900',
-  },
-  mobileFloatingCartTitle: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '800',
-    letterSpacing: 0.2,
-  },
-  mobileFloatingCartSub: {
-    color: '#D4AF37',
-    fontSize: 11,
-    fontWeight: '600',
-  },
-  mobileFloatingCartRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  mobileFloatingCartTotal: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '900',
-  },
-  orderTakerModeToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5.5,
-    borderRadius: 8,
-    backgroundColor: 'rgba(255, 255, 255, 0.08)',
-    borderWidth: 1.2,
-    borderColor: 'rgba(212, 175, 55, 0.35)',
-    ...Platform.select({
-      web: { cursor: 'pointer' } as any,
-    }),
-  },
-  orderTakerModeToggleActive: {
-    backgroundColor: 'rgba(245, 158, 11, 0.18)',
-    borderColor: '#F59E0B',
-  },
-  orderTakerModeText: {
-    fontSize: 11,
-    fontWeight: '800',
-    color: '#E2E8F0',
-  },
-  orderTakerModeTextActive: {
-    color: '#FCD34D',
-    fontWeight: '900',
-  },
-  dishCardOrderPill: {
-    backgroundColor: 'rgba(245, 158, 11, 0.08)',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(217, 119, 6, 0.25)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 4,
-  },
-  dishCardOrderPillActive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.12)',
-    borderColor: '#10B981',
-  },
-  dishCardOrderText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  dishCardOrderTextActive: {
-    color: '#059669',
-    fontWeight: '900',
-  },
-  portionPill: {
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(82, 20, 28, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  portionPillText: {
-    fontSize: 11.5,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  orderTakerSummaryBox: {
-    backgroundColor: 'rgba(248, 250, 252, 0.95)',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(226, 232, 240, 0.9)',
-    padding: 10,
-    marginBottom: 10,
-    gap: 8,
-  },
-  orderTakerSummaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  orderTakerSummaryItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  orderTakerSummaryDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: 'rgba(203, 213, 225, 0.8)',
-  },
-  orderTakerSummaryLabel: {
-    fontSize: 9.5,
-    color: '#64748B',
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
-  },
-  orderTakerSummaryValue: {
-    fontSize: 14,
-    fontWeight: '900',
-    color: '#0F172A',
-    marginTop: 2,
-  },
-  orderTakerNoticeBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(254, 243, 199, 0.65)',
-    borderWidth: 1,
-    borderColor: 'rgba(245, 158, 11, 0.35)',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-  orderTakerNoticeText: {
-    fontSize: 10,
-    color: '#92400E',
-    fontWeight: '700',
-    flex: 1,
-  },
-  runningOrdersPillActive: {
-    backgroundColor: 'rgba(254, 243, 199, 0.98)',
-    borderColor: '#D97706',
-  },
-  sendKdsBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1.5,
-    borderColor: '#D97706',
-    borderRadius: 10,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    marginBottom: 7,
-  },
-  sendKdsBtnText: {
-    color: '#92400E',
-    fontSize: 12.5,
-    fontWeight: '900',
-    letterSpacing: 0.4,
-  },
-  kdsToastBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#ECFDF5',
-    borderBottomWidth: 1,
-    borderBottomColor: '#A7F3D0',
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  kdsToastText: {
-    fontSize: 12,
-    fontWeight: '800',
-    color: '#065F46',
-    flex: 1,
-  },
-  kdsLiveStripWrapper: {
-    backgroundColor: '#FFFBEB',
-    borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+  filterChip: {
     paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  kdsLiveStripHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 6,
-  },
-  kdsLiveDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#D97706',
-  },
-  kdsLiveStripTitle: {
-    fontSize: 10.5,
-    fontWeight: '900',
-    color: '#92400E',
-    letterSpacing: 0.6,
-  },
-  kdsLiveViewAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 6,
-    backgroundColor: 'rgba(82, 20, 28, 0.08)',
-  },
-  kdsLiveViewAllText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  kdsLiveStripScroll: {
-    gap: 8,
-    paddingRight: 8,
-  },
-  kdsStripCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FCD34D',
-    borderRadius: 10,
-    paddingHorizontal: 10,
     paddingVertical: 6,
-    minWidth: 235,
-    maxWidth: 285,
-  },
-  kdsStripTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-    marginBottom: 2,
-  },
-  kdsStripTarget: {
-    fontSize: 12,
-    fontWeight: '900',
-    color: '#1E293B',
-    flex: 1,
-  },
-  kdsStripStatusPill: {
-    paddingHorizontal: 6,
-    paddingVertical: 1.5,
-    borderRadius: 5,
-    borderWidth: 1,
-  },
-  kdsStripStatusText: {
-    fontSize: 9,
-    fontWeight: '900',
-    letterSpacing: 0.3,
-  },
-  kdsStripMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  kdsStripStation: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#B45309',
-  },
-  kdsStripMetaSep: {
-    fontSize: 10,
-    color: '#CBD5E1',
-  },
-  kdsStripTicketId: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  kdsStripMetaCount: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: '#334155',
-  },
-  kdsStripActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  kdsStripSlipBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    paddingHorizontal: 7,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-  kdsStripSlipText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#52141C',
-  },
-  kdsStripPayBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#52141C',
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    borderRadius: 7,
-  },
-  kdsStripPayText: {
-    fontSize: 10.5,
-    fontWeight: '800',
-    color: '#FFFFFF',
-  },
-  kdsFilterChip: {
-    paddingHorizontal: 10,
-    paddingVertical: 5,
     borderRadius: 8,
     backgroundColor: '#F1F5F9',
     borderWidth: 1,
     borderColor: '#E2E8F0',
   },
-  kdsFilterChipActive: {
+  filterChipActive: {
     backgroundColor: '#52141C',
     borderColor: '#52141C',
   },
-  kdsFilterChipText: {
-    fontSize: 11,
+  filterChipText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#475569',
   },
-  kdsFilterChipTextActive: {
+  filterChipTextActive: {
     color: '#FFFFFF',
   },
-  ticketStationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 6,
-    marginBottom: 4,
-  },
-  ticketStationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: '#FEF3C7',
+  modalSearchBox: {
+    height: 38,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#FDE68A',
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
+    borderColor: '#CBD5E1',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    gap: 8,
   },
-  ticketStationBadgeText: {
-    fontSize: 10,
-    fontWeight: '800',
-    color: '#92400E',
+  modalSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: '#0F172A',
   },
-  ticketPlacedTimeText: {
-    fontSize: 10,
-    fontWeight: '700',
+  tableGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    padding: 14,
+    gap: 10,
+  },
+  tablePickerCard: {
+    width: '31.5%',
+    minWidth: 160,
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F0FDF4',
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    gap: 4,
+  },
+  tablePickerCardBusy: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+  tablePickerCardSelected: {
+    borderColor: '#52141C',
+    borderWidth: 2,
+  },
+  tablePickerName: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  tableStatusDot: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+  },
+  tablePickerMeta: {
+    fontSize: 11.5,
     color: '#64748B',
-    marginLeft: 'auto',
+    fontWeight: '600',
   },
-  ticketSlipBtn: {
+  tablePickerStatus: {
+    fontSize: 12,
+    fontWeight: '800',
+    marginTop: 2,
+  },
+  inputLabel: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  textInputField: {
+    height: 40,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+  },
+  modalPrimaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#FEF3C7',
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    gap: 6,
+    backgroundColor: '#52141C',
+    paddingHorizontal: 16,
+    height: 40,
     borderRadius: 8,
   },
-  ticketSlipBtnText: {
-    fontSize: 11.5,
+  modalPrimaryBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
     fontWeight: '800',
-    color: '#92400E',
+  },
+  modalSecBtn: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    paddingHorizontal: 16,
+    height: 40,
+    borderRadius: 8,
+  },
+  modalSecBtnText: {
+    color: '#334155',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  custListRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  custListRowActive: {
+    backgroundColor: '#FDF2F4',
+  },
+  custListName: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  custListPhone: {
+    fontSize: 12,
+    color: '#64748B',
+  },
+  variantChoiceBtn: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  variantChoiceName: {
+    fontSize: 14.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  variantChoicePrice: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#52141C',
+  },
+  checkoutBody: {
+    flexDirection: 'row',
+    padding: 16,
+    gap: 16,
+  },
+  checkoutLeftCol: {
+    flex: 1.2,
+    gap: 12,
+  },
+  checkoutRightCol: {
+    flex: 1,
+    gap: 12,
+    justifyContent: 'space-between',
+  },
+  checkoutTotalBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#24050A',
+    padding: 14,
+    borderRadius: 12,
+  },
+  checkoutTotalLabel: {
+    color: '#F3D179',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  checkoutTotalItems: {
+    color: '#CBD5E1',
+    fontSize: 12,
+  },
+  checkoutTotalValue: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: '900',
+  },
+  paymentLineCard: {
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  paymentMethodTabs: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  payMethodTab: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  payMethodTabActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  payMethodTabText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  splitPayBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    borderColor: '#52141C',
+  },
+  splitPayBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#52141C',
+  },
+  quickCashRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  quickCashPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  quickCashText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  changeDueBanner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  confirmSettleBtn: {
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: '#D4AF37',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  confirmSettleBtnText: {
+    color: '#24050A',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+  runningOrderCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 10,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 8,
+    gap: 10,
+  },
+  runningOrderTitle: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  runningStatusPill: {
+    backgroundColor: '#FEF3C7',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  runningStatusText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  runningOrderItems: {
+    fontSize: 12.5,
+    color: '#475569',
+    marginTop: 2,
+  },
+  runningOrderAmount: {
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#52141C',
+    marginTop: 2,
+  },
+  runningActionBtn: {
+    paddingHorizontal: 10,
+    height: 34,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
-
