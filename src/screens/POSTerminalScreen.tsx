@@ -1,56 +1,56 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  useWindowDimensions,
-  StatusBar,
-  Image,
-} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  useRestaurantStore,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import FullscreenButton from '../components/FullscreenButton';
+import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
+import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
+import SeatingTypeIcon from '../components/SeatingTypeIcon';
+import SultanLogo from '../components/SultanLogo';
+import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
+import {
+  FLOOR_ORDER,
+  getTableFloor,
+  getTableSeatingType,
+  SeatingZoneType,
+  sortFloors,
+} from '../constants/floors';
+import {
+  CustomerDisplayState,
+  INITIAL_CFD_STATE,
+  publishCustomerDisplayState,
+  subscribeToCustomerDisplay,
+} from '../services/customerDisplaySync';
+import { broadcastImmediately } from '../services/syncService';
+import {
+  EventDiscount,
+  Invoice,
   MenuItem,
   OrderItem,
   Payment,
-  Invoice,
   useAuthStore,
   useDiscountStore,
-  EventDiscount,
+  useRestaurantStore,
 } from '../store';
-import { useShiftStore } from '../store/shiftStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions, type RolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
+import { useShiftStore } from '../store/shiftStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
 import { resolveMenuImageUri } from '../utils/menuImage';
-import { broadcastImmediately } from '../services/syncService';
-import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
-import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
-import SultanLogo from '../components/SultanLogo';
-import FullscreenButton from '../components/FullscreenButton';
-import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
-import {
-  publishCustomerDisplayState,
-  subscribeToCustomerDisplay,
-  CustomerDisplayState,
-  INITIAL_CFD_STATE,
-} from '../services/customerDisplaySync';
-import {
-  getTableFloor,
-  getTableSeatingType,
-  sortFloors,
-  FLOOR_ORDER,
-  SeatingZoneType,
-} from '../constants/floors';
-import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
 function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSettled'>): Invoice {
   const now = Date.now();
@@ -529,15 +529,15 @@ export default function POSTerminalScreen({
       status: hasItems ? 'active' : 'idle',
       cart: hasItems
         ? cart.map((item) => ({
-            id: item.id,
-            name: item.name,
-            price: item.price,
-            qty: item.qty,
-            notes: item.notes,
-            selectedVariant: (item as any).selectedVariant,
-            selectedAddons: (item as any).selectedAddons,
-            subtotal: item.price * item.qty,
-          }))
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          qty: item.qty,
+          notes: item.notes,
+          selectedVariant: (item as any).selectedVariant,
+          selectedAddons: (item as any).selectedAddons,
+          subtotal: item.price * item.qty,
+        }))
         : [],
       itemCount: hasItems ? cart.reduce((s, i) => s + i.qty, 0) : 0,
       subTotal: hasItems ? subTotal : 0,
@@ -565,7 +565,7 @@ export default function POSTerminalScreen({
           isPosActive: false,
           status: 'idle',
         });
-      } catch {}
+      } catch { }
     };
   }, []);
 
@@ -577,7 +577,7 @@ export default function POSTerminalScreen({
     }
     const currentState = getCurrentCfdState();
     publishCustomerDisplayState(currentState);
-    const unsubscribe = subscribeToCustomerDisplay(() => {}, () => getCurrentCfdState());
+    const unsubscribe = subscribeToCustomerDisplay(() => { }, () => getCurrentCfdState());
     return () => unsubscribe();
   }, [cart, subTotal, discountVal, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, user?.name]);
 
@@ -826,8 +826,8 @@ export default function POSTerminalScreen({
     const derivedOrderType: 'dine-in' | 'takeaway' | 'delivery' = isTable
       ? 'dine-in'
       : ticket.tableId?.toLowerCase() === 'delivery'
-      ? 'delivery'
-      : 'takeaway';
+        ? 'delivery'
+        : 'takeaway';
 
     const ticketSub = (ticket.items || []).reduce((sum, it) => sum + it.price * it.qty, 0);
     const ticketTax = ticketSub * effectiveTaxRate;
@@ -877,10 +877,10 @@ export default function POSTerminalScreen({
     const targetTableName = targetTable
       ? targetTable.name
       : selectedCustomerObj?.name
-      ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
-      : orderType === 'delivery'
-      ? 'Delivery'
-      : 'Takeaway';
+        ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
+        : orderType === 'delivery'
+          ? 'Delivery'
+          : 'Takeaway';
 
     const kotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
     cart.forEach((cartItem) => {
@@ -891,19 +891,19 @@ export default function POSTerminalScreen({
         const baseMenu = menuItems.find((m) => m.id === baseId || m.id === cartItem.id);
         const itemObj: MenuItem = baseMenu
           ? {
-              ...baseMenu,
-              id: cartItem.id,
-              name: cartItem.name,
-              price: cartItem.price,
-              station: cartItem.station || baseMenu.station || 'main',
-            }
+            ...baseMenu,
+            id: cartItem.id,
+            name: cartItem.name,
+            price: cartItem.price,
+            station: cartItem.station || baseMenu.station || 'main',
+          }
           : {
-              id: cartItem.id,
-              name: cartItem.name,
-              price: cartItem.price,
-              category: 'Mains',
-              station: cartItem.station || 'main',
-            };
+            id: cartItem.id,
+            name: cartItem.name,
+            price: cartItem.price,
+            category: 'Mains',
+            station: cartItem.station || 'main',
+          };
         kotItems.push({
           item: itemObj,
           qty: cartItem.qty - loadedQty,
@@ -1009,10 +1009,10 @@ export default function POSTerminalScreen({
     const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
     const targetTable = isTable
       ? tables.find(
-          (t) =>
-            t.id === ticket.tableId ||
-            (ticket.tableName && t.name.trim().toLowerCase() === ticket.tableName.trim().toLowerCase())
-        )
+        (t) =>
+          t.id === ticket.tableId ||
+          (ticket.tableName && t.name.trim().toLowerCase() === ticket.tableName.trim().toLowerCase())
+      )
       : null;
 
     if (targetTable) {
@@ -1065,10 +1065,10 @@ export default function POSTerminalScreen({
     const userRoleLabel = user?.role
       ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
       : role === 'admin'
-      ? 'Admin'
-      : role === 'floor_manager'
-      ? 'Floor Manager'
-      : 'Cashier';
+        ? 'Admin'
+        : role === 'floor_manager'
+          ? 'Floor Manager'
+          : 'Cashier';
     const currentUserName = user?.name
       ? user.name.includes(`(${userRoleLabel})`)
         ? user.name
@@ -1118,19 +1118,19 @@ export default function POSTerminalScreen({
         const baseMenu = menuItems.find((m) => m.id === cartItem.id || cartItem.id.startsWith(`${m.id}-`));
         const itemObj: MenuItem = baseMenu
           ? {
-              ...baseMenu,
-              id: cartItem.id,
-              name: cartItem.name,
-              price: cartItem.price,
-              station: cartItem.station || baseMenu.station || 'main',
-            }
+            ...baseMenu,
+            id: cartItem.id,
+            name: cartItem.name,
+            price: cartItem.price,
+            station: cartItem.station || baseMenu.station || 'main',
+          }
           : {
-              id: cartItem.id,
-              name: cartItem.name,
-              price: cartItem.price,
-              category: 'Mains',
-              station: cartItem.station || 'main',
-            };
+            id: cartItem.id,
+            name: cartItem.name,
+            price: cartItem.price,
+            category: 'Mains',
+            station: cartItem.station || 'main',
+          };
         unsentKotItems.push({ item: itemObj, qty: cartItem.qty - loadedQty });
       }
     });
@@ -1797,8 +1797,8 @@ export default function POSTerminalScreen({
                       {selectedCustomerObj
                         ? `${selectedCustomerObj.name} (${selectedCustomerObj.phone})`
                         : orderType === 'delivery'
-                        ? 'Select Delivery Customer *'
-                        : 'Walk-in Guest (Optional)'}
+                          ? 'Select Delivery Customer *'
+                          : 'Walk-in Guest (Optional)'}
                     </Text>
                   </View>
                   <View style={styles.contextActionPill}>
@@ -1915,8 +1915,8 @@ export default function POSTerminalScreen({
                           {selectedEventCampaign
                             ? selectedEventCampaign.title
                             : discountVal > 0
-                            ? 'Edit'
-                            : '+ Add'}
+                              ? 'Edit'
+                              : '+ Add'}
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2454,8 +2454,8 @@ export default function POSTerminalScreen({
                                 method === 'cash'
                                   ? 'cash-outline'
                                   : method === 'card'
-                                  ? 'card-outline'
-                                  : 'phone-portrait-outline'
+                                    ? 'card-outline'
+                                    : 'phone-portrait-outline'
                               }
                               size={15}
                               color={active ? '#FFFFFF' : '#475569'}
