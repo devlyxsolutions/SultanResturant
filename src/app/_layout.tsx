@@ -25,13 +25,19 @@ LogBox.ignoreLogs([
   'Firestore (12.19.0)',
   'Backend didn\'t respond within 10 seconds',
   'The client will operate in offline mode',
+  'Unknown event handler property',
+  'onResponderTerminate',
+  'onResponderGrant',
+  'onResponderRelease',
+  'onResponderMove',
+  'onStartShouldSetResponder',
 ]);
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Global Web Font Patch & Error Guard against external browser extension crashes, font timeouts & network stalls
 if (Platform.OS === 'web') {
-  // Suppress benign Firestore offline timeout warnings from popping up Expo LogBox overlay on web
+  // Suppress benign Firestore offline timeout warnings & react-native-svg responder warnings from popping up Expo LogBox overlay on web
   if (typeof console !== 'undefined' && console.error) {
     try {
       const originalConsoleError = console.error.bind(console);
@@ -40,9 +46,13 @@ if (Platform.OS === 'web') {
         if (
           msg.includes('Could not reach Cloud Firestore backend') ||
           msg.includes('@firebase/firestore') ||
-          (msg.includes('Firestore') && msg.includes('offline mode'))
+          (msg.includes('Firestore') && msg.includes('offline mode')) ||
+          msg.includes('Unknown event handler property') ||
+          msg.includes('onResponder') ||
+          msg.includes('onStartShouldSetResponder') ||
+          msg.includes('onMoveShouldSetResponder')
         ) {
-          // Benign offline fallback notice — do not pop up dev overlay
+          // Benign offline fallback or react-native-svg web prop notice — do not pop up dev overlay
           return;
         }
         return originalConsoleError(...args);
