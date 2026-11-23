@@ -134,6 +134,7 @@ export default function StaffManagementScreen({
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeRoleFilter, setActiveRoleFilter] = useState<string>('All');
+  const [activeAccessFilter, setActiveAccessFilter] = useState<'all' | 'has_access' | 'no_access'>('all');
   const [revealedPins, setRevealedPins] = useState<Record<string, boolean>>({});
 
   // Staff Modal State
@@ -170,26 +171,54 @@ export default function StaffManagementScreen({
   const kitchenCount = staff.filter((s) => s.role === 'Kitchen').length;
   const juiceBarCount = staff.filter((s) => s.role === 'JuiceBar').length;
 
+  const staffHasAccess = (s: StaffMember): boolean => {
+    if (s.hasSystemAccess === false) return false;
+    return Boolean(s.pin && s.pin.trim().length > 0);
+  };
+
+  const withAccessCount = staff.filter(staffHasAccess).length;
+  const withoutAccessCount = staff.filter((s) => !staffHasAccess(s)).length;
+
   // Role list for filters & selection
   const allRoleNames = Array.from(new Set(['All', ...roles.map((r) => r.name).filter(Boolean)]));
+
+  const getStaffCountByRole = (rName: string) => {
+    if (rName === 'All') return totalStaff;
+    return staff.filter((s) => {
+      if (rName.toLowerCase() === 'order taker' || rName.toLowerCase() === 'waiter') {
+        return (s.role || '').toLowerCase() === 'waiter' || (s.role || '').toLowerCase() === 'order taker';
+      }
+      return (s.role || '').toLowerCase() === rName.toLowerCase();
+    }).length;
+  };
 
   // Filtered Staff List
   const filteredStaff = staff.filter((s) => {
     const matchesRole =
       activeRoleFilter === 'All' ||
       s.role.toLowerCase() === activeRoleFilter.toLowerCase() ||
-      (activeRoleFilter === 'Order Taker' && s.role === 'Waiter');
+      (activeRoleFilter.toLowerCase() === 'order taker' &&
+        (s.role.toLowerCase() === 'waiter' || s.role.toLowerCase() === 'order taker'));
+
+    const hasAccess = staffHasAccess(s);
+    const matchesAccess =
+      activeAccessFilter === 'all' ||
+      (activeAccessFilter === 'has_access' && hasAccess) ||
+      (activeAccessFilter === 'no_access' && !hasAccess);
+
     const query = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !query ||
       s.name.toLowerCase().includes(query) ||
       (s.phone && s.phone.toLowerCase().includes(query)) ||
+      (s.username && s.username.toLowerCase().includes(query)) ||
       s.role.toLowerCase().includes(query) ||
-      (s.role === 'Waiter' && 'order taker'.includes(query)) ||
+      (s.role.toLowerCase() === 'waiter' && 'order taker'.includes(query)) ||
       s.shift.toLowerCase().includes(query) ||
       (s.assignedZone && s.assignedZone.toLowerCase().includes(query)) ||
       (s.assignedZones && s.assignedZones.some((z) => z.toLowerCase().includes(query)));
-    return matchesRole && matchesSearch;
+
+    return matchesRole && matchesAccess && matchesSearch;
   });
 
   const getRoleColor = (roleStr: string) => {
@@ -408,8 +437,8 @@ export default function StaffManagementScreen({
   if (role !== 'admin' && !can('canAccessStaff')) {
     return (
       <PermissionDeniedScreen
-        moduleName="Staff & HR / پیرول"
-        urduModuleName="ملازمین اور پیرول"
+        moduleName="Staff & HR Management"
+        urduModuleName="Staff & HR Management"
         requiredPermission="canAccessStaff"
         backRoute={backRoute}
       />
@@ -488,7 +517,7 @@ export default function StaffManagementScreen({
                 color={activeTab === 'attendance' ? '#140306' : BRAND.burgundy}
               />
               <Text style={[styles.viewTabText, activeTab === 'attendance' && styles.viewTabTextActive]}>
-                Daily Attendance (حاضری)
+                Daily Attendance
               </Text>
             </TouchableOpacity>
           )}
@@ -505,7 +534,7 @@ export default function StaffManagementScreen({
                 color={activeTab === 'payroll' ? '#140306' : BRAND.burgundy}
               />
               <Text style={[styles.viewTabText, activeTab === 'payroll' && styles.viewTabTextActive]}>
-                Salary & Payroll (تنخواہیں)
+                Salary & Payroll
               </Text>
             </TouchableOpacity>
           )}
@@ -550,15 +579,24 @@ export default function StaffManagementScreen({
                 </View>
               </View>
 
-              <View style={[styles.kpiCard, isMobile && styles.kpiCardMobile]}>
-                <View style={[styles.kpiIconWrapper, { backgroundColor: '#F4EFFE' }]}>
-                  <Ionicons name="restaurant" size={20} color="#5856D6" />
+              <TouchableOpacity
+                style={[
+                  styles.kpiCard,
+                  isMobile && styles.kpiCardMobile,
+                  activeAccessFilter === 'has_access' && { borderColor: '#10B981', backgroundColor: '#ECFDF5' },
+                ]}
+                onPress={() =>
+                  setActiveAccessFilter((prev) => (prev === 'has_access' ? 'all' : 'has_access'))
+                }
+              >
+                <View style={[styles.kpiIconWrapper, { backgroundColor: '#ECFDF5' }]}>
+                  <Ionicons name="key" size={20} color="#10B981" />
                 </View>
                 <View>
-                  <Text style={styles.kpiValue}>{waiterCount + kitchenCount + juiceBarCount}</Text>
-                  <Text style={styles.kpiLabel}>Floor & Kitchen Crew</Text>
+                  <Text style={styles.kpiValue}>{withAccessCount}</Text>
+                  <Text style={styles.kpiLabel}>With System Access</Text>
                 </View>
-              </View>
+              </TouchableOpacity>
             </View>
 
             {/* Search & Filters */}
@@ -586,6 +624,95 @@ export default function StaffManagementScreen({
                 )}
               </View>
 
+              {/* System Access Filter Bar */}
+              <View style={styles.accessFilterRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="shield-checkmark-outline" size={15} color={BRAND.burgundy} />
+                  <Text style={styles.accessFilterLabel}>SYSTEM ACCESS:</Text>
+                </View>
+
+                <View style={styles.accessPillsGroup}>
+                  <TouchableOpacity
+                    style={[
+                      styles.accessPill,
+                      activeAccessFilter === 'all' && styles.accessPillActive,
+                    ]}
+                    onPress={() => setActiveAccessFilter('all')}
+                  >
+                    <Text
+                      style={[
+                        styles.accessPillText,
+                        activeAccessFilter === 'all' && styles.accessPillTextActive,
+                      ]}
+                    >
+                      All ({totalStaff})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.accessPill,
+                      styles.accessPillWithAccess,
+                      activeAccessFilter === 'has_access' && styles.accessPillWithAccessActive,
+                    ]}
+                    onPress={() => setActiveAccessFilter('has_access')}
+                  >
+                    <Ionicons
+                      name="key"
+                      size={13}
+                      color={activeAccessFilter === 'has_access' ? '#FFFFFF' : '#15803D'}
+                    />
+                    <Text
+                      style={[
+                        styles.accessPillText,
+                        {
+                          color: activeAccessFilter === 'has_access' ? '#FFFFFF' : '#15803D',
+                          fontWeight: activeAccessFilter === 'has_access' ? '800' : '700',
+                        },
+                      ]}
+                    >
+                      Has Access ({withAccessCount})
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.accessPill,
+                      styles.accessPillNoAccess,
+                      activeAccessFilter === 'no_access' && styles.accessPillNoAccessActive,
+                    ]}
+                    onPress={() => setActiveAccessFilter('no_access')}
+                  >
+                    <Ionicons
+                      name="lock-closed"
+                      size={13}
+                      color={activeAccessFilter === 'no_access' ? '#FFFFFF' : '#64748B'}
+                    />
+                    <Text
+                      style={[
+                        styles.accessPillText,
+                        {
+                          color: activeAccessFilter === 'no_access' ? '#FFFFFF' : '#64748B',
+                          fontWeight: activeAccessFilter === 'no_access' ? '800' : '700',
+                        },
+                      ]}
+                    >
+                      No Access ({withoutAccessCount})
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {activeAccessFilter !== 'all' && (
+                  <TouchableOpacity
+                    style={styles.clearFilterBtn}
+                    onPress={() => setActiveAccessFilter('all')}
+                  >
+                    <Ionicons name="close-circle" size={14} color="#DC2626" />
+                    <Text style={styles.clearFilterText}>Reset Access</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.roleTabs}>
                 {allRoleNames.filter(Boolean).map((rName) => (
                   <TouchableOpacity
@@ -599,10 +726,7 @@ export default function StaffManagementScreen({
                         activeRoleFilter === rName && styles.roleTabTextActive,
                       ]}
                     >
-                      {formatRoleName(rName)}{' '}
-                      {rName === 'All'
-                        ? `(${totalStaff})`
-                        : `(${staff.filter((s) => s.role && s.role.toLowerCase() === rName.toLowerCase()).length})`}
+                      {formatRoleName(rName)} ({getStaffCountByRole(rName)})
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -985,7 +1109,7 @@ export default function StaffManagementScreen({
               {/* System Login Access Toggle (Yes / No) */}
               <View style={styles.formGroup}>
                 <Text style={styles.formLabel}>
-                  System Access (کیا اس ملازم کو سسٹم لاگ ان کی رسائی دینی ہے؟) *
+                  System Access (Allow this employee to log in to the system?) *
                 </Text>
                 <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
                   <TouchableOpacity
@@ -1022,7 +1146,7 @@ export default function StaffManagementScreen({
                         formHasSystemAccess ? { color: '#FFFFFF' } : { color: '#475569' },
                       ]}
                     >
-                      Yes (سسٹم ایکسیس دیں)
+                      Yes (Grant System Access)
                     </Text>
                   </TouchableOpacity>
 
@@ -1057,13 +1181,13 @@ export default function StaffManagementScreen({
                         !formHasSystemAccess ? { color: '#FFFFFF' } : { color: '#475569' },
                       ]}
                     >
-                      No (صرف اسٹاف ریکارڈ)
+                      No (Staff Record Only)
                     </Text>
                   </TouchableOpacity>
                 </View>
                 {!formHasSystemAccess && (
                   <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 6 }}>
-                    یہ ملازم سسٹم میں لاگ ان نہیں کر سکے گا (جیسے Sweeper, Dish Washer, Helper) — صرف اسٹاف ڈائریکٹری، حاضری اور تنخواہ کے ریکارڈ میں شامل ہوگا۔
+                    This employee will not be able to log in to the system (e.g. Sweeper, Dishwasher, Helper) — included only in staff directory, attendance, and payroll records.
                   </Text>
                 )}
               </View>
@@ -1083,7 +1207,7 @@ export default function StaffManagementScreen({
                   {/* Unique Login ID / Username */}
                   <View style={styles.formGroup}>
                     <Text style={[styles.formLabel, { color: '#065F46' }]}>
-                      Login ID / Username (منفرد لاگ ان آئی ڈی) *
+                      Login ID / Username (Unique Login ID) *
                     </Text>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: '#FFFFFF', borderColor: '#6EE7B7' }]}
@@ -1103,7 +1227,7 @@ export default function StaffManagementScreen({
                   <View style={[styles.formGroup, { marginBottom: 4 }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                       <Text style={[styles.formLabel, { color: '#065F46', marginBottom: 0 }]}>
-                        Password / 4-Digit Login PIN (پاس ورڈ / پن کوڈ) *
+                        Password / 4-Digit Login PIN *
                       </Text>
                       <TouchableOpacity
                         onPress={() => setFormPin(Math.floor(1000 + Math.random() * 9000).toString())}
@@ -1189,9 +1313,9 @@ export default function StaffManagementScreen({
               {/* Concurrent Device Limit (Shown ONLY when System Access = Yes) */}
               {formHasSystemAccess && (
                 <View style={styles.formGroup}>
-                  <Text style={styles.formLabel}>Max Concurrent Devices (اس اکاؤنٹ کی بیک وقت لاگ ان حد)</Text>
+                  <Text style={styles.formLabel}>Max Concurrent Devices (Session limit for this account)</Text>
                   <Text style={{ fontSize: 11, color: '#64748B', marginBottom: 6 }}>
-                    یہ حد صرف اس اکاؤنٹ پر لاگو ہوگی — دوسرے صارفین اور ماسٹر اکاؤنٹ مکمل طور پر الگ رہیں گے۔
+                    This limit applies only to this staff account — other accounts and master admin remain independent.
                   </Text>
                   <View style={styles.pillsRow}>
                     {[
@@ -1200,7 +1324,7 @@ export default function StaffManagementScreen({
                       { val: 2, label: '2 Devices' },
                       { val: 3, label: '3 Devices' },
                       { val: 5, label: '5 Devices' },
-                      { val: 999, label: 'Unlimited (لا محدود)' },
+                      { val: 999, label: 'Unlimited Devices' },
                     ].map((opt) => {
                       const isSelected = formMaxDevices === opt.val;
                       return (
@@ -1697,6 +1821,83 @@ const styles = StyleSheet.create({
     fontSize: 9.5,
     fontWeight: '900',
     letterSpacing: 0.8,
+  },
+  accessFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 10,
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 10,
+  },
+  accessFilterLabel: {
+    fontSize: 11.5,
+    fontWeight: '900',
+    color: BRAND.burgundy,
+    letterSpacing: 0.6,
+  },
+  accessPillsGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  accessPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  accessPillActive: {
+    backgroundColor: BRAND.burgundy,
+    borderColor: BRAND.burgundy,
+  },
+  accessPillWithAccess: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+  accessPillWithAccessActive: {
+    backgroundColor: '#16A34A',
+    borderColor: '#15803D',
+  },
+  accessPillNoAccess: {
+    backgroundColor: '#F8FAFC',
+    borderColor: '#CBD5E1',
+  },
+  accessPillNoAccessActive: {
+    backgroundColor: '#475569',
+    borderColor: '#334155',
+  },
+  accessPillText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  accessPillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  clearFilterBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FEF2F2',
+  },
+  clearFilterText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
   },
   roleTabs: {
     flexDirection: 'row',
