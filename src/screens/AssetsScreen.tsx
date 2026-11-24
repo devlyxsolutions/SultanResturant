@@ -30,6 +30,7 @@ import {
 } from '../store';
 import { formatDay, money } from '../utils/format';
 import { useRolePermissions } from '../store/roleStore';
+import { COMMON_ASSETS_BY_CATEGORY } from './SuppliersScreen';
 
 const LIGHT = {
   bg: '#F8F9FA',
@@ -168,12 +169,53 @@ export default function AssetsScreen({
     quantity: string;
     cost: string;
   };
+  const [lotSelectedCategory, setLotSelectedCategory] = useState<string>(assetCategories[0] || ASSET_CATEGORIES[0]);
   const [lotItems, setLotItems] = useState<LotItem[]>([
     { id: 'item-1', name: '', category: assetCategories[0] || ASSET_CATEGORIES[0], quantity: '1', cost: '' },
   ]);
   const [lotPaidAmount, setLotPaidAmount] = useState('0');
   const [lotPaymentMethod, setLotPaymentMethod] = useState<'cash' | 'online' | 'cheque'>('cash');
   const [lotNotes, setLotNotes] = useState('');
+
+  const categoryCatalogItems = useMemo(() => {
+    return COMMON_ASSETS_BY_CATEGORY[lotSelectedCategory] || [];
+  }, [lotSelectedCategory]);
+
+  const toggleOrAddItemToLot = (itemName: string, category: string) => {
+    const existingIdx = lotItems.findIndex((it) => it.name.trim().toLowerCase() === itemName.trim().toLowerCase());
+    if (existingIdx >= 0) {
+      if (lotItems.length > 1) {
+        setLotItems(lotItems.filter((_, idx) => idx !== existingIdx));
+      } else {
+        setLotItems([{ ...lotItems[0], name: '' }]);
+      }
+    } else {
+      if (lotItems.length === 1 && !lotItems[0].name.trim() && !lotItems[0].cost.trim()) {
+        setLotItems([{ id: `item-${Date.now()}-1`, name: itemName, category, quantity: '1', cost: '' }]);
+      } else {
+        setLotItems([
+          ...lotItems,
+          { id: `item-${Date.now()}-${lotItems.length + 1}`, name: itemName, category, quantity: '1', cost: '' },
+        ]);
+      }
+    }
+  };
+
+  const addAllItemsFromCategory = (category: string) => {
+    const items = COMMON_ASSETS_BY_CATEGORY[category] || [];
+    if (items.length === 0) return;
+    const newLotItems: LotItem[] = items.map((itemName, idx) => {
+      const existing = lotItems.find((it) => it.name.trim().toLowerCase() === itemName.trim().toLowerCase());
+      return {
+        id: existing ? existing.id : `item-${Date.now()}-${idx + 1}`,
+        name: itemName,
+        category,
+        quantity: existing ? existing.quantity : '1',
+        cost: existing ? existing.cost : '',
+      };
+    });
+    setLotItems(newLotItems);
+  };
 
   // Maintenance Form State
   const [maintCost, setMaintCost] = useState('');
@@ -259,7 +301,9 @@ export default function AssetsScreen({
     setModalMode(mode);
     setFormName('');
     setFormUrduName('');
-    setFormCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
+    const defaultCat = assetCategories[0] || ASSET_CATEGORIES[0];
+    setFormCategory(defaultCat);
+    setLotSelectedCategory(defaultCat);
     setFormCost('');
     setFormQty('1');
     setFormSupplierId('');
@@ -1322,14 +1366,131 @@ export default function AssetsScreen({
 
                   {/* Multi-Item Lot Items List */}
                   <View style={styles.lotSectionBox}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                      <Text style={styles.lotSectionTitle}>
-                        2. Invoice Asset Items ({lotItems.length})
-                      </Text>
-                      <Text style={{ fontSize: 12, fontWeight: '800', color: LIGHT.gold }}>
-                        Subtotal: {money(lotTotalBill)}
-                      </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View>
+                        <Text style={styles.lotSectionTitle}>
+                          2. Invoice Asset Items ({lotItems.length})
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: LIGHT.textDim, marginTop: 1 }}>
+                          کیٹیگری منتخب کریں اور سامان کی تعداد (Qty) اور قیمت (Price) درج کریں
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 10.5, color: LIGHT.textDim, fontWeight: '700' }}>TOTAL BILL</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: LIGHT.gold }}>
+                          {money(lotTotalBill)}
+                        </Text>
+                      </View>
                     </View>
+
+                    {/* Category Selector & Quick Preset Chips */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: LIGHT.burgundy }}>
+                          📁 Asset Category (اثاثہ کی کیٹیگری):
+                        </Text>
+                        {categoryCatalogItems.length > 0 && (
+                          <TouchableOpacity
+                            onPress={() => addAllItemsFromCategory(lotSelectedCategory)}
+                            style={{
+                              backgroundColor: LIGHT.burgundy,
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 4,
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <Ionicons name="duplicate-outline" size={13} color="#FFFFFF" />
+                            <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                              + Add All ({categoryCatalogItems.length}) Items
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Category Selection Dropdown */}
+                      <RoyalDropdown
+                        label="Active Category"
+                        icon="pricetag-outline"
+                        placeholder="Select category to view catalog..."
+                        options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
+                        value={lotSelectedCategory}
+                        onSelect={(cat) => setLotSelectedCategory(cat)}
+                        searchable
+                        triggerStyle={{
+                          backgroundColor: '#FFFFFF',
+                          borderColor: '#CBD5E1',
+                          borderWidth: 1,
+                          borderRadius: 8,
+                          paddingHorizontal: 10,
+                          paddingVertical: 7,
+                          minHeight: 38,
+                        }}
+                        style={{ marginBottom: 8, zIndex: 40 }}
+                      />
+
+                      {/* Category Preset Chips */}
+                      {categoryCatalogItems.length > 0 && (
+                        <View style={{ marginTop: 4 }}>
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>
+                            👇 کلک کر کے انوائس میں شامل کریں (Click to add {lotSelectedCategory} items):
+                          </Text>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {categoryCatalogItems.map((presetName) => {
+                              const isAdded = lotItems.some(
+                                (it) => it.name.trim().toLowerCase() === presetName.trim().toLowerCase()
+                              );
+                              return (
+                                <TouchableOpacity
+                                  key={presetName}
+                                  onPress={() => toggleOrAddItemToLot(presetName, lotSelectedCategory)}
+                                  style={[
+                                    {
+                                      paddingHorizontal: 8,
+                                      paddingVertical: 4,
+                                      borderRadius: 6,
+                                      backgroundColor: '#FFFFFF',
+                                      borderWidth: 1,
+                                      borderColor: '#CBD5E1',
+                                      flexDirection: 'row',
+                                      alignItems: 'center',
+                                      gap: 4,
+                                    },
+                                    isAdded && {
+                                      backgroundColor: '#DCFCE7',
+                                      borderColor: '#16A34A',
+                                    },
+                                  ]}
+                                  activeOpacity={0.75}
+                                >
+                                  <Ionicons
+                                    name={isAdded ? 'checkmark-circle' : 'add-circle-outline'}
+                                    size={13}
+                                    color={isAdded ? '#15803D' : LIGHT.burgundy}
+                                  />
+                                  <Text
+                                    style={[
+                                      { fontSize: 11, fontWeight: '600', color: '#334155' },
+                                      isAdded && { color: '#166534', fontWeight: '800' },
+                                    ]}
+                                  >
+                                    {presetName}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
+                    </View>
+
+                    {/* Active Lot Item Cards */}
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: LIGHT.ink, marginBottom: 8 }}>
+                      Invoice Items ({lotItems.filter((i) => i.name.trim()).length} Entered) — Qty & Price:
+                    </Text>
 
                     {lotItems.map((item, idx) => {
                       const itemQty = parseInt(item.quantity, 10) || 0;
@@ -1339,24 +1500,31 @@ export default function AssetsScreen({
                       return (
                         <View key={item.id} style={styles.lotItemCard}>
                           <View style={styles.lotItemCardHeader}>
-                            <View style={styles.lotItemNumberBadge}>
-                              <Text style={styles.lotItemNumberText}>#{idx + 1}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <View style={styles.lotItemNumberBadge}>
+                                <Text style={styles.lotItemNumberText}>#{idx + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: LIGHT.burgundy, backgroundColor: LIGHT.burgundySoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                {item.category || lotSelectedCategory}
+                              </Text>
                             </View>
-                            <Text style={styles.lotItemTotalPreview}>
-                              Total: {money(itemTotal)}
-                            </Text>
-                            {lotItems.length > 1 && (
-                              <TouchableOpacity
-                                onPress={() => setLotItems(lotItems.filter((it) => it.id !== item.id))}
-                                style={{ padding: 4 }}
-                              >
-                                <Ionicons name="trash-outline" size={16} color={LIGHT.rose} />
-                              </TouchableOpacity>
-                            )}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={styles.lotItemTotalPreview}>
+                                Total: {money(itemTotal)}
+                              </Text>
+                              {lotItems.length > 1 && (
+                                <TouchableOpacity
+                                  onPress={() => setLotItems(lotItems.filter((it) => it.id !== item.id))}
+                                  style={{ padding: 4 }}
+                                >
+                                  <Ionicons name="trash-outline" size={16} color={LIGHT.rose} />
+                                </TouchableOpacity>
+                              )}
+                            </View>
                           </View>
 
                           <View style={styles.inputGroup}>
-                            <Text style={styles.inputLabel}>Item Description / Asset Name *</Text>
+                            <Text style={styles.inputLabel}>Asset Name / Description *</Text>
                             <TextInput
                               style={styles.input}
                               placeholder="e.g. Dining Chairs Wooden, 4-Seater Table, Chiller"
@@ -1368,24 +1536,9 @@ export default function AssetsScreen({
                             />
                           </View>
 
-                          <View style={{ marginBottom: 10 }}>
-                            <RoyalDropdown
-                              label="Category"
-                              required
-                              icon="pricetag-outline"
-                              placeholder="Select category..."
-                              options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
-                              value={item.category}
-                              onSelect={(cat) => {
-                                setLotItems(lotItems.map((it) => (it.id === item.id ? { ...it, category: cat } : it)));
-                              }}
-                              searchable
-                            />
-                          </View>
-
                           <View style={styles.twoCol}>
                             <View style={[styles.inputGroup, { flex: 1, minWidth: 140 }]}>
-                              <Text style={styles.inputLabel}>Quantity (Units) *</Text>
+                              <Text style={styles.inputLabel}>Quantity (تعداد) *</Text>
                               <TextInput
                                 style={styles.input}
                                 placeholder="1"
@@ -1399,7 +1552,7 @@ export default function AssetsScreen({
                             </View>
 
                             <View style={[styles.inputGroup, { flex: 1, minWidth: 140 }]}>
-                              <Text style={styles.inputLabel}>Unit Purchase Cost (PKR) *</Text>
+                              <Text style={styles.inputLabel}>Unit Purchase Price (قیمت - PKR) *</Text>
                               <TextInput
                                 style={styles.input}
                                 placeholder="e.g. 4500"
@@ -1424,7 +1577,7 @@ export default function AssetsScreen({
                           {
                             id: `item-${Date.now()}-${lotItems.length + 1}`,
                             name: '',
-                            category: assetCategories[0] || ASSET_CATEGORIES[0],
+                            category: lotSelectedCategory,
                             quantity: '1',
                             cost: '',
                           },
@@ -1433,7 +1586,7 @@ export default function AssetsScreen({
                       activeOpacity={0.85}
                     >
                       <Ionicons name="add-circle-outline" size={18} color={LIGHT.burgundy} />
-                      <Text style={styles.addLotRowBtnText}>+ Add Another Asset Item to Invoice</Text>
+                      <Text style={styles.addLotRowBtnText}>+ Add Custom / Unlisted Asset Item</Text>
                     </TouchableOpacity>
                   </View>
 
@@ -1608,6 +1761,95 @@ export default function AssetsScreen({
                       activeOpacity={0.8}
                     >
                       <Ionicons name="folder-open-outline" size={18} color={LIGHT.burgundy} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Preset Item Chips for this category */}
+                  {(() => {
+                    const catItems = COMMON_ASSETS_BY_CATEGORY[formCategory] || [];
+                    if (catItems.length === 0) return null;
+                    return (
+                      <View style={{ marginTop: 6, marginBottom: 4 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: LIGHT.burgundy, marginBottom: 4 }}>
+                          👇 {formCategory} کے عام سامان (Click to pick name):
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 2 }}>
+                            {catItems.map((cName) => (
+                              <TouchableOpacity
+                                key={cName}
+                                style={{
+                                  backgroundColor: formName === cName ? '#FEF3C7' : '#F1F5F9',
+                                  borderColor: formName === cName ? '#F59E0B' : '#CBD5E1',
+                                  borderWidth: 1,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                }}
+                                onPress={() => setFormName(cName)}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: formName === cName ? '800' : '600',
+                                    color: formName === cName ? '#92400E' : '#334155',
+                                  }}
+                                >
+                                  {cName}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    );
+                  })()}
+
+                  {/* Multi-Item Assistant Banner */}
+                  <View
+                    style={{
+                      backgroundColor: '#FEF3C7',
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      borderRadius: 8,
+                      padding: 10,
+                      marginTop: 4,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E' }}>
+                        📦 Multiple items in {formCategory}?
+                      </Text>
+                      <Text style={{ fontSize: 10.5, color: '#78350F', marginTop: 1 }}>
+                        اس کیٹیگری کے سب سامان کی الگ الگ تعداد (Qty) اور قیمت (Price) ایک ساتھ درج کریں
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#B45309',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                      onPress={() => {
+                        setLotSelectedCategory(formCategory);
+                        addAllItemsFromCategory(formCategory);
+                        setModalMode('lot');
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="layers" size={13} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                        + Add All Items
+                      </Text>
                     </TouchableOpacity>
                   </View>
 

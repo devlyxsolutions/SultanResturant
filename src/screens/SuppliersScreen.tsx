@@ -75,7 +75,7 @@ const ASSET_THEMES: Record<
   'Other Capital Assets': { accent: '#64748B', bg: '#F1F5F9', text: '#334155', icon: 'cube-outline', urdu: 'دیگر کیپیٹل اثاثے' },
 };
 
-const COMMON_ASSETS_BY_CATEGORY: Record<string, string[]> = {
+export const COMMON_ASSETS_BY_CATEGORY: Record<string, string[]> = {
   'Crockery (Plates & Bowls)': [
     'Dinner Plates 10" (Full Plate)',
     'Quarter Plates 7" (Half Plate)',
@@ -186,6 +186,74 @@ const COMMON_ASSETS_BY_CATEGORY: Record<string, string[]> = {
   ],
 };
 
+export const COMMON_INVENTORY_BY_CATEGORY: Record<string, { name: string; unit: string; defaultCost: number }[]> = {
+  'Meat & Poultry': [
+    { name: 'Fresh Chicken (Whole / Broiler)', unit: 'kg', defaultCost: 550 },
+    { name: 'Chicken Boneless (Boti/Breast)', unit: 'kg', defaultCost: 850 },
+    { name: 'Mutton (Goat / Lamb)', unit: 'kg', defaultCost: 1800 },
+    { name: 'Beef (Boneless / Veal)', unit: 'kg', defaultCost: 1100 },
+    { name: 'Fish Fillet (Finger Fish)', unit: 'kg', defaultCost: 1200 },
+  ],
+  'Produce & Vegetables': [
+    { name: 'Onions (پیاز)', unit: 'kg', defaultCost: 120 },
+    { name: 'Tomatoes (ٹماٹر)', unit: 'kg', defaultCost: 140 },
+    { name: 'Potatoes (آلو)', unit: 'kg', defaultCost: 80 },
+    { name: 'Ginger & Garlic (ادرک لہسن)', unit: 'kg', defaultCost: 450 },
+    { name: 'Green Chillies & Lemon (سبز مرچ)', unit: 'kg', defaultCost: 200 },
+    { name: 'Fresh Mint & Coriander (دھنیا پودینہ)', unit: 'bunch', defaultCost: 40 },
+  ],
+  'Dairy & Eggs': [
+    { name: 'Fresh Milk (دودھ)', unit: 'liter', defaultCost: 180 },
+    { name: 'Fresh Yogurt (دہی)', unit: 'kg', defaultCost: 200 },
+    { name: 'Desi Ghee (خالص دیسی گھی)', unit: 'kg', defaultCost: 2200 },
+    { name: 'Cooking Butter (مکھن)', unit: 'kg', defaultCost: 1600 },
+    { name: 'Heavy Whipping Cream', unit: 'pack', defaultCost: 550 },
+    { name: 'Mozzarella & Cheddar Cheese', unit: 'kg', defaultCost: 1850 },
+    { name: 'Eggs (انڈے کریٹ)', unit: 'tray', defaultCost: 750 },
+  ],
+  'Dry Goods & Spices': [
+    { name: 'Basmati Super Rice (سیلہ / باسمتی چاول)', unit: 'kg', defaultCost: 320 },
+    { name: 'Cooking Oil (پریمیم کوکنگ آئل)', unit: 'liter', defaultCost: 480 },
+    { name: 'Fine Wheat Flour (میدہ / فائن آٹا)', unit: 'kg', defaultCost: 120 },
+    { name: 'Red Chilli Powder (سرخ مرچ)', unit: 'kg', defaultCost: 800 },
+    { name: 'Whole Garam Masala (ثابت گرم مصالحہ)', unit: 'kg', defaultCost: 1800 },
+    { name: 'Turmeric & Cumin (ہلدی و زیرہ)', unit: 'kg', defaultCost: 900 },
+    { name: 'Iodized Salt (نمک بیگ)', unit: 'kg', defaultCost: 50 },
+  ],
+  'Beverages & Liquids': [
+    { name: 'Soft Drinks (Cola / Sprite Cans 250ml)', unit: 'pack', defaultCost: 1200 },
+    { name: 'Mineral Water (500ml / 1.5L Bottles)', unit: 'crate', defaultCost: 650 },
+    { name: 'Tea Leaves (کڑک چائے پتی)', unit: 'kg', defaultCost: 1400 },
+    { name: 'Flavored Syrups (Rooh Afza / Tang)', unit: 'bottle', defaultCost: 450 },
+  ],
+  'Packaging & Disposables': [
+    { name: 'Food Delivery Boxes (L / M / S)', unit: 'pack', defaultCost: 450 },
+    { name: 'Aluminium Foil Roll (Commercial 1kg)', unit: 'roll', defaultCost: 1100 },
+    { name: 'Plastic Spoons & Disposable Cutlery', unit: 'pack', defaultCost: 250 },
+    { name: 'Branded Paper Napkins (ٹشو پیپر)', unit: 'pack', defaultCost: 180 },
+    { name: 'Food Grade Poly Bags (شاپر)', unit: 'kg', defaultCost: 400 },
+  ],
+  'Fuel & Gas': [
+    { name: 'Commercial LPG Cylinder (45.4 kg)', unit: 'cylinder', defaultCost: 12500 },
+    { name: 'Charcoal (لکڑی کا کوئلہ برائے باربی کیو)', unit: 'kg', defaultCost: 160 },
+  ],
+  'Cleaning & Sanitation': [
+    { name: 'Dishwashing Liquid (5L Can)', unit: 'can', defaultCost: 1400 },
+    { name: 'Floor Cleaner & Phenyl (5L)', unit: 'can', defaultCost: 850 },
+    { name: 'Hand Wash Soap Refill', unit: 'liter', defaultCost: 450 },
+    { name: 'Steel Scrubbers & Cleaning Sponges', unit: 'pack', defaultCost: 200 },
+  ],
+};
+
+export interface SupplierItemRow {
+  id: string;
+  name: string;
+  category: string;
+  unit: string;
+  quantity: string;
+  unitPrice: string;
+}
+
 export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { backRoute?: string }) {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -220,6 +288,9 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     deleteSupplier,
     addPurchaseOrder,
     recordSupplierPayment,
+    addAsset,
+    addInventoryItem,
+    updateInventoryItem,
   } = useOpsStore();
 
   const assetCategories = useMemo(
@@ -257,6 +328,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
   const [formAccountNumber, setFormAccountNumber] = useState('');
   const [formIban, setFormIban] = useState('');
   const [formSuppliedItems, setFormSuppliedItems] = useState('');
+  const [formItemRows, setFormItemRows] = useState<SupplierItemRow[]>([]);
   const [formCurrentBalance, setFormCurrentBalance] = useState('0');
   const [formNotes, setFormNotes] = useState('');
 
@@ -277,38 +349,102 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     }));
   }, [formSupplierType]);
 
-  // Existing items available to pick based on supplier type
+  // Existing items available to pick based on supplier type & category
   const availableItemsForSupplier = useMemo(() => {
     if (formSupplierType === 'assets') {
-      const fromExistingAssets = assets.map((a) => a.name);
+      const fromExistingAssets = assets.filter((a) => a.category === formCategory).map((a) => a.name);
       const fromSuggestions = COMMON_ASSETS_BY_CATEGORY[formCategory] || [];
-      return Array.from(new Set([...fromExistingAssets, ...fromSuggestions]));
+      return Array.from(new Set([...fromSuggestions, ...fromExistingAssets]));
     }
     // Inventory
-    return inventory.map((inv) => inv.name);
+    const fromExistingInv = inventory.filter((inv) => inv.category === formCategory).map((inv) => inv.name);
+    const fromSuggestions = (COMMON_INVENTORY_BY_CATEGORY[formCategory] || []).map((i) => i.name);
+    return Array.from(new Set([...fromSuggestions, ...fromExistingInv]));
   }, [formSupplierType, formCategory, assets, inventory]);
 
+  const formItemsTotalValue = useMemo(() => {
+    return formItemRows.reduce((sum, r) => {
+      const q = parseFloat(r.quantity) || 0;
+      const p = parseFloat(r.unitPrice) || 0;
+      return sum + q * p;
+    }, 0);
+  }, [formItemRows]);
+
+  const toggleItemInFormRows = (itemName: string) => {
+    const existingIdx = formItemRows.findIndex((r) => r.name.toLowerCase() === itemName.toLowerCase());
+    if (existingIdx >= 0) {
+      setFormItemRows(formItemRows.filter((_, idx) => idx !== existingIdx));
+    } else {
+      let defaultPrice = '';
+      let unit = formSupplierType === 'assets' ? 'unit' : 'kg';
+      if (formSupplierType === 'inventory') {
+        const catList = COMMON_INVENTORY_BY_CATEGORY[formCategory] || [];
+        const match = catList.find((c) => c.name.toLowerCase() === itemName.toLowerCase());
+        if (match) {
+          defaultPrice = String(match.defaultCost);
+          unit = match.unit;
+        } else {
+          const invMatch = inventory.find((i) => i.name.toLowerCase() === itemName.toLowerCase());
+          if (invMatch) {
+            defaultPrice = String(invMatch.costPerUnit || '');
+            unit = invMatch.unit || 'kg';
+          }
+        }
+      } else {
+        const astMatch = assets.find((a) => a.name.toLowerCase() === itemName.toLowerCase());
+        if (astMatch) {
+          defaultPrice = String(astMatch.cost || '');
+        }
+      }
+      setFormItemRows([
+        ...formItemRows,
+        {
+          id: `sup-item-${Date.now()}-${formItemRows.length + 1}`,
+          name: itemName,
+          category: formCategory,
+          unit,
+          quantity: '1',
+          unitPrice: defaultPrice,
+        },
+      ]);
+    }
+  };
+
+  const addAllCategoryItemsToSupplier = () => {
+    if (availableItemsForSupplier.length === 0) return;
+    const newRows: SupplierItemRow[] = availableItemsForSupplier.map((itemName, idx) => {
+      const existing = formItemRows.find((r) => r.name.toLowerCase() === itemName.toLowerCase());
+      if (existing) return existing;
+      let defaultPrice = '';
+      let unit = formSupplierType === 'assets' ? 'unit' : 'kg';
+      if (formSupplierType === 'inventory') {
+        const catList = COMMON_INVENTORY_BY_CATEGORY[formCategory] || [];
+        const match = catList.find((c) => c.name.toLowerCase() === itemName.toLowerCase());
+        if (match) {
+          defaultPrice = String(match.defaultCost);
+          unit = match.unit;
+        }
+      }
+      return {
+        id: `sup-item-${Date.now()}-${idx + 1}`,
+        name: itemName,
+        category: formCategory,
+        unit,
+        quantity: '1',
+        unitPrice: defaultPrice,
+      };
+    });
+    setFormItemRows(newRows);
+  };
+
   const formSuppliedItemsArray = useMemo(() => {
-    return formSuppliedItems
+    const fromRows = formItemRows.map((r) => r.name.trim().toLowerCase());
+    const fromStr = formSuppliedItems
       .split(',')
       .map((s) => s.trim().toLowerCase())
       .filter(Boolean);
-  }, [formSuppliedItems]);
-
-  const toggleSuppliedItem = (itemName: string) => {
-    const current = formSuppliedItems
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const exists = current.some((s) => s.toLowerCase() === itemName.toLowerCase());
-    let updated: string[];
-    if (exists) {
-      updated = current.filter((s) => s.toLowerCase() !== itemName.toLowerCase());
-    } else {
-      updated = [...current, itemName];
-    }
-    setFormSuppliedItems(updated.join(', '));
-  };
+    return Array.from(new Set([...fromRows, ...fromStr]));
+  }, [formItemRows, formSuppliedItems]);
 
   // 3. Quick Payment Voucher Modal
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
@@ -533,6 +669,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     setFormAccountNumber('');
     setFormIban('');
     setFormSuppliedItems('');
+    setFormItemRows([]);
     setFormCurrentBalance('0');
     setFormNotes('');
     setIsSupplierModalOpen(true);
@@ -561,6 +698,16 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     setFormAccountNumber(sup.bankDetails?.accountNumber || '');
     setFormIban(sup.bankDetails?.iban || '');
     setFormSuppliedItems((sup.suppliedItems || []).join(', '));
+    setFormItemRows(
+      (sup.suppliedItems || []).map((name, idx) => ({
+        id: `sup-item-${Date.now()}-${idx + 1}`,
+        name,
+        category: sup.category,
+        unit: sup.supplierType === 'assets' ? 'unit' : 'kg',
+        quantity: '1',
+        unitPrice: '',
+      }))
+    );
     setFormCurrentBalance(String(sup.currentBalance || 0));
     setFormNotes(sup.notes || '');
     setIsSupplierModalOpen(true);
@@ -582,10 +729,13 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
       return;
     }
 
-    const suppliedItemsArray = formSuppliedItems
-      .split(',')
-      .map((i) => i.trim())
-      .filter(Boolean);
+    const suppliedItemsArray =
+      formItemRows.length > 0
+        ? formItemRows.filter((r) => r.name.trim()).map((r) => r.name.trim())
+        : formSuppliedItems
+            .split(',')
+            .map((i) => i.trim())
+            .filter(Boolean);
 
     const bankDetails =
       formBankName.trim() || formAccountNumber.trim()
@@ -655,6 +805,53 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
         rating: 5,
         status: 'active',
         notes: formNotes.trim() || undefined,
+      });
+    }
+
+    // Auto-sync items with positive quantity & unit price to Assets / Inventory
+    if (formItemRows.length > 0) {
+      formItemRows.forEach((row) => {
+        const q = parseFloat(row.quantity) || 0;
+        const p = parseFloat(row.unitPrice) || 0;
+        if (q > 0 && p > 0) {
+          if (formSupplierType === 'assets') {
+            addAsset({
+              assetCode: `AST-${formCategory.slice(0, 3).toUpperCase()}-${Date.now().toString().slice(-4)}-${Math.floor(Math.random() * 1000)}`,
+              name: row.name.trim(),
+              category: (formCategory as AssetCategory) || 'Other Capital Assets',
+              purchaseDate: Date.now(),
+              cost: p,
+              quantity: Math.max(1, Math.round(q)),
+              totalCost: p * q,
+              status: 'active',
+              condition: 'good',
+              vendor: formName.trim(),
+              vendorPhone: formPhone.trim(),
+              location: 'Main Facility',
+              isCapEx: true,
+            });
+          } else {
+            const existingInv = inventory.find((inv) => inv.name.toLowerCase() === row.name.trim().toLowerCase());
+            if (existingInv) {
+              updateInventoryItem(existingInv.id, {
+                costPerUnit: p,
+                supplier: formName.trim(),
+                supplierPhone: formPhone.trim(),
+              });
+            } else {
+              addInventoryItem({
+                name: row.name.trim(),
+                category: formCategory,
+                unit: row.unit || 'kg',
+                stock: q,
+                threshold: Math.max(5, Math.round(q * 0.2)),
+                costPerUnit: p,
+                supplier: formName.trim(),
+                supplierPhone: formPhone.trim(),
+              });
+            }
+          }
+        }
       });
     }
 
@@ -2749,34 +2946,51 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                 keyboardType="numeric"
               />
 
-              {/* Supplied Items / Assets with Interactive Quick Chips */}
-              <View style={{ marginBottom: 8 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+              {/* Supplied Items / Assets with Interactive Quick Chips & Qty / Price */}
+              <View style={{ marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                   <Text style={[styles.formLabel, { marginBottom: 0 }]}>
                     {formSupplierType === 'assets'
-                      ? 'Supplied Assets (فراہم کردہ اثاثہ جات)'
-                      : 'Supplied Raw Materials (فراہم کردہ اشیاء)'}
+                      ? 'Supplied Assets & Equipment (فراہم کردہ سامان و اثاثہ جات)'
+                      : 'Supplied Raw Materials & Inventory (فراہم کردہ اشیاء)'}
                   </Text>
-                  <Text style={{ fontSize: 11, color: '#64748B' }}>
-                    {availableItemsForSupplier.length > 0 ? 'Click chips to add/remove' : ''}
-                  </Text>
+                  {availableItemsForSupplier.length > 0 && (
+                    <TouchableOpacity
+                      onPress={addAllCategoryItemsToSupplier}
+                      style={{
+                        backgroundColor: '#52141C',
+                        paddingHorizontal: 8,
+                        paddingVertical: 3,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                    >
+                      <Ionicons name="duplicate-outline" size={12} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>
+                        + Add All ({availableItemsForSupplier.length})
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
 
                 {availableItemsForSupplier.length > 0 && (
                   <View style={styles.quickChipsBox}>
                     <Text style={styles.quickChipsHeading}>
                       {formSupplierType === 'assets'
-                        ? '👇 کلک کر کے اثاثے منتخب کریں (Select Assets):'
-                        : '👇 کلک کر کے آئٹمز منتخب کریں (Select Raw Inventory):'}
+                        ? `👇 [${formCategory}] کے اثاثے کلک کر کے شامل کریں:`
+                        : `👇 [${formCategory}] کے خام مال آئٹمز کلک کر کے شامل کریں:`}
                     </Text>
                     <ScrollView style={{ maxHeight: 110 }} nestedScrollEnabled showsVerticalScrollIndicator={true}>
                       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 2 }}>
                         {availableItemsForSupplier.map((itemName) => {
-                          const isSelected = formSuppliedItemsArray.includes(itemName.trim().toLowerCase());
+                          const isSelected = formItemRows.some((r) => r.name.toLowerCase() === itemName.toLowerCase()) ||
+                            formSuppliedItemsArray.includes(itemName.trim().toLowerCase());
                           return (
                             <TouchableOpacity
                               key={itemName}
-                              onPress={() => toggleSuppliedItem(itemName)}
+                              onPress={() => toggleItemInFormRows(itemName)}
                               style={[styles.itemChip, isSelected && styles.itemChipSelected]}
                             >
                               <Ionicons
@@ -2795,17 +3009,151 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                   </View>
                 )}
 
-                <TextInput
-                  style={[styles.formInput, { marginTop: 6 }]}
-                  placeholder={
-                    formSupplierType === 'assets'
-                      ? 'e.g. Karahi, Plates, Deep Fryer, Chiller (comma separated)'
-                      : 'e.g. Boneless Chicken, Whole Skinless, Wings (comma separated)'
-                  }
-                  placeholderTextColor="#94A3B8"
-                  value={formSuppliedItems}
-                  onChangeText={setFormSuppliedItems}
-                />
+                {/* Selected Item Rows with Qty & Unit Price */}
+                {formItemRows.length > 0 && (
+                  <View style={{ marginTop: 10, backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 8 }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#1E293B', marginBottom: 6 }}>
+                      Selected Items ({formItemRows.length}) — Specify Qty & Purchase Price:
+                    </Text>
+
+                    {formItemRows.map((row, idx) => {
+                      const q = parseFloat(row.quantity) || 0;
+                      const p = parseFloat(row.unitPrice) || 0;
+                      const subtotal = q * p;
+
+                      return (
+                        <View
+                          key={row.id}
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            borderRadius: 6,
+                            padding: 8,
+                            marginBottom: 6,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <View style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 3 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '800', color: '#475569' }}>#{idx + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{row.name}</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#047857' }}>
+                                Rs. {subtotal.toLocaleString()}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => setFormItemRows(formItemRows.filter((_, i) => i !== idx))}
+                                style={{ padding: 2 }}
+                              >
+                                <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginBottom: 2 }}>
+                                Quantity ({row.unit || 'units'})
+                              </Text>
+                              <TextInput
+                                style={{
+                                  backgroundColor: '#FFFFFF',
+                                  borderWidth: 1,
+                                  borderColor: '#CBD5E1',
+                                  borderRadius: 4,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 4,
+                                  fontSize: 12,
+                                  color: '#0F172A',
+                                }}
+                                placeholder="1"
+                                placeholderTextColor="#94A3B8"
+                                keyboardType="numeric"
+                                value={row.quantity}
+                                onChangeText={(val) => {
+                                  setFormItemRows(formItemRows.map((r, i) => (i === idx ? { ...r, quantity: val } : r)));
+                                }}
+                              />
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', marginBottom: 2 }}>
+                                Unit Price (PKR)
+                              </Text>
+                              <TextInput
+                                style={{
+                                  backgroundColor: '#FFFFFF',
+                                  borderWidth: 1,
+                                  borderColor: '#CBD5E1',
+                                  borderRadius: 4,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 4,
+                                  fontSize: 12,
+                                  color: '#0F172A',
+                                }}
+                                placeholder="e.g. 500"
+                                placeholderTextColor="#94A3B8"
+                                keyboardType="numeric"
+                                value={row.unitPrice}
+                                onChangeText={(val) => {
+                                  setFormItemRows(formItemRows.map((r, i) => (i === idx ? { ...r, unitPrice: val } : r)));
+                                }}
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4 }}>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setFormItemRows([
+                            ...formItemRows,
+                            {
+                              id: `sup-item-${Date.now()}-${formItemRows.length + 1}`,
+                              name: '',
+                              category: formCategory,
+                              unit: formSupplierType === 'assets' ? 'unit' : 'kg',
+                              quantity: '1',
+                              unitPrice: '',
+                            },
+                          ]);
+                        }}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                      >
+                        <Ionicons name="add-circle" size={14} color="#52141C" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#52141C' }}>+ Add Custom Item</Text>
+                      </TouchableOpacity>
+
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#B45309' }}>
+                        Total Value: Rs. {formItemsTotalValue.toLocaleString()}
+                      </Text>
+                    </View>
+
+                    {formItemsTotalValue > 0 && (
+                      <TouchableOpacity
+                        onPress={() => setFormCurrentBalance(String(formItemsTotalValue))}
+                        style={{
+                          backgroundColor: '#FEF3C7',
+                          borderWidth: 1,
+                          borderColor: '#FDE68A',
+                          borderRadius: 6,
+                          paddingVertical: 5,
+                          alignItems: 'center',
+                          marginTop: 8,
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>
+                          ⚡ Apply Rs. {formItemsTotalValue.toLocaleString()} as Opening Balance Due
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
 
               <Text style={[styles.formLabel, { marginTop: 12, fontWeight: '800', color: '#52141C' }]}>

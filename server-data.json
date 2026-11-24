@@ -17568,54 +17568,34 @@
       "deviceName": "Edge on Windows",
       "platform": "web",
       "loginTime": 1795507557074,
-      "lastActiveTime": 1795508297119
+      "lastActiveTime": 1795511824108
     },
     {
-      "sessionId": "sess_mwufa4sm_bg6gb1",
+      "sessionId": "sess_mwugyqpk_xx650t",
+      "staffId": "st-emp-f25",
+      "username": "tanveer",
+      "staffName": "Tanveer",
+      "role": "manager",
+      "deviceId": "dev_web_mwqnc5ee_p4203_rvil",
+      "deviceName": "Edge on Windows",
+      "platform": "web",
+      "loginTime": 1795511125084,
+      "lastActiveTime": 1795511825185
+    },
+    {
+      "sessionId": "sess_mwuh27jc_ad9oop",
       "staffId": "st-master",
       "username": "master",
       "staffName": "Master Admin",
       "role": "admin",
-      "deviceId": "dev_web_mwoxutps_z3jgb_u2ap",
-      "deviceName": "Edge on Windows",
+      "deviceId": "dev_web_mwqkzuav_q6kfe_mvat",
+      "deviceName": "Chrome on Windows",
       "platform": "web",
-      "loginTime": 1795508297158,
-      "lastActiveTime": 1795508297158
+      "loginTime": 1795511286697,
+      "lastActiveTime": 1795511821730
     }
   ],
   "revokedSessions": {
-    "sess_mwtdfuuf_3y192g": {
-      "sessionId": "sess_mwtdfuuf_3y192g",
-      "deviceId": "dev_web_mwqnc5ee_p4203_d4og",
-      "staffId": "st-emp-f25",
-      "staffName": "Tanveer",
-      "timestamp": 1795505413827,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "sess_mwtc96mo_9s6fuc": {
-      "sessionId": "sess_mwtc96mo_9s6fuc",
-      "deviceId": "dev_web_mwqo1air_eke8w_3psj",
-      "staffId": "st-emp-f19",
-      "staffName": "Sheroz",
-      "timestamp": 1795505866159,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "sess_mwucp0m3_a87dik": {
-      "sessionId": "sess_mwucp0m3_a87dik",
-      "deviceId": "dev_web_mwsv4kta_jxztf_un59",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795506540334,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "sess_mwucxp4q_uh54mb": {
-      "sessionId": "sess_mwucxp4q_uh54mb",
-      "deviceId": "dev_web_mwucxnym_7zznz_29x6",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795506540334,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
     "sess_mwueorfg_nkqsaj": {
       "sessionId": "sess_mwueorfg_nkqsaj",
       "deviceId": "dev_web_mwsv4kta_jxztf_un59",
@@ -17631,25 +17611,17 @@
       "staffName": "Master Admin",
       "timestamp": 1795508297158,
       "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
+    },
+    "sess_mwufa4sm_bg6gb1": {
+      "sessionId": "sess_mwufa4sm_bg6gb1",
+      "deviceId": "dev_web_mwoxutps_z3jgb_u2ap",
+      "staffId": "st-master",
+      "staffName": "Master Admin",
+      "timestamp": 1795511286697,
+      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
     }
   },
   "revokedDeviceIds": {
-    "dev_web_mwqnc5ee_p4203_d4og": {
-      "sessionId": "sess_mwtdfuuf_3y192g",
-      "deviceId": "dev_web_mwqnc5ee_p4203_d4og",
-      "staffId": "st-emp-f25",
-      "staffName": "Tanveer",
-      "timestamp": 1795505413827,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqo1air_eke8w_3psj": {
-      "sessionId": "sess_mwtc96mo_9s6fuc",
-      "deviceId": "dev_web_mwqo1air_eke8w_3psj",
-      "staffId": "st-emp-f19",
-      "staffName": "Sheroz",
-      "timestamp": 1795505866159,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
     "dev_web_mwsv4kta_jxztf_un59": {
       "sessionId": "sess_mwueorfg_nkqsaj",
       "deviceId": "dev_web_mwsv4kta_jxztf_un59",
@@ -17658,55 +17630,13 @@
       "timestamp": 1795508100527,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
     },
-    "dev_web_mwucxnym_7zznz_29x6": {
-      "sessionId": "sess_mwucxp4q_uh54mb",
-      "deviceId": "dev_web_mwucxnym_7zznz_29x6",
+    "dev_web_mwoxutps_z3jgb_u2ap": {
+      "sessionId": "sess_mwufa4sm_bg6gb1",
+      "deviceId": "dev_web_mwoxutps_z3jgb_u2ap",
       "staffId": "st-master",
       "staffName": "Master Admin",
-      "timestamp": 1795506540334,
+      "timestamp": 1795511286697,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_android_mwt9vwur_j9qut": {
-      "sessionId": "sess_mwt9xkxs_fcn60l",
-      "staffId": "st-emp-f04",
-      "staffName": "Zulfiqar",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
-    },
-    "dev_android_mwt9x8ta_lycgq": {
-      "sessionId": "sess_mwt9xvcw_cftfm6",
-      "staffId": "st-emp-f11",
-      "staffName": "Bilal",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
-    },
-    "dev_android_mwt9u37u_abfg1": {
-      "sessionId": "sess_mwt9yjte_pveou9",
-      "staffId": "st-emp-f21",
-      "staffName": "Tehreem",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
-    },
-    "dev_android_mwt9uuta_nhdlm": {
-      "sessionId": "sess_mwt9yt4x_s4ard4",
-      "staffId": "st-emp-f23",
-      "staffName": "Tahir",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
-    },
-    "dev_android_mwt9wj0z_azowq": {
-      "sessionId": "sess_mwt9zepb_g9bwvh",
-      "staffId": "st-emp-f22",
-      "staffName": "Madhia",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
-    },
-    "dev_web_mwqnc5ee_p4203_rvil": {
-      "sessionId": "sess_mwudkbzf_fcraru",
-      "staffId": "st-emp-f25",
-      "staffName": "Tanveer",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
     },
     "dev_web_mwqkzuav_q6kfe_mvat": {
       "sessionId": "sess_mwuf5x2t_36p9ex",
@@ -17715,21 +17645,16 @@
       "staffName": "Master Admin",
       "timestamp": 1795508297158,
       "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqo1air_eke8w_ju8s": {
-      "sessionId": "sess_mwudu1br_86dn2p",
-      "staffId": "st-emp-f19",
-      "staffName": "Sheroz",
-      "timestamp": 1795507413053,
-      "reason": "Master Admin نے تمام صارفین کو لاگ آؤٹ کر دیا ہے"
     }
   },
   "forceLogoutAll": null,
   "chillerHandovers": [],
   "roles": [
     {
-      "description": "Full unconstrained system authority over finance, staff, menu, and operations.",
-      "urduName": "ایگزیکٹو ایڈمن",
+      "isSystem": true,
+      "id": "role-admin",
+      "updatedAt": 1795261080581,
+      "baseRole": "admin",
       "permissions": {
         "canViewRevenue": true,
         "canViewCostPrice": true,
@@ -17799,20 +17724,17 @@
         "canEditCustomers": true,
         "canDeleteCustomers": true
       },
+      "description": "Full unconstrained system authority over finance, staff, menu, and operations.",
       "badgeColor": "#52171B",
-      "id": "role-admin",
-      "isSystem": true,
-      "updatedAt": 1795261080581,
+      "urduName": "ایگزیکٹو ایڈمن",
       "icon": "shield-checkmark",
-      "createdAt": 1700000000000,
       "name": "Admin",
-      "baseRole": "admin"
+      "createdAt": 1700000000000
     },
     {
       "urduName": "جنرل منیجر",
-      "id": "role-manager",
-      "badgeColor": "#B48214",
-      "baseRole": "manager",
+      "icon": "business",
+      "name": "Manager",
       "permissions": {
         "posCanDineIn": true,
         "posCanTakeaway": true,
@@ -17882,24 +17804,17 @@
         "canStartCloseShift": true,
         "canModifyMenuPrices": false
       },
-      "isSystem": true,
-      "createdAt": 1700000000000,
-      "name": "Manager",
       "description": "Floor command, shift operations, stock auditing, and table seating management.",
       "updatedAt": 1795350224349,
-      "icon": "business"
+      "id": "role-manager",
+      "isSystem": true,
+      "baseRole": "manager",
+      "badgeColor": "#B48214",
+      "createdAt": 1700000000000
     },
     {
-      "icon": "layers",
-      "baseRole": "floor_manager",
-      "name": "Floor Manager",
-      "isSystem": true,
-      "updatedAt": 1795261080581,
-      "urduName": "فلور منیجر",
-      "badgeColor": "#0D9488",
-      "description": "Floor command, table supervision, live seating occupancy, and digital menu order confirmation.",
-      "createdAt": 1700000000000,
       "id": "role-floor-manager",
+      "urduName": "فلور منیجر",
       "permissions": {
         "posCanDineIn": true,
         "posCanTakeaway": true,
@@ -17968,15 +17883,17 @@
         "canProcessReturns": false,
         "canStartCloseShift": true,
         "canModifyMenuPrices": false
-      }
+      },
+      "description": "Floor command, table supervision, live seating occupancy, and digital menu order confirmation.",
+      "updatedAt": 1795261080581,
+      "badgeColor": "#0D9488",
+      "icon": "layers",
+      "name": "Floor Manager",
+      "baseRole": "floor_manager",
+      "createdAt": 1700000000000,
+      "isSystem": true
     },
     {
-      "badgeColor": "#0D9488",
-      "icon": "calculator",
-      "description": "Dedicated POS billing, invoice generation, and shift cash reconciliation.",
-      "name": "Cashier",
-      "urduName": "کاؤنٹر کیشیئر",
-      "updatedAt": 1795280254103,
       "permissions": {
         "posCanDineIn": true,
         "posCanTakeaway": true,
@@ -18047,20 +17964,17 @@
         "canModifyMenuPrices": false
       },
       "createdAt": 1700000000000,
-      "baseRole": "manager",
+      "description": "Dedicated POS billing, invoice generation, and shift cash reconciliation.",
+      "urduName": "کاؤنٹر کیشیئر",
+      "badgeColor": "#0D9488",
+      "icon": "calculator",
+      "name": "Cashier",
       "id": "role-cashier",
-      "isSystem": true
+      "isSystem": true,
+      "updatedAt": 1795280254103,
+      "baseRole": "manager"
     },
     {
-      "urduName": "آرڈر ٹیکر / ویٹر",
-      "updatedAt": 1795261080581,
-      "icon": "person",
-      "name": "Order Taker",
-      "createdAt": 1700000000000,
-      "baseRole": "waiter",
-      "description": "Takes table orders, generates KOT tickets, and manages assigned dining zones.",
-      "isSystem": true,
-      "badgeColor": "#2563EB",
       "permissions": {
         "posCanDineIn": true,
         "posCanTakeaway": false,
@@ -18130,16 +18044,20 @@
         "canStartCloseShift": false,
         "canModifyMenuPrices": false
       },
-      "id": "role-waiter"
+      "description": "Takes table orders, generates KOT tickets, and manages assigned dining zones.",
+      "isSystem": true,
+      "createdAt": 1700000000000,
+      "badgeColor": "#2563EB",
+      "baseRole": "waiter",
+      "urduName": "آرڈر ٹیکر / ویٹر",
+      "icon": "person",
+      "name": "Order Taker",
+      "id": "role-waiter",
+      "updatedAt": 1795261080581
     },
     {
-      "isSystem": true,
-      "baseRole": "kitchen",
-      "id": "role-kitchen",
+      "updatedAt": 1795261080581,
       "badgeColor": "#DC2626",
-      "createdAt": 1700000000000,
-      "urduName": "شیف / کچن ماسٹر",
-      "updatedAt": 1795261080581,
       "permissions": {
         "posCanDineIn": false,
         "posCanTakeaway": false,
@@ -18209,15 +18127,22 @@
         "canStartCloseShift": true,
         "canModifyMenuPrices": false
       },
-      "name": "Kitchen",
+      "description": "Culinary preparation console, recipe execution, and raw materials handover.",
       "icon": "restaurant",
-      "description": "Culinary preparation console, recipe execution, and raw materials handover."
+      "name": "Kitchen",
+      "urduName": "شیف / کچن ماسٹر",
+      "baseRole": "kitchen",
+      "createdAt": 1700000000000,
+      "isSystem": true,
+      "id": "role-kitchen"
     },
     {
       "updatedAt": 1795261080581,
-      "description": "Beverages preparation, mocktails station, and fruit inventory monitoring.",
+      "badgeColor": "#059669",
+      "urduName": "جوس بار انچارج",
       "createdAt": 1700000000000,
-      "icon": "wine",
+      "id": "role-juicebar",
+      "baseRole": "juicebar",
       "permissions": {
         "posCanDineIn": false,
         "posCanTakeaway": false,
@@ -18287,14 +18212,19 @@
         "canStartCloseShift": true,
         "canModifyMenuPrices": false
       },
-      "baseRole": "juicebar",
-      "isSystem": true,
+      "description": "Beverages preparation, mocktails station, and fruit inventory monitoring.",
+      "icon": "wine",
       "name": "Juice Bar",
-      "badgeColor": "#059669",
-      "id": "role-juicebar",
-      "urduName": "جوس بار انچارج"
+      "isSystem": true
     },
     {
+      "icon": "balloon",
+      "name": "Playland",
+      "urduName": "پلے لینڈ انچارج",
+      "badgeColor": "#D97706",
+      "createdAt": 1700000000000,
+      "id": "role-playland",
+      "isSystem": true,
       "permissions": {
         "posCanDineIn": false,
         "posCanTakeaway": false,
@@ -18364,27 +18294,17 @@
         "canStartCloseShift": true,
         "canModifyMenuPrices": false
       },
-      "urduName": "پلے لینڈ انچارج",
-      "badgeColor": "#D97706",
       "description": "Kids playland tokens, wristband check-in, and attraction safety.",
-      "id": "role-playland",
-      "createdAt": 1700000000000,
       "updatedAt": 1795261080581,
-      "name": "Playland",
-      "baseRole": "playland",
-      "isSystem": true,
-      "icon": "balloon"
+      "baseRole": "playland"
     },
     {
-      "createdAt": 1795331264937,
-      "id": "role-mwrhvpux-354",
-      "updatedAt": 1795331595653,
-      "badgeColor": "#059669",
-      "name": "Administration",
-      "isSystem": false,
-      "description": "Custom permissions configured in System Settings",
-      "icon": "shield-checkmark",
       "baseRole": "custom",
+      "badgeColor": "#059669",
+      "icon": "shield-checkmark",
+      "name": "Administration",
+      "createdAt": 1795331264937,
+      "isSystem": false,
       "permissions": {
         "posCanDineIn": true,
         "posCanTakeaway": true,
@@ -18453,7 +18373,10 @@
         "canProcessReturns": true,
         "canStartCloseShift": true,
         "canModifyMenuPrices": true
-      }
+      },
+      "description": "Custom permissions configured in System Settings",
+      "updatedAt": 1795331595653,
+      "id": "role-mwrhvpux-354"
     }
   ],
   "systemSettings": {
@@ -18730,7 +18653,7 @@
   "lastBillPaidAlert": null,
   "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
-  "lastUpdated": 1795510528581,
+  "lastUpdated": 1795513917959,
   "inventoryCategories": [
     "Meat",
     "Produce",
@@ -18741,5 +18664,36 @@
     "Fuel",
     "Packaging",
     "Supplies"
+  ],
+  "assetCategories": [
+    "Crockery (Plates & Bowls)",
+    "Glassware & Tumblers",
+    "Cutlery & Utensils",
+    "Clayware & Specialty Pots",
+    "Kitchen Machinery & Heavy Line",
+    "Kitchen Equipment & Tools",
+    "Refrigeration & Cold Storage",
+    "Dining Furniture & Decor",
+    "Dining Furniture & Seating",
+    "Crockery & Cutlery (Bulk Assets)",
+    "HVAC, Electrical & Generators",
+    "IT, POS & Surveillance Hardware",
+    "Amusement & Playland Rides",
+    "Playland Assets & Rides",
+    "Interior, Signage & Royal Decor",
+    "Other Capital Assets"
+  ],
+  "expenseCategories": [
+    "Groceries & Produce",
+    "Meat & Poultry",
+    "Dairy & Bakery",
+    "Gas / LPG / Charcoal",
+    "Electricity & Utilities",
+    "Staff Salary / Advance",
+    "Rent",
+    "Maintenance & Repair",
+    "Packaging & Supplies",
+    "Marketing",
+    "Other"
   ]
 }
