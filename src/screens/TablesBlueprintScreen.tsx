@@ -1,42 +1,42 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Modal,
-  Alert,
-  Platform,
-  useWindowDimensions,
-  Image,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, Table, Reservation } from '../store/restaurantStore';
-import { broadcastImmediately } from '../services/syncService';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useMemo, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import RoyalDropdown from '../components/RoyalDropdown';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 import {
+  FLOOR_ORDER,
+  FLOOR_TEMPLATE,
   SEATING_ZONES,
   SEATING_ZONE_TYPES,
   SeatingZoneType,
-  FLOOR_ORDER,
-  FLOOR_TEMPLATE,
+  getFloorMeta,
   getTableFloor,
   getTableSeatingType,
-  getFloorMeta,
   sortFloors,
 } from '../constants/floors';
+import { broadcastImmediately } from '../services/syncService';
+import { Reservation, Table, useRestaurantStore } from '../store/restaurantStore';
 import { useRolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
-import RoyalDropdown from '../components/RoyalDropdown';
 import {
   generateTableQrCode,
   getTableMenuUrl,
-  printTableStandeeHtml,
   printAllTablesStandeesHtml,
+  printTableStandeeHtml,
 } from '../utils/qrCode';
 import {
   findTableReservation,
@@ -61,11 +61,93 @@ const STATUS_META: Record<Table['status'], { label: string; color: string; bg: s
   reserved: { label: 'Reserved', color: '#7C3AED', bg: '#F3E8FF', icon: 'calendar' },
 };
 
-const TIME_SLOTS = [
-  '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '05:30 PM',
-  '06:30 PM', '07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM',
-  '09:00 PM', '09:30 PM', '10:00 PM', '10:30 PM', '11:00 PM',
+const MEAL_TIME_GROUPS: {
+  key: 'lunch' | 'hitea' | 'dinner' | 'custom';
+  label: string;
+  sub: string;
+  icon: IconName;
+  slots: string[];
+}[] = [
+  {
+    key: 'lunch',
+    label: 'Lunch',
+    sub: '12–4 PM',
+    icon: 'sunny-outline',
+    slots: ['12:00 PM', '12:30 PM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM'],
+  },
+  {
+    key: 'hitea',
+    label: 'Hi-Tea',
+    sub: '4–7 PM',
+    icon: 'cafe-outline',
+    slots: ['04:00 PM', '04:30 PM', '05:00 PM', '05:30 PM', '06:00 PM', '06:30 PM'],
+  },
+  {
+    key: 'dinner',
+    label: 'Dinner',
+    sub: '7–11:30 PM',
+    icon: 'moon-outline',
+    slots: ['07:00 PM', '07:30 PM', '08:00 PM', '08:30 PM', '09:00 PM', '09:30 PM', '10:00 PM', '10:30 PM', '11:00 PM', '11:30 PM'],
+  },
+  {
+    key: 'custom',
+    label: 'Custom',
+    sub: 'Exact Time',
+    icon: 'options-outline',
+    slots: [],
+  },
 ];
+
+const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS_FULL = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+const MONTHS_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const toLocalIsoDate = (d: Date) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+};
+
+const parseIsoDateSafe = (iso?: string): Date => {
+  if (iso && /^\d{4}-\d{2}-\d{2}$/.test(iso)) {
+    const [y, m, d] = iso.split('-').map(Number);
+    const parsed = new Date(y, m - 1, d);
+    if (!isNaN(parsed.getTime())) return parsed;
+  }
+  return new Date();
+};
+
+const formatDisplayDate = (iso?: string): string => {
+  const d = parseIsoDateSafe(iso);
+  return `${WEEKDAYS_SHORT[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')} ${MONTHS_SHORT[d.getMonth()]} ${d.getFullYear()}`;
+};
+
+const parseTimeSlotParts = (slot: string): { hour: number; minute: number; period: 'AM' | 'PM' } => {
+  const match = String(slot || '').trim().match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+  if (match) {
+    const h = Math.min(12, Math.max(1, parseInt(match[1], 10) || 8));
+    const m = Math.min(59, Math.max(0, parseInt(match[2], 10) || 0));
+    const p = match[3].toUpperCase() === 'AM' ? 'AM' : 'PM';
+    return { hour: h, minute: m, period: p };
+  }
+  return { hour: 8, minute: 0, period: 'PM' };
+};
+
+const formatTimeSlotParts = (hour: number, minute: number, period: 'AM' | 'PM') =>
+  `${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')} ${period}`;
+
+const getMealPeriodLabel = (slot: string): string => {
+  const { hour, period } = parseTimeSlotParts(slot);
+  const h24 = period === 'AM' ? (hour === 12 ? 0 : hour) : (hour === 12 ? 12 : hour + 12);
+  if (h24 >= 12 && h24 < 16) return 'Lunch';
+  if (h24 >= 16 && h24 < 19) return 'Hi-Tea';
+  if (h24 >= 19 || h24 < 2) return 'Dinner';
+  return 'Morning';
+};
 
 const GUEST_PRESETS = [4, 8, 12, 15, 20, 25, 30, 40, 50];
 
@@ -91,7 +173,7 @@ const ARRANGEMENT_STYLES = [
 const getDateOffsetIso = (daysOffset = 0) => {
   const d = new Date();
   d.setDate(d.getDate() + daysOffset);
-  return d.toISOString().split('T')[0];
+  return toLocalIsoDate(d);
 };
 
 const notify = (title: string, message: string) => {
@@ -218,6 +300,12 @@ export default function TablesBlueprintScreen({
   const [resLinkedIds, setResLinkedIds] = useState<string[]>([]);
   const [resDate, setResDate] = useState(() => getDateOffsetIso(0));
   const [resTimeSlot, setResTimeSlot] = useState('08:00 PM');
+  const [activeSchedulePicker, setActiveSchedulePicker] = useState<'none' | 'date' | 'time'>('none');
+  const [calendarMonth, setCalendarMonth] = useState(() => {
+    const d = new Date();
+    return { year: d.getFullYear(), month: d.getMonth() };
+  });
+  const [activeTimeTab, setActiveTimeTab] = useState<'lunch' | 'hitea' | 'dinner' | 'custom'>('dinner');
   const [resGuestsCount, setResGuestsCount] = useState('25');
   const [resOccasion, setResOccasion] = useState('Family Gathering');
   const [resArrangementStyle, setResArrangementStyle] = useState('Joined Long Table');
@@ -476,7 +564,7 @@ export default function TablesBlueprintScreen({
       if (!newMap[t.id]) {
         try {
           newMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name);
-        } catch {}
+        } catch { }
       }
     }
     setBatchQrMap(newMap);
@@ -718,8 +806,8 @@ export default function TablesBlueprintScreen({
 
     const otherFloorCandidates = includeOther
       ? enabledTables
-          .filter((t) => isSelectableForReservation(t) && getTableFloor(t).toLowerCase() !== targetFloor.toLowerCase())
-          .sort((a, b) => b.seats - a.seats)
+        .filter((t) => isSelectableForReservation(t) && getTableFloor(t).toLowerCase() !== targetFloor.toLowerCase())
+        .sort((a, b) => b.seats - a.seats)
       : [];
 
     const pool = [...sameFloorCandidates, ...otherFloorCandidates];
@@ -774,6 +862,10 @@ export default function TablesBlueprintScreen({
     setResCustomerName('');
     setResPhone('');
     setResDate(getDateOffsetIso(0));
+    const todayDate = new Date();
+    setCalendarMonth({ year: todayDate.getFullYear(), month: todayDate.getMonth() });
+    setActiveSchedulePicker('none');
+    setActiveTimeTab('dinner');
     setResTimeSlot('08:00 PM');
     setResGuestsCount(String(guests));
     setResOccasion(mode === 'group_event' ? 'Family Gathering' : '');
@@ -811,6 +903,9 @@ export default function TablesBlueprintScreen({
     setResTableId(res.tableId);
     setResLinkedIds(res.linkedTableIds || []);
     setResDate(res.reservationDate);
+    const parsedEditDate = parseIsoDateSafe(res.reservationDate);
+    setCalendarMonth({ year: parsedEditDate.getFullYear(), month: parsedEditDate.getMonth() });
+    setActiveSchedulePicker('none');
     setResTimeSlot(res.timeSlot);
     setResGuestsCount(String(res.guestsCount));
     setResOccasion(res.occasion || 'Family Gathering');
@@ -968,10 +1063,9 @@ export default function TablesBlueprintScreen({
         editingReservation
           ? 'Arrangement Updated'
           : effectiveType === 'group_event'
-          ? 'Group Arrangement Confirmed'
-          : 'Reservation Confirmed',
-        `${resFloor} • ${guestsNum} Guests • ${resTimeSlot}\nUnits: ${tableName}${
-          seatsShortfall > 0 ? `\nNote: Arrange +${seatsShortfall} extra chairs` : ''
+            ? 'Group Arrangement Confirmed'
+            : 'Reservation Confirmed',
+        `${resFloor} • ${guestsNum} Guests • ${resTimeSlot}\nUnits: ${tableName}${seatsShortfall > 0 ? `\nNote: Arrange +${seatsShortfall} extra chairs` : ''
         }`
       );
     };
@@ -1064,14 +1158,14 @@ export default function TablesBlueprintScreen({
       table.status === 'reserved' && isGroup
         ? GROUP_ACCENT
         : table.status === 'reserved'
-        ? STATUS_META.reserved.color
-        : isBusy
-        ? meta.color
-        : isMajlis
-        ? '#4a121a'
-        : isCouch
-        ? '#E65100'
-        : meta.color;
+          ? STATUS_META.reserved.color
+          : isBusy
+            ? meta.color
+            : isMajlis
+              ? '#4a121a'
+              : isCouch
+                ? '#E65100'
+                : meta.color;
 
     return (
       <View key={`${table.id}-${index ?? 0}`} style={{ width: `${100 / columns}%`, padding: 6 }}>
@@ -1530,62 +1624,62 @@ export default function TablesBlueprintScreen({
     border: string;
     iconBg: string;
   }[] = [
-    {
-      key: 'available',
-      label: 'Available',
-      value: `${counts.available}/${enabledTables.length}`,
-      sub: `${availableSeats} Free Seats`,
-      icon: 'checkmark-circle',
-      color: '#059669',
-      bg: '#ECFDF5',
-      border: '#A7F3D0',
-      iconBg: '#D1FAE5',
-    },
-    {
-      key: 'occupied',
-      label: 'Occupied',
-      value: `${counts.occupied + counts.billed}`,
-      sub: `${occupiedSeats} Seated`,
-      icon: 'people',
-      color: '#DC2626',
-      bg: '#FEF2F2',
-      border: '#FECACA',
-      iconBg: '#FEE2E2',
-    },
-    {
-      key: 'reserved',
-      label: 'Reserved',
-      value: `${counts.reserved}`,
-      sub: `${activeGroupBookings.length} Group Event${activeGroupBookings.length === 1 ? '' : 's'}`,
-      icon: 'calendar',
-      color: '#7C3AED',
-      bg: '#FAF5FF',
-      border: '#DDD6FE',
-      iconBg: '#EDE9FE',
-    },
-    {
-      key: 'occupancy',
-      label: 'Occupancy',
-      value: `${occupancyPct}%`,
-      sub: `${totalSeats} Total Seats`,
-      icon: 'pie-chart',
-      color: '#0284C7',
-      bg: '#F0F9FF',
-      border: '#BAE6FD',
-      iconBg: '#E0F2FE',
-    },
-    {
-      key: 'revenue',
-      label: 'Live Dine-In',
-      value: canViewRevenue ? `Rs. ${liveRevenue.toLocaleString()}` : 'Rs. ••••••',
-      sub: 'Running Bills',
-      icon: 'cash',
-      color: '#B45309',
-      bg: '#FFFBEB',
-      border: '#FDE68A',
-      iconBg: '#FEF3C7',
-    },
-  ];
+      {
+        key: 'available',
+        label: 'Available',
+        value: `${counts.available}/${enabledTables.length}`,
+        sub: `${availableSeats} Free Seats`,
+        icon: 'checkmark-circle',
+        color: '#059669',
+        bg: '#ECFDF5',
+        border: '#A7F3D0',
+        iconBg: '#D1FAE5',
+      },
+      {
+        key: 'occupied',
+        label: 'Occupied',
+        value: `${counts.occupied + counts.billed}`,
+        sub: `${occupiedSeats} Seated`,
+        icon: 'people',
+        color: '#DC2626',
+        bg: '#FEF2F2',
+        border: '#FECACA',
+        iconBg: '#FEE2E2',
+      },
+      {
+        key: 'reserved',
+        label: 'Reserved',
+        value: `${counts.reserved}`,
+        sub: `${activeGroupBookings.length} Group Event${activeGroupBookings.length === 1 ? '' : 's'}`,
+        icon: 'calendar',
+        color: '#7C3AED',
+        bg: '#FAF5FF',
+        border: '#DDD6FE',
+        iconBg: '#EDE9FE',
+      },
+      {
+        key: 'occupancy',
+        label: 'Occupancy',
+        value: `${occupancyPct}%`,
+        sub: `${totalSeats} Total Seats`,
+        icon: 'pie-chart',
+        color: '#0284C7',
+        bg: '#F0F9FF',
+        border: '#BAE6FD',
+        iconBg: '#E0F2FE',
+      },
+      {
+        key: 'revenue',
+        label: 'Live Dine-In',
+        value: canViewRevenue ? `Rs. ${liveRevenue.toLocaleString()}` : 'Rs. ••••••',
+        sub: 'Running Bills',
+        icon: 'cash',
+        color: '#B45309',
+        bg: '#FFFBEB',
+        border: '#FDE68A',
+        iconBg: '#FEF3C7',
+      },
+    ];
 
   const TABS: { key: TabKey; label: string; icon: IconName; badge?: number }[] = [
     { key: 'tables', label: 'Blueprint', icon: 'grid' },
@@ -1962,8 +2056,8 @@ export default function TablesBlueprintScreen({
                       type === 'tables'
                         ? zoneSummary.tables.count
                         : type === 'couches'
-                        ? zoneSummary.couches.count
-                        : zoneSummary.majlis.cabinsCount;
+                          ? zoneSummary.couches.count
+                          : zoneSummary.majlis.cabinsCount;
                     return (
                       <TouchableOpacity
                         key={type}
@@ -2169,17 +2263,17 @@ export default function TablesBlueprintScreen({
               const statusColor = isConfirmed
                 ? '#7C3AED'
                 : isSeated
-                ? '#15803D'
-                : res.status === 'completed'
-                ? '#0284C7'
-                : '#64748B';
+                  ? '#15803D'
+                  : res.status === 'completed'
+                    ? '#0284C7'
+                    : '#64748B';
               const statusBg = isConfirmed
                 ? '#F3E8FF'
                 : isSeated
-                ? '#DCFCE7'
-                : res.status === 'completed'
-                ? '#E0F2FE'
-                : '#F1F5F9';
+                  ? '#DCFCE7'
+                  : res.status === 'completed'
+                    ? '#E0F2FE'
+                    : '#F1F5F9';
 
               return (
                 <View
@@ -2631,8 +2725,8 @@ export default function TablesBlueprintScreen({
               {formSeatingType === 'majlis'
                 ? 'Majlis Cabin Name / Number *'
                 : formSeatingType === 'couches'
-                ? 'Couch Name / Number *'
-                : 'Table Name / Number *'}
+                  ? 'Couch Name / Number *'
+                  : 'Table Name / Number *'}
             </Text>
             <TextInput
               style={styles.input}
@@ -2640,8 +2734,8 @@ export default function TablesBlueprintScreen({
                 formSeatingType === 'majlis'
                   ? 'e.g. Cabin 1, Royal Cabin A'
                   : formSeatingType === 'couches'
-                  ? 'e.g. Couch 1, Lounge Sofa 2'
-                  : 'e.g. RT-01, Table 5'
+                    ? 'e.g. Couch 1, Lounge Sofa 2'
+                    : 'e.g. RT-01, Table 5'
               }
               value={formName}
               onChangeText={setFormName}
@@ -2804,8 +2898,8 @@ export default function TablesBlueprintScreen({
                     {editingReservation
                       ? 'Edit Booking / Group Arrangement'
                       : resBookingType === 'group_event'
-                      ? 'Group / Floor Event Arrangement'
-                      : 'New Table Reservation'}
+                        ? 'Group / Floor Event Arrangement'
+                        : 'New Table Reservation'}
                   </Text>
                   <Text style={[styles.dialogSub, { marginBottom: 0 }]} numberOfLines={1}>
                     Plan 10–100+ guest arrangements on Rooftop or any floor with live cross-module sync
@@ -2882,56 +2976,374 @@ export default function TablesBlueprintScreen({
                       </View>
                     </View>
 
+                    {/* Interactive Date & Time Picker Trigger Fields */}
                     <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
-                      <View style={{ flex: 1 }}>
+                      <View style={{ flex: 1, marginBottom: 10 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
                           <Text style={[styles.label, { marginBottom: 0 }]}>Event Date *</Text>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(0))}>
-                              <Text style={{ fontSize: 11, fontWeight: '800', color: GROUP_ACCENT }}>Today</Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const iso = getDateOffsetIso(0);
+                                setResDate(iso);
+                                const d = parseIsoDateSafe(iso);
+                                setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() });
+                              }}
+                            >
+                              <Text style={[styles.quickLinkText, resDate === getDateOffsetIso(0) && { color: BRAND, textDecorationLine: 'underline' }]}>
+                                Today
+                              </Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(1))}>
-                              <Text style={{ fontSize: 11, fontWeight: '800', color: GROUP_ACCENT }}>Tomorrow</Text>
+                            <TouchableOpacity
+                              onPress={() => {
+                                const iso = getDateOffsetIso(1);
+                                setResDate(iso);
+                                const d = parseIsoDateSafe(iso);
+                                setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() });
+                              }}
+                            >
+                              <Text style={[styles.quickLinkText, resDate === getDateOffsetIso(1) && { color: BRAND, textDecorationLine: 'underline' }]}>
+                                Tomorrow
+                              </Text>
                             </TouchableOpacity>
                           </View>
                         </View>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="YYYY-MM-DD"
-                          placeholderTextColor="#94A3B8"
-                          value={resDate}
-                          onChangeText={setResDate}
-                        />
+                        <TouchableOpacity
+                          style={[
+                            styles.scheduleTriggerBtn,
+                            activeSchedulePicker === 'date' && styles.scheduleTriggerBtnActive,
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => {
+                            const d = parseIsoDateSafe(resDate);
+                            setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() });
+                            setActiveSchedulePicker((cur) => (cur === 'date' ? 'none' : 'date'));
+                          }}
+                        >
+                          <View style={styles.scheduleTriggerIcon}>
+                            <Ionicons name="calendar" size={16} color={BRAND} />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.scheduleTriggerValue} numberOfLines={1}>
+                              {formatDisplayDate(resDate)}
+                            </Text>
+                            <Text style={styles.scheduleTriggerSub} numberOfLines={1}>
+                              Tap to open calendar
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name={activeSchedulePicker === 'date' ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                            color="#64748B"
+                          />
+                        </TouchableOpacity>
                       </View>
 
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.label}>Selected Time *</Text>
-                        <TextInput
-                          style={styles.input}
-                          placeholder="e.g. 08:00 PM"
-                          placeholderTextColor="#94A3B8"
-                          value={resTimeSlot}
-                          onChangeText={setResTimeSlot}
-                        />
+                      <View style={{ flex: 1, marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <Text style={[styles.label, { marginBottom: 0 }]}>Event Time *</Text>
+                          <Text style={styles.mealBadgeInline}>{getMealPeriodLabel(resTimeSlot)}</Text>
+                        </View>
+                        <TouchableOpacity
+                          style={[
+                            styles.scheduleTriggerBtn,
+                            activeSchedulePicker === 'time' && styles.scheduleTriggerBtnActive,
+                          ]}
+                          activeOpacity={0.8}
+                          onPress={() => setActiveSchedulePicker((cur) => (cur === 'time' ? 'none' : 'time'))}
+                        >
+                          <View style={[styles.scheduleTriggerIcon, { backgroundColor: '#F3E8FF' }]}>
+                            <Ionicons name="time" size={16} color={GROUP_ACCENT} />
+                          </View>
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text style={styles.scheduleTriggerValue} numberOfLines={1}>
+                              {resTimeSlot}
+                            </Text>
+                            <Text style={styles.scheduleTriggerSub} numberOfLines={1}>
+                              Tap to pick slot or dial
+                            </Text>
+                          </View>
+                          <Ionicons
+                            name={activeSchedulePicker === 'time' ? 'chevron-up' : 'chevron-down'}
+                            size={16}
+                            color="#64748B"
+                          />
+                        </TouchableOpacity>
                       </View>
                     </View>
 
-                    {/* Clean Wrapped Time Slot Grid (Zero Horizontal Clipping — All Lunch & Dinner Times Visible) */}
-                    <Text style={[styles.label, { marginBottom: 6 }]}>Quick Time Slots</Text>
-                    <View style={styles.timeGridWrap}>
-                      {TIME_SLOTS.map((slot) => {
-                        const active = resTimeSlot === slot;
-                        return (
-                          <TouchableOpacity
-                            key={slot}
-                            style={[styles.timeSlotBtn, active && styles.timeSlotBtnActive]}
-                            onPress={() => setResTimeSlot(slot)}
-                          >
-                            <Text style={[styles.timeSlotBtnText, active && styles.timeSlotBtnTextActive]}>{slot}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
+                    {/* INLINE INTERACTIVE MONTHLY CALENDAR */}
+                    {activeSchedulePicker === 'date' && (() => {
+                      const { year, month } = calendarMonth;
+                      const firstDayOfWeek = new Date(year, month, 1).getDay();
+                      const daysInMonth = new Date(year, month + 1, 0).getDate();
+                      const todayIso = getDateOffsetIso(0);
+                      const bookedDatesSet = new Set(
+                        reservations
+                          .filter((r) => r.status === 'confirmed' || r.status === 'seated')
+                          .map((r) => r.reservationDate)
+                      );
+
+                      const cells: (number | null)[] = [];
+                      for (let i = 0; i < firstDayOfWeek; i++) cells.push(null);
+                      for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+                      while (cells.length % 7 !== 0) cells.push(null);
+
+                      const shiftMonth = (delta: number) => {
+                        const next = new Date(year, month + delta, 1);
+                        setCalendarMonth({ year: next.getFullYear(), month: next.getMonth() });
+                      };
+
+                      return (
+                        <View style={styles.calendarBox}>
+                          {/* Month Navigation */}
+                          <View style={styles.calendarHeader}>
+                            <TouchableOpacity style={styles.calNavBtn} onPress={() => shiftMonth(-1)}>
+                              <Ionicons name="chevron-back" size={16} color={BRAND} />
+                            </TouchableOpacity>
+                            <Text style={styles.calendarMonthTitle}>
+                              {MONTHS_FULL[month]} {year}
+                            </Text>
+                            <TouchableOpacity style={styles.calNavBtn} onPress={() => shiftMonth(1)}>
+                              <Ionicons name="chevron-forward" size={16} color={BRAND} />
+                            </TouchableOpacity>
+                          </View>
+
+                          {/* Weekday Headers */}
+                          <View style={styles.calWeekRow}>
+                            {WEEKDAYS_SHORT.map((wd) => (
+                              <Text key={wd} style={styles.calWeekLabel}>
+                                {wd}
+                              </Text>
+                            ))}
+                          </View>
+
+                          {/* Days Grid */}
+                          <View style={styles.calDaysGrid}>
+                            {cells.map((dayNum, idx) => {
+                              if (!dayNum) {
+                                return <View key={`empty-${idx}`} style={styles.calDayCell} />;
+                              }
+                              const cellIso = `${year}-${String(month + 1).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                              const isSelected = cellIso === resDate;
+                              const isToday = cellIso === todayIso;
+                              const isPast = cellIso < todayIso;
+                              const hasEvent = bookedDatesSet.has(cellIso);
+
+                              return (
+                                <TouchableOpacity
+                                  key={cellIso}
+                                  disabled={isPast}
+                                  style={[
+                                    styles.calDayCell,
+                                    isToday && !isSelected && styles.calDayCellToday,
+                                    isSelected && styles.calDayCellSelected,
+                                    isPast && { opacity: 0.32 },
+                                  ]}
+                                  onPress={() => {
+                                    setResDate(cellIso);
+                                    setActiveSchedulePicker('time');
+                                  }}
+                                >
+                                  <Text
+                                    style={[
+                                      styles.calDayText,
+                                      isToday && !isSelected && { color: BRAND, fontWeight: '900' },
+                                      isSelected && styles.calDayTextSelected,
+                                    ]}
+                                  >
+                                    {dayNum}
+                                  </Text>
+                                  {hasEvent && (
+                                    <View
+                                      style={[
+                                        styles.calEventDot,
+                                        isSelected && { backgroundColor: GOLD },
+                                      ]}
+                                    />
+                                  )}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          {/* Calendar Quick Footer */}
+                          <View style={styles.calFooterRow}>
+                            <View style={{ flexDirection: 'row', gap: 6 }}>
+                              {[
+                                { label: 'Today', offset: 0 },
+                                { label: 'Tomorrow', offset: 1 },
+                                { label: '+3 Days', offset: 3 },
+                                { label: '+7 Days', offset: 7 },
+                              ].map((q) => {
+                                const qIso = getDateOffsetIso(q.offset);
+                                return (
+                                  <TouchableOpacity
+                                    key={q.label}
+                                    style={[styles.calQuickChip, resDate === qIso && { backgroundColor: BRAND, borderColor: BRAND }]}
+                                    onPress={() => {
+                                      setResDate(qIso);
+                                      const d = parseIsoDateSafe(qIso);
+                                      setCalendarMonth({ year: d.getFullYear(), month: d.getMonth() });
+                                      setActiveSchedulePicker('none');
+                                    }}
+                                  >
+                                    <Text style={[styles.calQuickChipText, resDate === qIso && { color: '#F3D179' }]}>
+                                      {q.label}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                            <TouchableOpacity onPress={() => setActiveSchedulePicker('none')}>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND }}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })()}
+
+                    {/* INLINE ROYAL TIME PICKER (MEAL PERIODS + CUSTOM EXACT TIME DIAL) */}
+                    {activeSchedulePicker === 'time' && (() => {
+                      const activeGroup = MEAL_TIME_GROUPS.find((g) => g.key === activeTimeTab) || MEAL_TIME_GROUPS[2];
+                      const { hour, minute, period } = parseTimeSlotParts(resTimeSlot);
+                      const setDial = (h: number, m: number, p: 'AM' | 'PM') => {
+                        setResTimeSlot(formatTimeSlotParts(h, m, p));
+                      };
+
+                      return (
+                        <View style={styles.timePickerBox}>
+                          {/* Meal Period Tabs */}
+                          <View style={styles.mealTabsRow}>
+                            {MEAL_TIME_GROUPS.map((grp) => {
+                              const active = activeTimeTab === grp.key;
+                              return (
+                                <TouchableOpacity
+                                  key={grp.key}
+                                  style={[styles.mealTabBtn, active && styles.mealTabBtnActive]}
+                                  onPress={() => setActiveTimeTab(grp.key)}
+                                >
+                                  <Ionicons
+                                    name={grp.icon}
+                                    size={13}
+                                    color={active ? '#F3D179' : '#64748B'}
+                                  />
+                                  <View>
+                                    <Text style={[styles.mealTabTitle, active && { color: '#F3D179' }]}>
+                                      {grp.label}
+                                    </Text>
+                                    <Text style={[styles.mealTabSub, active && { color: 'rgba(255,255,255,0.75)' }]}>
+                                      {grp.sub}
+                                    </Text>
+                                  </View>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          {/* Slots Grid OR Custom Exact Time Dial */}
+                          {activeTimeTab !== 'custom' ? (
+                            <View style={styles.timeGridWrap}>
+                              {activeGroup.slots.map((slot) => {
+                                const active = resTimeSlot === slot;
+                                return (
+                                  <TouchableOpacity
+                                    key={slot}
+                                    style={[styles.timeSlotBtn, active && styles.timeSlotBtnActive]}
+                                    onPress={() => {
+                                      setResTimeSlot(slot);
+                                      setActiveSchedulePicker('none');
+                                    }}
+                                  >
+                                    <Ionicons
+                                      name="time-outline"
+                                      size={12}
+                                      color={active ? '#F3D179' : '#64748B'}
+                                    />
+                                    <Text style={[styles.timeSlotBtnText, active && styles.timeSlotBtnTextActive]}>
+                                      {slot}
+                                    </Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                            </View>
+                          ) : (
+                            <View style={styles.customDialBox}>
+                              <View style={styles.dialRow}>
+                                {/* Hour Stepper */}
+                                <View style={styles.dialCol}>
+                                  <Text style={styles.dialLabel}>HOUR</Text>
+                                  <View style={styles.dialStepper}>
+                                    <TouchableOpacity
+                                      style={styles.dialStepBtn}
+                                      onPress={() => setDial(hour === 1 ? 12 : hour - 1, minute, period)}
+                                    >
+                                      <Ionicons name="remove" size={16} color={BRAND} />
+                                    </TouchableOpacity>
+                                    <Text style={styles.dialValue}>{String(hour).padStart(2, '0')}</Text>
+                                    <TouchableOpacity
+                                      style={styles.dialStepBtn}
+                                      onPress={() => setDial(hour === 12 ? 1 : hour + 1, minute, period)}
+                                    >
+                                      <Ionicons name="add" size={16} color={BRAND} />
+                                    </TouchableOpacity>
+                                  </View>
+                                </View>
+
+                                {/* Minute Presets */}
+                                <View style={[styles.dialCol, { flex: 1.4 }]}>
+                                  <Text style={styles.dialLabel}>MINUTE</Text>
+                                  <View style={{ flexDirection: 'row', gap: 5 }}>
+                                    {[0, 15, 30, 45].map((m) => {
+                                      const active = minute === m;
+                                      return (
+                                        <TouchableOpacity
+                                          key={m}
+                                          style={[styles.dialMinChip, active && styles.dialMinChipActive]}
+                                          onPress={() => setDial(hour, m, period)}
+                                        >
+                                          <Text style={[styles.dialMinText, active && { color: '#F3D179' }]}>
+                                            :{String(m).padStart(2, '0')}
+                                          </Text>
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+
+                                {/* AM / PM Toggle */}
+                                <View style={styles.dialCol}>
+                                  <Text style={styles.dialLabel}>AM / PM</Text>
+                                  <View style={{ flexDirection: 'row', gap: 5 }}>
+                                    {(['AM', 'PM'] as const).map((p) => {
+                                      const active = period === p;
+                                      return (
+                                        <TouchableOpacity
+                                          key={p}
+                                          style={[styles.dialMinChip, active && styles.dialMinChipActive]}
+                                          onPress={() => setDial(hour, minute, p)}
+                                        >
+                                          <Text style={[styles.dialMinText, active && { color: '#F3D179' }]}>{p}</Text>
+                                        </TouchableOpacity>
+                                      );
+                                    })}
+                                  </View>
+                                </View>
+                              </View>
+                            </View>
+                          )}
+
+                          <View style={styles.calFooterRow}>
+                            <Text style={{ fontSize: 11.5, color: '#64748B', fontWeight: '700' }}>
+                              Selected: <Text style={{ color: BRAND, fontWeight: '900' }}>{resTimeSlot}</Text> ({getMealPeriodLabel(resTimeSlot)})
+                            </Text>
+                            <TouchableOpacity onPress={() => setActiveSchedulePicker('none')}>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND }}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })()}
                   </View>
 
                   {/* Section Card 2: Party Size & Event Details */}
@@ -3171,10 +3583,10 @@ export default function TablesBlueprintScreen({
                               {isPrimary
                                 ? `PRIMARY • ${t.seats}s`
                                 : isLinked
-                                ? `JOINED • ${t.seats}s`
-                                : !selectable
-                                ? `${t.status.toUpperCase()} • ${t.seats}s`
-                                : `${tFloor.toLowerCase() === resFloor.toLowerCase() ? getTableSeatingType(t) : tFloor} • ${t.seats}s`}
+                                  ? `JOINED • ${t.seats}s`
+                                  : !selectable
+                                    ? `${t.status.toUpperCase()} • ${t.seats}s`
+                                    : `${tFloor.toLowerCase() === resFloor.toLowerCase() ? getTableSeatingType(t) : tFloor} • ${t.seats}s`}
                             </Text>
                           </TouchableOpacity>
                         );
@@ -3256,8 +3668,8 @@ export default function TablesBlueprintScreen({
                     {editingReservation
                       ? 'Update Arrangement'
                       : resBookingType === 'group_event'
-                      ? `Confirm ${guestsNum || 0}-Guest Arrangement`
-                      : 'Confirm Booking'}
+                        ? `Confirm ${guestsNum || 0}-Guest Arrangement`
+                        : 'Confirm Booking'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -4082,8 +4494,11 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   timeSlotBtn: {
-    paddingHorizontal: 9,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     borderRadius: 8,
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -4094,7 +4509,7 @@ const styles = StyleSheet.create({
     borderColor: BRAND,
   },
   timeSlotBtnText: {
-    fontSize: 11.5,
+    fontSize: 12,
     fontWeight: '700',
     color: '#334155',
   },
@@ -4102,6 +4517,183 @@ const styles = StyleSheet.create({
     color: '#F3D179',
     fontWeight: '900',
   },
+  quickLinkText: { fontSize: 11, fontWeight: '800', color: GROUP_ACCENT },
+  mealBadgeInline: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: GROUP_ACCENT,
+    backgroundColor: '#F3E8FF',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  scheduleTriggerBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    borderRadius: 11,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  scheduleTriggerBtnActive: {
+    borderColor: BRAND,
+    backgroundColor: '#FFFDF8',
+  },
+  scheduleTriggerIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#FAF5EA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scheduleTriggerValue: { fontSize: 13.5, fontWeight: '900', color: '#0F172A' },
+  scheduleTriggerSub: { fontSize: 10.5, color: '#64748B', fontWeight: '600' },
+  calendarBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#DDD6CA',
+    padding: 12,
+    marginTop: 2,
+    gap: 8,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  calNavBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#FAF7F2',
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarMonthTitle: { fontSize: 14, fontWeight: '900', color: BRAND },
+  calWeekRow: { flexDirection: 'row' },
+  calWeekLabel: {
+    width: '14.285%',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    paddingVertical: 3,
+  },
+  calDaysGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+  calDayCell: {
+    width: '14.285%',
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    position: 'relative',
+  },
+  calDayCellToday: {
+    borderWidth: 1.5,
+    borderColor: GOLD,
+    backgroundColor: '#FFFBEB',
+  },
+  calDayCellSelected: {
+    backgroundColor: BRAND,
+  },
+  calDayText: { fontSize: 12.5, fontWeight: '700', color: '#1E293B' },
+  calDayTextSelected: { color: '#F3D179', fontWeight: '900' },
+  calEventDot: {
+    position: 'absolute',
+    bottom: 3,
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: GROUP_ACCENT,
+  },
+  calFooterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  calQuickChip: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  calQuickChipText: { fontSize: 11, fontWeight: '800', color: '#334155' },
+  timePickerBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#DDD6FE',
+    padding: 12,
+    marginTop: 2,
+    gap: 10,
+  },
+  mealTabsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  mealTabBtn: {
+    flex: 1,
+    minWidth: 85,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  mealTabBtnActive: {
+    backgroundColor: BRAND,
+    borderColor: BRAND,
+  },
+  mealTabTitle: { fontSize: 11.5, fontWeight: '900', color: '#1E293B' },
+  mealTabSub: { fontSize: 9.5, fontWeight: '600', color: '#64748B' },
+  customDialBox: {
+    backgroundColor: '#FAF9F6',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+  },
+  dialRow: { flexDirection: 'row', gap: 10, flexWrap: 'wrap', alignItems: 'center' },
+  dialCol: { flex: 1, minWidth: 92, gap: 5 },
+  dialLabel: { fontSize: 10, fontWeight: '900', color: '#64748B', letterSpacing: 0.5 },
+  dialStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    overflow: 'hidden',
+  },
+  dialStepBtn: { width: 30, height: 32, alignItems: 'center', justifyContent: 'center', backgroundColor: '#F8FAFC' },
+  dialValue: { fontSize: 15, fontWeight: '900', color: '#0F172A' },
+  dialMinChip: {
+    flex: 1,
+    paddingVertical: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+  },
+  dialMinChipActive: { backgroundColor: BRAND, borderColor: BRAND },
+  dialMinText: { fontSize: 11.5, fontWeight: '800', color: '#334155' },
   modalFloorGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
