@@ -6,7 +6,13 @@ import { Invoice, useRestaurantStore } from '../store/restaurantStore';
 import { useSettingsStore } from '../store/settingsStore';
 import SultanLogo from './SultanLogo';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
-import { generateInvoiceQrCode, getInvoiceFeedbackUrl } from '../utils/qrCode';
+import {
+  generateInvoiceQrCode,
+  getBaseFeedbackUrl,
+  getInvoiceFeedbackUrl,
+  isValidFeedbackUrl,
+  PUBLIC_ONLINE_URL,
+} from '../utils/qrCode';
 import { getActiveServerHttpUrl } from '../services/syncService';
 
 type InvoiceProps = {
@@ -638,10 +644,8 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const onlineFeedbackUrl = useRestaurantStore((state) => state.onlineFeedbackUrl);
   const setOnlineFeedbackUrl = useRestaurantStore((state) => state.setOnlineFeedbackUrl);
 
-  // Automatically purge dropped/dead tunnels and 404 placeholders from store/state
-  const effectiveOnlineUrl = (!onlineFeedbackUrl || onlineFeedbackUrl.includes('192.168.1.17') || onlineFeedbackUrl.includes('sultan-resturant.web.app') || onlineFeedbackUrl.includes('.lhr.life'))
-    ? 'http://192.168.1.14:8081'
-    : onlineFeedbackUrl;
+  // Automatically resolve a verified Sultan Restaurant public HTTPS URL (purges foreign/LAN/dead URLs)
+  const effectiveOnlineUrl = getBaseFeedbackUrl(onlineFeedbackUrl);
 
   const [qrCodeDataUrl, setQrCodeDataUrl] = React.useState<string>('');
   const [activeFeedbackUrl, setActiveFeedbackUrl] = React.useState<string>('');
@@ -649,19 +653,11 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const [customDomainInput, setCustomDomainInput] = React.useState<string>(effectiveOnlineUrl);
 
   React.useEffect(() => {
-    if (!onlineFeedbackUrl || onlineFeedbackUrl.includes('192.168.1.17') || onlineFeedbackUrl.includes('sultan-resturant.web.app') || onlineFeedbackUrl.includes('.lhr.life')) {
-      const stableUrl = 'http://192.168.1.14:8081';
-      setOnlineFeedbackUrl(stableUrl);
-      setCustomDomainInput(stableUrl);
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        try {
-          window.localStorage.removeItem('sultan_feedback_online_url');
-        } catch {
-          // Ignore
-        }
-      }
+    if (onlineFeedbackUrl !== effectiveOnlineUrl) {
+      setOnlineFeedbackUrl(effectiveOnlineUrl);
+      setCustomDomainInput(effectiveOnlineUrl);
     }
-  }, [onlineFeedbackUrl, setOnlineFeedbackUrl]);
+  }, [onlineFeedbackUrl, effectiveOnlineUrl, setOnlineFeedbackUrl]);
 
   React.useEffect(() => {
     if (!showFeedbackQr) {
@@ -691,10 +687,12 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const handleSaveDomain = () => {
     if (customDomainInput.trim()) {
       const clean = customDomainInput.trim().replace(/\/+$/, '');
-      setOnlineFeedbackUrl(clean);
+      const verified = isValidFeedbackUrl(clean) ? clean : PUBLIC_ONLINE_URL;
+      setOnlineFeedbackUrl(verified);
+      setCustomDomainInput(verified);
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
         try {
-          window.localStorage.setItem('sultan_feedback_online_url', clean);
+          window.localStorage.setItem('sultan_feedback_online_url', verified);
         } catch {
           // Ignore
         }
@@ -934,13 +932,13 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
               <TouchableOpacity
                 style={styles.qrConfigBtn}
                 onPress={() => {
-                  setCustomDomainInput(onlineFeedbackUrl || 'http://192.168.1.14:8081');
+                  setCustomDomainInput(effectiveOnlineUrl);
                   setDomainModalVisible(true);
                 }}
                 activeOpacity={0.7}
               >
                 <Ionicons name="settings-outline" size={12} color="#475569" style={{ marginRight: 4 }} />
-                <Text style={styles.qrConfigBtnText}>Configure Online / Wi-Fi QR Link</Text>
+                <Text style={styles.qrConfigBtnText}>Configure Online QR Link</Text>
               </TouchableOpacity>
 
               {invoice.feedbackSubmitted || invoice.feedback ? (
@@ -1023,25 +1021,25 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
               <TouchableOpacity
                 style={[
                   styles.presetPill,
-                  customDomainInput.includes('192.168.1.14') && styles.presetPillActive,
+                  customDomainInput.includes('sultanresturant092.netlify.app') && styles.presetPillActive,
                 ]}
-                onPress={() => setCustomDomainInput('http://192.168.1.14:8081')}
+                onPress={() => setCustomDomainInput(PUBLIC_ONLINE_URL)}
                 activeOpacity={0.7}
               >
-                <Ionicons name="wifi" size={16} color="#0284C7" style={{ marginRight: 8 }} />
+                <Ionicons name="globe" size={16} color="#0284C7" style={{ marginRight: 8 }} />
                 <View>
-                  <Text style={styles.presetPillTitle}>Restaurant Wi-Fi (Instant & Permanent)</Text>
-                  <Text style={styles.presetPillSub}>http://192.168.1.14:8081</Text>
+                  <Text style={styles.presetPillTitle}>Sultan Live Cloud (4G / 5G & Wi-Fi)</Text>
+                  <Text style={styles.presetPillSub}>{PUBLIC_ONLINE_URL}</Text>
                 </View>
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.domainFieldLabel}>Custom Domain / Ngrok / Tunnel URL:</Text>
+            <Text style={styles.domainFieldLabel}>Custom Sultan Domain (HTTPS):</Text>
             <TextInput
               style={styles.domainTextInput}
               value={customDomainInput}
               onChangeText={setCustomDomainInput}
-              placeholder="e.g. https://my-domain.com or https://xxxx.ngrok-free.app"
+              placeholder="e.g. https://sultanrestaurant.com.pk"
               placeholderTextColor="#94A3B8"
               autoCapitalize="none"
               autoCorrect={false}

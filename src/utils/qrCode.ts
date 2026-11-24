@@ -25,23 +25,50 @@ function isPrivateLanUrl(url: string): boolean {
 }
 
 /**
- * Validates that a customer QR URL is publicly reachable over mobile networks (4G/5G)
- * and not localhost, a private LAN IP, or a dead placeholder.
+ * Returns true if the URL does not belong to Sultan Restaurant or points to a dead/temporary host
+ * (prevents stale localhost localStorage from unrelated POS projects from leaking into Sultan QR codes).
  */
-function isValidFeedbackUrl(url?: string): boolean {
+export function isBlockedForeignUrl(url: string): boolean {
+  const clean = url.trim().toLowerCase();
+  if (!clean) return true;
+  if (
+    clean.includes('sultan-resturant.web.app') ||
+    clean.includes('.lhr.life')
+  ) {
+    return true;
+  }
+  try {
+    const parsed = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
+    const host = (parsed.hostname || '').toLowerCase();
+    // Strictly require a Sultan Restaurant domain (e.g., sultanresturant092.netlify.app, sultanrestaurant.com.pk)
+    if (!host || !host.includes('sultan')) {
+      return true;
+    }
+  } catch {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Validates that a customer QR URL is publicly reachable over mobile networks (4G/5G),
+ * belongs to Sultan Restaurant, and is not localhost, a private LAN IP, or a foreign app URL.
+ */
+export function isValidFeedbackUrl(url?: string): boolean {
   if (!url || !url.trim()) return false;
   const clean = url.trim().toLowerCase();
+  if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
   if (isPrivateLanUrl(clean)) return false;
-  if (clean.includes('sultan-resturant.web.app') || clean.includes('.lhr.life')) return false;
-  return clean.startsWith('http://') || clean.startsWith('https://');
+  if (isBlockedForeignUrl(clean)) return false;
+  return true;
 }
 
 /**
  * Resolves the public HTTPS online base URL for all customer-facing QR codes
  * (Table Digital Menu QR Standees, Feedback QR Codes, WhatsApp Links).
  *
- * CRITICAL: Always resolves to a public HTTPS URL (default: https://sultanresturant092.netlify.app)
- * so customers can scan on ANY mobile data network (4G/5G) without connecting to restaurant Wi-Fi!
+ * CRITICAL: Always resolves to a verified Sultan Restaurant public HTTPS URL
+ * (default: https://sultanresturant092.netlify.app) so customers can scan on ANY 4G/5G network!
  */
 export function getBaseFeedbackUrl(customOverride?: string): string {
   // 1. Explicit public override passed as argument
@@ -51,9 +78,13 @@ export function getBaseFeedbackUrl(customOverride?: string): string {
 
   // 2. Check user-configured public URL stored in Zustand Store (persisted)
   try {
-    const storeUrl = useRestaurantStore.getState().onlineFeedbackUrl;
+    const store = useRestaurantStore.getState();
+    const storeUrl = store.onlineFeedbackUrl;
     if (storeUrl && isValidFeedbackUrl(storeUrl)) {
       return storeUrl.trim().replace(/\/+$/, '');
+    } else if (storeUrl && isBlockedForeignUrl(storeUrl)) {
+      // Automatically purge any foreign/stale URL from persisted store
+      store.setOnlineFeedbackUrl(PUBLIC_ONLINE_URL);
     }
   } catch {
     // Zustand store may not be ready during early init
@@ -64,13 +95,13 @@ export function getBaseFeedbackUrl(customOverride?: string): string {
     return process.env.EXPO_PUBLIC_FEEDBACK_ONLINE_URL.trim().replace(/\/+$/, '');
   }
 
-  // 4. In Web Browser: Check localStorage or current public origin
+  // 4. In Web Browser: Check localStorage or current public origin (auto-purging foreign/stale URLs)
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     try {
       const stored = window.localStorage.getItem('sultan_feedback_online_url');
       if (stored && isValidFeedbackUrl(stored)) {
         return stored.trim().replace(/\/+$/, '');
-      } else if (stored && (isPrivateLanUrl(stored) || stored.includes('sultan-resturant.web.app') || stored.includes('.lhr.life'))) {
+      } else if (stored) {
         window.localStorage.removeItem('sultan_feedback_online_url');
       }
     } catch {
@@ -302,7 +333,7 @@ export function printTableStandeeHtml(
         <div class="inner-border"></div>
         <div>
           <div class="header-title">SULTAN RESTAURANT</div>
-          <div class="header-urdu">سلطان ریستوراں • شاہی ذائقے</div>
+          <div class="header-urdu">ROYAL FINE DINING &amp; DIGITAL MENU</div>
           <div class="table-badge-wrap">
             <div class="table-badge-title">${table.name}</div>
           </div>
@@ -314,8 +345,7 @@ export function printTableStandeeHtml(
         </div>
 
         <div>
-          <div class="instructions-title">Scan Camera to View Menu & Order</div>
-          <div class="instructions-urdu">آرڈر کے لیے اپنے کیمرے سے اسکین کریں</div>
+          <div class="instructions-title">Scan Camera to View Menu &amp; Order</div>
           <div class="steps-row">
             1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
             3. Choose Dishes • 4. Direct Sent to Kitchen!
@@ -374,7 +404,7 @@ export function printAllTablesStandeesHtml(
           <div class="inner-border"></div>
           <div>
             <div class="header-title">SULTAN RESTAURANT</div>
-            <div class="header-urdu">سلطان ریستوراں • شاہی ذائقے</div>
+            <div class="header-urdu">ROYAL FINE DINING &amp; DIGITAL MENU</div>
             <div class="table-badge-wrap">
               <div class="table-badge-title">${table.name}</div>
             </div>
@@ -386,8 +416,7 @@ export function printAllTablesStandeesHtml(
           </div>
 
           <div>
-            <div class="instructions-title">Scan Camera to View Menu & Order</div>
-            <div class="instructions-urdu">آرڈر کے لیے اپنے کیمرے سے اسکین کریں</div>
+            <div class="instructions-title">Scan Camera to View Menu &amp; Order</div>
             <div class="steps-row">
               1. Open Mobile Camera / QR Scanner • 2. Tap Menu Link<br/>
               3. Choose Dishes • 4. Direct Sent to Kitchen!

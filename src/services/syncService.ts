@@ -282,12 +282,13 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   };
 }
 
-/** Probes a candidate LAN IP to check if Sultan Central POS Hub is running there */
-async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
+/** Verifies that a given HTTP base URL hosts Sultan Restaurant's Central POS Hub (and NOT another POS app on port 5050). */
+async function verifySultanServer(httpUrl: string, timeoutMs = 950): Promise<boolean> {
+  if (!httpUrl) return false;
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
-    const res = await fetch(`http://${ip}:${SERVER_PORT}/health`, {
+    const res = await fetch(`${httpUrl.replace(/\/+$/, '')}/health`, {
       method: 'GET',
       ...(controller ? { signal: controller.signal } : {}),
     });
@@ -295,14 +296,19 @@ async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
     if (!res.ok) return false;
     const data = await res.json();
     const serverName = String(data?.server || '').toLowerCase();
-    // Reject unrelated POS apps (e.g., Kanaf Cafe running on the same dev machine)
-    if (serverName && !serverName.includes('sultan')) {
+    // Strictly require Sultan server identity — never sync with unrelated POS servers on the same machine
+    if (!serverName || !serverName.includes('sultan')) {
       return false;
     }
-    return Boolean(data && (data.status === 'online' || data.server));
+    return Boolean(data && data.status === 'online');
   } catch {
     return false;
   }
+}
+
+/** Probes a candidate LAN IP to check if Sultan Central POS Hub is running there */
+async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
+  return verifySultanServer(`http://${ip}:${SERVER_PORT}`, timeoutMs);
 }
 
 /** Automatically discovers the Sultan POS Hub IP across common restaurant LAN subnets (192.168.0.x, 192.168.100.x, 192.168.1.x) */
@@ -474,9 +480,9 @@ export async function setCustomServerIp(newAddress: string) {
 async function fetchInitialFirebaseState() {
   let loadedRemotely = false;
 
-  // 0. Try Local LAN Central Server first (<50ms on restaurant Wi-Fi / LAN)
+  // 0. Try Local LAN Central Server first (<50ms on restaurant Wi-Fi / LAN), ONLY if verified as Sultan Hub
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
-  if (httpUrl) {
+  if (httpUrl && (await verifySultanServer(httpUrl, 1000))) {
     try {
       const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const timer = controller ? setTimeout(() => controller.abort(), 1400) : null;
@@ -714,6 +720,10 @@ async function pollLocalLanFallback() {
   }
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (!httpUrl) return;
+  if (!(await verifySultanServer(httpUrl, 900))) {
+    isLanConnected = false;
+    return;
+  }
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
   const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
   try {
@@ -750,7 +760,7 @@ async function pollLocalLanFallback() {
 }
 
 function connectWebSocket(forceReconnect = false) {
-  const { wsUrl } = parseServerEndpoints(currentServerAddress);
+  const { wsUrl, httpUrl } = parseServerEndpoints(currentServerAddress);
 
   // Never tear down an already-open or connecting WebSocket to the same server URL
   if (
@@ -785,6 +795,19 @@ function connectWebSocket(forceReconnect = false) {
     return;
   }
 
+  // Verify the target port 5050 server actually belongs to Sultan Restaurant before opening WebSocket
+  verifySultanServer(httpUrl, 950).then((isSultan) => {
+    if (!isSultan) {
+      isLanConnected = false;
+      syncStatus = isCloudConnected ? 'connected' : 'offline';
+      notifyListeners();
+      return;
+    }
+    openVerifiedWebSocket(wsUrl);
+  });
+}
+
+function openVerifiedWebSocket(wsUrl: string) {
   try {
     currentWsUrl = wsUrl;
     ws = new WebSocket(wsUrl);

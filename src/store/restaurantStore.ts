@@ -2605,11 +2605,27 @@ export const useRestaurantStore = create<RestaurantState>()(
         feedbacks: (state.feedbacks || []).filter(f => f.id !== id)
       })),
 
-      onlineFeedbackUrl: 'http://192.168.1.14:8081',
+      onlineFeedbackUrl: 'https://sultanresturant092.netlify.app',
 
-      setOnlineFeedbackUrl: (url) => set({
-        onlineFeedbackUrl: url.trim().replace(/\/+$/, '')
-      }),
+      setOnlineFeedbackUrl: (url) => {
+        const clean = (url || '').trim().replace(/\/+$/, '');
+        const lower = clean.toLowerCase();
+        let validSultanHost = false;
+        try {
+          if (lower.startsWith('http://') || lower.startsWith('https://')) {
+            const host = (new URL(lower).hostname || '').toLowerCase();
+            validSultanHost =
+              host.includes('sultan') &&
+              !host.includes('sultan-resturant.web.app') &&
+              !host.endsWith('.lhr.life');
+          }
+        } catch {
+          validSultanHost = false;
+        }
+        set({
+          onlineFeedbackUrl: validSultanHost ? clean : 'https://sultanresturant092.netlify.app'
+        });
+      },
 
       addMenuItem: (item) => {
         set((state) => {
@@ -3542,6 +3558,37 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           if (!Array.isArray(state.onlineOrders)) {
             state.onlineOrders = [];
+          }
+          // Sanitize onlineFeedbackUrl on boot so stale LAN IPs or unrelated app URLs never leak into Sultan QR codes
+          const isValidSultanUrl = (candidate: string): boolean => {
+            const c = candidate.trim().toLowerCase();
+            if (!c || (!c.startsWith('http://') && !c.startsWith('https://'))) return false;
+            if (
+              c.includes('localhost') ||
+              c.includes('127.0.0.1') ||
+              /https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(c) ||
+              c.includes('sultan-resturant.web.app') ||
+              c.includes('.lhr.life')
+            ) {
+              return false;
+            }
+            try {
+              const host = (new URL(c).hostname || '').toLowerCase();
+              return host.includes('sultan');
+            } catch {
+              return false;
+            }
+          };
+          if (!isValidSultanUrl(String(state.onlineFeedbackUrl || ''))) {
+            state.onlineFeedbackUrl = 'https://sultanresturant092.netlify.app';
+          }
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            try {
+              const storedUrl = window.localStorage.getItem('sultan_feedback_online_url') || '';
+              if (storedUrl && !isValidSultanUrl(storedUrl)) {
+                window.localStorage.removeItem('sultan_feedback_online_url');
+              }
+            } catch {}
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
