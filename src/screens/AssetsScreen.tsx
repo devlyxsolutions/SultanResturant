@@ -23,6 +23,8 @@ import {
   AssetCategory,
   AssetCondition,
   AssetStatus,
+  Supplier,
+  SupplierPayment,
   useAuthStore,
   useOpsStore,
 } from '../store';
@@ -96,6 +98,11 @@ export default function AssetsScreen({
   const renameAssetCategory = useOpsStore((s) => s.renameAssetCategory);
   const deleteAssetCategory = useOpsStore((s) => s.deleteAssetCategory);
   const suppliers = useOpsStore((s) => s.suppliers || []);
+  const addSupplier = useOpsStore((s) => s.addSupplier);
+  const purchaseOrders = useOpsStore((s) => s.purchaseOrders || []);
+  const addPurchaseOrder = useOpsStore((s) => s.addPurchaseOrder);
+  const supplierPayments = useOpsStore((s) => s.supplierPayments || []);
+  const recordSupplierPayment = useOpsStore((s) => s.recordSupplierPayment);
   const damageRecords = useOpsStore((s) => s.damageRecords || []);
   const addAsset = useOpsStore((s) => s.addAsset);
   const updateAsset = useOpsStore((s) => s.updateAsset);
@@ -109,16 +116,33 @@ export default function AssetsScreen({
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [modalMode, setModalMode] = useState<'single' | 'lot'>('lot');
   const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
   const [newCatInput, setNewCatInput] = useState('');
   const [editingCategoryOld, setEditingCategoryOld] = useState<string | null>(null);
   const [editingCategoryNew, setEditingCategoryNew] = useState('');
 
+  // Quick Add Supplier Modal
+  const [isQuickSupplierModalOpen, setIsQuickSupplierModalOpen] = useState(false);
+  const [quickSupplierName, setQuickSupplierName] = useState('');
+  const [quickSupplierCategory, setQuickSupplierCategory] = useState<string>(assetCategories[0] || ASSET_CATEGORIES[0]);
+  const [quickSupplierContact, setQuickSupplierContact] = useState('');
+  const [quickSupplierPhone, setQuickSupplierPhone] = useState('');
+  const [quickSupplierTerms, setQuickSupplierTerms] = useState('Credit 15 Days');
+  const [quickSupplierCity, setQuickSupplierCity] = useState('Lahore');
+
+  // Supplier Khata & Payments Modal
+  const [isSupplierLedgersOpen, setIsSupplierLedgersOpen] = useState(false);
+  const [selectedLedgerSupplierId, setSelectedLedgerSupplierId] = useState<string | null>(null);
+  const [paymentAmountInput, setPaymentAmountInput] = useState('');
+  const [paymentMethodInput, setPaymentMethodInput] = useState<'cash' | 'online' | 'cheque'>('cash');
+  const [paymentNotesInput, setPaymentNotesInput] = useState('');
+
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [maintenanceAsset, setMaintenanceAsset] = useState<Asset | null>(null);
   const [viewAsset, setViewAsset] = useState<Asset | null>(null);
 
-  // Form State
+  // Single Asset Form State
   const [formName, setFormName] = useState('');
   const [formUrduName, setFormUrduName] = useState('');
   const [formCategory, setFormCategory] = useState<string>(assetCategories[0] || ASSET_CATEGORIES[0]);
@@ -128,13 +152,28 @@ export default function AssetsScreen({
   const [formVendor, setFormVendor] = useState('');
   const [formVendorPhone, setFormVendorPhone] = useState('');
   const [formInvoiceNo, setFormInvoiceNo] = useState('');
-  const [formLocation, setFormLocation] = useState('Main Kitchen Line 1');
+  const [formLocation, setFormLocation] = useState('Main Dining Hall');
   const [formCondition, setFormCondition] = useState<AssetCondition>('good');
   const [formStatus, setFormStatus] = useState<AssetStatus>('active');
   const [formDepreciationRate, setFormDepreciationRate] = useState('10');
   const [formSerial, setFormSerial] = useState('');
   const [formNotes, setFormNotes] = useState('');
   const [formIsCapEx, setFormIsCapEx] = useState(true);
+
+  // Multi-Item Lot Form State
+  type LotItem = {
+    id: string;
+    name: string;
+    category: string;
+    quantity: string;
+    cost: string;
+  };
+  const [lotItems, setLotItems] = useState<LotItem[]>([
+    { id: 'item-1', name: '', category: assetCategories[0] || ASSET_CATEGORIES[0], quantity: '1', cost: '' },
+  ]);
+  const [lotPaidAmount, setLotPaidAmount] = useState('0');
+  const [lotPaymentMethod, setLotPaymentMethod] = useState<'cash' | 'online' | 'cheque'>('cash');
+  const [lotNotes, setLotNotes] = useState('');
 
   // Maintenance Form State
   const [maintCost, setMaintCost] = useState('');
@@ -198,12 +237,26 @@ export default function AssetsScreen({
     initialPageSize: 10,
   });
 
-  const openAddModal = () => {
+  const lotTotalBill = useMemo(() => {
+    return lotItems.reduce((sum, item) => {
+      const q = parseInt(item.quantity, 10) || 0;
+      const c = parseFloat(item.cost) || 0;
+      return sum + q * c;
+    }, 0);
+  }, [lotItems]);
+
+  const lotBalanceDue = useMemo(() => {
+    const paid = parseFloat(lotPaidAmount) || 0;
+    return Math.max(0, lotTotalBill - paid);
+  }, [lotTotalBill, lotPaidAmount]);
+
+  const openAddModal = (mode: 'single' | 'lot' = 'lot') => {
     if (!canAddAssets) {
       alertMsg('Permission Denied', 'You do not have permission to add capital assets.');
       return;
     }
     setEditingAsset(null);
+    setModalMode(mode);
     setFormName('');
     setFormUrduName('');
     setFormCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
@@ -213,13 +266,19 @@ export default function AssetsScreen({
     setFormVendor('');
     setFormVendorPhone('');
     setFormInvoiceNo('');
-    setFormLocation('Main Kitchen Line 1');
+    setFormLocation('Main Dining Hall');
     setFormCondition('good');
     setFormStatus('active');
     setFormDepreciationRate('10');
     setFormSerial('');
     setFormNotes('');
     setFormIsCapEx(true);
+    setLotItems([
+      { id: `item-${Date.now()}-1`, name: '', category: assetCategories[0] || ASSET_CATEGORIES[0], quantity: '1', cost: '' },
+    ]);
+    setLotPaidAmount('0');
+    setLotPaymentMethod('cash');
+    setLotNotes('');
     setIsAddModalOpen(true);
   };
 
@@ -228,6 +287,7 @@ export default function AssetsScreen({
       alertMsg('Permission Denied', 'You do not have permission to edit capital assets.');
       return;
     }
+    setModalMode('single');
     setEditingAsset(ast);
     setFormName(ast.name);
     setFormUrduName(ast.urduName || '');
@@ -248,6 +308,64 @@ export default function AssetsScreen({
     setIsAddModalOpen(true);
   };
 
+  const handleQuickAddSupplier = () => {
+    if (!quickSupplierName.trim()) {
+      alertMsg('Missing Name', 'Please enter the supplier or firm name.');
+      return;
+    }
+    const newId = `sup-${Date.now().toString().slice(-6)}`;
+    addSupplier({
+      name: quickSupplierName.trim(),
+      category: quickSupplierCategory || 'Furniture & Fixtures',
+      supplierType: 'assets',
+      contactPerson: quickSupplierContact.trim() || 'Contact Person',
+      phone: quickSupplierPhone.trim() || '0300-0000000',
+      paymentTerms: quickSupplierTerms || 'Credit 15 Days',
+      city: quickSupplierCity.trim() || 'Lahore',
+      suppliedItems: [],
+      currentBalance: 0,
+      totalPurchases: 0,
+      rating: 5,
+      status: 'active',
+    });
+
+    setFormSupplierId(newId);
+    setFormVendor(quickSupplierName.trim());
+    if (quickSupplierPhone.trim()) setFormVendorPhone(quickSupplierPhone.trim());
+    setIsQuickSupplierModalOpen(false);
+    setQuickSupplierName('');
+    setQuickSupplierPhone('');
+    setQuickSupplierContact('');
+    alertMsg('Supplier Registered', `Supplier "${quickSupplierName.trim()}" created & selected.`);
+  };
+
+  const handleRecordSupplierPayment = (sup: Supplier) => {
+    const amt = parseFloat(paymentAmountInput);
+    if (!Number.isFinite(amt) || amt <= 0) {
+      alertMsg('Invalid Amount', 'Please enter a valid payment amount.');
+      return;
+    }
+    recordSupplierPayment(
+      {
+        supplierId: sup.id,
+        supplierName: sup.name,
+        amount: amt,
+        method: paymentMethodInput,
+        paidBy: user?.name || 'Manager',
+        notes: paymentNotesInput.trim() || `CapEx Payment to ${sup.name}`,
+      },
+      {
+        autoRecordExpense: true,
+      }
+    );
+    setPaymentAmountInput('');
+    setPaymentNotesInput('');
+    alertMsg(
+      'Payment Recorded',
+      `Payment of ${money(amt)} paid to [${sup.name}] recorded successfully. Khata balance reduced.`
+    );
+  };
+
   const handleSaveAsset = () => {
     if (editingAsset ? !canEditAssets : !canAddAssets) {
       alertMsg(
@@ -258,6 +376,130 @@ export default function AssetsScreen({
       );
       return;
     }
+
+    const selectedSupplier = suppliers.find((s) => s.id === formSupplierId);
+    const finalVendor = selectedSupplier ? selectedSupplier.name : (formVendor.trim() || 'General Vendor');
+    const finalPhone = selectedSupplier ? (selectedSupplier.phone || formVendorPhone.trim()) : (formVendorPhone.trim() || undefined);
+    const depRate = parseFloat(formDepreciationRate) || 10;
+    const now = Date.now();
+
+    // ---------------- MULTI-ITEM LOT PURCHASE MODE ----------------
+    if (modalMode === 'lot' && !editingAsset) {
+      const validItems = lotItems.filter(
+        (it) => it.name.trim() && (parseFloat(it.cost) || 0) > 0 && (parseInt(it.quantity, 10) || 0) > 0
+      );
+      if (validItems.length === 0) {
+        alertMsg('Missing Items', 'Please add at least one valid item with description, quantity, and unit cost.');
+        return;
+      }
+
+      const totalBill = validItems.reduce((sum, it) => {
+        const q = parseInt(it.quantity, 10) || 1;
+        const c = parseFloat(it.cost) || 0;
+        return sum + q * c;
+      }, 0);
+
+      const paidAmount = parseFloat(lotPaidAmount) || 0;
+      if (paidAmount < 0) {
+        alertMsg('Invalid Payment', 'Paid amount cannot be negative.');
+        return;
+      }
+      const balanceDue = Math.max(0, totalBill - paidAmount);
+
+      const poItems = validItems.map((it, idx) => {
+        const q = parseInt(it.quantity, 10) || 1;
+        const c = parseFloat(it.cost) || 0;
+        const itemTotal = q * c;
+
+        addAsset({
+          assetCode: `AST-${(it.category || 'GEN').slice(0, 3).toUpperCase()}-${now.toString().slice(-4)}-${idx + 1}`,
+          name: it.name.trim(),
+          category: it.category || assetCategories[0] || ASSET_CATEGORIES[0],
+          purchaseDate: now,
+          cost: c,
+          quantity: q,
+          totalCost: itemTotal,
+          vendor: finalVendor,
+          vendorPhone: finalPhone,
+          supplierId: formSupplierId || undefined,
+          supplierName: selectedSupplier ? selectedSupplier.name : undefined,
+          isCapEx: formIsCapEx,
+          invoiceNo: formInvoiceNo.trim() || undefined,
+          location: formLocation.trim() || 'Main Dining Hall',
+          condition: formCondition,
+          status: formStatus,
+          depreciationRateYearly: depRate,
+          notes: lotNotes.trim() || undefined,
+        });
+
+        return {
+          name: it.name.trim(),
+          category: it.category,
+          unit: 'unit',
+          qtyOrdered: q,
+          qtyReceived: q,
+          unitCost: c,
+          totalCost: itemTotal,
+        };
+      });
+
+      if (selectedSupplier) {
+        const poId = `PO-AST-${now.toString().slice(-5)}`;
+        addPurchaseOrder(
+          {
+            poNumber: poId,
+            supplierId: selectedSupplier.id,
+            supplierName: selectedSupplier.name,
+            supplierType: 'assets',
+            invoiceNo: formInvoiceNo.trim() || undefined,
+            orderDate: now,
+            deliveryDate: now,
+            status: 'received',
+            paymentStatus: paidAmount >= totalBill ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
+            items: poItems,
+            subtotal: totalBill,
+            discount: 0,
+            tax: 0,
+            freight: 0,
+            totalAmount: totalBill,
+            amountPaid: paidAmount,
+            balanceDue: balanceDue,
+            paymentMethod: lotPaymentMethod,
+            receivedBy: user?.name || 'Manager',
+            notes: lotNotes.trim() || `CapEx Purchase: ${validItems.length} items (${formInvoiceNo || 'No Invoice'})`,
+          },
+          {
+            autoReceiveToInventory: false,
+            autoRecordExpense: false,
+          }
+        );
+
+        if (paidAmount > 0) {
+          recordSupplierPayment(
+            {
+              supplierId: selectedSupplier.id,
+              supplierName: selectedSupplier.name,
+              amount: paidAmount,
+              method: lotPaymentMethod,
+              paidBy: user?.name || 'Manager',
+              notes: `Initial payment for Asset Invoice ${formInvoiceNo.trim() || poId}`,
+            },
+            {
+              autoRecordExpense: true,
+            }
+          );
+        }
+      }
+
+      alertMsg(
+        'Multi-Item Asset Lot Registered',
+        `Successfully registered ${validItems.length} capital assets.\nTotal Bill: ${money(totalBill)}\nPaid Now: ${money(paidAmount)}\nSupplier Balance Due: ${money(balanceDue)}`
+      );
+      setIsAddModalOpen(false);
+      return;
+    }
+
+    // ---------------- SINGLE ASSET ITEM MODE ----------------
     if (!formName.trim()) {
       alertMsg('Missing Information', 'Please enter the asset name.');
       return;
@@ -272,11 +514,7 @@ export default function AssetsScreen({
       alertMsg('Invalid Quantity', 'Please enter a valid quantity.');
       return;
     }
-    const depRate = parseFloat(formDepreciationRate) || 10;
     const totalCost = cost * qty;
-    const selectedSupplier = suppliers.find((s) => s.id === formSupplierId);
-    const finalVendor = selectedSupplier ? selectedSupplier.name : (formVendor.trim() || 'General Vendor');
-    const finalPhone = selectedSupplier ? (selectedSupplier.phone || formVendorPhone.trim()) : (formVendorPhone.trim() || undefined);
 
     if (editingAsset) {
       updateAsset(editingAsset.id, {
@@ -434,10 +672,24 @@ export default function AssetsScreen({
             </Text>
           </TouchableOpacity>
 
+          <TouchableOpacity
+            style={[styles.addAssetBtn, { backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A' }]}
+            onPress={() => {
+              setSelectedLedgerSupplierId(suppliers.find((s) => (s.currentBalance || 0) > 0)?.id || suppliers[0]?.id || null);
+              setIsSupplierLedgersOpen(true);
+            }}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="book-outline" size={17} color="#92400E" />
+            <Text style={[styles.addAssetBtnText, { color: '#92400E' }]}>
+              Supplier Khatas ({suppliers.filter((s) => (s.currentBalance || 0) > 0).length} Due)
+            </Text>
+          </TouchableOpacity>
+
           {canAddAssets && (
-            <TouchableOpacity style={styles.addAssetBtn} onPress={openAddModal} activeOpacity={0.85}>
+            <TouchableOpacity style={styles.addAssetBtn} onPress={() => openAddModal('lot')} activeOpacity={0.85}>
               <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-              <Text style={styles.addAssetBtnText}>+ Add Capital Asset</Text>
+              <Text style={styles.addAssetBtnText}>+ Purchase Asset Lot</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -634,10 +886,21 @@ export default function AssetsScreen({
                           </View>
                         ) : null}
                         {ast.supplierName ? (
-                          <View style={styles.supplierBadge}>
+                          <TouchableOpacity
+                            style={styles.supplierBadge}
+                            onPress={() => {
+                              if (ast.supplierId) {
+                                setSelectedLedgerSupplierId(ast.supplierId);
+                                setIsSupplierLedgersOpen(true);
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
                             <Ionicons name="business" size={9} color="#0D9488" />
-                            <Text style={styles.supplierBadgeText} numberOfLines={1}>{ast.supplierName}</Text>
-                          </View>
+                            <Text style={styles.supplierBadgeText} numberOfLines={1}>
+                              {ast.supplierName} (Khata)
+                            </Text>
+                          </TouchableOpacity>
                         ) : null}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                           <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
@@ -763,10 +1026,21 @@ export default function AssetsScreen({
                         <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
                         <Text style={styles.rowLocationText} numberOfLines={1}>{ast.location || 'Kitchen'}</Text>
                         {ast.supplierName ? (
-                          <View style={styles.supplierBadge}>
+                          <TouchableOpacity
+                            style={styles.supplierBadge}
+                            onPress={() => {
+                              if (ast.supplierId) {
+                                setSelectedLedgerSupplierId(ast.supplierId);
+                                setIsSupplierLedgersOpen(true);
+                              }
+                            }}
+                            activeOpacity={0.8}
+                          >
                             <Ionicons name="business" size={9} color="#0D9488" />
-                            <Text style={styles.supplierBadgeText} numberOfLines={1}>{ast.supplierName}</Text>
-                          </View>
+                            <Text style={styles.supplierBadgeText} numberOfLines={1}>
+                              {ast.supplierName} (Khata)
+                            </Text>
+                          </TouchableOpacity>
                         ) : ast.vendor ? (
                           <Text style={styles.rowVendorText} numberOfLines={1}>• {ast.vendor}</Text>
                         ) : null}
@@ -883,12 +1157,16 @@ export default function AssetsScreen({
       {/* -------------------- ADD / EDIT MODAL -------------------- */}
       <Modal visible={isAddModalOpen} transparent animationType="fade">
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalCard, isMobile && { width: '95%', maxHeight: '92%' }]}>
+          <View style={[styles.modalCard, { maxWidth: modalMode === 'lot' ? 760 : 640 }, isMobile && { width: '96%', maxHeight: '94%' }]}>
             <View style={styles.modalHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                <Ionicons name="cube" size={20} color={LIGHT.burgundy} />
+                <Ionicons name={modalMode === 'lot' ? 'receipt' : 'cube'} size={20} color={LIGHT.burgundy} />
                 <Text style={styles.modalTitle}>
-                  {editingAsset ? `Edit [${editingAsset.assetCode}]` : 'Register New Capital Asset'}
+                  {editingAsset
+                    ? `Edit [${editingAsset.assetCode}]`
+                    : modalMode === 'lot'
+                    ? 'Purchase Capital Asset Lot (Multi-Item Invoice)'
+                    : 'Register Single Capital Asset'}
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setIsAddModalOpen(false)}>
@@ -897,240 +1175,646 @@ export default function AssetsScreen({
             </View>
 
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
-              {/* Asset Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Asset Name / Description *</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. Commercial 4-Burner Range Cooker"
-                  placeholderTextColor={LIGHT.textDim}
-                  value={formName}
-                  onChangeText={setFormName}
-                />
-              </View>
+              {/* Entry Mode Switcher (When adding new) */}
+              {!editingAsset && (
+                <View style={styles.entryModeToggle}>
+                  <TouchableOpacity
+                    style={[styles.entryModeBtn, modalMode === 'lot' && styles.entryModeBtnActiveLot]}
+                    onPress={() => setModalMode('lot')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="receipt" size={16} color={modalMode === 'lot' ? '#FFFFFF' : '#475569'} />
+                    <Text style={[styles.entryModeBtnText, modalMode === 'lot' && styles.entryModeBtnTextActive]}>
+                      Multi-Item Invoice Lot (Khata)
+                    </Text>
+                  </TouchableOpacity>
 
-              {/* Urdu Name */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Urdu Name (Optional)</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder="e.g. کمرشل چولہا رینج"
-                  placeholderTextColor={LIGHT.textDim}
-                  value={formUrduName}
-                  onChangeText={setFormUrduName}
-                />
-              </View>
-
-              {/* Category Dropdown with Manage Shortcut */}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <RoyalDropdown
-                    label="Asset Category"
-                    required
-                    icon="pricetag-outline"
-                    placeholder="Select asset category..."
-                    options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
-                    value={formCategory}
-                    onSelect={(cat) => setFormCategory(cat)}
-                    searchable
-                  />
+                  <TouchableOpacity
+                    style={[styles.entryModeBtn, modalMode === 'single' && styles.entryModeBtnActive]}
+                    onPress={() => setModalMode('single')}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="cube-outline" size={16} color={modalMode === 'single' ? '#FFFFFF' : '#475569'} />
+                    <Text style={[styles.entryModeBtnText, modalMode === 'single' && styles.entryModeBtnTextActive]}>
+                      Single Equipment Item
+                    </Text>
+                  </TouchableOpacity>
                 </View>
-                <TouchableOpacity
-                  style={styles.inlineManageBtn}
-                  onPress={() => setIsManageCategoriesOpen(true)}
-                  activeOpacity={0.8}
-                >
-                  <Ionicons name="folder-open-outline" size={18} color={LIGHT.burgundy} />
-                </TouchableOpacity>
-              </View>
+              )}
 
-              {/* CapEx vs Regular Outlay Toggle */}
-              <TouchableOpacity
-                style={[styles.capexToggleBox, formIsCapEx && styles.capexToggleBoxActive]}
-                onPress={() => setFormIsCapEx(!formIsCapEx)}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={formIsCapEx ? 'diamond' : 'square-outline'}
-                  size={20}
-                  color={formIsCapEx ? '#B48214' : LIGHT.textSecondary}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.capexToggleTitle, formIsCapEx && { color: '#854D0E' }]}>
-                    Capital Investment (CapEx Asset)
-                  </Text>
-                  <Text style={styles.capexToggleSub}>
-                    {formIsCapEx
-                      ? 'Capitalized balance sheet equipment. Excluded from daily operating expenses.'
-                      : 'Operational expense asset.'}
-                  </Text>
-                </View>
-              </TouchableOpacity>
+              {/* ==================== MULTI-ITEM LOT MODE ==================== */}
+              {modalMode === 'lot' && !editingAsset ? (
+                <>
+                  {/* Supplier & Invoice Header Card */}
+                  <View style={styles.lotSectionBox}>
+                    <Text style={styles.lotSectionTitle}>1. Supplier & Invoice Details</Text>
 
-              {/* Cost & Qty */}
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Unit Purchase Cost (PKR) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 250000"
-                    placeholderTextColor={LIGHT.textDim}
-                    keyboardType="numeric"
-                    value={formCost}
-                    onChangeText={setFormCost}
-                  />
-                </View>
+                    {/* Registered Supplier with Quick Add */}
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1 }}>
+                        <RoyalDropdown
+                          label="Registered Supplier (Sync with Ledger)"
+                          icon="business-outline"
+                          placeholder="Select registered vendor (or Cash Vendor)..."
+                          options={[
+                            { label: 'Direct / Cash Purchase (No registered supplier)', value: '' },
+                            ...suppliers.map((s) => ({
+                              label: `${s.name}${s.category ? ` (${s.category})` : ''} • Bal: Rs. ${(s.currentBalance || 0).toLocaleString()}`,
+                              value: s.id,
+                            })),
+                          ]}
+                          value={formSupplierId}
+                          onSelect={(supId) => {
+                            setFormSupplierId(supId);
+                            const found = suppliers.find((s) => s.id === supId);
+                            if (found) {
+                              setFormVendor(found.name);
+                              if (found.phone) setFormVendorPhone(found.phone);
+                            }
+                          }}
+                          searchable
+                        />
+                      </View>
+                      <TouchableOpacity
+                        style={styles.addSupplierQuickBtn}
+                        onPress={() => {
+                          setQuickSupplierCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
+                          setIsQuickSupplierModalOpen(true);
+                        }}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="person-add" size={15} color="#FFFFFF" />
+                        <Text style={styles.addSupplierQuickBtnText}>+ New</Text>
+                      </TouchableOpacity>
+                    </View>
 
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Quantity (Units) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="1"
-                    placeholderTextColor={LIGHT.textDim}
-                    keyboardType="numeric"
-                    value={formQty}
-                    onChangeText={setFormQty}
-                  />
-                </View>
-              </View>
+                    {/* Vendor Name & Phone (if not registered supplier) */}
+                    {!formSupplierId && (
+                      <View style={styles.twoCol}>
+                        <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                          <Text style={styles.inputLabel}>Vendor / Counter Party Name</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. Royal Wood Furnishers"
+                            placeholderTextColor={LIGHT.textDim}
+                            value={formVendor}
+                            onChangeText={setFormVendor}
+                          />
+                        </View>
+                        <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                          <Text style={styles.inputLabel}>Vendor Phone</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. 0300-1234567"
+                            placeholderTextColor={LIGHT.textDim}
+                            value={formVendorPhone}
+                            onChangeText={setFormVendorPhone}
+                          />
+                        </View>
+                      </View>
+                    )}
 
-              {/* Linked Registered Supplier */}
-              <RoyalDropdown
-                label="Registered Supplier (Sync with Ledger)"
-                icon="business-outline"
-                placeholder="Direct / Cash Purchase (No registered supplier)"
-                options={[
-                  { label: 'Direct / Cash Purchase (No registered supplier)', value: '' },
-                  ...suppliers.map((s) => ({
-                    label: `${s.name}${s.category ? ` (${s.category})` : ''}`,
-                    value: s.id,
-                  })),
-                ]}
-                value={formSupplierId}
-                onSelect={(supId) => {
-                  setFormSupplierId(supId);
-                  const found = suppliers.find((s) => s.id === supId);
-                  if (found) {
-                    setFormVendor(found.name);
-                    if (found.phone) setFormVendorPhone(found.phone);
-                  }
-                }}
-                searchable
-              />
+                    {/* Invoice No & Location */}
+                    <View style={styles.twoCol}>
+                      <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                        <Text style={styles.inputLabel}>Invoice / Bill / Challan No.</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. RWF-2024-889"
+                          placeholderTextColor={LIGHT.textDim}
+                          value={formInvoiceNo}
+                          onChangeText={setFormInvoiceNo}
+                        />
+                      </View>
+                      <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                        <Text style={styles.inputLabel}>Delivery Location / Floor</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. Main Dining Hall & Terrace"
+                          placeholderTextColor={LIGHT.textDim}
+                          value={formLocation}
+                          onChangeText={setFormLocation}
+                        />
+                      </View>
+                    </View>
 
-              {/* Vendor & Phone */}
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Vendor / Counter Party Name</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Pak Kitchen Tech Ltd"
-                    placeholderTextColor={LIGHT.textDim}
-                    value={formVendor}
-                    onChangeText={setFormVendor}
-                  />
-                </View>
+                    {/* CapEx Toggle Box */}
+                    <TouchableOpacity
+                      style={[styles.capexToggleBox, formIsCapEx && styles.capexToggleBoxActive, { marginBottom: 0 }]}
+                      onPress={() => setFormIsCapEx(!formIsCapEx)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={formIsCapEx ? 'diamond' : 'square-outline'}
+                        size={18}
+                        color={formIsCapEx ? '#B48214' : LIGHT.textSecondary}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.capexToggleTitle, formIsCapEx && { color: '#854D0E' }]}>
+                          Capital Investment (CapEx Asset)
+                        </Text>
+                        <Text style={styles.capexToggleSub}>
+                          Balance sheet asset equipment. Not deducted from daily operational restaurant expenses.
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  </View>
 
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Vendor Phone</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 0300-1234567"
-                    placeholderTextColor={LIGHT.textDim}
-                    value={formVendorPhone}
-                    onChangeText={setFormVendorPhone}
-                  />
-                </View>
-              </View>
+                  {/* Multi-Item Lot Items List */}
+                  <View style={styles.lotSectionBox}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <Text style={styles.lotSectionTitle}>
+                        2. Invoice Asset Items ({lotItems.length})
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: LIGHT.gold }}>
+                        Subtotal: {money(lotTotalBill)}
+                      </Text>
+                    </View>
 
-              {/* Location & Invoice */}
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Location / Floor Department</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Ground Floor Dining Hall"
-                    placeholderTextColor={LIGHT.textDim}
-                    value={formLocation}
-                    onChangeText={setFormLocation}
-                  />
-                </View>
+                    {lotItems.map((item, idx) => {
+                      const itemQty = parseInt(item.quantity, 10) || 0;
+                      const itemCost = parseFloat(item.cost) || 0;
+                      const itemTotal = itemQty * itemCost;
 
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Invoice / Bill No.</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. PKT-8821"
-                    placeholderTextColor={LIGHT.textDim}
-                    value={formInvoiceNo}
-                    onChangeText={setFormInvoiceNo}
-                  />
-                </View>
-              </View>
+                      return (
+                        <View key={item.id} style={styles.lotItemCard}>
+                          <View style={styles.lotItemCardHeader}>
+                            <View style={styles.lotItemNumberBadge}>
+                              <Text style={styles.lotItemNumberText}>#{idx + 1}</Text>
+                            </View>
+                            <Text style={styles.lotItemTotalPreview}>
+                              Total: {money(itemTotal)}
+                            </Text>
+                            {lotItems.length > 1 && (
+                              <TouchableOpacity
+                                onPress={() => setLotItems(lotItems.filter((it) => it.id !== item.id))}
+                                style={{ padding: 4 }}
+                              >
+                                <Ionicons name="trash-outline" size={16} color={LIGHT.rose} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
 
-              {/* Condition & Status Dropdowns */}
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <RoyalDropdown
-                    label="Physical Condition"
-                    required
-                    icon="sparkles-outline"
-                    options={CONDITIONS.map((c) => ({ label: c.label, value: c.key }))}
-                    value={formCondition}
-                    onSelect={(c) => setFormCondition(c as AssetCondition)}
-                  />
-                </View>
+                          <View style={styles.inputGroup}>
+                            <Text style={styles.inputLabel}>Item Description / Asset Name *</Text>
+                            <TextInput
+                              style={styles.input}
+                              placeholder="e.g. Dining Chairs Wooden, 4-Seater Table, Chiller"
+                              placeholderTextColor={LIGHT.textDim}
+                              value={item.name}
+                              onChangeText={(val) => {
+                                setLotItems(lotItems.map((it) => (it.id === item.id ? { ...it, name: val } : it)));
+                              }}
+                            />
+                          </View>
 
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <RoyalDropdown
-                    label="Operational Status"
-                    required
-                    icon="shield-checkmark-outline"
-                    options={STATUSES.map((s) => ({ label: s.label, value: s.key }))}
-                    value={formStatus}
-                    onSelect={(s) => setFormStatus(s as AssetStatus)}
-                  />
-                </View>
-              </View>
+                          <View style={{ marginBottom: 10 }}>
+                            <RoyalDropdown
+                              label="Category"
+                              required
+                              icon="pricetag-outline"
+                              placeholder="Select category..."
+                              options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
+                              value={item.category}
+                              onSelect={(cat) => {
+                                setLotItems(lotItems.map((it) => (it.id === item.id ? { ...it, category: cat } : it)));
+                              }}
+                              searchable
+                            />
+                          </View>
 
-              {/* Depreciation & Serial */}
-              <View style={styles.twoCol}>
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Depreciation Rate (%/Year)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="10"
-                    placeholderTextColor={LIGHT.textDim}
-                    keyboardType="numeric"
-                    value={formDepreciationRate}
-                    onChangeText={setFormDepreciationRate}
-                  />
-                </View>
+                          <View style={styles.twoCol}>
+                            <View style={[styles.inputGroup, { flex: 1, minWidth: 140 }]}>
+                              <Text style={styles.inputLabel}>Quantity (Units) *</Text>
+                              <TextInput
+                                style={styles.input}
+                                placeholder="1"
+                                placeholderTextColor={LIGHT.textDim}
+                                keyboardType="numeric"
+                                value={item.quantity}
+                                onChangeText={(val) => {
+                                  setLotItems(lotItems.map((it) => (it.id === item.id ? { ...it, quantity: val } : it)));
+                                }}
+                              />
+                            </View>
 
-                <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Serial / Chassis No.</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. SN-981249"
-                    placeholderTextColor={LIGHT.textDim}
-                    value={formSerial}
-                    onChangeText={setFormSerial}
-                  />
-                </View>
-              </View>
+                            <View style={[styles.inputGroup, { flex: 1, minWidth: 140 }]}>
+                              <Text style={styles.inputLabel}>Unit Purchase Cost (PKR) *</Text>
+                              <TextInput
+                                style={styles.input}
+                                placeholder="e.g. 4500"
+                                placeholderTextColor={LIGHT.textDim}
+                                keyboardType="numeric"
+                                value={item.cost}
+                                onChangeText={(val) => {
+                                  setLotItems(lotItems.map((it) => (it.id === item.id ? { ...it, cost: val } : it)));
+                                }}
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
 
-              {/* Notes */}
-              <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Technical Notes & Specifications</Text>
-                <TextInput
-                  style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
-                  placeholder="Warranty terms, power requirements (amps/phases), special maintenance notes..."
-                  placeholderTextColor={LIGHT.textDim}
-                  multiline
-                  value={formNotes}
-                  onChangeText={setFormNotes}
-                />
-              </View>
+                    <TouchableOpacity
+                      style={styles.addLotRowBtn}
+                      onPress={() => {
+                        setLotItems([
+                          ...lotItems,
+                          {
+                            id: `item-${Date.now()}-${lotItems.length + 1}`,
+                            name: '',
+                            category: assetCategories[0] || ASSET_CATEGORIES[0],
+                            quantity: '1',
+                            cost: '',
+                          },
+                        ]);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="add-circle-outline" size={18} color={LIGHT.burgundy} />
+                      <Text style={styles.addLotRowBtnText}>+ Add Another Asset Item to Invoice</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Bill Total & Khata Settlement Box */}
+                  <View style={[styles.lotSectionBox, { borderColor: '#FDE68A', backgroundColor: '#FFFDF5' }]}>
+                    <Text style={[styles.lotSectionTitle, { color: '#92400E' }]}>
+                      3. Invoice Bill & Supplier Khata Settlement
+                    </Text>
+
+                    {/* Total Bill Row */}
+                    <View style={styles.billTotalRow}>
+                      <Text style={styles.billTotalLabel}>Total Invoice Bill (PKR):</Text>
+                      <Text style={styles.billTotalValue}>{money(lotTotalBill)}</Text>
+                    </View>
+
+                    {/* Amount Paid Now */}
+                    <View style={[styles.inputGroup, { marginTop: 10 }]}>
+                      <Text style={styles.inputLabel}>Amount Paid to Supplier Now (PKR) *</Text>
+                      <TextInput
+                        style={[styles.input, { fontSize: 16, fontWeight: '800', color: LIGHT.emerald }]}
+                        placeholder="0"
+                        placeholderTextColor={LIGHT.textDim}
+                        keyboardType="numeric"
+                        value={lotPaidAmount}
+                        onChangeText={setLotPaidAmount}
+                      />
+                    </View>
+
+                    {/* Quick Payment Presets */}
+                    <View style={styles.quickPresetRow}>
+                      <TouchableOpacity
+                        style={styles.quickPresetBtn}
+                        onPress={() => setLotPaidAmount(String(lotTotalBill))}
+                      >
+                        <Text style={styles.quickPresetBtnText}>Full Paid ({money(lotTotalBill)})</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quickPresetBtn}
+                        onPress={() => setLotPaidAmount(String(Math.round(lotTotalBill / 2)))}
+                      >
+                        <Text style={styles.quickPresetBtnText}>50% Advance</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.quickPresetBtn}
+                        onPress={() => setLotPaidAmount('0')}
+                      >
+                        <Text style={styles.quickPresetBtnText}>Full Credit (Unpaid 0)</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Balance Payable Alert */}
+                    <View
+                      style={[
+                        styles.khataNoticeBox,
+                        lotBalanceDue > 0 ? styles.khataNoticeBoxDue : styles.khataNoticeBoxClear,
+                      ]}
+                    >
+                      <Ionicons
+                        name={lotBalanceDue > 0 ? 'alert-circle' : 'checkmark-circle'}
+                        size={18}
+                        color={lotBalanceDue > 0 ? '#BE123C' : '#047857'}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.khataNoticeTitle, lotBalanceDue > 0 ? { color: '#9F1239' } : { color: '#065F46' }]}>
+                          {lotBalanceDue > 0
+                            ? `Remaining Balance: ${money(lotBalanceDue)}`
+                            : 'Fully Paid & Settled'}
+                        </Text>
+                        <Text style={styles.khataNoticeSub}>
+                          {lotBalanceDue > 0
+                            ? formSupplierId
+                              ? `This Rs. ${lotBalanceDue.toLocaleString()} will be automatically added to the supplier's Khata ledger as pending payable.`
+                              : `Note: Select a Registered Supplier above to track this Rs. ${lotBalanceDue.toLocaleString()} in their Khata ledger.`
+                            : 'Full payment completed. No pending payable balance will be created.'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Payment Method */}
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={styles.inputLabel}>Payment Method</Text>
+                      <View style={styles.methodToggleRow}>
+                        <TouchableOpacity
+                          style={[styles.methodToggleBtn, lotPaymentMethod === 'cash' && styles.methodToggleBtnActive]}
+                          onPress={() => setLotPaymentMethod('cash')}
+                        >
+                          <Ionicons name="cash-outline" size={15} color={lotPaymentMethod === 'cash' ? '#FFFFFF' : '#475569'} />
+                          <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'cash' && styles.methodToggleBtnTextActive]}>
+                            Cash
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.methodToggleBtn, lotPaymentMethod === 'online' && styles.methodToggleBtnActive]}
+                          onPress={() => setLotPaymentMethod('online')}
+                        >
+                          <Ionicons name="card-outline" size={15} color={lotPaymentMethod === 'online' ? '#FFFFFF' : '#475569'} />
+                          <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'online' && styles.methodToggleBtnTextActive]}>
+                            Bank / Online
+                          </Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={[styles.methodToggleBtn, lotPaymentMethod === 'cheque' && styles.methodToggleBtnActive]}
+                          onPress={() => setLotPaymentMethod('cheque')}
+                        >
+                          <Ionicons name="document-text-outline" size={15} color={lotPaymentMethod === 'cheque' ? '#FFFFFF' : '#475569'} />
+                          <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'cheque' && styles.methodToggleBtnTextActive]}>
+                            Cheque
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    {/* Lot Notes */}
+                    <View style={[styles.inputGroup, { marginTop: 10 }]}>
+                      <Text style={styles.inputLabel}>Invoice Notes / Terms</Text>
+                      <TextInput
+                        style={[styles.input, { height: 50 }]}
+                        placeholder="e.g. Delivered to hall. Remaining payment due on installation."
+                        placeholderTextColor={LIGHT.textDim}
+                        value={lotNotes}
+                        onChangeText={setLotNotes}
+                      />
+                    </View>
+                  </View>
+                </>
+              ) : (
+                /* ==================== SINGLE ASSET MODE ==================== */
+                <>
+                  {/* Asset Name */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Asset Name / Description *</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. Commercial 4-Burner Range Cooker"
+                      placeholderTextColor={LIGHT.textDim}
+                      value={formName}
+                      onChangeText={setFormName}
+                    />
+                  </View>
+
+                  {/* Urdu Name */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Urdu Name (Optional)</Text>
+                    <TextInput
+                      style={styles.input}
+                      placeholder="e.g. کمرشل چولہا رینج"
+                      placeholderTextColor={LIGHT.textDim}
+                      value={formUrduName}
+                      onChangeText={setFormUrduName}
+                    />
+                  </View>
+
+                  {/* Category Dropdown with Manage Shortcut */}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <RoyalDropdown
+                        label="Asset Category"
+                        required
+                        icon="pricetag-outline"
+                        placeholder="Select asset category..."
+                        options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
+                        value={formCategory}
+                        onSelect={(cat) => setFormCategory(cat)}
+                        searchable
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.inlineManageBtn}
+                      onPress={() => setIsManageCategoriesOpen(true)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="folder-open-outline" size={18} color={LIGHT.burgundy} />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* CapEx vs Regular Outlay Toggle */}
+                  <TouchableOpacity
+                    style={[styles.capexToggleBox, formIsCapEx && styles.capexToggleBoxActive]}
+                    onPress={() => setFormIsCapEx(!formIsCapEx)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons
+                      name={formIsCapEx ? 'diamond' : 'square-outline'}
+                      size={20}
+                      color={formIsCapEx ? '#B48214' : LIGHT.textSecondary}
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.capexToggleTitle, formIsCapEx && { color: '#854D0E' }]}>
+                        Capital Investment (CapEx Asset)
+                      </Text>
+                      <Text style={styles.capexToggleSub}>
+                        {formIsCapEx
+                          ? 'Capitalized balance sheet equipment. Excluded from daily operating expenses.'
+                          : 'Operational expense asset.'}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+
+                  {/* Cost & Qty */}
+                  <View style={styles.twoCol}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Unit Purchase Cost (PKR) *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 250000"
+                        placeholderTextColor={LIGHT.textDim}
+                        keyboardType="numeric"
+                        value={formCost}
+                        onChangeText={setFormCost}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Quantity (Units) *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="1"
+                        placeholderTextColor={LIGHT.textDim}
+                        keyboardType="numeric"
+                        value={formQty}
+                        onChangeText={setFormQty}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Linked Registered Supplier with + New Button */}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                    <View style={{ flex: 1 }}>
+                      <RoyalDropdown
+                        label="Registered Supplier (Sync with Ledger)"
+                        icon="business-outline"
+                        placeholder="Direct / Cash Purchase (No registered supplier)"
+                        options={[
+                          { label: 'Direct / Cash Purchase (No registered supplier)', value: '' },
+                          ...suppliers.map((s) => ({
+                            label: `${s.name}${s.category ? ` (${s.category})` : ''} • Bal: Rs. ${(s.currentBalance || 0).toLocaleString()}`,
+                            value: s.id,
+                          })),
+                        ]}
+                        value={formSupplierId}
+                        onSelect={(supId) => {
+                          setFormSupplierId(supId);
+                          const found = suppliers.find((s) => s.id === supId);
+                          if (found) {
+                            setFormVendor(found.name);
+                            if (found.phone) setFormVendorPhone(found.phone);
+                          }
+                        }}
+                        searchable
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={styles.addSupplierQuickBtn}
+                      onPress={() => {
+                        setQuickSupplierCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
+                        setIsQuickSupplierModalOpen(true);
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="person-add" size={15} color="#FFFFFF" />
+                      <Text style={styles.addSupplierQuickBtnText}>+ New</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Vendor & Phone */}
+                  <View style={styles.twoCol}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Vendor / Counter Party Name</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Pak Kitchen Tech Ltd"
+                        placeholderTextColor={LIGHT.textDim}
+                        value={formVendor}
+                        onChangeText={setFormVendor}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Vendor Phone</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 0300-1234567"
+                        placeholderTextColor={LIGHT.textDim}
+                        value={formVendorPhone}
+                        onChangeText={setFormVendorPhone}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Location & Invoice */}
+                  <View style={styles.twoCol}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Location / Floor Department</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Ground Floor Dining Hall"
+                        placeholderTextColor={LIGHT.textDim}
+                        value={formLocation}
+                        onChangeText={setFormLocation}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Invoice / Bill No.</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. PKT-8821"
+                        placeholderTextColor={LIGHT.textDim}
+                        value={formInvoiceNo}
+                        onChangeText={setFormInvoiceNo}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Condition & Status Dropdowns */}
+                  <View style={styles.twoCol}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <RoyalDropdown
+                        label="Physical Condition"
+                        required
+                        icon="sparkles-outline"
+                        options={CONDITIONS.map((c) => ({ label: c.label, value: c.key }))}
+                        value={formCondition}
+                        onSelect={(c) => setFormCondition(c as AssetCondition)}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <RoyalDropdown
+                        label="Operational Status"
+                        required
+                        icon="shield-checkmark-outline"
+                        options={STATUSES.map((s) => ({ label: s.label, value: s.key }))}
+                        value={formStatus}
+                        onSelect={(s) => setFormStatus(s as AssetStatus)}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Depreciation & Serial */}
+                  <View style={styles.twoCol}>
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Depreciation Rate (%/Year)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="10"
+                        placeholderTextColor={LIGHT.textDim}
+                        keyboardType="numeric"
+                        value={formDepreciationRate}
+                        onChangeText={setFormDepreciationRate}
+                      />
+                    </View>
+
+                    <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
+                      <Text style={styles.inputLabel}>Serial / Chassis No.</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. SN-981249"
+                        placeholderTextColor={LIGHT.textDim}
+                        value={formSerial}
+                        onChangeText={setFormSerial}
+                      />
+                    </View>
+                  </View>
+
+                  {/* Notes */}
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Technical Notes & Specifications</Text>
+                    <TextInput
+                      style={[styles.input, { height: 70, textAlignVertical: 'top' }]}
+                      placeholder="Warranty terms, power requirements (amps/phases), special maintenance notes..."
+                      placeholderTextColor={LIGHT.textDim}
+                      multiline
+                      value={formNotes}
+                      onChangeText={setFormNotes}
+                    />
+                  </View>
+                </>
+              )}
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -1144,7 +1828,11 @@ export default function AssetsScreen({
               <TouchableOpacity style={styles.modalSubmitBtn} onPress={handleSaveAsset}>
                 <Ionicons name="checkmark-done" size={18} color="#FFFFFF" />
                 <Text style={styles.modalSubmitText}>
-                  {editingAsset ? 'Update Asset' : 'Save Capital Asset'}
+                  {editingAsset
+                    ? 'Update Asset'
+                    : modalMode === 'lot'
+                    ? `Save Lot (${lotItems.length} Assets • ${money(lotTotalBill)})`
+                    : 'Save Capital Asset'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1543,6 +2231,351 @@ export default function AssetsScreen({
                 onPress={() => setIsManageCategoriesOpen(false)}
               >
                 <Text style={styles.modalSubmitText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* -------------------- QUICK ADD SUPPLIER MODAL -------------------- */}
+      <Modal visible={isQuickSupplierModalOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 500 }, isMobile && { width: '95%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="person-add" size={20} color={LIGHT.burgundy} />
+                <Text style={styles.modalTitle}>Quick Add Capital Supplier</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsQuickSupplierModalOpen(false)}>
+                <Ionicons name="close" size={22} color={LIGHT.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 18, maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Supplier / Business Firm Name *</Text>
+                <TextInput
+                  style={styles.input}
+                  placeholder="e.g. Royal Wood Furnishers"
+                  placeholderTextColor={LIGHT.textDim}
+                  value={quickSupplierName}
+                  onChangeText={setQuickSupplierName}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.inputLabel}>Asset Specialty / Category</Text>
+                <RoyalDropdown
+                  label="Category"
+                  options={assetCategories.map((c) => ({ label: c, value: c }))}
+                  value={quickSupplierCategory}
+                  onSelect={(c) => setQuickSupplierCategory(c)}
+                  searchable
+                />
+              </View>
+
+              <View style={styles.twoCol}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.inputLabel}>Contact Person</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Haji Rashid"
+                    placeholderTextColor={LIGHT.textDim}
+                    value={quickSupplierContact}
+                    onChangeText={setQuickSupplierContact}
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.inputLabel}>Phone / WhatsApp *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. 0300-1234567"
+                    placeholderTextColor={LIGHT.textDim}
+                    value={quickSupplierPhone}
+                    onChangeText={setQuickSupplierPhone}
+                  />
+                </View>
+              </View>
+
+              <View style={styles.twoCol}>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.inputLabel}>Payment Terms</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Credit 15 Days"
+                    placeholderTextColor={LIGHT.textDim}
+                    value={quickSupplierTerms}
+                    onChangeText={setQuickSupplierTerms}
+                  />
+                </View>
+                <View style={[styles.inputGroup, { flex: 1, minWidth: 150 }]}>
+                  <Text style={styles.inputLabel}>City</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Lahore"
+                    placeholderTextColor={LIGHT.textDim}
+                    value={quickSupplierCity}
+                    onChangeText={setQuickSupplierCity}
+                  />
+                </View>
+              </View>
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsQuickSupplierModalOpen(false)}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSubmitBtn}
+                onPress={handleQuickAddSupplier}
+              >
+                <Ionicons name="checkmark-done" size={17} color="#FFFFFF" />
+                <Text style={styles.modalSubmitText}>Save & Select Supplier</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* -------------------- SUPPLIER KHATAS & PAYMENTS MODAL -------------------- */}
+      <Modal visible={isSupplierLedgersOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 880, height: isMobile ? '94%' : 680 }, isMobile && { width: '96%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="book" size={20} color={LIGHT.burgundy} />
+                <Text style={styles.modalTitle}>Capital Suppliers Khata & Payment Ledger</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsSupplierLedgersOpen(false)}>
+                <Ionicons name="close" size={22} color={LIGHT.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flex: 1, flexDirection: isMobile ? 'column' : 'row' }}>
+              {/* Left Column: Supplier List */}
+              <View style={[styles.ledgerLeftCol, isMobile && { maxHeight: 180, borderRightWidth: 0, borderBottomWidth: 1 }]}>
+                <Text style={styles.ledgerListHeader}>SUPPLIERS ({suppliers.length})</Text>
+                <ScrollView showsVerticalScrollIndicator={false}>
+                  {suppliers.length === 0 ? (
+                    <Text style={{ fontSize: 12, color: LIGHT.textDim, padding: 12 }}>No suppliers registered yet.</Text>
+                  ) : (
+                    suppliers.map((sup) => {
+                      const isSelected = (selectedLedgerSupplierId || suppliers[0]?.id) === sup.id;
+                      const bal = sup.currentBalance || 0;
+                      return (
+                        <TouchableOpacity
+                          key={sup.id}
+                          style={[styles.ledgerSupplierItem, isSelected && styles.ledgerSupplierItemActive]}
+                          onPress={() => setSelectedLedgerSupplierId(sup.id)}
+                          activeOpacity={0.8}
+                        >
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.ledgerSupplierName, isSelected && { color: LIGHT.burgundy }]} numberOfLines={1}>
+                              {sup.name}
+                            </Text>
+                            <Text style={styles.ledgerSupplierSub} numberOfLines={1}>
+                              {sup.category || 'General'} • {sup.phone || 'No Phone'}
+                            </Text>
+                          </View>
+                          <View style={{ alignItems: 'flex-end', marginLeft: 6 }}>
+                            <Text style={[styles.ledgerBalVal, bal > 0 ? { color: LIGHT.rose } : { color: LIGHT.emerald }]}>
+                              {bal > 0 ? `Due ${money(bal)}` : 'Cleared'}
+                            </Text>
+                            <Text style={styles.ledgerPurchasesVal}>Pur: {money(sup.totalPurchases || 0)}</Text>
+                          </View>
+                        </TouchableOpacity>
+                      );
+                    })
+                  )}
+                </ScrollView>
+              </View>
+
+              {/* Right Column: Ledger & Payment History */}
+              {(() => {
+                const currentSup = suppliers.find((s) => s.id === (selectedLedgerSupplierId || suppliers[0]?.id));
+                if (!currentSup) {
+                  return (
+                    <View style={{ flex: 2, padding: 24, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ color: LIGHT.textDim, fontSize: 14 }}>No supplier selected.</Text>
+                    </View>
+                  );
+                }
+                const historyPayments = supplierPayments.filter((p) => p.supplierId === currentSup.id);
+                const supPOs = purchaseOrders.filter((po) => po.supplierId === currentSup.id);
+
+                return (
+                  <ScrollView style={{ flex: 2, padding: 16 }} showsVerticalScrollIndicator={false}>
+                    {/* Supplier Quick Header */}
+                    <View style={styles.supplierDetailHeader}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.detailSupName}>{currentSup.name}</Text>
+                        <Text style={styles.detailSupMeta}>
+                          {currentSup.category} • Contact: {currentSup.contactPerson} ({currentSup.phone})
+                        </Text>
+                        <Text style={styles.detailSupMeta}>Terms: {currentSup.paymentTerms || 'Credit 15 Days'}</Text>
+                      </View>
+                    </View>
+
+                    {/* KPI Balance Cards */}
+                    <View style={styles.ledgerKpiRow}>
+                      <View style={[styles.ledgerKpiBox, { borderColor: '#FECDD3', backgroundColor: '#FFF1F2' }]}>
+                        <Text style={[styles.ledgerKpiLabel, { color: '#BE123C' }]}>CURRENT PAYABLE (KHATA DUE)</Text>
+                        <Text style={[styles.ledgerKpiVal, { color: '#9F1239' }]}>{money(currentSup.currentBalance || 0)}</Text>
+                      </View>
+                      <View style={[styles.ledgerKpiBox, { borderColor: '#E2E8F0', backgroundColor: '#F8FAFC' }]}>
+                        <Text style={styles.ledgerKpiLabel}>TOTAL INVOICED PURCHASES</Text>
+                        <Text style={[styles.ledgerKpiVal, { color: LIGHT.ink }]}>{money(currentSup.totalPurchases || 0)}</Text>
+                      </View>
+                    </View>
+
+                    {/* Record Payment Card */}
+                    <View style={styles.recordPaymentCard}>
+                      <Text style={styles.recordPaymentTitle}>Record Payment to Supplier (Deduct Khata)</Text>
+
+                      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                        <View style={{ flex: 1, minWidth: 150 }}>
+                          <Text style={styles.inputLabel}>Payment Amount (PKR) *</Text>
+                          <TextInput
+                            style={[styles.input, { fontWeight: '800', color: LIGHT.emerald, fontSize: 15 }]}
+                            placeholder="e.g. 25000"
+                            placeholderTextColor={LIGHT.textDim}
+                            keyboardType="numeric"
+                            value={paymentAmountInput}
+                            onChangeText={setPaymentAmountInput}
+                          />
+                        </View>
+                        <View style={{ width: 140 }}>
+                          <Text style={styles.inputLabel}>Payment Method</Text>
+                          <View style={{ flexDirection: 'row', gap: 4, height: 42 }}>
+                            <TouchableOpacity
+                              style={[styles.quickPayMethodBtn, paymentMethodInput === 'cash' && styles.quickPayMethodBtnActive]}
+                              onPress={() => setPaymentMethodInput('cash')}
+                            >
+                              <Text style={[styles.quickPayMethodText, paymentMethodInput === 'cash' && styles.quickPayMethodTextActive]}>Cash</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={[styles.quickPayMethodBtn, paymentMethodInput === 'online' && styles.quickPayMethodBtnActive]}
+                              onPress={() => setPaymentMethodInput('online')}
+                            >
+                              <Text style={[styles.quickPayMethodText, paymentMethodInput === 'online' && styles.quickPayMethodTextActive]}>Bank</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      </View>
+
+                      {/* Quick Presets */}
+                      {(currentSup.currentBalance || 0) > 0 && (
+                        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                          <TouchableOpacity
+                            style={styles.smallPresetBtn}
+                            onPress={() => setPaymentAmountInput(String(currentSup.currentBalance))}
+                          >
+                            <Text style={styles.smallPresetBtnText}>Pay Full Due ({money(currentSup.currentBalance)})</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.smallPresetBtn}
+                            onPress={() => setPaymentAmountInput(String(Math.round(currentSup.currentBalance / 2)))}
+                          >
+                            <Text style={styles.smallPresetBtnText}>Pay 50%</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+
+                      <View style={{ marginTop: 8 }}>
+                        <Text style={styles.inputLabel}>Payment Note / Cheque / Transaction Ref</Text>
+                        <TextInput
+                          style={[styles.input, { height: 38 }]}
+                          placeholder="e.g. Cheque #88192 or Meezan Bank Transfer"
+                          placeholderTextColor={LIGHT.textDim}
+                          value={paymentNotesInput}
+                          onChangeText={setPaymentNotesInput}
+                        />
+                      </View>
+
+                      <TouchableOpacity
+                        style={styles.submitPaymentBtn}
+                        onPress={() => handleRecordSupplierPayment(currentSup)}
+                        activeOpacity={0.85}
+                      >
+                        <Ionicons name="wallet-outline" size={16} color="#FFFFFF" />
+                        <Text style={styles.submitPaymentBtnText}>Pay & Deduct from Khata</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Payment History Log */}
+                    <View style={{ marginTop: 16 }}>
+                      <Text style={styles.sectionHeading}>
+                        PAYMENT RECORD HISTORY ({historyPayments.length})
+                      </Text>
+                      {historyPayments.length === 0 ? (
+                        <Text style={{ fontSize: 12.5, color: LIGHT.textDim, fontStyle: 'italic', marginTop: 4 }}>
+                          No payment transactions recorded yet for this supplier.
+                        </Text>
+                      ) : (
+                        historyPayments.map((p) => (
+                          <View key={p.id} style={styles.paymentRecordRow}>
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={styles.paymentRecordAmount}>{money(p.amount)}</Text>
+                                <View style={styles.paymentMethodPill}>
+                                  <Text style={styles.paymentMethodPillText}>{p.method.toUpperCase()}</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.paymentRecordMeta}>
+                                Paid on {formatDay(p.paidAt)} by {p.paidBy || 'Manager'}
+                              </Text>
+                              {p.notes ? <Text style={styles.paymentRecordNote}>"{p.notes}"</Text> : null}
+                            </View>
+                            <Ionicons name="checkmark-circle" size={18} color={LIGHT.emerald} />
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Invoices / POs History */}
+                    <View style={{ marginTop: 16, marginBottom: 20 }}>
+                      <Text style={styles.sectionHeading}>
+                        PURCHASE INVOICES ({supPOs.length})
+                      </Text>
+                      {supPOs.length === 0 ? (
+                        <Text style={{ fontSize: 12.5, color: LIGHT.textDim, fontStyle: 'italic', marginTop: 4 }}>
+                          No formal purchase orders on file.
+                        </Text>
+                      ) : (
+                        supPOs.map((po) => (
+                          <View key={po.id} style={styles.poRecordRow}>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.poRecordTitle}>
+                                {po.poNumber} • {po.invoiceNo ? `Inv: ${po.invoiceNo}` : 'No Invoice #'}
+                              </Text>
+                              <Text style={styles.poRecordMeta}>
+                                {formatDay(po.orderDate)} • {po.items?.length || 0} items
+                              </Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                              <Text style={styles.poRecordAmount}>{money(po.totalAmount)}</Text>
+                              <Text style={[styles.poRecordStatus, po.balanceDue > 0 ? { color: LIGHT.rose } : { color: LIGHT.emerald }]}>
+                                {po.balanceDue > 0 ? `Due ${money(po.balanceDue)}` : 'PAID'}
+                              </Text>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+                  </ScrollView>
+                );
+              })()}
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalSubmitBtn}
+                onPress={() => setIsSupplierLedgersOpen(false)}
+              >
+                <Text style={styles.modalSubmitText}>Close Ledger</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2330,5 +3363,437 @@ const styles = StyleSheet.create({
   catRowCount: {
     fontSize: 11.5,
     color: '#64748B',
+  },
+  // Multi-Item Lot & Supplier Khata Styles
+  entryModeToggle: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    backgroundColor: '#F1F5F9',
+    padding: 4,
+    borderRadius: 8,
+  },
+  entryModeBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+  },
+  entryModeBtnActive: {
+    backgroundColor: '#0284C7',
+  },
+  entryModeBtnActiveLot: {
+    backgroundColor: LIGHT.burgundy,
+  },
+  entryModeBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  entryModeBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  addSupplierQuickBtn: {
+    height: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: LIGHT.burgundy,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  addSupplierQuickBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12.5,
+    fontWeight: '800',
+  },
+  lotSectionBox: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 14,
+  },
+  lotSectionTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1E293B',
+    marginBottom: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  lotItemCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 10,
+  },
+  lotItemCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  lotItemNumberBadge: {
+    backgroundColor: LIGHT.burgundySoft,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  lotItemNumberText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: LIGHT.burgundy,
+  },
+  lotItemTotalPreview: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: LIGHT.emerald,
+  },
+  addLotRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    backgroundColor: LIGHT.burgundySoft,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(82, 23, 27, 0.2)',
+    borderStyle: 'dashed',
+    marginTop: 4,
+  },
+  addLotRowBtnText: {
+    color: LIGHT.burgundy,
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  billTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
+  },
+  billTotalLabel: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  billTotalValue: {
+    fontSize: 20,
+    fontWeight: '900',
+    color: '#B45309',
+  },
+  quickPresetRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 6,
+    flexWrap: 'wrap',
+  },
+  quickPresetBtn: {
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 6,
+  },
+  quickPresetBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#92400E',
+  },
+  khataNoticeBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    padding: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    marginTop: 10,
+  },
+  khataNoticeBoxDue: {
+    backgroundColor: '#FFF1F2',
+    borderColor: '#FECDD3',
+  },
+  khataNoticeBoxClear: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  khataNoticeTitle: {
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  khataNoticeSub: {
+    fontSize: 11.5,
+    color: '#475569',
+    marginTop: 2,
+  },
+  methodToggleRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: 4,
+  },
+  methodToggleBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    paddingVertical: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+  },
+  methodToggleBtnActive: {
+    backgroundColor: LIGHT.burgundy,
+    borderColor: LIGHT.burgundy,
+  },
+  methodToggleBtnText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  methodToggleBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  // Supplier Khata Ledger Styles
+  ledgerLeftCol: {
+    width: 260,
+    borderRightWidth: 1,
+    borderRightColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    padding: 10,
+  },
+  ledgerListHeader: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  ledgerSupplierItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    marginBottom: 6,
+  },
+  ledgerSupplierItemActive: {
+    borderColor: LIGHT.burgundy,
+    backgroundColor: '#FFF5F5',
+  },
+  ledgerSupplierName: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  ledgerSupplierSub: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  ledgerBalVal: {
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  ledgerPurchasesVal: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  supplierDetailHeader: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+    marginBottom: 12,
+  },
+  detailSupName: {
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  detailSupMeta: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  ledgerKpiRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  ledgerKpiBox: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  ledgerKpiLabel: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#64748B',
+    letterSpacing: 0.5,
+  },
+  ledgerKpiVal: {
+    fontSize: 18,
+    fontWeight: '900',
+    marginTop: 2,
+  },
+  recordPaymentCard: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 10,
+    padding: 14,
+  },
+  recordPaymentTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#1E293B',
+  },
+  quickPayMethodBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+  },
+  quickPayMethodBtnActive: {
+    backgroundColor: LIGHT.burgundy,
+    borderColor: LIGHT.burgundy,
+  },
+  quickPayMethodText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  quickPayMethodTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  smallPresetBtn: {
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  smallPresetBtnText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0369A1',
+  },
+  submitPaymentBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: LIGHT.burgundy,
+    paddingVertical: 10,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  submitPaymentBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13.5,
+  },
+  sectionHeading: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#475569',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  paymentRecordRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  paymentRecordAmount: {
+    fontSize: 14.5,
+    fontWeight: '900',
+    color: LIGHT.emerald,
+  },
+  paymentRecordMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  paymentRecordNote: {
+    fontSize: 11.5,
+    color: '#334155',
+    fontStyle: 'italic',
+    marginTop: 2,
+  },
+  paymentMethodPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 4,
+  },
+  paymentMethodPillText: {
+    fontSize: 9.5,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  poRecordRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 10,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 8,
+    marginBottom: 6,
+  },
+  poRecordTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  poRecordMeta: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  poRecordAmount: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  poRecordStatus: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginTop: 1,
   },
 });
