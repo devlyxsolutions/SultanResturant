@@ -16910,177 +16910,22 @@
   "damageRecords": [],
   "activeStaffSessions": [
     {
-      "sessionId": "sess_mwqmb4in_d6gu0",
-      "staffId": "st-c1",
-      "staffName": "Usman Tariq",
-      "role": "manager",
-      "deviceId": "dev_web_mwqls8zr_34oq9_x8hy",
-      "deviceName": "Edge on Windows",
-      "platform": "web",
-      "loginTime": 1795278236063,
-      "lastActiveTime": 1795278236063
-    },
-    {
-      "sessionId": "sess_mwrjsboz_hz026",
-      "staffId": "st1",
-      "staffName": "Junaid Ahsan",
+      "sessionId": "sess_mwufe6lw_wilb18",
+      "staffId": "st-master",
+      "username": "master",
+      "staffName": "Master Admin",
       "role": "admin",
-      "deviceId": "dev_web_mwqkzuav_q6kfe_cjzr",
-      "deviceName": "Chrome on Windows",
-      "platform": "web",
-      "loginTime": 1795334465843,
-      "lastActiveTime": 1795334465843
-    },
-    {
-      "sessionId": "sess_mwrjxmz2_64tg5",
-      "staffId": "st4",
-      "staffName": "Sara Ahmed",
-      "role": "waiter",
-      "deviceId": "dev_android_mwriamzr_7nf6q",
-      "deviceName": "ANDROID Terminal",
-      "platform": "android",
-      "loginTime": 1795334713742,
-      "lastActiveTime": 1795334713742
-    },
-    {
-      "sessionId": "sess_mwrlmh44_7wmcn",
-      "staffId": "st7",
-      "staffName": "Tariq Juice Master",
-      "role": "juicebar",
-      "deviceId": "dev_web_mwql6ab8_iyt6v_rqsj",
+      "deviceId": "dev_web_mwsv4kta_jxztf_un59",
       "deviceName": "Edge on Windows",
       "platform": "web",
-      "loginTime": 1795337552164,
-      "lastActiveTime": 1795337552164
+      "loginTime": 1795508486148,
+      "lastActiveTime": 1795508486148
     }
   ],
-  "revokedDeviceIds": {
-    "dev_web_mwox4wf7_f0dpt_83sb": {
-      "timestamp": 1795182744015,
-      "staffName": "Junaid Ahsan",
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwp1fy1o_mx3f1_1bra": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795246555507,
-      "staffName": "Tariq Juice Master"
-    },
-    "dev_web_mwoyn91n_jcy3w_fet4": {
-      "timestamp": 1795248070975,
-      "staffName": "Junaid Ahsan",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwoxutps_z3jgb_m2hk": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795256187958,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwq968kj_hihtp_iia0": {
-      "timestamp": 1795257360794,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "staffName": "Junaid Ahsan"
-    },
-    "dev_web_mwq9u67g_k4y39_6i07": {
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai",
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795267499616
-    },
-    "dev_web_mwqezkcn_orcta_aw6v": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795267823256,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwq3evao_obdzt_62ob": {
-      "timestamp": 1795277700571,
-      "staffName": "Tariq Juice Master",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqg3qlw_i1u9k_0mmh": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795330945374,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwq3cwno_h2v4r_shpe": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795278104788,
-      "staffName": "Sara Ahmed"
-    },
-    "dev_web_mwql2e8x_ylkwk_nr47": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795283820220,
-      "staffName": "Junaid Ahsan"
-    },
-    "dev_web_mwql2e8x_ylkwk_rd4h": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "staffName": "Usman Tariq",
-      "timestamp": 1795283785277
-    },
-    "dev_web_mwql6ab8_iyt6v_o6mf": {
-      "staffName": "Tariq Juice Master",
-      "timestamp": 1795337159460,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwql2e8x_ylkwk_78yt": {
-      "timestamp": 1795284434215,
-      "staffName": "Rohan Ali",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwql2e8x_ylkwk_7zka": {
-      "staffName": "Rohan Ali",
-      "timestamp": 1795284640331,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwql2e8x_ylkwk_q8sp": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795284754288,
-      "staffName": "Usman Tariq"
-    },
-    "dev_web_mwql2e8x_ylkwk_yuok": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795284886095,
-      "staffName": "Junaid Ahsan"
-    },
-    "dev_web_mwql2e8x_ylkwk_juii": {
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai",
-      "timestamp": 1795279778766,
-      "staffName": "Chef Omar"
-    },
-    "dev_web_mwqls8zr_34oq9_x8hy": {
-      "staffName": "Sara Ahmed",
-      "timestamp": 1795334713742,
-      "reason": "Doosri device (ANDROID Terminal) par login kiya gaya hai"
-    },
-    "dev_web_mwqnc5ee_p4203_e196": {
-      "timestamp": 1795280200973,
-      "staffName": "Usman Tariq",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwq9u67g_k4y39_oqhb": {
-      "timestamp": 1795284300617,
-      "staffName": "Rohan Ali",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqq6h3d_c9uv2_pye5": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795287264536,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqq6h3d_c9uv2_4qo2": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795288065056,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqq6h3d_c9uv2_4t8z": {
-      "staffName": "Junaid Ahsan",
-      "timestamp": 1795334465843,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqkzuav_q6kfe_3s8p": {
-      "timestamp": 1795334372008,
-      "staffName": "Junaid Ahsan",
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    }
-  },
+  "revokedSessions": {},
+  "revokedDeviceIds": {},
+  "forceLogoutAll": null,
+  "chillerHandovers": [],
   "roles": [
     {
       "urduName": "ایگزیکٹو ایڈمن",
@@ -18002,7 +17847,7 @@
   "lastBillPaidAlert": null,
   "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
-  "lastUpdated": 1795347866647,
+  "lastUpdated": 1795508486148,
   "inventoryCategories": [
     "Meat",
     "Produce",
