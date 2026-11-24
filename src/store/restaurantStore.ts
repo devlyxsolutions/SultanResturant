@@ -1193,27 +1193,54 @@ export const useRestaurantStore = create<RestaurantState>()(
             return m;
           });
 
-          // Detect beverages for Floor Manager Chiller Notification & Deduction
-          const beverageItems = orderItems.filter(
-            (oi) =>
-              (oi.item.category || '').toLowerCase() === 'drinks' ||
-              (oi.item.category || '').toLowerCase() === 'beverages' ||
-              oi.item.station === 'juice' ||
-              (oi.item.name || '').toLowerCase().includes('water') ||
-              (oi.item.name || '').toLowerCase().includes('pepsi') ||
-              (oi.item.name || '').toLowerCase().includes('coke') ||
-              (oi.item.name || '').toLowerCase().includes('soda')
-          );
+          // Detect beverages for Chiller Stock Auto-Deduction across floors
+          const beverageItems = orderItems.filter((oi) => {
+            const cat = (oi.item.category || '').toLowerCase();
+            const nm = (oi.item.name || '').toLowerCase();
+            const st = (oi.item.station || '').toLowerCase();
+            return (
+              cat === 'drinks' ||
+              cat === 'beverages' ||
+              cat.includes('drink') ||
+              cat.includes('beverage') ||
+              cat.includes('juice') ||
+              cat.includes('soda') ||
+              st === 'juice' ||
+              st === 'bar' ||
+              nm.includes('water') ||
+              nm.includes('pepsi') ||
+              nm.includes('coke') ||
+              nm.includes('cola') ||
+              nm.includes('sprite') ||
+              nm.includes('fanta') ||
+              nm.includes('7up') ||
+              nm.includes('dew') ||
+              nm.includes('marinda') ||
+              nm.includes('mirinda') ||
+              nm.includes('sting') ||
+              nm.includes('soda') ||
+              nm.includes('pakola') ||
+              nm.includes('juice') ||
+              nm.includes('shake') ||
+              nm.includes('lassi') ||
+              nm.includes('lemonade') ||
+              nm.includes('rooh afza') ||
+              nm.includes('red bull') ||
+              nm.includes('tin') ||
+              nm.includes('can') ||
+              nm.includes('cold drink')
+            );
+          });
 
           let newBeverageAlert: BeverageOrderAlert | null = null;
-          if (beverageItems.length > 0 && table) {
-            const tableFloor = (table.floor || table.zone || 'Ground Floor').trim();
+          if (beverageItems.length > 0) {
+            const rawFloor = table ? (table.floor || table.zone || 'Ground Floor').trim() : 'Ground Floor';
             const itemsSummary = beverageItems.map((b) => `${b.qty}x ${b.item.name}`).join(', ');
             newBeverageAlert = {
               id: `bev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-              tableId: table.id,
-              tableName: table.name,
-              floor: tableFloor,
+              tableId: table ? table.id : (tableId || 'counter'),
+              tableName: table ? table.name : (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter'),
+              floor: rawFloor,
               server: serverName,
               items: beverageItems.map((b) => ({
                 name: b.item.name,
@@ -1225,20 +1252,21 @@ export const useRestaurantStore = create<RestaurantState>()(
               status: 'pending',
             };
 
-            // Trigger opsStore floor beverage deduction safely
+            // Trigger opsStore floor beverage deduction safely with floor normalization
             try {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { useOpsStore } = require('./opsStore');
+              const { useOpsStore, normalizeChillerFloor } = require('./opsStore');
               if (useOpsStore && typeof useOpsStore.getState === 'function') {
+                const normFloor = typeof normalizeChillerFloor === 'function' ? normalizeChillerFloor(rawFloor) : rawFloor;
                 useOpsStore.getState().deductFloorBeverageUsage({
-                  floor: tableFloor,
+                  floor: normFloor,
                   items: beverageItems.map((b) => ({
                     menuItemId: b.item.id,
                     name: b.item.name,
                     qty: b.qty,
                   })),
-                  tableId: table.id,
-                  tableName: table.name,
+                  tableId: table?.id,
+                  tableName: table ? table.name : (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter'),
                   by: serverName,
                 });
               }

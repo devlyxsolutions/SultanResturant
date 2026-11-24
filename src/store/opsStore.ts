@@ -164,6 +164,17 @@ export const CHILLER_FLOORS = [
 
 export type ChillerFloor = typeof CHILLER_FLOORS[number];
 
+export function normalizeChillerFloor(rawFloor?: string): ChillerFloor {
+  if (!rawFloor) return 'Ground Floor';
+  const f = rawFloor.trim().toLowerCase();
+  if (f.includes('roof') || f.includes('terrace') || f.includes('rt')) return 'Rooftop';
+  if (f.includes('3') || f.includes('third')) return '3rd Floor';
+  if (f.includes('2') || f.includes('second')) return '2nd Floor';
+  if (f.includes('1') || f.includes('first')) return '1st Floor';
+  if (f.includes('ground') || f === 'g' || f === 'gf' || f === '0') return 'Ground Floor';
+  return 'Ground Floor';
+}
+
 export type ChillerHandoverRecord = {
   id: string;
   itemId: string;
@@ -622,6 +633,23 @@ type OpsState = OpsData & {
     receivedByFloorManager: string;
     notes?: string;
   }) => boolean;
+  refillChillerProduct: (params: {
+    itemId: string;
+    floor: string;
+    qty: number;
+    fromLocation?: string;
+    by?: string;
+    notes?: string;
+  }) => boolean;
+  handoverKitchenStock: (params: {
+    itemId: string;
+    qty: number;
+    fromLocation?: string;
+    toLocation?: string;
+    handedOverBy?: string;
+    receivedByKitchen?: string;
+    notes?: string;
+  }) => boolean;
   deductFloorBeverageUsage: (params: {
     floor: string;
     items: { menuItemId?: string; name: string; qty: number }[];
@@ -1029,8 +1057,115 @@ export const useOpsStore = create<OpsState>()(
         return success;
       },
 
+      refillChillerProduct: ({ itemId, floor, qty, fromLocation = 'Beverage Cold Room', by, notes }) => {
+        let success = false;
+        const normFloor = normalizeChillerFloor(floor);
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item || qty <= 0) return state;
+
+          const currentFloorStock = Number(item.chillerStock?.[normFloor] || 0);
+          const nextFloorStock = currentFloorStock + qty;
+
+          const updatedChillerStock = {
+            ...(item.chillerStock || {}),
+            [normFloor]: nextFloorStock,
+          };
+
+          const handoverId = uid('hnd');
+          const handoverRecord: ChillerHandoverRecord = {
+            id: handoverId,
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            unit: item.unit,
+            qty,
+            fromLocation,
+            toFloor: normFloor,
+            toChiller: `${normFloor} Chiller`,
+            handedOverBy: by || 'Inventory Manager',
+            receivedByFloorManager: `${normFloor} Chiller (Direct Refill)`,
+            at: Date.now(),
+            notes: notes || `Direct Chiller Refill (+${qty} ${item.unit})`,
+            status: 'transferred',
+          };
+
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'transfer',
+            qty,
+            delta: 0,
+            note: `Chiller Refill to ${normFloor} Chiller (+${qty} ${item.unit})${notes ? ` - ${notes}` : ''}`,
+            by: by || 'Inventory Manager',
+            at: Date.now(),
+            fromLocation,
+            toLocation: `${normFloor} Chiller`,
+            toFloor: normFloor,
+          };
+
+          success = true;
+          return {
+            inventory: state.inventory.map((i) =>
+              i.id === itemId
+                ? {
+                    ...i,
+                    chillerStock: updatedChillerStock,
+                    updatedAt: Date.now(),
+                  }
+                : i
+            ),
+            chillerHandovers: [handoverRecord, ...(state.chillerHandovers || [])].slice(0, 100),
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (success) notifySync();
+        return success;
+      },
+
+      handoverKitchenStock: ({
+        itemId,
+        qty,
+        fromLocation = 'Main Central Store',
+        toLocation = 'Cooking Line / Kitchen',
+        handedOverBy,
+        receivedByKitchen,
+        notes,
+      }) => {
+        let success = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item || qty <= 0) return state;
+
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            type: 'handover',
+            qty,
+            delta: 0,
+            note: `Kitchen Handover: ${fromLocation} ➔ ${toLocation} (${qty} ${item.unit})${receivedByKitchen ? ` | Received by: ${receivedByKitchen}` : ''}${notes ? ` | Notes: ${notes}` : ''}`,
+            by: handedOverBy || 'Store Manager',
+            at: Date.now(),
+            fromLocation,
+            toLocation,
+          };
+
+          success = true;
+          return {
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (success) notifySync();
+        return success;
+      },
+
       deductFloorBeverageUsage: ({ floor, items, tableId, tableName, orderId, by }) => {
         if (!items || items.length === 0) return;
+        const normFloor = normalizeChillerFloor(floor);
         set((state) => {
           let hasChanged = false;
           const newMovements: StockMovement[] = [];
@@ -1047,7 +1182,7 @@ export const useOpsStore = create<OpsState>()(
             if (!target || target.qty <= 0) return invItem;
 
             hasChanged = true;
-            const currentFloorQty = Number(invItem.chillerStock?.[floor] || 0);
+            const currentFloorQty = Number(invItem.chillerStock?.[normFloor] || 0);
             const deductFloorQty = Math.min(currentFloorQty, target.qty);
             const nextFloorQty = Math.max(0, currentFloorQty - target.qty);
             const nextTotalStock = Math.max(0, invItem.stock - target.qty);
@@ -1060,11 +1195,11 @@ export const useOpsStore = create<OpsState>()(
               type: 'usage',
               qty: target.qty,
               delta: -target.qty,
-              note: `Floor Sale at ${tableName || tableId || floor}${orderId ? ` (#${orderId})` : ''} [${floor} Chiller: -${deductFloorQty}]`,
+              note: `Floor Order at ${tableName || tableId || normFloor}${orderId ? ` (#${orderId})` : ''} [${normFloor} Chiller: -${target.qty}]`,
               by: by || 'POS / Waiter',
               at: Date.now(),
-              fromFloor: floor,
-              fromLocation: `${floor} Chiller`,
+              fromFloor: normFloor,
+              fromLocation: `${normFloor} Chiller`,
             });
 
             return {
@@ -1072,7 +1207,7 @@ export const useOpsStore = create<OpsState>()(
               stock: nextTotalStock,
               chillerStock: {
                 ...(invItem.chillerStock || {}),
-                [floor]: nextFloorQty,
+                [normFloor]: nextFloorQty,
               },
               updatedAt: Date.now(),
             };

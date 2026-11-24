@@ -81,6 +81,8 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const recordStockMovement = useOpsStore((s) => s.recordStockMovement);
   const chillerHandovers = useOpsStore((s) => s.chillerHandovers || []);
   const handoverBeveragesToFloor = useOpsStore((s) => s.handoverBeveragesToFloor);
+  const refillChillerProduct = useOpsStore((s) => s.refillChillerProduct);
+  const handoverKitchenStock = useOpsStore((s) => s.handoverKitchenStock);
   const adjustFloorChillerStock = useOpsStore((s) => s.adjustFloorChillerStock);
 
   const allCategories = useMemo(() => {
@@ -307,6 +309,17 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const [handoverReceivedBy, setHandoverReceivedBy] = useState('');
   const [handoverNotes, setHandoverNotes] = useState('');
   const [selectedChillerFloorView, setSelectedChillerFloorView] = useState<string>('All');
+  const [chillerSubView, setChillerSubView] = useState<'floors' | 'products' | 'kitchen'>('floors');
+
+  // Kitchen Storage Zone Handover State
+  const [showKitchenHandoverModal, setShowKitchenHandoverModal] = useState(false);
+  const [kitchenItemId, setKitchenItemId] = useState('');
+  const [kitchenQty, setKitchenQty] = useState('');
+  const [kitchenFromLoc, setKitchenFromLoc] = useState('Main Central Store');
+  const [kitchenToStation, setKitchenToStation] = useState('Cooking Line / Kitchen');
+  const [kitchenHandedBy, setKitchenHandedBy] = useState(user?.name || 'Storekeeper');
+  const [kitchenReceivedBy, setKitchenReceivedBy] = useState('');
+  const [kitchenNotes, setKitchenNotes] = useState('');
 
   // Analytics & Summary Metrics
   const metrics = useMemo(() => {
@@ -530,14 +543,36 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   // Filtered Beverages & Chiller Items
   const beverageInventory = useMemo(() => {
     return inventory.filter((item) => {
+      const cat = (item.category || '').toLowerCase();
+      const nm = (item.name || '').toLowerCase();
       const isBev =
-        (item.category || '').toLowerCase() === 'beverages' ||
-        (item.category || '').toLowerCase() === 'drinks' ||
-        (item.category || '').toLowerCase().includes('juice') ||
-        (item.name || '').toLowerCase().includes('pepsi') ||
-        (item.name || '').toLowerCase().includes('coke') ||
-        (item.name || '').toLowerCase().includes('water') ||
-        (item.name || '').toLowerCase().includes('sprite');
+        cat === 'beverages' ||
+        cat === 'drinks' ||
+        cat.includes('drink') ||
+        cat.includes('beverage') ||
+        cat.includes('juice') ||
+        cat.includes('soda') ||
+        nm.includes('pepsi') ||
+        nm.includes('coke') ||
+        nm.includes('cola') ||
+        nm.includes('water') ||
+        nm.includes('sprite') ||
+        nm.includes('fanta') ||
+        nm.includes('7up') ||
+        nm.includes('dew') ||
+        nm.includes('marinda') ||
+        nm.includes('mirinda') ||
+        nm.includes('sting') ||
+        nm.includes('pakola') ||
+        nm.includes('soda') ||
+        nm.includes('juice') ||
+        nm.includes('shake') ||
+        nm.includes('lemonade') ||
+        nm.includes('rooh afza') ||
+        nm.includes('red bull') ||
+        nm.includes('can') ||
+        nm.includes('tin') ||
+        nm.includes('cold drink');
       if (!isBev) return false;
 
       const q = searchQuery.toLowerCase().trim();
@@ -549,6 +584,31 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       return matchSearch;
     });
   }, [inventory, searchQuery]);
+
+  // Floor Chillers Comprehensive Summary
+  const floorChillersSummary = useMemo(() => {
+    return CHILLER_FLOORS.map((floor) => {
+      let totalDrinks = 0;
+      const products: { item: InventoryItem; qty: number; isLow: boolean }[] = [];
+      beverageInventory.forEach((item) => {
+        const qty = Number(item.chillerStock?.[floor] || 0);
+        totalDrinks += qty;
+        if (qty > 0 || (item.chillerThreshold && qty <= item.chillerThreshold)) {
+          products.push({
+            item,
+            qty,
+            isLow: qty <= (item.chillerThreshold || 5),
+          });
+        }
+      });
+      return {
+        floor,
+        totalDrinks,
+        products,
+        lowStockAlerts: products.filter((p) => p.isLow).length,
+      };
+    });
+  }, [beverageInventory]);
 
   // Tracked Dishes in Menu
   const trackedDishes = useMemo(() => {
@@ -1446,13 +1506,13 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             activeOpacity={0.7}
           >
             <Ionicons
-              name="wine"
+              name="snow"
               size={15}
               color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
               style={{ marginRight: 6 }}
             />
             <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
-              Beverages & Chillers ({beverageInventory.length})
+              ❄️ Chillers & Zones ({beverageInventory.length})
             </Text>
           </TouchableOpacity>
 
@@ -1560,13 +1620,13 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             activeOpacity={0.7}
           >
             <Ionicons
-              name="wine"
+              name="snow"
               size={16}
               color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
               style={{ marginRight: 6 }}
             />
             <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
-              Beverages & Chillers ({beverageInventory.length})
+              ❄️ Chillers & Zones ({beverageInventory.length})
             </Text>
           </TouchableOpacity>
 
@@ -2230,260 +2290,640 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 1.5: BEVERAGES & CHILLERS INVENTORY */}
+      {/* TAB 1.5: STORAGE ZONES & FLOOR CHILLERS INVENTORY */}
       {/* ========================================================================= */}
       {activeTab === 'beverages' && (
         <View>
           <View style={styles.sectionHeaderRow}>
-            <View>
-              <Text style={styles.sectionTitle}>Beverages & Floor Chiller Stocks</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>❄️ Storage Zones & Floor Chillers (اسٹوریج زونز اور چلرز)</Text>
               <Text style={styles.sectionDesc}>
-                Track cold drinks, juices and mineral waters floor-wise across chillers. Dispatch and hand over cartons to floor managers.
+                Main Store se Kitchen Line handover aur 5 floors k chillers ki live product-wise monitoring
               </Text>
             </View>
-            <TouchableOpacity
-              style={[styles.addBtn, { backgroundColor: '#0284C7' }]}
-              onPress={() => {
-                if (beverageInventory.length > 0) {
-                  setHandoverItemId(beverageInventory[0].id);
-                }
-                setHandoverQty('12');
-                setHandoverFloor(CHILLER_FLOORS[0]);
-                setHandoverFromLoc('Beverage Cold Room');
-                setHandoverGivenBy(user?.name || 'Inventory Manager');
-                setHandoverReceivedBy('');
-                setHandoverNotes('');
-                setShowHandoverModal(true);
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: '#10B981', paddingHorizontal: 14 }]}
+                onPress={() => {
+                  if (inventory.length > 0) setKitchenItemId(inventory[0].id);
+                  setKitchenQty('');
+                  setKitchenFromLoc('Main Central Store');
+                  setKitchenToStation('Cooking Line / Kitchen');
+                  setKitchenHandedBy(user?.name || 'Storekeeper');
+                  setKitchenReceivedBy('');
+                  setKitchenNotes('');
+                  setShowKitchenHandoverModal(true);
+                }}
+              >
+                <Ionicons name="restaurant-outline" size={18} color="#FFF" />
+                <Text style={styles.addBtnText}>🍳 Hand Over to Kitchen</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: '#0284C7', paddingHorizontal: 14 }]}
+                onPress={() => {
+                  if (beverageInventory.length > 0) {
+                    setHandoverItemId(beverageInventory[0].id);
+                  }
+                  setHandoverQty('24');
+                  setHandoverFloor(CHILLER_FLOORS[0]);
+                  setHandoverFromLoc('Beverage Cold Room');
+                  setHandoverGivenBy(user?.name || 'Inventory Manager');
+                  setHandoverReceivedBy(`${CHILLER_FLOORS[0]} Chiller`);
+                  setHandoverNotes('');
+                  setShowHandoverModal(true);
+                }}
+              >
+                <Ionicons name="flash-outline" size={18} color="#FFF" />
+                <Text style={styles.addBtnText}>⚡ Refill Chiller</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Direct Floor Order Auto-Deduction Active Banner */}
+          <View
+            style={{
+              backgroundColor: '#ECFDF5',
+              borderColor: '#6EE7B7',
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={26} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065F46' }}>
+                ⚡ Direct Floor Order Auto-Deduction Active (نو فلور مینیجر محتاجی)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>
+                Ground Floor, 1st, 2nd, 3rd Floor aur Rooftop ke kisi bhi table ya waiter order me cold drink shamil hone par direct usi floor k chiller stock se auto-minus hoti hai!
+              </Text>
+            </View>
+          </View>
+
+          {/* Storage Zones Overview 3-Pillar Cards */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            {/* Zone 1: Main Central Store */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: 200,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                borderLeftWidth: 4,
+                borderLeftColor: '#6366F1',
               }}
             >
-              <Ionicons name="swap-horizontal" size={18} color="#FFF" />
-              <Text style={styles.addBtnText}>Hand Over to Floor Chiller</Text>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#6366F1', textTransform: 'uppercase' }}>
+                  Zone 1: Bulk Warehouse
+                </Text>
+                <Ionicons name="business" size={18} color="#6366F1" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                Main Central Store (مرکزی گودام)
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                {inventory.length} Total SKUs • Walk-in Cold Rooms & Dry Store
+              </Text>
+              <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>Stock Value:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>{money(metrics.totalValuation)}</Text>
+              </View>
+            </View>
+
+            {/* Zone 2: Kitchen Stations */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: 200,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                borderLeftWidth: 4,
+                borderLeftColor: '#10B981',
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981', textTransform: 'uppercase' }}>
+                  Zone 2: Active Cooking
+                </Text>
+                <Ionicons name="restaurant" size={18} color="#10B981" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                Kitchen Cooking Line (کچن اسٹیشنز)
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                Curry/Karahi, BBQ, Tandoor & Prep Stations
+              </Text>
+              <TouchableOpacity
+                style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                onPress={() => {
+                  if (inventory.length > 0) setKitchenItemId(inventory[0].id);
+                  setKitchenQty('');
+                  setShowKitchenHandoverModal(true);
+                }}
+              >
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#10B981' }}>+ Issue / Handover Stock ➔</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Zone 3: Floor Chillers */}
+            <View
+              style={{
+                flex: 1,
+                minWidth: 200,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 14,
+                borderWidth: 1,
+                borderColor: '#E2E8F0',
+                borderLeftWidth: 4,
+                borderLeftColor: '#0284C7',
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7', textTransform: 'uppercase' }}>
+                  Zone 3: Service Chillers
+                </Text>
+                <Ionicons name="snow" size={18} color="#0284C7" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
+                5 Floor Chillers (فلور چلرز)
+              </Text>
+              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                Ground, 1st, 2nd, 3rd Floor & Rooftop
+              </Text>
+              <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11, color: '#64748B' }}>Chiller Drinks:</Text>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284C7' }}>
+                  {floorChillersSummary.reduce((s, f) => s + f.totalDrinks, 0)} Units
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Sub View Toggle Bar */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'floors' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'floors' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('floors')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'floors' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                🏢 5 Floor Chillers Network ({floorChillersSummary.length} Floors)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'products' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'products' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('products')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'products' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                🥤 All Beverage Products ({beverageInventory.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'kitchen' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'kitchen' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('kitchen')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'kitchen' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                📋 Handovers & Refill Logs ({chillerHandovers.length})
+              </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Floor Chiller Filter Selector */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-            {['All', ...CHILLER_FLOORS].map((fl) => (
-              <TouchableOpacity
-                key={fl}
-                onPress={() => setSelectedChillerFloorView(fl)}
-                style={[
-                  {
-                    paddingHorizontal: 14,
-                    paddingVertical: 7,
-                    borderRadius: 20,
-                    backgroundColor: selectedChillerFloorView === fl ? '#0284C7' : '#F1F5F9',
-                    borderWidth: 1,
-                    borderColor: selectedChillerFloorView === fl ? '#0284C7' : '#E2E8F0',
-                  },
-                ]}
-              >
-                <Text
-                  style={{
-                    fontSize: 12.5,
-                    fontWeight: '700',
-                    color: selectedChillerFloorView === fl ? '#FFFFFF' : '#475569',
-                  }}
-                >
-                  {fl === 'All' ? '🏢 All Floor Chillers' : `❄️ ${fl} Chiller`}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {beverageInventory.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="wine-outline" size={48} color={BRAND.muted} />
-              <Text style={styles.emptyTitle}>No Beverage Items Found</Text>
-              <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory to track chiller levels.</Text>
-            </View>
-          ) : (
-            <View style={styles.itemsGrid}>
-              {beverageInventory.map((item) => {
-                const totalStock = item.stock || 0;
-                const chillers = item.chillerStock || {};
-                const totalInChillers = Object.values(chillers).reduce((s, v) => s + (Number(v) || 0), 0);
-                const warehouseStock = Math.max(0, totalStock - totalInChillers);
-
+          {/* ================= SUB VIEW 1: 5 FLOOR CHILLERS NETWORK ================= */}
+          {chillerSubView === 'floors' && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+              {floorChillersSummary.map((summary) => {
+                const floorName = summary.floor;
                 return (
-                  <View key={item.id} style={styles.itemCard}>
-                    <View style={styles.itemCardHeader}>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
-                          <View style={[styles.skuBadge, { backgroundColor: '#E0F2FE' }]}>
-                            <Text style={[styles.skuBadgeText, { color: '#0369A1' }]}>{item.itemCode || 'BEV'}</Text>
-                          </View>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>
-                            {item.category || 'Beverages'}
+                  <View
+                    key={floorName}
+                    style={{
+                      flex: 1,
+                      minWidth: isMobile ? '100%' : 340,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 14,
+                      padding: 16,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.04,
+                      shadowRadius: 6,
+                      elevation: 2,
+                    }}
+                  >
+                    {/* Chiller Card Header */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }}>
+                          <Ionicons name="snow" size={20} color="#0284C7" />
+                        </View>
+                        <View>
+                          <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                            {floorName} Chiller
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>
+                            Live Chilled Floor Station
                           </Text>
                         </View>
-                        <Text style={styles.itemCardTitle}>{item.name}</Text>
-                        {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.stockStatValue, { color: totalStock <= 10 ? '#DC2626' : '#0F172A' }]}>
-                          {totalStock} <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0284C7' }}>
+                          {summary.totalDrinks} <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>Drinks</Text>
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#64748B' }}>Total Balance</Text>
+                        {summary.lowStockAlerts > 0 ? (
+                          <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#DC2626' }}>
+                              ⚠️ {summary.lowStockAlerts} Low Stock
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A' }}>
+                              ✓ Sufficient
+                            </Text>
+                          </View>
+                        )}
                       </View>
                     </View>
 
-                    {/* Floor Wise Chiller Distribution Grid */}
-                    <View
+                    {/* Products in this Chiller */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#F1F5F9', minHeight: 120 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
+                        Product Breakdown ({summary.products.length} Items):
+                      </Text>
+
+                      {summary.products.length === 0 ? (
+                        <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                          No drinks in this chiller yet. Click Refill below to stock up.
+                        </Text>
+                      ) : (
+                        summary.products.map(({ item, qty, isLow }) => (
+                          <View
+                            key={item.id}
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              paddingVertical: 5,
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#F1F5F9',
+                            }}
+                          >
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1E293B' }} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: isLow ? '#DC2626' : '#0284C7' }}>
+                                {qty} {item.unit}
+                              </Text>
+                              {isLow && (
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626' }}>LOW</Text>
+                              )}
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#E0F2FE',
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 4,
+                                }}
+                                onPress={() => {
+                                  setHandoverItemId(item.id);
+                                  setHandoverFloor(floorName);
+                                  setHandoverQty('12');
+                                  setHandoverFromLoc('Beverage Cold Room');
+                                  setHandoverGivenBy(user?.name || 'Inventory Manager');
+                                  setHandoverNotes('');
+                                  setShowHandoverModal(true);
+                                }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369A1' }}>+ Refill</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Refill Button for this Floor */}
+                    <TouchableOpacity
                       style={{
-                        backgroundColor: '#F8FAFC',
-                        borderRadius: 10,
-                        padding: 10,
-                        marginTop: 10,
-                        borderWidth: 1,
-                        borderColor: '#E2E8F0',
+                        marginTop: 12,
+                        backgroundColor: '#0284C7',
+                        borderRadius: 8,
+                        paddingVertical: 9,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        if (beverageInventory.length > 0) {
+                          setHandoverItemId(beverageInventory[0].id);
+                        }
+                        setHandoverFloor(floorName);
+                        setHandoverQty('24');
+                        setHandoverFromLoc('Beverage Cold Room');
+                        setHandoverGivenBy(user?.name || 'Inventory Manager');
+                        setHandoverNotes('');
+                        setShowHandoverModal(true);
                       }}
                     >
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>
-                          ❄️ CHILLER STOCK BREAKDOWN:
-                        </Text>
-                        <Text style={{ fontSize: 11, color: '#64748B' }}>
-                          Main Store: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{warehouseStock} {item.unit}</Text>
-                        </Text>
-                      </View>
-
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                        {CHILLER_FLOORS.map((floor) => {
-                          const qty = chillers[floor] || 0;
-                          const isLow = qty <= (item.chillerThreshold || 5);
-                          const isSelectedFloor = selectedChillerFloorView === floor;
-
-                          if (selectedChillerFloorView !== 'All' && !isSelectedFloor) return null;
-
-                          return (
-                            <View
-                              key={floor}
-                              style={{
-                                flex: selectedChillerFloorView === 'All' ? (isMobile ? 1 : undefined) : 1,
-                                minWidth: isMobile ? 100 : 120,
-                                backgroundColor: isLow ? '#FEF2F2' : '#FFFFFF',
-                                borderRadius: 8,
-                                paddingHorizontal: 10,
-                                paddingVertical: 6,
-                                borderWidth: 1,
-                                borderColor: isLow ? '#FCA5A5' : '#E2E8F0',
-                              }}
-                            >
-                              <Text style={{ fontSize: 11, fontWeight: '600', color: isLow ? '#991B1B' : '#475569' }} numberOfLines={1}>
-                                {floor}
-                              </Text>
-                              <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
-                                <Text style={{ fontSize: 14, fontWeight: '900', color: isLow ? '#DC2626' : '#0284C7' }}>
-                                  {qty} <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B' }}>{item.unit}</Text>
-                                </Text>
-                                {isLow && (
-                                  <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#DC2626' }}>LOW</Text>
-                                )}
-                              </View>
-                            </View>
-                          );
-                        })}
-                      </View>
-                    </View>
-
-                    {/* Quick Handover Button per item */}
-                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
-                      <TouchableOpacity
-                        style={[styles.quickMovementBtn, { flex: 1, backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
-                        onPress={() => {
-                          setHandoverItemId(item.id);
-                          setHandoverQty('12');
-                          setHandoverFloor(CHILLER_FLOORS[0]);
-                          setHandoverFromLoc('Beverage Cold Room');
-                          setHandoverGivenBy(user?.name || 'Inventory Manager');
-                          setHandoverReceivedBy('');
-                          setHandoverNotes('');
-                          setShowHandoverModal(true);
-                        }}
-                      >
-                        <Ionicons name="arrow-forward-circle-outline" size={15} color="#0284C7" />
-                        <Text style={[styles.quickMovementBtnText, { color: '#0284C7', fontWeight: '700' }]}>
-                          Hand Over to Chiller
-                        </Text>
-                      </TouchableOpacity>
-
-                      <TouchableOpacity
-                        style={[styles.quickMovementBtn, { paddingHorizontal: 12 }]}
-                        onPress={() => {
-                          setSelectedItem(item);
-                          setShowMovementModal(true);
-                        }}
-                      >
-                        <Ionicons name="pencil-outline" size={14} color={BRAND.ink} />
-                        <Text style={styles.quickMovementBtnText}>Adjust</Text>
-                      </TouchableOpacity>
-                    </View>
+                      <Ionicons name="flash-outline" size={15} color="#FFF" />
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#FFF' }}>
+                        ⚡ Refill {floorName} Chiller
+                      </Text>
+                    </TouchableOpacity>
                   </View>
                 );
               })}
             </View>
           )}
 
-          {/* Recent Chiller Handover Logs */}
-          <View style={{ marginTop: 28, backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Ionicons name="list" size={18} color="#0284C7" />
-                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
-                  Floor Handover Dispatch History
-                </Text>
-              </View>
-              <Text style={{ fontSize: 12, color: '#64748B' }}>
-                {chillerHandovers.length} Records Transferred
-              </Text>
-            </View>
-
-            {chillerHandovers.length === 0 ? (
-              <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
-                No beverage handovers logged yet. Use the Hand Over button above to issue beverages to a floor chiller.
-              </Text>
-            ) : (
-              <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
-                {chillerHandovers.slice(0, 15).map((h) => (
-                  <View
-                    key={h.id}
-                    style={{
-                      flexDirection: 'row',
-                      justifyContent: 'space-between',
-                      alignItems: 'center',
-                      paddingVertical: 10,
-                      borderBottomWidth: 1,
-                      borderBottomColor: '#F1F5F9',
-                    }}
+          {/* ================= SUB VIEW 2: ALL BEVERAGE PRODUCTS ================= */}
+          {chillerSubView === 'products' && (
+            <View>
+              {/* Floor Chiller Filter Selector */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {['All', ...CHILLER_FLOORS].map((fl) => (
+                  <TouchableOpacity
+                    key={fl}
+                    onPress={() => setSelectedChillerFloorView(fl)}
+                    style={[
+                      {
+                        paddingHorizontal: 14,
+                        paddingVertical: 7,
+                        borderRadius: 20,
+                        backgroundColor: selectedChillerFloorView === fl ? '#0284C7' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: selectedChillerFloorView === fl ? '#0284C7' : '#E2E8F0',
+                      },
+                    ]}
                   >
-                    <View style={{ flex: 1, marginRight: 12 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
-                          {h.itemName}
-                        </Text>
-                        <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
-                            ❄️ {h.toFloor} Chiller
-                          </Text>
+                    <Text
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: '700',
+                        color: selectedChillerFloorView === fl ? '#FFFFFF' : '#475569',
+                      }}
+                    >
+                      {fl === 'All' ? '🏢 All Floor Chillers' : `❄️ ${fl} Chiller`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {beverageInventory.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="wine-outline" size={48} color={BRAND.muted} />
+                  <Text style={styles.emptyTitle}>No Beverage Items Found</Text>
+                  <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory to track chiller levels.</Text>
+                </View>
+              ) : (
+                <View style={styles.itemsGrid}>
+                  {beverageInventory.map((item) => {
+                    const totalStock = item.stock || 0;
+                    const chillers = item.chillerStock || {};
+                    const totalInChillers = Object.values(chillers).reduce((s, v) => s + (Number(v) || 0), 0);
+                    const warehouseStock = Math.max(0, totalStock - totalInChillers);
+
+                    return (
+                      <View key={item.id} style={styles.itemCard}>
+                        <View style={styles.itemCardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                              <View style={[styles.skuBadge, { backgroundColor: '#E0F2FE' }]}>
+                                <Text style={[styles.skuBadgeText, { color: '#0369A1' }]}>{item.itemCode || 'BEV'}</Text>
+                              </View>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>
+                                {item.category || 'Beverages'}
+                              </Text>
+                            </View>
+                            <Text style={styles.itemCardTitle}>{item.name}</Text>
+                            {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.stockStatValue, { color: totalStock <= 10 ? '#DC2626' : '#0F172A' }]}>
+                              {totalStock} <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>Total Balance</Text>
+                          </View>
+                        </View>
+
+                        {/* Floor Wise Chiller Distribution Grid */}
+                        <View
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 10,
+                            padding: 10,
+                            marginTop: 10,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>
+                              ❄️ CHILLER STOCK BREAKDOWN:
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              Main Store: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{warehouseStock} {item.unit}</Text>
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {CHILLER_FLOORS.map((floor) => {
+                              const qty = chillers[floor] || 0;
+                              const isLow = qty <= (item.chillerThreshold || 5);
+                              const isSelectedFloor = selectedChillerFloorView === floor;
+
+                              if (selectedChillerFloorView !== 'All' && !isSelectedFloor) return null;
+
+                              return (
+                                <View
+                                  key={floor}
+                                  style={{
+                                    flex: selectedChillerFloorView === 'All' ? (isMobile ? 1 : undefined) : 1,
+                                    minWidth: isMobile ? 100 : 120,
+                                    backgroundColor: isLow ? '#FEF2F2' : '#FFFFFF',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderWidth: 1,
+                                    borderColor: isLow ? '#FCA5A5' : '#E2E8F0',
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: isLow ? '#991B1B' : '#475569' }} numberOfLines={1}>
+                                    {floor}
+                                  </Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '900', color: isLow ? '#DC2626' : '#0284C7' }}>
+                                      {qty} <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B' }}>{item.unit}</Text>
+                                    </Text>
+                                    {isLow && (
+                                      <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#DC2626' }}>LOW</Text>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+
+                        {/* Quick Refill Button per item */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                          <TouchableOpacity
+                            style={[styles.quickMovementBtn, { flex: 1, backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
+                            onPress={() => {
+                              setHandoverItemId(item.id);
+                              setHandoverQty('12');
+                              setHandoverFloor(CHILLER_FLOORS[0]);
+                              setHandoverFromLoc('Beverage Cold Room');
+                              setHandoverGivenBy(user?.name || 'Inventory Manager');
+                              setHandoverReceivedBy('');
+                              setHandoverNotes('');
+                              setShowHandoverModal(true);
+                            }}
+                          >
+                            <Ionicons name="flash-outline" size={15} color="#0284C7" />
+                            <Text style={[styles.quickMovementBtnText, { color: '#0284C7', fontWeight: '700' }]}>
+                              ⚡ Refill into Chiller
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.quickMovementBtn, { paddingHorizontal: 12 }]}
+                            onPress={() => {
+                              setSelectedItem(item);
+                              setShowMovementModal(true);
+                            }}
+                          >
+                            <Ionicons name="pencil-outline" size={14} color={BRAND.ink} />
+                            <Text style={styles.quickMovementBtnText}>Adjust</Text>
+                          </TouchableOpacity>
                         </View>
                       </View>
-                      <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                        Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text> • Received by: <Text style={{ fontWeight: '600' }}>{h.receivedByFloorManager || 'Floor Manager'}</Text>
-                        {h.notes ? ` • Note: "${h.notes}"` : ''}
-                      </Text>
+                    );
+                  })}
+                </View>
+              )}
+            </View>
+          )}
+
+          {/* ================= SUB VIEW 3: HANDOVERS & REFILL LOGS ================= */}
+          {chillerSubView === 'kitchen' && (
+            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <Ionicons name="list" size={18} color="#0284C7" />
+                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                    Floor Chiller Refills & Kitchen Handover History
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#64748B' }}>
+                  {chillerHandovers.length} Total Logs
+                </Text>
+              </View>
+
+              {chillerHandovers.length === 0 ? (
+                <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                  No handovers or chiller refills logged yet. Use the buttons above to transfer stock.
+                </Text>
+              ) : (
+                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                  {chillerHandovers.slice(0, 30).map((h) => (
+                    <View
+                      key={h.id}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingVertical: 10,
+                        borderBottomWidth: 1,
+                        borderBottomColor: '#F1F5F9',
+                      }}
+                    >
+                      <View style={{ flex: 1, marginRight: 12 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                            {h.itemName}
+                          </Text>
+                          <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                              ❄️ {h.toFloor} Chiller
+                            </Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                          Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text>
+                          {h.receivedByFloorManager ? ` • Received: ${h.receivedByFloorManager}` : ''}
+                          {h.notes ? ` • Note: "${h.notes}"` : ''}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
+                          +{h.qty} {h.unit}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
+                      </View>
                     </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
-                        +{h.qty} {h.unit}
-                      </Text>
-                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
-                    </View>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-          </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          )}
         </View>
       )}
 
@@ -4270,16 +4710,16 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </Modal>
 
       {/* ========================================================================= */}
-      {/* HANDOVER TO FLOOR CHILLER MODAL */}
+      {/* MODAL: REFILL FLOOR CHILLER (PRODUCT-WISE REFILL) */}
       {/* ========================================================================= */}
       <Modal visible={showHandoverModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Hand Over to Floor Chiller</Text>
+                <Text style={styles.modalTitle}>⚡ Refill Floor Chiller (چلرز پروڈکٹ ری فل)</Text>
                 <Text style={styles.modalSubtitle}>
-                  Issue cold drinks / beverages from cold storage to floor manager chiller
+                  Main Store ya Cold Room se floor chiller mein cold drinks refill karein
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setShowHandoverModal(false)}>
@@ -4288,22 +4728,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
 
             <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
-              {/* Beverage Item Selection */}
-              <Text style={styles.inputLabel}>Select Beverage / Drink *</Text>
-              <RoyalDropdown
-                options={beverageInventory.map((i) => ({
-                  label: `${i.name} (Balance: ${i.stock} ${i.unit})`,
-                  value: i.id,
-                }))}
-                value={handoverItemId}
-                onSelect={(val) => setHandoverItemId(val)}
-                icon="wine-outline"
-                searchable
-                style={{ marginBottom: 12 }}
-              />
-
               {/* Destination Floor Chiller */}
-              <Text style={styles.inputLabel}>Destination Floor Chiller *</Text>
+              <Text style={styles.inputLabel}>Destination Floor Chiller (منزل کا چلر) *</Text>
               <RoyalDropdown
                 options={CHILLER_FLOORS.map((fl) => ({
                   label: `❄️ ${fl} Chiller`,
@@ -4315,10 +4741,24 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 style={{ marginBottom: 12 }}
               />
 
+              {/* Beverage Item Selection */}
+              <Text style={styles.inputLabel}>Select Beverage / Drink (مشروب منتخب کریں) *</Text>
+              <RoyalDropdown
+                options={beverageInventory.map((i) => ({
+                  label: `${i.name} (Store Balance: ${i.stock} ${i.unit})`,
+                  value: i.id,
+                }))}
+                value={handoverItemId}
+                onSelect={(val) => setHandoverItemId(val)}
+                icon="wine-outline"
+                searchable
+                style={{ marginBottom: 12 }}
+              />
+
               {/* Quantity */}
               <View style={styles.formRow2}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.inputLabel}>Handover Quantity *</Text>
+                  <Text style={styles.inputLabel}>Refill Quantity (تعداد) *</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. 24"
@@ -4328,7 +4768,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   />
                 </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.inputLabel}>From Storage Source</Text>
+                  <Text style={styles.inputLabel}>From Storage Source (گودام کا مقام)</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. Beverage Cold Room"
@@ -4338,22 +4778,22 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 </View>
               </View>
 
-              {/* Handover Accountability */}
+              {/* Refilled By & Recipient */}
               <View style={styles.formRow2}>
                 <View style={{ flex: 1, marginRight: 8 }}>
-                  <Text style={styles.inputLabel}>Handed Over By (Storekeeper / Manager)</Text>
+                  <Text style={styles.inputLabel}>Refilled By (عملہ / مینیجر)</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="Storekeeper / Manager"
+                    placeholder="Inventory Manager"
                     value={handoverGivenBy}
                     onChangeText={setHandoverGivenBy}
                   />
                 </View>
                 <View style={{ flex: 1, marginLeft: 8 }}>
-                  <Text style={styles.inputLabel}>Received By Floor Manager *</Text>
+                  <Text style={styles.inputLabel}>Floor Note / Recipient (اختیاری)</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. Hamza / Ali (Floor Manager)"
+                    placeholder="Direct Refill / Self"
                     value={handoverReceivedBy}
                     onChangeText={setHandoverReceivedBy}
                   />
@@ -4361,11 +4801,11 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </View>
 
               {/* Notes */}
-              <Text style={styles.inputLabel}>Handover Notes / Batch Details (Optional)</Text>
+              <Text style={styles.inputLabel}>Refill Notes / Batch Details (Optional)</Text>
               <TextInput
                 style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
                 multiline
-                placeholder="e.g. 1 Crates (24 Cans) transferred, chilled, verified undamaged"
+                placeholder="e.g. 1 Crate (24 Cans) refilled, chilled & ready for service"
                 value={handoverNotes}
                 onChangeText={setHandoverNotes}
               />
@@ -4380,41 +4820,184 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 onPress={() => {
                   const numQty = Number(handoverQty);
                   if (!handoverItemId) {
-                    alertMsg('Select Item', 'Please select a beverage item to hand over.');
+                    alertMsg('Select Item', 'Please select a beverage item to refill.');
+                    return;
+                  }
+                  if (!numQty || numQty <= 0) {
+                    alertMsg('Invalid Quantity', 'Please enter a valid positive refill quantity.');
+                    return;
+                  }
+
+                  const ok = refillChillerProduct({
+                    itemId: handoverItemId,
+                    qty: numQty,
+                    floor: handoverFloor,
+                    fromLocation: handoverFromLoc.trim() || 'Beverage Cold Room',
+                    by: handoverGivenBy.trim() || user?.name || 'Inventory Manager',
+                    notes: handoverNotes.trim() || `Refilled into ${handoverFloor} Chiller`,
+                  });
+
+                  if (ok) {
+                    setShowHandoverModal(false);
+                    setHandoverQty('');
+                    setHandoverNotes('');
+                    alertMsg(
+                      'Chiller Refill Complete',
+                      `Successfully refilled ${numQty} units into ${handoverFloor} Chiller. Live orders will now auto-deduct from this stock!`
+                    );
+                  } else {
+                    alertMsg('Error', 'Failed to execute chiller refill.');
+                  }
+                }}
+              >
+                <Ionicons name="flash-outline" size={18} color="#FFF" style={{ marginRight: 6 }} />
+                <Text style={styles.modalSaveBtnText}>Confirm Chiller Refill</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* MODAL: HANDOVER FROM MAIN STORE TO KITCHEN STATIONS */}
+      {/* ========================================================================= */}
+      <Modal visible={showKitchenHandoverModal} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>🍳 Hand Over to Kitchen Station (کچن ٹرانسفر)</Text>
+                <Text style={styles.modalSubtitle}>
+                  Transfer raw ingredients, spices, oil, meat & rations from Main Store to Kitchen Line
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setShowKitchenHandoverModal(false)}>
+                <Ionicons name="close" size={24} color={BRAND.ink} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
+              {/* Item Selection */}
+              <Text style={styles.inputLabel}>Select Ingredient / Raw Material (اجزاء منتخب کریں) *</Text>
+              <RoyalDropdown
+                options={inventory.map((i) => ({
+                  label: `${i.name} [${i.category || 'Raw'}] • Balance: ${i.stock} ${i.unit}`,
+                  value: i.id,
+                }))}
+                value={kitchenItemId}
+                onSelect={(val) => setKitchenItemId(val)}
+                icon="cube-outline"
+                searchable
+                style={{ marginBottom: 12 }}
+              />
+
+              {/* Source & Destination */}
+              <View style={styles.formRow2}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.inputLabel}>Source Storage Zone (مرکزی گودام) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Main Central Store"
+                    value={kitchenFromLoc}
+                    onChangeText={setKitchenFromLoc}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.inputLabel}>Destination Kitchen Station (کچن اسٹیشن) *</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Cooking Line / Kitchen"
+                    value={kitchenToStation}
+                    onChangeText={setKitchenToStation}
+                  />
+                </View>
+              </View>
+
+              {/* Quantity */}
+              <Text style={styles.inputLabel}>Quantity to Transfer (تعداد / وزن) *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g. 10"
+                keyboardType="numeric"
+                value={kitchenQty}
+                onChangeText={setKitchenQty}
+              />
+
+              {/* Staff */}
+              <View style={styles.formRow2}>
+                <View style={{ flex: 1, marginRight: 8 }}>
+                  <Text style={styles.inputLabel}>Handed Over By (اسٹور انچارج)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Storekeeper / Manager"
+                    value={kitchenHandedBy}
+                    onChangeText={setKitchenHandedBy}
+                  />
+                </View>
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={styles.inputLabel}>Received By Kitchen Chef / Cook (کچن چیف)</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="e.g. Head Chef / Line Cook"
+                    value={kitchenReceivedBy}
+                    onChangeText={setKitchenReceivedBy}
+                  />
+                </View>
+              </View>
+
+              {/* Notes */}
+              <Text style={styles.inputLabel}>Handover Notes / Batch Details (Optional)</Text>
+              <TextInput
+                style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
+                multiline
+                placeholder="e.g. Issued 10kg chicken for dinner service karahi prep"
+                value={kitchenNotes}
+                onChangeText={setKitchenNotes}
+              />
+            </ScrollView>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowKitchenHandoverModal(false)}>
+                <Text style={styles.modalCancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalSaveBtn, { backgroundColor: '#10B981' }]}
+                onPress={() => {
+                  const numQty = Number(kitchenQty);
+                  if (!kitchenItemId) {
+                    alertMsg('Select Item', 'Please select a raw material or ingredient to transfer.');
                     return;
                   }
                   if (!numQty || numQty <= 0) {
                     alertMsg('Invalid Quantity', 'Please enter a valid positive quantity.');
                     return;
                   }
-                  if (!handoverReceivedBy.trim()) {
-                    alertMsg('Floor Manager Name', 'Please specify the name of the Floor Manager receiving the stock.');
-                    return;
-                  }
 
-                  const ok = handoverBeveragesToFloor({
-                    itemId: handoverItemId,
+                  const ok = handoverKitchenStock({
+                    itemId: kitchenItemId,
                     qty: numQty,
-                    toFloor: handoverFloor,
-                    fromLocation: handoverFromLoc.trim() || 'Beverage Cold Room',
-                    handedOverBy: handoverGivenBy.trim() || user?.name || 'Inventory Manager',
-                    receivedByFloorManager: handoverReceivedBy.trim(),
-                    notes: handoverNotes.trim(),
+                    fromLocation: kitchenFromLoc.trim() || 'Main Central Store',
+                    toLocation: kitchenToStation.trim() || 'Cooking Line / Kitchen',
+                    handedOverBy: kitchenHandedBy.trim() || user?.name || 'Storekeeper',
+                    receivedByKitchen: kitchenReceivedBy.trim() || 'Head Chef',
+                    notes: kitchenNotes.trim(),
                   });
 
                   if (ok) {
-                    setShowHandoverModal(false);
+                    setShowKitchenHandoverModal(false);
+                    setKitchenQty('');
+                    setKitchenNotes('');
                     alertMsg(
-                      'Handover Complete',
-                      `Successfully handed over ${numQty} units to ${handoverFloor} Chiller. Floor Manager will now see this updated stock.`
+                      'Kitchen Handover Complete',
+                      `Successfully transferred ${numQty} units from ${kitchenFromLoc} to ${kitchenToStation}.`
                     );
                   } else {
-                    alertMsg('Error', 'Failed to execute handover. Check stock levels.');
+                    alertMsg('Error', 'Failed to execute kitchen handover.');
                   }
                 }}
               >
                 <Ionicons name="checkmark-done-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.modalSaveBtnText}>Confirm Floor Handover</Text>
+                <Text style={styles.modalSaveBtnText}>Confirm Kitchen Handover</Text>
               </TouchableOpacity>
             </View>
           </View>
