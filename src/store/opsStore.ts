@@ -665,6 +665,7 @@ type OpsState = OpsData & {
     reason?: string;
     by?: string;
   }) => void;
+  syncMenuBeveragesToInventory: (menuItems?: { id: string; name: string; category?: string; price: number; urduName?: string }[]) => { added: number; updated: number };
 
   // Expenses
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
@@ -1267,6 +1268,158 @@ export const useOpsStore = create<OpsState>()(
           };
         });
         if (hasChanged) notifySync();
+      },
+
+      syncMenuBeveragesToInventory: (menuItems) => {
+        let addedCount = 0;
+        let updatedCount = 0;
+
+        const defaultBeverages = [
+          { id: 'slt-drk-soft-drink', name: 'Soft Drink (Regular)', urduName: 'سافٹ ڈرنک', unit: 'bottles', price: 150, category: 'Beverages' },
+          { id: 'slt-drk-water', name: 'Mineral Water 500ml', urduName: 'منرل واٹر', unit: 'bottles', price: 70, category: 'Beverages' },
+          { id: 'slt-drk-water-lg', name: 'Mineral Water 1.5L', urduName: 'منرل واٹر بڑا', unit: 'bottles', price: 130, category: 'Beverages' },
+          { id: 'slt-drk-coke-can', name: 'Coca Cola Can 250ml', urduName: 'کوکا کولا کین', unit: 'cans', price: 180, category: 'Beverages' },
+          { id: 'slt-drk-coke-15', name: 'Coca Cola 1.5L', urduName: 'کوکا کولا 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
+          { id: 'slt-drk-sprite-can', name: 'Sprite Can 250ml', urduName: 'اسپرائٹ کین', unit: 'cans', price: 180, category: 'Beverages' },
+          { id: 'slt-drk-sprite-15', name: 'Sprite 1.5L', urduName: 'اسپرائٹ 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
+          { id: 'slt-drk-fanta-15', name: 'Fanta 1.5L', urduName: 'فینٹا 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
+          { id: 'slt-drk-pepsi-15', name: 'Pepsi 1.5L', urduName: 'پیپسی 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
+          { id: 'slt-drk-7up-15', name: '7up 1.5L', urduName: 'سیون اپ 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
+          { id: 'slt-drk-dew-can', name: 'Mountain Dew Can', urduName: 'ڈیو کین', unit: 'cans', price: 180, category: 'Beverages' },
+          { id: 'slt-drk-sting', name: 'Sting Berry Blast', urduName: 'اسٹنگ انرجی', unit: 'bottles', price: 120, category: 'Beverages' },
+          { id: 'slt-drk-mint-lemonade', name: 'Fresh Mint Lemonade', urduName: 'تازہ پودینہ لیمونیڈ', unit: 'glasses', price: 220, category: 'Beverages' },
+          { id: 'slt-drk-roohafza', name: 'Traditional Rooh Afza', urduName: 'روح افزاء شربت', unit: 'bottles', price: 150, category: 'Beverages' },
+        ];
+
+        set((state) => {
+          const existingInv = [...state.inventory];
+          let changed = false;
+
+          const candidates: { id?: string; name: string; urduName?: string; price?: number; category?: string; unit?: string }[] = [];
+          if (Array.isArray(menuItems) && menuItems.length > 0) {
+            menuItems.forEach((m) => {
+              const cat = (m.category || '').toLowerCase();
+              const nm = (m.name || '').toLowerCase();
+              const isBev =
+                cat.includes('drink') ||
+                cat.includes('beverage') ||
+                cat.includes('water') ||
+                cat.includes('juice') ||
+                cat.includes('mocktail') ||
+                cat.includes('cold') ||
+                nm.includes('drink') ||
+                nm.includes('water') ||
+                nm.includes('pepsi') ||
+                nm.includes('coke') ||
+                nm.includes('sprite') ||
+                nm.includes('fanta') ||
+                nm.includes('7up') ||
+                nm.includes('dew') ||
+                nm.includes('marinda') ||
+                nm.includes('sting') ||
+                nm.includes('soda') ||
+                nm.includes('juice') ||
+                nm.includes('lemonade') ||
+                nm.includes('rooh afza');
+              if (isBev) {
+                candidates.push({
+                  id: m.id,
+                  name: m.name,
+                  urduName: m.urduName,
+                  price: m.price,
+                  category: 'Beverages',
+                  unit: nm.includes('can') ? 'cans' : 'bottles',
+                });
+              }
+            });
+          }
+
+          defaultBeverages.forEach((d) => {
+            if (!candidates.some((c) => c.name.toLowerCase().trim() === d.name.toLowerCase().trim())) {
+              candidates.push(d);
+            }
+          });
+
+          candidates.forEach((cand) => {
+            const foundIdx = existingInv.findIndex(
+              (i) =>
+                (cand.id && i.menuItemId === cand.id) ||
+                i.name.toLowerCase().trim() === cand.name.toLowerCase().trim() ||
+                (cand.id && i.id === cand.id) ||
+                (cand.name.toLowerCase().includes('soft drink') && i.name.toLowerCase().includes('soft drink')) ||
+                (cand.name.toLowerCase() === 'water' && i.name.toLowerCase().includes('water'))
+            );
+
+            if (foundIdx >= 0) {
+              const cur = existingInv[foundIdx];
+              const curChillers = cur.chillerStock || {};
+              const defaultChillerPerFloor = 24;
+              let chillerUpdated = false;
+              const nextChillers: Record<string, number> = { ...curChillers };
+              CHILLER_FLOORS.forEach((floor) => {
+                if (typeof nextChillers[floor] !== 'number' || nextChillers[floor] <= 0) {
+                  nextChillers[floor] = defaultChillerPerFloor;
+                  chillerUpdated = true;
+                }
+              });
+
+              if (!cur.menuItemId && cand.id) {
+                existingInv[foundIdx] = {
+                  ...cur,
+                  menuItemId: cand.id,
+                  chillerStock: nextChillers,
+                  category: cur.category || 'Beverages',
+                  updatedAt: Date.now(),
+                };
+                changed = true;
+                updatedCount++;
+              } else if (chillerUpdated) {
+                existingInv[foundIdx] = {
+                  ...cur,
+                  chillerStock: nextChillers,
+                  updatedAt: Date.now(),
+                };
+                changed = true;
+                updatedCount++;
+              }
+            } else {
+              const initialChillers: Record<string, number> = {};
+              CHILLER_FLOORS.forEach((fl) => {
+                initialChillers[fl] = 24;
+              });
+
+              const newInvItem: InventoryItem = {
+                id: cand.id ? `inv-${cand.id}` : uid('inv'),
+                itemCode: `BEV-${Math.floor(100 + Math.random() * 900)}`,
+                name: cand.name,
+                urduName: cand.urduName || 'مشروب',
+                category: 'Beverages',
+                unit: cand.unit || 'bottles',
+                stock: 160,
+                threshold: 15,
+                costPerUnit: Math.round((cand.price || 150) * 0.5) || 60,
+                location: 'Beverage Cold Room',
+                menuItemId: cand.id,
+                chillerStock: initialChillers,
+                chillerThreshold: 6,
+                updatedAt: Date.now(),
+              };
+
+              existingInv.push(newInvItem);
+              changed = true;
+              addedCount++;
+            }
+          });
+
+          if (!changed) return state;
+
+          return {
+            inventory: existingInv,
+          };
+        });
+
+        if (addedCount > 0 || updatedCount > 0) notifySync();
+        return { added: addedCount, updated: updatedCount };
       },
 
       addExpense: (expense) => {

@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -51,7 +51,7 @@ interface Props {
   backRoute?: string;
 }
 
-type TabType = 'raw' | 'beverages' | 'receiving' | 'expiries' | 'lowstock' | 'movements' | 'dishes';
+type TabType = 'raw' | 'zones' | 'chillers' | 'beverages' | 'receiving' | 'expiries' | 'lowstock' | 'movements' | 'dishes';
 
 export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Props) {
   const router = useRouter();
@@ -84,6 +84,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const refillChillerProduct = useOpsStore((s) => s.refillChillerProduct);
   const handoverKitchenStock = useOpsStore((s) => s.handoverKitchenStock);
   const adjustFloorChillerStock = useOpsStore((s) => s.adjustFloorChillerStock);
+  const syncMenuBeveragesToInventory = useOpsStore((s) => s.syncMenuBeveragesToInventory);
 
   const allCategories = useMemo(() => {
     const base = Array.isArray(storedCategories) && storedCategories.length > 0
@@ -320,6 +321,14 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const [kitchenHandedBy, setKitchenHandedBy] = useState(user?.name || 'Storekeeper');
   const [kitchenReceivedBy, setKitchenReceivedBy] = useState('');
   const [kitchenNotes, setKitchenNotes] = useState('');
+  const [selectedStorageZoneFilter, setSelectedStorageZoneFilter] = useState<string>('All');
+
+  // Auto-sync menu beverages with chillers on mount
+  useEffect(() => {
+    if (menuItems && menuItems.length > 0) {
+      syncMenuBeveragesToInventory(menuItems);
+    }
+  }, [menuItems, syncMenuBeveragesToInventory]);
 
   // Analytics & Summary Metrics
   const metrics = useMemo(() => {
@@ -609,6 +618,60 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       };
     });
   }, [beverageInventory]);
+
+  // Storage Zones Breakdown
+  const storageZoneBreakdown = useMemo(() => {
+    const zoneMap: Record<string, { items: InventoryItem[]; count: number; totalValue: number }> = {};
+    const standardZones = [
+      'Main Central Store',
+      'Cooking Line / Kitchen',
+      'Walk-in Chiller',
+      'Deep Freezer #1 (Meat)',
+      'Deep Freezer #2 (Poultry)',
+      'Dry Ration Store - Shelf A',
+      'Dry Ration Store - Shelf B',
+      'Spice & Masala Rack',
+      'Beverage Cold Room',
+      'Packaging Store',
+    ];
+
+    standardZones.forEach((loc) => {
+      zoneMap[loc] = { items: [], count: 0, totalValue: 0 };
+    });
+
+    inventory.forEach((item) => {
+      const loc = item.location || 'Main Central Store';
+      if (!zoneMap[loc]) {
+        zoneMap[loc] = { items: [], count: 0, totalValue: 0 };
+      }
+      zoneMap[loc].items.push(item);
+      zoneMap[loc].count += item.stock || 0;
+      zoneMap[loc].totalValue += (item.stock || 0) * (item.costPerUnit || 0);
+    });
+
+    return zoneMap;
+  }, [inventory]);
+
+  // Kitchen Handover Records
+  const kitchenHandovers = useMemo(() => {
+    return stockMovements.filter(
+      (m) =>
+        m.type === 'handover' ||
+        (m.note && m.note.toLowerCase().includes('kitchen')) ||
+        (m.toLocation && m.toLocation.toLowerCase().includes('kitchen'))
+    );
+  }, [stockMovements]);
+
+  // Live Beverage Order Deductions
+  const liveBeverageDeductionLogs = useMemo(() => {
+    return stockMovements.filter(
+      (m) =>
+        m.type === 'usage' &&
+        ((m.note && m.note.toLowerCase().includes('chiller')) ||
+          (m.fromLocation && m.fromLocation.toLowerCase().includes('chiller')) ||
+          (m.fromFloor && m.fromFloor.length > 0))
+    );
+  }, [stockMovements]);
 
   // Tracked Dishes in Menu
   const trackedDishes = useMemo(() => {
@@ -1476,7 +1539,148 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
         </TouchableOpacity>
       </View>
 
-      {/* 6 Main Navigation Tabs */}
+      {/* ========================================================================= */}
+      {/* STORAGE ZONES & BEVERAGES LIVE QUICK-ACCESS STATUS BANNER */}
+      {/* ========================================================================= */}
+      <View
+        style={{
+          backgroundColor: '#FFFFFF',
+          borderRadius: 12,
+          padding: 12,
+          marginBottom: 14,
+          borderWidth: 1,
+          borderColor: '#E2E8F0',
+          flexDirection: 'row',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+        }}
+      >
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: activeTab === 'zones' ? '#4F46E5' : '#EEF2FF',
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: activeTab === 'zones' ? '#4338CA' : '#C7D2FE',
+            }}
+            onPress={() => setActiveTab('zones')}
+          >
+            <Ionicons name="business" size={16} color={activeTab === 'zones' ? '#FFFFFF' : '#4F46E5'} />
+            <View>
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: activeTab === 'zones' ? '#FFFFFF' : '#312E81' }}>
+                🏢 Storage Zones (اسٹوریج زونز)
+              </Text>
+              <Text style={{ fontSize: 10, color: activeTab === 'zones' ? '#E0E7FF' : '#6366F1' }}>
+                Main Store, Kitchen Lines & Freezers
+              </Text>
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 8,
+              backgroundColor: activeTab === 'chillers' || activeTab === 'beverages' ? '#0284C7' : '#F0F9FF',
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 8,
+              borderWidth: 1,
+              borderColor: activeTab === 'chillers' || activeTab === 'beverages' ? '#0369A1' : '#BAE6FD',
+            }}
+            onPress={() => setActiveTab('chillers')}
+          >
+            <Ionicons name="snow" size={16} color={activeTab === 'chillers' || activeTab === 'beverages' ? '#FFFFFF' : '#0284C7'} />
+            <View>
+              <Text style={{ fontSize: 12.5, fontWeight: '800', color: activeTab === 'chillers' || activeTab === 'beverages' ? '#FFFFFF' : '#075985' }}>
+                ❄️ 5 Floor Chillers ({beverageInventory.length} Drinks)
+              </Text>
+              <Text style={{ fontSize: 10, color: activeTab === 'chillers' || activeTab === 'beverages' ? '#E0F2FE' : '#0284C7' }}>
+                🟢 POS Auto-Deduction 100% Synced
+              </Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick Action Shortcut Buttons */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              backgroundColor: '#ECFDF5',
+              borderColor: '#6EE7B7',
+              borderWidth: 1,
+              paddingHorizontal: 11,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              const res = syncMenuBeveragesToInventory(menuItems);
+              alertMsg('Beverages Synced', `Successfully synced ${res.added + res.updated} drinks with POS Menu! All 5 floor chillers updated with live stock.`);
+            }}
+          >
+            <Ionicons name="sync" size={14} color="#059669" />
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#065F46' }}>
+              🔄 Sync Menu Drinks ({beverageInventory.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              backgroundColor: '#0284C7',
+              paddingHorizontal: 11,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              if (beverageInventory.length > 0) setHandoverItemId(beverageInventory[0].id);
+              setHandoverQty('24');
+              setHandoverFloor(CHILLER_FLOORS[0]);
+              setShowHandoverModal(true);
+            }}
+          >
+            <Ionicons name="flash-outline" size={14} color="#FFFFFF" />
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+              ⚡ Refill Chiller
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 5,
+              backgroundColor: '#10B981',
+              paddingHorizontal: 11,
+              paddingVertical: 6,
+              borderRadius: 8,
+            }}
+            onPress={() => {
+              if (inventory.length > 0) setKitchenItemId(inventory[0].id);
+              setShowKitchenHandoverModal(true);
+            }}
+          >
+            <Ionicons name="restaurant-outline" size={14} color="#FFFFFF" />
+            <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#FFFFFF' }}>
+              🍳 Kitchen Handover
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* Main Navigation Tabs */}
       {isMobile ? (
         <ScrollView
           horizontal
@@ -1501,18 +1705,34 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'beverages' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('beverages')}
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, activeTab === 'zones' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('zones')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="business"
+              size={15}
+              color={activeTab === 'zones' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'zones' && styles.tabBtnTextActive]}>
+              🏢 Storage Zones
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, { flex: undefined, minWidth: undefined, paddingHorizontal: 14 }, (activeTab === 'chillers' || activeTab === 'beverages') && styles.tabBtnActive]}
+            onPress={() => setActiveTab('chillers')}
             activeOpacity={0.7}
           >
             <Ionicons
               name="snow"
               size={15}
-              color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
+              color={(activeTab === 'chillers' || activeTab === 'beverages') ? BRAND.burgundy : BRAND.muted}
               style={{ marginRight: 6 }}
             />
-            <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
-              ❄️ Chillers & Zones ({beverageInventory.length})
+            <Text style={[styles.tabBtnText, (activeTab === 'chillers' || activeTab === 'beverages') && styles.tabBtnTextActive]}>
+              ❄️ 5 Floor Chillers ({beverageInventory.length})
             </Text>
           </TouchableOpacity>
 
@@ -1615,18 +1835,34 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.tabBtn, activeTab === 'beverages' && styles.tabBtnActive]}
-            onPress={() => setActiveTab('beverages')}
+            style={[styles.tabBtn, activeTab === 'zones' && styles.tabBtnActive]}
+            onPress={() => setActiveTab('zones')}
+            activeOpacity={0.7}
+          >
+            <Ionicons
+              name="business"
+              size={16}
+              color={activeTab === 'zones' ? BRAND.burgundy : BRAND.muted}
+              style={{ marginRight: 6 }}
+            />
+            <Text style={[styles.tabBtnText, activeTab === 'zones' && styles.tabBtnTextActive]}>
+              🏢 Storage Zones & Kitchen
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.tabBtn, (activeTab === 'chillers' || activeTab === 'beverages') && styles.tabBtnActive]}
+            onPress={() => setActiveTab('chillers')}
             activeOpacity={0.7}
           >
             <Ionicons
               name="snow"
               size={16}
-              color={activeTab === 'beverages' ? BRAND.burgundy : BRAND.muted}
+              color={(activeTab === 'chillers' || activeTab === 'beverages') ? BRAND.burgundy : BRAND.muted}
               style={{ marginRight: 6 }}
             />
-            <Text style={[styles.tabBtnText, activeTab === 'beverages' && styles.tabBtnTextActive]}>
-              ❄️ Chillers & Zones ({beverageInventory.length})
+            <Text style={[styles.tabBtnText, (activeTab === 'chillers' || activeTab === 'beverages') && styles.tabBtnTextActive]}>
+              ❄️ 5 Floor Chillers & Beverage Sync ({beverageInventory.length})
             </Text>
           </TouchableOpacity>
 
@@ -2290,33 +2526,314 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       )}
 
       {/* ========================================================================= */}
-      {/* TAB 1.5: STORAGE ZONES & FLOOR CHILLERS INVENTORY */}
+      {/* TAB: RESTAURANT STORAGE ZONES & KITCHEN LINE MANAGEMENT */}
       {/* ========================================================================= */}
-      {activeTab === 'beverages' && (
+      {activeTab === 'zones' && (
         <View>
           <View style={styles.sectionHeaderRow}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.sectionTitle}>❄️ Storage Zones & Floor Chillers (اسٹوریج زونز اور چلرز)</Text>
+              <Text style={styles.sectionTitle}>🏢 Storage Zones & Kitchen Stations (اسٹوریج زونز)</Text>
               <Text style={styles.sectionDesc}>
-                Main Store se Kitchen Line handover aur 5 floors k chillers ki live product-wise monitoring
+                Main Central Store se Cooking Line, BBQ, Tandoor & Chillers mein inventory stock handovers aur locations management
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: '#10B981', paddingHorizontal: 16 }]}
+              onPress={() => {
+                if (inventory.length > 0) setKitchenItemId(inventory[0].id);
+                setKitchenQty('');
+                setShowKitchenHandoverModal(true);
+              }}
+            >
+              <Ionicons name="restaurant-outline" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>🍳 Hand Over to Kitchen Station</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Storage Zones Overview Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            {/* Zone 1: Main Central Store */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: selectedStorageZoneFilter === 'Main Central Store' ? '#EEF2FF' : '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: selectedStorageZoneFilter === 'Main Central Store' ? '#4F46E5' : '#E2E8F0',
+              }}
+              onPress={() => setSelectedStorageZoneFilter(selectedStorageZoneFilter === 'Main Central Store' ? 'All' : 'Main Central Store')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="business" size={18} color="#4F46E5" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5', textTransform: 'uppercase' }}>
+                  Central Warehouse
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Main Central Store (مرکزی گودام)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Bulk inventory, receiving point & dry rations
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  SKUs: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{storageZoneBreakdown['Main Central Store']?.items.length || 0}</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Valuation: <Text style={{ fontWeight: '800', color: '#4F46E5' }}>{money(storageZoneBreakdown['Main Central Store']?.totalValue || 0)}</Text>
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Zone 2: Kitchen Stations */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? '#ECFDF5' : '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? '#10B981' : '#E2E8F0',
+              }}
+              onPress={() => setSelectedStorageZoneFilter(selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? 'All' : 'Cooking Line / Kitchen')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="restaurant" size={18} color="#10B981" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981', textTransform: 'uppercase' }}>
+                  Live Cooking Line
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Kitchen Cooking Line (کچن اسٹیشنز)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Karahi, Handi, BBQ, Tandoor & Prep Stations
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Handovers: <Text style={{ fontWeight: '700', color: '#10B981' }}>{kitchenHandovers.length} Batches</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#10B981' }}>+ Issue Stock ➔</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Zone 3: 5 Floor Chillers */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: '#E2E8F0',
+              }}
+              onPress={() => setActiveTab('chillers')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="snow" size={18} color="#0284C7" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7', textTransform: 'uppercase' }}>
+                  5 Floors Network
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Floor Chillers Network (فلور چلرز)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Ground, 1st, 2nd, 3rd Floor & Rooftop Chillers
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Total Drinks: <Text style={{ fontWeight: '800', color: '#0284C7' }}>{floorChillersSummary.reduce((s, f) => s + f.totalDrinks, 0)} Units</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0284C7' }}>View Chillers ➔</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sub Location Filter Pills */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
+              Filter Inventory By Storage Location:
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {['All', ...STORAGE_LOCATIONS].map((loc) => {
+                const count = loc === 'All' ? inventory.length : (storageZoneBreakdown[loc]?.items.length || 0);
+                const isSelected = selectedStorageZoneFilter === loc;
+                return (
+                  <TouchableOpacity
+                    key={loc}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      backgroundColor: isSelected ? '#4F46E5' : '#F1F5F9',
+                      borderWidth: 1,
+                      borderColor: isSelected ? '#4338CA' : '#E2E8F0',
+                    }}
+                    onPress={() => setSelectedStorageZoneFilter(loc)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#FFFFFF' : '#475569' }}>
+                      {loc} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Storage Zone Items List */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 18 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                Stock in {selectedStorageZoneFilter === 'All' ? 'All Storage Zones' : selectedStorageZoneFilter}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                {inventory.filter((i) => selectedStorageZoneFilter === 'All' || (i.location || 'Main Central Store') === selectedStorageZoneFilter).length} Items Listed
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {inventory
+                .filter((i) => selectedStorageZoneFilter === 'All' || (i.location || 'Main Central Store') === selectedStorageZoneFilter)
+                .slice(0, 24)
+                .map((item) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      flex: 1,
+                      minWidth: isMobile ? '100%' : 260,
+                      backgroundColor: '#F8FAFC',
+                      borderRadius: 10,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{item.name}</Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          📍 {item.location || 'Main Central Store'} • {item.category}
+                        </Text>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                          {item.stock} <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
+                        </Text>
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 8,
+                        backgroundColor: '#ECFDF5',
+                        borderColor: '#A7F3D0',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        paddingVertical: 5,
+                        alignItems: 'center',
+                      }}
+                      onPress={() => {
+                        setKitchenItemId(item.id);
+                        setKitchenFromLoc(item.location || 'Main Central Store');
+                        setShowKitchenHandoverModal(true);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                        🍳 Transfer this item to Kitchen Station
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+            </View>
+          </View>
+
+          {/* Kitchen Handover History */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="restaurant" size={18} color="#10B981" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                  Recent Kitchen Station Handovers (مین اسٹور ➔ کچن ریکارڈ)
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                {kitchenHandovers.length} Handover Logs
+              </Text>
+            </View>
+
+            {kitchenHandovers.length === 0 ? (
+              <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 10 }}>
+                No kitchen handovers recorded yet. Use the "Hand Over to Kitchen" button to issue cooking ingredients.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                {kitchenHandovers.slice(0, 20).map((kh) => (
+                  <View
+                    key={kh.id}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                        {kh.itemName}
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                        {kh.note || `Transferred from ${kh.fromLocation || 'Store'} to ${kh.toLocation || 'Kitchen'}`}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#10B981' }}>
+                        {kh.qty} {kh.unit || 'units'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(kh.at)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: 5 FLOOR CHILLERS & LIVE BEVERAGE SYNC */}
+      {/* ========================================================================= */}
+      {(activeTab === 'chillers' || activeTab === 'beverages') && (
+        <View>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>❄️ 5 Floor Chillers Network & Beverage Sync (فلور چلرز)</Text>
+              <Text style={styles.sectionDesc}>
+                Ground Floor, 1st, 2nd, 3rd Floor aur Rooftop ke chillers ka live stock aur POS orders ki direct auto-deduction
               </Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
               <TouchableOpacity
-                style={[styles.addBtn, { backgroundColor: '#10B981', paddingHorizontal: 14 }]}
+                style={[styles.addBtn, { backgroundColor: '#059669', paddingHorizontal: 14 }]}
                 onPress={() => {
-                  if (inventory.length > 0) setKitchenItemId(inventory[0].id);
-                  setKitchenQty('');
-                  setKitchenFromLoc('Main Central Store');
-                  setKitchenToStation('Cooking Line / Kitchen');
-                  setKitchenHandedBy(user?.name || 'Storekeeper');
-                  setKitchenReceivedBy('');
-                  setKitchenNotes('');
-                  setShowKitchenHandoverModal(true);
+                  const res = syncMenuBeveragesToInventory(menuItems);
+                  alertMsg('Beverages Synced', `Successfully synced ${res.added + res.updated} drinks with POS Menu! All 5 floor chillers updated with live stock.`);
                 }}
               >
-                <Ionicons name="restaurant-outline" size={18} color="#FFF" />
-                <Text style={styles.addBtnText}>🍳 Hand Over to Kitchen</Text>
+                <Ionicons name="sync" size={16} color="#FFF" />
+                <Text style={styles.addBtnText}>🔄 Sync Menu Beverages</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -2356,119 +2873,19 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
           >
             <Ionicons name="checkmark-circle" size={26} color="#059669" />
             <View style={{ flex: 1 }}>
-              <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065F46' }}>
-                ⚡ Direct Floor Order Auto-Deduction Active (نو فلور مینیجر محتاجی)
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065F46' }}>
+                  🟢 POS ➔ Floor Chillers Live Sync Active (نو فلور مینیجر محتاجی)
+                </Text>
+                <View style={{ backgroundColor: '#A7F3D0', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#047857' }}>
+                    {beverageInventory.length} Drinks Synced
+                  </Text>
+                </View>
+              </View>
               <Text style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>
-                Ground Floor, 1st, 2nd, 3rd Floor aur Rooftop ke kisi bhi table ya waiter order me cold drink shamil hone par direct usi floor k chiller stock se auto-minus hoti hai!
+                Ground Floor, 1st, 2nd, 3rd Floor ya Rooftop ke kisi bhi table ya waiter order me cold drink shamil hote hi chiller se direct auto-minus ho jati hai!
               </Text>
-            </View>
-          </View>
-
-          {/* Storage Zones Overview 3-Pillar Cards */}
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
-            {/* Zone 1: Main Central Store */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 200,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 12,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                borderLeftWidth: 4,
-                borderLeftColor: '#6366F1',
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#6366F1', textTransform: 'uppercase' }}>
-                  Zone 1: Bulk Warehouse
-                </Text>
-                <Ionicons name="business" size={18} color="#6366F1" />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
-                Main Central Store (مرکزی گودام)
-              </Text>
-              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                {inventory.length} Total SKUs • Walk-in Cold Rooms & Dry Store
-              </Text>
-              <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 11, color: '#64748B' }}>Stock Value:</Text>
-                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0F172A' }}>{money(metrics.totalValuation)}</Text>
-              </View>
-            </View>
-
-            {/* Zone 2: Kitchen Stations */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 200,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 12,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                borderLeftWidth: 4,
-                borderLeftColor: '#10B981',
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981', textTransform: 'uppercase' }}>
-                  Zone 2: Active Cooking
-                </Text>
-                <Ionicons name="restaurant" size={18} color="#10B981" />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
-                Kitchen Cooking Line (کچن اسٹیشنز)
-              </Text>
-              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                Curry/Karahi, BBQ, Tandoor & Prep Stations
-              </Text>
-              <TouchableOpacity
-                style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                onPress={() => {
-                  if (inventory.length > 0) setKitchenItemId(inventory[0].id);
-                  setKitchenQty('');
-                  setShowKitchenHandoverModal(true);
-                }}
-              >
-                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#10B981' }}>+ Issue / Handover Stock ➔</Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Zone 3: Floor Chillers */}
-            <View
-              style={{
-                flex: 1,
-                minWidth: 200,
-                backgroundColor: '#FFFFFF',
-                borderRadius: 12,
-                padding: 14,
-                borderWidth: 1,
-                borderColor: '#E2E8F0',
-                borderLeftWidth: 4,
-                borderLeftColor: '#0284C7',
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7', textTransform: 'uppercase' }}>
-                  Zone 3: Service Chillers
-                </Text>
-                <Ionicons name="snow" size={18} color="#0284C7" />
-              </View>
-              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A', marginTop: 4 }}>
-                5 Floor Chillers (فلور چلرز)
-              </Text>
-              <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                Ground, 1st, 2nd, 3rd Floor & Rooftop
-              </Text>
-              <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 11, color: '#64748B' }}>Chiller Drinks:</Text>
-                <Text style={{ fontSize: 12, fontWeight: '800', color: '#0284C7' }}>
-                  {floorChillersSummary.reduce((s, f) => s + f.totalDrinks, 0)} Units
-                </Text>
-              </View>
             </View>
           </View>
 
@@ -2536,7 +2953,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                   color: chillerSubView === 'kitchen' ? '#FFFFFF' : '#475569',
                 }}
               >
-                📋 Handovers & Refill Logs ({chillerHandovers.length})
+                🔴 Live Order Sync Stream ({liveBeverageDeductionLogs.length})
               </Text>
             </TouchableOpacity>
           </View>
@@ -2730,7 +3147,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                 <View style={styles.emptyCard}>
                   <Ionicons name="wine-outline" size={48} color={BRAND.muted} />
                   <Text style={styles.emptyTitle}>No Beverage Items Found</Text>
-                  <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory to track chiller levels.</Text>
+                  <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory or click "Sync Menu Beverages".</Text>
                 </View>
               ) : (
                 <View style={styles.itemsGrid}>
@@ -2862,66 +3279,1008 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
           )}
 
-          {/* ================= SUB VIEW 3: HANDOVERS & REFILL LOGS ================= */}
+          {/* ================= SUB VIEW 3: LIVE ORDER SYNC STREAM & REFILL LOGS ================= */}
           {chillerSubView === 'kitchen' && (
-            <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Ionicons name="list" size={18} color="#0284C7" />
-                  <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
-                    Floor Chiller Refills & Kitchen Handover History
-                  </Text>
+            <View>
+              {/* Real-time Order Deduction Stream Card */}
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="pulse" size={18} color="#DC2626" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                      🔴 Real-Time POS Floor Beverage Deduction Stream (لائیو آرڈر کٹوتی)
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
+                      Live Stream Active
+                    </Text>
+                  </View>
                 </View>
-                <Text style={{ fontSize: 12, color: '#64748B' }}>
-                  {chillerHandovers.length} Total Logs
-                </Text>
+
+                {liveBeverageDeductionLogs.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                    No table beverage orders recorded yet. When a table order is placed in POS or Waiter App, live chiller deduction will appear here immediately!
+                  </Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                    {liveBeverageDeductionLogs.slice(0, 20).map((log) => (
+                      <View
+                        key={log.id}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                              {log.itemName}
+                            </Text>
+                            <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                                ❄️ {log.fromFloor || 'Floor'} Chiller
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                            {log.note || `Deducted for live table order by ${log.by || 'POS / Waiter'}`}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#DC2626' }}>
+                            -{log.qty} {log.unit || 'units'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(log.at)}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
               </View>
 
-              {chillerHandovers.length === 0 ? (
-                <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
-                  No handovers or chiller refills logged yet. Use the buttons above to transfer stock.
-                </Text>
-              ) : (
-                <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-                  {chillerHandovers.slice(0, 30).map((h) => (
-                    <View
-                      key={h.id}
-                      style={{
-                        flexDirection: 'row',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        paddingVertical: 10,
-                        borderBottomWidth: 1,
-                        borderBottomColor: '#F1F5F9',
-                      }}
-                    >
-                      <View style={{ flex: 1, marginRight: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                          <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
-                            {h.itemName}
-                          </Text>
-                          <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
-                              ❄️ {h.toFloor} Chiller
+              {/* Chiller Refill Logs */}
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="list" size={18} color="#0284C7" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                      Floor Chiller Refill Logs (چلرز ری فل ریکارڈ)
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    {chillerHandovers.length} Total Logs
+                  </Text>
+                </View>
+
+                {chillerHandovers.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                    No chiller refills logged yet. Use the "Refill Chiller" button above to replenish floor stocks.
+                  </Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                    {chillerHandovers.slice(0, 20).map((h) => (
+                      <View
+                        key={h.id}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                              {h.itemName}
                             </Text>
+                            <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                                ❄️ {h.toFloor} Chiller
+                              </Text>
+                            </View>
                           </View>
+                          <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                            Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text>
+                            {h.receivedByFloorManager ? ` • Received: ${h.receivedByFloorManager}` : ''}
+                            {h.notes ? ` • Note: "${h.notes}"` : ''}
+                          </Text>
                         </View>
-                        <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
-                          Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text>
-                          {h.receivedByFloorManager ? ` • Received: ${h.receivedByFloorManager}` : ''}
-                          {h.notes ? ` • Note: "${h.notes}"` : ''}
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
+                            +{h.qty} {h.unit}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            </View>
+          )}
+        </View>
+      )}
+        <View>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>🏢 Storage Zones & Kitchen Stations (اسٹوریج زونز)</Text>
+              <Text style={styles.sectionDesc}>
+                Main Central Store se Cooking Line, BBQ, Tandoor & Chillers mein inventory stock handovers aur locations management
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: '#10B981', paddingHorizontal: 16 }]}
+              onPress={() => {
+                if (inventory.length > 0) setKitchenItemId(inventory[0].id);
+                setKitchenQty('');
+                setShowKitchenHandoverModal(true);
+              }}
+            >
+              <Ionicons name="restaurant-outline" size={18} color="#FFF" />
+              <Text style={styles.addBtnText}>🍳 Hand Over to Kitchen Station</Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Storage Zones Overview Grid */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+            {/* Zone 1: Main Central Store */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: selectedStorageZoneFilter === 'Main Central Store' ? '#EEF2FF' : '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: selectedStorageZoneFilter === 'Main Central Store' ? '#4F46E5' : '#E2E8F0',
+              }}
+              onPress={() => setSelectedStorageZoneFilter(selectedStorageZoneFilter === 'Main Central Store' ? 'All' : 'Main Central Store')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#EEF2FF', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="business" size={18} color="#4F46E5" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#4F46E5', textTransform: 'uppercase' }}>
+                  Central Warehouse
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Main Central Store (مرکزی گودام)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Bulk inventory, receiving point & dry rations
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  SKUs: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{storageZoneBreakdown['Main Central Store']?.items.length || 0}</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Valuation: <Text style={{ fontWeight: '800', color: '#4F46E5' }}>{money(storageZoneBreakdown['Main Central Store']?.totalValue || 0)}</Text>
+                </Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Zone 2: Kitchen Stations */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? '#ECFDF5' : '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? '#10B981' : '#E2E8F0',
+              }}
+              onPress={() => setSelectedStorageZoneFilter(selectedStorageZoneFilter === 'Cooking Line / Kitchen' ? 'All' : 'Cooking Line / Kitchen')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#ECFDF5', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="restaurant" size={18} color="#10B981" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981', textTransform: 'uppercase' }}>
+                  Live Cooking Line
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Kitchen Cooking Line (کچن اسٹیشنز)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Karahi, Handi, BBQ, Tandoor & Prep Stations
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Handovers: <Text style={{ fontWeight: '700', color: '#10B981' }}>{kitchenHandovers.length} Batches</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#10B981' }}>+ Issue Stock ➔</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Zone 3: 5 Floor Chillers */}
+            <TouchableOpacity
+              style={{
+                flex: 1,
+                minWidth: isMobile ? '100%' : 260,
+                backgroundColor: '#FFFFFF',
+                borderRadius: 12,
+                padding: 16,
+                borderWidth: 1.5,
+                borderColor: '#E2E8F0',
+              }}
+              onPress={() => setActiveTab('chillers')}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                <View style={{ width: 34, height: 34, borderRadius: 8, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }}>
+                  <Ionicons name="snow" size={18} color="#0284C7" />
+                </View>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7', textTransform: 'uppercase' }}>
+                  5 Floors Network
+                </Text>
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A', marginTop: 8 }}>
+                Floor Chillers Network (فلور چلرز)
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                Ground, 1st, 2nd, 3rd Floor & Rooftop Chillers
+              </Text>
+              <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontSize: 11.5, color: '#64748B' }}>
+                  Total Drinks: <Text style={{ fontWeight: '800', color: '#0284C7' }}>{floorChillersSummary.reduce((s, f) => s + f.totalDrinks, 0)} Units</Text>
+                </Text>
+                <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#0284C7' }}>View Chillers ➔</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {/* Sub Location Filter Pills */}
+          <View style={{ marginBottom: 14 }}>
+            <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569', marginBottom: 8, textTransform: 'uppercase' }}>
+              Filter Inventory By Storage Location:
+            </Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+              {['All', ...STORAGE_LOCATIONS].map((loc) => {
+                const count = loc === 'All' ? inventory.length : (storageZoneBreakdown[loc]?.items.length || 0);
+                const isSelected = selectedStorageZoneFilter === loc;
+                return (
+                  <TouchableOpacity
+                    key={loc}
+                    style={{
+                      paddingHorizontal: 12,
+                      paddingVertical: 6,
+                      borderRadius: 20,
+                      backgroundColor: isSelected ? '#4F46E5' : '#F1F5F9',
+                      borderWidth: 1,
+                      borderColor: isSelected ? '#4338CA' : '#E2E8F0',
+                    }}
+                    onPress={() => setSelectedStorageZoneFilter(loc)}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#FFFFFF' : '#475569' }}>
+                      {loc} ({count})
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* Storage Zone Items List */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 18 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                Stock in {selectedStorageZoneFilter === 'All' ? 'All Storage Zones' : selectedStorageZoneFilter}
+              </Text>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                {inventory.filter((i) => selectedStorageZoneFilter === 'All' || (i.location || 'Main Central Store') === selectedStorageZoneFilter).length} Items Listed
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+              {inventory
+                .filter((i) => selectedStorageZoneFilter === 'All' || (i.location || 'Main Central Store') === selectedStorageZoneFilter)
+                .slice(0, 24)
+                .map((item) => (
+                  <View
+                    key={item.id}
+                    style={{
+                      flex: 1,
+                      minWidth: isMobile ? '100%' : 260,
+                      backgroundColor: '#F8FAFC',
+                      borderRadius: 10,
+                      padding: 12,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{item.name}</Text>
+                        <Text style={{ fontSize: 11, color: '#64748B' }}>
+                          📍 {item.location || 'Main Central Store'} • {item.category}
                         </Text>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
-                          +{h.qty} {h.unit}
+                        <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>
+                          {item.stock} <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
                         </Text>
-                        <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
                       </View>
                     </View>
-                  ))}
-                </ScrollView>
+
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 8,
+                        backgroundColor: '#ECFDF5',
+                        borderColor: '#A7F3D0',
+                        borderWidth: 1,
+                        borderRadius: 6,
+                        paddingVertical: 5,
+                        alignItems: 'center',
+                      }}
+                      onPress={() => {
+                        setKitchenItemId(item.id);
+                        setKitchenFromLoc(item.location || 'Main Central Store');
+                        setShowKitchenHandoverModal(true);
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#059669' }}>
+                        🍳 Transfer this item to Kitchen Station
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+            </View>
+          </View>
+
+          {/* Kitchen Handover History */}
+          <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Ionicons name="restaurant" size={18} color="#10B981" />
+                <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                  Recent Kitchen Station Handovers (مین اسٹور ➔ کچن ریکارڈ)
+                </Text>
+              </View>
+              <Text style={{ fontSize: 12, color: '#64748B' }}>
+                {kitchenHandovers.length} Handover Logs
+              </Text>
+            </View>
+
+            {kitchenHandovers.length === 0 ? (
+              <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 10 }}>
+                No kitchen handovers recorded yet. Use the "Hand Over to Kitchen" button to issue cooking ingredients.
+              </Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                {kitchenHandovers.slice(0, 20).map((kh) => (
+                  <View
+                    key={kh.id}
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      paddingVertical: 10,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                    }}
+                  >
+                    <View style={{ flex: 1, marginRight: 12 }}>
+                      <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                        {kh.itemName}
+                      </Text>
+                      <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                        {kh.note || `Transferred from ${kh.fromLocation || 'Store'} to ${kh.toLocation || 'Kitchen'}`}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#10B981' }}>
+                        {kh.qty} {kh.unit || 'units'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(kh.at)}</Text>
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            )}
+          </View>
+        </View>
+      )}
+
+      {/* ========================================================================= */}
+      {/* TAB: 5 FLOOR CHILLERS & LIVE BEVERAGE SYNC */}
+      {/* ========================================================================= */}
+      {(activeTab === 'chillers' || activeTab === 'beverages') && (
+        <View>
+          <View style={styles.sectionHeaderRow}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.sectionTitle}>❄️ 5 Floor Chillers Network & Beverage Sync (فلور چلرز)</Text>
+              <Text style={styles.sectionDesc}>
+                Ground Floor, 1st, 2nd, 3rd Floor aur Rooftop ke chillers ka live stock aur POS orders ki direct auto-deduction
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: '#059669', paddingHorizontal: 14 }]}
+                onPress={() => {
+                  const res = syncMenuBeveragesToInventory(menuItems);
+                  alertMsg('Beverages Synced', `Successfully synced ${res.added + res.updated} drinks with POS Menu! All 5 floor chillers updated with live stock.`);
+                }}
+              >
+                <Ionicons name="sync" size={16} color="#FFF" />
+                <Text style={styles.addBtnText}>🔄 Sync Menu Beverages</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.addBtn, { backgroundColor: '#0284C7', paddingHorizontal: 14 }]}
+                onPress={() => {
+                  if (beverageInventory.length > 0) {
+                    setHandoverItemId(beverageInventory[0].id);
+                  }
+                  setHandoverQty('24');
+                  setHandoverFloor(CHILLER_FLOORS[0]);
+                  setHandoverFromLoc('Beverage Cold Room');
+                  setHandoverGivenBy(user?.name || 'Inventory Manager');
+                  setHandoverReceivedBy(`${CHILLER_FLOORS[0]} Chiller`);
+                  setHandoverNotes('');
+                  setShowHandoverModal(true);
+                }}
+              >
+                <Ionicons name="flash-outline" size={18} color="#FFF" />
+                <Text style={styles.addBtnText}>⚡ Refill Chiller</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* Direct Floor Order Auto-Deduction Active Banner */}
+          <View
+            style={{
+              backgroundColor: '#ECFDF5',
+              borderColor: '#6EE7B7',
+              borderWidth: 1,
+              borderRadius: 12,
+              padding: 12,
+              marginBottom: 16,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            <Ionicons name="checkmark-circle" size={26} color="#059669" />
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065F46' }}>
+                  🟢 POS ➔ Floor Chillers Live Sync Active (نو فلور مینیجر محتاجی)
+                </Text>
+                <View style={{ backgroundColor: '#A7F3D0', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: '#047857' }}>
+                    {beverageInventory.length} Drinks Synced
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, color: '#047857', marginTop: 2 }}>
+                Ground Floor, 1st, 2nd, 3rd Floor ya Rooftop ke kisi bhi table ya waiter order me cold drink shamil hote hi chiller se direct auto-minus ho jati hai!
+              </Text>
+            </View>
+          </View>
+
+          {/* Sub View Toggle Bar */}
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'floors' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'floors' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('floors')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'floors' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                🏢 5 Floor Chillers Network ({floorChillersSummary.length} Floors)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'products' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'products' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('products')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'products' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                🥤 All Beverage Products ({beverageInventory.length})
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: 20,
+                backgroundColor: chillerSubView === 'kitchen' ? '#0284C7' : '#F1F5F9',
+                borderWidth: 1,
+                borderColor: chillerSubView === 'kitchen' ? '#0284C7' : '#E2E8F0',
+              }}
+              onPress={() => setChillerSubView('kitchen')}
+            >
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontWeight: '700',
+                  color: chillerSubView === 'kitchen' ? '#FFFFFF' : '#475569',
+                }}
+              >
+                🔴 Live Order Sync Stream ({liveBeverageDeductionLogs.length})
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* ================= SUB VIEW 1: 5 FLOOR CHILLERS NETWORK ================= */}
+          {chillerSubView === 'floors' && (
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+              {floorChillersSummary.map((summary) => {
+                const floorName = summary.floor;
+                return (
+                  <View
+                    key={floorName}
+                    style={{
+                      flex: 1,
+                      minWidth: isMobile ? '100%' : 340,
+                      backgroundColor: '#FFFFFF',
+                      borderRadius: 14,
+                      padding: 16,
+                      borderWidth: 1,
+                      borderColor: '#E2E8F0',
+                      shadowColor: '#000',
+                      shadowOpacity: 0.04,
+                      shadowRadius: 6,
+                      elevation: 2,
+                    }}
+                  >
+                    {/* Chiller Card Header */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#E0F2FE', justifyContent: 'center', alignItems: 'center' }}>
+                          <Ionicons name="snow" size={20} color="#0284C7" />
+                        </View>
+                        <View>
+                          <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                            {floorName} Chiller
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B' }}>
+                            Live Chilled Floor Station
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: '#0284C7' }}>
+                          {summary.totalDrinks} <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>Drinks</Text>
+                        </Text>
+                        {summary.lowStockAlerts > 0 ? (
+                          <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#DC2626' }}>
+                              ⚠️ {summary.lowStockAlerts} Low Stock
+                            </Text>
+                          </View>
+                        ) : (
+                          <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4, marginTop: 2 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A' }}>
+                              ✓ Sufficient
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+
+                    {/* Products in this Chiller */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#F1F5F9', minHeight: 120 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: '#475569', marginBottom: 6, textTransform: 'uppercase' }}>
+                        Product Breakdown ({summary.products.length} Items):
+                      </Text>
+
+                      {summary.products.length === 0 ? (
+                        <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                          No drinks in this chiller yet. Click Refill below to stock up.
+                        </Text>
+                      ) : (
+                        summary.products.map(({ item, qty, isLow }) => (
+                          <View
+                            key={item.id}
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              paddingVertical: 5,
+                              borderBottomWidth: 1,
+                              borderBottomColor: '#F1F5F9',
+                            }}
+                          >
+                            <View style={{ flex: 1, marginRight: 8 }}>
+                              <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1E293B' }} numberOfLines={1}>
+                                {item.name}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: isLow ? '#DC2626' : '#0284C7' }}>
+                                {qty} {item.unit}
+                              </Text>
+                              {isLow && (
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626' }}>LOW</Text>
+                              )}
+                              <TouchableOpacity
+                                style={{
+                                  backgroundColor: '#E0F2FE',
+                                  paddingHorizontal: 6,
+                                  paddingVertical: 2,
+                                  borderRadius: 4,
+                                }}
+                                onPress={() => {
+                                  setHandoverItemId(item.id);
+                                  setHandoverFloor(floorName);
+                                  setHandoverQty('12');
+                                  setHandoverFromLoc('Beverage Cold Room');
+                                  setHandoverGivenBy(user?.name || 'Inventory Manager');
+                                  setHandoverNotes('');
+                                  setShowHandoverModal(true);
+                                }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#0369A1' }}>+ Refill</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      )}
+                    </View>
+
+                    {/* Refill Button for this Floor */}
+                    <TouchableOpacity
+                      style={{
+                        marginTop: 12,
+                        backgroundColor: '#0284C7',
+                        borderRadius: 8,
+                        paddingVertical: 9,
+                        flexDirection: 'row',
+                        justifyContent: 'center',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        if (beverageInventory.length > 0) {
+                          setHandoverItemId(beverageInventory[0].id);
+                        }
+                        setHandoverFloor(floorName);
+                        setHandoverQty('24');
+                        setHandoverFromLoc('Beverage Cold Room');
+                        setHandoverGivenBy(user?.name || 'Inventory Manager');
+                        setHandoverNotes('');
+                        setShowHandoverModal(true);
+                      }}
+                    >
+                      <Ionicons name="flash-outline" size={15} color="#FFF" />
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#FFF' }}>
+                        ⚡ Refill {floorName} Chiller
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+
+          {/* ================= SUB VIEW 2: ALL BEVERAGE PRODUCTS ================= */}
+          {chillerSubView === 'products' && (
+            <View>
+              {/* Floor Chiller Filter Selector */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                {['All', ...CHILLER_FLOORS].map((fl) => (
+                  <TouchableOpacity
+                    key={fl}
+                    onPress={() => setSelectedChillerFloorView(fl)}
+                    style={[
+                      {
+                        paddingHorizontal: 14,
+                        paddingVertical: 7,
+                        borderRadius: 20,
+                        backgroundColor: selectedChillerFloorView === fl ? '#0284C7' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: selectedChillerFloorView === fl ? '#0284C7' : '#E2E8F0',
+                      },
+                    ]}
+                  >
+                    <Text
+                      style={{
+                        fontSize: 12.5,
+                        fontWeight: '700',
+                        color: selectedChillerFloorView === fl ? '#FFFFFF' : '#475569',
+                      }}
+                    >
+                      {fl === 'All' ? '🏢 All Floor Chillers' : `❄️ ${fl} Chiller`}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {beverageInventory.length === 0 ? (
+                <View style={styles.emptyCard}>
+                  <Ionicons name="wine-outline" size={48} color={BRAND.muted} />
+                  <Text style={styles.emptyTitle}>No Beverage Items Found</Text>
+                  <Text style={styles.emptyDesc}>Add beverages and cold drinks in the directory or click "Sync Menu Beverages".</Text>
+                </View>
+              ) : (
+                <View style={styles.itemsGrid}>
+                  {beverageInventory.map((item) => {
+                    const totalStock = item.stock || 0;
+                    const chillers = item.chillerStock || {};
+                    const totalInChillers = Object.values(chillers).reduce((s, v) => s + (Number(v) || 0), 0);
+                    const warehouseStock = Math.max(0, totalStock - totalInChillers);
+
+                    return (
+                      <View key={item.id} style={styles.itemCard}>
+                        <View style={styles.itemCardHeader}>
+                          <View style={{ flex: 1 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                              <View style={[styles.skuBadge, { backgroundColor: '#E0F2FE' }]}>
+                                <Text style={[styles.skuBadgeText, { color: '#0369A1' }]}>{item.itemCode || 'BEV'}</Text>
+                              </View>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0284C7' }}>
+                                {item.category || 'Beverages'}
+                              </Text>
+                            </View>
+                            <Text style={styles.itemCardTitle}>{item.name}</Text>
+                            {item.urduName ? <Text style={styles.urduTitle}>{item.urduName}</Text> : null}
+                          </View>
+                          <View style={{ alignItems: 'flex-end' }}>
+                            <Text style={[styles.stockStatValue, { color: totalStock <= 10 ? '#DC2626' : '#0F172A' }]}>
+                              {totalStock} <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{item.unit}</Text>
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>Total Balance</Text>
+                          </View>
+                        </View>
+
+                        {/* Floor Wise Chiller Distribution Grid */}
+                        <View
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            borderRadius: 10,
+                            padding: 10,
+                            marginTop: 10,
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                            <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>
+                              ❄️ CHILLER STOCK BREAKDOWN:
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#64748B' }}>
+                              Main Store: <Text style={{ fontWeight: '700', color: '#0F172A' }}>{warehouseStock} {item.unit}</Text>
+                            </Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                            {CHILLER_FLOORS.map((floor) => {
+                              const qty = chillers[floor] || 0;
+                              const isLow = qty <= (item.chillerThreshold || 5);
+                              const isSelectedFloor = selectedChillerFloorView === floor;
+
+                              if (selectedChillerFloorView !== 'All' && !isSelectedFloor) return null;
+
+                              return (
+                                <View
+                                  key={floor}
+                                  style={{
+                                    flex: selectedChillerFloorView === 'All' ? (isMobile ? 1 : undefined) : 1,
+                                    minWidth: isMobile ? 100 : 120,
+                                    backgroundColor: isLow ? '#FEF2F2' : '#FFFFFF',
+                                    borderRadius: 8,
+                                    paddingHorizontal: 10,
+                                    paddingVertical: 6,
+                                    borderWidth: 1,
+                                    borderColor: isLow ? '#FCA5A5' : '#E2E8F0',
+                                  }}
+                                >
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: isLow ? '#991B1B' : '#475569' }} numberOfLines={1}>
+                                    {floor}
+                                  </Text>
+                                  <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginTop: 2 }}>
+                                    <Text style={{ fontSize: 14, fontWeight: '900', color: isLow ? '#DC2626' : '#0284C7' }}>
+                                      {qty} <Text style={{ fontSize: 10, fontWeight: '500', color: '#64748B' }}>{item.unit}</Text>
+                                    </Text>
+                                    {isLow && (
+                                      <Text style={{ fontSize: 9.5, fontWeight: '700', color: '#DC2626' }}>LOW</Text>
+                                    )}
+                                  </View>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+
+                        {/* Quick Refill Button per item */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+                          <TouchableOpacity
+                            style={[styles.quickMovementBtn, { flex: 1, backgroundColor: '#E0F2FE', borderColor: '#BAE6FD' }]}
+                            onPress={() => {
+                              setHandoverItemId(item.id);
+                              setHandoverQty('12');
+                              setHandoverFloor(CHILLER_FLOORS[0]);
+                              setHandoverFromLoc('Beverage Cold Room');
+                              setHandoverGivenBy(user?.name || 'Inventory Manager');
+                              setHandoverReceivedBy('');
+                              setHandoverNotes('');
+                              setShowHandoverModal(true);
+                            }}
+                          >
+                            <Ionicons name="flash-outline" size={15} color="#0284C7" />
+                            <Text style={[styles.quickMovementBtnText, { color: '#0284C7', fontWeight: '700' }]}>
+                              ⚡ Refill into Chiller
+                            </Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            style={[styles.quickMovementBtn, { paddingHorizontal: 12 }]}
+                            onPress={() => {
+                              setSelectedItem(item);
+                              setShowMovementModal(true);
+                            }}
+                          >
+                            <Ionicons name="pencil-outline" size={14} color={BRAND.ink} />
+                            <Text style={styles.quickMovementBtnText}>Adjust</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
               )}
+            </View>
+          )}
+
+          {/* ================= SUB VIEW 3: LIVE ORDER SYNC STREAM & REFILL LOGS ================= */}
+          {chillerSubView === 'kitchen' && (
+            <View>
+              {/* Real-time Order Deduction Stream Card */}
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 16 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="pulse" size={18} color="#DC2626" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                      🔴 Real-Time POS Floor Beverage Deduction Stream (لائیو آرڈر کٹوتی)
+                    </Text>
+                  </View>
+                  <View style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 4 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
+                      Live Stream Active
+                    </Text>
+                  </View>
+                </View>
+
+                {liveBeverageDeductionLogs.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                    No table beverage orders recorded yet. When a table order is placed in POS or Waiter App, live chiller deduction will appear here immediately!
+                  </Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                    {liveBeverageDeductionLogs.slice(0, 20).map((log) => (
+                      <View
+                        key={log.id}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>
+                              {log.itemName}
+                            </Text>
+                            <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                                ❄️ {log.fromFloor || 'Floor'} Chiller
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                            {log.note || `Deducted for live table order by ${log.by || 'POS / Waiter'}`}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#DC2626' }}>
+                            -{log.qty} {log.unit || 'units'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(log.at)}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+
+              {/* Chiller Refill Logs */}
+              <View style={{ backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="list" size={18} color="#0284C7" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#0F172A' }}>
+                      Floor Chiller Refill Logs (چلرز ری فل ریکارڈ)
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: '#64748B' }}>
+                    {chillerHandovers.length} Total Logs
+                  </Text>
+                </View>
+
+                {chillerHandovers.length === 0 ? (
+                  <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic', paddingVertical: 8 }}>
+                    No chiller refills logged yet. Use the "Refill Chiller" button above to replenish floor stocks.
+                  </Text>
+                ) : (
+                  <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                    {chillerHandovers.slice(0, 20).map((h) => (
+                      <View
+                        key={h.id}
+                        style={{
+                          flexDirection: 'row',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          paddingVertical: 10,
+                          borderBottomWidth: 1,
+                          borderBottomColor: '#F1F5F9',
+                        }}
+                      >
+                        <View style={{ flex: 1, marginRight: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 13.5, fontWeight: '700', color: '#0F172A' }}>
+                              {h.itemName}
+                            </Text>
+                            <View style={{ backgroundColor: '#E0F2FE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#0369A1' }}>
+                                ❄️ {h.toFloor} Chiller
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontSize: 11.5, color: '#64748B', marginTop: 2 }}>
+                            Issued by: <Text style={{ fontWeight: '600' }}>{h.handedOverBy}</Text>
+                            {h.receivedByFloorManager ? ` • Received: ${h.receivedByFloorManager}` : ''}
+                            {h.notes ? ` • Note: "${h.notes}"` : ''}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#0284C7' }}>
+                            +{h.qty} {h.unit}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#94A3B8' }}>{formatTime(h.at)}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
             </View>
           )}
         </View>
