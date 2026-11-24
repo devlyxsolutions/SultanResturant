@@ -43,6 +43,7 @@ import { useSyncStatus } from '../hooks/useSyncStatus';
 import { broadcastImmediately } from '../services/syncService';
 import SultanLogo from '../components/SultanLogo';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
+import { COMMON_INVENTORY_BY_CATEGORY } from './SuppliersScreen';
 
 const UNITS = ['kg', 'Liters', 'bottles', 'packs', 'grams', 'cylinders', 'pcs', 'cartons', 'crates', 'bags', 'Tins'];
 
@@ -152,6 +153,104 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const [formBatchNumber, setFormBatchNumber] = useState('');
   const [formExpiryDays, setFormExpiryDays] = useState('');
   const [formInvoiceNo, setFormInvoiceNo] = useState('');
+
+  // Multi-Item Batch Inventory Entry Form State
+  type BatchInventoryItem = {
+    id: string;
+    name: string;
+    urduName?: string;
+    category: string;
+    unit: string;
+    stock: string;
+    cost: string;
+    threshold?: string;
+  };
+  const [addModalMode, setAddModalMode] = useState<'batch' | 'single'>('batch');
+  const [batchCategory, setBatchCategory] = useState<string>(INVENTORY_CATEGORIES[0]);
+  const [batchItems, setBatchItems] = useState<BatchInventoryItem[]>([]);
+
+  const getCatalogForCategory = (cat: string) => {
+    if (COMMON_INVENTORY_BY_CATEGORY[cat]) return COMMON_INVENTORY_BY_CATEGORY[cat];
+    const lower = cat.toLowerCase();
+    for (const [key, items] of Object.entries(COMMON_INVENTORY_BY_CATEGORY)) {
+      if (key.toLowerCase().includes(lower) || lower.includes(key.toLowerCase().slice(0, 4))) {
+        return items;
+      }
+    }
+    return [];
+  };
+
+  const categoryInventoryCatalog = useMemo(() => {
+    return getCatalogForCategory(batchCategory);
+  }, [batchCategory]);
+
+  const batchTotalStock = useMemo(() => {
+    return batchItems.reduce((sum, item) => sum + (parseFloat(item.stock) || 0), 0);
+  }, [batchItems]);
+
+  const batchTotalValue = useMemo(() => {
+    return batchItems.reduce((sum, item) => {
+      const q = parseFloat(item.stock) || 0;
+      const c = parseFloat(item.cost) || 0;
+      return sum + q * c;
+    }, 0);
+  }, [batchItems]);
+
+  const toggleOrAddItemToBatch = (itemName: string, defaultCost: number, defaultUnit: string) => {
+    const existingIdx = batchItems.findIndex((it) => it.name.trim().toLowerCase() === itemName.trim().toLowerCase());
+    if (existingIdx >= 0) {
+      if (batchItems.length > 1) {
+        setBatchItems(batchItems.filter((_, idx) => idx !== existingIdx));
+      } else {
+        setBatchItems([{ ...batchItems[0], name: '' }]);
+      }
+    } else {
+      if (batchItems.length === 1 && !batchItems[0].name.trim() && !batchItems[0].cost.trim()) {
+        setBatchItems([
+          {
+            id: `batch-${Date.now()}-1`,
+            name: itemName,
+            category: batchCategory,
+            unit: defaultUnit || 'kg',
+            stock: '10',
+            cost: defaultCost ? String(defaultCost) : '',
+            threshold: '5',
+          },
+        ]);
+      } else {
+        setBatchItems([
+          ...batchItems,
+          {
+            id: `batch-${Date.now()}-${batchItems.length + 1}`,
+            name: itemName,
+            category: batchCategory,
+            unit: defaultUnit || 'kg',
+            stock: '10',
+            cost: defaultCost ? String(defaultCost) : '',
+            threshold: '5',
+          },
+        ]);
+      }
+    }
+  };
+
+  const addAllCategoryItemsToBatch = (cat: string) => {
+    const catItems = getCatalogForCategory(cat);
+    if (catItems.length === 0) return;
+    const newBatch: BatchInventoryItem[] = catItems.map((c, idx) => {
+      const existing = batchItems.find((it) => it.name.trim().toLowerCase() === c.name.trim().toLowerCase());
+      return {
+        id: existing ? existing.id : `batch-${Date.now()}-${idx + 1}`,
+        name: c.name,
+        category: cat,
+        unit: c.unit || 'kg',
+        stock: existing ? existing.stock : '10',
+        cost: existing ? existing.cost : String(c.defaultCost),
+        threshold: existing ? existing.threshold : '5',
+      };
+    });
+    setBatchItems(newBatch);
+  };
 
   // Quick Movement Form State
   const [movementType, setMovementType] = useState<StockMovementType>('receive');
@@ -531,6 +630,34 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     setFormName('');
     setFormUrduName('');
     setFormCategory(defaultCat);
+    setBatchCategory(defaultCat);
+    setAddModalMode('batch');
+    const catalog = getCatalogForCategory(defaultCat);
+    if (catalog.length > 0) {
+      setBatchItems(
+        catalog.map((c, i) => ({
+          id: `batch-${Date.now()}-${i + 1}`,
+          name: c.name,
+          category: defaultCat,
+          unit: c.unit || 'kg',
+          stock: '10',
+          cost: String(c.defaultCost),
+          threshold: '5',
+        }))
+      );
+    } else {
+      setBatchItems([
+        {
+          id: `batch-${Date.now()}-1`,
+          name: '',
+          category: defaultCat,
+          unit: 'kg',
+          stock: '10',
+          cost: '',
+          threshold: '5',
+        },
+      ]);
+    }
     setShowInlineCatCreator(false);
     setInlineNewCatInput('');
     setFormLocation(STORAGE_LOCATIONS[0]);
@@ -668,6 +795,54 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
       alertMsg('Permission Denied', 'You do not have permission to add inventory items.');
       return;
     }
+
+    if (addModalMode === 'batch') {
+      const validItems = batchItems.filter((it) => it.name.trim());
+      if (validItems.length === 0) {
+        alertMsg('No Items', 'Please enter at least one inventory item with a valid name.');
+        return;
+      }
+      let totalStockAdded = 0;
+      let totalValueAdded = 0;
+      const expiryDaysNum = parseInt(formExpiryDays, 10);
+      const expiryDate = Number.isFinite(expiryDaysNum) && expiryDaysNum > 0 ? Date.now() + expiryDaysNum * 86400000 : undefined;
+
+      validItems.forEach((it, idx) => {
+        const q = parseFloat(it.stock) || 0;
+        const c = parseFloat(it.cost) || 0;
+        const thresh = parseFloat(it.threshold || '') || (systemSettings.lowStockAlertThreshold || 5);
+        const itemSku = generateNextSkuCode(it.category || batchCategory);
+        totalStockAdded += q;
+        totalValueAdded += q * c;
+
+        addInventoryItem({
+          itemCode: itemSku,
+          name: it.name.trim(),
+          urduName: it.urduName?.trim() || undefined,
+          category: it.category || batchCategory,
+          location: formLocation,
+          unit: it.unit || 'kg',
+          stock: q,
+          threshold: thresh,
+          costPerUnit: c,
+          supplier: formSupplier.trim() || undefined,
+          supplierPhone: formSupplierPhone.trim() || undefined,
+          batchNumber: formBatchNumber.trim() ? `${formBatchNumber.trim()}-${idx + 1}` : undefined,
+          invoiceNo: formInvoiceNo.trim() || undefined,
+          expiryDate,
+        });
+      });
+
+      broadcastImmediately();
+      setShowAddModal(false);
+      alertMsg(
+        'Inventory Added',
+        `Successfully registered ${validItems.length} items (${totalStockAdded} units).\nTotal Stock Value: Rs. ${totalValueAdded.toLocaleString()}`
+      );
+      return;
+    }
+
+    // ---------------- SINGLE ITEM MODE ----------------
     if (!formName.trim()) {
       alertMsg('Missing Name', 'Please enter the item name.');
       return;
@@ -3131,201 +3306,624 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       )}
 
       {/* ========================================================================= */}
-      {/* MODAL 1: ADD NEW RAW MATERIAL (SKU) */}
+      {/* MODAL 1: ADD NEW RAW MATERIAL (SKU) / MULTI-ITEM BATCH */}
       {/* ========================================================================= */}
       <Modal visible={showAddModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
+          <View style={[styles.modalCard, { maxWidth: addModalMode === 'batch' ? 780 : 640 }, isMobile && styles.modalCardMobile]}>
             <View style={styles.modalHeader}>
-              <View>
-                <Text style={styles.modalTitle}>Add Raw Material / SKU</Text>
-                <Text style={styles.modalSubtitle}>Create new tracked ingredient with SKU and storage zone</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>
+                  {addModalMode === 'batch' ? 'Add Inventory Stock (Multi-Item Batch)' : 'Add Raw Material / Single SKU'}
+                </Text>
+                <Text style={styles.modalSubtitle}>
+                  {addModalMode === 'batch'
+                    ? 'کیٹیگری منتخب کریں اور سامان کی تعداد (Qty) اور قیمت (Price) درج کریں'
+                    : 'Create new tracked ingredient with SKU and storage zone'}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setShowAddModal(false)}>
                 <Ionicons name="close" size={24} color={BRAND.ink} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 500 }} showsVerticalScrollIndicator={false}>
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
-                    <Text style={[styles.inputLabel, { marginBottom: 0 }]}>Item SKU Code</Text>
-                    <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                      <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#15803D' }}>AUTO-GENERATED</Text>
+            {/* Mode Switcher Toggle */}
+            <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, backgroundColor: '#F1F5F9', padding: 4, borderRadius: 8 }}>
+              <TouchableOpacity
+                style={[
+                  { flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
+                  addModalMode === 'batch' && { backgroundColor: BRAND.burgundy },
+                ]}
+                onPress={() => setAddModalMode('batch')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="layers" size={15} color={addModalMode === 'batch' ? '#FFFFFF' : '#475569'} />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: addModalMode === 'batch' ? '#FFFFFF' : '#475569' }}>
+                  Multi-Item Category Batch (ملٹی آئٹمز)
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  { flex: 1, paddingVertical: 7, borderRadius: 6, alignItems: 'center', flexDirection: 'row', justifyContent: 'center', gap: 6 },
+                  addModalMode === 'single' && { backgroundColor: BRAND.burgundy },
+                ]}
+                onPress={() => setAddModalMode('single')}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="cube-outline" size={15} color={addModalMode === 'single' ? '#FFFFFF' : '#475569'} />
+                <Text style={{ fontSize: 12, fontWeight: '800', color: addModalMode === 'single' ? '#FFFFFF' : '#475569' }}>
+                  Single SKU Item (واحد آئٹم)
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
+              {addModalMode === 'batch' ? (
+                /* ==================== MULTI-ITEM BATCH MODE ==================== */
+                <View>
+                  {/* Category Selector Card */}
+                  <View style={{ backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>
+                        📁 Inventory Category (خام مال کیٹیگری):
+                      </Text>
+                      {categoryInventoryCatalog.length > 0 && (
+                        <TouchableOpacity
+                          onPress={() => addAllCategoryItemsToBatch(batchCategory)}
+                          style={{
+                            backgroundColor: BRAND.burgundy,
+                            paddingHorizontal: 8,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons name="duplicate-outline" size={13} color="#FFFFFF" />
+                          <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                            + Add All ({categoryInventoryCatalog.length}) Items
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    <RoyalDropdown
+                      label="Category"
+                      options={allCategories}
+                      value={batchCategory}
+                      onSelect={(val) => {
+                        setBatchCategory(val);
+                        // Auto-sync items if batch currently empty or category changed
+                        const catalog = getCatalogForCategory(val);
+                        if (catalog.length > 0) {
+                          setBatchItems(
+                            catalog.map((c, i) => ({
+                              id: `batch-${Date.now()}-${i + 1}`,
+                              name: c.name,
+                              category: val,
+                              unit: c.unit || 'kg',
+                              stock: '10',
+                              cost: String(c.defaultCost),
+                              threshold: '5',
+                            }))
+                          );
+                        }
+                      }}
+                      icon="pricetag-outline"
+                      searchable
+                      style={{ marginBottom: 8, zIndex: 40 }}
+                    />
+
+                    {/* Category Preset Chips */}
+                    {categoryInventoryCatalog.length > 0 && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={{ fontSize: 10.5, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>
+                          👇 کلک کر کے شامل کریں (Click to add {batchCategory} items):
+                        </Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {categoryInventoryCatalog.map((preset) => {
+                            const isAdded = batchItems.some(
+                              (it) => it.name.trim().toLowerCase() === preset.name.trim().toLowerCase()
+                            );
+                            return (
+                              <TouchableOpacity
+                                key={preset.name}
+                                onPress={() => toggleOrAddItemToBatch(preset.name, preset.defaultCost, preset.unit)}
+                                style={[
+                                  {
+                                    paddingHorizontal: 8,
+                                    paddingVertical: 4,
+                                    borderRadius: 6,
+                                    backgroundColor: '#FFFFFF',
+                                    borderWidth: 1,
+                                    borderColor: '#CBD5E1',
+                                    flexDirection: 'row',
+                                    alignItems: 'center',
+                                    gap: 4,
+                                  },
+                                  isAdded && {
+                                    backgroundColor: '#DCFCE7',
+                                    borderColor: '#16A34A',
+                                  },
+                                ]}
+                                activeOpacity={0.75}
+                              >
+                                <Ionicons
+                                  name={isAdded ? 'checkmark-circle' : 'add-circle-outline'}
+                                  size={13}
+                                  color={isAdded ? '#15803D' : BRAND.burgundy}
+                                />
+                                <Text
+                                  style={[
+                                    { fontSize: 11, fontWeight: '600', color: '#334155' },
+                                    isAdded && { color: '#166534', fontWeight: '800' },
+                                  ]}
+                                >
+                                  {preset.name}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Active Items Table with Qty & Unit Price */}
+                  <View style={{ marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12.5, fontWeight: '800', color: BRAND.ink, marginBottom: 8 }}>
+                      Items to Add ({batchItems.filter((i) => i.name.trim()).length}) — Enter Quantity & Purchase Price:
+                    </Text>
+
+                    {batchItems.map((item, idx) => {
+                      const q = parseFloat(item.stock) || 0;
+                      const c = parseFloat(item.cost) || 0;
+                      const rowTotal = q * c;
+
+                      return (
+                        <View
+                          key={item.id}
+                          style={{
+                            backgroundColor: '#F8FAFC',
+                            borderWidth: 1,
+                            borderColor: '#E2E8F0',
+                            borderRadius: 8,
+                            padding: 10,
+                            marginBottom: 8,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              <View style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#475569' }}>#{idx + 1}</Text>
+                              </View>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy, backgroundColor: BRAND.burgundySoft, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                                {item.category || batchCategory}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.success }}>
+                                Subtotal: {money(rowTotal)}
+                              </Text>
+                              {batchItems.length > 1 && (
+                                <TouchableOpacity
+                                  onPress={() => setBatchItems(batchItems.filter((it) => it.id !== item.id))}
+                                  style={{ padding: 2 }}
+                                >
+                                  <Ionicons name="trash-outline" size={15} color={BRAND.danger} />
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          {/* Item Name */}
+                          <View style={{ marginBottom: 6 }}>
+                            <Text style={styles.inputLabel}>Item Name (English) *</Text>
+                            <TextInput
+                              style={[styles.input, { marginBottom: 0, paddingVertical: 6, fontSize: 12.5 }]}
+                              placeholder="e.g. Boneless Chicken, Rice, Oil"
+                              value={item.name}
+                              onChangeText={(val) => {
+                                setBatchItems(batchItems.map((it) => (it.id === item.id ? { ...it, name: val } : it)));
+                              }}
+                            />
+                          </View>
+
+                          {/* Qty, Unit & Unit Price Row */}
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <View style={{ flex: 1.2 }}>
+                              <Text style={styles.inputLabel}>Quantity (اسٹاک تعداد) *</Text>
+                              <TextInput
+                                style={[styles.input, { marginBottom: 0, paddingVertical: 6, fontSize: 12.5 }]}
+                                placeholder="10"
+                                keyboardType="numeric"
+                                value={item.stock}
+                                onChangeText={(val) => {
+                                  setBatchItems(batchItems.map((it) => (it.id === item.id ? { ...it, stock: val } : it)));
+                                }}
+                              />
+                            </View>
+
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.inputLabel}>Unit</Text>
+                              <TextInput
+                                style={[styles.input, { marginBottom: 0, paddingVertical: 6, fontSize: 12.5 }]}
+                                placeholder="kg"
+                                value={item.unit}
+                                onChangeText={(val) => {
+                                  setBatchItems(batchItems.map((it) => (it.id === item.id ? { ...it, unit: val } : it)));
+                                }}
+                              />
+                            </View>
+
+                            <View style={{ flex: 1.5 }}>
+                              <Text style={styles.inputLabel}>Price (قیمت - PKR) *</Text>
+                              <TextInput
+                                style={[styles.input, { marginBottom: 0, paddingVertical: 6, fontSize: 12.5 }]}
+                                placeholder="e.g. 550"
+                                keyboardType="numeric"
+                                value={item.cost}
+                                onChangeText={(val) => {
+                                  setBatchItems(batchItems.map((it) => (it.id === item.id ? { ...it, cost: val } : it)));
+                                }}
+                              />
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+
+                    <TouchableOpacity
+                      onPress={() => {
+                        setBatchItems([
+                          ...batchItems,
+                          {
+                            id: `batch-${Date.now()}-${batchItems.length + 1}`,
+                            name: '',
+                            category: batchCategory,
+                            unit: 'kg',
+                            stock: '10',
+                            cost: '',
+                            threshold: '5',
+                          },
+                        ]);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 8,
+                        backgroundColor: BRAND.burgundySoft,
+                        borderRadius: 6,
+                        borderWidth: 1,
+                        borderColor: 'rgba(82, 20, 28, 0.2)',
+                        borderStyle: 'dashed',
+                        marginTop: 4,
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color={BRAND.burgundy} />
+                      <Text style={{ color: BRAND.burgundy, fontSize: 12, fontWeight: '800' }}>
+                        + Add Custom / Unlisted Ingredient
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Summary & Common Batch Properties */}
+                  <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A', borderRadius: 8, padding: 10, marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>
+                        Total Items: {batchItems.filter((i) => i.name.trim()).length} ({batchTotalStock} Units)
+                      </Text>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#B45309' }}>
+                        Total Value: {money(batchTotalValue)}
+                      </Text>
                     </View>
                   </View>
-                  <TextInput
-                    style={[styles.input, { backgroundColor: '#F1F5F9', color: '#334155', fontWeight: '800' }]}
-                    value={formItemCode}
-                    editable={false}
-                    selectTextOnFocus={false}
-                  />
+
+                  <View style={styles.formRow2}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <RoyalDropdown
+                        label="Storage Location / Zone"
+                        options={STORAGE_LOCATIONS}
+                        value={formLocation}
+                        onSelect={(val) => setFormLocation(val)}
+                        icon="location-outline"
+                        searchable
+                        style={{ marginBottom: 12 }}
+                      />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Preferred Vendor / Supplier</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Al-Madina Fresh Poultry"
+                        value={formSupplier}
+                        onChangeText={setFormSupplier}
+                      />
+                    </View>
+                  </View>
                 </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Urdu Name (Optional)</Text>
+              ) : (
+                /* ==================== SINGLE ITEM MODE ==================== */
+                <View>
+                  <View style={styles.formRow2}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <Text style={[styles.inputLabel, { marginBottom: 0 }]}>Item SKU Code</Text>
+                        <View style={{ backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 9.5, fontWeight: '800', color: '#15803D' }}>AUTO-GENERATED</Text>
+                        </View>
+                      </View>
+                      <TextInput
+                        style={[styles.input, { backgroundColor: '#F1F5F9', color: '#334155', fontWeight: '800' }]}
+                        value={formItemCode}
+                        editable={false}
+                        selectTextOnFocus={false}
+                      />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Urdu Name (Optional)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. چکن بون لیس"
+                        value={formUrduName}
+                        onChangeText={setFormUrduName}
+                      />
+                    </View>
+                  </View>
+
+                  <Text style={styles.inputLabel}>Item Name (English) *</Text>
                   <TextInput
                     style={styles.input}
-                    placeholder="e.g. چکن بون لیس"
-                    value={formUrduName}
-                    onChangeText={setFormUrduName}
+                    placeholder="e.g., Boneless Chicken, Basmati Rice, Cooking Oil"
+                    value={formName}
+                    onChangeText={setFormName}
                   />
-                </View>
-              </View>
 
-              <Text style={styles.inputLabel}>Item Name (English) *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., Boneless Chicken, Basmati Rice, Cooking Oil"
-                value={formName}
-                onChangeText={setFormName}
-              />
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 6 }}>
+                    <View style={{ flex: 1 }}>
+                      <RoyalDropdown
+                        label="Category"
+                        options={allCategories}
+                        value={formCategory}
+                        onSelect={(val) => {
+                          setFormCategory(val);
+                          setFormItemCode(generateNextSkuCode(val));
+                        }}
+                        icon="pricetag-outline"
+                        searchable
+                      />
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: '#D5A943',
+                        borderRadius: 10,
+                        paddingHorizontal: 12,
+                        height: 44,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                      onPress={() => setShowInlineCatCreator(!showInlineCatCreator)}
+                    >
+                      <Ionicons name="add-circle" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>+ New Category</Text>
+                    </TouchableOpacity>
+                  </View>
 
-              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 12 }}>
-                <View style={{ flex: 1 }}>
-                  <RoyalDropdown
-                    label="Category"
-                    options={allCategories}
-                    value={formCategory}
-                    onSelect={(val) => {
-                      setFormCategory(val);
-                      setFormItemCode(generateNextSkuCode(val));
-                    }}
-                    icon="pricetag-outline"
-                    searchable
-                  />
-                </View>
-                <TouchableOpacity
-                  style={{
-                    backgroundColor: '#FEF3C7',
-                    borderWidth: 1,
-                    borderColor: '#D5A943',
-                    borderRadius: 10,
-                    paddingHorizontal: 12,
-                    height: 44,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                  }}
-                  onPress={() => setShowInlineCatCreator(!showInlineCatCreator)}
-                >
-                  <Ionicons name="add-circle" size={16} color={BRAND.burgundy} style={{ marginRight: 4 }} />
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>+ New Category</Text>
-                </TouchableOpacity>
-              </View>
+                  {/* Preset chips for this category */}
+                  {(() => {
+                    const catItems = getCatalogForCategory(formCategory);
+                    if (catItems.length === 0) return null;
+                    return (
+                      <View style={{ marginBottom: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy, marginBottom: 4 }}>
+                          👇 {formCategory} کے عام اشیاء (Click to pick name):
+                        </Text>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                          <View style={{ flexDirection: 'row', gap: 6, paddingVertical: 2 }}>
+                            {catItems.map((c) => (
+                              <TouchableOpacity
+                                key={c.name}
+                                style={{
+                                  backgroundColor: formName === c.name ? '#FEF3C7' : '#F1F5F9',
+                                  borderColor: formName === c.name ? '#F59E0B' : '#CBD5E1',
+                                  borderWidth: 1,
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                }}
+                                onPress={() => {
+                                  setFormName(c.name);
+                                  if (c.defaultCost) setFormCost(String(c.defaultCost));
+                                  if (c.unit) setFormUnit(c.unit);
+                                }}
+                              >
+                                <Text
+                                  style={{
+                                    fontSize: 11,
+                                    fontWeight: formName === c.name ? '800' : '600',
+                                    color: formName === c.name ? '#92400E' : '#334155',
+                                  }}
+                                >
+                                  {c.name}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </ScrollView>
+                      </View>
+                    );
+                  })()}
 
-              {showInlineCatCreator && (
-                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
-                  <TextInput
-                    style={[styles.input, { flex: 1, marginBottom: 0, backgroundColor: '#FFFFFF' }]}
-                    placeholder="Type new category name (e.g. Spices, Frozen, Sauces)..."
-                    value={inlineNewCatInput}
-                    onChangeText={setInlineNewCatInput}
-                  />
-                  <TouchableOpacity
-                    style={{ backgroundColor: BRAND.burgundy, paddingHorizontal: 14, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
-                    onPress={() => {
-                      const clean = inlineNewCatInput.trim();
-                      if (!clean) return;
-                      addInventoryCategory(clean);
-                      setFormCategory(clean);
-                      setInlineNewCatInput('');
-                      setShowInlineCatCreator(false);
-                      broadcastImmediately();
+                  {/* Multi-Item Assistant Banner */}
+                  <View
+                    style={{
+                      backgroundColor: '#FEF3C7',
+                      borderWidth: 1,
+                      borderColor: '#FDE68A',
+                      borderRadius: 8,
+                      padding: 10,
+                      marginBottom: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 8,
                     }}
                   >
-                    <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12.5 }}>Add & Select</Text>
-                  </TouchableOpacity>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#92400E' }}>
+                        📦 Multiple items in {formCategory}?
+                      </Text>
+                      <Text style={{ fontSize: 10.5, color: '#78350F', marginTop: 1 }}>
+                        اس کیٹیگری کے سب سامان کی تعداد (Qty) اور قیمت (Price) ایک ساتھ درج کریں
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#B45309',
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                      }}
+                      onPress={() => {
+                        setBatchCategory(formCategory);
+                        addAllCategoryItemsToBatch(formCategory);
+                        setAddModalMode('batch');
+                      }}
+                      activeOpacity={0.85}
+                    >
+                      <Ionicons name="layers" size={13} color="#FFFFFF" />
+                      <Text style={{ color: '#FFFFFF', fontSize: 11, fontWeight: '800' }}>
+                        + Add All Items
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showInlineCatCreator && (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14, backgroundColor: '#FFFBEB', padding: 10, borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                      <TextInput
+                        style={[styles.input, { flex: 1, marginBottom: 0, backgroundColor: '#FFFFFF' }]}
+                        placeholder="Type new category name (e.g. Spices, Frozen, Sauces)..."
+                        value={inlineNewCatInput}
+                        onChangeText={setInlineNewCatInput}
+                      />
+                      <TouchableOpacity
+                        style={{ backgroundColor: BRAND.burgundy, paddingHorizontal: 14, borderRadius: 8, justifyContent: 'center', alignItems: 'center' }}
+                        onPress={() => {
+                          const clean = inlineNewCatInput.trim();
+                          if (!clean) return;
+                          addInventoryCategory(clean);
+                          setFormCategory(clean);
+                          setInlineNewCatInput('');
+                          setShowInlineCatCreator(false);
+                          broadcastImmediately();
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontWeight: '800', fontSize: 12.5 }}>Add & Select</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  <RoyalDropdown
+                    label="Storage Location / Zone"
+                    options={STORAGE_LOCATIONS}
+                    value={formLocation}
+                    onSelect={(val) => setFormLocation(val)}
+                    icon="location-outline"
+                    searchable
+                    style={{ marginBottom: 12 }}
+                  />
+
+                  <RoyalDropdown
+                    label="Measurement Unit"
+                    options={UNITS}
+                    value={formUnit}
+                    onSelect={(val) => setFormUnit(val)}
+                    icon="scale-outline"
+                    searchable
+                    style={{ marginBottom: 12 }}
+                  />
+
+                  <View style={styles.formRow2}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Initial Stock ({formUnit})</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 25"
+                        keyboardType="numeric"
+                        value={formStock}
+                        onChangeText={setFormStock}
+                      />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Low Stock Alert ({formUnit}) *</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 10"
+                        keyboardType="numeric"
+                        value={formThreshold}
+                        onChangeText={setFormThreshold}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formRow2}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Unit Cost (Rs. per {formUnit})</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 780"
+                        keyboardType="numeric"
+                        value={formCost}
+                        onChangeText={setFormCost}
+                      />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Shelf Life (Days from Receipt)</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 30"
+                        keyboardType="numeric"
+                        value={formExpiryDays}
+                        onChangeText={setFormExpiryDays}
+                      />
+                    </View>
+                  </View>
+
+                  <View style={styles.formRow2}>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Preferred Vendor / Supplier</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. Al-Madina Fresh Poultry"
+                        value={formSupplier}
+                        onChangeText={setFormSupplier}
+                      />
+                    </View>
+                    <View style={{ flex: 1, minWidth: 160 }}>
+                      <Text style={styles.inputLabel}>Supplier WhatsApp Phone</Text>
+                      <TextInput
+                        style={styles.input}
+                        placeholder="e.g. 03001234567"
+                        keyboardType="phone-pad"
+                        value={formSupplierPhone}
+                        onChangeText={setFormSupplierPhone}
+                      />
+                    </View>
+                  </View>
                 </View>
               )}
-
-              <RoyalDropdown
-                label="Storage Location / Zone"
-                options={STORAGE_LOCATIONS}
-                value={formLocation}
-                onSelect={(val) => setFormLocation(val)}
-                icon="location-outline"
-                searchable
-                style={{ marginBottom: 12 }}
-              />
-
-              <RoyalDropdown
-                label="Measurement Unit"
-                options={UNITS}
-                value={formUnit}
-                onSelect={(val) => setFormUnit(val)}
-                icon="scale-outline"
-                searchable
-                style={{ marginBottom: 12 }}
-              />
-
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Initial Stock ({formUnit})</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 25"
-                    keyboardType="numeric"
-                    value={formStock}
-                    onChangeText={setFormStock}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Low Stock Alert ({formUnit}) *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 10"
-                    keyboardType="numeric"
-                    value={formThreshold}
-                    onChangeText={setFormThreshold}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Unit Cost (Rs. per {formUnit})</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 780"
-                    keyboardType="numeric"
-                    value={formCost}
-                    onChangeText={setFormCost}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Shelf Life (Days from Receipt)</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 30"
-                    keyboardType="numeric"
-                    value={formExpiryDays}
-                    onChangeText={setFormExpiryDays}
-                  />
-                </View>
-              </View>
-
-              <View style={styles.formRow2}>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Preferred Vendor / Supplier</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Al-Madina Fresh Poultry"
-                    value={formSupplier}
-                    onChangeText={setFormSupplier}
-                  />
-                </View>
-                <View style={{ flex: 1, minWidth: 160 }}>
-                  <Text style={styles.inputLabel}>Supplier WhatsApp Phone</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. 03001234567"
-                    keyboardType="phone-pad"
-                    value={formSupplierPhone}
-                    onChangeText={setFormSupplierPhone}
-                  />
-                </View>
-              </View>
             </ScrollView>
 
             <View style={styles.modalFooter}>
@@ -3334,7 +3932,11 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </TouchableOpacity>
               <TouchableOpacity style={styles.modalSaveBtn} onPress={handleSaveAdd}>
                 <Ionicons name="checkmark-circle" size={18} color="#FFF" style={{ marginRight: 6 }} />
-                <Text style={styles.modalSaveBtnText}>Save SKU Item</Text>
+                <Text style={styles.modalSaveBtnText}>
+                  {addModalMode === 'batch'
+                    ? `Save ${batchItems.filter((i) => i.name.trim()).length} Inventory Items`
+                    : 'Save SKU Item'}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
