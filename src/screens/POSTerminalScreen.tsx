@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -219,6 +220,9 @@ export default function POSTerminalScreen({
   const isLandscape = (width > height && width >= 700) || width >= 1000;
   const isTablet = width >= 600 && width < 1200;
   const isMobile = !isLandscape;
+  const numCols = isLandscape
+    ? (width < 1050 ? 2 : width < 1400 ? 3 : 4)
+    : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
     ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
@@ -303,6 +307,17 @@ export default function POSTerminalScreen({
 
   // Cart & Order Context
   const [cart, setCart] = useState<OrderItem[]>([]);
+
+  // Fast O(1) in-cart lookup map to eliminate scroll lag
+  const cartQtyMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of cart) {
+      const baseId = c.id.includes('-') ? c.id.split('-')[0] : c.id;
+      map[baseId] = (map[baseId] || 0) + c.qty;
+      map[c.id] = (map[c.id] || 0) + c.qty;
+    }
+    return map;
+  }, [cart]);
   const [loadedCart, setLoadedCart] = useState<OrderItem[]>([]);
   const [orderType, setOrderType] = useState<'takeaway' | 'dine-in' | 'delivery'>('takeaway');
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>('');
@@ -1584,11 +1599,11 @@ export default function POSTerminalScreen({
           >
             <Ionicons
               name="restaurant"
-              size={18}
+              size={16}
               color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
             />
             <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              1. Order / Menu Dishes ({filteredItems.length})
+              Dishes ({filteredItems.length})
             </Text>
           </TouchableOpacity>
 
@@ -1599,33 +1614,12 @@ export default function POSTerminalScreen({
           >
             <Ionicons
               name="cart"
-              size={19}
+              size={16}
               color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
             />
             <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              2. Current Cart & Bill ({totalCartQty}
-              {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
+              Cart & Bill ({totalCartQty}{!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
             </Text>
-            {totalCartQty > 0 && (
-              <View
-                style={{
-                  backgroundColor: mobileTab === 'cart' ? '#D4AF37' : '#52141C',
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: 10,
-                }}
-              >
-                <Text
-                  style={{
-                    color: mobileTab === 'cart' ? '#24050A' : '#FFFFFF',
-                    fontSize: 12,
-                    fontWeight: '900',
-                  }}
-                >
-                  {totalCartQty}
-                </Text>
-              </View>
-            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1638,7 +1632,7 @@ export default function POSTerminalScreen({
           >
             <Ionicons
               name="flame"
-              size={19}
+              size={16}
               color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
             />
             <Text
@@ -1647,30 +1641,8 @@ export default function POSTerminalScreen({
                 mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
               ]}
             >
-              3. Running KDS & Prep Time ({tickets.length})
+              Running ({tickets.length})
             </Text>
-            {tickets.length > 0 && (
-              <View
-                style={{
-                  backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#F59E0B',
-                }}
-              >
-                <Text
-                  style={{
-                    color: '#B45309',
-                    fontSize: 12,
-                    fontWeight: '900',
-                  }}
-                >
-                  {tickets.length} Live
-                </Text>
-              </View>
-            )}
           </TouchableOpacity>
         </View>
       )}
@@ -1902,108 +1874,114 @@ export default function POSTerminalScreen({
             </View>
 
             {/* Dish Grid */}
-            <ScrollView
-              style={{ flex: 1 }}
+            <FlatList
+              key={`pos-grid-${numCols}`}
+              data={filteredItems}
+              keyExtractor={(item) => item.id}
+              numColumns={numCols}
+              columnWrapperStyle={numCols > 1 ? styles.dishRow : undefined}
               contentContainerStyle={[styles.dishGridContent, totalCartQty > 0 && { paddingBottom: 96 }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.dishGrid}>
-                {filteredItems.map((item) => {
-                  const inCartQty = cart
-                    .filter((c) => c.id === item.id || c.id.startsWith(`${item.id}-`))
-                    .reduce((sum, c) => sum + c.qty, 0);
-                  const isInCart = inCartQty > 0;
-                  const isOutOfStock = isPosItemBlocked(item);
-                  const hasVariants = Boolean(item.variants && item.variants.length > 0);
-                  const imageUri = resolveMenuImageUri(item);
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
+              ListEmptyComponent={
+                <View style={styles.emptyCatalogBox}>
+                  <Ionicons name="search-outline" size={44} color="#CBD5E1" />
+                  <Text style={styles.emptyCatalogTitle}>No dishes found</Text>
+                  <Text style={styles.emptyCatalogSub}>Try clearing the search or choosing another category</Text>
+                </View>
+              }
+              renderItem={({ item }) => {
+                const inCartQty = cartQtyMap[item.id] || 0;
+                const isInCart = inCartQty > 0;
+                const isOutOfStock = isPosItemBlocked(item);
+                const hasVariants = Boolean(item.variants && item.variants.length > 0);
+                const imageUri = resolveMenuImageUri(item);
 
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[
-                        styles.dishCard,
-                        { width: dishCardWidth as any },
-                        isInCart && styles.dishCardActive,
-                        isOutOfStock && { opacity: 0.55 },
-                      ]}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={0.78}
-                      disabled={isOutOfStock}
-                    >
-                      {/* Dish Image */}
-                      <View style={styles.dishImgBox}>
-                        {imageUri && !failedImages[item.id] ? (
-                          <Image
-                            source={{ uri: imageUri }}
-                            style={styles.dishImg}
-                            resizeMode="cover"
-                            onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.dishCard,
+                      { flex: 1 / numCols },
+                      isInCart && styles.dishCardActive,
+                      isOutOfStock && { opacity: 0.55 },
+                    ]}
+                    onPress={() => addToCart(item)}
+                    activeOpacity={0.78}
+                    disabled={isOutOfStock}
+                  >
+                    {/* Dish Image */}
+                    <View style={styles.dishImgBox}>
+                      {imageUri && !failedImages[item.id] ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.dishImg}
+                          resizeMode="cover"
+                          onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                        />
+                      ) : (
+                        <View style={styles.dishImgFallback}>
+                          <Ionicons
+                            name={item.isDeal ? 'gift-outline' : 'restaurant-outline'}
+                            size={26}
+                            color="#D4AF37"
                           />
-                        ) : (
-                          <View style={styles.dishImgFallback}>
-                            <Ionicons
-                              name={item.isDeal ? 'gift-outline' : 'restaurant-outline'}
-                              size={26}
-                              color="#D4AF37"
-                            />
-                          </View>
-                        )}
+                        </View>
+                      )}
 
-                        {/* Single Clean Price Badge or Variant Tag */}
-                        {!hidePrices && (
-                          <View style={[styles.dishPriceTag, isInCart && styles.dishPriceTagActive]}>
-                            <Text style={[styles.dishPriceTagText, isInCart && { color: '#24050A' }]}>
-                              Rs. {item.price.toLocaleString()}
-                            </Text>
-                          </View>
-                        )}
+                      {/* Single Clean Price Badge or Variant Tag */}
+                      {!hidePrices && (
+                        <View style={[styles.dishPriceTag, isInCart && styles.dishPriceTagActive]}>
+                          <Text style={[styles.dishPriceTagText, isInCart && { color: '#24050A' }]}>
+                            Rs. {item.price.toLocaleString()}
+                          </Text>
+                        </View>
+                      )}
 
-                        {/* Quantity Badge when in Cart */}
-                        {isInCart && (
-                          <View style={styles.dishQtyBadge}>
-                            <Text style={styles.dishQtyBadgeText}>{inCartQty}×</Text>
-                          </View>
-                        )}
+                      {/* Quantity Badge when in Cart */}
+                      {isInCart && (
+                        <View style={styles.dishQtyBadge}>
+                          <Text style={styles.dishQtyBadgeText}>{inCartQty}×</Text>
+                        </View>
+                      )}
 
-                        {isOutOfStock && (
-                          <View style={styles.soldOutOverlay}>
-                            <Text style={styles.soldOutOverlayText}>SOLD OUT</Text>
-                          </View>
-                        )}
-                      </View>
+                      {isOutOfStock && (
+                        <View style={styles.soldOutOverlay}>
+                          <Text style={styles.soldOutOverlayText}>SOLD OUT</Text>
+                        </View>
+                      )}
+                    </View>
 
-                      {/* Dish Info */}
-                      <View style={styles.dishBody}>
-                        <Text style={styles.dishTitle} numberOfLines={2}>
-                          {item.name}
-                        </Text>
-                        <View style={styles.dishFooterRow}>
+                    {/* Dish Info */}
+                    <View style={styles.dishBody}>
+                      <Text style={styles.dishTitle} numberOfLines={2}>
+                        {item.name}
+                      </Text>
+                      <View style={styles.dishFooterRow}>
+                        <View style={styles.dishMetaWrap}>
                           <Text style={styles.dishCategoryLabel} numberOfLines={1}>
                             {hasVariants ? `${item.variants?.length} Sizes` : item.category}
                           </Text>
-                          <View style={[styles.dishAddIcon, isInCart && styles.dishAddIconActive]}>
-                            <Ionicons
-                              name={isInCart ? 'add' : 'add'}
-                              size={15}
-                              color={isInCart ? '#FFFFFF' : '#52141C'}
-                            />
-                          </View>
+                          <Text style={styles.dishPriceText}>
+                            {hasVariants ? `From Rs. ${item.price.toLocaleString()}` : `Rs. ${item.price.toLocaleString()}`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dishAddIcon, isInCart && styles.dishAddIconActive]}>
+                          <Ionicons
+                            name="add"
+                            size={16}
+                            color={isInCart ? '#FFFFFF' : '#52141C'}
+                          />
                         </View>
                       </View>
-                    </TouchableOpacity>
-                  );
-                })}
-
-                {filteredItems.length === 0 && (
-                  <View style={styles.emptyCatalogBox}>
-                    <Ionicons name="search-outline" size={44} color="#CBD5E1" />
-                    <Text style={styles.emptyCatalogTitle}>No dishes found</Text>
-                    <Text style={styles.emptyCatalogSub}>Try clearing the search or choosing another category</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
           </View>
         )}
 
@@ -3789,18 +3767,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1.5,
     borderBottomColor: '#CBD5E1',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 8,
   },
   mobileTabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
@@ -3810,7 +3789,7 @@ const styles = StyleSheet.create({
     borderColor: '#D4AF37',
   },
   mobileTabText: {
-    fontSize: 15,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#334155',
   },
@@ -4017,9 +3996,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  dishRow: {
+    gap: 10,
+    marginBottom: 10,
+  },
   dishCard: {
-    width: '23.6%',
-    minWidth: 150,
+    minWidth: 0,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,
@@ -4113,16 +4095,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  dishMetaWrap: {
+    flex: 1,
+    marginRight: 6,
+  },
   dishCategoryLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
-    flex: 1,
+  },
+  dishPriceText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#52141C',
+    marginTop: 2,
   },
   dishAddIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',

@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -146,6 +147,9 @@ export default function TableOrderScreen() {
   const isLandscape = (width > height && width >= 700) || width >= 1000;
   const isTablet = width >= 600 && width < 1200;
   const isMobile = !isLandscape;
+  const numCols = isLandscape
+    ? (width < 1050 ? 2 : width < 1400 ? 3 : 4)
+    : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
     ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
@@ -159,6 +163,17 @@ export default function TableOrderScreen() {
 
   // Cart & Customizations
   const [newCart, setNewCart] = useState<{ item: MenuItem; qty: number; notes?: string }[]>([]);
+
+  // Fast O(1) in-cart lookup map to eliminate scroll lag
+  const cartQtyMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of newCart) {
+      const baseId = c.item.id.includes('-') ? c.item.id.split('-')[0] : c.item.id;
+      map[baseId] = (map[baseId] || 0) + c.qty;
+      map[c.item.id] = (map[c.item.id] || 0) + c.qty;
+    }
+    return map;
+  }, [newCart]);
   const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
   const [editingNoteItem, setEditingNoteItem] = useState<{ item: MenuItem; notes?: string } | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
@@ -613,28 +628,31 @@ export default function TableOrderScreen() {
           <TouchableOpacity
             style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
             onPress={() => setMobileTab('menu')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
+            <Ionicons name="restaurant" size={16} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
             <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              1. Order / Menu Dishes ({filteredItems.length})
+              Dishes ({filteredItems.length})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
             onPress={() => setMobileTab('cart')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="cart" size={18} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
+            <Ionicons name="cart" size={16} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
             <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              2. Current Cart & KOT ({totalNewQty} Items{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
+              Cart ({totalNewQty}{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
             onPress={() => setMobileTab('running')}
+            activeOpacity={0.85}
           >
-            <Ionicons name="flame" size={18} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
+            <Ionicons name="flame" size={16} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
             <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
-              3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
+              Running ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
             </Text>
           </TouchableOpacity>
         </View>
@@ -803,79 +821,87 @@ export default function TableOrderScreen() {
               )}
             </View>
 
-            <ScrollView
-              style={{ flex: 1 }}
+            <FlatList
+              key={`waiter-grid-${numCols}`}
+              data={filteredItems}
+              keyExtractor={(item) => item.id}
+              numColumns={numCols}
+              columnWrapperStyle={numCols > 1 ? styles.dishRow : undefined}
               contentContainerStyle={[styles.dishGridContent, isMobile && totalNewQty > 0 && { paddingBottom: 90 }]}
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
-            >
-              <View style={styles.dishGrid}>
-                {filteredItems.map((item) => {
-                  const inCartQty = newCart
-                    .filter((c) => c.item.id === item.id || c.item.id.startsWith(`${item.id}-`))
-                    .reduce((sum, c) => sum + c.qty, 0);
-                  const isInCart = inCartQty > 0;
-                  const isSoldOut = getItemStockStatus(item).isSoldOut;
-                  const imageUri = resolveMenuImageUri(item);
+              initialNumToRender={12}
+              maxToRenderPerBatch={12}
+              windowSize={5}
+              removeClippedSubviews={Platform.OS === 'android'}
+              renderItem={({ item }) => {
+                const inCartQty = cartQtyMap[item.id] || 0;
+                const isInCart = inCartQty > 0;
+                const isSoldOut = getItemStockStatus(item).isSoldOut;
+                const imageUri = resolveMenuImageUri(item);
+                const hasVariants = Boolean(item.variants && item.variants.length > 0);
 
-                  return (
-                    <TouchableOpacity
-                      key={item.id}
-                      style={[
-                        styles.dishCard,
-                        { width: dishCardWidth as any },
-                        isInCart && styles.dishCardActive,
-                        isSoldOut && { opacity: 0.55 },
-                      ]}
-                      onPress={() => addToCart(item)}
-                      activeOpacity={0.78}
-                      disabled={isSoldOut}
-                    >
-                      <View style={styles.dishImgBox}>
-                        {imageUri && !failedImages[item.id] ? (
-                          <Image
-                            source={{ uri: imageUri }}
-                            style={styles.dishImg}
-                            resizeMode="cover"
-                            onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
-                          />
-                        ) : (
-                          <View style={styles.dishImgFallback}>
-                            <Ionicons name="restaurant-outline" size={26} color="#D4AF37" />
-                          </View>
-                        )}
+                return (
+                  <TouchableOpacity
+                    style={[
+                      styles.dishCard,
+                      { flex: 1 / numCols },
+                      isInCart && styles.dishCardActive,
+                      isSoldOut && { opacity: 0.55 },
+                    ]}
+                    onPress={() => addToCart(item)}
+                    activeOpacity={0.78}
+                    disabled={isSoldOut}
+                  >
+                    <View style={styles.dishImgBox}>
+                      {imageUri && !failedImages[item.id] ? (
+                        <Image
+                          source={{ uri: imageUri }}
+                          style={styles.dishImg}
+                          resizeMode="cover"
+                          onError={() => setFailedImages((prev) => ({ ...prev, [item.id]: true }))}
+                        />
+                      ) : (
+                        <View style={styles.dishImgFallback}>
+                          <Ionicons name="restaurant-outline" size={26} color="#D4AF37" />
+                        </View>
+                      )}
 
-                        {isInCart && (
-                          <View style={styles.dishQtyBadge}>
-                            <Text style={styles.dishQtyBadgeText}>{inCartQty}×</Text>
-                          </View>
-                        )}
+                      {isInCart && (
+                        <View style={styles.dishQtyBadge}>
+                          <Text style={styles.dishQtyBadgeText}>{inCartQty}×</Text>
+                        </View>
+                      )}
 
-                        {isSoldOut && (
-                          <View style={styles.soldOutOverlay}>
-                            <Text style={styles.soldOutOverlayText}>SOLD OUT</Text>
-                          </View>
-                        )}
-                      </View>
+                      {isSoldOut && (
+                        <View style={styles.soldOutOverlay}>
+                          <Text style={styles.soldOutOverlayText}>SOLD OUT</Text>
+                        </View>
+                      )}
+                    </View>
 
-                      <View style={styles.dishBody}>
-                        <Text style={styles.dishTitle} numberOfLines={2}>
-                          {item.name}
-                        </Text>
-                        <View style={styles.dishFooterRow}>
+                    <View style={styles.dishBody}>
+                      <Text style={styles.dishTitle} numberOfLines={2}>
+                        {item.name}
+                      </Text>
+                      <View style={styles.dishFooterRow}>
+                        <View style={styles.dishMetaWrap}>
                           <Text style={styles.dishCategoryLabel} numberOfLines={1}>
-                            {item.variants?.length ? `${item.variants.length} Sizes` : item.category}
+                            {hasVariants ? `${item.variants?.length} Sizes` : item.category}
                           </Text>
-                          <View style={[styles.dishAddIcon, isInCart && styles.dishAddIconActive]}>
-                            <Ionicons name="add" size={15} color={isInCart ? '#FFFFFF' : '#52141C'} />
-                          </View>
+                          <Text style={styles.dishPriceText}>
+                            {hasVariants ? `From Rs. ${item.price.toLocaleString()}` : `Rs. ${item.price.toLocaleString()}`}
+                          </Text>
+                        </View>
+                        <View style={[styles.dishAddIcon, isInCart && styles.dishAddIconActive]}>
+                          <Ionicons name="add" size={16} color={isInCart ? '#FFFFFF' : '#52141C'} />
                         </View>
                       </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-            </ScrollView>
+                    </View>
+                  </TouchableOpacity>
+                );
+              }}
+            />
           </View>
         )}
 
@@ -1457,18 +1483,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1.5,
     borderBottomColor: '#CBD5E1',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    gap: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 8,
   },
   mobileTabBtn: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 10,
-    paddingVertical: 12,
-    borderRadius: 12,
+    gap: 6,
+    paddingVertical: 9,
+    paddingHorizontal: 4,
+    borderRadius: 10,
     backgroundColor: '#F1F5F9',
     borderWidth: 1.5,
     borderColor: '#CBD5E1',
@@ -1478,7 +1505,7 @@ const styles = StyleSheet.create({
     borderColor: '#D4AF37',
   },
   mobileTabText: {
-    fontSize: 15,
+    fontSize: 12.5,
     fontWeight: '800',
     color: '#334155',
   },
@@ -1499,7 +1526,7 @@ const styles = StyleSheet.create({
   },
   categoryRailMobile: {
     width: '100%',
-    height: 112,
+    height: 58,
     borderRightWidth: 0,
     borderBottomWidth: 1.5,
     borderBottomColor: '#CBD5E1',
@@ -1663,9 +1690,12 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 10,
   },
+  dishRow: {
+    gap: 10,
+    marginBottom: 10,
+  },
   dishCard: {
-    width: '23.6%',
-    minWidth: 150,
+    minWidth: 0,
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
     borderWidth: 1.5,
@@ -1742,16 +1772,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  dishMetaWrap: {
+    flex: 1,
+    marginRight: 6,
+  },
   dishCategoryLabel: {
     fontSize: 11,
     fontWeight: '600',
     color: '#64748B',
-    flex: 1,
+  },
+  dishPriceText: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#52141C',
+    marginTop: 2,
   },
   dishAddIcon: {
-    width: 24,
-    height: 24,
-    borderRadius: 6,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
     backgroundColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
