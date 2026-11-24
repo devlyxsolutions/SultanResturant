@@ -214,12 +214,18 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
     supplierPayments,
     inventory,
     assets,
+    assetCategories: rawAssetCategories,
     addSupplier,
     updateSupplier,
     deleteSupplier,
     addPurchaseOrder,
     recordSupplierPayment,
   } = useOpsStore();
+
+  const assetCategories = useMemo(
+    () => (rawAssetCategories && rawAssetCategories.length > 0 ? rawAssetCategories : [...ASSET_CATEGORIES]),
+    [rawAssetCategories]
+  );
 
   // Filter & Search States
   const [searchQuery, setSearchQuery] = useState('');
@@ -256,11 +262,11 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
 
   const supplierCategoryOptions = useMemo(() => {
     if (formSupplierType === 'assets') {
-      return ASSET_CATEGORIES.map((cat) => ({
+      return assetCategories.map((cat) => ({
         label: cat,
         value: cat,
-        icon: (ASSET_THEMES[cat]?.icon || 'business-outline') as keyof typeof Ionicons.glyphMap,
-        sublabel: ASSET_THEMES[cat]?.urdu,
+        icon: (ASSET_THEMES[cat as AssetCategory]?.icon || 'business-outline') as keyof typeof Ionicons.glyphMap,
+        sublabel: ASSET_THEMES[cat as AssetCategory]?.urdu,
       }));
     }
     return SUPPLIER_CATEGORIES.map((cat) => ({
@@ -1373,9 +1379,9 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
               </Text>
             </TouchableOpacity>
 
-            {(typeFilter === 'assets' ? ASSET_CATEGORIES : SUPPLIER_CATEGORIES).map((cat) => {
+            {(typeFilter === 'assets' ? assetCategories : SUPPLIER_CATEGORIES).map((cat) => {
               const theme = typeFilter === 'assets'
-                ? (ASSET_THEMES[cat] || { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'business' as any, urdu: '' })
+                ? (ASSET_THEMES[cat as AssetCategory] || { accent: '#2563EB', bg: '#DBEAFE', text: '#1E40AF', icon: 'business' as any, urdu: '' })
                 : (CATEGORY_THEMES[cat as SupplierCategory] || CATEGORY_THEMES['Other']);
               const count = suppliers.filter((s) => s.category === cat).length;
               const isSelected = categoryFilter === cat;
@@ -2623,7 +2629,7 @@ export default function SuppliersScreen({ backRoute = '/admin/dashboard' }: { ba
                   ]}
                   onPress={() => {
                     setFormSupplierType('assets');
-                    setFormCategory(ASSET_CATEGORIES[0]);
+                    setFormCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
                   }}
                   activeOpacity={0.8}
                 >

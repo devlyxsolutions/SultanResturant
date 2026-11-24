@@ -8,6 +8,7 @@ import {
   TextInput,
   Platform,
   Alert,
+  Modal,
   useWindowDimensions,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -43,36 +44,69 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
 
   const invoices = useRestaurantStore((s) => s.invoices);
   const expenses = useOpsStore((s) => s.expenses);
+  const expenseCategories = useOpsStore((s) => (s.expenseCategories && s.expenseCategories.length > 0 ? s.expenseCategories : [...EXPENSE_CATEGORIES]));
   const addExpense = useOpsStore((s) => s.addExpense);
   const updateExpense = useOpsStore((s) => s.updateExpense);
   const deleteExpense = useOpsStore((s) => s.deleteExpense);
+  const addExpenseCategory = useOpsStore((s) => s.addExpenseCategory);
+  const renameExpenseCategory = useOpsStore((s) => s.renameExpenseCategory);
+  const deleteExpenseCategory = useOpsStore((s) => s.deleteExpenseCategory);
 
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
-  const [category, setCategory] = useState<string>(EXPENSE_CATEGORIES[0]);
+  const [category, setCategory] = useState<string>(expenseCategories[0] || EXPENSE_CATEGORIES[0]);
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const [method, setMethod] = useState<ExpenseMethod>('cash');
+  const [formHeadType, setFormHeadType] = useState<'opex' | 'capex'>('opex');
   const [filterPeriod, setFilterPeriod] = useState<'today' | 'all'>('today');
+  const [filterHeadType, setFilterHeadType] = useState<'all' | 'opex' | 'capex'>('all');
   const [todayStart] = useState(() => startOfDay(Date.now()));
 
-  const { filteredExpenses, todayInvoices, todayRevenue, totalExpenseAmount, netProfitToday } = useMemo(() => {
+  // Manage Account Heads Modal
+  const [isManageHeadsOpen, setIsManageHeadsOpen] = useState(false);
+  const [newHeadInput, setNewHeadInput] = useState('');
+  const [editingHeadOld, setEditingHeadOld] = useState<string | null>(null);
+  const [editingHeadNew, setEditingHeadNew] = useState('');
+
+  const {
+    filteredExpenses,
+    todayInvoices,
+    todayRevenue,
+    totalExpenseAmount,
+    opexTotal,
+    capexTotal,
+    netProfitToday,
+  } = useMemo(() => {
     const invList = invoices || [];
     const expList = expenses || [];
-    const filtered = filterPeriod === 'today'
+    let periodExpenses = filterPeriod === 'today'
       ? expList.filter((e) => e.at >= todayStart)
       : expList;
+
+    let filtered = periodExpenses;
+    if (filterHeadType === 'opex') {
+      filtered = periodExpenses.filter((e) => !e.isCapEx && e.headType !== 'capex');
+    } else if (filterHeadType === 'capex') {
+      filtered = periodExpenses.filter((e) => e.isCapEx || e.headType === 'capex');
+    }
+
     const invs = invList.filter((inv) => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= todayStart);
     const rev = invs.reduce((sum, inv) => sum + (inv.total || 0), 0);
-    const expTotal = filtered.reduce((sum, e) => sum + (e.amount || 0), 0);
-    const profit = rev - expTotal;
+    const expTotal = periodExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
+    const opex = periodExpenses.filter((e) => !e.isCapEx && e.headType !== 'capex').reduce((sum, e) => sum + (e.amount || 0), 0);
+    const capex = periodExpenses.filter((e) => e.isCapEx || e.headType === 'capex').reduce((sum, e) => sum + (e.amount || 0), 0);
+    const profit = rev - opex; // Operating cash profit after daily OpEx
+
     return {
       filteredExpenses: filtered,
       todayInvoices: invs,
       todayRevenue: rev,
       totalExpenseAmount: expTotal,
+      opexTotal: opex,
+      capexTotal: capex,
       netProfitToday: profit,
     };
-  }, [filterPeriod, expenses, invoices, todayStart]);
+  }, [filterPeriod, filterHeadType, expenses, invoices, todayStart]);
 
   // Pagination for Expenses List
   const expensePagination = usePagination({
@@ -92,14 +126,16 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
     setAmount(String(exp.amount));
     setNote(exp.note || '');
     setMethod(exp.method);
+    setFormHeadType(exp.isCapEx || exp.headType === 'capex' ? 'capex' : 'opex');
   };
 
   const handleCancelEdit = () => {
     setEditingExpenseId(null);
-    setCategory(EXPENSE_CATEGORIES[0]);
+    setCategory(expenseCategories[0] || EXPENSE_CATEGORIES[0]);
     setAmount('');
     setNote('');
     setMethod('cash');
+    setFormHeadType('opex');
   };
 
   const handleAdd = () => {
@@ -119,15 +155,19 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       return;
     }
 
+    const isCapExSelected = formHeadType === 'capex';
+
     if (editingExpenseId) {
       updateExpense(editingExpenseId, {
         category,
         amount: num,
         note: note.trim() || undefined,
         method,
+        isCapEx: isCapExSelected,
+        headType: formHeadType,
       });
       handleCancelEdit();
-      const msg = `Expense updated to Rs. ${num.toLocaleString()} (${category}).`;
+      const msg = `Expense updated to Rs. ${num.toLocaleString()} (${category}) [${isCapExSelected ? 'CapEx' : 'OpEx'}].`;
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Updated', msg);
       return;
@@ -139,11 +179,13 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       note: note.trim() || undefined,
       method,
       paidBy: user?.name || 'Manager',
+      isCapEx: isCapExSelected,
+      headType: formHeadType,
     });
 
     setAmount('');
     setNote('');
-    const msg = `Expense of Rs. ${num.toLocaleString()} recorded under ${category}.`;
+    const msg = `Expense of Rs. ${num.toLocaleString()} recorded under ${category} [${isCapExSelected ? 'CapEx' : 'OpEx'}].`;
     if (Platform.OS === 'web') window.alert(msg);
     else Alert.alert('Recorded', msg);
   };
@@ -199,9 +241,17 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Daily Expenses & Ledger</Text>
           <Text style={styles.headerSubtitle}>
-            Kitchen Groceries, Utilities, Staff Advances & P&L
+            Kitchen Groceries, Utilities, Staff Advances, CapEx & P&L
           </Text>
         </View>
+        <TouchableOpacity
+          style={styles.manageHeadsBtn}
+          onPress={() => setIsManageHeadsOpen(true)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="folder-open-outline" size={16} color={BRAND.burgundy} />
+          <Text style={styles.manageHeadsBtnText}>Account Heads ({expenseCategories.length})</Text>
+        </TouchableOpacity>
       </View>
 
       {/* P&L Financial Summary Bar */}
@@ -219,7 +269,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
             style={[styles.pnlBox, styles.pnlBoxEmerald]}
           >
             <View style={styles.pnlBoxHeader}>
-              <Text style={[styles.pnlLabel, { color: '#059669' }]}>{"Today's Inflow (Sales)"}</Text>
+              <Text style={[styles.pnlLabel, { color: '#059669' }]}>{"Today's Sales Inflow"}</Text>
               <View style={[styles.pnlIconOrb, { backgroundColor: '#D1FAE5' }]}>
                 <Ionicons name="trending-up" size={16} color="#059669" />
               </View>
@@ -230,22 +280,37 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
             <Text style={[styles.pnlMeta, { color: '#065F46' }]}>{todayInvoices.length} Bills Settled</Text>
           </View>
 
-          {/* Outflow Box */}
+          {/* Operating Outflow (OpEx) Box */}
           <View
             {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
             style={[styles.pnlBox, styles.pnlBoxRose]}
           >
             <View style={styles.pnlBoxHeader}>
-              <Text style={[styles.pnlLabel, { color: '#DC2626' }]}>Outflow (Expenses)</Text>
+              <Text style={[styles.pnlLabel, { color: '#DC2626' }]}>Daily OpEx (Kitchen/Bills)</Text>
               <View style={[styles.pnlIconOrb, { backgroundColor: '#FEE2E2' }]}>
-                <Ionicons name="trending-down" size={16} color="#DC2626" />
+                <Ionicons name="flash-outline" size={16} color="#DC2626" />
               </View>
             </View>
-            <Text style={[styles.pnlVal, { color: '#B91C1C' }]}>{money(totalExpenseAmount)}</Text>
-            <Text style={[styles.pnlMeta, { color: '#991B1B' }]}>{filteredExpenses.length} Expense Slips</Text>
+            <Text style={[styles.pnlVal, { color: '#B91C1C' }]}>{money(opexTotal)}</Text>
+            <Text style={[styles.pnlMeta, { color: '#991B1B' }]}>Direct Daily Running Costs</Text>
           </View>
 
-          {/* Net Profit Box */}
+          {/* Capital Outlay (CapEx) Box */}
+          <View
+            {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
+            style={[styles.pnlBox, { borderColor: '#FDE047', backgroundColor: '#FEFCE8' }]}
+          >
+            <View style={styles.pnlBoxHeader}>
+              <Text style={[styles.pnlLabel, { color: '#854D0E' }]}>Capital CapEx Outlay</Text>
+              <View style={[styles.pnlIconOrb, { backgroundColor: '#FEF9C3' }]}>
+                <Ionicons name="diamond-outline" size={16} color="#854D0E" />
+              </View>
+            </View>
+            <Text style={[styles.pnlVal, { color: '#713F12' }]}>{money(capexTotal)}</Text>
+            <Text style={[styles.pnlMeta, { color: '#854D0E' }]}>Balance Sheet Equipment</Text>
+          </View>
+
+          {/* Net Operating Profit Box */}
           <View
             {...(Platform.OS === 'web' ? ({ className: 'interactive-card' } as any) : {})}
             style={[
@@ -255,7 +320,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
           >
             <View style={styles.pnlBoxHeader}>
               <Text style={[styles.pnlLabel, { color: netProfitToday >= 0 ? '#B45309' : '#DC2626' }]}>
-                Net Cash Profit
+                Net Operating Cash
               </Text>
               <View
                 style={[
@@ -284,7 +349,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
                 { color: netProfitToday >= 0 ? '#78350F' : '#991B1B' },
               ]}
             >
-              In Drawer Cash
+              Sales - Daily OpEx
             </Text>
           </View>
         </View>
@@ -308,16 +373,69 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
             )}
           </View>
 
-          <RoyalDropdown
-            label="Expense Category"
-            placeholder="Select expense category..."
-            options={EXPENSE_CATEGORIES}
-            value={category}
-            onSelect={(cat) => setCategory(cat)}
-            icon="wallet-outline"
-            searchable
-            style={{ marginBottom: 14 }}
-          />
+          {/* OpEx vs CapEx Segmented Selector */}
+          <View style={styles.headTypeToggleContainer}>
+            <TouchableOpacity
+              style={[styles.headTypeBtn, formHeadType === 'opex' && styles.headTypeBtnActive]}
+              onPress={() => setFormHeadType('opex')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="flash"
+                size={14}
+                color={formHeadType === 'opex' ? '#FFFFFF' : '#475569'}
+              />
+              <Text
+                style={[
+                  styles.headTypeBtnText,
+                  formHeadType === 'opex' && styles.headTypeBtnTextActive,
+                ]}
+              >
+                ⚡ Operating Expense (OpEx)
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.headTypeBtn, formHeadType === 'capex' && styles.headTypeBtnCapExActive]}
+              onPress={() => setFormHeadType('capex')}
+              activeOpacity={0.8}
+            >
+              <Ionicons
+                name="diamond"
+                size={14}
+                color={formHeadType === 'capex' ? '#FFFFFF' : '#475569'}
+              />
+              <Text
+                style={[
+                  styles.headTypeBtnText,
+                  formHeadType === 'capex' && styles.headTypeBtnTextActive,
+                ]}
+              >
+                💎 Capital Investment (CapEx)
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8, marginBottom: 14 }}>
+            <View style={{ flex: 1 }}>
+              <RoyalDropdown
+                label="Account Head / Category"
+                placeholder="Select account head..."
+                options={expenseCategories.map((c) => ({ label: c, value: c }))}
+                value={category}
+                onSelect={(cat) => setCategory(cat)}
+                icon="wallet-outline"
+                searchable
+              />
+            </View>
+            <TouchableOpacity
+              style={styles.inlineManageBtn}
+              onPress={() => setIsManageHeadsOpen(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="folder-open-outline" size={18} color={BRAND.burgundy} />
+            </TouchableOpacity>
+          </View>
 
           <View style={styles.amountRow}>
             <View style={{ flex: 1 }}>
@@ -378,7 +496,9 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
               style={{ marginRight: 6 }}
             />
             <Text style={styles.submitBtnText}>
-              {editingExpenseId ? 'Save Expense Changes' : 'Add Expense to Shift Ledger'}
+              {editingExpenseId
+                ? 'Save Expense Changes'
+                : `Record ${formHeadType === 'capex' ? 'CapEx Investment' : 'OpEx Expense'}`}
             </Text>
           </TouchableOpacity>
         </View>
@@ -387,25 +507,56 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       {/* Expense History Header */}
       <View style={styles.historyHeader}>
         <Text style={styles.cardTitle}>Expense History ({filteredExpenses.length})</Text>
-        <View style={styles.filterPills}>
-          <TouchableOpacity
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            style={[styles.filterPill, filterPeriod === 'today' && styles.filterPillActive]}
-            onPress={() => setFilterPeriod('today')}
-          >
-            <Text style={[styles.filterPillText, filterPeriod === 'today' && styles.filterPillTextActive]}>
-              Today
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
-            style={[styles.filterPill, filterPeriod === 'all' && styles.filterPillActive]}
-            onPress={() => setFilterPeriod('all')}
-          >
-            <Text style={[styles.filterPillText, filterPeriod === 'all' && styles.filterPillTextActive]}>
-              All Time
-            </Text>
-          </TouchableOpacity>
+        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {/* Period Filter */}
+          <View style={styles.filterPills}>
+            <TouchableOpacity
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              style={[styles.filterPill, filterPeriod === 'today' && styles.filterPillActive]}
+              onPress={() => setFilterPeriod('today')}
+            >
+              <Text style={[styles.filterPillText, filterPeriod === 'today' && styles.filterPillTextActive]}>
+                Today
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              {...(Platform.OS === 'web' ? ({ className: 'interactive-btn' } as any) : {})}
+              style={[styles.filterPill, filterPeriod === 'all' && styles.filterPillActive]}
+              onPress={() => setFilterPeriod('all')}
+            >
+              <Text style={[styles.filterPillText, filterPeriod === 'all' && styles.filterPillTextActive]}>
+                All Time
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* OpEx vs CapEx Filter */}
+          <View style={styles.filterPills}>
+            <TouchableOpacity
+              style={[styles.filterPill, filterHeadType === 'all' && styles.filterPillActive]}
+              onPress={() => setFilterHeadType('all')}
+            >
+              <Text style={[styles.filterPillText, filterHeadType === 'all' && styles.filterPillTextActive]}>
+                All Heads
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, filterHeadType === 'opex' && styles.filterPillActive]}
+              onPress={() => setFilterHeadType('opex')}
+            >
+              <Text style={[styles.filterPillText, filterHeadType === 'opex' && styles.filterPillTextActive]}>
+                ⚡ OpEx
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.filterPill, filterHeadType === 'capex' && styles.filterPillActive]}
+              onPress={() => setFilterHeadType('capex')}
+            >
+              <Text style={[styles.filterPillText, filterHeadType === 'capex' && styles.filterPillTextActive]}>
+                💎 CapEx
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
 
@@ -433,8 +584,34 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
               </View>
               <View style={{ flex: 1 }}>
                 <View style={styles.itemTopRow}>
-                  <Text style={styles.itemCategory}>{exp.category}</Text>
-                  <Text style={styles.itemAmount}>- {money(exp.amount)}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', flex: 1 }}>
+                    <Text style={styles.itemCategory}>{exp.category}</Text>
+                    {exp.isCapEx || exp.headType === 'capex' ? (
+                      <View style={styles.capexBadge}>
+                        <Ionicons name="diamond" size={10} color="#854D0E" />
+                        <Text style={styles.capexBadgeText}>CapEx</Text>
+                      </View>
+                    ) : (
+                      <View style={styles.opexBadge}>
+                        <Ionicons name="flash" size={10} color="#0369A1" />
+                        <Text style={styles.opexBadgeText}>OpEx</Text>
+                      </View>
+                    )}
+                    {exp.sourcePOId ? (
+                      <View style={styles.poBadge}>
+                        <Ionicons name="cart" size={10} color="#0D9488" />
+                        <Text style={styles.poBadgeText}>Supplier PO</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <Text
+                    style={[
+                      styles.itemAmount,
+                      (exp.isCapEx || exp.headType === 'capex') && { color: '#B45309' },
+                    ]}
+                  >
+                    - {money(exp.amount)}
+                  </Text>
                 </View>
                 {exp.note && <Text style={styles.itemNote}>{`"${exp.note}"`}</Text>}
                 <Text style={styles.itemMeta}>
@@ -470,6 +647,132 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
           />
         </>
       )}
+
+      {/* -------------------- MANAGE ACCOUNT HEADS MODAL -------------------- */}
+      <Modal visible={isManageHeadsOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, isMobile && { width: '95%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="folder-open" size={20} color={BRAND.burgundy} />
+                <Text style={styles.modalTitle}>Manage Account Heads (Expense Categories)</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsManageHeadsOpen(false)}>
+                <Ionicons name="close" size={22} color="#64748B" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16 }}>
+              {/* Add New Head */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <TextInput
+                  style={[styles.modalInput, { flex: 1 }]}
+                  placeholder="New Head Name (e.g. Generator Fuel, Staff Tea)..."
+                  placeholderTextColor="#94A3B8"
+                  value={newHeadInput}
+                  onChangeText={setNewHeadInput}
+                />
+                <TouchableOpacity
+                  style={styles.modalAddBtn}
+                  onPress={() => {
+                    if (!newHeadInput.trim()) return;
+                    addExpenseCategory(newHeadInput.trim());
+                    setNewHeadInput('');
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                  <Text style={styles.modalAddBtnText}>Add Head</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 340 }} showsVerticalScrollIndicator={false}>
+                {expenseCategories.map((head) => {
+                  const count = (expenses || []).filter((e) => e.category === head).length;
+                  const isEditing = editingHeadOld === head;
+                  return (
+                    <View key={head} style={styles.headRowItem}>
+                      {isEditing ? (
+                        <View style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          <TextInput
+                            style={[styles.modalInput, { flex: 1, height: 36, paddingVertical: 4 }]}
+                            value={editingHeadNew}
+                            onChangeText={setEditingHeadNew}
+                            autoFocus
+                          />
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (editingHeadNew.trim() && editingHeadNew.trim() !== head) {
+                                renameExpenseCategory(head, editingHeadNew.trim());
+                              }
+                              setEditingHeadOld(null);
+                              setEditingHeadNew('');
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Ionicons name="checkmark-circle" size={22} color="#059669" />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setEditingHeadOld(null);
+                              setEditingHeadNew('');
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Ionicons name="close-circle" size={22} color="#DC2626" />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.headRowTitle}>{head}</Text>
+                            <Text style={styles.headRowCount}>{count} {count === 1 ? 'voucher recorded' : 'vouchers recorded'}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingHeadOld(head);
+                                setEditingHeadNew(head);
+                              }}
+                              style={{ padding: 6 }}
+                            >
+                              <Ionicons name="pencil-outline" size={17} color="#475569" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (count > 0) {
+                                  const warn = `Cannot delete "${head}" because ${count} expense voucher(s) are recorded under it.`;
+                                  if (Platform.OS === 'web') window.alert(warn);
+                                  else Alert.alert('Head in Use', warn);
+                                  return;
+                                }
+                                deleteExpenseCategory(head);
+                              }}
+                              style={{ padding: 6 }}
+                            >
+                              <Ionicons name="trash-outline" size={17} color="#DC2626" />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalDoneBtn}
+                onPress={() => setIsManageHeadsOpen(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalDoneBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -847,5 +1150,216 @@ const styles = StyleSheet.create({
     color: '#475569',
     marginTop: 4,
     textAlign: 'center',
+  },
+  manageHeadsBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: BRAND.burgundySoft,
+    borderWidth: 1,
+    borderColor: 'rgba(82, 23, 27, 0.2)',
+  },
+  manageHeadsBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: BRAND.burgundy,
+  },
+  headTypeToggleContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 14,
+    flexWrap: 'wrap',
+  },
+  headTypeBtn: {
+    flex: 1,
+    minWidth: 180,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  headTypeBtnActive: {
+    backgroundColor: '#0284C7',
+    borderColor: '#0284C7',
+  },
+  headTypeBtnCapExActive: {
+    backgroundColor: '#B45309',
+    borderColor: '#B45309',
+  },
+  headTypeBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  headTypeBtnTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+  },
+  inlineManageBtn: {
+    height: 48,
+    width: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  capexBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF9C3',
+    borderWidth: 1,
+    borderColor: '#FDE047',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  capexBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#854D0E',
+  },
+  opexBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#E0F2FE',
+    borderWidth: 1,
+    borderColor: '#BAE6FD',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  opexBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#0369A1',
+  },
+  poBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  poBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  modalTitle: {
+    fontSize: 15.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13.5,
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+  },
+  modalAddBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  modalAddBtnText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  headRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 6,
+    gap: 8,
+  },
+  headRowTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  headRowCount: {
+    fontSize: 11.5,
+    color: '#64748B',
+  },
+  modalFooter: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'flex-end',
+  },
+  modalDoneBtn: {
+    backgroundColor: BRAND.burgundy,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  modalDoneBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '800',
+    fontSize: 13.5,
   },
 });

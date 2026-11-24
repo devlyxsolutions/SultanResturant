@@ -193,6 +193,9 @@ export type Expense = {
   at: number;
   sourcePaymentId?: string;
   sourcePOId?: string;
+  isCapEx?: boolean;
+  headType?: 'opex' | 'capex';
+  assetId?: string;
 };
 
 export type GuestFeedback = {
@@ -427,13 +430,17 @@ export type Asset = {
   assetCode: string;
   name: string;
   urduName?: string;
-  category: AssetCategory;
+  category: AssetCategory | string;
   purchaseDate: number;
   cost: number;
   quantity: number;
   totalCost: number;
   vendor: string;
   vendorPhone?: string;
+  supplierId?: string;
+  supplierName?: string;
+  sourcePOId?: string;
+  isCapEx?: boolean;
   invoiceNo?: string;
   warrantyExpiry?: number;
   location: string;
@@ -528,6 +535,8 @@ export type OpsData = {
   serviceRequests: ServiceRequest[];
   inventory: InventoryItem[];
   inventoryCategories?: string[];
+  assetCategories?: string[];
+  expenseCategories?: string[];
   stockMovements: StockMovement[];
   chillerHandovers: ChillerHandoverRecord[];
   expenses: Expense[];
@@ -545,6 +554,8 @@ export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'serviceRequests',
   'inventory',
   'inventoryCategories',
+  'assetCategories',
+  'expenseCategories',
   'stockMovements',
   'chillerHandovers',
   'expenses',
@@ -631,6 +642,9 @@ type OpsState = OpsData & {
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
   updateExpense: (id: string, patch: Partial<Omit<Expense, 'id'>>) => void;
   deleteExpense: (id: string) => void;
+  addExpenseCategory: (category: string) => void;
+  renameExpenseCategory: (oldName: string, newName: string) => void;
+  deleteExpenseCategory: (category: string) => void;
 
   // Sold-out list
   setItemAvailability: (menuItemId: string, available: boolean) => void;
@@ -673,6 +687,9 @@ type OpsState = OpsData & {
   ) => void;
   updateAsset: (id: string, patch: Partial<Omit<Asset, 'id' | 'createdAt'>>) => void;
   deleteAsset: (id: string) => void;
+  addAssetCategory: (category: string) => void;
+  renameAssetCategory: (oldName: string, newName: string) => void;
+  deleteAssetCategory: (category: string) => void;
   addAssetMaintenanceLog: (
     assetId: string,
     log: Omit<AssetMaintenanceLog, 'id'>,
@@ -723,6 +740,8 @@ export const useOpsStore = create<OpsState>()(
       serviceRequests: [],
       inventory: INITIAL_INVENTORY,
       inventoryCategories: [...INVENTORY_CATEGORIES],
+      assetCategories: [...ASSET_CATEGORIES],
+      expenseCategories: [...EXPENSE_CATEGORIES],
       stockMovements: INITIAL_STOCK_MOVEMENTS,
       chillerHandovers: [],
       expenses: [],
@@ -1116,21 +1135,91 @@ export const useOpsStore = create<OpsState>()(
       },
 
       addExpense: (expense) => {
-        set((state) => ({
-          expenses: [{ ...expense, id: uid('ex'), at: expense.at ?? Date.now() }, ...state.expenses],
-        }));
+        const cat = (expense.category || '').trim();
+        set((state) => {
+          const currentCats = Array.isArray(state.expenseCategories) && state.expenseCategories.length > 0
+            ? state.expenseCategories
+            : [...EXPENSE_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+          return {
+            expenses: [{ ...expense, id: uid('ex'), at: expense.at ?? Date.now() }, ...state.expenses],
+            expenseCategories: nextCats,
+          };
+        });
         notifySync();
       },
 
       updateExpense: (id, patch) => {
-        set((state) => ({
-          expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
-        }));
+        set((state) => {
+          const cat = patch.category ? (patch.category || '').trim() : '';
+          const currentCats = Array.isArray(state.expenseCategories) && state.expenseCategories.length > 0
+            ? state.expenseCategories
+            : [...EXPENSE_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+          return {
+            expenses: state.expenses.map((e) => (e.id === id ? { ...e, ...patch } : e)),
+            expenseCategories: nextCats,
+          };
+        });
         notifySync();
       },
 
       deleteExpense: (id) => {
         set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) }));
+        notifySync();
+      },
+
+      addExpenseCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.expenseCategories) && state.expenseCategories.length > 0
+            ? state.expenseCategories
+            : [...EXPENSE_CATEGORIES];
+          if (currentCats.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+            return state;
+          }
+          return { expenseCategories: [...currentCats, clean] };
+        });
+        notifySync();
+      },
+
+      renameExpenseCategory: (oldName, newName) => {
+        const cleanOld = (oldName || '').trim();
+        const cleanNew = (newName || '').trim();
+        if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.expenseCategories) && state.expenseCategories.length > 0
+            ? state.expenseCategories
+            : [...EXPENSE_CATEGORIES];
+          const updatedCats = currentCats.map((c) => (c === cleanOld ? cleanNew : c));
+          const dedupedCats = Array.from(new Set(updatedCats));
+          return {
+            expenseCategories: dedupedCats,
+            expenses: state.expenses.map((e) =>
+              e.category === cleanOld ? { ...e, category: cleanNew } : e
+            ),
+          };
+        });
+        notifySync();
+      },
+
+      deleteExpenseCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.expenseCategories) && state.expenseCategories.length > 0
+            ? state.expenseCategories
+            : [...EXPENSE_CATEGORIES];
+          const filtered = currentCats.filter((c) => c !== clean);
+          return {
+            expenseCategories: filtered.length > 0 ? filtered : [...EXPENSE_CATEGORIES],
+          };
+        });
         notifySync();
       },
 
@@ -1247,7 +1336,18 @@ export const useOpsStore = create<OpsState>()(
                   const newTotal = newQty * newCost;
                   nextAssets = nextAssets.map((a) =>
                     a.id === existing.id
-                      ? { ...a, quantity: newQty, cost: newCost, totalCost: newTotal, currentValue: newTotal, updatedAt: now }
+                      ? {
+                          ...a,
+                          quantity: newQty,
+                          cost: newCost,
+                          totalCost: newTotal,
+                          currentValue: (a.currentValue || 0) + (qtyToAdd * newCost),
+                          supplierId: po.supplierId || a.supplierId,
+                          supplierName: po.supplierName || a.supplierName,
+                          invoiceNo: po.invoiceNo || a.invoiceNo,
+                          isCapEx: true,
+                          updatedAt: now,
+                        }
                       : a
                   );
                 } else {
@@ -1264,6 +1364,10 @@ export const useOpsStore = create<OpsState>()(
                     currentValue: total,
                     vendor: po.supplierName,
                     vendorPhone: supplier?.phone,
+                    supplierId: po.supplierId,
+                    supplierName: po.supplierName,
+                    sourcePOId: po.id,
+                    isCapEx: true,
                     invoiceNo: po.invoiceNo,
                     location: 'Main Store / Restaurant',
                     condition: 'brand_new',
@@ -1313,8 +1417,10 @@ export const useOpsStore = create<OpsState>()(
           let nextExpenses = state.expenses;
           if (autoRecordExpense && po.amountPaid > 0) {
             let expenseCategory: any = 'Groceries & Produce';
+            let isCapEx = false;
             if (isAssetPurchase) {
-              expenseCategory = 'Maintenance & Repair';
+              expenseCategory = 'Capital Asset Purchases (CapEx)';
+              isCapEx = true;
             } else if (supplier?.category === 'Meat & Poultry') {
               expenseCategory = 'Meat & Poultry';
             } else if (supplier?.category === 'Dairy & Bakery') {
@@ -1329,11 +1435,13 @@ export const useOpsStore = create<OpsState>()(
                 id: uid('ex'),
                 category: expenseCategory,
                 amount: po.amountPaid,
-                note: `PO #${po.poNumber} Payment to ${po.supplierName}${isAssetPurchase ? ' (Asset Purchase)' : ''}`,
+                note: `PO #${po.poNumber} Payment to ${po.supplierName}${isAssetPurchase ? ' (CapEx Purchase)' : ''}`,
                 method: po.paymentMethod === 'online' ? 'online' : 'cash',
                 paidBy: receivedBy || po.receivedBy || 'Admin',
                 at: now,
                 sourcePOId: po.id,
+                isCapEx,
+                headType: isCapEx ? 'capex' : 'opex',
               },
               ...nextExpenses,
             ];
@@ -1378,39 +1486,98 @@ export const useOpsStore = create<OpsState>()(
           const po = state.purchaseOrders.find((p) => p.id === poId);
           if (!po) return state;
           const now = Date.now();
+          const supplier = state.suppliers.find((s) => s.id === po.supplierId);
+          const isAssetPurchase = po.supplierType === 'assets' || supplier?.supplierType === 'assets';
 
           let nextInventory = state.inventory;
           let nextMovements = state.stockMovements;
+          let nextAssets = state.assets;
 
           const updatedItems = po.items.map((item) => {
             const match = receivedItems?.find((ri) => (ri.itemId && ri.itemId === item.itemId) || ri.itemId === item.name);
             const qtyRec = match ? match.qtyReceived : item.qtyOrdered;
 
-            // Increment inventory stock
-            const existing = nextInventory.find(
-              (inv) => (item.itemId && inv.id === item.itemId) || inv.name.toLowerCase() === item.name.toLowerCase()
-            );
-            if (existing && qtyRec > 0) {
-              const newStock = existing.stock + qtyRec;
-              nextInventory = nextInventory.map((inv) =>
-                inv.id === existing.id
-                  ? { ...inv, stock: newStock, costPerUnit: item.unitCost || inv.costPerUnit, updatedAt: now }
-                  : inv
+            if (isAssetPurchase) {
+              if (qtyRec > 0) {
+                const existing = nextAssets.find(
+                  (a) => (item.itemId && a.id === item.itemId) || a.name.toLowerCase() === item.name.toLowerCase()
+                );
+                if (existing) {
+                  const newQty = existing.quantity + qtyRec;
+                  const newCost = item.unitCost || existing.cost;
+                  const newTotal = newQty * newCost;
+                  nextAssets = nextAssets.map((a) =>
+                    a.id === existing.id
+                      ? {
+                          ...a,
+                          quantity: newQty,
+                          cost: newCost,
+                          totalCost: newTotal,
+                          currentValue: (a.currentValue || 0) + (qtyRec * newCost),
+                          supplierId: po.supplierId || a.supplierId,
+                          supplierName: po.supplierName || a.supplierName,
+                          invoiceNo: po.invoiceNo || a.invoiceNo,
+                          isCapEx: true,
+                          updatedAt: now,
+                        }
+                      : a
+                  );
+                } else {
+                  const total = qtyRec * (item.unitCost || 0);
+                  const newAsset: Asset = {
+                    id: uid('ast'),
+                    assetCode: `AST-${Date.now().toString().slice(-4)}`,
+                    name: item.name,
+                    category: (item.category as AssetCategory) || (supplier?.category as AssetCategory) || 'Other Capital Assets',
+                    purchaseDate: now,
+                    cost: item.unitCost || 0,
+                    quantity: qtyRec,
+                    totalCost: total,
+                    currentValue: total,
+                    vendor: po.supplierName,
+                    vendorPhone: supplier?.phone,
+                    supplierId: po.supplierId,
+                    supplierName: po.supplierName,
+                    sourcePOId: po.id,
+                    isCapEx: true,
+                    invoiceNo: po.invoiceNo,
+                    location: 'Main Store / Restaurant',
+                    condition: 'brand_new',
+                    status: 'active',
+                    maintenanceLogs: [],
+                    createdAt: now,
+                    updatedAt: now,
+                  };
+                  nextAssets = [newAsset, ...nextAssets];
+                }
+              }
+            } else {
+              // Increment inventory stock
+              const existing = nextInventory.find(
+                (inv) => (item.itemId && inv.id === item.itemId) || inv.name.toLowerCase() === item.name.toLowerCase()
               );
-              nextMovements = [
-                {
-                  id: uid('mv'),
-                  itemId: existing.id,
-                  itemName: existing.name,
-                  type: 'receive' as StockMovementType,
-                  qty: qtyRec,
-                  delta: qtyRec,
-                  note: `Received PO #${po.poNumber} from ${po.supplierName}`,
-                  by: receivedBy || 'Admin',
-                  at: now,
-                },
-                ...nextMovements,
-              ];
+              if (existing && qtyRec > 0) {
+                const newStock = existing.stock + qtyRec;
+                nextInventory = nextInventory.map((inv) =>
+                  inv.id === existing.id
+                    ? { ...inv, stock: newStock, costPerUnit: item.unitCost || inv.costPerUnit, updatedAt: now }
+                    : inv
+                );
+                nextMovements = [
+                  {
+                    id: uid('mv'),
+                    itemId: existing.id,
+                    itemName: existing.name,
+                    type: 'receive' as StockMovementType,
+                    qty: qtyRec,
+                    delta: qtyRec,
+                    note: `Received PO #${po.poNumber} from ${po.supplierName}`,
+                    by: receivedBy || 'Admin',
+                    at: now,
+                  },
+                  ...nextMovements,
+                ];
+              }
             }
 
             return {
@@ -1433,6 +1600,7 @@ export const useOpsStore = create<OpsState>()(
             ),
             inventory: nextInventory,
             stockMovements: nextMovements.slice(0, MAX_MOVEMENTS),
+            assets: nextAssets,
           };
         });
         notifySync();
@@ -1574,26 +1742,48 @@ export const useOpsStore = create<OpsState>()(
       },
 
       // Assets & Capital Purchases
-      addAsset: (asset) =>
+      addAsset: (asset) => {
+        const cat = (asset.category || '').trim();
         set((state) => {
           const now = Date.now();
           const totalCost = asset.totalCost !== undefined ? asset.totalCost : asset.cost * asset.quantity;
           const currentValue = asset.currentValue !== undefined ? asset.currentValue : totalCost;
+          const currentCats = Array.isArray(state.assetCategories) && state.assetCategories.length > 0
+            ? state.assetCategories
+            : [...ASSET_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+
           const newAsset: Asset = {
             ...asset,
             id: uid('ast'),
             assetCode: asset.assetCode || `AST-${Date.now().toString().slice(-4)}`,
             totalCost,
             currentValue,
+            isCapEx: asset.isCapEx !== undefined ? asset.isCapEx : true,
             maintenanceLogs: [],
             createdAt: now,
             updatedAt: now,
           };
-          return { assets: [newAsset, ...state.assets] };
-        }),
+          return {
+            assets: [newAsset, ...state.assets],
+            assetCategories: nextCats,
+          };
+        });
+        notifySync();
+      },
 
-      updateAsset: (id, patch) =>
+      updateAsset: (id, patch) => {
+        const cat = patch.category ? (patch.category || '').trim() : '';
         set((state) => {
+          const currentCats = Array.isArray(state.assetCategories) && state.assetCategories.length > 0
+            ? state.assetCategories
+            : [...ASSET_CATEGORIES];
+          const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
+            ? [...currentCats, cat]
+            : currentCats;
+
           const updated = state.assets.map((ast) => {
             if (ast.id !== id) return ast;
             const cost = patch.cost !== undefined ? patch.cost : ast.cost;
@@ -1608,11 +1798,65 @@ export const useOpsStore = create<OpsState>()(
               updatedAt: Date.now(),
             };
           });
-          return { assets: updated };
-        }),
+          return { assets: updated, assetCategories: nextCats };
+        });
+        notifySync();
+      },
 
-      deleteAsset: (id) =>
-        set((state) => ({ assets: state.assets.filter((a) => a.id !== id) })),
+      deleteAsset: (id) => {
+        set((state) => ({ assets: state.assets.filter((a) => a.id !== id) }));
+        notifySync();
+      },
+
+      addAssetCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.assetCategories) && state.assetCategories.length > 0
+            ? state.assetCategories
+            : [...ASSET_CATEGORIES];
+          if (currentCats.some((c) => c.toLowerCase() === clean.toLowerCase())) {
+            return state;
+          }
+          return { assetCategories: [...currentCats, clean] };
+        });
+        notifySync();
+      },
+
+      renameAssetCategory: (oldName, newName) => {
+        const cleanOld = (oldName || '').trim();
+        const cleanNew = (newName || '').trim();
+        if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.assetCategories) && state.assetCategories.length > 0
+            ? state.assetCategories
+            : [...ASSET_CATEGORIES];
+          const updatedCats = currentCats.map((c) => (c === cleanOld ? cleanNew : c));
+          const dedupedCats = Array.from(new Set(updatedCats));
+          return {
+            assetCategories: dedupedCats,
+            assets: state.assets.map((a) =>
+              a.category === cleanOld ? { ...a, category: cleanNew, updatedAt: Date.now() } : a
+            ),
+          };
+        });
+        notifySync();
+      },
+
+      deleteAssetCategory: (category) => {
+        const clean = (category || '').trim();
+        if (!clean) return;
+        set((state) => {
+          const currentCats = Array.isArray(state.assetCategories) && state.assetCategories.length > 0
+            ? state.assetCategories
+            : [...ASSET_CATEGORIES];
+          const filtered = currentCats.filter((c) => c !== clean);
+          return {
+            assetCategories: filtered.length > 0 ? filtered : [...ASSET_CATEGORIES],
+          };
+        });
+        notifySync();
+      },
 
       addAssetMaintenanceLog: (assetId, log, options) => {
         const now = Date.now();
@@ -1648,10 +1892,11 @@ export const useOpsStore = create<OpsState>()(
             };
           }),
         }));
+        notifySync();
       },
 
       // Damage Control & Breakages
-      logDamageIncident: (record) =>
+      logDamageIncident: (record) => {
         set((state) => {
           const now = Date.now();
           const totalLoss = record.totalLoss !== undefined ? record.totalLoss : record.quantity * record.unitCost;
@@ -1667,9 +1912,11 @@ export const useOpsStore = create<OpsState>()(
             createdAt: now,
           };
           return { damageRecords: [newDmg, ...state.damageRecords] };
-        }),
+        });
+        notifySync();
+      },
 
-      updateDamageRecord: (id, patch) =>
+      updateDamageRecord: (id, patch) => {
         set((state) => {
           const updated = state.damageRecords.map((d) => {
             if (d.id !== id) return d;
@@ -1689,12 +1936,16 @@ export const useOpsStore = create<OpsState>()(
             };
           });
           return { damageRecords: updated };
-        }),
+        });
+        notifySync();
+      },
 
-      deleteDamageRecord: (id) =>
-        set((state) => ({ damageRecords: state.damageRecords.filter((d) => d.id !== id) })),
+      deleteDamageRecord: (id) => {
+        set((state) => ({ damageRecords: state.damageRecords.filter((d) => d.id !== id) }));
+        notifySync();
+      },
 
-      resolveDamageRecord: (id, resolution) =>
+      resolveDamageRecord: (id, resolution) => {
         set((state) => {
           const updated = state.damageRecords.map((d) => {
             if (d.id !== id) return d;
@@ -1711,7 +1962,9 @@ export const useOpsStore = create<OpsState>()(
             };
           });
           return { damageRecords: updated };
-        }),
+        });
+        notifySync();
+      },
 
       syncFromServer: (remote) =>
         set((state) => {
@@ -1720,6 +1973,12 @@ export const useOpsStore = create<OpsState>()(
           if (Array.isArray(remote.inventory)) next.inventory = remote.inventory;
           if (Array.isArray(remote.inventoryCategories) && remote.inventoryCategories.length > 0) {
             next.inventoryCategories = remote.inventoryCategories;
+          }
+          if (Array.isArray(remote.assetCategories) && remote.assetCategories.length > 0) {
+            next.assetCategories = remote.assetCategories;
+          }
+          if (Array.isArray(remote.expenseCategories) && remote.expenseCategories.length > 0) {
+            next.expenseCategories = remote.expenseCategories;
           }
           if (Array.isArray(remote.stockMovements)) {
             next.stockMovements = [...remote.stockMovements]
@@ -1783,6 +2042,8 @@ export function getOpsSyncState(): OpsData {
     serviceRequests: s.serviceRequests,
     inventory: s.inventory,
     inventoryCategories: s.inventoryCategories,
+    assetCategories: s.assetCategories || [...ASSET_CATEGORIES],
+    expenseCategories: s.expenseCategories || [...EXPENSE_CATEGORIES],
     stockMovements: s.stockMovements,
     chillerHandovers: s.chillerHandovers || [],
     expenses: s.expenses,

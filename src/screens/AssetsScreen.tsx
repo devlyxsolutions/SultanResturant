@@ -91,6 +91,11 @@ export default function AssetsScreen({
   const user = useAuthStore((s) => s.user);
   const { canAddAssets, canEditAssets, canDeleteAssets } = useRolePermissions();
   const assets = useOpsStore((s) => s.assets || []);
+  const assetCategories = useOpsStore((s) => s.assetCategories && s.assetCategories.length > 0 ? s.assetCategories : [...ASSET_CATEGORIES]);
+  const addAssetCategory = useOpsStore((s) => s.addAssetCategory);
+  const renameAssetCategory = useOpsStore((s) => s.renameAssetCategory);
+  const deleteAssetCategory = useOpsStore((s) => s.deleteAssetCategory);
+  const suppliers = useOpsStore((s) => s.suppliers || []);
   const damageRecords = useOpsStore((s) => s.damageRecords || []);
   const addAsset = useOpsStore((s) => s.addAsset);
   const updateAsset = useOpsStore((s) => s.updateAsset);
@@ -104,6 +109,11 @@ export default function AssetsScreen({
 
   // Modals
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isManageCategoriesOpen, setIsManageCategoriesOpen] = useState(false);
+  const [newCatInput, setNewCatInput] = useState('');
+  const [editingCategoryOld, setEditingCategoryOld] = useState<string | null>(null);
+  const [editingCategoryNew, setEditingCategoryNew] = useState('');
+
   const [editingAsset, setEditingAsset] = useState<Asset | null>(null);
   const [maintenanceAsset, setMaintenanceAsset] = useState<Asset | null>(null);
   const [viewAsset, setViewAsset] = useState<Asset | null>(null);
@@ -111,9 +121,10 @@ export default function AssetsScreen({
   // Form State
   const [formName, setFormName] = useState('');
   const [formUrduName, setFormUrduName] = useState('');
-  const [formCategory, setFormCategory] = useState<AssetCategory>(ASSET_CATEGORIES[0]);
+  const [formCategory, setFormCategory] = useState<string>(assetCategories[0] || ASSET_CATEGORIES[0]);
   const [formCost, setFormCost] = useState('');
   const [formQty, setFormQty] = useState('1');
+  const [formSupplierId, setFormSupplierId] = useState('');
   const [formVendor, setFormVendor] = useState('');
   const [formVendorPhone, setFormVendorPhone] = useState('');
   const [formInvoiceNo, setFormInvoiceNo] = useState('');
@@ -123,6 +134,7 @@ export default function AssetsScreen({
   const [formDepreciationRate, setFormDepreciationRate] = useState('10');
   const [formSerial, setFormSerial] = useState('');
   const [formNotes, setFormNotes] = useState('');
+  const [formIsCapEx, setFormIsCapEx] = useState(true);
 
   // Maintenance Form State
   const [maintCost, setMaintCost] = useState('');
@@ -194,9 +206,10 @@ export default function AssetsScreen({
     setEditingAsset(null);
     setFormName('');
     setFormUrduName('');
-    setFormCategory(ASSET_CATEGORIES[0]);
+    setFormCategory(assetCategories[0] || ASSET_CATEGORIES[0]);
     setFormCost('');
     setFormQty('1');
+    setFormSupplierId('');
     setFormVendor('');
     setFormVendorPhone('');
     setFormInvoiceNo('');
@@ -206,6 +219,7 @@ export default function AssetsScreen({
     setFormDepreciationRate('10');
     setFormSerial('');
     setFormNotes('');
+    setFormIsCapEx(true);
     setIsAddModalOpen(true);
   };
 
@@ -220,6 +234,7 @@ export default function AssetsScreen({
     setFormCategory(ast.category);
     setFormCost(String(ast.cost));
     setFormQty(String(ast.quantity || 1));
+    setFormSupplierId(ast.supplierId || '');
     setFormVendor(ast.vendor);
     setFormVendorPhone(ast.vendorPhone || '');
     setFormInvoiceNo(ast.invoiceNo || '');
@@ -229,6 +244,7 @@ export default function AssetsScreen({
     setFormDepreciationRate(String(ast.depreciationRateYearly || 10));
     setFormSerial(ast.serialNumber || '');
     setFormNotes(ast.notes || '');
+    setFormIsCapEx(ast.isCapEx !== undefined ? ast.isCapEx : true);
     setIsAddModalOpen(true);
   };
 
@@ -258,6 +274,9 @@ export default function AssetsScreen({
     }
     const depRate = parseFloat(formDepreciationRate) || 10;
     const totalCost = cost * qty;
+    const selectedSupplier = suppliers.find((s) => s.id === formSupplierId);
+    const finalVendor = selectedSupplier ? selectedSupplier.name : (formVendor.trim() || 'General Vendor');
+    const finalPhone = selectedSupplier ? (selectedSupplier.phone || formVendorPhone.trim()) : (formVendorPhone.trim() || undefined);
 
     if (editingAsset) {
       updateAsset(editingAsset.id, {
@@ -267,8 +286,11 @@ export default function AssetsScreen({
         cost,
         quantity: qty,
         totalCost,
-        vendor: formVendor.trim() || 'General Vendor',
-        vendorPhone: formVendorPhone.trim() || undefined,
+        vendor: finalVendor,
+        vendorPhone: finalPhone,
+        supplierId: formSupplierId || undefined,
+        supplierName: selectedSupplier ? selectedSupplier.name : undefined,
+        isCapEx: formIsCapEx,
         invoiceNo: formInvoiceNo.trim() || undefined,
         location: formLocation.trim() || 'Main Kitchen',
         condition: formCondition,
@@ -288,8 +310,11 @@ export default function AssetsScreen({
         cost,
         quantity: qty,
         totalCost,
-        vendor: formVendor.trim() || 'General Vendor',
-        vendorPhone: formVendorPhone.trim() || undefined,
+        vendor: finalVendor,
+        vendorPhone: finalPhone,
+        supplierId: formSupplierId || undefined,
+        supplierName: selectedSupplier ? selectedSupplier.name : undefined,
+        isCapEx: formIsCapEx,
         invoiceNo: formInvoiceNo.trim() || undefined,
         location: formLocation.trim() || 'Main Kitchen',
         condition: formCondition,
@@ -397,12 +422,25 @@ export default function AssetsScreen({
           </View>
         </View>
 
-        {canAddAssets && (
-          <TouchableOpacity style={styles.addAssetBtn} onPress={openAddModal} activeOpacity={0.85}>
-            <Ionicons name="add-circle" size={18} color="#FFFFFF" />
-            <Text style={styles.addAssetBtnText}>+ Add Capital Asset</Text>
+        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          <TouchableOpacity
+            style={[styles.addAssetBtn, { backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#CBD5E1' }]}
+            onPress={() => setIsManageCategoriesOpen(true)}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="folder-open-outline" size={17} color={LIGHT.burgundy} />
+            <Text style={[styles.addAssetBtnText, { color: LIGHT.burgundy }]}>
+              Categories ({assetCategories.length})
+            </Text>
           </TouchableOpacity>
-        )}
+
+          {canAddAssets && (
+            <TouchableOpacity style={styles.addAssetBtn} onPress={openAddModal} activeOpacity={0.85}>
+              <Ionicons name="add-circle" size={18} color="#FFFFFF" />
+              <Text style={styles.addAssetBtnText}>+ Add Capital Asset</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
 
       <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
@@ -486,7 +524,7 @@ export default function AssetsScreen({
               placeholder="All Categories"
               options={[
                 { label: `All Categories (${assets.length})`, value: 'All' },
-                ...ASSET_CATEGORIES.map((cat) => ({
+                ...assetCategories.map((cat) => ({
                   label: `${cat} (${assets.filter((a) => a.category === cat).length})`,
                   value: cat,
                 })),
@@ -589,6 +627,18 @@ export default function AssetsScreen({
                           <Ionicons name="pricetag-outline" size={11} color={LIGHT.burgundy} />
                           <Text style={styles.categoryBadgeCompactText} numberOfLines={1}>{ast.category}</Text>
                         </View>
+                        {ast.isCapEx ? (
+                          <View style={styles.capexBadge}>
+                            <Ionicons name="diamond" size={9} color="#B48214" />
+                            <Text style={styles.capexBadgeText}>CapEx</Text>
+                          </View>
+                        ) : null}
+                        {ast.supplierName ? (
+                          <View style={styles.supplierBadge}>
+                            <Ionicons name="business" size={9} color="#0D9488" />
+                            <Text style={styles.supplierBadgeText} numberOfLines={1}>{ast.supplierName}</Text>
+                          </View>
+                        ) : null}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
                           <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
                           <Text style={styles.rowLocationText} numberOfLines={1}>{ast.location || 'Kitchen'}</Text>
@@ -697,14 +747,27 @@ export default function AssetsScreen({
 
                     {/* 2. Category & Location */}
                     <View style={[styles.rowCol, { flex: 2.2, minWidth: 170, gap: 2 }]}>
-                      <View style={styles.categoryBadgeCompact}>
-                        <Ionicons name="pricetag-outline" size={10} color={LIGHT.burgundy} />
-                        <Text style={styles.categoryBadgeCompactText} numberOfLines={1}>{ast.category}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
+                        <View style={styles.categoryBadgeCompact}>
+                          <Ionicons name="pricetag-outline" size={10} color={LIGHT.burgundy} />
+                          <Text style={styles.categoryBadgeCompactText} numberOfLines={1}>{ast.category}</Text>
+                        </View>
+                        {ast.isCapEx ? (
+                          <View style={styles.capexBadge}>
+                            <Ionicons name="diamond" size={9} color="#B48214" />
+                            <Text style={styles.capexBadgeText}>CapEx</Text>
+                          </View>
+                        ) : null}
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, flexWrap: 'wrap' }}>
                         <Ionicons name="location-outline" size={11} color={LIGHT.burgundy} />
                         <Text style={styles.rowLocationText} numberOfLines={1}>{ast.location || 'Kitchen'}</Text>
-                        {ast.vendor ? (
+                        {ast.supplierName ? (
+                          <View style={styles.supplierBadge}>
+                            <Ionicons name="business" size={9} color="#0D9488" />
+                            <Text style={styles.supplierBadgeText} numberOfLines={1}>{ast.supplierName}</Text>
+                          </View>
+                        ) : ast.vendor ? (
                           <Text style={styles.rowVendorText} numberOfLines={1}>• {ast.vendor}</Text>
                         ) : null}
                       </View>
@@ -858,17 +921,51 @@ export default function AssetsScreen({
                 />
               </View>
 
-              {/* Category Dropdown */}
-              <RoyalDropdown
-                label="Asset Category"
-                required
-                icon="pricetag-outline"
-                placeholder="Select asset category..."
-                options={ASSET_CATEGORIES}
-                value={formCategory}
-                onSelect={(cat) => setFormCategory(cat as AssetCategory)}
-                searchable
-              />
+              {/* Category Dropdown with Manage Shortcut */}
+              <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <RoyalDropdown
+                    label="Asset Category"
+                    required
+                    icon="pricetag-outline"
+                    placeholder="Select asset category..."
+                    options={assetCategories.map((cat) => ({ label: cat, value: cat }))}
+                    value={formCategory}
+                    onSelect={(cat) => setFormCategory(cat)}
+                    searchable
+                  />
+                </View>
+                <TouchableOpacity
+                  style={styles.inlineManageBtn}
+                  onPress={() => setIsManageCategoriesOpen(true)}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="folder-open-outline" size={18} color={LIGHT.burgundy} />
+                </TouchableOpacity>
+              </View>
+
+              {/* CapEx vs Regular Outlay Toggle */}
+              <TouchableOpacity
+                style={[styles.capexToggleBox, formIsCapEx && styles.capexToggleBoxActive]}
+                onPress={() => setFormIsCapEx(!formIsCapEx)}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={formIsCapEx ? 'diamond' : 'square-outline'}
+                  size={20}
+                  color={formIsCapEx ? '#B48214' : LIGHT.textSecondary}
+                />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.capexToggleTitle, formIsCapEx && { color: '#854D0E' }]}>
+                    Capital Investment (CapEx Asset)
+                  </Text>
+                  <Text style={styles.capexToggleSub}>
+                    {formIsCapEx
+                      ? 'Capitalized balance sheet equipment. Excluded from daily operating expenses.'
+                      : 'Operational expense asset.'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
 
               {/* Cost & Qty */}
               <View style={styles.twoCol}>
@@ -897,10 +994,34 @@ export default function AssetsScreen({
                 </View>
               </View>
 
+              {/* Linked Registered Supplier */}
+              <RoyalDropdown
+                label="Registered Supplier (Sync with Ledger)"
+                icon="business-outline"
+                placeholder="Direct / Cash Purchase (No registered supplier)"
+                options={[
+                  { label: 'Direct / Cash Purchase (No registered supplier)', value: '' },
+                  ...suppliers.map((s) => ({
+                    label: `${s.name}${s.category ? ` (${s.category})` : ''}`,
+                    value: s.id,
+                  })),
+                ]}
+                value={formSupplierId}
+                onSelect={(supId) => {
+                  setFormSupplierId(supId);
+                  const found = suppliers.find((s) => s.id === supId);
+                  if (found) {
+                    setFormVendor(found.name);
+                    if (found.phone) setFormVendorPhone(found.phone);
+                  }
+                }}
+                searchable
+              />
+
               {/* Vendor & Phone */}
               <View style={styles.twoCol}>
                 <View style={[styles.inputGroup, { flex: 1, minWidth: 160 }]}>
-                  <Text style={styles.inputLabel}>Vendor / Supplier Name</Text>
+                  <Text style={styles.inputLabel}>Vendor / Counter Party Name</Text>
                   <TextInput
                     style={styles.input}
                     placeholder="e.g. Pak Kitchen Tech Ltd"
@@ -1300,6 +1421,128 @@ export default function AssetsScreen({
               >
                 <Ionicons name="print-outline" size={18} color="#FFFFFF" />
                 <Text style={styles.modalSubmitText}>Print Audit Slip</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* -------------------- MANAGE ASSET CATEGORIES MODAL -------------------- */}
+      <Modal visible={isManageCategoriesOpen} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 520 }, isMobile && { width: '95%' }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Ionicons name="folder-open" size={20} color={LIGHT.burgundy} />
+                <Text style={styles.modalTitle}>Manage Asset Categories</Text>
+              </View>
+              <TouchableOpacity onPress={() => setIsManageCategoriesOpen(false)}>
+                <Ionicons name="close" size={22} color={LIGHT.textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16 }}>
+              {/* Add New Category */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <TextInput
+                  style={[styles.input, { flex: 1 }]}
+                  placeholder="New Category name (e.g. Solar & Energy)..."
+                  placeholderTextColor={LIGHT.textDim}
+                  value={newCatInput}
+                  onChangeText={setNewCatInput}
+                />
+                <TouchableOpacity
+                  style={[styles.modalSubmitBtn, { paddingHorizontal: 14 }]}
+                  onPress={() => {
+                    if (!newCatInput.trim()) return;
+                    addAssetCategory(newCatInput.trim());
+                    setNewCatInput('');
+                  }}
+                >
+                  <Ionicons name="add" size={18} color="#FFFFFF" />
+                  <Text style={styles.modalSubmitText}>Add</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                {assetCategories.map((cat) => {
+                  const count = assets.filter((a) => a.category === cat).length;
+                  const isEditing = editingCategoryOld === cat;
+                  return (
+                    <View key={cat} style={styles.catRowItem}>
+                      {isEditing ? (
+                        <View style={{ flex: 1, flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          <TextInput
+                            style={[styles.input, { flex: 1, height: 36, paddingVertical: 4 }]}
+                            value={editingCategoryNew}
+                            onChangeText={setEditingCategoryNew}
+                            autoFocus
+                          />
+                          <TouchableOpacity
+                            onPress={() => {
+                              if (editingCategoryNew.trim() && editingCategoryNew.trim() !== cat) {
+                                renameAssetCategory(cat, editingCategoryNew.trim());
+                              }
+                              setEditingCategoryOld(null);
+                              setEditingCategoryNew('');
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Ionicons name="checkmark-circle" size={22} color={LIGHT.emerald} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              setEditingCategoryOld(null);
+                              setEditingCategoryNew('');
+                            }}
+                            style={{ padding: 6 }}
+                          >
+                            <Ionicons name="close-circle" size={22} color={LIGHT.rose} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.catRowTitle}>{cat}</Text>
+                            <Text style={styles.catRowCount}>{count} {count === 1 ? 'asset item' : 'asset items'}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 4 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                setEditingCategoryOld(cat);
+                                setEditingCategoryNew(cat);
+                              }}
+                              style={{ padding: 6 }}
+                            >
+                              <Ionicons name="pencil-outline" size={17} color="#475569" />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                if (count > 0) {
+                                  alertMsg('Category in Use', `Cannot delete "${cat}" because ${count} asset(s) are assigned to it. Please reassign them first.`);
+                                  return;
+                                }
+                                deleteAssetCategory(cat);
+                              }}
+                              style={{ padding: 6 }}
+                            >
+                              <Ionicons name="trash-outline" size={17} color={LIGHT.rose} />
+                            </TouchableOpacity>
+                          </View>
+                        </>
+                      )}
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            <View style={styles.modalFooter}>
+              <TouchableOpacity
+                style={styles.modalSubmitBtn}
+                onPress={() => setIsManageCategoriesOpen(false)}
+              >
+                <Text style={styles.modalSubmitText}>Done</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1997,5 +2240,95 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontWeight: '800',
     color: '#BE123C',
+  },
+  supplierBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  supplierBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
+  capexBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FEF9C3',
+    borderWidth: 1,
+    borderColor: '#FDE047',
+    paddingHorizontal: 5,
+    paddingVertical: 1.5,
+    borderRadius: 4,
+  },
+  capexBadgeText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#854D0E',
+  },
+  inlineManageBtn: {
+    height: 48,
+    width: 48,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  capexToggleBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+    marginBottom: 14,
+  },
+  capexToggleBoxActive: {
+    borderColor: '#FACC15',
+    backgroundColor: '#FEFCE8',
+  },
+  capexToggleTitle: {
+    fontSize: 13.5,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  capexToggleSub: {
+    fontSize: 11.5,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  catRowItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    marginBottom: 6,
+    gap: 8,
+  },
+  catRowTitle: {
+    fontSize: 13.5,
+    fontWeight: '700',
+    color: '#1E293B',
+  },
+  catRowCount: {
+    fontSize: 11.5,
+    color: '#64748B',
   },
 });

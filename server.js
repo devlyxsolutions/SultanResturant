@@ -6219,6 +6219,8 @@ function computeStateFingerprint(st) {
       customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
       inventoryLen: Array.isArray(st.inventory) ? st.inventory.length : 0,
       inventoryCategoriesKey: Array.isArray(st.inventoryCategories) ? st.inventoryCategories.join('|') : '',
+      assetCategoriesKey: Array.isArray(st.assetCategories) ? st.assetCategories.join('|') : '',
+      expenseCategoriesKey: Array.isArray(st.expenseCategories) ? st.expenseCategories.join('|') : '',
       suppliersLen: Array.isArray(st.suppliers) ? st.suppliers.length : 0,
       recipesLen: Array.isArray(st.recipes) ? st.recipes.length : 0,
       expensesLen: Array.isArray(st.expenses) ? st.expenses.length : 0,
@@ -6326,7 +6328,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
@@ -6907,6 +6909,8 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 serviceRequests: serverState.serviceRequests || [],
                 inventory: serverState.inventory || [],
                 inventoryCategories: serverState.inventoryCategories || [],
+                assetCategories: serverState.assetCategories || [],
+                expenseCategories: serverState.expenseCategories || [],
                 stockMovements: serverState.stockMovements || [],
                 expenses: serverState.expenses || [],
                 suppliers: serverState.suppliers || [],
