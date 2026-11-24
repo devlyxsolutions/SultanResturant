@@ -214,21 +214,16 @@ export default function POSTerminalScreen({
   const prefillCustomerAddress = searchParams.prefillCustomerAddress as string | undefined;
   const paramOrderType = searchParams.orderType as string | undefined;
 
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1120;
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width >= 900 && width > height;
+  const isTablet = (width >= 600 && width < 1120);
+  const isMobile = width < 768 || (width < 900 && width <= height);
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
   const [categorySearchQuery, setCategorySearchQuery] = useState('');
   const [tableSearchQuery, setTableSearchQuery] = useState('');
   const [pendingOrderSearchQuery, setPendingOrderSearchQuery] = useState('');
-  const [nowTick, setNowTick] = useState(() => Date.now());
-
-  useEffect(() => {
-    const timer = setInterval(() => setNowTick(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, []);
 
   const user = useAuthStore((state) => state.user);
   const { can, roleName, permissions } = useRolePermissions();
@@ -315,6 +310,14 @@ export default function POSTerminalScreen({
   const [tableModalVisible, setTableModalVisible] = useState(false);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [pendingOrdersModalVisible, setPendingOrdersModalVisible] = useState(false);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+
+  useEffect(() => {
+    // Only tick frequently when running tickets view/modal is active to avoid 1-second render thrashing during billing
+    const intervalMs = (mobileTab === 'running' || pendingOrdersModalVisible) ? 1000 : 15000;
+    const timer = setInterval(() => setNowTick(Date.now()), intervalMs);
+    return () => clearInterval(timer);
+  }, [mobileTab, pendingOrdersModalVisible]);
   const [kdsModalFilter, setKdsModalFilter] = useState<'all' | 'pending' | 'cooking' | 'ready' | 'takeaway' | 'dine-in' | 'delivery'>('all');
   const [kdsStatusToast, setKdsStatusToast] = useState<string | null>(null);
   const [customerSearchQuery, setCustomerSearchQuery] = useState('');
@@ -1566,105 +1569,107 @@ export default function POSTerminalScreen({
       </View>
 
       {/* ========================================================
-          FULL-PAGE MODE SWITCHER (ON ALL DEVICES: MENU vs CART vs RUNNING KDS)
+          PORTRAIT MODE SWITCHER (ON PHONES & PORTRAIT TABLETS: MENU vs CART vs RUNNING KDS)
           ======================================================== */}
-      <View style={styles.mobileTabBar}>
-        <TouchableOpacity
-          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-          onPress={() => setMobileTab('menu')}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="restaurant"
-            size={18}
-            color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
-          />
-          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order / Menu Dishes ({filteredItems.length})
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-          onPress={() => setMobileTab('cart')}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="cart"
-            size={19}
-            color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
-          />
-          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-            2. Current Cart & Bill ({totalCartQty}
-            {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
-          </Text>
-          {totalCartQty > 0 && (
-            <View
-              style={{
-                backgroundColor: mobileTab === 'cart' ? '#D4AF37' : '#52141C',
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 10,
-              }}
-            >
-              <Text
-                style={{
-                  color: mobileTab === 'cart' ? '#24050A' : '#FFFFFF',
-                  fontSize: 12,
-                  fontWeight: '900',
-                }}
-              >
-                {totalCartQty}
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[
-            styles.mobileTabBtn,
-            mobileTab === 'running' && { backgroundColor: '#B45309', borderColor: '#F59E0B' },
-          ]}
-          onPress={() => setMobileTab('running')}
-          activeOpacity={0.85}
-        >
-          <Ionicons
-            name="flame"
-            size={19}
-            color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
-          />
-          <Text
-            style={[
-              styles.mobileTabText,
-              mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
-            ]}
+      {!isLandscape && (
+        <View style={styles.mobileTabBar}>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('menu')}
+            activeOpacity={0.85}
           >
-            3. Running KDS & Prep Time ({tickets.length})
-          </Text>
-          {tickets.length > 0 && (
-            <View
-              style={{
-                backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
-                paddingHorizontal: 8,
-                paddingVertical: 2,
-                borderRadius: 10,
-                borderWidth: 1,
-                borderColor: '#F59E0B',
-              }}
-            >
-              <Text
+            <Ionicons
+              name="restaurant"
+              size={18}
+              color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
+            />
+            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+              1. Order / Menu Dishes ({filteredItems.length})
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('cart')}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="cart"
+              size={19}
+              color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
+            />
+            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+              2. Current Cart & Bill ({totalCartQty}
+              {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
+            </Text>
+            {totalCartQty > 0 && (
+              <View
                 style={{
-                  color: '#B45309',
-                  fontSize: 12,
-                  fontWeight: '900',
+                  backgroundColor: mobileTab === 'cart' ? '#D4AF37' : '#52141C',
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 10,
                 }}
               >
-                {tickets.length} Live
-              </Text>
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+                <Text
+                  style={{
+                    color: mobileTab === 'cart' ? '#24050A' : '#FFFFFF',
+                    fontSize: 12,
+                    fontWeight: '900',
+                  }}
+                >
+                  {totalCartQty}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.mobileTabBtn,
+              mobileTab === 'running' && { backgroundColor: '#B45309', borderColor: '#F59E0B' },
+            ]}
+            onPress={() => setMobileTab('running')}
+            activeOpacity={0.85}
+          >
+            <Ionicons
+              name="flame"
+              size={19}
+              color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
+            />
+            <Text
+              style={[
+                styles.mobileTabText,
+                mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
+              ]}
+            >
+              3. Running KDS & Prep Time ({tickets.length})
+            </Text>
+            {tickets.length > 0 && (
+              <View
+                style={{
+                  backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#F59E0B',
+                }}
+              >
+                <Text
+                  style={{
+                    color: '#B45309',
+                    fontSize: 12,
+                    fontWeight: '900',
+                  }}
+                >
+                  {tickets.length} Live
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* Toast Notification */}
       {kdsStatusToast && (
@@ -1678,14 +1683,14 @@ export default function POSTerminalScreen({
       )}
 
       {/* ========================================================
-          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: FULL-PAGE CART)
+          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT)
           ======================================================== */}
-      <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
+      <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
         {/* --------------------------------------------------------
-            TAB 1 (MENU): LEFT CATEGORY RAIL + FULL-WIDTH DISHES GRID
+            LEFT CATEGORY RAIL (LANDSCAPE OR PORTRAIT MENU TAB)
             -------------------------------------------------------- */}
-        {mobileTab === 'menu' && (
-          <View style={[styles.categoryRail, isTablet && { width: 230 }, isMobile && styles.categoryRailMobile]}>
+        {(isLandscape || mobileTab === 'menu') && (
+          <View style={[styles.categoryRail, isTablet && !isLandscape && { width: 210 }, isMobile && styles.categoryRailMobile]}>
             {!isMobile && (
               <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1848,7 +1853,7 @@ export default function POSTerminalScreen({
         {/* --------------------------------------------------------
             TAB 1 (MENU): SPACIOUS FULL-WIDTH DISHES CATALOG GRID
             -------------------------------------------------------- */}
-        {mobileTab === 'menu' && (
+        {(isLandscape || mobileTab === 'menu') && (
           <View style={styles.catalogPane}>
             {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
             <View style={styles.catalogFilterBar}>
@@ -1998,82 +2003,136 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            TAB 2 (CART): FULL-PAGE SPACIOUS ORDER CART & BILLING VIEW
+            TAB 2 (CART): ORDER CART & BILLING VIEW (PINNED RIGHT IN LANDSCAPE, TABBED IN PORTRAIT)
             -------------------------------------------------------- */}
-        {mobileTab === 'cart' && (
-          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
-            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher */}
-            <View
-              style={{
-                flexDirection: 'row',
-                flexWrap: 'wrap',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                paddingHorizontal: 18,
-                paddingVertical: 12,
-                backgroundColor: '#FFFFFF',
-                borderBottomWidth: 1,
-                borderBottomColor: '#E2E8F0',
-                gap: 12,
-              }}
-            >
-              <TouchableOpacity
+        {(isLandscape || mobileTab === 'cart') && (
+          <View
+            style={[
+              styles.ticketPanel,
+              isLandscape
+                ? { width: width < 1180 ? 350 : 390 }
+                : { width: '100%', flex: 1, borderLeftWidth: 0 },
+            ]}
+          >
+            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher (Portrait only) */}
+            {!isLandscape && (
+              <View
                 style={{
                   flexDirection: 'row',
+                  flexWrap: 'wrap',
                   alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: '#F1F5F9',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
+                  justifyContent: 'space-between',
+                  paddingHorizontal: 18,
+                  paddingVertical: 12,
+                  backgroundColor: '#FFFFFF',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#E2E8F0',
+                  gap: 12,
                 }}
-                onPress={() => setMobileTab('menu')}
               >
-                <Ionicons name="arrow-back" size={18} color="#52141C" />
-                <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
-                  + Add More Dishes (Menu)
-                </Text>
-              </TouchableOpacity>
+                <TouchableOpacity
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 8,
+                    backgroundColor: '#F1F5F9',
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 10,
+                    borderWidth: 1,
+                    borderColor: '#CBD5E1',
+                  }}
+                  onPress={() => setMobileTab('menu')}
+                >
+                  <Ionicons name="arrow-back" size={18} color="#52141C" />
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
+                    + Add More Dishes (Menu)
+                  </Text>
+                </TouchableOpacity>
 
-              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+                  {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
+                    const active = orderType === t;
+                    return (
+                      <TouchableOpacity
+                        key={t}
+                        style={[
+                          {
+                            paddingHorizontal: 18,
+                            paddingVertical: 10,
+                            borderRadius: 10,
+                            backgroundColor: active ? '#52141C' : '#F1F5F9',
+                            borderWidth: 1,
+                            borderColor: active ? '#52141C' : '#CBD5E1',
+                          },
+                        ]}
+                        onPress={() => handleOrderTypeChange(t)}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 13.5,
+                            fontWeight: '900',
+                            color: active ? '#F3D179' : '#334155',
+                          }}
+                        >
+                          {t.toUpperCase()}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            )}
+
+            {/* Landscape Order Type Switcher */}
+            {isLandscape && (
+              <View
+                style={{
+                  flexDirection: 'row',
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  backgroundColor: '#FFFFFF',
+                  borderBottomWidth: 1,
+                  borderBottomColor: '#E2E8F0',
+                  gap: 6,
+                }}
+              >
                 {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
                   const active = orderType === t;
                   return (
                     <TouchableOpacity
                       key={t}
-                      style={[
-                        {
-                          paddingHorizontal: 18,
-                          paddingVertical: 10,
-                          borderRadius: 10,
-                          backgroundColor: active ? '#52141C' : '#F1F5F9',
-                          borderWidth: 1,
-                          borderColor: active ? '#52141C' : '#CBD5E1',
-                        },
-                      ]}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        backgroundColor: active ? '#52141C' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: active ? '#52141C' : '#CBD5E1',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
                       onPress={() => handleOrderTypeChange(t)}
                     >
                       <Text
                         style={{
-                          fontSize: 13.5,
-                          fontWeight: '900',
+                          fontSize: 12,
+                          fontWeight: '800',
                           color: active ? '#F3D179' : '#334155',
                         }}
                       >
-                        {t.toUpperCase()}
+                        {t === 'dine-in' ? 'DINE-IN' : t === 'takeaway' ? 'TAKEAWAY' : 'DELIVERY'}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            </View>
+            )}
 
-            {/* Full-Page Cart Main Body: 2 Wide Columns on Desktop/Tablet, Stacked on Mobile */}
-            <View style={{ flex: 1, flexDirection: isMobile ? 'column' : 'row', overflow: 'hidden' }}>
-              {/* LEFT SIDE OF FULL-PAGE CART: Table/Customer Context + Large Cart Item Rows */}
-              <View style={{ flex: 1.4, borderRightWidth: isMobile ? 0 : 1, borderRightColor: '#E2E8F0', display: 'flex', flexDirection: 'column' }}>
+            {/* Cart Main Body: Single column in Landscape / Stacked on Mobile / 2 Columns on Portrait Tablet */}
+            <View style={{ flex: 1, flexDirection: (isMobile || isLandscape) ? 'column' : 'row', overflow: 'hidden' }}>
+              {/* Context + Cart Item Rows */}
+              <View style={{ flex: 1, borderRightWidth: (isMobile || isLandscape) ? 0 : 1, borderRightColor: '#E2E8F0', display: 'flex', flexDirection: 'column' }}>
 
             {/* 1. Order Context Header (Table or Customer Selector) */}
             <View style={styles.ticketContextCard}>
@@ -2236,7 +2295,7 @@ export default function POSTerminalScreen({
               </View>
 
               {/* RIGHT SIDE OF FULL-PAGE CART: Large Financial Summary & Big Action Buttons */}
-              <View style={[styles.ticketFooter, !isMobile && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
+              <View style={[styles.ticketFooter, (!isMobile && !isLandscape) && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
               {/* Estimated Kitchen Preparation Time Banner */}
               {cart.length > 0 && (
                 <View
@@ -2661,8 +2720,8 @@ export default function POSTerminalScreen({
         )}
       </View>
 
-      {/* Floating Bottom Bar on Menu Tab (All Devices) to Jump to Full-Page Cart */}
-      {mobileTab === 'menu' && totalCartQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (Portrait Only) to Jump to Full-Page Cart */}
+      {!isLandscape && mobileTab === 'menu' && totalCartQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}

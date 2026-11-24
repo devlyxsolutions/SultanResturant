@@ -142,9 +142,10 @@ function estimateOrderPrepTime(
 export default function TableOrderScreen() {
   const { tableId } = useLocalSearchParams();
   const router = useRouter();
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const isTablet = width >= 768 && width < 1120;
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width >= 900 && width > height;
+  const isTablet = width >= 600 && width < 1120;
+  const isMobile = width < 768 || (width < 900 && width <= height);
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
@@ -166,9 +167,11 @@ export default function TableOrderScreen() {
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000);
+    // Only tick frequently when running tickets view or modal is active to prevent order screen lag
+    const intervalMs = (mobileTab === 'running' || runningItemsModalVisible) ? 1000 : 15000;
+    const timer = setInterval(() => setNow(Date.now()), intervalMs);
     return () => clearInterval(timer);
-  }, []);
+  }, [mobileTab, runningItemsModalVisible]);
 
   // Store bindings
   const tables = useRestaurantStore((state) => state.tables) || [];
@@ -209,67 +212,70 @@ export default function TableOrderScreen() {
   });
   const isExistingOrderActive = activeTickets.length > 0 || table?.status === 'occupied' || table?.status === 'billed';
 
-  const alreadyOrderedItems: {
-    id: string;
-    name: string;
-    price: number;
-    qty: number;
-    notes?: string;
-    status: 'pending' | 'cooking' | 'ready' | 'served';
-    ticketId: string;
-    timePlaced: number;
-    roundNumber?: number;
-    station?: 'main' | 'juice';
-  }[] = [];
+  const alreadyOrderedItems = useMemo(() => {
+    const list: {
+      id: string;
+      name: string;
+      price: number;
+      qty: number;
+      notes?: string;
+      status: 'pending' | 'cooking' | 'ready' | 'served';
+      ticketId: string;
+      timePlaced: number;
+      roundNumber?: number;
+      station?: 'main' | 'juice';
+    }[] = [];
 
-  if (activeTickets.length > 0) {
-    activeTickets.forEach((ticket) => {
-      (ticket.items || []).forEach((it) => {
-        const itemStation = (it.station || 'main') as 'main' | 'juice';
-        const stationStatus = ticket.stationStatuses?.[itemStation];
-        const itemEffectiveStatus: 'pending' | 'cooking' | 'ready' | 'served' = it.itemStatus
-          ? it.itemStatus
-          : ticket.status === 'served' || (it.completed && stationStatus === 'served')
-            ? 'served'
-            : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
-              ? 'ready'
-              : stationStatus === 'cooking' || ticket.status === 'cooking'
-                ? 'cooking'
-                : 'pending';
+    if (activeTickets.length > 0) {
+      activeTickets.forEach((ticket) => {
+        (ticket.items || []).forEach((it) => {
+          const itemStation = (it.station || 'main') as 'main' | 'juice';
+          const stationStatus = ticket.stationStatuses?.[itemStation];
+          const itemEffectiveStatus: 'pending' | 'cooking' | 'ready' | 'served' = it.itemStatus
+            ? it.itemStatus
+            : ticket.status === 'served' || (it.completed && stationStatus === 'served')
+              ? 'served'
+              : stationStatus === 'ready' || it.completed || ticket.status === 'ready'
+                ? 'ready'
+                : stationStatus === 'cooking' || ticket.status === 'cooking'
+                  ? 'cooking'
+                  : 'pending';
 
-        alreadyOrderedItems.push({
+          list.push({
+            id: it.id,
+            name: it.name,
+            price: it.price,
+            qty: it.qty,
+            notes: it.notes,
+            status: itemEffectiveStatus,
+            station: itemStation,
+            ticketId: ticket.id,
+            timePlaced: ticket.timePlaced,
+            roundNumber: ticket.roundNumber,
+          });
+        });
+      });
+    } else if (
+      table &&
+      table.orders &&
+      table.orders.length > 0 &&
+      (!isOrderTaker || doesOrderBelongToUser({ server: table.server, serverId: table.serverId }, user, staff))
+    ) {
+      table.orders.forEach((it) => {
+        list.push({
           id: it.id,
           name: it.name,
           price: it.price,
           qty: it.qty,
           notes: it.notes,
-          status: itemEffectiveStatus,
-          station: itemStation,
-          ticketId: ticket.id,
-          timePlaced: ticket.timePlaced,
-          roundNumber: ticket.roundNumber,
+          status: 'served',
+          ticketId: 'ORDER-SAVED',
+          timePlaced: Date.now(),
         });
       });
-    });
-  } else if (
-    table &&
-    table.orders &&
-    table.orders.length > 0 &&
-    (!isOrderTaker || doesOrderBelongToUser({ server: table.server, serverId: table.serverId }, user, staff))
-  ) {
-    table.orders.forEach((it) => {
-      alreadyOrderedItems.push({
-        id: it.id,
-        name: it.name,
-        price: it.price,
-        qty: it.qty,
-        notes: it.notes,
-        status: 'served',
-        ticketId: 'ORDER-SAVED',
-        timePlaced: now,
-      });
-    });
-  }
+    }
+    return list;
+  }, [activeTickets, table, isOrderTaker, user, staff]);
 
   const categoryList = useMemo(() => {
     const set = new Set<string>();
@@ -598,44 +604,46 @@ export default function TableOrderScreen() {
         </View>
       </View>
 
-      {/* Full-Page Mode Switcher (All Devices: Menu vs Cart vs Running KDS Prep Time) */}
-      <View style={styles.mobileTabBar}>
-        <TouchableOpacity
-          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-          onPress={() => setMobileTab('menu')}
-        >
-          <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order / Menu Dishes ({filteredItems.length})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-          onPress={() => setMobileTab('cart')}
-        >
-          <Ionicons name="cart" size={18} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-            2. Current Cart & KOT ({totalNewQty} Items{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
-          onPress={() => setMobileTab('running')}
-        >
-          <Ionicons name="flame" size={18} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
-            3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
-          </Text>
-        </TouchableOpacity>
-      </View>
+      {/* Tab Switcher (Portrait Phones & Tablets: Menu vs Cart vs Running KDS Prep Time) */}
+      {!isLandscape && (
+        <View style={styles.mobileTabBar}>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('menu')}
+          >
+            <Ionicons name="restaurant" size={18} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
+            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+              1. Order / Menu Dishes ({filteredItems.length})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('cart')}
+          >
+            <Ionicons name="cart" size={18} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
+            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+              2. Current Cart & KOT ({totalNewQty} Items{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
+            onPress={() => setMobileTab('running')}
+          >
+            <Ionicons name="flame" size={18} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
+            <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
+              3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {/* ========================================================
-          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: CART | TAB 3: RUNNING KDS)
+          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT)
           ======================================================== */}
-      <View style={[styles.workspace, isMobile && { flexDirection: 'column' }]}>
+      <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
         {/* LEFT: Category Rail */}
-        {mobileTab === 'menu' && (
-          <View style={[styles.categoryRail, isTablet && { width: 230 }, isMobile && styles.categoryRailMobile]}>
+        {(isLandscape || mobileTab === 'menu') && (
+          <View style={[styles.categoryRail, isTablet && !isLandscape && { width: 210 }, isMobile && styles.categoryRailMobile]}>
             <View style={styles.categoryRailHeader}>
               {!isMobile && (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -759,7 +767,7 @@ export default function TableOrderScreen() {
         )}
 
         {/* CENTER: Dish Grid */}
-        {mobileTab === 'menu' && (
+        {(isLandscape || mobileTab === 'menu') && (
           <View style={styles.catalogPane}>
             <View style={styles.catalogFilterBar}>
               <Text style={styles.activeCatTitle}>
@@ -867,9 +875,41 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* FULL-PAGE CART: Order KOT Ticket Panel */}
-        {mobileTab === 'cart' && (
-          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
+        {/* CART / KOT TICKET PANEL: DUAL-PANE RIGHT IN LANDSCAPE / TABBED IN PORTRAIT */}
+        {(isLandscape || mobileTab === 'cart') && (
+          <View
+            style={[
+              styles.ticketPanel,
+              isLandscape
+                ? { width: width < 1180 ? 350 : 380 }
+                : { width: '100%', flex: 1, borderLeftWidth: 0 },
+            ]}
+          >
+            {/* Top Bar inside Cart in Portrait: Back to Menu */}
+            {!isLandscape && (
+              <TouchableOpacity
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 8,
+                  backgroundColor: '#F1F5F9',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
+                  margin: 12,
+                  marginBottom: 6,
+                }}
+                onPress={() => setMobileTab('menu')}
+              >
+                <Ionicons name="arrow-back" size={18} color="#52141C" />
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
+                  + Add More Dishes (Menu)
+                </Text>
+              </TouchableOpacity>
+            )}
+
             <View style={styles.ticketItemsHeader}>
               <Text style={styles.ticketItemsHeaderTitle}>
                 NEW KOT ITEMS ({totalNewQty})
@@ -1138,8 +1178,8 @@ export default function TableOrderScreen() {
         )}
       </View>
 
-      {/* Floating Bottom Bar on Menu Tab (All Devices) */}
-      {mobileTab === 'menu' && totalNewQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (Portrait Only) */}
+      {!isLandscape && mobileTab === 'menu' && totalNewQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}

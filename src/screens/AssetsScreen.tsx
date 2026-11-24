@@ -605,7 +605,73 @@ export default function AssetsScreen({
         serialNumber: formSerial.trim() || undefined,
         notes: formNotes.trim() || undefined,
       });
-      alertMsg('Capital Asset Added', `New capital investment ${formName} (${money(totalCost)}) recorded.`);
+
+      if (selectedSupplier) {
+        const paidAmount = parseFloat(lotPaidAmount) || 0;
+        const balanceDue = Math.max(0, totalCost - paidAmount);
+        const poId = `PO-AST-${now.toString().slice(-5)}`;
+        addPurchaseOrder(
+          {
+            poNumber: poId,
+            supplierId: selectedSupplier.id,
+            supplierName: selectedSupplier.name,
+            supplierType: 'assets',
+            invoiceNo: formInvoiceNo.trim() || undefined,
+            orderDate: now,
+            deliveryDate: now,
+            status: 'received',
+            paymentStatus: paidAmount >= totalCost ? 'paid' : paidAmount > 0 ? 'partial' : 'unpaid',
+            items: [
+              {
+                name: formName.trim(),
+                category: formCategory,
+                unit: 'unit',
+                qtyOrdered: qty,
+                qtyReceived: qty,
+                unitCost: cost,
+                totalCost: totalCost,
+              },
+            ],
+            subtotal: totalCost,
+            discount: 0,
+            tax: 0,
+            freight: 0,
+            totalAmount: totalCost,
+            amountPaid: paidAmount,
+            balanceDue: balanceDue,
+            paymentMethod: lotPaymentMethod,
+            receivedBy: user?.name || 'Manager',
+            notes: formNotes.trim() || `CapEx Purchase: ${formName.trim()} (${formInvoiceNo || 'No Invoice'})`,
+          },
+          {
+            autoReceiveToInventory: false,
+            autoRecordExpense: false,
+          }
+        );
+
+        if (paidAmount > 0) {
+          recordSupplierPayment(
+            {
+              supplierId: selectedSupplier.id,
+              supplierName: selectedSupplier.name,
+              amount: paidAmount,
+              method: lotPaymentMethod,
+              paidBy: user?.name || 'Manager',
+              notes: `Initial payment for Asset Invoice ${formInvoiceNo.trim() || poId}`,
+            },
+            {
+              autoRecordExpense: true,
+            }
+          );
+        }
+      }
+
+      alertMsg(
+        'Capital Asset Added',
+        selectedSupplier
+          ? `Recorded ${formName} (${money(totalCost)}).\nPaid: ${money(parseFloat(lotPaidAmount) || 0)} • Supplier Balance Due: ${money(Math.max(0, totalCost - (parseFloat(lotPaidAmount) || 0)))}`
+          : `New capital investment ${formName} (${money(totalCost)}) recorded.`
+      );
     }
     setIsAddModalOpen(false);
   };
@@ -1227,10 +1293,15 @@ export default function AssetsScreen({
                     onPress={() => setModalMode('lot')}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="receipt" size={16} color={modalMode === 'lot' ? '#FFFFFF' : '#475569'} />
-                    <Text style={[styles.entryModeBtnText, modalMode === 'lot' && styles.entryModeBtnTextActive]}>
-                      Multi-Item Invoice Lot (Khata)
-                    </Text>
+                    <Ionicons name="receipt" size={17} color={modalMode === 'lot' ? '#FFFFFF' : '#475569'} />
+                    <View style={{ alignItems: 'flex-start' }}>
+                      <Text style={[styles.entryModeBtnText, modalMode === 'lot' && styles.entryModeBtnTextActive]}>
+                        Multi-Item Lot (ایک سے زیادہ سامان)
+                      </Text>
+                      <Text style={{ fontSize: 10, color: modalMode === 'lot' ? '#FEF3C7' : '#64748B', fontWeight: '600' }}>
+                        Supplier Invoice • Multiple Items • Khata Ledger
+                      </Text>
+                    </View>
                   </TouchableOpacity>
 
                   <TouchableOpacity
@@ -1238,10 +1309,15 @@ export default function AssetsScreen({
                     onPress={() => setModalMode('single')}
                     activeOpacity={0.8}
                   >
-                    <Ionicons name="cube-outline" size={16} color={modalMode === 'single' ? '#FFFFFF' : '#475569'} />
-                    <Text style={[styles.entryModeBtnText, modalMode === 'single' && styles.entryModeBtnTextActive]}>
-                      Single Equipment Item
-                    </Text>
+                    <Ionicons name="cube-outline" size={17} color={modalMode === 'single' ? '#FFFFFF' : '#475569'} />
+                    <View style={{ alignItems: 'flex-start' }}>
+                      <Text style={[styles.entryModeBtnText, modalMode === 'single' && styles.entryModeBtnTextActive]}>
+                        Single Item (اکیلا سامان)
+                      </Text>
+                      <Text style={{ fontSize: 10, color: modalMode === 'single' ? '#E0F2FE' : '#64748B', fontWeight: '600' }}>
+                        Single Equipment / Appliance Entry
+                      </Text>
+                    </View>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1941,6 +2017,128 @@ export default function AssetsScreen({
                       <Text style={styles.addSupplierQuickBtnText}>+ New</Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Supplier Khata & Payment Settlement (When Registered Supplier Selected) */}
+                  {!!formSupplierId && (
+                    <View style={[styles.lotSectionBox, { borderColor: '#FDE68A', backgroundColor: '#FFFDF5', marginTop: 4, marginBottom: 12 }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={[styles.lotSectionTitle, { color: '#92400E', fontSize: 13 }]}>
+                          Supplier Ledger & Payment Settlement (کھاتہ)
+                        </Text>
+                        <Text style={{ fontSize: 13, fontWeight: '900', color: LIGHT.gold }}>
+                          Total: {money((parseFloat(formCost) || 0) * (parseInt(formQty, 10) || 1))}
+                        </Text>
+                      </View>
+
+                      {/* Amount Paid Now */}
+                      <View style={[styles.inputGroup, { marginTop: 10 }]}>
+                        <Text style={styles.inputLabel}>Amount Paid to Supplier Now (PKR) *</Text>
+                        <TextInput
+                          style={[styles.input, { fontSize: 15, fontWeight: '800', color: LIGHT.emerald }]}
+                          placeholder="0"
+                          placeholderTextColor={LIGHT.textDim}
+                          keyboardType="numeric"
+                          value={lotPaidAmount}
+                          onChangeText={setLotPaidAmount}
+                        />
+                      </View>
+
+                      {/* Quick Presets */}
+                      {(() => {
+                        const singleTotal = (parseFloat(formCost) || 0) * (parseInt(formQty, 10) || 1);
+                        return (
+                          <View style={styles.quickPresetRow}>
+                            <TouchableOpacity
+                              style={styles.quickPresetBtn}
+                              onPress={() => setLotPaidAmount(String(singleTotal))}
+                            >
+                              <Text style={styles.quickPresetBtnText}>Full Paid ({money(singleTotal)})</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.quickPresetBtn}
+                              onPress={() => setLotPaidAmount(String(Math.round(singleTotal / 2)))}
+                            >
+                              <Text style={styles.quickPresetBtnText}>50% Advance</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={styles.quickPresetBtn}
+                              onPress={() => setLotPaidAmount('0')}
+                            >
+                              <Text style={styles.quickPresetBtnText}>Full Credit (Unpaid 0)</Text>
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })()}
+
+                      {/* Balance Payable Alert */}
+                      {(() => {
+                        const singleTotal = (parseFloat(formCost) || 0) * (parseInt(formQty, 10) || 1);
+                        const paid = parseFloat(lotPaidAmount) || 0;
+                        const due = Math.max(0, singleTotal - paid);
+                        const selSupplier = suppliers.find((s) => s.id === formSupplierId);
+                        const vendorName = selSupplier ? selSupplier.name : formVendor || 'Supplier';
+                        return (
+                          <View
+                            style={[
+                              styles.khataNoticeBox,
+                              due > 0 ? styles.khataNoticeBoxDue : styles.khataNoticeBoxClear,
+                              { marginTop: 8 },
+                            ]}
+                          >
+                            <Ionicons
+                              name={due > 0 ? 'alert-circle' : 'checkmark-circle'}
+                              size={18}
+                              color={due > 0 ? '#BE123C' : '#047857'}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.khataNoticeTitle, due > 0 ? { color: '#9F1239' } : { color: '#065F46' }]}>
+                                {due > 0 ? `Remaining Balance: ${money(due)}` : 'Fully Paid & Settled'}
+                              </Text>
+                              <Text style={styles.khataNoticeSub}>
+                                {due > 0
+                                  ? `Rs. ${due.toLocaleString()} will be automatically credited to ${vendorName}'s Khata ledger as pending payable.`
+                                  : 'Full payment completed. No pending payable balance will be created.'}
+                              </Text>
+                            </View>
+                          </View>
+                        );
+                      })()}
+
+                      {/* Payment Method */}
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={styles.inputLabel}>Payment Method</Text>
+                        <View style={styles.methodToggleRow}>
+                          <TouchableOpacity
+                            style={[styles.methodToggleBtn, lotPaymentMethod === 'cash' && styles.methodToggleBtnActive]}
+                            onPress={() => setLotPaymentMethod('cash')}
+                          >
+                            <Ionicons name="cash-outline" size={15} color={lotPaymentMethod === 'cash' ? '#FFFFFF' : '#475569'} />
+                            <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'cash' && styles.methodToggleBtnTextActive]}>
+                              Cash
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.methodToggleBtn, lotPaymentMethod === 'online' && styles.methodToggleBtnActive]}
+                            onPress={() => setLotPaymentMethod('online')}
+                          >
+                            <Ionicons name="card-outline" size={15} color={lotPaymentMethod === 'online' ? '#FFFFFF' : '#475569'} />
+                            <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'online' && styles.methodToggleBtnTextActive]}>
+                              Bank / Online
+                            </Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.methodToggleBtn, lotPaymentMethod === 'cheque' && styles.methodToggleBtnActive]}
+                            onPress={() => setLotPaymentMethod('cheque')}
+                          >
+                            <Ionicons name="document-text-outline" size={15} color={lotPaymentMethod === 'cheque' ? '#FFFFFF' : '#475569'} />
+                            <Text style={[styles.methodToggleBtnText, lotPaymentMethod === 'cheque' && styles.methodToggleBtnTextActive]}>
+                              Cheque
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Vendor & Phone */}
                   <View style={styles.twoCol}>
