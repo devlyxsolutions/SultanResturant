@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FullscreenButton from '../../components/FullscreenButton';
 import SeatingTypeIcon from '../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
@@ -761,8 +762,9 @@ export default function OrderTakerScreen() {
   const displayName = currentStaff?.name || user?.name || 'Order Taker';
 
   return (
-    <View style={[styles.container, isMobile && { paddingHorizontal: 12 }]}>
-      {/* Compact High-Efficiency Order Taker Header */}
+    <SafeAreaView style={styles.safeContainer} edges={['top']}>
+      <View style={[styles.container, isMobile && { paddingHorizontal: 12 }]}>
+        {/* Compact High-Efficiency Order Taker Header */}
       <View style={[styles.compactHeader, width < 420 && { flexWrap: 'wrap', gap: 8 }]}>
         <View style={[styles.compactHeaderLeft, { marginRight: 6 }]}>
           <View style={styles.waiterAvatar}>
@@ -1530,7 +1532,8 @@ export default function OrderTakerScreen() {
           </Text>
         </View>
       )}
-    </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -1542,7 +1545,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: 14,
-    paddingTop: 8,
+    paddingTop: 4,
     backgroundColor: '#F8F9FA',
   },
   header: {

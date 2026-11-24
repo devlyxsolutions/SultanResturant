@@ -891,8 +891,11 @@ export default function WelcomeScreen({ forceLogin = false }: { forceLogin?: boo
                         </View>
                       </View>
 
-                      {/* Title Header */}
+                      {/* Title Header with Sultan Brand Logo */}
                       <View style={styles.loginHeader}>
+                        <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                          <SultanLogo size="md" width={78} height={78} />
+                        </View>
                         <View style={styles.loginTitleRow}>
                           <Text style={styles.loginTitle}>STAFF PORTAL LOGIN</Text>
                           <View style={styles.loginUrduPill}>

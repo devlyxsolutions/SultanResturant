@@ -148,10 +148,10 @@ export default function TableOrderScreen() {
   const isTablet = width >= 600 && width < 1200;
   const isMobile = !isLandscape;
   const numCols = isLandscape
-    ? (width < 1050 ? 2 : width < 1400 ? 3 : 4)
+    ? (width < 900 ? 2 : width < 1350 ? 3 : 4)
     : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
-    ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
+    ? (width < 900 ? '48%' : width < 1350 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
@@ -556,7 +556,7 @@ export default function TableOrderScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.screen} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: '#24050A' }]} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
 
       {/* ========================================================
@@ -664,7 +664,7 @@ export default function TableOrderScreen() {
       <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
         {/* LEFT: Category Rail */}
         {(isLandscape || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 175 : 210 } : styles.categoryRailMobile]}>
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 160 : width < 1250 ? 180 : 210 } : styles.categoryRailMobile]}>
             {isLandscape && (
               <View style={styles.categoryRailHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -911,7 +911,7 @@ export default function TableOrderScreen() {
             style={[
               styles.ticketPanel,
               isLandscape
-                ? { width: width < 1000 ? 320 : width < 1200 ? 350 : 380 }
+                ? { width: width < 1000 ? 295 : width < 1200 ? 330 : 365 }
                 : { width: '100%', flex: 1, borderLeftWidth: 0 },
             ]}
           >
@@ -1990,11 +1990,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
+    paddingHorizontal: 12,
   },
   primaryPayBtnText: {
     color: '#24050A',
-    fontSize: 13.5,
+    fontSize: 12,
     fontWeight: '900',
+    textAlign: 'center',
+    flexShrink: 1,
   },
   mobileFloatingBar: {
     position: 'absolute',

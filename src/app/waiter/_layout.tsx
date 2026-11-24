@@ -22,8 +22,8 @@ export default function WaiterLayout() {
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <StatusBar barStyle="dark-content" />
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
 
       <View style={styles.content}>
         <Stack
@@ -34,7 +34,7 @@ export default function WaiterLayout() {
         />
       </View>
       <BottomNav role="waiter" onLogout={logout} />
-    </SafeAreaView>
+    </View>
   );
 }
 

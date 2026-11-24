@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Image, ImageStyle, ViewStyle, StyleProp, StyleSheet } from 'react-native';
 
 export type SultanLogoSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'hero';
@@ -22,6 +22,9 @@ const SIZE_MAP: Record<SultanLogoSize, { imgW: number; imgH: number; box: number
   hero: { imgW: 380, imgH: 340, box: 400, radius: 44 },
 };
 
+const LOGO_PRIMARY = require('../../assets/images/sultan-logo.png');
+const LOGO_CLEAN = require('../../assets/images/sultan-logo-clean.png');
+
 export default function SultanLogo({
   size = 'md',
   variant = 'bare',
@@ -30,13 +33,15 @@ export default function SultanLogo({
   style,
   containerStyle,
 }: SultanLogoProps) {
+  const [loadError, setLoadError] = useState(false);
   const meta = SIZE_MAP[size] || SIZE_MAP.md;
   const finalWidth = width ?? meta.imgW;
   const finalHeight = height ?? meta.imgH;
 
   const imageElem = (
     <Image
-      source={require('../../assets/images/sultan-logo-clean.png')}
+      source={loadError ? LOGO_CLEAN : LOGO_PRIMARY}
+      onError={() => setLoadError(true)}
       style={[
         {
           width: finalWidth,

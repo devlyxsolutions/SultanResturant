@@ -16,6 +16,7 @@ import {
   useWindowDimensions,
   View,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import FullscreenButton from '../components/FullscreenButton';
 import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
@@ -221,10 +222,10 @@ export default function POSTerminalScreen({
   const isTablet = width >= 600 && width < 1200;
   const isMobile = !isLandscape;
   const numCols = isLandscape
-    ? (width < 1050 ? 2 : width < 1400 ? 3 : 4)
+    ? (width < 900 ? 2 : width < 1350 ? 3 : 4)
     : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
-    ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
+    ? (width < 900 ? '48%' : width < 1350 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
@@ -1462,7 +1463,7 @@ export default function POSTerminalScreen({
   );
 
   return (
-    <View style={styles.screen}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: '#24050A' }]} edges={['top', 'bottom']}>
       <StatusBar barStyle="light-content" />
 
       {/* ========================================================
@@ -1666,7 +1667,7 @@ export default function POSTerminalScreen({
             LEFT CATEGORY RAIL (LANDSCAPE OR PORTRAIT MENU TAB)
             -------------------------------------------------------- */}
         {(isLandscape || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 175 : 210 } : styles.categoryRailMobile]}>
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 160 : width < 1250 ? 180 : 210 } : styles.categoryRailMobile]}>
             {isLandscape && (
               <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1993,7 +1994,7 @@ export default function POSTerminalScreen({
             style={[
               styles.ticketPanel,
               isLandscape
-                ? { width: width < 1000 ? 320 : width < 1200 ? 350 : 380 }
+                ? { width: width < 1000 ? 295 : width < 1200 ? 330 : 365 }
                 : { width: '100%', flex: 1, borderLeftWidth: 0 },
             ]}
           >
@@ -3602,7 +3603,7 @@ export default function POSTerminalScreen({
           </View>
         </Modal>
       )}
-    </View>
+    </SafeAreaView>
   );
 }
 
