@@ -2775,22 +2775,42 @@ export default function TablesBlueprintScreen({
       {/* ============================================================
           FLOOR-FIRST GROUP / EVENT ARRANGEMENT & RESERVATION MODAL
          ============================================================ */}
-      <Modal visible={reservationModalVisible} transparent animationType="slide" onRequestClose={() => setReservationModalVisible(false)}>
+      <Modal visible={reservationModalVisible} transparent animationType="fade" onRequestClose={() => setReservationModalVisible(false)}>
         <View style={styles.overlay}>
-          <View style={[styles.dialog, { maxWidth: 680, maxHeight: '92%' }]}>
-            {/* Header */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-              <View>
-                <Text style={styles.dialogTitle}>
-                  {editingReservation
-                    ? 'Edit Booking / Group Arrangement'
-                    : resBookingType === 'group_event'
-                    ? 'Group / Floor Event Arrangement'
-                    : 'New Table Reservation'}
-                </Text>
-                <Text style={styles.dialogSub}>
-                  Reserve a single table or arrange 10–100+ guests on Rooftop or any floor with live cross-module sync.
-                </Text>
+          <View
+            style={[
+              styles.dialog,
+              styles.resModalShell,
+              width >= 960 ? { maxWidth: 980, width: '95%' } : { maxWidth: 680, width: '96%' },
+            ]}
+          >
+            {/* Modal Header */}
+            <View style={styles.resModalHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View
+                  style={[
+                    styles.resModalHeaderIcon,
+                    { backgroundColor: resBookingType === 'group_event' ? '#F3E8FF' : '#FAF5EA' },
+                  ]}
+                >
+                  <Ionicons
+                    name={resBookingType === 'group_event' ? 'sparkles' : 'calendar'}
+                    size={20}
+                    color={resBookingType === 'group_event' ? GROUP_ACCENT : BRAND}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dialogTitle} numberOfLines={1}>
+                    {editingReservation
+                      ? 'Edit Booking / Group Arrangement'
+                      : resBookingType === 'group_event'
+                      ? 'Group / Floor Event Arrangement'
+                      : 'New Table Reservation'}
+                  </Text>
+                  <Text style={[styles.dialogSub, { marginBottom: 0 }]} numberOfLines={1}>
+                    Plan 10–100+ guest arrangements on Rooftop or any floor with live cross-module sync
+                  </Text>
+                </View>
               </View>
               <TouchableOpacity onPress={() => setReservationModalVisible(false)} style={styles.closeBtn}>
                 <Ionicons name="close" size={20} color="#64748B" />
@@ -2806,7 +2826,7 @@ export default function TablesBlueprintScreen({
                   if (guestsNum < 10) setResGuestsCount('25');
                 }}
               >
-                <Ionicons name="sparkles" size={15} color={resBookingType === 'group_event' ? '#fff' : GROUP_ACCENT} />
+                <Ionicons name="sparkles" size={14} color={resBookingType === 'group_event' ? '#fff' : GROUP_ACCENT} />
                 <Text style={[styles.modeSwitchText, resBookingType === 'group_event' && { color: '#fff' }]}>
                   Group / Party Arrangement (10–100+)
                 </Text>
@@ -2819,361 +2839,428 @@ export default function TablesBlueprintScreen({
                   if (guestsNum >= 15) setResGuestsCount('4');
                 }}
               >
-                <Ionicons name="calendar-outline" size={15} color={resBookingType === 'regular' ? '#fff' : BRAND} />
+                <Ionicons name="calendar-outline" size={14} color={resBookingType === 'regular' ? '#fff' : BRAND} />
                 <Text style={[styles.modeSwitchText, resBookingType === 'regular' && { color: '#fff' }]}>
                   Standard Table Booking
                 </Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 540 }} showsVerticalScrollIndicator={false}>
-              {/* STEP 1: FLOOR & PARTY SIZE */}
-              <Text style={styles.sectionLabel}>1. CHOOSE FLOOR & GUEST COUNT</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 8 }}>
-                {availableFloors.map((fl) => {
-                  const active = resFloor.toLowerCase() === fl.toLowerCase();
-                  const cap = floorCapacityMap[fl.toLowerCase()];
-                  const meta = getFloorMeta(fl, dynamicFloors);
-                  return (
-                    <TouchableOpacity
-                      key={fl}
-                      style={[
-                        styles.modalFloorCard,
-                        active && { borderColor: GROUP_ACCENT, backgroundColor: '#F5F3FF' },
-                      ]}
-                      onPress={() => handleSwitchReservationFloor(fl)}
-                    >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <Ionicons name={(meta?.icon as any) || 'layers-outline'} size={14} color={active ? GROUP_ACCENT : '#64748B'} />
-                        <Text style={[styles.modalFloorCardTitle, active && { color: GROUP_ACCENT }]}>{fl}</Text>
+            {/* Scrollable Body (2-Column Side-by-Side on Desktop >= 900px, Clean Stack on Mobile) */}
+            <ScrollView
+              style={styles.resModalScroll}
+              contentContainerStyle={{ paddingBottom: 8 }}
+              showsVerticalScrollIndicator={true}
+            >
+              <View style={[styles.resModalColumns, width < 900 && { flexDirection: 'column' }]}>
+                {/* LEFT COLUMN: HOST, SCHEDULE & EVENT DETAILS */}
+                <View style={styles.resModalCol}>
+                  {/* Section Card 1: Host & Schedule */}
+                  <View style={styles.resSectionCard}>
+                    <Text style={styles.resSectionHeading}>1. HOST & SCHEDULE</Text>
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Customer / Host Name *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. Mr. Usman Ali"
+                          placeholderTextColor="#94A3B8"
+                          value={resCustomerName}
+                          onChangeText={setResCustomerName}
+                        />
                       </View>
-                      <Text style={styles.modalFloorCardSub}>
-                        {cap?.availableSeats || 0} Free Seats ({cap?.availableUnits || 0} units)
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Phone Number *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="03xx-xxxxxxx"
+                          placeholderTextColor="#94A3B8"
+                          value={resPhone}
+                          onChangeText={setResPhone}
+                          keyboardType="phone-pad"
+                        />
+                      </View>
+                    </View>
 
-              {/* Guests Stepper + Quick Presets */}
-              <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Total Guests *</Text>
-                  <View style={styles.stepper}>
-                    <TouchableOpacity
-                      style={styles.stepBtn}
-                      onPress={() => setResGuestsCount(String(Math.max(1, guestsNum - (guestsNum >= 10 ? 5 : 1))))}
-                    >
-                      <Ionicons name="remove" size={18} color={BRAND} />
-                    </TouchableOpacity>
-                    <TextInput
-                      style={styles.stepInput}
-                      value={resGuestsCount}
-                      onChangeText={setResGuestsCount}
-                      keyboardType="numeric"
-                    />
-                    <TouchableOpacity
-                      style={styles.stepBtn}
-                      onPress={() => setResGuestsCount(String(guestsNum + (guestsNum >= 10 ? 5 : 1)))}
-                    >
-                      <Ionicons name="add" size={18} color={BRAND} />
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                          <Text style={[styles.label, { marginBottom: 0 }]}>Event Date *</Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(0))}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: GROUP_ACCENT }}>Today</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(1))}>
+                              <Text style={{ fontSize: 11, fontWeight: '800', color: GROUP_ACCENT }}>Tomorrow</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor="#94A3B8"
+                          value={resDate}
+                          onChangeText={setResDate}
+                        />
+                      </View>
 
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <Text style={[styles.label, { marginBottom: 0 }]}>Event Date *</Text>
-                    <View style={{ flexDirection: 'row', gap: 6 }}>
-                      <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(0))}>
-                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: GROUP_ACCENT }}>Today</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity onPress={() => setResDate(getDateOffsetIso(1))}>
-                        <Text style={{ fontSize: 11.5, fontWeight: '800', color: GROUP_ACCENT }}>Tomorrow</Text>
-                      </TouchableOpacity>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Selected Time *</Text>
+                        <TextInput
+                          style={styles.input}
+                          placeholder="e.g. 08:00 PM"
+                          placeholderTextColor="#94A3B8"
+                          value={resTimeSlot}
+                          onChangeText={setResTimeSlot}
+                        />
+                      </View>
+                    </View>
+
+                    {/* Clean Wrapped Time Slot Grid (Zero Horizontal Clipping — All Lunch & Dinner Times Visible) */}
+                    <Text style={[styles.label, { marginBottom: 6 }]}>Quick Time Slots</Text>
+                    <View style={styles.timeGridWrap}>
+                      {TIME_SLOTS.map((slot) => {
+                        const active = resTimeSlot === slot;
+                        return (
+                          <TouchableOpacity
+                            key={slot}
+                            style={[styles.timeSlotBtn, active && styles.timeSlotBtnActive]}
+                            onPress={() => setResTimeSlot(slot)}
+                          >
+                            <Text style={[styles.timeSlotBtnText, active && styles.timeSlotBtnTextActive]}>{slot}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
                   </View>
-                  <TextInput style={styles.input} placeholder="YYYY-MM-DD" value={resDate} onChangeText={setResDate} />
-                </View>
-              </View>
 
-              {/* Quick Guest Count Presets */}
-              <View style={[styles.wrapRow, { marginBottom: 10 }]}>
-                {GUEST_PRESETS.map((num) => {
-                  const active = guestsNum === num;
-                  return (
-                    <TouchableOpacity
-                      key={num}
-                      style={[
-                        styles.presetPill,
-                        active && { backgroundColor: GROUP_ACCENT, borderColor: GROUP_ACCENT },
-                      ]}
-                      onPress={() => {
-                        setResGuestsCount(String(num));
-                        if (num >= 10) setResBookingType('group_event');
-                        const picked = autoPickTablesForFloor(resFloor, num, resIncludeOtherFloors);
-                        if (picked.primaryId) {
-                          setResTableId(picked.primaryId);
-                          setResLinkedIds(picked.linkedIds);
-                          setResIsFullFloor(false);
-                        }
-                      }}
-                    >
-                      <Text style={[styles.presetPillText, active && { color: '#fff' }]}>{num} Guests</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                  {/* Section Card 2: Party Size & Event Details */}
+                  <View style={styles.resSectionCard}>
+                    <Text style={styles.resSectionHeading}>2. PARTY SIZE & EVENT SETUP</Text>
 
-              {/* Time Slots */}
-              <Text style={styles.label}>Time Slot</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 14 }}>
-                {TIME_SLOTS.map((slot) => (
-                  <TouchableOpacity
-                    key={slot}
-                    style={[styles.chip, resTimeSlot === slot && { backgroundColor: BRAND, borderColor: BRAND }]}
-                    onPress={() => setResTimeSlot(slot)}
-                  >
-                    <Text style={[styles.chipText, resTimeSlot === slot && { color: '#fff' }]}>{slot}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+                    <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.label}>Total Guests *</Text>
+                        <View style={styles.stepper}>
+                          <TouchableOpacity
+                            style={styles.stepBtn}
+                            onPress={() => setResGuestsCount(String(Math.max(1, guestsNum - (guestsNum >= 10 ? 5 : 1))))}
+                          >
+                            <Ionicons name="remove" size={18} color={BRAND} />
+                          </TouchableOpacity>
+                          <TextInput
+                            style={styles.stepInput}
+                            value={resGuestsCount}
+                            onChangeText={setResGuestsCount}
+                            keyboardType="numeric"
+                          />
+                          <TouchableOpacity
+                            style={styles.stepBtn}
+                            onPress={() => setResGuestsCount(String(guestsNum + (guestsNum >= 10 ? 5 : 1)))}
+                          >
+                            <Ionicons name="add" size={18} color={BRAND} />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
 
-              {/* STEP 2: CUSTOMER & EVENT DETAILS */}
-              <Text style={styles.sectionLabel}>2. CUSTOMER & ARRANGEMENT DETAILS</Text>
-              <View style={[styles.formRow, isMobile && { flexDirection: 'column', gap: 0 }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Customer / Host Name *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="e.g. Mr. Usman Ali"
-                    value={resCustomerName}
-                    onChangeText={setResCustomerName}
-                  />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.label}>Phone Number *</Text>
-                  <TextInput
-                    style={styles.input}
-                    placeholder="03xx-xxxxxxx"
-                    value={resPhone}
-                    onChangeText={setResPhone}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              </View>
-
-              {resBookingType === 'group_event' && (
-                <>
-                  <Text style={styles.label}>Occasion / Event Type</Text>
-                  <View style={styles.wrapRow}>
-                    {EVENT_OCCASIONS.map((occ) => {
-                      const active = resOccasion === occ;
-                      return (
-                        <TouchableOpacity
-                          key={occ}
-                          style={[styles.chip, active && { backgroundColor: GROUP_ACCENT, borderColor: GROUP_ACCENT }]}
-                          onPress={() => setResOccasion(occ)}
-                        >
-                          <Text style={[styles.chipText, active && { color: '#fff' }]}>{occ}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <Text style={styles.label}>Seating Arrangement Style</Text>
-                  <View style={styles.wrapRow}>
-                    {ARRANGEMENT_STYLES.map((st) => {
-                      const active = resArrangementStyle === st;
-                      return (
-                        <TouchableOpacity
-                          key={st}
-                          style={[styles.chip, active && { backgroundColor: BRAND, borderColor: BRAND }]}
-                          onPress={() => setResArrangementStyle(st)}
-                        >
-                          <Text style={[styles.chipText, active && { color: '#fff' }]}>{st}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.label}>Advance Deposit Paid (Rs. — optional)</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="e.g. 10000"
-                      value={resAdvanceDeposit}
-                      onChangeText={setResAdvanceDeposit}
-                      keyboardType="numeric"
-                    />
-                  </View>
-                </>
-              )}
-
-              {/* STEP 3: SMART FLOOR TABLE SELECTOR */}
-              <View style={styles.mergeHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.sectionLabel}>3. {resFloor.toUpperCase()} SEATING UNITS</Text>
-                  <Text style={styles.dialogSub}>
-                    Tap units to include in this arrangement. First selected unit is Primary (handles billing).
-                  </Text>
-                </View>
-              </View>
-
-              {/* Smart Arrangement Action Buttons */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
-                <TouchableOpacity style={styles.autoArrangeBtn} onPress={handleAutoArrangeFloor}>
-                  <Ionicons name="sparkles" size={14} color="#fff" />
-                  <Text style={styles.autoArrangeBtnText}>
-                    Auto-Arrange for {guestsNum || 0} Guests on {resFloor}
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity style={styles.fullFloorBtn} onPress={handleReserveEntireFloor}>
-                  <Ionicons name="shield-checkmark-outline" size={14} color={BRAND} />
-                  <Text style={styles.fullFloorBtnText}>Reserve Entire {resFloor}</Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  style={[styles.typeMiniChip, resIncludeOtherFloors && { backgroundColor: '#0284C7', borderColor: '#0284C7' }]}
-                  onPress={() => setResIncludeOtherFloors((v) => !v)}
-                >
-                  <Text style={[styles.typeMiniChipText, resIncludeOtherFloors && { color: '#fff' }]}>
-                    {resIncludeOtherFloors ? '✓ Including Other Floors' : '+ Include Other Floors'}
-                  </Text>
-                </TouchableOpacity>
-
-                {allSelectedIds.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.typeMiniChip}
-                    onPress={() => {
-                      setResTableId('');
-                      setResLinkedIds([]);
-                      setResIsFullFloor(false);
-                    }}
-                  >
-                    <Text style={[styles.typeMiniChipText, { color: '#DC2626' }]}>Clear</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Floor Units Picker Grid */}
-              <View style={styles.wrapRow}>
-                {modalFloorUnits.map((t) => {
-                  const selectable = isSelectableForReservation(t);
-                  const isPrimary = resTableId === t.id;
-                  const isLinked = resLinkedIds.includes(t.id);
-                  const isPicked = isPrimary || isLinked;
-                  const accent = isPrimary ? BRAND : GROUP_ACCENT;
-                  const tFloor = getTableFloor(t);
-
-                  return (
-                    <TouchableOpacity
-                      key={t.id}
-                      disabled={!selectable}
-                      onPress={() => handleToggleModalUnit(t.id)}
-                      style={[
-                        styles.pickCard,
-                        !selectable && { opacity: 0.42, backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' },
-                        isPicked && { backgroundColor: accent, borderColor: accent },
-                      ]}
-                      activeOpacity={0.85}
-                    >
-                      {isPicked && (
-                        <View style={styles.pickCheck}>
-                          <Ionicons name="checkmark" size={11} color={accent} />
+                      {resBookingType === 'group_event' && (
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.label}>Advance Deposit (Rs.)</Text>
+                          <TextInput
+                            style={styles.input}
+                            placeholder="e.g. 10000 (optional)"
+                            placeholderTextColor="#94A3B8"
+                            value={resAdvanceDeposit}
+                            onChangeText={setResAdvanceDeposit}
+                            keyboardType="numeric"
+                          />
                         </View>
                       )}
-                      <Text style={[styles.pickName, isPicked && { color: '#fff' }]}>{t.name}</Text>
-                      <Text style={[styles.pickSub, isPicked && { color: '#ffffffdd' }]}>
-                        {isPrimary
-                          ? `PRIMARY • ${t.seats}s`
-                          : isLinked
-                          ? `JOINED • ${t.seats}s`
-                          : !selectable
-                          ? `${t.status.toUpperCase()} • ${t.seats}s`
-                          : `${tFloor.toLowerCase() === resFloor.toLowerCase() ? getTableSeatingType(t) : tFloor} • ${t.seats}s`}
+                    </View>
+
+                    {/* Quick Guest Presets */}
+                    <View style={[styles.wrapRow, { marginBottom: 10 }]}>
+                      {GUEST_PRESETS.map((num) => {
+                        const active = guestsNum === num;
+                        return (
+                          <TouchableOpacity
+                            key={num}
+                            style={[
+                              styles.presetPill,
+                              active && { backgroundColor: GROUP_ACCENT, borderColor: GROUP_ACCENT },
+                            ]}
+                            onPress={() => {
+                              setResGuestsCount(String(num));
+                              if (num >= 10) setResBookingType('group_event');
+                              const picked = autoPickTablesForFloor(resFloor, num, resIncludeOtherFloors);
+                              if (picked.primaryId) {
+                                setResTableId(picked.primaryId);
+                                setResLinkedIds(picked.linkedIds);
+                                setResIsFullFloor(false);
+                              }
+                            }}
+                          >
+                            <Text style={[styles.presetPillText, active && { color: '#fff' }]}>{num} Guests</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {resBookingType === 'group_event' && (
+                      <>
+                        <Text style={styles.label}>Occasion / Event Type</Text>
+                        <View style={[styles.wrapRow, { marginBottom: 10 }]}>
+                          {EVENT_OCCASIONS.map((occ) => {
+                            const active = resOccasion === occ;
+                            return (
+                              <TouchableOpacity
+                                key={occ}
+                                style={[styles.chip, active && { backgroundColor: GROUP_ACCENT, borderColor: GROUP_ACCENT }]}
+                                onPress={() => setResOccasion(occ)}
+                              >
+                                <Text style={[styles.chipText, active && { color: '#fff' }]}>{occ}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        <Text style={styles.label}>Seating Arrangement Style</Text>
+                        <View style={[styles.wrapRow, { marginBottom: 10 }]}>
+                          {ARRANGEMENT_STYLES.map((st) => {
+                            const active = resArrangementStyle === st;
+                            return (
+                              <TouchableOpacity
+                                key={st}
+                                style={[styles.chip, active && { backgroundColor: BRAND, borderColor: BRAND }]}
+                                onPress={() => setResArrangementStyle(st)}
+                              >
+                                <Text style={[styles.chipText, active && { color: '#fff' }]}>{st}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      </>
+                    )}
+
+                    <Text style={styles.label}>Setup, Decor & Menu Notes (optional)</Text>
+                    <TextInput
+                      style={[styles.input, { height: 64, textAlignVertical: 'top', marginBottom: 0 }]}
+                      placeholder="e.g. Rooftop setup for 25 guests, BBQ platters pre-order, birthday decor, high chairs…"
+                      placeholderTextColor="#94A3B8"
+                      value={resNotes}
+                      onChangeText={setResNotes}
+                      multiline
+                    />
+                  </View>
+                </View>
+
+                {/* RIGHT COLUMN: FLOOR PICKER & INTERACTIVE SEATING PLANNER */}
+                <View style={styles.resModalCol}>
+                  {/* Section Card 3: Floor Picker */}
+                  <View style={styles.resSectionCard}>
+                    <Text style={styles.resSectionHeading}>3. CHOOSE FLOOR</Text>
+                    <View style={styles.modalFloorGrid}>
+                      {availableFloors.map((fl) => {
+                        const active = resFloor.toLowerCase() === fl.toLowerCase();
+                        const cap = floorCapacityMap[fl.toLowerCase()];
+                        const meta = getFloorMeta(fl, dynamicFloors);
+                        return (
+                          <TouchableOpacity
+                            key={fl}
+                            style={[
+                              styles.modalFloorCard,
+                              active && { borderColor: GROUP_ACCENT, backgroundColor: '#F5F3FF' },
+                            ]}
+                            onPress={() => handleSwitchReservationFloor(fl)}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                              <Ionicons
+                                name={(meta?.icon as any) || 'layers-outline'}
+                                size={14}
+                                color={active ? GROUP_ACCENT : meta?.color || '#64748B'}
+                              />
+                              <Text style={[styles.modalFloorCardTitle, active && { color: GROUP_ACCENT }]} numberOfLines={1}>
+                                {fl}
+                              </Text>
+                            </View>
+                            <Text style={styles.modalFloorCardSub} numberOfLines={1}>
+                              {cap?.availableSeats || 0} Free • {cap?.availableUnits || 0} units
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
+
+                  {/* Section Card 4: Floor Seating Units & Auto-Arrange */}
+                  <View style={styles.resSectionCard}>
+                    <Text style={styles.resSectionHeading}>4. {resFloor.toUpperCase()} SEATING UNITS</Text>
+                    <Text style={[styles.dialogSub, { marginTop: 0, marginBottom: 10 }]}>
+                      Tap units to join for this party. First selected unit is Primary (handles unified billing).
+                    </Text>
+
+                    {/* Smart Arrangement Action Buttons */}
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+                      <TouchableOpacity style={styles.autoArrangeBtn} onPress={handleAutoArrangeFloor}>
+                        <Ionicons name="sparkles" size={13} color="#fff" />
+                        <Text style={styles.autoArrangeBtnText}>
+                          Auto-Arrange {guestsNum || 0}G on {resFloor}
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.fullFloorBtn} onPress={handleReserveEntireFloor}>
+                        <Ionicons name="shield-checkmark-outline" size={13} color={BRAND} />
+                        <Text style={styles.fullFloorBtnText}>Full {resFloor}</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        style={[
+                          styles.typeMiniChip,
+                          resIncludeOtherFloors && { backgroundColor: '#0284C7', borderColor: '#0284C7' },
+                        ]}
+                        onPress={() => setResIncludeOtherFloors((v) => !v)}
+                      >
+                        <Text style={[styles.typeMiniChipText, resIncludeOtherFloors && { color: '#fff' }]}>
+                          {resIncludeOtherFloors ? '✓ + Other Floors' : '+ Other Floors'}
+                        </Text>
+                      </TouchableOpacity>
+
+                      {allSelectedIds.length > 0 && (
+                        <TouchableOpacity
+                          style={styles.typeMiniChip}
+                          onPress={() => {
+                            setResTableId('');
+                            setResLinkedIds([]);
+                            setResIsFullFloor(false);
+                          }}
+                        >
+                          <Text style={[styles.typeMiniChipText, { color: '#DC2626' }]}>Clear</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+
+                    {/* Interactive Units Grid */}
+                    <View style={[styles.wrapRow, { marginBottom: 12 }]}>
+                      {modalFloorUnits.map((t) => {
+                        const selectable = isSelectableForReservation(t);
+                        const isPrimary = resTableId === t.id;
+                        const isLinked = resLinkedIds.includes(t.id);
+                        const isPicked = isPrimary || isLinked;
+                        const accent = isPrimary ? BRAND : GROUP_ACCENT;
+                        const tFloor = getTableFloor(t);
+
+                        return (
+                          <TouchableOpacity
+                            key={t.id}
+                            disabled={!selectable}
+                            onPress={() => handleToggleModalUnit(t.id)}
+                            style={[
+                              styles.pickCard,
+                              !selectable && { opacity: 0.42, backgroundColor: '#F1F5F9', borderColor: '#CBD5E1' },
+                              isPicked && { backgroundColor: accent, borderColor: accent },
+                            ]}
+                            activeOpacity={0.85}
+                          >
+                            {isPicked && (
+                              <View style={styles.pickCheck}>
+                                <Ionicons name="checkmark" size={11} color={accent} />
+                              </View>
+                            )}
+                            <Text style={[styles.pickName, isPicked && { color: '#fff' }]}>{t.name}</Text>
+                            <Text style={[styles.pickSub, isPicked && { color: '#ffffffdd' }]}>
+                              {isPrimary
+                                ? `PRIMARY • ${t.seats}s`
+                                : isLinked
+                                ? `JOINED • ${t.seats}s`
+                                : !selectable
+                                ? `${t.status.toUpperCase()} • ${t.seats}s`
+                                : `${tFloor.toLowerCase() === resFloor.toLowerCase() ? getTableSeatingType(t) : tFloor} • ${t.seats}s`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {modalFloorUnits.filter(isSelectableForReservation).length === 0 && (
+                      <Text style={styles.warnText}>
+                        No available seating units on {resFloor} right now. Switch floors or enable &ldquo;+ Other Floors&rdquo;.
                       </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                    )}
 
-              {modalFloorUnits.filter(isSelectableForReservation).length === 0 && (
-                <Text style={styles.warnText}>
-                  No available seating units on {resFloor} right now. Switch floors or enable &ldquo;Include Other Floors&rdquo;.
-                </Text>
-              )}
-
-              {/* Live Capacity Progress Box */}
-              <View
-                style={[
-                  styles.capacityBox,
-                  {
-                    borderColor: capacityOk ? '#15803D55' : '#D9770655',
-                    backgroundColor: capacityOk ? '#F0FDF4' : '#FFFBEB',
-                  },
-                ]}
-              >
-                <Ionicons
-                  name={capacityOk ? 'checkmark-circle' : 'alert-circle'}
-                  size={22}
-                  color={capacityOk ? '#15803D' : '#D97706'}
-                />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.capacityTitle, { color: capacityOk ? '#15803D' : '#B45309' }]}>
-                    {selectedSeats} / {guestsNum} Seats Covered across {allSelectedIds.length} Unit(s)
-                    {resIsFullFloor ? ` (Full ${resFloor})` : ''}
-                  </Text>
-                  <Text style={styles.capacitySub}>
-                    {allSelectedIds.length > 0
-                      ? allSelectedIds.map((id) => tableById(id)?.name).filter(Boolean).join(' + ')
-                      : 'No seating units selected yet'}
-                    {seatsShortfall > 0 && allSelectedIds.length > 0
-                      ? ` • +${seatsShortfall} extra chairs needed`
-                      : ''}
-                  </Text>
+                    {/* Live Capacity Progress Box */}
+                    <View
+                      style={[
+                        styles.capacityBox,
+                        {
+                          borderColor: capacityOk ? '#15803D55' : '#D9770655',
+                          backgroundColor: capacityOk ? '#F0FDF4' : '#FFFBEB',
+                        },
+                      ]}
+                    >
+                      <Ionicons
+                        name={capacityOk ? 'checkmark-circle' : 'alert-circle'}
+                        size={20}
+                        color={capacityOk ? '#15803D' : '#D97706'}
+                      />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.capacityTitle, { color: capacityOk ? '#15803D' : '#B45309' }]}>
+                          {selectedSeats} / {guestsNum} Seats Covered ({allSelectedIds.length} Unit{allSelectedIds.length === 1 ? '' : 's'})
+                          {resIsFullFloor ? ` • Full ${resFloor}` : ''}
+                        </Text>
+                        <Text style={styles.capacitySub}>
+                          {allSelectedIds.length > 0
+                            ? allSelectedIds.map((id) => tableById(id)?.name).filter(Boolean).join(' + ')
+                            : 'No seating units selected yet'}
+                          {seatsShortfall > 0 && allSelectedIds.length > 0
+                            ? ` • +${seatsShortfall} extra chairs needed`
+                            : ''}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.progressTrack}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${Math.min(100, guestsNum ? (selectedSeats / guestsNum) * 100 : 0)}%`,
+                            backgroundColor: capacityOk ? '#15803D' : '#D97706',
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
                 </View>
               </View>
-              <View style={styles.progressTrack}>
-                <View
-                  style={[
-                    styles.progressFill,
-                    {
-                      width: `${Math.min(100, guestsNum ? (selectedSeats / guestsNum) * 100 : 0)}%`,
-                      backgroundColor: capacityOk ? '#15803D' : '#D97706',
-                    },
-                  ]}
-                />
-              </View>
-
-              <Text style={[styles.label, { marginTop: 14 }]}>Setup, Decor & Menu Notes (optional)</Text>
-              <TextInput
-                style={[styles.input, { height: 68, textAlignVertical: 'top' }]}
-                placeholder="e.g. Rooftop setup for 25 guests, BBQ platters pre-order, birthday cake table, high chairs…"
-                value={resNotes}
-                onChangeText={setResNotes}
-                multiline
-              />
             </ScrollView>
 
-            <View style={styles.dialogActions}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={() => setReservationModalVisible(false)}>
-                <Text style={styles.ghostBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: resBookingType === 'group_event' ? GROUP_ACCENT : BRAND }]}
-                onPress={handleSaveReservation}
-              >
-                <Ionicons name="checkmark-circle" size={16} color="#fff" />
-                <Text style={styles.primaryBtnText}>
-                  {editingReservation
-                    ? 'Update Arrangement'
-                    : resBookingType === 'group_event'
-                    ? `Confirm ${guestsNum || 0}-Guest Arrangement`
-                    : 'Confirm Booking'}
-                </Text>
-              </TouchableOpacity>
+            {/* Sticky Footer Bar */}
+            <View style={styles.resModalFooter}>
+              {!isMobile && (
+                <View style={styles.resFooterSummary}>
+                  <Ionicons name="location-outline" size={14} color={GROUP_ACCENT} />
+                  <Text style={styles.resFooterSummaryText} numberOfLines={1}>
+                    {resFloor} • {guestsNum || 0} Guests • {resTimeSlot} • {allSelectedIds.length} Unit(s)
+                  </Text>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 10, marginLeft: 'auto' }}>
+                <TouchableOpacity style={styles.ghostBtn} onPress={() => setReservationModalVisible(false)}>
+                  <Text style={styles.ghostBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.primaryBtn, { backgroundColor: resBookingType === 'group_event' ? GROUP_ACCENT : BRAND }]}
+                  onPress={handleSaveReservation}
+                >
+                  <Ionicons name="checkmark-circle" size={16} color="#fff" />
+                  <Text style={styles.primaryBtnText}>
+                    {editingReservation
+                      ? 'Update Arrangement'
+                      : resBookingType === 'group_event'
+                      ? `Confirm ${guestsNum || 0}-Guest Arrangement`
+                      : 'Confirm Booking'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
@@ -3940,7 +4027,114 @@ const styles = StyleSheet.create({
   primaryBtnText: { color: '#fff', fontWeight: '800', fontSize: 14.5 },
 
   // Group Modal specific styles
-  modeSwitchRow: { flexDirection: 'row', gap: 8, marginBottom: 14, flexWrap: 'wrap' },
+  resModalShell: {
+    maxHeight: '92%',
+    padding: 18,
+    overflow: 'hidden',
+  },
+  resModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    paddingBottom: 12,
+    marginBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  resModalHeaderIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  resModalScroll: {
+    maxHeight: 560,
+  },
+  resModalColumns: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 14,
+  },
+  resModalCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  resSectionCard: {
+    backgroundColor: '#FAF9F6',
+    borderRadius: 13,
+    borderWidth: 1,
+    borderColor: '#E5E1DA',
+    padding: 12,
+  },
+  resSectionHeading: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: BRAND,
+    letterSpacing: 0.7,
+    marginBottom: 10,
+  },
+  timeGridWrap: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  timeSlotBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  timeSlotBtnActive: {
+    backgroundColor: BRAND,
+    borderColor: BRAND,
+  },
+  timeSlotBtnText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#334155',
+  },
+  timeSlotBtnTextActive: {
+    color: '#F3D179',
+    fontWeight: '900',
+  },
+  modalFloorGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  resModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E1DA',
+  },
+  resFooterSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#F5F3FF',
+    borderWidth: 1,
+    borderColor: '#DDD6FE',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    flexShrink: 1,
+  },
+  resFooterSummaryText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#4C1D95',
+  },
+  modeSwitchRow: { flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' },
   modeSwitchBtn: {
     flex: 1,
     minWidth: 180,
@@ -3948,9 +4142,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    paddingVertical: 10,
+    paddingVertical: 9,
     paddingHorizontal: 12,
-    borderRadius: 11,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
     backgroundColor: '#F8FAFC',
@@ -3960,13 +4154,14 @@ const styles = StyleSheet.create({
   modeSwitchText: { fontSize: 12.5, fontWeight: '800', color: '#334155' },
 
   modalFloorCard: {
-    minWidth: 135,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 12,
+    flexGrow: 1,
+    minWidth: 128,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
     gap: 2,
   },
   modalFloorCardTitle: { fontSize: 13.5, fontWeight: '900', color: '#1E293B' },
@@ -4011,22 +4206,23 @@ const styles = StyleSheet.create({
   formRow: { flexDirection: 'row', gap: 12 },
   wrapRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
   warnText: { color: '#DC2626', fontSize: 13, fontStyle: 'italic', marginBottom: 8 },
-  stepper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, marginBottom: 12, backgroundColor: '#FCFBF9' },
-  stepBtn: { width: 42, height: 42, alignItems: 'center', justifyContent: 'center' },
-  stepInput: { flex: 1, textAlign: 'center', fontSize: 16, fontWeight: '800', color: '#0F172A', paddingVertical: 8 },
+  stepper: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, marginBottom: 12, backgroundColor: '#FFFFFF', overflow: 'hidden' },
+  stepBtn: { width: 38, height: 42, alignItems: 'center', justifyContent: 'center', flexShrink: 0, backgroundColor: '#F8FAFC' },
+  stepInput: { flex: 1, minWidth: 0, width: 40, textAlign: 'center', fontSize: 16, fontWeight: '800', color: '#0F172A', paddingVertical: 8 },
 
   pickCard: {
-    minWidth: 100,
-    paddingHorizontal: 11,
-    paddingVertical: 9,
+    minWidth: 104,
+    paddingHorizontal: 12,
+    paddingTop: 11,
+    paddingBottom: 9,
     borderRadius: 11,
     borderWidth: 1.5,
     borderColor: '#E2E8F0',
-    backgroundColor: '#FCFBF9',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
   },
-  pickCheck: { position: 'absolute', top: 5, right: 5, width: 16, height: 16, borderRadius: 8, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
-  pickName: { fontSize: 14, fontWeight: '900', color: '#0F172A' },
+  pickCheck: { position: 'absolute', top: 4, right: 4, width: 15, height: 15, borderRadius: 8, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' },
+  pickName: { fontSize: 13.5, fontWeight: '900', color: '#0F172A', paddingHorizontal: 10 },
   pickSub: { fontSize: 11.5, color: '#64748B', marginTop: 2, fontWeight: '700' },
   mergeHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 4 },
   capacityBox: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderRadius: 12, padding: 12, marginBottom: 8 },
