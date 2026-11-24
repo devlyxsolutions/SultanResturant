@@ -482,6 +482,7 @@ type RestaurantState = {
   deleteRegion: (regionName: string) => void;
   restoreDefaultRestaurantMenu: () => void;
   addTable: (table: Omit<Table, 'id' | 'status'> & { status?: Table['status'] }) => void;
+  addTablesBulk: (tables: (Omit<Table, 'id' | 'status'> & { status?: Table['status'] })[]) => void;
   updateTable: (id: string, table: Partial<Omit<Table, 'id'>>) => void;
   deleteTable: (id: string) => void;
   addFloor: (floor: Omit<Floor, 'id'>) => void;
@@ -547,7 +548,7 @@ export const INITIAL_FLOORS: Floor[] = [
     prefix: 'F1',
     color: '#1976D2',
     icon: 'people-outline',
-    description: 'Family hall, Couches & Traditional Majlis',
+    description: 'Family hall, Sofas & Traditional Majlis',
     order: 2,
   },
   {
@@ -587,15 +588,15 @@ const INITIAL_TABLES: Table[] = [
   // Ground Floor
   { id: '1', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-01', seats: 4, status: 'available' },
   { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'available' },
-  { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
+  { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Sofa 1', seats: 6, status: 'available' },
   { id: '4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
   { id: '5', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
 
   // 1st Floor
   { id: 'f1-t1', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T01', seats: 4, status: 'available' },
   { id: 'f1-t2', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T02', seats: 6, status: 'available' },
-  { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
-  { id: 'f1-c2', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 2', seats: 6, status: 'available' },
+  { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Sofa 1', seats: 6, status: 'available' },
+  { id: 'f1-c2', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Sofa 2', seats: 6, status: 'available' },
   { id: 'f1-m1', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
   { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
   { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
@@ -603,7 +604,7 @@ const INITIAL_TABLES: Table[] = [
 
   // 2nd Floor (Banquet & Executive)
   { id: 'f2-t1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'tables', name: 'Banquet T-01', seats: 10, status: 'available' },
-  { id: 'f2-c1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'couches', name: 'Executive Couch 1', seats: 8, status: 'available' },
+  { id: 'f2-c1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'couches', name: 'Executive Sofa 1', seats: 8, status: 'available' },
   { id: 'f2-m1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'majlis', cabinNumber: 'Royal Cabin 1', name: 'Royal Cabin 1', seats: 12, status: 'available' },
 
   // 3rd Floor (VIP & Royal Majlis)
@@ -2789,6 +2790,22 @@ export const useRestaurantStore = create<RestaurantState>()(
         notifySync();
       },
 
+      addTablesBulk: (newTables) => {
+        if (!Array.isArray(newTables) || newTables.length === 0) return;
+        const baseTs = Date.now();
+        set((state) => ({
+          tables: [
+            ...state.tables,
+            ...newTables.map((table, idx) => ({
+              ...table,
+              status: table.status || 'available',
+              id: `t-${baseTs}-${idx}-${Math.random().toString(36).slice(2, 6)}`,
+            })),
+          ],
+        }));
+        notifySync();
+      },
+
       updateTable: (id, updatedTable) => {
         set((state) => {
           let alert = state.lastBillPaidAlert;
@@ -3684,14 +3701,26 @@ export const useRestaurantStore = create<RestaurantState>()(
             const inferredFloor = getTableFloor(t);
             const inferredType = getTableSeatingType(t);
             const isLegacyZone = !t.floor || t.floor.toLowerCase().includes('main hall') || (t.zone && t.zone.toLowerCase().includes('main hall'));
+            const normalizedName =
+              typeof t.name === 'string' && /\bcouch\b/i.test(t.name)
+                ? t.name.replace(/\bcouch\b/gi, 'Sofa')
+                : t.name;
             return {
               ...t,
+              name: normalizedName,
               floor: isLegacyZone ? inferredFloor : (t.floor || inferredFloor),
               zone: isLegacyZone ? inferredFloor : (t.zone || inferredFloor),
               seatingType: t.seatingType || inferredType,
-              cabinNumber: (t.seatingType === 'majlis' || inferredType === 'majlis') ? (t.cabinNumber || t.name) : t.cabinNumber,
+              cabinNumber: (t.seatingType === 'majlis' || inferredType === 'majlis') ? (t.cabinNumber || normalizedName) : t.cabinNumber,
             };
           });
+          if (Array.isArray(state.floors)) {
+            state.floors = state.floors.map((fl) =>
+              fl && typeof fl.description === 'string' && /\bcouches?\b/i.test(fl.description)
+                ? { ...fl, description: fl.description.replace(/\bcouches\b/gi, 'Sofas').replace(/\bcouch\b/gi, 'Sofa') }
+                : fl
+            );
+          }
 
           // Guarantee zones strictly match the configured floors, eliminating any ghost zones
           const validFloorNames = (state.floors || INITIAL_FLOORS).map((f) => f.name);

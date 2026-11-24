@@ -873,7 +873,11 @@
       "seatingType": "tables",
       "seats": 4,
       "status": "available",
-      "id": "t-1795517837788-0-terq"
+      "id": "t-1795517837788-0-terq",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-T07",
@@ -882,7 +886,11 @@
       "seatingType": "tables",
       "seats": 4,
       "status": "available",
-      "id": "t-1795517837788-1-tikf"
+      "id": "t-1795517837788-1-tikf",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-T08",
@@ -891,7 +899,11 @@
       "seatingType": "tables",
       "seats": 4,
       "status": "available",
-      "id": "t-1795517837788-2-caho"
+      "id": "t-1795517837788-2-caho",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-T09",
@@ -900,7 +912,11 @@
       "seatingType": "tables",
       "seats": 4,
       "status": "available",
-      "id": "t-1795517837788-3-l21n"
+      "id": "t-1795517837788-3-l21n",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-Sofa 3",
@@ -909,7 +925,11 @@
       "seatingType": "couches",
       "seats": 6,
       "status": "available",
-      "id": "t-1795517837788-4-hhqq"
+      "id": "t-1795517837788-4-hhqq",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-Sofa 4",
@@ -918,7 +938,11 @@
       "seatingType": "couches",
       "seats": 6,
       "status": "available",
-      "id": "t-1795517837788-5-myy6"
+      "id": "t-1795517837788-5-myy6",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     },
     {
       "name": "G-Sofa 5",
@@ -927,7 +951,11 @@
       "seatingType": "couches",
       "seats": 6,
       "status": "available",
-      "id": "t-1795517837788-6-19k3"
+      "id": "t-1795517837788-6-19k3",
+      "billTotal": 0,
+      "orders": [],
+      "isPaid": false,
+      "lastSettledAt": 1795517845323
     }
   ],
   "tickets": [],
@@ -18210,71 +18238,51 @@
       "deviceName": "Edge on Windows",
       "platform": "web",
       "loginTime": 1795511125084,
-      "lastActiveTime": 1795511825185
+      "lastActiveTime": 1795517982561
     },
     {
-      "sessionId": "sess_mwul08rg_k09d3b",
+      "sessionId": "sess_mwuo86uz_cjv2mk",
       "staffId": "st-master",
       "username": "master",
       "staffName": "Master Admin",
       "role": "admin",
-      "deviceId": "dev_web_mwsv4kta_jxztf_un59",
+      "deviceId": "dev_web_mwqkzuav_q6kfe_mvat",
+      "deviceName": "Chrome on Windows",
+      "platform": "web",
+      "loginTime": 1795523323069,
+      "lastActiveTime": 1795523443170
+    },
+    {
+      "sessionId": "sess_mwul28te_vs4hso",
+      "staffId": "st-master",
+      "username": "master",
+      "staffName": "Master Admin",
+      "role": "admin",
+      "deviceId": "dev_web_mwoxutps_z3jgb_4chk",
       "deviceName": "Edge on Windows",
       "platform": "web",
-      "loginTime": 1795517913455,
-      "lastActiveTime": 1795521536669
+      "loginTime": 1795518006819,
+      "lastActiveTime": 1795522649187
     }
   ],
   "revokedSessions": {
-    "sess_mwueorfg_nkqsaj": {
-      "sessionId": "sess_mwueorfg_nkqsaj",
+    "sess_mwul08rg_k09d3b": {
+      "sessionId": "sess_mwul08rg_k09d3b",
       "deviceId": "dev_web_mwsv4kta_jxztf_un59",
       "staffId": "st-master",
       "staffName": "Master Admin",
-      "timestamp": 1795508100527,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "sess_mwuf5x2t_36p9ex": {
-      "sessionId": "sess_mwuf5x2t_36p9ex",
-      "deviceId": "dev_web_mwqkzuav_q6kfe_mvat",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795508297158,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
-    },
-    "sess_mwufa4sm_bg6gb1": {
-      "sessionId": "sess_mwufa4sm_bg6gb1",
-      "deviceId": "dev_web_mwoxutps_z3jgb_u2ap",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795511286697,
+      "timestamp": 1795523323069,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
     }
   },
   "revokedDeviceIds": {
     "dev_web_mwsv4kta_jxztf_un59": {
-      "sessionId": "sess_mwueorfg_nkqsaj",
+      "sessionId": "sess_mwul08rg_k09d3b",
       "deviceId": "dev_web_mwsv4kta_jxztf_un59",
       "staffId": "st-master",
       "staffName": "Master Admin",
-      "timestamp": 1795508100527,
+      "timestamp": 1795523323069,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwoxutps_z3jgb_u2ap": {
-      "sessionId": "sess_mwufa4sm_bg6gb1",
-      "deviceId": "dev_web_mwoxutps_z3jgb_u2ap",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795511286697,
-      "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
-    },
-    "dev_web_mwqkzuav_q6kfe_mvat": {
-      "sessionId": "sess_mwuf5x2t_36p9ex",
-      "deviceId": "dev_web_mwqkzuav_q6kfe_mvat",
-      "staffId": "st-master",
-      "staffName": "Master Admin",
-      "timestamp": 1795508297158,
-      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
     }
   },
   "forceLogoutAll": null,
@@ -19126,19 +19134,19 @@
     "cashDrawerKickOnPay": true
   },
   "kitchenSettings": {
+    "overheadPct": 12,
+    "targetMarginPct": 65,
+    "priceRounding": 10,
+    "par": {},
     "varianceTolerancePct": 3,
+    "openingHour": 11,
+    "closingHour": 23,
+    "shiftLowPct": 25,
+    "shiftCriticalPct": 10,
+    "runwayAlertMin": 90,
     "alarmSound": true,
     "ingredientDefaults": {},
-    "shiftLowPct": 25,
-    "closingHour": 23,
-    "priceRounding": 10,
-    "runwayAlertMin": 90,
-    "shiftCriticalPct": 10,
-    "openingHour": 11,
-    "targetMarginPct": 65,
-    "categoryTemplates": {},
-    "par": {},
-    "overheadPct": 12
+    "categoryTemplates": {}
   },
   "deletedTicketIds": [
     "KOT-1042",
@@ -19283,7 +19291,7 @@
   "lastBillPaidAlert": null,
   "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
-  "lastUpdated": 1795523189633,
+  "lastUpdated": 1795523446032,
   "inventoryCategories": [
     "Meat",
     "Produce",

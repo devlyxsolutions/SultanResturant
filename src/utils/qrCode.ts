@@ -205,7 +205,7 @@ export function printTableStandeeHtml(
   if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
   const floorName = table.floor || 'Ground Floor';
-  const unitType = table.seatingType === 'majlis' ? 'Arabian Majlis Cabin' : table.seatingType === 'couches' ? 'VIP Couch' : 'Dining Table';
+  const unitType = table.seatingType === 'majlis' ? 'Arabian Majlis Cabin' : table.seatingType === 'couches' ? 'VIP Sofa' : 'Dining Table';
 
   const html = `
     <!DOCTYPE html>
@@ -396,7 +396,7 @@ export function printAllTablesStandeesHtml(
   const cardsHtml = tablesList.map(table => {
     const qrDataUrl = qrMap[table.id] || '';
     const floorName = table.floor || 'Ground Floor';
-    const unitType = table.seatingType === 'majlis' ? 'Arabian Majlis Cabin' : table.seatingType === 'couches' ? 'VIP Couch' : 'Dining Table';
+    const unitType = table.seatingType === 'majlis' ? 'Arabian Majlis Cabin' : table.seatingType === 'couches' ? 'VIP Sofa' : 'Dining Table';
 
     return `
       <div class="page-break">

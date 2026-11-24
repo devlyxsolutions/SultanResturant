@@ -175,7 +175,7 @@ export default function FloorsManagementScreen({
         color: formColor,
         icon: formIcon,
       });
-      notify('Floor Added', `Successfully created "${name}". You can now add tables, couches and majlis cabins to it.`);
+      notify('Floor Added', `Successfully created "${name}". You can now add tables, sofas and majlis cabins to it.`);
     }
     setModalVisible(false);
   };
@@ -285,7 +285,7 @@ export default function FloorsManagementScreen({
             </View>
             <View>
               <Text style={styles.kpiValue}>{stats.totalCouches}</Text>
-              <Text style={styles.kpiLabel}>Couches</Text>
+              <Text style={styles.kpiLabel}>Sofas</Text>
             </View>
           </View>
 
@@ -387,13 +387,13 @@ export default function FloorsManagementScreen({
                       <Text style={styles.zoneCounterSub}>{tableSeats} Seats</Text>
                     </View>
 
-                    {/* Couches */}
+                    {/* Sofas */}
                     <View style={styles.zoneCounterItem}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                         <SeatingTypeIcon type="couches" size={14} color="#E65100" />
-                        <Text style={styles.zoneCounterTitle}>Couches</Text>
+                        <Text style={styles.zoneCounterTitle}>Sofas</Text>
                       </View>
-                      <Text style={styles.zoneCounterValue}>{couchItems.length} Couches</Text>
+                      <Text style={styles.zoneCounterValue}>{couchItems.length} Sofas</Text>
                       <Text style={styles.zoneCounterSub}>{couchSeats} Seats</Text>
                     </View>
 
@@ -510,7 +510,7 @@ export default function FloorsManagementScreen({
               <Text style={styles.label}>Description / Blurb</Text>
               <TextInput
                 style={[styles.input, { height: 60, textAlignVertical: 'top' }]}
-                placeholder="e.g. Family hall, Couches & Traditional Arabian Majlis"
+                placeholder="e.g. Family hall, Sofas & Traditional Arabian Majlis"
                 value={formDescription}
                 onChangeText={setFormDescription}
                 multiline
@@ -618,7 +618,7 @@ export default function FloorsManagementScreen({
                     <View style={styles.attachedWarningBox}>
                       <Ionicons name="alert-circle" size={18} color="#E65100" />
                       <Text style={styles.attachedWarningText}>
-                        This floor has <Text style={{ fontWeight: '800' }}>{attached.length} seating units</Text> attached (tables, couches, or cabins).
+                        This floor has <Text style={{ fontWeight: '800' }}>{attached.length} seating units</Text> attached (tables, sofas, or cabins).
                       </Text>
                     </View>
                   ) : (

@@ -6,10 +6,10 @@ export type SeatingZoneType = 'tables' | 'couches' | 'majlis';
 
 export interface SeatingZoneMeta {
   type: SeatingZoneType;
-  label: string; // "Tables", "Couches", "Majlis Sitting"
-  unitLabel: string; // "Table", "Couch", "Cabin"
-  pluralUnitLabel: string; // "Tables", "Couches", "Cabins"
-  prefix: string; // "T", "C", "Cabin"
+  label: string; // "Tables", "Sofas", "Majlis Sitting"
+  unitLabel: string; // "Table", "Sofa", "Cabin"
+  pluralUnitLabel: string; // "Tables", "Sofas", "Cabins"
+  prefix: string; // "T", "S", "Cabin"
   defaultSeats: number;
   color: string;
   description: string;
@@ -28,13 +28,13 @@ export const SEATING_ZONES: Record<SeatingZoneType, SeatingZoneMeta> = {
   },
   couches: {
     type: 'couches',
-    label: 'Couches',
-    unitLabel: 'Couch',
-    pluralUnitLabel: 'Couches',
-    prefix: 'C',
+    label: 'Sofas',
+    unitLabel: 'Sofa',
+    pluralUnitLabel: 'Sofas',
+    prefix: 'S',
     defaultSeats: 6,
     color: '#E65100',
-    description: 'Comfortable sofa & lounge booth seating',
+    description: 'Comfortable sofa & lounge seating',
   },
   majlis: {
     type: 'majlis',
@@ -92,7 +92,7 @@ export const FLOOR_TEMPLATE: FloorTemplate[] = [
     prefix: 'F1',
     icon: 'people-outline',
     color: '#1976D2',
-    blurb: 'Family hall, Couches & Traditional Majlis',
+    blurb: 'Family hall, Sofas & Traditional Majlis',
     seats: [4, 4, 4, 4, 6, 6, 6, 8, 2, 2],
     zones: {
       tables: [4, 4, 4, 6],
