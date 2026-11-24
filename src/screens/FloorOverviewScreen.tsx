@@ -15,7 +15,9 @@ import { useRestaurantStore } from '../store/restaurantStore';
 import { useRolePermissions } from '../store/roleStore';
 import { BRAND } from '../constants/brand';
 import { FLOOR_TEMPLATE, getFloorMeta, sortFloors, getTableFloor, getTableSeatingType, SEATING_ZONES } from '../constants/floors';
+import { broadcastImmediately } from '../services/syncService';
 import { money, percent } from '../utils/format';
+import { findTableReservation, getFloorActiveReservations, isGroupReservation } from '../utils/reservationHelpers';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 
 export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }: { backRoute?: string }) {
@@ -33,6 +35,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
     return true;
   });
   const tickets = useRestaurantStore((s) => s.tickets) || [];
+  const reservations = useRestaurantStore((s) => s.reservations) || [];
   const addTable = useRestaurantStore((s) => s.addTable);
 
   const [selectedFloor, setSelectedFloor] = useState<string>('All');
@@ -60,6 +63,8 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
 
     const floorTableIds = new Set(floorTables.map((t) => t.id));
     const activeTickets = tickets.filter((tk) => floorTableIds.has(tk.tableId));
+    const floorGroupBookings = getFloorActiveReservations(reservations, tables, zone).filter(isGroupReservation);
+    const reservedGuestsTotal = floorGroupBookings.reduce((s, r) => s + (r.guestsCount || 0), 0);
 
     const meta = getFloorMeta(zone);
 
@@ -78,6 +83,8 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
       majlisCabinsCount: majlisList.length,
       majlisSeats,
       activeTickets: activeTickets.length,
+      groupBookingsCount: floorGroupBookings.length,
+      reservedGuestsTotal,
       occupancyRate: percent(occupied + billed, floorTables.length),
     };
   });
@@ -112,6 +119,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           });
         }
       });
+      if (created > 0) broadcastImmediately();
       const notify = created > 0 ? `Successfully set up ${created} tables across the 5 floors!` : 'All 5 floors already have tables configured.';
       if (Platform.OS === 'web') window.alert(notify);
       else Alert.alert('Floors Setup', notify);
@@ -246,6 +254,14 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                     {fs.majlisCabinsCount} Cabins ({fs.majlisSeats} Guests)
                   </Text>
                 </View>
+                {fs.groupBookingsCount > 0 && (
+                  <View style={[styles.floorZoneChip, { backgroundColor: '#F3E8FF', borderColor: '#C4B5FD' }]}>
+                    <Ionicons name="sparkles" size={12} color="#6D28D9" />
+                    <Text style={[styles.floorZoneChipText, { color: '#6D28D9', fontWeight: '900' }]}>
+                      {fs.groupBookingsCount} Group ({fs.reservedGuestsTotal}G)
+                    </Text>
+                  </View>
+                )}
               </View>
             </TouchableOpacity>
           );
@@ -291,6 +307,9 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           }
 
           const isBusy = t.status === 'occupied' || t.status === 'billed';
+          const res = findTableReservation(t, reservations, ['confirmed', 'seated']);
+          const isGroup = isGroupReservation(res);
+          const primaryTable = t.mergedInto ? tables.find((x) => x.id === t.mergedInto) : undefined;
           const tableTickets = tickets.filter(tk => tk.tableId === t.id);
           const earliestTime = tableTickets.length > 0 ? Math.min(...tableTickets.map(tk => tk.timePlaced)) : undefined;
           const occupiedTime = t.occupiedSince || earliestTime;
@@ -303,8 +322,12 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
           return (
             <TouchableOpacity
               key={t.id}
-              style={[styles.tableTile, isMajlis && { backgroundColor: '#FFFAF7', borderColor: '#4a121a40' }]}
-              onPress={() => router.push(`/manager/pos?prefillTableId=${t.id}` as any)}
+              style={[
+                styles.tableTile,
+                isMajlis && { backgroundColor: '#FFFAF7', borderColor: '#4a121a40' },
+                t.status === 'reserved' && isGroup && { backgroundColor: '#FAF5FF', borderColor: '#C4B5FD' },
+              ]}
+              onPress={() => router.push(`/manager/pos?prefillTableId=${primaryTable ? primaryTable.id : t.id}` as any)}
               activeOpacity={0.8}
             >
               <View style={styles.tileHeader}>
@@ -314,13 +337,19 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                 </View>
                 <View style={[styles.tileBadge, { backgroundColor: statusBg }]}>
                   <Text style={[styles.tileBadgeText, { color: statusText }]}>
-                    {t.status.toUpperCase()}
+                    {t.status === 'reserved' && isGroup ? `GROUP ${res?.guestsCount}G` : t.status.toUpperCase()}
                   </Text>
                 </View>
               </View>
               <Text style={[styles.tileZone, { color: zoneMeta.color }]}>
                 {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch' : 'Table'} • {floorName}
               </Text>
+              {res && (t.status === 'reserved' || isGroup) && (
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#6D28D9', marginBottom: 6 }} numberOfLines={1}>
+                  {res.customerName} • {res.guestsCount}G • {res.timeSlot}
+                  {primaryTable ? ` (with ${primaryTable.name})` : ''}
+                </Text>
+              )}
               <View style={styles.tileFooter}>
                 <Text style={[styles.tileSeats, isMajlis && { color: '#4a121a', fontWeight: '800' }]}>
                   <Ionicons name="people-outline" size={13} color={isMajlis ? '#4a121a' : BRAND.muted} />{' '}

@@ -51,6 +51,7 @@ import { useSettingsStore } from '../store/settingsStore';
 import { useShiftStore } from '../store/shiftStore';
 import { calculateOrderDiscount } from '../utils/discountCalculator';
 import { resolveMenuImageUri } from '../utils/menuImage';
+import { findTableReservation, getReservationTableCount, isGroupReservation } from '../utils/reservationHelpers';
 
 function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSettled'>): Invoice {
   const now = Date.now();
@@ -274,6 +275,8 @@ export default function POSTerminalScreen({
   const regions = useRestaurantStore((state) => state.regions) || [];
   const customers = useRestaurantStore((state) => state.customers) || [];
   const tables = useRestaurantStore((state) => state.tables) || [];
+  const reservations = useRestaurantStore((state) => state.reservations) || [];
+  const seatReservation = useRestaurantStore((state) => state.seatReservation);
   const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
   const addCustomer = useRestaurantStore((state) => state.addCustomer);
   const updateCustomer = useRestaurantStore((state) => state.updateCustomer);
@@ -334,7 +337,7 @@ export default function POSTerminalScreen({
   // Table Modal Filters
   const [tableModalFloor, setTableModalFloor] = useState<string>('All');
   const [tableModalSeatingType, setTableModalSeatingType] = useState<'all' | SeatingZoneType>('all');
-  const [tableModalStatus, setTableModalStatus] = useState<'all' | 'available' | 'occupied'>('all');
+  const [tableModalStatus, setTableModalStatus] = useState<'all' | 'available' | 'occupied' | 'reserved'>('all');
 
   const [generatedInvoice, setGeneratedInvoice] = useState<any>(null);
   const [tableDecisionModal, setTableDecisionModal] = useState<{ tableId: string; tableName: string; invoice: any } | null>(null);
@@ -373,17 +376,21 @@ export default function POSTerminalScreen({
       if (tableModalStatus !== 'all') {
         if (tableModalStatus === 'available' && t.status !== 'available') return false;
         if (tableModalStatus === 'occupied' && t.status !== 'occupied' && t.status !== 'billed') return false;
+        if (tableModalStatus === 'reserved' && t.status !== 'reserved') return false;
       }
       if (tableSearchQuery.trim()) {
         const q = tableSearchQuery.toLowerCase().trim();
+        const res = findTableReservation(t, reservations);
         const matchesName = t.name.toLowerCase().includes(q);
         const matchesFloor = tFloor.toLowerCase().includes(q);
         const matchesServer = Boolean(t.server && t.server.toLowerCase().includes(q));
-        if (!matchesName && !matchesFloor && !matchesServer) return false;
+        const matchesGuest = Boolean(res?.customerName?.toLowerCase().includes(q));
+        const matchesOccasion = Boolean(res?.occasion?.toLowerCase().includes(q));
+        if (!matchesName && !matchesFloor && !matchesServer && !matchesGuest && !matchesOccasion) return false;
       }
       return true;
     });
-  }, [tables, tableModalFloor, tableModalSeatingType, tableModalStatus, tableSearchQuery, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
+  }, [tables, reservations, tableModalFloor, tableModalSeatingType, tableModalStatus, tableSearchQuery, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   const recent8Invoices = useMemo(() => {
     return [...invoices]
@@ -2723,16 +2730,32 @@ export default function POSTerminalScreen({
                   />
                 </View>
 
-                {(['all', 'available', 'occupied'] as const).map((st) => {
+                {(['all', 'available', 'occupied', 'reserved'] as const).map((st) => {
                   const active = tableModalStatus === st;
+                  const count =
+                    st === 'all'
+                      ? tables.length
+                      : st === 'occupied'
+                      ? tables.filter((x) => x.status === 'occupied' || x.status === 'billed').length
+                      : tables.filter((x) => x.status === st).length;
                   return (
                     <TouchableOpacity
                       key={st}
-                      style={[styles.filterChip, active && styles.filterChipActive]}
+                      style={[
+                        styles.filterChip,
+                        active && styles.filterChipActive,
+                        st === 'reserved' && !active && count > 0 && { borderColor: '#C4B5FD', backgroundColor: '#FAF5FF' },
+                      ]}
                       onPress={() => setTableModalStatus(st)}
                     >
-                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                        {st.charAt(0).toUpperCase() + st.slice(1)}
+                      <Text
+                        style={[
+                          styles.filterChipText,
+                          active && styles.filterChipTextActive,
+                          st === 'reserved' && !active && count > 0 && { color: '#6D28D9' },
+                        ]}
+                      >
+                        {st.charAt(0).toUpperCase() + st.slice(1)} ({count})
                       </Text>
                     </TouchableOpacity>
                   );
@@ -2744,6 +2767,10 @@ export default function POSTerminalScreen({
               {filteredModalTables.map((t) => {
                 const isSelected = selectedTableId === t.id;
                 const isBusy = t.status === 'occupied' || t.status === 'billed';
+                const isReserved = t.status === 'reserved';
+                const res = findTableReservation(t, reservations, ['confirmed', 'seated']);
+                const isGroup = isGroupReservation(res);
+                const primaryTable = t.mergedInto ? tables.find((x) => x.id === t.mergedInto) : undefined;
                 const sType = getTableSeatingType(t);
                 const tTickets = tickets.filter((tk) => tk.tableId === t.id);
                 const runningBill =
@@ -2753,43 +2780,91 @@ export default function POSTerminalScreen({
                     0
                   );
 
+                const onPickTable = () => {
+                  if (isReserved && res && res.status === 'confirmed') {
+                    const msg = `${t.name} is RESERVED for ${res.customerName} (${res.guestsCount} Guests at ${res.timeSlot}${
+                      res.occasion ? ` • ${res.occasion}` : ''
+                    }).\n\nCheck-in & seat this ${isGroup ? 'group arrangement' : 'reservation'} now and open order on ${
+                      primaryTable ? primaryTable.name : t.name
+                    }?`;
+                    const proceed = () => {
+                      seatReservation(res.id);
+                      broadcastImmediately();
+                      handleTableSelect(res.tableId || t.id);
+                    };
+                    if (Platform.OS === 'web') {
+                      if (window.confirm(msg)) proceed();
+                    } else {
+                      Alert.alert('Reserved Table Check-In', msg, [
+                        { text: 'Cancel', style: 'cancel' },
+                        { text: 'Seat & Open Order', onPress: proceed },
+                      ]);
+                    }
+                    return;
+                  }
+                  // If tapping a secondary joined table of a seated group, route to the primary table so all items stay on one unified bill
+                  handleTableSelect(primaryTable ? primaryTable.id : t.id);
+                };
+
                 return (
                   <TouchableOpacity
                     key={t.id}
                     style={[
                       styles.tablePickerCard,
                       isBusy && styles.tablePickerCardBusy,
+                      isReserved && { borderColor: '#A855F7', backgroundColor: '#FAF5FF' },
                       isSelected && styles.tablePickerCardSelected,
                     ]}
-                    onPress={() => handleTableSelect(t.id)}
+                    onPress={onPickTable}
                   >
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <SeatingTypeIcon type={sType} size={16} color={isBusy ? '#DC2626' : '#15803D'} />
-                        <Text style={styles.tablePickerName}>{t.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <SeatingTypeIcon
+                          type={sType}
+                          size={16}
+                          color={isReserved ? '#7C3AED' : isBusy ? '#DC2626' : '#15803D'}
+                        />
+                        <Text style={styles.tablePickerName} numberOfLines={1}>{t.name}</Text>
                       </View>
                       <View
                         style={[
                           styles.tableStatusDot,
-                          { backgroundColor: isBusy ? '#DC2626' : '#16A34A' },
+                          { backgroundColor: isReserved ? '#7C3AED' : isBusy ? '#DC2626' : '#16A34A' },
                         ]}
                       />
                     </View>
                     <Text style={styles.tablePickerMeta}>
                       {getTableFloor(t)} • {t.seats} Seats
                     </Text>
-                    <Text
-                      style={[
-                        styles.tablePickerStatus,
-                        { color: isBusy ? '#DC2626' : '#15803D' },
-                      ]}
-                    >
-                      {isBusy
-                        ? !hidePrices && runningBill > 0
-                          ? `Occupied • Rs. ${runningBill.toLocaleString()}`
-                          : 'Occupied'
-                        : 'Available'}
-                    </Text>
+                    {isReserved && res ? (
+                      <View style={{ marginTop: 4, gap: 2 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '900', color: '#6D28D9' }} numberOfLines={1}>
+                          {isGroup ? `GROUP • ${res.guestsCount}G` : `RESERVED • ${res.guestsCount}G`} • {res.timeSlot}
+                        </Text>
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: '#4C1D95' }} numberOfLines={1}>
+                          {res.customerName}
+                          {primaryTable ? ` (Joined ${primaryTable.name})` : getReservationTableCount(res) > 1 ? ` (${getReservationTableCount(res)} units)` : ''}
+                        </Text>
+                      </View>
+                    ) : (
+                      <Text
+                        style={[
+                          styles.tablePickerStatus,
+                          { color: isBusy ? '#DC2626' : '#15803D' },
+                        ]}
+                        numberOfLines={2}
+                      >
+                        {primaryTable
+                          ? `Joined with ${primaryTable.name}${res && isGroup ? ` (${res.guestsCount}G)` : ''}`
+                          : isBusy
+                          ? !hidePrices && runningBill > 0
+                            ? `${res && isGroup ? `Group ${res.guestsCount}G • ` : ''}Occupied • Rs. ${runningBill.toLocaleString()}`
+                            : res && isGroup
+                            ? `Seated Group • ${res.guestsCount} Guests`
+                            : 'Occupied'
+                          : 'Available'}
+                      </Text>
+                    )}
                   </TouchableOpacity>
                 );
               })}

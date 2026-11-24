@@ -10,13 +10,19 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
+import { usePathname } from 'expo-router';
 import { getActiveServerHttpUrl } from '../services/syncService';
+import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 
 export const INSTALLED_APK_VERSION = 19;
 export const APP_VERSION_LABEL = `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
 export default function CentralUpdateHost() {
+  const pathname = usePathname();
+  const isPublicGuestPortal =
+    isCustomerPortalRoute() ||
+    Boolean(pathname && (pathname === '/menu' || pathname.startsWith('/menu/') || pathname === '/feedback' || pathname.startsWith('/feedback/')));
   const initialWebHashRef = useRef<string | null>(null);
   const initialApkHashRef = useRef<string | null>(null);
   const [apkUpdateAvailable, setApkUpdateAvailable] = useState(false);
@@ -26,6 +32,7 @@ export default function CentralUpdateHost() {
   const [isServerConnected, setIsServerConnected] = useState<boolean>(false);
 
   useEffect(() => {
+    if (isPublicGuestPortal) return;
     let mounted = true;
 
     const checkCentralServerUpdate = async () => {
@@ -130,6 +137,8 @@ export default function CentralUpdateHost() {
       }
     } catch { }
   };
+
+  if (isPublicGuestPortal) return null;
 
   const hasNewerServerVersion = serverVersion > INSTALLED_APK_VERSION;
   const canTapBadgeToUpdate = Platform.OS === 'android' && (apkUpdateAvailable || hasNewerServerVersion);

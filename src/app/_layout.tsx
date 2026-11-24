@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect } from 'react';
-import { Platform, View, LogBox } from 'react-native';
+import React, { useEffect } from 'react';
+import { Platform, View, Text, TouchableOpacity, LogBox } from 'react-native';
 import * as Font from 'expo-font';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { initSyncService } from '../services/syncService';
@@ -119,6 +119,51 @@ if (Platform.OS === 'web') {
         event.stopImmediatePropagation?.();
       }
     });
+  }
+}
+
+class AppErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { hasError: boolean; errorMsg: string }
+> {
+  constructor(props: { children: React.ReactNode }) {
+    super(props);
+    this.state = { hasError: false, errorMsg: '' };
+  }
+
+  static getDerivedStateFromError(error: any) {
+    return { hasError: true, errorMsg: String(error?.message || error || 'Unexpected UI error') };
+  }
+
+  componentDidCatch(error: any) {
+    console.error('[Sultan ErrorBoundary]', error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <View style={{ flex: 1, backgroundColor: '#24050A', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+          <Text style={{ color: '#F3D179', fontSize: 20, fontWeight: '900', marginBottom: 8 }}>
+            Sultan POS Recovery
+          </Text>
+          <Text style={{ color: '#E2E8F0', fontSize: 13, textAlign: 'center', maxWidth: 440, marginBottom: 18 }}>
+            {this.state.errorMsg}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 10 }}>
+            <TouchableOpacity
+              style={{ backgroundColor: '#D4AF37', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 10 }}
+              onPress={() => {
+                this.setState({ hasError: false, errorMsg: '' });
+                if (Platform.OS === 'web' && typeof window !== 'undefined') window.location.reload();
+              }}
+            >
+              <Text style={{ color: '#24050A', fontWeight: '900' }}>Reload App</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      );
+    }
+    return this.props.children;
   }
 }
 
@@ -390,13 +435,15 @@ export default function RootLayout() {
       )}
 
       {/* Screen container */}
-      <View
-        id="sultan-screen-wrapper"
-        style={{ flex: 1 }}
-        {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true', pageEnter: 'true' } } as any) : {})}
-      >
-        <Stack screenOptions={{ headerShown: false }} />
-      </View>
+      <AppErrorBoundary>
+        <View
+          id="sultan-screen-wrapper"
+          style={{ flex: 1 }}
+          {...(Platform.OS === 'web' ? ({ dataSet: { pageLanding: 'true', pageEnter: 'true' } } as any) : {})}
+        >
+          <Stack screenOptions={{ headerShown: false }} />
+        </View>
+      </AppErrorBoundary>
 
       {/* Live stock / kitchen handover alarms for admin, manager and kitchen roles */}
       <StockAlarmHost />

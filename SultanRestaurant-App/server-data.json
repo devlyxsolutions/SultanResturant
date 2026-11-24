@@ -3059,7 +3059,7 @@
           "completed": true,
           "station": "juice",
           "qty": 1,
-          "name": "Kanaf Spanish Latte (Hot (Single Origin))"
+          "name": "Sultan Spanish Latte (Hot (Single Origin))"
         }
       ],
       "tableName": "F1-06",
@@ -3119,7 +3119,7 @@
           "name": "Cold Brew Iced Americano"
         },
         {
-          "name": "Kanaf Spanish Latte (Hot (Single Origin))",
+          "name": "Sultan Spanish Latte (Hot (Single Origin))",
           "completed": true,
           "price": 650,
           "qty": 1,
@@ -3182,14 +3182,14 @@
         },
         {
           "qty": 1,
-          "name": "Kanaf Spanish Latte (Iced Spanish Latte)",
+          "name": "Sultan Spanish Latte (Iced Spanish Latte)",
           "completed": true,
           "id": "m1-Iced Spanish Latte",
           "station": "juice",
           "price": 680
         },
         {
-          "name": "Kanaf Royal Cheese Kunafa (Family Platter (Sharing))",
+          "name": "Sultan Royal Cheese Kunafa (Family Platter (Sharing))",
           "id": "m9-Family Platter (Sharing)",
           "station": "main",
           "qty": 1,
@@ -3350,7 +3350,7 @@
           "price": 950,
           "id": "m15",
           "qty": 1,
-          "name": "Kanaf Club Sandwich & Fries"
+          "name": "Sultan Club Sandwich & Fries"
         },
         {
           "station": "main",
