@@ -1,36 +1,36 @@
-import React, { useState, useMemo, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Platform,
-  Alert,
-  ScrollView,
-  TextInput,
-  useWindowDimensions,
-} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import { useRestaurantStore, useAuthStore } from '../../store';
-import { Ticket } from '../../store/restaurantStore';
-import { useSettingsStore } from '../../store/settingsStore';
+import { useEffect, useMemo, useState } from 'react';
 import {
-  sortFloors,
+  Alert,
+  FlatList,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from 'react-native';
+import FullscreenButton from '../../components/FullscreenButton';
+import SeatingTypeIcon from '../../components/SeatingTypeIcon';
+import SyncStatusBadge from '../../components/SyncStatusBadge';
+import { BRAND as BRAND_PALETTE } from '../../constants/brand';
+import {
   getFloorMeta,
   getTableFloor,
   getTableSeatingType,
-  SeatingZoneType,
-  SEATING_ZONES,
   SEATING_ZONE_TYPES,
+  SEATING_ZONES,
+  SeatingZoneType,
+  sortFloors,
 } from '../../constants/floors';
-import SeatingTypeIcon from '../../components/SeatingTypeIcon';
-import FullscreenButton from '../../components/FullscreenButton';
-import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { broadcastImmediately } from '../../services/syncService';
-import { BRAND as BRAND_PALETTE } from '../../constants/brand';
+import { useAuthStore, useRestaurantStore } from '../../store';
+import { Ticket } from '../../store/restaurantStore';
+import { useSettingsStore } from '../../store/settingsStore';
 import {
   doesOrderBelongToUser,
   isOrderTakerUser,
@@ -64,7 +64,7 @@ function playFoodReadyChime() {
         osc.start(now);
         osc.stop(now + 0.55);
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 }
 
@@ -114,12 +114,12 @@ export default function OrderTakerScreen() {
     currentStaff?.assignedZones && currentStaff.assignedZones.length > 0
       ? currentStaff.assignedZones
       : currentStaff?.assignedZone
-      ? [currentStaff.assignedZone]
-      : user?.assignedZones && user.assignedZones.length > 0
-      ? user.assignedZones
-      : user?.assignedZone
-      ? [user.assignedZone]
-      : ['All Floors'];
+        ? [currentStaff.assignedZone]
+        : user?.assignedZones && user.assignedZones.length > 0
+          ? user.assignedZones
+          : user?.assignedZone
+            ? [user.assignedZone]
+            : ['All Floors'];
 
   const isAllFloors =
     systemSettings.enableWaiterFloorLock === false ||
@@ -164,12 +164,12 @@ export default function OrderTakerScreen() {
                 (k) => typeof k === 'string' && (k.includes('_') || /^\d{10,}$/.test(k))
               );
               setDismissedAlerts(clean);
-              AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(clean.slice(-60))).catch(() => {});
+              AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(clean.slice(-60))).catch(() => { });
             }
-          } catch (e) {}
+          } catch (e) { }
         }
       })
-      .catch(() => {});
+      .catch(() => { });
   }, []);
 
   const handleDismissBillPaidAlert = async () => {
@@ -185,7 +185,7 @@ export default function OrderTakerScreen() {
 
     try {
       await AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(newDismissed.slice(-60)));
-    } catch (e) {}
+    } catch (e) { }
 
     clearBillPaidAlert(lastBillPaidAlert.id || lastBillPaidAlert.tableId);
     clearBillPaidAlert();
@@ -210,7 +210,7 @@ export default function OrderTakerScreen() {
         setDismissedAlerts(newDismissed);
         try {
           await AsyncStorage.setItem('@sultan_dismissed_bill_alerts', JSON.stringify(newDismissed.slice(-60)));
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -316,8 +316,8 @@ export default function OrderTakerScreen() {
     !isAllFloors && authorizedFloors.length === 1
       ? authorizedFloors[0]
       : selectedFloor !== 'All' && authorizedFloors.includes(selectedFloor)
-      ? selectedFloor
-      : 'All';
+        ? selectedFloor
+        : 'All';
 
   // 3. Scoped tables by Floor authorization, seating zone toggles, selected floor tab & Order Taker ownership
   // Order Takers see Available tables (to take new orders) + ONLY Occupied/Billed tables where THEY placed the order!
@@ -451,9 +451,8 @@ export default function OrderTakerScreen() {
     }
     const res = findTableReservation(tapped, reservations, ['confirmed', 'seated']);
     if (tapped.status === 'reserved' && res && res.status === 'confirmed') {
-      const msg = `${tapped.name} is RESERVED for ${res.customerName} (${res.guestsCount} Guests at ${res.timeSlot}${
-        res.occasion ? ` • ${res.occasion}` : ''
-      }).\n\nPlease confirm with the Floor Manager before seating walk-in guests. Open order anyway?`;
+      const msg = `${tapped.name} is RESERVED for ${res.customerName} (${res.guestsCount} Guests at ${res.timeSlot}${res.occasion ? ` • ${res.occasion}` : ''
+        }).\n\nPlease confirm with the Floor Manager before seating walk-in guests. Open order anyway?`;
       if (Platform.OS === 'web') {
         if (!window.confirm(msg)) return;
       } else {
@@ -529,8 +528,8 @@ export default function OrderTakerScreen() {
                 isMajlis
                   ? styles.majlisIconBubble
                   : isCouch
-                  ? styles.couchIconBubble
-                  : styles.tableIconBubble,
+                    ? styles.couchIconBubble
+                    : styles.tableIconBubble,
               ]}
             >
               <SeatingTypeIcon type={seatingType} size={20} color={isMajlis ? '#D5A943' : zoneMeta.color} />
@@ -551,7 +550,7 @@ export default function OrderTakerScreen() {
                       { color: isMajlis ? '#8A5D00' : zoneMeta.color },
                     ]}
                   >
-                    {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch Lounge' : 'Dining Table'}
+                    {isMajlis ? 'Majlis Cabin' : isCouch ? 'Sofa Lounge' : 'Dining Table'}
                   </Text>
                 </View>
                 <Text style={styles.dot}>•</Text>
@@ -572,12 +571,12 @@ export default function OrderTakerScreen() {
                   statusColor === '#34C759'
                     ? '#E8F8EE'
                     : statusColor === '#007AFF'
-                    ? '#E8F2FF'
-                    : statusColor === '#E67E22'
-                    ? '#FEF5E7'
-                    : statusColor === '#7D3C98'
-                    ? '#F3E8FF'
-                    : '#FDEDEC',
+                      ? '#E8F2FF'
+                      : statusColor === '#E67E22'
+                        ? '#FEF5E7'
+                        : statusColor === '#7D3C98'
+                          ? '#F3E8FF'
+                          : '#FDEDEC',
                 borderColor: statusColor + '55',
               },
             ]}
@@ -587,10 +586,10 @@ export default function OrderTakerScreen() {
               {isFoodReady
                 ? 'READY'
                 : isBilled
-                ? 'BILLED'
-                : isReserved && isGroupRes
-                ? `GROUP ${tableRes?.guestsCount}G`
-                : item.status.toUpperCase()}
+                  ? 'BILLED'
+                  : isReserved && isGroupRes
+                    ? `GROUP ${tableRes?.guestsCount}G`
+                    : item.status.toUpperCase()}
             </Text>
           </View>
         </View>
@@ -605,8 +604,8 @@ export default function OrderTakerScreen() {
                 {isMajlis
                   ? `Capacity: ${item.seats} Guests (Family Cabin)`
                   : isCouch
-                  ? `Seating: ${item.seats} Guests (Lounge)`
-                  : `Seating: ${item.seats} Guests`}
+                    ? `Seating: ${item.seats} Guests (Lounge)`
+                    : `Seating: ${item.seats} Guests`}
               </Text>
             </View>
 
@@ -630,8 +629,8 @@ export default function OrderTakerScreen() {
                   {primaryGroupTable
                     ? ` (Joined ${primaryGroupTable.name})`
                     : getReservationTableCount(tableRes) > 1
-                    ? ` (${getReservationTableCount(tableRes)} units)`
-                    : ''}
+                      ? ` (${getReservationTableCount(tableRes)} units)`
+                      : ''}
                 </Text>
               </View>
             ) : item.status === 'occupied' || item.status === 'billed' ? (
@@ -641,10 +640,10 @@ export default function OrderTakerScreen() {
                   {primaryGroupTable
                     ? `Joined with ${primaryGroupTable.name}`
                     : item.status === 'billed'
-                    ? 'Bill Requested'
-                    : tableRes && isGroupRes
-                    ? `Seated Group (${tableRes.guestsCount}G)`
-                    : 'Active Order'}
+                      ? 'Bill Requested'
+                      : tableRes && isGroupRes
+                        ? `Seated Group (${tableRes.guestsCount}G)`
+                        : 'Active Order'}
                 </Text>
               </View>
             ) : (
@@ -681,8 +680,8 @@ export default function OrderTakerScreen() {
                   {isPartialItemReady
                     ? `READY: ${itemNames}${extraCount}`
                     : roundCount > 1
-                    ? `FOOD READY AT PASS (Round #${roundCount})`
-                    : 'FOOD READY AT PASS!'}
+                      ? `FOOD READY AT PASS (Round #${roundCount})`
+                      : 'FOOD READY AT PASS!'}
                 </Text>
               </View>
             );
@@ -710,8 +709,8 @@ export default function OrderTakerScreen() {
               {isOccupied
                 ? 'View items / Add punch ➔'
                 : isBilled
-                ? 'Guests Dining / Billed ➔'
-                : 'Take customer order ➔'}
+                  ? 'Guests Dining / Billed ➔'
+                  : 'Take customer order ➔'}
             </Text>
           </View>
 
@@ -814,7 +813,7 @@ export default function OrderTakerScreen() {
             }}
           />
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[styles.compactSyncBtn, isSyncing && styles.compactSyncBtnActive]}
             onPress={() => {
               setIsSyncing(true);
@@ -823,17 +822,17 @@ export default function OrderTakerScreen() {
             }}
             activeOpacity={0.7}
           >
-            <Ionicons 
-              name="sync-outline" 
-              size={13} 
-              color={isSyncing ? '#D4AF37' : '#636366'} 
+            <Ionicons
+              name="sync-outline"
+              size={13}
+              color={isSyncing ? '#D4AF37' : '#636366'}
             />
             <Text style={[styles.compactSyncText, isSyncing && { color: '#D4AF37' }]}>
               {isSyncing ? 'Synced' : 'Sync'}
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.compactTakeawayBtn}
             onPress={() => router.push('/waiter/order/takeaway')}
             activeOpacity={0.8}
@@ -849,7 +848,7 @@ export default function OrderTakerScreen() {
         <Ionicons name="search" size={15} color="#8E8E93" />
         <TextInput
           style={styles.compactSearchInput}
-          placeholder="Search tables, couches, cabins by name..."
+          placeholder="Search tables, sofas, cabins by name..."
           placeholderTextColor="#AEAEB2"
           value={search}
           onChangeText={setSearch}
@@ -1291,247 +1290,247 @@ export default function OrderTakerScreen() {
         </ScrollView>
       </View>
 
-        {/* Real-time KDS Status Alert Banner (Strictly ONLY for this Order Taker's own orders) */}
-        {shouldShowFoodReadyAlert && activeKdsAlert && (
+      {/* Real-time KDS Status Alert Banner (Strictly ONLY for this Order Taker's own orders) */}
+      {shouldShowFoodReadyAlert && activeKdsAlert && (
+        <View
+          style={[
+            styles.billPaidAlertBanner,
+            activeKdsAlert.type === 'cooking_started'
+              ? { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }
+              : { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+          ]}
+        >
           <View
             style={[
-              styles.billPaidAlertBanner,
+              styles.billPaidIconBox,
               activeKdsAlert.type === 'cooking_started'
-                ? { backgroundColor: '#FFFBEB', borderColor: '#FCD34D' }
-                : { backgroundColor: '#F0FDF4', borderColor: '#86EFAC' },
+                ? { backgroundColor: '#FEF3C7' }
+                : { backgroundColor: '#DCFCE7' },
             ]}
           >
-            <View
+            <Ionicons
+              name={activeKdsAlert.type === 'cooking_started' ? 'flame' : 'restaurant'}
+              size={20}
+              color={activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A'}
+            />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text
               style={[
-                styles.billPaidIconBox,
-                activeKdsAlert.type === 'cooking_started'
-                  ? { backgroundColor: '#FEF3C7' }
-                  : { backgroundColor: '#DCFCE7' },
+                styles.billPaidAlertTitle,
+                { color: activeKdsAlert.type === 'cooking_started' ? '#B45309' : '#15803D' },
               ]}
             >
-              <Ionicons
-                name={activeKdsAlert.type === 'cooking_started' ? 'flame' : 'restaurant'}
-                size={20}
-                color={activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A'}
-              />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[
-                  styles.billPaidAlertTitle,
-                  { color: activeKdsAlert.type === 'cooking_started' ? '#B45309' : '#15803D' },
-                ]}
-              >
-                {activeKdsAlert.type === 'cooking_started'
-                  ? `KDS Cooking Started: ${activeKdsAlert.tableName}`
-                  : activeKdsAlert.type === 'item_ready'
-                    ? `KDS Dish Ready: ${activeKdsAlert.tableName}`
-                    : `KDS Order Ready: ${activeKdsAlert.tableName}`}
-              </Text>
-              <Text
-                style={[
-                  styles.billPaidAlertDesc,
-                  { color: activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534' },
-                ]}
-              >
-                {activeKdsAlert.station === 'juice' ? 'Juice Bar KDS' : 'Kitchen KDS'}:{' '}
-                <Text style={{ fontWeight: '700' }}>
-                  {activeKdsAlert.singleItemName || activeKdsAlert.itemsSummary}
-                </Text>
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={{
-                backgroundColor: activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 8,
-                marginRight: 6,
-              }}
-              onPress={() => router.push(`/waiter/order/${activeKdsAlert.tableId}` as any)}
+              {activeKdsAlert.type === 'cooking_started'
+                ? `KDS Cooking Started: ${activeKdsAlert.tableName}`
+                : activeKdsAlert.type === 'item_ready'
+                  ? `KDS Dish Ready: ${activeKdsAlert.tableName}`
+                  : `KDS Order Ready: ${activeKdsAlert.tableName}`}
+            </Text>
+            <Text
+              style={[
+                styles.billPaidAlertDesc,
+                { color: activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534' },
+              ]}
             >
-              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>View ➔</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.billPaidDismissBtn}
-              onPress={() => clearFoodReadyAlert(activeKdsAlert.id)}
-            >
-              <Ionicons
-                name="close"
-                size={18}
-                color={activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534'}
-              />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* My Placed Orders — Live KDS Status Tracker (Strictly this Order Taker's own orders) */}
-        {myActiveKdsTickets.length > 0 && (
-          <View
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              borderWidth: 1.5,
-              borderColor: '#E2E8F0',
-              padding: 10,
-              marginBottom: 8,
-              gap: 8,
-            }}
-          >
-            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Ionicons name="flame" size={16} color="#D97706" />
-                <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#0F172A' }}>
-                  {isOrderTaker ? 'MY PLACED ORDERS — LIVE KDS STATUS' : 'ACTIVE ORDERS — LIVE KDS STATUS'} ({myActiveKdsTickets.length})
-                </Text>
-              </View>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
-                Live Kitchen Updates
+              {activeKdsAlert.station === 'juice' ? 'Juice Bar KDS' : 'Kitchen KDS'}:{' '}
+              <Text style={{ fontWeight: '700' }}>
+                {activeKdsAlert.singleItemName || activeKdsAlert.itemsSummary}
               </Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-              {myActiveKdsTickets.map((tk) => {
-                const tkReady = isTicketReadyForPickup(tk);
-                const tkCooking = !tkReady && (tk.status === 'cooking' || tk.stationStatuses?.main === 'cooking' || tk.stationStatuses?.juice === 'cooking');
-                const statusBg = tkReady ? '#DCFCE7' : tkCooking ? '#FEF3C7' : '#F1F5F9';
-                const statusColor = tkReady ? '#15803D' : tkCooking ? '#B45309' : '#475569';
-                const statusLabel = tkReady ? 'READY AT PASS' : tkCooking ? 'COOKING IN KDS' : 'PENDING IN KDS';
-                const itemsPreview = (tk.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ');
-                const elapsedMin = Math.max(0, Math.floor((Date.now() - (tk.timePlaced || Date.now())) / 60000));
-                return (
-                  <TouchableOpacity
-                    key={tk.id}
-                    style={{
-                      width: 240,
-                      backgroundColor: tkReady ? '#F0FDF4' : '#F8FAFC',
-                      borderWidth: 1.5,
-                      borderColor: tkReady ? '#22C55E' : tkCooking ? '#F59E0B' : '#CBD5E1',
-                      borderRadius: 10,
-                      padding: 10,
-                      gap: 5,
-                    }}
-                    onPress={() => router.push(`/waiter/order/${tk.tableId}` as any)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-                      <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0F172A', flex: 1 }} numberOfLines={1}>
-                        {tk.tableName}
-                      </Text>
-                      <View style={{ backgroundColor: statusBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
-                        <Text style={{ fontSize: 10, fontWeight: '900', color: statusColor }}>
-                          {statusLabel}
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={{ fontSize: 11.5, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
-                      {itemsPreview}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700' }}>
-                        #{tk.id.slice(-4)} • {elapsedMin}m ago
-                      </Text>
-                      {tkReady && (
-                        <TouchableOpacity
-                          style={{ backgroundColor: '#16A34A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}
-                          onPress={(e) => {
-                            e.stopPropagation?.();
-                            serveTableTickets(tk.tableId);
-                            clearFoodReadyAlert(tk.id);
-                            broadcastImmediately();
-                          }}
-                        >
-                          <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Serve Now</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
-
-        {/* Real-time Bill Paid Alert Banner */}
-        {shouldShowBillPaidAlert && lastBillPaidAlert && (
-          <View style={styles.billPaidAlertBanner}>
-            <View style={styles.billPaidIconBox}>
-              <Ionicons name="card" size={20} color="#E67E22" />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.billPaidAlertTitle}>
-                Bill Paid: {lastBillPaidAlert.tableName}!
-              </Text>
-              <Text style={styles.billPaidAlertDesc}>
-                Bill settled at Cashier counter. Guests are still seated — tap Release below when vacated.
-              </Text>
-            </View>
-            <TouchableOpacity style={styles.billPaidDismissBtn} onPress={handleDismissBillPaidAlert}>
-              <Ionicons name="close" size={18} color="#666" />
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Notification banner if food is ready for this Order Taker's tables */}
-        {readyTickets.length > 0 && (
-          <View style={styles.readyAlertBanner}>
-            <Ionicons name="notifications" size={22} color="#007AFF" />
-            <View style={{ flex: 1, marginLeft: 6 }}>
-              <Text style={styles.readyAlertTitle}>
-                {readyTickets.length} Order{readyTickets.length > 1 ? 's' : ''} Ready for Pickup!
-              </Text>
-              <Text style={styles.readyAlertDesc}>
-                {Array.from(new Set(readyTickets.map((t) => t.tableName))).join(', ')} ready at the pass.
-              </Text>
-            </View>
-            <TouchableOpacity
-              style={{
-                backgroundColor: '#007AFF',
-                paddingHorizontal: 12,
-                paddingVertical: 7,
-                borderRadius: 8,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 4,
-              }}
-              onPress={() => {
-                readyTickets.forEach((t) => serveTableTickets(t.tableId));
-                broadcastImmediately();
-                const msg = 'All ready orders marked served!';
-                if (Platform.OS !== 'web') Alert.alert('Served', msg);
-              }}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="checkmark-done" size={14} color="#fff" />
-              <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Serve All</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Tables & Cabins Grid */}
-        {visibleTables.length > 0 ? (
-          <FlatList
-            data={visibleTables}
-            keyExtractor={(item) => item.id}
-            renderItem={renderTable}
-            numColumns={columns}
-            key={`waiter-cols-${columns}`}
-            contentContainerStyle={styles.listContent}
-            columnWrapperStyle={columns > 1 ? styles.rowWrapper : undefined}
-            showsVerticalScrollIndicator={false}
-          />
-        ) : (
-          <View style={styles.emptyState}>
-            <Ionicons name="business-outline" size={48} color="#C7C7CC" />
-            <Text style={styles.emptyTitle}>No units found</Text>
-            <Text style={styles.emptySubtitle}>
-              No tables or cabins match the selected filters on{' '}
-              <Text style={{ fontWeight: '700', color: '#1C1C1E' }}>
-                {activeFloor === 'All' ? authorizedFloors.join(', ') : activeFloor}
-              </Text>.
             </Text>
           </View>
-        )}
-      </View>
+          <TouchableOpacity
+            style={{
+              backgroundColor: activeKdsAlert.type === 'cooking_started' ? '#D97706' : '#16A34A',
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 8,
+              marginRight: 6,
+            }}
+            onPress={() => router.push(`/waiter/order/${activeKdsAlert.tableId}` as any)}
+          >
+            <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '700' }}>View ➔</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.billPaidDismissBtn}
+            onPress={() => clearFoodReadyAlert(activeKdsAlert.id)}
+          >
+            <Ionicons
+              name="close"
+              size={18}
+              color={activeKdsAlert.type === 'cooking_started' ? '#92400E' : '#166534'}
+            />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* My Placed Orders — Live KDS Status Tracker (Strictly this Order Taker's own orders) */}
+      {myActiveKdsTickets.length > 0 && (
+        <View
+          style={{
+            backgroundColor: '#FFFFFF',
+            borderRadius: 12,
+            borderWidth: 1.5,
+            borderColor: '#E2E8F0',
+            padding: 10,
+            marginBottom: 8,
+            gap: 8,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Ionicons name="flame" size={16} color="#D97706" />
+              <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#0F172A' }}>
+                {isOrderTaker ? 'MY PLACED ORDERS — LIVE KDS STATUS' : 'ACTIVE ORDERS — LIVE KDS STATUS'} ({myActiveKdsTickets.length})
+              </Text>
+            </View>
+            <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>
+              Live Kitchen Updates
+            </Text>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+            {myActiveKdsTickets.map((tk) => {
+              const tkReady = isTicketReadyForPickup(tk);
+              const tkCooking = !tkReady && (tk.status === 'cooking' || tk.stationStatuses?.main === 'cooking' || tk.stationStatuses?.juice === 'cooking');
+              const statusBg = tkReady ? '#DCFCE7' : tkCooking ? '#FEF3C7' : '#F1F5F9';
+              const statusColor = tkReady ? '#15803D' : tkCooking ? '#B45309' : '#475569';
+              const statusLabel = tkReady ? 'READY AT PASS' : tkCooking ? 'COOKING IN KDS' : 'PENDING IN KDS';
+              const itemsPreview = (tk.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ');
+              const elapsedMin = Math.max(0, Math.floor((Date.now() - (tk.timePlaced || Date.now())) / 60000));
+              return (
+                <TouchableOpacity
+                  key={tk.id}
+                  style={{
+                    width: 240,
+                    backgroundColor: tkReady ? '#F0FDF4' : '#F8FAFC',
+                    borderWidth: 1.5,
+                    borderColor: tkReady ? '#22C55E' : tkCooking ? '#F59E0B' : '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 10,
+                    gap: 5,
+                  }}
+                  onPress={() => router.push(`/waiter/order/${tk.tableId}` as any)}
+                  activeOpacity={0.8}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+                    <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#0F172A', flex: 1 }} numberOfLines={1}>
+                      {tk.tableName}
+                    </Text>
+                    <View style={{ backgroundColor: statusBg, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '900', color: statusColor }}>
+                        {statusLabel}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11.5, color: '#475569', fontWeight: '600' }} numberOfLines={1}>
+                    {itemsPreview}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 10.5, color: '#64748B', fontWeight: '700' }}>
+                      #{tk.id.slice(-4)} • {elapsedMin}m ago
+                    </Text>
+                    {tkReady && (
+                      <TouchableOpacity
+                        style={{ backgroundColor: '#16A34A', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          serveTableTickets(tk.tableId);
+                          clearFoodReadyAlert(tk.id);
+                          broadcastImmediately();
+                        }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 10.5, fontWeight: '800' }}>Serve Now</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
+
+      {/* Real-time Bill Paid Alert Banner */}
+      {shouldShowBillPaidAlert && lastBillPaidAlert && (
+        <View style={styles.billPaidAlertBanner}>
+          <View style={styles.billPaidIconBox}>
+            <Ionicons name="card" size={20} color="#E67E22" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.billPaidAlertTitle}>
+              Bill Paid: {lastBillPaidAlert.tableName}!
+            </Text>
+            <Text style={styles.billPaidAlertDesc}>
+              Bill settled at Cashier counter. Guests are still seated — tap Release below when vacated.
+            </Text>
+          </View>
+          <TouchableOpacity style={styles.billPaidDismissBtn} onPress={handleDismissBillPaidAlert}>
+            <Ionicons name="close" size={18} color="#666" />
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Notification banner if food is ready for this Order Taker's tables */}
+      {readyTickets.length > 0 && (
+        <View style={styles.readyAlertBanner}>
+          <Ionicons name="notifications" size={22} color="#007AFF" />
+          <View style={{ flex: 1, marginLeft: 6 }}>
+            <Text style={styles.readyAlertTitle}>
+              {readyTickets.length} Order{readyTickets.length > 1 ? 's' : ''} Ready for Pickup!
+            </Text>
+            <Text style={styles.readyAlertDesc}>
+              {Array.from(new Set(readyTickets.map((t) => t.tableName))).join(', ')} ready at the pass.
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#007AFF',
+              paddingHorizontal: 12,
+              paddingVertical: 7,
+              borderRadius: 8,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+            }}
+            onPress={() => {
+              readyTickets.forEach((t) => serveTableTickets(t.tableId));
+              broadcastImmediately();
+              const msg = 'All ready orders marked served!';
+              if (Platform.OS !== 'web') Alert.alert('Served', msg);
+            }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="checkmark-done" size={14} color="#fff" />
+            <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>Serve All</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Tables & Cabins Grid */}
+      {visibleTables.length > 0 ? (
+        <FlatList
+          data={visibleTables}
+          keyExtractor={(item) => item.id}
+          renderItem={renderTable}
+          numColumns={columns}
+          key={`waiter-cols-${columns}`}
+          contentContainerStyle={styles.listContent}
+          columnWrapperStyle={columns > 1 ? styles.rowWrapper : undefined}
+          showsVerticalScrollIndicator={false}
+        />
+      ) : (
+        <View style={styles.emptyState}>
+          <Ionicons name="business-outline" size={48} color="#C7C7CC" />
+          <Text style={styles.emptyTitle}>No units found</Text>
+          <Text style={styles.emptySubtitle}>
+            No tables or cabins match the selected filters on{' '}
+            <Text style={{ fontWeight: '700', color: '#1C1C1E' }}>
+              {activeFloor === 'All' ? authorizedFloors.join(', ') : activeFloor}
+            </Text>.
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 

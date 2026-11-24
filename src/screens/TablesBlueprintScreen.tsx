@@ -50,6 +50,19 @@ type IconName = keyof typeof Ionicons.glyphMap;
 type TabKey = 'tables' | 'reservations' | 'zones';
 type StatusFilter = 'all' | Table['status'];
 
+interface BulkUnitRow {
+  id: string;
+  seatingType: SeatingZoneType;
+  seats: string;
+  quantity: string;
+  prefix: string;
+  customPrefix?: boolean;
+}
+
+const BULK_SEAT_PRESETS = [2, 4, 6, 8, 10, 12];
+const MAX_BULK_PER_ROW = 50;
+const MAX_BULK_TOTAL = 100;
+
 const BRAND = '#4a121a';
 const GOLD = '#D5A943';
 const GROUP_ACCENT = '#6D28D9';
@@ -237,6 +250,7 @@ export default function TablesBlueprintScreen({
   const reservations = useRestaurantStore((s) => s.reservations) || [];
 
   const addTable = useRestaurantStore((s) => s.addTable);
+  const addTablesBulk = useRestaurantStore((s) => s.addTablesBulk);
   const updateTable = useRestaurantStore((s) => s.updateTable);
   const deleteTable = useRestaurantStore((s) => s.deleteTable);
   const addZone = useRestaurantStore((s) => s.addZone);
@@ -269,13 +283,17 @@ export default function TablesBlueprintScreen({
   const [actionTableId, setActionTableId] = useState<string | null>(null);
   const actionTable = actionTableId ? tables.find((t) => t.id === actionTableId) || null : null;
 
-  // Table & Cabin form
+  // Table & Cabin form (supports Single Unit & Bulk Add)
   const [tableModalVisible, setTableModalVisible] = useState(false);
+  const [tableModalMode, setTableModalMode] = useState<'single' | 'bulk'>('single');
   const [editingTable, setEditingTable] = useState<Table | null>(null);
   const [formFloor, setFormFloor] = useState<string>('Ground Floor');
   const [formSeatingType, setFormSeatingType] = useState<SeatingZoneType>('tables');
   const [formName, setFormName] = useState('');
   const [formSeats, setFormSeats] = useState('4');
+  const [bulkRows, setBulkRows] = useState<BulkUnitRow[]>([
+    { id: 'bulk-init-1', seatingType: 'tables', seats: '4', quantity: '4', prefix: 'G-T' },
+  ]);
 
   // Zone form
   const [zoneModalVisible, setZoneModalVisible] = useState(false);
@@ -619,11 +637,33 @@ export default function TablesBlueprintScreen({
   };
 
   // ---------- Table & Cabin CRUD ----------
-  const openAddTableModal = (defaultFloor?: string, defaultType?: SeatingZoneType) => {
+  const getDefaultBulkPrefix = (floor: string, type: SeatingZoneType): string => {
+    const meta = getFloorMeta(floor, dynamicFloors);
+    const code = (meta.prefix || meta.short || 'T').replace(/-+$/, '');
+    if (type === 'majlis') return `${code}-Cabin `;
+    if (type === 'couches') return `${code}-Sofa `;
+    return `${code}-T`;
+  };
+
+  const makeBulkRow = (floor: string, type: SeatingZoneType, seats?: number, quantity = 4): BulkUnitRow => ({
+    id: `br-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    seatingType: type,
+    seats: String(seats ?? SEATING_ZONES[type].defaultSeats),
+    quantity: String(quantity),
+    prefix: getDefaultBulkPrefix(floor, type),
+    customPrefix: false,
+  });
+
+  const openAddTableModal = (
+    defaultFloor?: string,
+    defaultType?: SeatingZoneType,
+    initialMode: 'single' | 'bulk' = 'single'
+  ) => {
     if (!canAddTables) {
       return notify('Permission Denied', 'You do not have permission to add seating units.');
     }
     setEditingTable(null);
+    setTableModalMode(initialMode);
     const chosenFloor = defaultFloor || (floorFilter !== 'all' ? floorFilter : availableFloors[0] || 'Ground Floor');
     const chosenType = defaultType || (seatingTypeFilter !== 'all' ? seatingTypeFilter : 'tables');
     setFormFloor(chosenFloor);
@@ -638,14 +678,164 @@ export default function TablesBlueprintScreen({
       setFormName(`Cabin ${nextNum}`);
       setFormSeats('8');
     } else if (chosenType === 'couches') {
-      setFormName(`Couch ${nextNum}`);
+      setFormName(`Sofa ${nextNum}`);
       setFormSeats('6');
     } else {
       const meta = getFloorMeta(chosenFloor, dynamicFloors);
       setFormName(`${meta.short || 'T'}-${String(nextNum).padStart(2, '0')}`);
       setFormSeats('4');
     }
+    setBulkRows([makeBulkRow(chosenFloor, chosenType, SEATING_ZONES[chosenType].defaultSeats, 4)]);
     setTableModalVisible(true);
+  };
+
+  const handleBulkFloorChange = (newFloor: string) => {
+    setFormFloor(newFloor);
+    setBulkRows((prev) =>
+      prev.map((row) =>
+        row.customPrefix ? row : { ...row, prefix: getDefaultBulkPrefix(newFloor, row.seatingType) }
+      )
+    );
+  };
+
+  const handleUpdateBulkRow = (rowId: string, patch: Partial<BulkUnitRow>) => {
+    setBulkRows((prev) =>
+      prev.map((row) => {
+        if (row.id !== rowId) return row;
+        const next: BulkUnitRow = { ...row, ...patch };
+        if (patch.seatingType && patch.seatingType !== row.seatingType && !row.customPrefix) {
+          next.prefix = getDefaultBulkPrefix(formFloor, patch.seatingType);
+          if (patch.seats === undefined) {
+            next.seats = String(SEATING_ZONES[patch.seatingType].defaultSeats);
+          }
+        }
+        return next;
+      })
+    );
+  };
+
+  const handleAddBulkPresetRow = (type: SeatingZoneType, seats: number, quantity = 4) => {
+    setBulkRows((prev) => [...prev, makeBulkRow(formFloor, type, seats, quantity)]);
+  };
+
+  const handleRemoveBulkRow = (rowId: string) => {
+    setBulkRows((prev) => (prev.length > 1 ? prev.filter((r) => r.id !== rowId) : prev));
+  };
+
+  const bulkPreview = useMemo(() => {
+    const usedNames = new Set(tables.map((t) => (t.name || '').trim().toLowerCase()));
+    const generated: {
+      rowId: string;
+      name: string;
+      seatingType: SeatingZoneType;
+      seats: number;
+      floor: string;
+    }[] = [];
+    const rowSummaries: Record<string, { count: number; seatsTotal: number; firstName?: string; lastName?: string }> = {};
+
+    for (const row of bulkRows) {
+      const qtyRaw = parseInt(row.quantity, 10);
+      const seatsRaw = parseInt(row.seats, 10);
+      const qty = isNaN(qtyRaw) ? 0 : Math.min(MAX_BULK_PER_ROW, Math.max(0, qtyRaw));
+      const seats = isNaN(seatsRaw) ? 0 : Math.min(40, Math.max(1, seatsRaw));
+      if (qty <= 0 || seats <= 0) {
+        rowSummaries[row.id] = { count: 0, seatsTotal: 0 };
+        continue;
+      }
+      const rawPrefix = row.prefix.length > 0 ? row.prefix : getDefaultBulkPrefix(formFloor, row.seatingType);
+      const padDigits = row.seatingType === 'tables' && !rawPrefix.endsWith(' ') ? 2 : 0;
+
+      const escapedPrefix = rawPrefix.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
+      const suffixRe = new RegExp(`^${escapedPrefix}(\\d+)$`, 'i');
+      let maxExisting = 0;
+      for (const existingName of usedNames) {
+        const m = existingName.match(suffixRe);
+        if (m) {
+          const n = parseInt(m[1], 10);
+          if (!isNaN(n) && n > maxExisting) maxExisting = n;
+        }
+      }
+      let nextNum = maxExisting + 1;
+      let firstName: string | undefined;
+      let lastName: string | undefined;
+      let createdInRow = 0;
+
+      for (let i = 0; i < qty; i++) {
+        let candidate = '';
+        while (true) {
+          const numStr = padDigits > 0 ? String(nextNum).padStart(padDigits, '0') : String(nextNum);
+          candidate = `${rawPrefix}${numStr}`.trim();
+          nextNum++;
+          if (!usedNames.has(candidate.toLowerCase())) break;
+        }
+        usedNames.add(candidate.toLowerCase());
+        if (!firstName) firstName = candidate;
+        lastName = candidate;
+        createdInRow++;
+        generated.push({
+          rowId: row.id,
+          name: candidate,
+          seatingType: row.seatingType,
+          seats,
+          floor: formFloor,
+        });
+      }
+      rowSummaries[row.id] = {
+        count: createdInRow,
+        seatsTotal: createdInRow * seats,
+        firstName,
+        lastName,
+      };
+    }
+
+    const totalUnits = generated.length;
+    const totalSeats = generated.reduce((sum, u) => sum + u.seats, 0);
+    return {
+      generated,
+      rowSummaries,
+      totalUnits,
+      totalSeats,
+      exceedsCap: totalUnits > MAX_BULK_TOTAL,
+    };
+  }, [bulkRows, tables, formFloor, dynamicFloors]);
+
+  const handleSaveBulkTables = () => {
+    if (!canAddTables) {
+      return notify('Permission Denied', 'You do not have permission to add seating units.');
+    }
+    if (!formFloor.trim()) {
+      return notify('Select Floor', 'Please choose a floor before creating units.');
+    }
+    if (bulkPreview.totalUnits === 0) {
+      return notify('Nothing to Create', 'Enter a valid quantity and seating capacity in at least one row.');
+    }
+    if (bulkPreview.exceedsCap) {
+      return notify(
+        'Batch Limit Exceeded',
+        `You can create up to ${MAX_BULK_TOTAL} units at a time (currently ${bulkPreview.totalUnits}). Please reduce the quantity.`
+      );
+    }
+
+    addTablesBulk(
+      bulkPreview.generated.map((item) => ({
+        name: item.name,
+        floor: item.floor,
+        zone: item.floor,
+        seatingType: item.seatingType,
+        cabinNumber: item.seatingType === 'majlis' ? item.name : undefined,
+        seats: item.seats,
+        status: 'available' as const,
+      }))
+    );
+    broadcastImmediately();
+    setTableModalVisible(false);
+    if (floorFilter !== 'all' && floorFilter.toLowerCase() !== formFloor.toLowerCase()) {
+      setFloorFilter(formFloor);
+    }
+    notify(
+      'Bulk Units Created',
+      `Successfully added ${bulkPreview.totalUnits} seating unit(s) (+${bulkPreview.totalSeats} seats) to ${formFloor}.`
+    );
   };
 
   const openEditTableModal = (table: Table) => {
@@ -654,6 +844,7 @@ export default function TablesBlueprintScreen({
     }
     setActionTableId(null);
     setEditingTable(table);
+    setTableModalMode('single');
     setFormFloor(getTableFloor(table));
     setFormSeatingType(getTableSeatingType(table));
     setFormName(table.name);
@@ -1199,7 +1390,7 @@ export default function TablesBlueprintScreen({
                   </Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                     <Text style={[styles.tileTypeBadge, { color: zoneMeta.color }]}>
-                      {isMajlis ? 'Majlis' : isCouch ? 'Couch' : 'Table'}
+                      {isMajlis ? 'Majlis' : isCouch ? 'Sofa' : 'Table'}
                     </Text>
                     <Text style={styles.tileDot}>•</Text>
                     <Text style={styles.tileFloorTag} numberOfLines={1}>
@@ -1770,13 +1961,23 @@ export default function TablesBlueprintScreen({
             </TouchableOpacity>
 
             {canAddTables && (
-              <TouchableOpacity
-                style={[styles.cmdBtn, styles.cmdBtnPrimary]}
-                onPress={() => openAddTableModal()}
-              >
-                <Ionicons name="add" size={15} color="#F3D179" />
-                <Text style={[styles.cmdBtnText, { color: '#F3D179' }]}>Add Unit</Text>
-              </TouchableOpacity>
+              <>
+                <TouchableOpacity
+                  style={[styles.cmdBtn, styles.cmdBtnPrimary]}
+                  onPress={() => openAddTableModal(undefined, undefined, 'single')}
+                >
+                  <Ionicons name="add" size={15} color="#F3D179" />
+                  <Text style={[styles.cmdBtnText, { color: '#F3D179' }]}>Add Unit</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.cmdBtn, styles.cmdBtnBulk]}
+                  onPress={() => openAddTableModal(undefined, undefined, 'bulk')}
+                >
+                  <Ionicons name="copy-outline" size={14} color="#fff" />
+                  <Text style={[styles.cmdBtnText, { color: '#fff' }]}>Bulk Add</Text>
+                </TouchableOpacity>
+              </>
             )}
 
             <TouchableOpacity style={[styles.cmdBtn, styles.cmdBtnOutline]} onPress={openBatchQrModal}>
@@ -2470,21 +2671,34 @@ export default function TablesBlueprintScreen({
                       <Text style={styles.floorTotalCount}>
                         {floorTables.length} Units • {freeFloorSeats}/{totalFloorSeats} Free Seats
                       </Text>
-                      <TouchableOpacity
-                        style={styles.floorEditMiniBtn}
-                        onPress={() =>
-                          openReservationModal({
-                            mode: 'group_event',
-                            prefillFloor: floorName,
-                            defaultGuests: 25,
-                          })
-                        }
-                      >
-                        <Ionicons name="sparkles" size={12} color={GROUP_ACCENT} />
-                        <Text style={[styles.floorEditMiniBtnText, { color: GROUP_ACCENT }]}>
-                          Book Group on {floorName}
-                        </Text>
-                      </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                        {canAddTables && (
+                          <TouchableOpacity
+                            style={[styles.floorEditMiniBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}
+                            onPress={() => openAddTableModal(floorName, 'tables', 'bulk')}
+                          >
+                            <Ionicons name="copy-outline" size={12} color="#1D4ED8" />
+                            <Text style={[styles.floorEditMiniBtnText, { color: '#1D4ED8' }]}>
+                              Bulk Add
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                        <TouchableOpacity
+                          style={styles.floorEditMiniBtn}
+                          onPress={() =>
+                            openReservationModal({
+                              mode: 'group_event',
+                              prefillFloor: floorName,
+                              defaultGuests: 25,
+                            })
+                          }
+                        >
+                          <Ionicons name="sparkles" size={12} color={GROUP_ACCENT} />
+                          <Text style={[styles.floorEditMiniBtnText, { color: GROUP_ACCENT }]}>
+                            Book Group on {floorName}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
 
@@ -2530,7 +2744,7 @@ export default function TablesBlueprintScreen({
                       </View>
                     </View>
 
-                    {/* Couches */}
+                    {/* Sofas */}
                     {systemSettings.enableCouchSeating !== false && (
                       <View style={[styles.floorZoneBox, { borderColor: '#E6510030' }]}>
                         <View style={styles.floorZoneBoxHeader}>
@@ -2538,9 +2752,9 @@ export default function TablesBlueprintScreen({
                             <SeatingTypeIcon type="couches" size={16} color="#E65100" />
                           </View>
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.floorZoneTitle, { color: '#E65100' }]}>Couches Lounge</Text>
+                            <Text style={[styles.floorZoneTitle, { color: '#E65100' }]}>Sofas Lounge</Text>
                             <Text style={styles.floorZoneSub}>
-                              {couchItems.length} couches • {couchItems.reduce((s, t) => s + t.seats, 0)} seats
+                              {couchItems.length} sofas • {couchItems.reduce((s, t) => s + t.seats, 0)} seats
                             </Text>
                           </View>
                           {canAddTables && (
@@ -2549,7 +2763,7 @@ export default function TablesBlueprintScreen({
                               onPress={() => openAddTableModal(floorName, 'couches')}
                             >
                               <Ionicons name="add" size={13} color="#fff" />
-                              <Text style={styles.tinyAddBtnText}>Couch</Text>
+                              <Text style={styles.tinyAddBtnText}>Sofa</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -2568,7 +2782,7 @@ export default function TablesBlueprintScreen({
                               <Text style={styles.unitPillSeats}>{u.seats}s</Text>
                             </TouchableOpacity>
                           ))}
-                          {couchItems.length === 0 && <Text style={styles.noUnitsText}>No couches configured.</Text>}
+                          {couchItems.length === 0 && <Text style={styles.noUnitsText}>No sofas configured.</Text>}
                         </View>
                       </View>
                     )}
@@ -2642,17 +2856,72 @@ export default function TablesBlueprintScreen({
         </TouchableOpacity>
       </Modal>
 
-      {/* ---------- Add / Edit Seating Unit Modal ---------- */}
+      {/* ---------- Add / Edit / Bulk Seating Unit Modal ---------- */}
       <Modal visible={tableModalVisible} transparent animationType="fade" onRequestClose={() => setTableModalVisible(false)}>
         <View style={styles.overlay}>
-          <View style={styles.dialog}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-              <SeatingTypeIcon type={formSeatingType} size={22} color={SEATING_ZONES[formSeatingType].color} />
-              <Text style={styles.dialogTitle}>
-                {editingTable ? `Edit ${SEATING_ZONES[formSeatingType].unitLabel}` : `Add ${SEATING_ZONES[formSeatingType].unitLabel}`}
-              </Text>
+          <View style={[styles.dialog, tableModalMode === 'bulk' && !editingTable && styles.dialogBulk]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                {tableModalMode === 'bulk' && !editingTable ? (
+                  <View style={[styles.miniIconBubble, { backgroundColor: '#4a121a16' }]}>
+                    <Ionicons name="copy" size={16} color={BRAND} />
+                  </View>
+                ) : (
+                  <SeatingTypeIcon type={formSeatingType} size={22} color={SEATING_ZONES[formSeatingType].color} />
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.dialogTitle}>
+                    {editingTable
+                      ? `Edit ${SEATING_ZONES[formSeatingType].unitLabel}`
+                      : tableModalMode === 'bulk'
+                        ? 'Bulk Add Seating Units'
+                        : `Add ${SEATING_ZONES[formSeatingType].unitLabel}`}
+                  </Text>
+                  {tableModalMode === 'bulk' && !editingTable && (
+                    <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '600', marginTop: 1 }}>
+                      Add multiple tables, sofas, or Majlis cabins by seater capacity in one batch
+                    </Text>
+                  )}
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setTableModalVisible(false)} style={{ padding: 4 }}>
+                <Ionicons name="close" size={20} color="#64748B" />
+              </TouchableOpacity>
             </View>
 
+            {/* Single vs Bulk Segmented Mode Switcher (only when creating new units) */}
+            {!editingTable && (
+              <View style={styles.bulkModeBar}>
+                <TouchableOpacity
+                  style={[styles.bulkModePill, tableModalMode === 'single' && styles.bulkModePillActive]}
+                  onPress={() => setTableModalMode('single')}
+                >
+                  <Ionicons
+                    name="add-circle-outline"
+                    size={15}
+                    color={tableModalMode === 'single' ? '#F3D179' : '#475569'}
+                  />
+                  <Text style={[styles.bulkModeText, tableModalMode === 'single' && styles.bulkModeTextActive]}>
+                    Single Unit
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.bulkModePill, tableModalMode === 'bulk' && styles.bulkModePillActive]}
+                  onPress={() => setTableModalMode('bulk')}
+                >
+                  <Ionicons
+                    name="copy-outline"
+                    size={15}
+                    color={tableModalMode === 'bulk' ? '#F3D179' : '#475569'}
+                  />
+                  <Text style={[styles.bulkModeText, tableModalMode === 'bulk' && styles.bulkModeTextActive]}>
+                    Bulk Add (Multiple)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Floor Location Selector (shared by Single & Bulk) */}
             <View style={{ marginBottom: 12 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <Text style={styles.label}>Floor Location *</Text>
@@ -2669,114 +2938,385 @@ export default function TablesBlueprintScreen({
                 placeholder="Choose floor level..."
                 options={availableFloors.map((fl) => {
                   const meta = getFloorMeta(fl, dynamicFloors);
+                  const countOnFl = tables.filter((t) => getTableFloor(t).toLowerCase() === fl.toLowerCase()).length;
                   return {
-                    label: fl,
+                    label: `${fl} (${countOnFl} units)`,
                     value: fl,
                     icon: (meta?.icon as any) || 'layers-outline',
                   };
                 })}
                 value={formFloor}
-                onSelect={(fl) => setFormFloor(fl)}
+                onSelect={(fl) => (tableModalMode === 'bulk' ? handleBulkFloorChange(fl) : setFormFloor(fl))}
                 icon="layers-outline"
               />
             </View>
 
-            <Text style={styles.label}>Seating Zone Type</Text>
-            <View style={styles.seatingTypePickerRow}>
-              {SEATING_ZONE_TYPES.filter((type) => {
-                if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
-                if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
-                return true;
-              }).map((type) => {
-                const meta = SEATING_ZONES[type];
-                const active = formSeatingType === type;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    style={[
-                      styles.seatingTypeChoiceCard,
-                      active && { borderColor: meta.color, backgroundColor: `${meta.color}10` },
-                    ]}
-                    onPress={() => {
-                      setFormSeatingType(type);
-                      setFormSeats(String(meta.defaultSeats));
-                      if (!editingTable) {
-                        const floorItems = tables.filter(
-                          (t) => getTableFloor(t).toLowerCase() === formFloor.toLowerCase() && getTableSeatingType(t) === type
-                        );
-                        const nextNum = floorItems.length + 1;
-                        if (type === 'majlis') setFormName(`Cabin ${nextNum}`);
-                        else if (type === 'couches') setFormName(`Couch ${nextNum}`);
-                        else setFormName(`${getFloorMeta(formFloor, dynamicFloors).short || 'T'}-${String(nextNum).padStart(2, '0')}`);
-                      }
-                    }}
-                  >
-                    <SeatingTypeIcon type={type} size={22} color={active ? meta.color : '#8E8E93'} />
-                    <Text style={[styles.seatingTypeChoiceTitle, active && { color: meta.color, fontWeight: '900' }]}>
-                      {meta.label}
-                    </Text>
-                    <Text style={styles.seatingTypeChoiceSub}>{meta.unitLabel}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            {tableModalMode === 'single' || editingTable ? (
+              <>
+                <Text style={styles.label}>Seating Zone Type</Text>
+                <View style={styles.seatingTypePickerRow}>
+                  {SEATING_ZONE_TYPES.filter((type) => {
+                    if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                    if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                    return true;
+                  }).map((type) => {
+                    const meta = SEATING_ZONES[type];
+                    const active = formSeatingType === type;
+                    return (
+                      <TouchableOpacity
+                        key={type}
+                        style={[
+                          styles.seatingTypeChoiceCard,
+                          active && { borderColor: meta.color, backgroundColor: `${meta.color}10` },
+                        ]}
+                        onPress={() => {
+                          setFormSeatingType(type);
+                          setFormSeats(String(meta.defaultSeats));
+                          if (!editingTable) {
+                            const floorItems = tables.filter(
+                              (t) => getTableFloor(t).toLowerCase() === formFloor.toLowerCase() && getTableSeatingType(t) === type
+                            );
+                            const nextNum = floorItems.length + 1;
+                            if (type === 'majlis') setFormName(`Cabin ${nextNum}`);
+                            else if (type === 'couches') setFormName(`Sofa ${nextNum}`);
+                            else setFormName(`${getFloorMeta(formFloor, dynamicFloors).short || 'T'}-${String(nextNum).padStart(2, '0')}`);
+                          }
+                        }}
+                      >
+                        <SeatingTypeIcon type={type} size={22} color={active ? meta.color : '#8E8E93'} />
+                        <Text style={[styles.seatingTypeChoiceTitle, active && { color: meta.color, fontWeight: '900' }]}>
+                          {meta.label}
+                        </Text>
+                        <Text style={styles.seatingTypeChoiceSub}>{meta.unitLabel}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
 
-            <Text style={styles.label}>
-              {formSeatingType === 'majlis'
-                ? 'Majlis Cabin Name / Number *'
-                : formSeatingType === 'couches'
-                  ? 'Couch Name / Number *'
-                  : 'Table Name / Number *'}
-            </Text>
-            <TextInput
-              style={styles.input}
-              placeholder={
-                formSeatingType === 'majlis'
-                  ? 'e.g. Cabin 1, Royal Cabin A'
-                  : formSeatingType === 'couches'
-                    ? 'e.g. Couch 1, Lounge Sofa 2'
-                    : 'e.g. RT-01, Table 5'
-              }
-              value={formName}
-              onChangeText={setFormName}
-            />
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={styles.label}>Sitting Capacity (Guests) *</Text>
-              <Text style={{ fontSize: 12, color: SEATING_ZONES[formSeatingType].color, fontWeight: '700' }}>
-                {formSeats} Guests
-              </Text>
-            </View>
-
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => setFormSeats(String(Math.max(1, (parseInt(formSeats, 10) || 1) - 1)))}
-              >
-                <Ionicons name="remove" size={18} color={BRAND} />
-              </TouchableOpacity>
-              <TextInput style={styles.stepInput} value={formSeats} onChangeText={setFormSeats} keyboardType="numeric" />
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => setFormSeats(String((parseInt(formSeats, 10) || 0) + 1))}
-              >
-                <Ionicons name="add" size={18} color={BRAND} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.dialogActions}>
-              <TouchableOpacity style={styles.ghostBtn} onPress={() => setTableModalVisible(false)}>
-                <Text style={styles.ghostBtnText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: SEATING_ZONES[formSeatingType].color }]}
-                onPress={handleSaveTable}
-              >
-                <Text style={styles.primaryBtnText}>
-                  {editingTable ? 'Save Changes' : `Create ${SEATING_ZONES[formSeatingType].unitLabel}`}
+                <Text style={styles.label}>
+                  {formSeatingType === 'majlis'
+                    ? 'Majlis Cabin Name / Number *'
+                    : formSeatingType === 'couches'
+                      ? 'Sofa Name / Number *'
+                      : 'Table Name / Number *'}
                 </Text>
-              </TouchableOpacity>
-            </View>
+                <TextInput
+                  style={styles.input}
+                  placeholder={
+                    formSeatingType === 'majlis'
+                      ? 'e.g. Cabin 1, Royal Cabin A'
+                      : formSeatingType === 'couches'
+                        ? 'e.g. Sofa 1, Lounge Sofa 2'
+                        : 'e.g. RT-01, Table 5'
+                  }
+                  value={formName}
+                  onChangeText={setFormName}
+                />
+
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.label}>Sitting Capacity (Guests) *</Text>
+                  <Text style={{ fontSize: 12, color: SEATING_ZONES[formSeatingType].color, fontWeight: '700' }}>
+                    {formSeats} Guests
+                  </Text>
+                </View>
+
+                <View style={styles.stepper}>
+                  <TouchableOpacity
+                    style={styles.stepBtn}
+                    onPress={() => setFormSeats(String(Math.max(1, (parseInt(formSeats, 10) || 1) - 1)))}
+                  >
+                    <Ionicons name="remove" size={18} color={BRAND} />
+                  </TouchableOpacity>
+                  <TextInput style={styles.stepInput} value={formSeats} onChangeText={setFormSeats} keyboardType="numeric" />
+                  <TouchableOpacity
+                    style={styles.stepBtn}
+                    onPress={() => setFormSeats(String((parseInt(formSeats, 10) || 0) + 1))}
+                  >
+                    <Ionicons name="add" size={18} color={BRAND} />
+                  </TouchableOpacity>
+                </View>
+
+                <View style={styles.dialogActions}>
+                  <TouchableOpacity style={styles.ghostBtn} onPress={() => setTableModalVisible(false)}>
+                    <Text style={styles.ghostBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: SEATING_ZONES[formSeatingType].color }]}
+                    onPress={handleSaveTable}
+                  >
+                    <Text style={styles.primaryBtnText}>
+                      {editingTable ? 'Save Changes' : `Create ${SEATING_ZONES[formSeatingType].unitLabel}`}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Quick Preset Row Additions */}
+                <View style={styles.bulkPresetWrap}>
+                  <Text style={styles.bulkPresetLabel}>Quick Add Row:</Text>
+                  <View style={styles.bulkPresetRow}>
+                    <TouchableOpacity
+                      style={[styles.bulkPresetChip, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}
+                      onPress={() => handleAddBulkPresetRow('tables', 2, 4)}
+                    >
+                      <Text style={[styles.bulkPresetChipText, { color: '#1D4ED8' }]}>+ 2-Seater Table</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.bulkPresetChip, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}
+                      onPress={() => handleAddBulkPresetRow('tables', 4, 5)}
+                    >
+                      <Text style={[styles.bulkPresetChipText, { color: '#1D4ED8' }]}>+ 4-Seater Table</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.bulkPresetChip, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}
+                      onPress={() => handleAddBulkPresetRow('tables', 6, 4)}
+                    >
+                      <Text style={[styles.bulkPresetChipText, { color: '#1D4ED8' }]}>+ 6-Seater Table</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.bulkPresetChip, { borderColor: '#BFDBFE', backgroundColor: '#EFF6FF' }]}
+                      onPress={() => handleAddBulkPresetRow('tables', 8, 2)}
+                    >
+                      <Text style={[styles.bulkPresetChipText, { color: '#1D4ED8' }]}>+ 8-Seater Table</Text>
+                    </TouchableOpacity>
+                    {systemSettings.enableCouchSeating !== false && (
+                      <TouchableOpacity
+                        style={[styles.bulkPresetChip, { borderColor: '#FED7AA', backgroundColor: '#FFF7ED' }]}
+                        onPress={() => handleAddBulkPresetRow('couches', 6, 3)}
+                      >
+                        <Text style={[styles.bulkPresetChipText, { color: '#C2410C' }]}>+ 6-Seater Sofa</Text>
+                      </TouchableOpacity>
+                    )}
+                    {systemSettings.enableMajlisSeating !== false && (
+                      <TouchableOpacity
+                        style={[styles.bulkPresetChip, { borderColor: '#E5D0D3', backgroundColor: '#FDF8F5' }]}
+                        onPress={() => handleAddBulkPresetRow('majlis', 10, 2)}
+                      >
+                        <Text style={[styles.bulkPresetChipText, { color: BRAND }]}>+ 10-Seater Majlis</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {/* Scrollable Batch Rows */}
+                <ScrollView style={{ maxHeight: isMobile ? 310 : 350 }} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
+                  {bulkRows.map((row, rIdx) => {
+                    const zoneMeta = SEATING_ZONES[row.seatingType];
+                    const summary = bulkPreview.rowSummaries[row.id];
+                    const qtyVal = parseInt(row.quantity, 10) || 0;
+                    const seatsVal = parseInt(row.seats, 10) || 0;
+                    return (
+                      <View key={row.id} style={[styles.bulkRowCard, { borderLeftColor: zoneMeta.color }]}>
+                        {/* Row Header: Batch # + Zone Type Pills + Remove */}
+                        <View style={styles.bulkRowTop}>
+                          <View style={[styles.bulkRowNumBadge, { backgroundColor: `${zoneMeta.color}18` }]}>
+                            <Text style={[styles.bulkRowNumText, { color: zoneMeta.color }]}>#{rIdx + 1}</Text>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', gap: 5, flexWrap: 'wrap', flex: 1 }}>
+                            {SEATING_ZONE_TYPES.filter((type) => {
+                              if (type === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                              if (type === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                              return true;
+                            }).map((type) => {
+                              const m = SEATING_ZONES[type];
+                              const active = row.seatingType === type;
+                              return (
+                                <TouchableOpacity
+                                  key={type}
+                                  style={[
+                                    styles.bulkTypePill,
+                                    active && { backgroundColor: m.color, borderColor: m.color },
+                                  ]}
+                                  onPress={() => handleUpdateBulkRow(row.id, { seatingType: type })}
+                                >
+                                  <SeatingTypeIcon type={type} size={13} color={active ? '#fff' : '#64748B'} />
+                                  <Text style={[styles.bulkTypePillText, active && { color: '#fff' }]}>
+                                    {m.label}
+                                  </Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+
+                          {bulkRows.length > 1 && (
+                            <TouchableOpacity
+                              style={styles.bulkRemoveBtn}
+                              onPress={() => handleRemoveBulkRow(row.id)}
+                            >
+                              <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        {/* Row Controls: Seater Capacity | Quantity | Name Prefix */}
+                        <View style={[styles.bulkControlsGrid, isMobile && { flexDirection: 'column' }]}>
+                          {/* 1. Seater Capacity */}
+                          <View style={styles.bulkControlBlock}>
+                            <Text style={styles.bulkFieldLabel}>Seater (Capacity)</Text>
+                            <View style={styles.bulkSeatChipsRow}>
+                              {BULK_SEAT_PRESETS.map((sVal) => {
+                                const isSel = seatsVal === sVal;
+                                return (
+                                  <TouchableOpacity
+                                    key={sVal}
+                                    style={[
+                                      styles.bulkSeatChip,
+                                      isSel && { backgroundColor: zoneMeta.color, borderColor: zoneMeta.color },
+                                    ]}
+                                    onPress={() => handleUpdateBulkRow(row.id, { seats: String(sVal) })}
+                                  >
+                                    <Text style={[styles.bulkSeatChipText, isSel && { color: '#fff' }]}>{sVal}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })}
+                              <TextInput
+                                style={styles.bulkMiniInput}
+                                value={row.seats}
+                                onChangeText={(v) => handleUpdateBulkRow(row.id, { seats: v.replace(/[^0-9]/g, '') })}
+                                keyboardType="numeric"
+                                placeholder="4"
+                                maxLength={2}
+                              />
+                            </View>
+                          </View>
+
+                          {/* 2. Quantity */}
+                          <View style={[styles.bulkControlBlock, !isMobile && { flex: 0.72 }]}>
+                            <Text style={styles.bulkFieldLabel}>How Many Units?</Text>
+                            <View style={styles.bulkStepper}>
+                              <TouchableOpacity
+                                style={styles.bulkStepBtn}
+                                onPress={() =>
+                                  handleUpdateBulkRow(row.id, {
+                                    quantity: String(Math.max(1, (parseInt(row.quantity, 10) || 1) - 1)),
+                                  })
+                                }
+                              >
+                                <Ionicons name="remove" size={15} color={BRAND} />
+                              </TouchableOpacity>
+                              <TextInput
+                                style={styles.bulkStepInput}
+                                value={row.quantity}
+                                onChangeText={(v) =>
+                                  handleUpdateBulkRow(row.id, { quantity: v.replace(/[^0-9]/g, '') })
+                                }
+                                keyboardType="numeric"
+                                maxLength={2}
+                              />
+                              <TouchableOpacity
+                                style={styles.bulkStepBtn}
+                                onPress={() =>
+                                  handleUpdateBulkRow(row.id, {
+                                    quantity: String(Math.min(MAX_BULK_PER_ROW, (parseInt(row.quantity, 10) || 0) + 1)),
+                                  })
+                                }
+                              >
+                                <Ionicons name="add" size={15} color={BRAND} />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+
+                          {/* 3. Name Prefix */}
+                          <View style={[styles.bulkControlBlock, !isMobile && { flex: 0.72 }]}>
+                            <Text style={styles.bulkFieldLabel}>Name Prefix</Text>
+                            <TextInput
+                              style={styles.bulkPrefixInput}
+                              value={row.prefix}
+                              onChangeText={(v) =>
+                                handleUpdateBulkRow(row.id, { prefix: v, customPrefix: true })
+                              }
+                              placeholder="e.g. G-T"
+                            />
+                          </View>
+                        </View>
+
+                        {/* Row Summary */}
+                        <View style={styles.bulkRowFooter}>
+                          <Text style={styles.bulkRowSummaryText}>
+                            {qtyVal > 0 && seatsVal > 0
+                              ? `${summary?.count || 0} × ${seatsVal}-Seater ${zoneMeta.pluralUnitLabel} = ${summary?.seatsTotal || 0} Seats`
+                              : 'Enter valid seats and quantity'}
+                          </Text>
+                          {summary?.firstName && (
+                            <Text style={[styles.bulkRowRangeBadge, { color: zoneMeta.color }]}>
+                              {summary.count === 1
+                                ? summary.firstName
+                                : `${summary.firstName} → ${summary.lastName}`}
+                            </Text>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  <TouchableOpacity
+                    style={styles.bulkAddRowBtn}
+                    onPress={() => handleAddBulkPresetRow('tables', 4, 4)}
+                  >
+                    <Ionicons name="add-circle-outline" size={16} color={BRAND} />
+                    <Text style={styles.bulkAddRowBtnText}>Add Another Seater Group</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+
+                {/* Live Batch Preview Summary */}
+                <View style={[styles.bulkPreviewBox, bulkPreview.exceedsCap && { borderColor: '#DC2626', backgroundColor: '#FEF2F2' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
+                    <Text style={styles.bulkPreviewTitle}>
+                      {bulkPreview.exceedsCap
+                        ? `Max ${MAX_BULK_TOTAL} units per batch (${bulkPreview.totalUnits} selected)`
+                        : `Ready to Create: ${bulkPreview.totalUnits} Units (+${bulkPreview.totalSeats} Seats)`}
+                    </Text>
+                    <Text style={styles.bulkPreviewFloorTag}>{formFloor}</Text>
+                  </View>
+                  {bulkPreview.generated.length > 0 && (
+                    <View style={styles.bulkPreviewPills}>
+                      {bulkPreview.generated.slice(0, 10).map((item, idx) => (
+                        <View
+                          key={`${item.name}-${idx}`}
+                          style={[
+                            styles.bulkPreviewPill,
+                            { borderColor: `${SEATING_ZONES[item.seatingType].color}40` },
+                          ]}
+                        >
+                          <Text style={styles.bulkPreviewPillName}>{item.name}</Text>
+                          <Text style={[styles.bulkPreviewPillSeats, { color: SEATING_ZONES[item.seatingType].color }]}>
+                            {item.seats}s
+                          </Text>
+                        </View>
+                      ))}
+                      {bulkPreview.generated.length > 10 && (
+                        <View style={styles.bulkPreviewMorePill}>
+                          <Text style={styles.bulkPreviewMoreText}>
+                            +{bulkPreview.generated.length - 10} more
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+
+                <View style={styles.dialogActions}>
+                  <TouchableOpacity style={styles.ghostBtn} onPress={() => setTableModalVisible(false)}>
+                    <Text style={styles.ghostBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.primaryBtn,
+                      { backgroundColor: BRAND },
+                      (bulkPreview.totalUnits === 0 || bulkPreview.exceedsCap) && { opacity: 0.45 },
+                    ]}
+                    disabled={bulkPreview.totalUnits === 0 || bulkPreview.exceedsCap}
+                    onPress={handleSaveBulkTables}
+                  >
+                    <Text style={[styles.primaryBtnText, { color: '#F3D179' }]}>
+                      Create {bulkPreview.totalUnits} Units (+{bulkPreview.totalSeats} Seats)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </View>
         </View>
       </Modal>
@@ -4915,4 +5455,301 @@ const styles = StyleSheet.create({
   },
   seatingTypeChoiceTitle: { fontSize: 13, fontWeight: '800', color: '#0F172A', textAlign: 'center' },
   seatingTypeChoiceSub: { fontSize: 11.5, color: '#64748B' },
+
+  cmdBtnBulk: {
+    backgroundColor: '#1D4ED8',
+    borderWidth: 1,
+    borderColor: '#1E40AF',
+  },
+  dialogBulk: {
+    width: '94%',
+    maxWidth: 740,
+    maxHeight: '92%',
+  },
+  bulkModeBar: {
+    flexDirection: 'row',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    padding: 3,
+    gap: 4,
+    marginBottom: 12,
+  },
+  bulkModePill: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  bulkModePillActive: {
+    backgroundColor: BRAND,
+  },
+  bulkModeText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  bulkModeTextActive: {
+    color: '#F3D179',
+  },
+  bulkPresetWrap: {
+    marginBottom: 10,
+    gap: 6,
+  },
+  bulkPresetLabel: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.4,
+  },
+  bulkPresetRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  bulkPresetChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  bulkPresetChipText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+  },
+  bulkRowCard: {
+    backgroundColor: '#FCFBF9',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5E1DA',
+    borderLeftWidth: 4,
+    padding: 11,
+    gap: 9,
+  },
+  bulkRowTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  bulkRowNumBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  bulkRowNumText: {
+    fontSize: 11.5,
+    fontWeight: '900',
+  },
+  bulkTypePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#fff',
+  },
+  bulkTypePillText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#475569',
+  },
+  bulkRemoveBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 7,
+    backgroundColor: '#FEE2E2',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkControlsGrid: {
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'flex-start',
+  },
+  bulkControlBlock: {
+    flex: 1.25,
+    minWidth: 0,
+    gap: 4,
+  },
+  bulkFieldLabel: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.3,
+  },
+  bulkSeatChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 4,
+    alignItems: 'center',
+  },
+  bulkSeatChip: {
+    minWidth: 30,
+    height: 32,
+    paddingHorizontal: 7,
+    borderRadius: 7,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bulkSeatChipText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#334155',
+  },
+  bulkMiniInput: {
+    width: 42,
+    height: 32,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#fff',
+    textAlign: 'center',
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+    paddingHorizontal: 4,
+  },
+  bulkStepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#fff',
+    overflow: 'hidden',
+  },
+  bulkStepBtn: {
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAF7F2',
+  },
+  bulkStepInput: {
+    flex: 1,
+    minWidth: 0,
+    textAlign: 'center',
+    fontSize: 13.5,
+    fontWeight: '900',
+    color: '#0F172A',
+    paddingHorizontal: 4,
+  },
+  bulkPrefixInput: {
+    height: 34,
+    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#fff',
+    paddingHorizontal: 9,
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bulkRowFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: '#F1F5F9',
+  },
+  bulkRowSummaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  bulkRowRangeBadge: {
+    fontSize: 12,
+    fontWeight: '900',
+  },
+  bulkAddRowBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#CBD5E1',
+    backgroundColor: '#F8FAFC',
+  },
+  bulkAddRowBtnText: {
+    fontSize: 12.5,
+    fontWeight: '800',
+    color: BRAND,
+  },
+  bulkPreviewBox: {
+    marginTop: 10,
+    marginBottom: 4,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+    padding: 10,
+    gap: 7,
+  },
+  bulkPreviewTitle: {
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+  bulkPreviewFloorTag: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: BRAND,
+    backgroundColor: '#4a121a14',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  bulkPreviewPills: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  bulkPreviewPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderRadius: 7,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  bulkPreviewPillName: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  bulkPreviewPillSeats: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  bulkPreviewMorePill: {
+    backgroundColor: '#E2E8F0',
+    borderRadius: 7,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    justifyContent: 'center',
+  },
+  bulkPreviewMoreText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+  },
 });

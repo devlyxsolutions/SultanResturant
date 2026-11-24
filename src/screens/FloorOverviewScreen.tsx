@@ -246,7 +246,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                 </View>
                 <View style={styles.floorZoneChip}>
                   <SeatingTypeIcon type="couches" size={12} color="#E65100" />
-                  <Text style={styles.floorZoneChipText}>{fs.couchesZoneCount} Couches</Text>
+                  <Text style={styles.floorZoneChipText}>{fs.couchesZoneCount} Sofas</Text>
                 </View>
                 <View style={[styles.floorZoneChip, { backgroundColor: '#4a121a15', borderColor: '#4a121a30' }]}>
                   <SeatingTypeIcon type="majlis" size={12} color="#4a121a" />
@@ -275,7 +275,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
             {selectedFloor === 'All' ? 'All Tables' : `${selectedFloor} Tables`} ({displayTables.length})
           </Text>
           <Text style={styles.sectionSubtitle}>
-            Tap any table, couch, or cabin to open in Manager Floor Plan or POS
+            Tap any table, sofa, or cabin to open in Manager Floor Plan or POS
           </Text>
         </View>
         {selectedFloor !== 'All' && (
@@ -342,7 +342,7 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
                 </View>
               </View>
               <Text style={[styles.tileZone, { color: zoneMeta.color }]}>
-                {isMajlis ? 'Majlis Cabin' : isCouch ? 'Couch' : 'Table'} • {floorName}
+                {isMajlis ? 'Majlis Cabin' : isCouch ? 'Sofa' : 'Table'} • {floorName}
               </Text>
               {res && (t.status === 'reserved' || isGroup) && (
                 <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#6D28D9', marginBottom: 6 }} numberOfLines={1}>

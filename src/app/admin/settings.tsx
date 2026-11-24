@@ -267,7 +267,7 @@ const CRUD_MODULE_ROWS: CrudModuleRowMeta[] = [
   {
     id: 'tables',
     label: 'Floor Command, Floors, Tables & Zones (فلور کمانڈ)',
-    desc: 'View floor details vs Add, Edit, or Delete restaurant floors, dining tables, couches & Majlis cabins',
+    desc: 'View floor details vs Add, Edit, or Delete restaurant floors, dining tables, sofas & Majlis cabins',
     icon: 'layers-outline',
     viewKey: 'canAccessFloorPlan',
     addKey: 'canAddTables',
@@ -574,8 +574,8 @@ const MODULE_CONTROL_GROUPS: ModuleControlGroup[] = [
       },
       {
         key: 'enableCouchSeating',
-        label: 'Lounge & Couch Seating Zones',
-        sub: 'Include couch/sofa lounge seating groups in floor blueprint & POS selector',
+        label: 'Lounge & Sofa Seating Zones',
+        sub: 'Include sofa lounge seating groups in floor blueprint & POS selector',
       },
       {
         key: 'enableWaiterFloorLock',
@@ -2199,7 +2199,7 @@ export default function AdminSettingsScreen() {
                 </View>
               </View>
               <Text style={styles.rowSub}>
-                Control whether {managerRole.name} can only view floor details & capacities, or also Add, Edit, and Delete floors, tables, couches & Majlis cabins
+                Control whether {managerRole.name} can only view floor details & capacities, or also Add, Edit, and Delete floors, tables, sofas & Majlis cabins
               </Text>
             </View>
           </View>
@@ -2302,7 +2302,7 @@ export default function AdminSettingsScreen() {
                 1. View Floor Command & Details (صرف تفصیلات دیکھیں)
               </Text>
               <Text style={styles.permItemDesc}>
-                Allow {managerRole.name} to open Floor Command & Floor Plan to view floors, tables, couches & cabins
+                Allow {managerRole.name} to open Floor Command & Floor Plan to view floors, tables, sofas & cabins
               </Text>
             </View>
             <Switch
@@ -2326,7 +2326,7 @@ export default function AdminSettingsScreen() {
                 2. Add New Floors, Tables & Cabins (نیا فلور یا ٹیبل ایڈ کریں)
               </Text>
               <Text style={styles.permItemDesc}>
-                Allow {managerRole.name} to create new floors, add dining tables, couches, or Arabian Majlis cabins
+                Allow {managerRole.name} to create new floors, add dining tables, sofas, or Arabian Majlis cabins
               </Text>
             </View>
             <Switch
@@ -2374,7 +2374,7 @@ export default function AdminSettingsScreen() {
                 4. Delete Floors & Tables (فلور اور ٹیبل ڈیلیٹ کریں)
               </Text>
               <Text style={styles.permItemDesc}>
-                Allow {managerRole.name} to permanently delete floors, tables, couches, or Majlis cabins
+                Allow {managerRole.name} to permanently delete floors, tables, sofas, or Majlis cabins
               </Text>
             </View>
             <Switch

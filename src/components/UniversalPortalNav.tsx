@@ -62,7 +62,7 @@ const ALL_PORTALS_CONFIG: PortalGroup[] = [
       {
         id: 'waiter',
         title: 'Order Taker Terminal',
-        subtitle: 'Floor tables, couches & Arabian majlis cabins',
+        subtitle: 'Floor tables, sofas & Arabian majlis cabins',
         route: '/waiter',
         icon: 'walk-outline',
         color: '#4a121a',
