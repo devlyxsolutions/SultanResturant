@@ -215,9 +215,13 @@ export default function POSTerminalScreen({
   const paramOrderType = searchParams.orderType as string | undefined;
 
   const { width, height } = useWindowDimensions();
-  const isLandscape = width >= 900 && width > height;
-  const isTablet = (width >= 600 && width < 1120);
-  const isMobile = width < 768 || (width < 900 && width <= height);
+  // Landscape Dual-Pane POS: active on tablets and PCs in horizontal orientation (width > height and width >= 700), or wide screen >= 1000
+  const isLandscape = (width > height && width >= 700) || width >= 1000;
+  const isTablet = width >= 600 && width < 1200;
+  const isMobile = !isLandscape;
+  const dishCardWidth = isLandscape
+    ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
+    : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -1438,8 +1442,8 @@ export default function POSTerminalScreen({
 
   const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
   const cartPrepEstimate = useMemo(
-    () => estimateOrderPrepTime(cart, menuItems, undefined, nowTick),
-    [cart, menuItems, nowTick]
+    () => estimateOrderPrepTime(cart, menuItems, undefined),
+    [cart, menuItems]
   );
 
   return (
@@ -1690,8 +1694,8 @@ export default function POSTerminalScreen({
             LEFT CATEGORY RAIL (LANDSCAPE OR PORTRAIT MENU TAB)
             -------------------------------------------------------- */}
         {(isLandscape || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isTablet && !isLandscape && { width: 210 }, isMobile && styles.categoryRailMobile]}>
-            {!isMobile && (
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 175 : 210 } : styles.categoryRailMobile]}>
+            {isLandscape && (
               <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
@@ -1731,9 +1735,10 @@ export default function POSTerminalScreen({
               </View>
             )}
             <ScrollView
-              horizontal={isMobile}
+              horizontal={!isLandscape}
               showsVerticalScrollIndicator={false}
               showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
               contentContainerStyle={isMobile ? styles.categoryRailScrollMobile : styles.categoryRailScroll}
             >
               {/* All Items Button */}
@@ -1901,6 +1906,7 @@ export default function POSTerminalScreen({
               style={{ flex: 1 }}
               contentContainerStyle={[styles.dishGridContent, totalCartQty > 0 && { paddingBottom: 96 }]}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               <View style={styles.dishGrid}>
                 {filteredItems.map((item) => {
@@ -1917,8 +1923,7 @@ export default function POSTerminalScreen({
                       key={item.id}
                       style={[
                         styles.dishCard,
-                        isTablet && { width: '31.5%' },
-                        isMobile && { width: width < 380 ? '100%' : '48%' },
+                        { width: dishCardWidth as any },
                         isInCart && styles.dishCardActive,
                         isOutOfStock && { opacity: 0.55 },
                       ]}
@@ -2010,7 +2015,7 @@ export default function POSTerminalScreen({
             style={[
               styles.ticketPanel,
               isLandscape
-                ? { width: width < 1180 ? 350 : 390 }
+                ? { width: width < 1000 ? 320 : width < 1200 ? 350 : 380 }
                 : { width: '100%', flex: 1, borderLeftWidth: 0 },
             ]}
           >
@@ -2129,10 +2134,10 @@ export default function POSTerminalScreen({
               </View>
             )}
 
-            {/* Cart Main Body: Single column in Landscape / Stacked on Mobile / 2 Columns on Portrait Tablet */}
-            <View style={{ flex: 1, flexDirection: (isMobile || isLandscape) ? 'column' : 'row', overflow: 'hidden' }}>
+            {/* Cart Main Body: Single column in Landscape & Portrait for POS layout */}
+            <View style={{ flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
               {/* Context + Cart Item Rows */}
-              <View style={{ flex: 1, borderRightWidth: (isMobile || isLandscape) ? 0 : 1, borderRightColor: '#E2E8F0', display: 'flex', flexDirection: 'column' }}>
+              <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
 
             {/* 1. Order Context Header (Table or Customer Selector) */}
             <View style={styles.ticketContextCard}>
@@ -2231,6 +2236,7 @@ export default function POSTerminalScreen({
               style={styles.ticketItemsScroll}
               contentContainerStyle={styles.ticketItemsContent}
               showsVerticalScrollIndicator={true}
+              keyboardShouldPersistTaps="handled"
             >
               {cart.length === 0 ? (
                 <View style={styles.emptyTicketBox}>
@@ -2294,8 +2300,8 @@ export default function POSTerminalScreen({
             </ScrollView>
               </View>
 
-              {/* RIGHT SIDE OF FULL-PAGE CART: Large Financial Summary & Big Action Buttons */}
-              <View style={[styles.ticketFooter, (!isMobile && !isLandscape) && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
+              {/* Financial Summary & Big Action Buttons */}
+              <View style={[styles.ticketFooter, isLandscape && { padding: 12, paddingBottom: 14 }]}>
               {/* Estimated Kitchen Preparation Time Banner */}
               {cart.length > 0 && (
                 <View

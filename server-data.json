@@ -18217,30 +18217,6 @@
   "damageRecords": [],
   "activeStaffSessions": [
     {
-      "sessionId": "sess_mwueua1b_1pk7y5",
-      "staffId": "st-emp-f19",
-      "username": "sheroz",
-      "staffName": "Sheroz",
-      "role": "juicebar",
-      "deviceId": "dev_web_mwqo1air_eke8w_ju8s",
-      "deviceName": "Edge on Windows",
-      "platform": "web",
-      "loginTime": 1795507557074,
-      "lastActiveTime": 1795511824108
-    },
-    {
-      "sessionId": "sess_mwugyqpk_xx650t",
-      "staffId": "st-emp-f25",
-      "username": "tanveer",
-      "staffName": "Tanveer",
-      "role": "manager",
-      "deviceId": "dev_web_mwqnc5ee_p4203_rvil",
-      "deviceName": "Edge on Windows",
-      "platform": "web",
-      "loginTime": 1795511125084,
-      "lastActiveTime": 1795517982561
-    },
-    {
       "sessionId": "sess_mwuo86uz_cjv2mk",
       "staffId": "st-master",
       "username": "master",
@@ -18250,7 +18226,7 @@
       "deviceName": "Chrome on Windows",
       "platform": "web",
       "loginTime": 1795523323069,
-      "lastActiveTime": 1795523443170
+      "lastActiveTime": 1795526204321
     },
     {
       "sessionId": "sess_mwul28te_vs4hso",
@@ -18263,6 +18239,30 @@
       "platform": "web",
       "loginTime": 1795518006819,
       "lastActiveTime": 1795522649187
+    },
+    {
+      "sessionId": "sess_mwupwnio_3i2v03",
+      "staffId": "st-emp-f19",
+      "username": "sheroz",
+      "staffName": "Sheroz",
+      "role": "juicebar",
+      "deviceId": "dev_web_mwqo1air_eke8w_jzyn",
+      "deviceName": "Edge on Windows",
+      "platform": "web",
+      "loginTime": 1795526144151,
+      "lastActiveTime": 1795526200227
+    },
+    {
+      "sessionId": "sess_mwupxy36_3ce19j",
+      "staffId": "st-emp-f25",
+      "username": "tanveer",
+      "staffName": "Tanveer",
+      "role": "manager",
+      "deviceId": "dev_web_mwqnc5ee_p4203_e665",
+      "deviceName": "Edge on Windows",
+      "platform": "web",
+      "loginTime": 1795526204743,
+      "lastActiveTime": 1795526204743
     }
   ],
   "revokedSessions": {
@@ -18273,6 +18273,22 @@
       "staffName": "Master Admin",
       "timestamp": 1795523323069,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
+    },
+    "sess_mwueua1b_1pk7y5": {
+      "sessionId": "sess_mwueua1b_1pk7y5",
+      "deviceId": "dev_web_mwqo1air_eke8w_ju8s",
+      "staffId": "st-emp-f19",
+      "staffName": "Sheroz",
+      "timestamp": 1795526144151,
+      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
+    },
+    "sess_mwugyqpk_xx650t": {
+      "sessionId": "sess_mwugyqpk_xx650t",
+      "deviceId": "dev_web_mwqnc5ee_p4203_rvil",
+      "staffId": "st-emp-f25",
+      "staffName": "Tanveer",
+      "timestamp": 1795526204743,
+      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
     }
   },
   "revokedDeviceIds": {
@@ -18283,6 +18299,22 @@
       "staffName": "Master Admin",
       "timestamp": 1795523323069,
       "reason": "Doosri device (Chrome on Windows) par login kiya gaya hai"
+    },
+    "dev_web_mwqo1air_eke8w_ju8s": {
+      "sessionId": "sess_mwueua1b_1pk7y5",
+      "deviceId": "dev_web_mwqo1air_eke8w_ju8s",
+      "staffId": "st-emp-f19",
+      "staffName": "Sheroz",
+      "timestamp": 1795526144151,
+      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
+    },
+    "dev_web_mwqnc5ee_p4203_rvil": {
+      "sessionId": "sess_mwugyqpk_xx650t",
+      "deviceId": "dev_web_mwqnc5ee_p4203_rvil",
+      "staffId": "st-emp-f25",
+      "staffName": "Tanveer",
+      "timestamp": 1795526204743,
+      "reason": "Doosri device (Edge on Windows) par login kiya gaya hai"
     }
   },
   "forceLogoutAll": null,
@@ -19291,7 +19323,7 @@
   "lastBillPaidAlert": null,
   "lastFoodReadyAlert": null,
   "pendingFloorOrderAlert": null,
-  "lastUpdated": 1795525280534,
+  "lastUpdated": 1795526204743,
   "inventoryCategories": [
     "Meat",
     "Produce",

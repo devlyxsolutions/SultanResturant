@@ -143,9 +143,12 @@ export default function TableOrderScreen() {
   const { tableId } = useLocalSearchParams();
   const router = useRouter();
   const { width, height } = useWindowDimensions();
-  const isLandscape = width >= 900 && width > height;
-  const isTablet = width >= 600 && width < 1120;
-  const isMobile = width < 768 || (width < 900 && width <= height);
+  const isLandscape = (width > height && width >= 700) || width >= 1000;
+  const isTablet = width >= 600 && width < 1200;
+  const isMobile = !isLandscape;
+  const dishCardWidth = isLandscape
+    ? (width < 1050 ? '48%' : width < 1400 ? '31.5%' : '23.5%')
+    : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [activeCategory, setActiveCategory] = useState<string>('ALL');
@@ -643,35 +646,36 @@ export default function TableOrderScreen() {
       <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
         {/* LEFT: Category Rail */}
         {(isLandscape || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isTablet && !isLandscape && { width: 210 }, isMobile && styles.categoryRailMobile]}>
-            <View style={styles.categoryRailHeader}>
-              {!isMobile && (
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 175 : 210 } : styles.categoryRailMobile]}>
+            {isLandscape && (
+              <View style={styles.categoryRailHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
                   <Text style={styles.categoryRailTitle}>CATEGORIES</Text>
                   <Text style={styles.categoryRailCount}>{categoryList.length + 1}</Text>
                 </View>
-              )}
-              <View style={styles.categorySearchWrap}>
-                <Ionicons name="search" size={15} color="#64748B" />
-                <TextInput
-                  style={[styles.categorySearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
-                  placeholder="Search category..."
-                  placeholderTextColor="#94A3B8"
-                  value={categorySearchQuery}
-                  onChangeText={setCategorySearchQuery}
-                />
-                {categorySearchQuery.length > 0 && (
-                  <TouchableOpacity onPress={() => setCategorySearchQuery('')}>
-                    <Ionicons name="close-circle" size={16} color="#94A3B8" />
-                  </TouchableOpacity>
-                )}
+                <View style={styles.categorySearchWrap}>
+                  <Ionicons name="search" size={15} color="#64748B" />
+                  <TextInput
+                    style={[styles.categorySearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                    placeholder="Search category..."
+                    placeholderTextColor="#94A3B8"
+                    value={categorySearchQuery}
+                    onChangeText={setCategorySearchQuery}
+                  />
+                  {categorySearchQuery.length > 0 && (
+                    <TouchableOpacity onPress={() => setCategorySearchQuery('')}>
+                      <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
-            </View>
+            )}
             <ScrollView
-              horizontal={isMobile}
+              horizontal={!isLandscape}
               showsVerticalScrollIndicator={false}
               showsHorizontalScrollIndicator={false}
-              contentContainerStyle={isMobile ? styles.categoryRailScrollMobile : styles.categoryRailScroll}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={!isLandscape ? styles.categoryRailScrollMobile : styles.categoryRailScroll}
             >
               {(() => {
                 const isAll = activeCategory === 'ALL' || activeCategory === 'All';
@@ -803,6 +807,7 @@ export default function TableOrderScreen() {
               style={{ flex: 1 }}
               contentContainerStyle={[styles.dishGridContent, isMobile && totalNewQty > 0 && { paddingBottom: 90 }]}
               showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
             >
               <View style={styles.dishGrid}>
                 {filteredItems.map((item) => {
@@ -818,8 +823,7 @@ export default function TableOrderScreen() {
                       key={item.id}
                       style={[
                         styles.dishCard,
-                        isTablet && { width: '31.5%' },
-                        isMobile && { width: width < 380 ? '100%' : '48%' },
+                        { width: dishCardWidth as any },
                         isInCart && styles.dishCardActive,
                         isSoldOut && { opacity: 0.55 },
                       ]}
@@ -881,7 +885,7 @@ export default function TableOrderScreen() {
             style={[
               styles.ticketPanel,
               isLandscape
-                ? { width: width < 1180 ? 350 : 380 }
+                ? { width: width < 1000 ? 320 : width < 1200 ? 350 : 380 }
                 : { width: '100%', flex: 1, borderLeftWidth: 0 },
             ]}
           >
@@ -922,7 +926,12 @@ export default function TableOrderScreen() {
               )}
             </View>
 
-            <ScrollView style={styles.ticketItemsScroll} contentContainerStyle={styles.ticketItemsContent}>
+            <ScrollView
+              style={styles.ticketItemsScroll}
+              contentContainerStyle={styles.ticketItemsContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
               {newCart.length === 0 ? (
                 <View style={styles.emptyTicketBox}>
                   <Ionicons name="restaurant-outline" size={38} color="#CBD5E1" />
