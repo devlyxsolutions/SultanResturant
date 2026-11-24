@@ -219,13 +219,14 @@ export default function POSTerminalScreen({
   const { width, height } = useWindowDimensions();
   // Landscape Dual-Pane POS: active on tablets and PCs in horizontal orientation (width > height and width >= 700), or wide screen >= 1000
   const isLandscape = (width > height && width >= 700) || width >= 1000;
+  const isWideDesktop = width >= 1180;
   const isTablet = width >= 600 && width < 1200;
-  const isMobile = !isLandscape;
+  const isMobile = !isWideDesktop;
   const numCols = isLandscape
-    ? (width < 900 ? 2 : width < 1350 ? 3 : 4)
+    ? (width < 1180 ? 3 : width < 1400 ? 3 : 4)
     : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
-    ? (width < 900 ? '48%' : width < 1350 ? '31.5%' : '23.5%')
+    ? (width < 1180 ? '31.5%' : width < 1400 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
@@ -1589,9 +1590,9 @@ export default function POSTerminalScreen({
       </View>
 
       {/* ========================================================
-          PORTRAIT MODE SWITCHER (ON PHONES & PORTRAIT TABLETS: MENU vs CART vs RUNNING KDS)
+          TABLET / MOBILE MODE SWITCHER: MENU vs CART vs RUNNING KDS
           ======================================================== */}
-      {!isLandscape && (
+      {!isWideDesktop && (
         <View style={styles.mobileTabBar}>
           <TouchableOpacity
             style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
@@ -1660,13 +1661,13 @@ export default function POSTerminalScreen({
       )}
 
       {/* ========================================================
-          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT)
+          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT/TABLET)
           ======================================================== */}
-      <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
+      <View style={[styles.workspace, (!isLandscape || (!isWideDesktop && mobileTab !== 'menu')) && { flexDirection: 'column' }]}>
         {/* --------------------------------------------------------
-            LEFT CATEGORY RAIL (LANDSCAPE OR PORTRAIT MENU TAB)
+            LEFT CATEGORY RAIL (LANDSCAPE OR MENU TAB)
             -------------------------------------------------------- */}
-        {(isLandscape || mobileTab === 'menu') && (
+        {(isWideDesktop || mobileTab === 'menu') && (
           <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 160 : width < 1250 ? 180 : 210 } : styles.categoryRailMobile]}>
             {isLandscape && (
               <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
@@ -1831,7 +1832,7 @@ export default function POSTerminalScreen({
         {/* --------------------------------------------------------
             TAB 1 (MENU): SPACIOUS FULL-WIDTH DISHES CATALOG GRID
             -------------------------------------------------------- */}
-        {(isLandscape || mobileTab === 'menu') && (
+        {(isWideDesktop || mobileTab === 'menu') && (
           <View style={styles.catalogPane}>
             {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
             <View style={styles.catalogFilterBar}>
@@ -1987,19 +1988,19 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            TAB 2 (CART): ORDER CART & BILLING VIEW (PINNED RIGHT IN LANDSCAPE, TABBED IN PORTRAIT)
+            TAB 2 (CART): ORDER CART & BILLING VIEW (PINNED RIGHT ON DESKTOP, TABBED ON TABLET/MOBILE)
             -------------------------------------------------------- */}
-        {(isLandscape || mobileTab === 'cart') && (
+        {(isWideDesktop || mobileTab === 'cart') && (
           <View
             style={[
               styles.ticketPanel,
-              isLandscape
-                ? { width: width < 1000 ? 295 : width < 1200 ? 330 : 365 }
+              isWideDesktop
+                ? { width: width < 1350 ? 340 : 380 }
                 : { width: '100%', flex: 1, borderLeftWidth: 0 },
             ]}
           >
-            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher (Portrait only) */}
-            {!isLandscape && (
+            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher (Tablet/Mobile) */}
+            {!isWideDesktop && (
               <View
                 style={{
                   flexDirection: 'row',
@@ -2068,8 +2069,8 @@ export default function POSTerminalScreen({
               </View>
             )}
 
-            {/* Landscape Order Type Switcher */}
-            {isLandscape && (
+            {/* Desktop Wide Order Type Switcher */}
+            {isWideDesktop && (
               <View
                 style={{
                   flexDirection: 'row',
@@ -2705,8 +2706,8 @@ export default function POSTerminalScreen({
         )}
       </View>
 
-      {/* Floating Bottom Bar on Menu Tab (Portrait Only) to Jump to Full-Page Cart */}
-      {!isLandscape && mobileTab === 'menu' && totalCartQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (Tablet & Phone) to Jump to Full-Page Cart */}
+      {!isWideDesktop && mobileTab === 'menu' && totalCartQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}

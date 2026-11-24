@@ -148,10 +148,10 @@ export default function TableOrderScreen() {
   const isTablet = width >= 600 && width < 1200;
   const isMobile = !isLandscape;
   const numCols = isLandscape
-    ? (width < 900 ? 2 : width < 1350 ? 3 : 4)
+    ? (width < 1100 ? 3 : 4)
     : (width < 500 ? 2 : 3);
   const dishCardWidth = isLandscape
-    ? (width < 900 ? '48%' : width < 1350 ? '31.5%' : '23.5%')
+    ? (width < 1100 ? '31.5%' : '23.5%')
     : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
@@ -622,49 +622,47 @@ export default function TableOrderScreen() {
         </View>
       </View>
 
-      {/* Tab Switcher (Portrait Phones & Tablets: Menu vs Cart vs Running KDS Prep Time) */}
-      {!isLandscape && (
-        <View style={styles.mobileTabBar}>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('menu')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="restaurant" size={16} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              Dishes ({filteredItems.length})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('cart')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="cart" size={16} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              Cart ({totalNewQty}{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('running')}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="flame" size={16} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
-            <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
-              Running ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      {/* 2. Top Options Bar: 1. Order / Menu Dishes | 2. Current Cart & KOT | 3. Running KDS */}
+      <View style={styles.mobileTabBar}>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('menu')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="restaurant" size={16} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+            1. Order / Menu Dishes ({filteredItems.length})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('cart')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="cart" size={16} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+            2. Current Cart & KOT ({totalNewQty}{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'running' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('running')}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="flame" size={16} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
+          <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
+            3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       {/* ========================================================
-          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT)
+          3. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT)
           ======================================================== */}
-      <View style={[styles.workspace, !isLandscape && { flexDirection: 'column' }]}>
-        {/* LEFT: Category Rail */}
-        {(isLandscape || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 160 : width < 1250 ? 180 : 210 } : styles.categoryRailMobile]}>
+      <View style={[styles.workspace, (!isLandscape || mobileTab !== 'menu') && { flexDirection: 'column' }]}>
+        {/* LEFT: Category Rail (Menu Tab) */}
+        {mobileTab === 'menu' && (
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 175 : width < 1250 ? 195 : 220 } : styles.categoryRailMobile]}>
             {isLandscape && (
               <View style={styles.categoryRailHeader}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -788,13 +786,18 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* CENTER: Dish Grid */}
-        {(isLandscape || mobileTab === 'menu') && (
+        {/* RIGHT / MAIN: Dish Grid (Menu Tab) */}
+        {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
             <View style={styles.catalogFilterBar}>
-              <Text style={styles.activeCatTitle}>
-                {activeCategory === 'ALL' ? 'All Menu Dishes' : activeCategory}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={styles.activeCatTitle}>
+                  {activeCategory === 'ALL' ? 'All Menu Dishes' : activeCategory}
+                </Text>
+                <View style={styles.activeCatCountPill}>
+                  <Text style={styles.activeCatCountText}>{filteredItems.length} items</Text>
+                </View>
+              </View>
               {regions.length > 0 && (
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisinePillsRow}>
                   <TouchableOpacity
@@ -905,40 +908,31 @@ export default function TableOrderScreen() {
           </View>
         )}
 
-        {/* CART / KOT TICKET PANEL: DUAL-PANE RIGHT IN LANDSCAPE / TABBED IN PORTRAIT */}
-        {(isLandscape || mobileTab === 'cart') && (
-          <View
-            style={[
-              styles.ticketPanel,
-              isLandscape
-                ? { width: width < 1000 ? 295 : width < 1200 ? 330 : 365 }
-                : { width: '100%', flex: 1, borderLeftWidth: 0 },
-            ]}
-          >
-            {/* Top Bar inside Cart in Portrait: Back to Menu */}
-            {!isLandscape && (
-              <TouchableOpacity
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: '#F1F5F9',
-                  paddingHorizontal: 16,
-                  paddingVertical: 10,
-                  borderRadius: 10,
-                  borderWidth: 1,
-                  borderColor: '#CBD5E1',
-                  margin: 12,
-                  marginBottom: 6,
-                }}
-                onPress={() => setMobileTab('menu')}
-              >
-                <Ionicons name="arrow-back" size={18} color="#52141C" />
-                <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
-                  + Add More Dishes (Menu)
-                </Text>
-              </TouchableOpacity>
-            )}
+        {/* TAB 2: CART / KOT TICKET PANEL */}
+        {mobileTab === 'cart' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
+            {/* Top Bar inside Cart: Back to Menu */}
+            <TouchableOpacity
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 8,
+                backgroundColor: '#F1F5F9',
+                paddingHorizontal: 16,
+                paddingVertical: 10,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#CBD5E1',
+                margin: 12,
+                marginBottom: 6,
+              }}
+              onPress={() => setMobileTab('menu')}
+            >
+              <Ionicons name="arrow-back" size={18} color="#52141C" />
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
+                + Add More Dishes (Menu)
+              </Text>
+            </TouchableOpacity>
 
             <View style={styles.ticketItemsHeader}>
               <Text style={styles.ticketItemsHeaderTitle}>
@@ -1213,8 +1207,8 @@ export default function TableOrderScreen() {
         )}
       </View>
 
-      {/* Floating Bottom Bar on Menu Tab (Portrait Only) */}
-      {!isLandscape && mobileTab === 'menu' && totalNewQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab */}
+      {mobileTab === 'menu' && totalNewQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}
@@ -1656,6 +1650,19 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '900',
     color: '#0F172A',
+  },
+  activeCatCountPill: {
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  activeCatCountText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#64748B',
   },
   cuisinePillsRow: {
     flexDirection: 'row',
