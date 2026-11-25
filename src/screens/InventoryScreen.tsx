@@ -66,6 +66,11 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const isMobile = width < 768;
 
   const user = useAuthStore((s) => s.user);
+  const isMasterAdmin =
+    user?.id === 'st-master' ||
+    user?.staffId === 'st-master' ||
+    user?.username?.toLowerCase() === 'master' ||
+    user?.name?.toLowerCase() === 'master admin';
   const {
     can,
     canAddInventory,
@@ -489,6 +494,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   };
 
   const handleOpenBackupRestoreModal = async () => {
+    if (!isMasterAdmin) return;
     setShowBackupModal(true);
     setIsLoadingBackups(true);
     try {
@@ -1818,14 +1824,16 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             <Text style={[styles.addBtnText, { color: BRAND.burgundy }]}>Suppliers</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.addBtn, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}
-            onPress={handleOpenBackupRestoreModal}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="shield-checkmark-outline" size={15} color="#4338CA" style={{ marginRight: 4 }} />
-            <Text style={[styles.addBtnText, { color: '#312E81' }]}>Backups & Restore</Text>
-          </TouchableOpacity>
+          {isMasterAdmin && (
+            <TouchableOpacity
+              style={[styles.addBtn, { backgroundColor: '#EEF2FF', borderWidth: 1, borderColor: '#C7D2FE' }]}
+              onPress={handleOpenBackupRestoreModal}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="shield-checkmark-outline" size={15} color="#4338CA" style={{ marginRight: 4 }} />
+              <Text style={[styles.addBtnText, { color: '#312E81' }]}>Backups & Restore</Text>
+            </TouchableOpacity>
+          )}
 
           {(canAddInventory || canEditInventory) && (
             <TouchableOpacity
@@ -7118,9 +7126,9 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
       </Modal>
 
       {/* ========================================================================= */}
-      {/* MODAL 8: SERVER BACKUPS & 1-CLICK INVENTORY RECOVERY */}
+      {/* MODAL 8: SERVER BACKUPS & 1-CLICK INVENTORY RECOVERY (MASTER ID ONLY) */}
       {/* ========================================================================= */}
-      <Modal visible={showBackupModal} transparent animationType="fade">
+      <Modal visible={showBackupModal && isMasterAdmin} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, isMobile && styles.modalCardMobile]}>
             <View style={styles.modalHeader}>

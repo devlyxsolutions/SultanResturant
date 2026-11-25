@@ -41,13 +41,13 @@ if ((Test-Path $java) -and (Test-Path "$bt\zipalign.exe") -and (Test-Path "$env:
   if ($LASTEXITCODE -ne 0) { throw "expo export android failed" }
 
   $hbc = (Get-ChildItem -Path "dist-android\_expo\static\js\android\*.hbc" | Select-Object -First 1).FullName
-  $unalignedApk = "$env:TEMP\sultan_unaligned_v29.apk"
-  $alignedApk = "$env:TEMP\sultan_aligned_v29.apk"
-  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v29.apk"
+  $unalignedApk = "$env:TEMP\sultan_unaligned_v30.apk"
+  $alignedApk = "$env:TEMP\sultan_aligned_v30.apk"
+  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v30.apk"
   Remove-Item $unalignedApk, $alignedApk, $signedApk -Force -ErrorAction SilentlyContinue
 
-  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 28 }
-  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 29
+  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 29 }
+  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 30
   if ($LASTEXITCODE -ne 0) { throw "PatchApk failed" }
 
   & "$bt\zipalign.exe" -p -f 4 $unalignedApk $alignedApk
