@@ -4868,6 +4868,27 @@ async function handleRequest(req, res) {
         } catch (_) {}
       }
 
+      // Snappy-aware LevelDB scanner (covers Sultan EXE profile %LOCALAPPDATA%\SultanRestaurant\SultanAppProfile + Chrome/Edge/Brave)
+      try {
+        const scannerPath = [
+          path.join(__dirname, 'scripts', 'recover-browser-cache.js'),
+          path.join(__dirname, '..', 'scripts', 'recover-browser-cache.js'),
+        ].find((p) => fs.existsSync(p));
+        if (scannerPath) {
+          const scanner = require(scannerPath);
+          const rec = scanner.buildRecoveredState(scanner.scanAllSnapshots([BACKUP_DIR]));
+          harvestFromParsedState(
+            {
+              inventoryCategories: rec.inventoryCategories,
+              inventory: rec.inventory,
+              storageZones: rec.storageZones,
+              suppliers: rec.suppliers,
+            },
+            rec.source || 'Sultan EXE / Browser LevelDB'
+          );
+        }
+      } catch (_) {}
+
       if (foundCats.size === 0 && foundItemsMap.size === 0) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -7571,7 +7592,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       // BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
       // ==============================================================
       // Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
-      const IS_DEV_WORKSTATION = __dirname.toLowerCase().includes('nizaam digital sol') && process.env.SULTAN_FORCE_CLOUD_SYNC !== '1';
+      const IS_DEV_WORKSTATION = process.env.SULTAN_DISABLE_CLOUD_SYNC === '1';
       const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
       const FIRESTORE_PROJECT_ID = "sultan-resturant";
       const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
