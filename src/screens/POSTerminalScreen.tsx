@@ -217,17 +217,12 @@ export default function POSTerminalScreen({
   const paramOrderType = searchParams.orderType as string | undefined;
 
   const { width, height } = useWindowDimensions();
-  // Landscape Dual-Pane POS: active on tablets and PCs in horizontal orientation (width > height and width >= 700), or wide screen >= 1000
   const isLandscape = (width > height && width >= 700) || width >= 1000;
-  const isWideDesktop = width >= 1180;
-  const isTablet = width >= 600 && width < 1200;
-  const isMobile = !isWideDesktop;
+  const isTablet = width >= 700 && width < 1120;
+  const isMobile = width < 700;
   const numCols = isLandscape
-    ? (width < 1180 ? 3 : width < 1400 ? 3 : 4)
+    ? (width >= 1120 ? 4 : 3)
     : (width < 500 ? 2 : 3);
-  const dishCardWidth = isLandscape
-    ? (width < 1180 ? '31.5%' : width < 1400 ? '31.5%' : '23.5%')
-    : (width < 480 ? '48%' : '31.5%');
 
   const [mobileTab, setMobileTab] = useState<'menu' | 'cart' | 'running'>('menu');
   const [failedImages, setFailedImages] = useState<Record<string, boolean>>({});
@@ -309,6 +304,70 @@ export default function POSTerminalScreen({
 
   // Cart & Order Context
   const [cart, setCart] = useState<OrderItem[]>([]);
+  const [orderNotes, setOrderNotes] = useState('');
+  const [editingNoteItem, setEditingNoteItem] = useState<OrderItem | null>(null);
+  const [noteDraft, setNoteDraft] = useState('');
+  const [variantNoteDraft, setVariantNoteDraft] = useState('');
+
+  const ITEM_NOTE_PRESETS = [
+    'Less Spicy',
+    'Medium Spicy',
+    'Extra Spicy',
+    'No Onion',
+    'No Garlic',
+    'Less Oil',
+    'Well Done',
+    'Extra Sauce',
+    'No Mayo',
+    'Cheese on Top',
+    'Less Sugar',
+    'Less Ice',
+    'No Ice',
+    'Room Temp',
+    'Pack Separately',
+  ];
+
+  const ORDER_NOTE_PRESETS = [
+    'Serve Starters First',
+    'Serve All Together',
+    'Medium Spicy Overall',
+    'Less Spicy Overall',
+    'Family / Kids Table',
+    'VIP Guest Priority',
+    'Pack Leftovers',
+    'Extra Cutlery & Napkins',
+  ];
+
+  const toggleCommaNoteToken = (current: string, token: string): string => {
+    const parts = current
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+    const exists = parts.some((p) => p.toLowerCase() === token.toLowerCase());
+    if (exists) {
+      return parts.filter((p) => p.toLowerCase() !== token.toLowerCase()).join(', ');
+    }
+    return [...parts, token].join(', ');
+  };
+
+  const hasCommaNoteToken = (current: string, token: string): boolean =>
+    current
+      .split(',')
+      .map((p) => p.trim().toLowerCase())
+      .includes(token.toLowerCase());
+
+  const openItemNoteModal = (item: OrderItem) => {
+    setEditingNoteItem(item);
+    setNoteDraft(item.notes || '');
+  };
+
+  const saveItemNote = () => {
+    if (!editingNoteItem) return;
+    const clean = noteDraft.trim() || undefined;
+    setCart((prev) => prev.map((i) => (i.id === editingNoteItem.id ? { ...i, notes: clean } : i)));
+    setEditingNoteItem(null);
+    setNoteDraft('');
+  };
 
   // Fast O(1) in-cart lookup map to eliminate scroll lag
   const cartQtyMap = useMemo(() => {
@@ -908,10 +967,14 @@ export default function POSTerminalScreen({
     if (!variantModalItem) return;
     const variantId = `${variantModalItem.id}-${variant.name}`;
     const variantName = `${variantModalItem.name} (${variant.name})`;
+    const cleanNote = variantNoteDraft.trim() || undefined;
     setCart((prev) => {
       const existing = prev.find((i) => i.id === variantId);
       if (existing) {
-        return prev.map((i) => (i.id === variantId ? { ...i, qty: i.qty + 1 } : i));
+        const mergedNote = cleanNote
+          ? Array.from(new Set([existing.notes, cleanNote].filter(Boolean))).join(', ')
+          : existing.notes;
+        return prev.map((i) => (i.id === variantId ? { ...i, qty: i.qty + 1, notes: mergedNote } : i));
       }
       return [
         ...prev,
@@ -920,11 +983,13 @@ export default function POSTerminalScreen({
           name: variantName,
           price: variant.price,
           qty: 1,
+          notes: cleanNote,
           completed: false,
           station: variantModalItem.station || 'main',
         },
       ];
     });
+    setVariantNoteDraft('');
     setVariantModalItem(null);
   };
 
@@ -941,6 +1006,7 @@ export default function POSTerminalScreen({
   const clearCart = () => {
     setCart([]);
     setLoadedCart([]);
+    setOrderNotes('');
     setSelectedCustomerId('');
     setSelectedTableId('');
     setSelectedEventCampaign(null);
@@ -1085,7 +1151,7 @@ export default function POSTerminalScreen({
       menuItems
     );
 
-    placeOrder(tId, serverLabel, kotItems, isAddOn);
+    placeOrder(tId, serverLabel, kotItems, isAddOn, undefined, orderNotes.trim() || undefined);
     broadcastImmediately();
 
     const latestTicket = useRestaurantStore.getState().tickets?.[0];
@@ -1122,6 +1188,7 @@ export default function POSTerminalScreen({
     } else {
       setCart([]);
       setLoadedCart([]);
+      setOrderNotes('');
       setLoadedTicketId(null);
       setSelectedCustomerId('');
       setSelectedEventCampaign(null);
@@ -1186,6 +1253,9 @@ export default function POSTerminalScreen({
       setLoadedCart(JSON.parse(JSON.stringify(itemsCopy)));
     }
 
+    if (ticket.notes) {
+      setOrderNotes(ticket.notes);
+    }
     setPendingOrdersModalVisible(false);
 
     if (autoOpenCheckout) {
@@ -1200,7 +1270,7 @@ export default function POSTerminalScreen({
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
       }, 120);
-    } else if (isMobile) {
+    } else {
       setMobileTab('cart');
     }
   };
@@ -1270,7 +1340,7 @@ export default function POSTerminalScreen({
       changeReturned: changeDueAmount,
     });
 
-    const unsentKotItems: { item: MenuItem; qty: number }[] = [];
+    const unsentKotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
     cart.forEach((cartItem) => {
       const loadedQty = loadedCart.filter((lc) => lc.id === cartItem.id).reduce((s, lc) => s + lc.qty, 0);
       if (cartItem.qty > loadedQty) {
@@ -1290,13 +1360,13 @@ export default function POSTerminalScreen({
             category: 'Mains',
             station: cartItem.station || 'main',
           };
-        unsentKotItems.push({ item: itemObj, qty: cartItem.qty - loadedQty });
+        unsentKotItems.push({ item: itemObj, qty: cartItem.qty - loadedQty, notes: cartItem.notes });
       }
     });
 
     if (unsentKotItems.length > 0 && systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false) {
       const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
-      placeOrder(kotTarget, cashierName, unsentKotItems, loadedCart.length > 0);
+      placeOrder(kotTarget, cashierName, unsentKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
     }
 
     saveInvoice(invoice);
@@ -1359,6 +1429,7 @@ export default function POSTerminalScreen({
 
     setCart([]);
     setLoadedCart([]);
+    setOrderNotes('');
     setSelectedEventCampaign(null);
     setDiscountAmount('0');
     setCheckoutModalVisible(false);
@@ -1590,64 +1661,105 @@ export default function POSTerminalScreen({
       </View>
 
       {/* ========================================================
-          TABLET / MOBILE MODE SWITCHER: MENU vs CART vs RUNNING KDS
+          FULL-PAGE MODE SWITCHER (ON ALL DEVICES: MENU vs CART vs RUNNING KDS)
           ======================================================== */}
-      {!isWideDesktop && (
-        <View style={styles.mobileTabBar}>
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('menu')}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name="restaurant"
-              size={16}
-              color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
-            />
-            <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-              Dishes ({filteredItems.length})
-            </Text>
-          </TouchableOpacity>
+      <View style={styles.mobileTabBar}>
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'menu' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('menu')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="restaurant"
+            size={18}
+            color={mobileTab === 'menu' ? '#F3D179' : '#475569'}
+          />
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
+            1. Order / Menu Dishes ({filteredItems.length})
+          </Text>
+        </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
-            onPress={() => setMobileTab('cart')}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name="cart"
-              size={16}
-              color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
-            />
-            <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-              Cart & Bill ({totalCartQty}{!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[
-              styles.mobileTabBtn,
-              mobileTab === 'running' && { backgroundColor: '#B45309', borderColor: '#F59E0B' },
-            ]}
-            onPress={() => setMobileTab('running')}
-            activeOpacity={0.85}
-          >
-            <Ionicons
-              name="flame"
-              size={16}
-              color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
-            />
-            <Text
-              style={[
-                styles.mobileTabText,
-                mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
-              ]}
+        <TouchableOpacity
+          style={[styles.mobileTabBtn, mobileTab === 'cart' && styles.mobileTabBtnActive]}
+          onPress={() => setMobileTab('cart')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="cart"
+            size={19}
+            color={mobileTab === 'cart' ? '#F3D179' : '#475569'}
+          />
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
+            2. Current Cart & Bill ({totalCartQty}
+            {!hidePrices && totalCartQty > 0 ? ` • Rs. ${Math.round(total).toLocaleString()}` : ''})
+          </Text>
+          {totalCartQty > 0 && (
+            <View
+              style={{
+                backgroundColor: mobileTab === 'cart' ? '#D4AF37' : '#52141C',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+              }}
             >
-              Running ({tickets.length})
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+              <Text
+                style={{
+                  color: mobileTab === 'cart' ? '#24050A' : '#FFFFFF',
+                  fontSize: 12,
+                  fontWeight: '900',
+                }}
+              >
+                {totalCartQty}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[
+            styles.mobileTabBtn,
+            mobileTab === 'running' && { backgroundColor: '#B45309', borderColor: '#F59E0B' },
+          ]}
+          onPress={() => setMobileTab('running')}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="flame"
+            size={19}
+            color={mobileTab === 'running' ? '#FFFFFF' : '#B45309'}
+          />
+          <Text
+            style={[
+              styles.mobileTabText,
+              mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
+            ]}
+          >
+            3. Running KDS & Prep Time ({tickets.length})
+          </Text>
+          {tickets.length > 0 && (
+            <View
+              style={{
+                backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
+                paddingHorizontal: 8,
+                paddingVertical: 2,
+                borderRadius: 10,
+                borderWidth: 1,
+                borderColor: '#F59E0B',
+              }}
+            >
+              <Text
+                style={{
+                  color: '#B45309',
+                  fontSize: 12,
+                  fontWeight: '900',
+                }}
+              >
+                {tickets.length} Live
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
 
       {/* Toast Notification */}
       {kdsStatusToast && (
@@ -1661,14 +1773,14 @@ export default function POSTerminalScreen({
       )}
 
       {/* ========================================================
-          2. WORKSPACE: DUAL-PANE (LANDSCAPE) / TABBED (PORTRAIT/TABLET)
+          2. FULL-PAGE WORKSPACE (TAB 1: MENU | TAB 2: FULL-PAGE CART | TAB 3: RUNNING KDS)
           ======================================================== */}
-      <View style={[styles.workspace, (!isLandscape || (!isWideDesktop && mobileTab !== 'menu')) && { flexDirection: 'column' }]}>
+      <View style={[styles.workspace, (!isLandscape || mobileTab !== 'menu') && { flexDirection: 'column' }]}>
         {/* --------------------------------------------------------
-            LEFT CATEGORY RAIL (LANDSCAPE OR MENU TAB)
+            TAB 1 (MENU): LEFT CATEGORY RAIL
             -------------------------------------------------------- */}
-        {(isWideDesktop || mobileTab === 'menu') && (
-          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 160 : width < 1250 ? 180 : 210 } : styles.categoryRailMobile]}>
+        {mobileTab === 'menu' && (
+          <View style={[styles.categoryRail, isLandscape ? { width: width < 1000 ? 180 : width < 1250 ? 205 : 230 } : styles.categoryRailMobile]}>
             {isLandscape && (
               <View style={{ padding: 10, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', gap: 8 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1832,7 +1944,7 @@ export default function POSTerminalScreen({
         {/* --------------------------------------------------------
             TAB 1 (MENU): SPACIOUS FULL-WIDTH DISHES CATALOG GRID
             -------------------------------------------------------- */}
-        {(isWideDesktop || mobileTab === 'menu') && (
+        {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
             {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
             <View style={styles.catalogFilterBar}>
@@ -1988,136 +2100,82 @@ export default function POSTerminalScreen({
         )}
 
         {/* --------------------------------------------------------
-            TAB 2 (CART): ORDER CART & BILLING VIEW (PINNED RIGHT ON DESKTOP, TABBED ON TABLET/MOBILE)
+            TAB 2 (CART): FULL-PAGE SPACIOUS ORDER CART & BILLING VIEW (SEPARATE PAGE)
             -------------------------------------------------------- */}
-        {(isWideDesktop || mobileTab === 'cart') && (
-          <View
-            style={[
-              styles.ticketPanel,
-              isWideDesktop
-                ? { width: width < 1350 ? 340 : 380 }
-                : { width: '100%', flex: 1, borderLeftWidth: 0 },
-            ]}
-          >
-            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher (Tablet/Mobile) */}
-            {!isWideDesktop && (
-              <View
+        {mobileTab === 'cart' && (
+          <View style={[styles.ticketPanel, { width: '100%', flex: 1, borderLeftWidth: 0 }]}>
+            {/* Top Bar inside Full-Page Cart: Back to Menu + Order Type Switcher */}
+            <View
+              style={{
+                flexDirection: 'row',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                paddingHorizontal: 18,
+                paddingVertical: 12,
+                backgroundColor: '#FFFFFF',
+                borderBottomWidth: 1,
+                borderBottomColor: '#E2E8F0',
+                gap: 12,
+              }}
+            >
+              <TouchableOpacity
                 style={{
                   flexDirection: 'row',
-                  flexWrap: 'wrap',
                   alignItems: 'center',
-                  justifyContent: 'space-between',
-                  paddingHorizontal: 18,
-                  paddingVertical: 12,
-                  backgroundColor: '#FFFFFF',
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#E2E8F0',
-                  gap: 12,
+                  gap: 8,
+                  backgroundColor: '#F1F5F9',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  borderWidth: 1,
+                  borderColor: '#CBD5E1',
                 }}
+                onPress={() => setMobileTab('menu')}
               >
-                <TouchableOpacity
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 8,
-                    backgroundColor: '#F1F5F9',
-                    paddingHorizontal: 16,
-                    paddingVertical: 10,
-                    borderRadius: 10,
-                    borderWidth: 1,
-                    borderColor: '#CBD5E1',
-                  }}
-                  onPress={() => setMobileTab('menu')}
-                >
-                  <Ionicons name="arrow-back" size={18} color="#52141C" />
-                  <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
-                    + Add More Dishes (Menu)
-                  </Text>
-                </TouchableOpacity>
+                <Ionicons name="arrow-back" size={18} color="#52141C" />
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#52141C' }}>
+                  + Add More Dishes (Menu)
+                </Text>
+              </TouchableOpacity>
 
-                <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                  {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
-                    const active = orderType === t;
-                    return (
-                      <TouchableOpacity
-                        key={t}
-                        style={[
-                          {
-                            paddingHorizontal: 18,
-                            paddingVertical: 10,
-                            borderRadius: 10,
-                            backgroundColor: active ? '#52141C' : '#F1F5F9',
-                            borderWidth: 1,
-                            borderColor: active ? '#52141C' : '#CBD5E1',
-                          },
-                        ]}
-                        onPress={() => handleOrderTypeChange(t)}
-                      >
-                        <Text
-                          style={{
-                            fontSize: 13.5,
-                            fontWeight: '900',
-                            color: active ? '#F3D179' : '#334155',
-                          }}
-                        >
-                          {t.toUpperCase()}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            )}
-
-            {/* Desktop Wide Order Type Switcher */}
-            {isWideDesktop && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  backgroundColor: '#FFFFFF',
-                  borderBottomWidth: 1,
-                  borderBottomColor: '#E2E8F0',
-                  gap: 6,
-                }}
-              >
+              <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
                 {(['dine-in', 'takeaway', 'delivery'] as const).map((t) => {
                   const active = orderType === t;
                   return (
                     <TouchableOpacity
                       key={t}
-                      style={{
-                        flex: 1,
-                        paddingVertical: 7,
-                        borderRadius: 8,
-                        backgroundColor: active ? '#52141C' : '#F1F5F9',
-                        borderWidth: 1,
-                        borderColor: active ? '#52141C' : '#CBD5E1',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                      }}
+                      style={[
+                        {
+                          paddingHorizontal: 18,
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          backgroundColor: active ? '#52141C' : '#F1F5F9',
+                          borderWidth: 1,
+                          borderColor: active ? '#52141C' : '#CBD5E1',
+                        },
+                      ]}
                       onPress={() => handleOrderTypeChange(t)}
                     >
                       <Text
                         style={{
-                          fontSize: 12,
-                          fontWeight: '800',
+                          fontSize: 13.5,
+                          fontWeight: '900',
                           color: active ? '#F3D179' : '#334155',
                         }}
                       >
-                        {t === 'dine-in' ? 'DINE-IN' : t === 'takeaway' ? 'TAKEAWAY' : 'DELIVERY'}
+                        {t.toUpperCase()}
                       </Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-            )}
+            </View>
 
-            {/* Cart Main Body: Single column in Landscape & Portrait for POS layout */}
-            <View style={{ flex: 1, flexDirection: 'column', overflow: 'hidden' }}>
-              {/* Context + Cart Item Rows */}
-              <View style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+            {/* Full-Page Cart Main Body: 2 Wide Columns on Desktop/Landscape, Stacked on Mobile */}
+            <View style={{ flex: 1, flexDirection: !isLandscape ? 'column' : 'row', overflow: 'hidden' }}>
+              {/* LEFT SIDE OF FULL-PAGE CART: Table/Customer Context + Large Cart Item Rows + Cooking Comments */}
+              <View style={{ flex: 1.4, borderRightWidth: !isLandscape ? 0 : 1, borderRightColor: '#E2E8F0', display: 'flex', flexDirection: 'column' }}>
 
             {/* 1. Order Context Header (Table or Customer Selector) */}
             <View style={styles.ticketContextCard}>
@@ -2227,61 +2285,189 @@ export default function POSTerminalScreen({
                   </Text>
                 </View>
               ) : (
-                cart.map((item, idx) => (
-                  <View key={item.id} style={styles.ticketRow}>
-                    <View style={styles.ticketRowLeft}>
-                      <Text style={styles.ticketRowIndex}>{idx + 1}.</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ticketRowName} numberOfLines={1}>
-                          {item.name}
-                        </Text>
+                <>
+                  {cart.map((item, idx) => (
+                    <View key={item.id} style={styles.ticketRow}>
+                      <View style={styles.ticketRowLeft}>
+                        <Text style={styles.ticketRowIndex}>{idx + 1}.</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.ticketRowName} numberOfLines={2}>
+                            {item.name}
+                          </Text>
+                          {!hidePrices && (
+                            <Text style={styles.ticketRowUnit}>
+                              Rs. {item.price.toLocaleString()} each
+                            </Text>
+                          )}
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              alignSelf: 'flex-start',
+                              gap: 5,
+                              marginTop: 5,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 8,
+                              backgroundColor: item.notes ? '#FEF3C7' : '#F8FAFC',
+                              borderWidth: 1,
+                              borderColor: item.notes ? '#F59E0B' : '#CBD5E1',
+                            }}
+                            onPress={() => openItemNoteModal(item)}
+                            activeOpacity={0.78}
+                          >
+                            <Ionicons
+                              name={item.notes ? 'chatbubble-ellipses' : 'create-outline'}
+                              size={12}
+                              color={item.notes ? '#92400E' : '#64748B'}
+                            />
+                            <Text
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: '800',
+                                color: item.notes ? '#92400E' : '#475569',
+                              }}
+                              numberOfLines={2}
+                            >
+                              {item.notes ? `${item.notes}  •  Edit Note` : '+ Add Item Note / Comment'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <View style={styles.ticketRowRight}>
+                        <View style={styles.qtyStepper}>
+                          <TouchableOpacity
+                            style={styles.qtyBtn}
+                            onPress={() => updateQty(item.id, -1)}
+                          >
+                            <Ionicons name="remove" size={13} color="#1E293B" />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyValText}>{item.qty}</Text>
+                          <TouchableOpacity
+                            style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                            onPress={() => updateQty(item.id, 1)}
+                          >
+                            <Ionicons name="add" size={13} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+
                         {!hidePrices && (
-                          <Text style={styles.ticketRowUnit}>
-                            Rs. {item.price.toLocaleString()} each
+                          <Text style={styles.ticketRowSubtotal}>
+                            Rs. {(item.price * item.qty).toLocaleString()}
                           </Text>
                         )}
+
+                        <TouchableOpacity
+                          style={styles.removeRowBtn}
+                          onPress={() => removeFromCart(item.id)}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Ionicons name="close" size={15} color="#94A3B8" />
+                        </TouchableOpacity>
                       </View>
                     </View>
+                  ))}
 
-                    <View style={styles.ticketRowRight}>
-                      <View style={styles.qtyStepper}>
-                        <TouchableOpacity
-                          style={styles.qtyBtn}
-                          onPress={() => updateQty(item.id, -1)}
-                        >
-                          <Ionicons name="remove" size={13} color="#1E293B" />
-                        </TouchableOpacity>
-                        <Text style={styles.qtyValText}>{item.qty}</Text>
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, styles.qtyBtnPlus]}
-                          onPress={() => updateQty(item.id, 1)}
-                        >
-                          <Ionicons name="add" size={13} color="#FFFFFF" />
-                        </TouchableOpacity>
+                  {/* Overall Order Notes & Special Kitchen Comments Section */}
+                  <View
+                    style={{
+                      backgroundColor: '#FFFBEB',
+                      borderWidth: 1.5,
+                      borderColor: '#FDE68A',
+                      borderRadius: 12,
+                      padding: 12,
+                      marginTop: 8,
+                      gap: 8,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <Ionicons name="chatbox-ellipses-outline" size={17} color="#92400E" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '900', color: '#78350F' }}>
+                            Overall Order Notes & Kitchen Comments
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#B45309', fontWeight: '600' }}>
+                            Prints on KOT slip & displays on Kitchen / Juice Bar KDS
+                          </Text>
+                        </View>
                       </View>
-
-                      {!hidePrices && (
-                        <Text style={styles.ticketRowSubtotal}>
-                          {(item.price * item.qty).toLocaleString()}
-                        </Text>
+                      {orderNotes.trim().length > 0 && (
+                        <TouchableOpacity
+                          style={{
+                            backgroundColor: '#FEF2F2',
+                            paddingHorizontal: 10,
+                            paddingVertical: 4,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: '#FECACA',
+                          }}
+                          onPress={() => setOrderNotes('')}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>Clear</Text>
+                        </TouchableOpacity>
                       )}
-
-                      <TouchableOpacity
-                        style={styles.removeRowBtn}
-                        onPress={() => removeFromCart(item.id)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Ionicons name="close" size={15} color="#94A3B8" />
-                      </TouchableOpacity>
                     </View>
+
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                      {ORDER_NOTE_PRESETS.map((preset) => {
+                        const active = hasCommaNoteToken(orderNotes, preset);
+                        return (
+                          <TouchableOpacity
+                            key={preset}
+                            style={{
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 8,
+                              backgroundColor: active ? '#52141C' : '#FFFFFF',
+                              borderWidth: 1,
+                              borderColor: active ? '#52141C' : '#FCD34D',
+                            }}
+                            onPress={() => setOrderNotes((prev) => toggleCommaNoteToken(prev, preset))}
+                            activeOpacity={0.78}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 11.5,
+                                fontWeight: '800',
+                                color: active ? '#F3D179' : '#78350F',
+                              }}
+                            >
+                              {active ? `✓ ${preset}` : `+ ${preset}`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    <TextInput
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#FCD34D',
+                        borderRadius: 9,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        fontSize: 12.5,
+                        fontWeight: '700',
+                        color: '#0F172A',
+                        minHeight: 46,
+                      }}
+                      placeholder="Write overall order comments (e.g. Serve starters first, make all Karahi medium spicy, VIP table)..."
+                      placeholderTextColor="#94A3B8"
+                      value={orderNotes}
+                      onChangeText={setOrderNotes}
+                      multiline
+                    />
                   </View>
-                ))
+                </>
               )}
             </ScrollView>
               </View>
 
-              {/* Financial Summary & Big Action Buttons */}
-              <View style={[styles.ticketFooter, isLandscape && { padding: 12, paddingBottom: 14 }]}>
+              {/* RIGHT SIDE OF FULL-PAGE CART: Large Financial Summary & Big Action Buttons */}
+              <View style={[styles.ticketFooter, isLandscape && { width: 420, borderTopWidth: 0, justifyContent: 'space-between', padding: 20, backgroundColor: '#F8FAFC' }]}>
               {/* Estimated Kitchen Preparation Time Banner */}
               {cart.length > 0 && (
                 <View
@@ -2706,8 +2892,8 @@ export default function POSTerminalScreen({
         )}
       </View>
 
-      {/* Floating Bottom Bar on Menu Tab (Tablet & Phone) to Jump to Full-Page Cart */}
-      {!isWideDesktop && mobileTab === 'menu' && totalCartQty > 0 && (
+      {/* Floating Bottom Bar on Menu Tab (All Devices) to Jump to Full-Page Cart */}
+      {mobileTab === 'menu' && totalCartQty > 0 && (
         <TouchableOpacity
           style={styles.mobileFloatingBar}
           onPress={() => setMobileTab('cart')}
@@ -3059,6 +3245,110 @@ export default function POSTerminalScreen({
                   )}
                 </TouchableOpacity>
               ))}
+              <View style={{ marginTop: 6, gap: 6 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569' }}>
+                  Optional Cooking Note / Comment for this Dish:
+                </Text>
+                <TextInput
+                  style={styles.textInputField}
+                  placeholder="e.g. Less spicy, extra sauce, no onion..."
+                  placeholderTextColor="#94A3B8"
+                  value={variantNoteDraft}
+                  onChangeText={setVariantNoteDraft}
+                />
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 3B: ITEM-WISE COOKING COMMENT & NOTE EDITOR
+          ======================================================== */}
+      <Modal visible={!!editingNoteItem} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 520 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Dish Cooking Note / Comment</Text>
+                <Text style={styles.modalSub}>{editingNoteItem?.name}</Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => {
+                  setEditingNoteItem(null);
+                  setNoteDraft('');
+                }}
+              >
+                <Ionicons name="close" size={20} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ padding: 16, gap: 12 }}>
+              <Text style={styles.inputLabel}>Quick Kitchen & Bar Instructions (Tap to Toggle)</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+                {ITEM_NOTE_PRESETS.map((preset) => {
+                  const active = hasCommaNoteToken(noteDraft, preset);
+                  return (
+                    <TouchableOpacity
+                      key={preset}
+                      style={{
+                        paddingHorizontal: 11,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: active ? '#52141C' : '#F8FAFC',
+                        borderWidth: 1,
+                        borderColor: active ? '#52141C' : '#CBD5E1',
+                      }}
+                      onPress={() => setNoteDraft((prev) => toggleCommaNoteToken(prev, preset))}
+                    >
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '800',
+                          color: active ? '#F3D179' : '#334155',
+                        }}
+                      >
+                        {active ? `✓ ${preset}` : `+ ${preset}`}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              <Text style={styles.inputLabel}>Custom Instruction for Chef / Barman</Text>
+              <TextInput
+                style={[styles.textInputField, { minHeight: 60 }]}
+                placeholder="Type special cooking instruction for this item..."
+                placeholderTextColor="#94A3B8"
+                value={noteDraft}
+                onChangeText={setNoteDraft}
+                multiline
+              />
+
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 4 }}>
+                {noteDraft.trim().length > 0 && (
+                  <TouchableOpacity
+                    style={[styles.modalSecBtn, { borderColor: '#FECACA', backgroundColor: '#FEF2F2' }]}
+                    onPress={() => setNoteDraft('')}
+                  >
+                    <Text style={[styles.modalSecBtnText, { color: '#DC2626' }]}>Clear Note</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.modalSecBtn}
+                  onPress={() => {
+                    setEditingNoteItem(null);
+                    setNoteDraft('');
+                  }}
+                >
+                  <Text style={styles.modalSecBtnText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.modalPrimaryBtn} onPress={saveItemNote}>
+                  <Ionicons name="checkmark-circle" size={16} color="#FFFFFF" />
+                  <Text style={styles.modalPrimaryBtnText}>Save Dish Note</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </View>
