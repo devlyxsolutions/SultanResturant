@@ -2439,7 +2439,7 @@ const LIVE_MIRROR_FILE = path.join(BACKUP_DIR, 'latest-live-state.json');
 
 function countNonAutoBeverageInventory(invArr) {
   if (!Array.isArray(invArr)) return 0;
-  return invArr.filter((i) => i && i.id && !String(i.id).startsWith('inv-slt-')).length;
+  return invArr.filter((i) => i && i.id && !String(i.id).startsWith('inv-slt-') && !/^inv\d+$/.test(String(i.id))).length;
 }
 
 function findBestBackupSnapshot() {
@@ -2508,7 +2508,8 @@ function mergeMissingOpsFromBackup(targetState, backupState) {
   ];
   for (const k of opsArrayKeys) {
     const cur = Array.isArray(targetState[k]) ? targetState[k] : [];
-    const bak = Array.isArray(backupState[k]) ? backupState[k] : [];
+    const rawBak = Array.isArray(backupState[k]) ? backupState[k] : [];
+    const bak = typeof sanitizeIncomingSeedData === 'function' ? sanitizeIncomingSeedData(k, rawBak) : rawBak.filter((x) => x && !/^inv\d+$|^po-10\d$|^ast-\d+$|^sup-\d+$|^mv-0\d$/.test(String(x.id || '')));
     if (bak.length === 0) continue;
     if (k === 'inventory') {
       const curRaw = countNonAutoBeverageInventory(cur);
