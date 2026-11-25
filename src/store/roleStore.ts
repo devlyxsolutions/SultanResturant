@@ -69,6 +69,7 @@ export interface RolePermissions {
   posCanSettleBill: boolean; // Settle bills & collect Cash/Card/Online payments (Pay & Print)
   posCanPrintUnpaidBill: boolean; // Print provisional unpaid check (CHK-...)
   posCanReleaseTable: boolean; // Release / reset occupied tables without settling
+  posCanMoveTable: boolean; // Move / transfer active table orders to another table with reason note
   posCanDismissTicket: boolean; // Cancel / dismiss running KOT orders in Running Orders modal
   posCanSplitPayment: boolean; // Use Split Payment (multiple payment methods on one bill)
   posCanManageCustomers: boolean; // Register or edit customer CRM records in POS
@@ -335,6 +336,7 @@ export const ADMIN_PERMISSIONS: RolePermissions = {
   posCanSettleBill: true,
   posCanPrintUnpaidBill: true,
   posCanReleaseTable: true,
+  posCanMoveTable: true,
   posCanDismissTicket: true,
   posCanSplitPayment: true,
   posCanManageCustomers: true,
@@ -393,6 +395,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: true,
       posCanPrintUnpaidBill: true,
       posCanReleaseTable: true,
+      posCanMoveTable: true,
       posCanDismissTicket: true,
       posCanSplitPayment: true,
       posCanManageCustomers: true,
@@ -469,6 +472,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: false,
       posCanPrintUnpaidBill: true,
       posCanReleaseTable: true,
+      posCanMoveTable: true,
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: true,
@@ -521,6 +525,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: true,
       posCanPrintUnpaidBill: true,
       posCanReleaseTable: true,
+      posCanMoveTable: true,
       posCanDismissTicket: false,
       posCanSplitPayment: true,
       posCanManageCustomers: true,
@@ -571,6 +576,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: false,
       posCanPrintUnpaidBill: false,
       posCanReleaseTable: false,
+      posCanMoveTable: true,
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
@@ -617,6 +623,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: false,
       posCanPrintUnpaidBill: false,
       posCanReleaseTable: false,
+      posCanMoveTable: false,
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
@@ -663,6 +670,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: false,
       posCanPrintUnpaidBill: false,
       posCanReleaseTable: false,
+      posCanMoveTable: false,
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
@@ -709,6 +717,7 @@ export const DEFAULT_ROLES: CustomRole[] = [
       posCanSettleBill: false,
       posCanPrintUnpaidBill: false,
       posCanReleaseTable: false,
+      posCanMoveTable: false,
       posCanDismissTicket: false,
       posCanSplitPayment: false,
       posCanManageCustomers: false,
@@ -728,6 +737,7 @@ const POS_DEFAULT_FALSE: Pick<
   | 'posCanSettleBill'
   | 'posCanPrintUnpaidBill'
   | 'posCanReleaseTable'
+  | 'posCanMoveTable'
   | 'posCanDismissTicket'
   | 'posCanSplitPayment'
   | 'posCanManageCustomers'
@@ -739,6 +749,7 @@ const POS_DEFAULT_FALSE: Pick<
   posCanSettleBill: false,
   posCanPrintUnpaidBill: false,
   posCanReleaseTable: false,
+  posCanMoveTable: false,
   posCanDismissTicket: false,
   posCanSplitPayment: false,
   posCanManageCustomers: false,

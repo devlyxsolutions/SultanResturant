@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FullscreenButton from '../../components/FullscreenButton';
+import MoveTableModal from '../../components/MoveTableModal';
 import SeatingTypeIcon from '../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../components/SyncStatusBadge';
 import { BRAND as BRAND_PALETTE } from '../../constants/brand';
@@ -29,8 +30,8 @@ import {
   sortFloors,
 } from '../../constants/floors';
 import { broadcastImmediately } from '../../services/syncService';
-import { useAuthStore, useRestaurantStore } from '../../store';
-import { Ticket } from '../../store/restaurantStore';
+import { useAuthStore, useRestaurantStore, useRolePermissions } from '../../store';
+import { Table, Ticket } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
   doesOrderBelongToUser,
@@ -83,6 +84,7 @@ export default function OrderTakerScreen() {
   const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
   const settleBill = useRestaurantStore((state) => state.settleBill);
   const serveTableTickets = useRestaurantStore((state) => state.serveTableTickets);
+  const transferTable = useRestaurantStore((state) => state.transferTable);
   const lastBillPaidAlert = useRestaurantStore((state) => state.lastBillPaidAlert);
   const clearBillPaidAlert = useRestaurantStore((state) => state.clearBillPaidAlert);
   const lastFoodReadyAlert = useRestaurantStore((state) => state.lastFoodReadyAlert);
@@ -91,6 +93,9 @@ export default function OrderTakerScreen() {
 
   const user = useAuthStore((state) => state.user);
   const systemSettings = useSettingsStore((state) => state.settings);
+  const { can } = useRolePermissions();
+  const canMoveTable = can('posCanMoveTable');
+  const [movingSourceTable, setMovingSourceTable] = useState<Table | null>(null);
 
   // 1. Reactively lookup active staff member so floor assignment changes by Admin reflect immediately
   const currentStaff = staff.find(
@@ -717,6 +722,15 @@ export default function OrderTakerScreen() {
               </Text>
             </View>
           )}
+          {(isOccupied || isBilled) && item.lastMovedFrom && (
+            <View style={styles.movedNotePill}>
+              <Ionicons name="swap-horizontal" size={12} color="#52141C" />
+              <Text style={styles.movedNotePillText} numberOfLines={1}>
+                Moved from {item.lastMovedFrom}
+                {item.lastMoveNote ? ` • ${item.lastMoveNote}` : ''}
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Card Footer Actions */}
@@ -736,6 +750,20 @@ export default function OrderTakerScreen() {
                   : 'Take customer order ➔'}
             </Text>
           </View>
+
+          {canMoveTable && (isOccupied || isBilled) && (
+            <TouchableOpacity
+              style={styles.moveTableBtn}
+              onPress={(e) => {
+                e.stopPropagation?.();
+                setMovingSourceTable(item);
+              }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="swap-horizontal" size={13} color="#F3D179" />
+              <Text style={styles.moveTableBtnText}>Move</Text>
+            </TouchableOpacity>
+          )}
 
           {isFoodReady && !isBilled && (
             <TouchableOpacity
@@ -1614,6 +1642,26 @@ export default function OrderTakerScreen() {
         </View>
       )}
       </View>
+
+      {/* Move / Transfer Table Modal with Required Note & System Audit Log */}
+      <MoveTableModal
+        visible={!!movingSourceTable}
+        sourceTable={movingSourceTable}
+        availableTables={tables.filter(
+          (t) => t.id !== movingSourceTable?.id && t.status === 'available'
+        )}
+        onClose={() => setMovingSourceTable(null)}
+        onConfirmMove={(targetTable, note) => {
+          if (!movingSourceTable || !canMoveTable) return;
+          const fromName = movingSourceTable.name;
+          transferTable(movingSourceTable.id, targetTable.id, note, displayName);
+          broadcastImmediately();
+          setMovingSourceTable(null);
+          const msg = `Moved ${fromName} ➔ ${targetTable.name}\nNote: ${note} (Logged in System Logs)`;
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Table Moved', msg);
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -2323,6 +2371,41 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 13.5,
     fontWeight: '800',
+  },
+  moveTableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#52141C',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 8,
+    marginRight: 6,
+  },
+  moveTableBtnText: {
+    color: '#F3D179',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  movedNotePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+    marginTop: 4,
+  },
+  movedNotePillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#78350F',
+    flex: 1,
   },
 
   emptyState: {

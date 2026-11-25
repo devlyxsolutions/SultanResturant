@@ -51,6 +51,11 @@ export type Table = {
   waiterPaymentCollection?: WaiterPaymentCollection | null;
   /** If set, this table is physically joined to the given primary table (merged reservation / big party). */
   mergedInto?: string;
+  /** Optional audit trail when an active order was moved here from another table. */
+  lastMoveNote?: string;
+  lastMovedFrom?: string;
+  lastMovedAt?: number;
+  lastMovedBy?: string;
   x?: number;
   y?: number;
   shape?: 'square' | 'round' | 'rectangle';
@@ -492,7 +497,7 @@ type RestaurantState = {
   dismissTicket: (ticketId: string) => void;
   clearTableTickets: (tableId: string) => void;
   clearAllOldTickets: () => void;
-  transferTable: (fromTableId: string, toTableId: string) => void;
+  transferTable: (fromTableId: string, toTableId: string, note?: string, movedBy?: string) => void;
   mergeTables: (primaryTableId: string, secondaryTableId: string) => void;
   assignTableServer: (tableId: string, serverName: string) => void;
   addReservation: (res: Omit<Reservation, 'id' | 'createdAt' | 'status'> & { status?: Reservation['status'] }) => void;
@@ -2119,6 +2124,10 @@ export const useRestaurantStore = create<RestaurantState>()(
               mergedInto: undefined,
               reservationId: undefined,
               waiterPaymentCollection: undefined,
+              lastMoveNote: undefined,
+              lastMovedFrom: undefined,
+              lastMovedAt: undefined,
+              lastMovedBy: undefined,
             } : t
           ),
           reservations: (state.reservations || []).map(r => {
@@ -2241,7 +2250,9 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
       },
 
-      transferTable: (fromTableId, toTableId) => {
+      transferTable: (fromTableId, toTableId, note, movedBy) => {
+        const cleanNote = (note || '').trim();
+        const now = Date.now();
         set((state) => {
           const fromTable = state.tables.find(t => t.id === fromTableId);
           const toTable = state.tables.find(t => t.id === toTableId);
@@ -2260,8 +2271,13 @@ export const useRestaurantStore = create<RestaurantState>()(
                 serverId: fromTable.serverId,
                 isPaid: fromTable.isPaid,
                 lastInvoiceId: fromTable.lastInvoiceId,
-                occupiedSince: fromTable.occupiedSince || Date.now(),
+                occupiedSince: fromTable.occupiedSince || now,
                 reservationId: fromTable.reservationId,
+                waiterPaymentCollection: fromTable.waiterPaymentCollection,
+                lastMoveNote: cleanNote || undefined,
+                lastMovedFrom: fromTable.name,
+                lastMovedAt: now,
+                lastMovedBy: movedBy || fromTable.server || undefined,
               };
             }
             if (t.id === fromTableId) {
@@ -2276,6 +2292,11 @@ export const useRestaurantStore = create<RestaurantState>()(
                 lastInvoiceId: undefined,
                 occupiedSince: undefined,
                 reservationId: undefined,
+                waiterPaymentCollection: undefined,
+                lastMoveNote: undefined,
+                lastMovedFrom: undefined,
+                lastMovedAt: undefined,
+                lastMovedBy: undefined,
               };
             }
             if (t.mergedInto === fromTableId) {
@@ -2287,12 +2308,18 @@ export const useRestaurantStore = create<RestaurantState>()(
             return t;
           });
 
+          const moveBannerNote = cleanNote
+            ? `[Moved from ${fromTable.name}: ${cleanNote}]`
+            : `[Moved from ${fromTable.name}]`;
+
           const updatedTickets = state.tickets.map(tk => {
             if (tk.tableId === fromTableId) {
+              const prevNotes = (tk.notes || '').trim();
               return {
                 ...tk,
                 tableId: toTableId,
-                tableName: `${toTable.name} (from ${fromTable.name})`
+                tableName: `${toTable.name} (from ${fromTable.name})`,
+                notes: prevNotes ? `${prevNotes} • ${moveBannerNote}` : moveBannerNote,
               };
             }
             return tk;

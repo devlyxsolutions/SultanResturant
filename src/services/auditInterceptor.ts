@@ -427,17 +427,39 @@ const RESTAURANT_HANDLERS: Record<string, ActionDescriptor> = {
       details: { orderId, orderNumber: ord?.orderNumber, reason, total: ord?.total },
     };
   },
-  transferTable: ([fromId, toId], prev) => ({
-    module: 'TABLES_FLOORS',
-    action: 'TRANSFER_TABLE',
-    actionType: 'TRANSFER',
-    severity: 'warning',
-    entityType: 'Table',
-    entityId: fromId,
-    entityName: `${findTableName(prev, fromId)} → ${findTableName(prev, toId)}`,
-    summary: `Transferred active order from ${findTableName(prev, fromId)} to ${findTableName(prev, toId)}`,
-    details: { fromTableId: fromId, toTableId: toId },
-  }),
+  transferTable: ([fromId, toId, note, movedBy], prev) => {
+    const fromTable = findById(prev?.tables, fromId);
+    const toTable = findById(prev?.tables, toId);
+    const fromName = findTableName(prev, fromId);
+    const toName = findTableName(prev, toId);
+    const cleanNote = typeof note === 'string' ? note.trim() : '';
+    const activeTicketCount = (prev?.tickets || []).filter((tk: any) => tk?.tableId === fromId).length;
+    const billTotal = Number(fromTable?.billTotal || 0);
+    return {
+      module: 'TABLES_FLOORS',
+      action: 'MOVE_TABLE',
+      actionType: 'TRANSFER',
+      severity: 'warning',
+      entityType: 'Table',
+      entityId: `${fromId}->${toId}`,
+      entityName: `${fromName} → ${toName}`,
+      ...(billTotal > 0 ? { amount: billTotal } : {}),
+      summary: `Moved table ${fromName} → ${toName} (${activeTicketCount} KOT${billTotal > 0 ? `, ${fmtRs(billTotal)}` : ''})${cleanNote ? ` • Note: "${cleanNote}"` : ''}`,
+      details: {
+        fromTableId: fromId,
+        fromTableName: fromTable?.name || fromName,
+        fromFloor: fromTable?.floor || fromTable?.zone,
+        toTableId: toId,
+        toTableName: toTable?.name || toName,
+        toFloor: toTable?.floor || toTable?.zone,
+        note: cleanNote || '(No note entered)',
+        movedBy: movedBy || fromTable?.server || undefined,
+        activeTicketCount,
+        billTotal,
+        previousStatus: fromTable?.status,
+      },
+    };
+  },
   mergeTables: ([primaryId, secondaryId], prev) => ({
     module: 'TABLES_FLOORS',
     action: 'MERGE_TABLES',

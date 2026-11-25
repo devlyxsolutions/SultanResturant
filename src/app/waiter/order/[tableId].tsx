@@ -18,6 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { printInvoiceReceipt } from '../../../components/Invoice';
+import MoveTableModal from '../../../components/MoveTableModal';
 import SeatingTypeIcon from '../../../components/SeatingTypeIcon';
 import SyncStatusBadge from '../../../components/SyncStatusBadge';
 import { getTableFloor, getTableSeatingType } from '../../../constants/floors';
@@ -29,6 +30,7 @@ import {
   useAuthStore,
   useOpsStore,
   useRestaurantStore,
+  useRolePermissions,
 } from '../../../store';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
@@ -222,6 +224,8 @@ export default function TableOrderScreen() {
   const [waiterTenderedInput, setWaiterTenderedInput] = useState('');
   const [waiterPayNote, setWaiterPayNote] = useState('');
   const [now, setNow] = useState(() => Date.now());
+  const { can } = useRolePermissions();
+  const canMoveTable = can('posCanMoveTable');
 
   useEffect(() => {
     // Only tick frequently when running tickets view or modal is active to prevent order screen lag
@@ -568,11 +572,18 @@ export default function TableOrderScreen() {
     }
   };
 
-  const handleTransferTable = (targetTable: Table) => {
-    if (!table) return;
-    transferTable(table.id, targetTable.id);
+  const handleTransferTable = (targetTable: Table, note: string) => {
+    if (!table || !canMoveTable) return;
+    const movedBy = currentStaff?.name || user?.name || 'Order Taker';
+    transferTable(table.id, targetTable.id, note, movedBy);
     broadcastImmediately();
     setTransferModalVisible(false);
+    const doneMsg = `Moved ${table.name} ➔ ${targetTable.name}\nNote: ${note} (Logged in System Logs)`;
+    if (Platform.OS === 'web') {
+      window.alert(doneMsg);
+    } else {
+      Alert.alert('Table Moved', doneMsg);
+    }
     router.replace(`/waiter/order/${targetTable.id}`);
   };
 
@@ -683,7 +694,12 @@ export default function TableOrderScreen() {
             <SeatingTypeIcon type={seatingType} size={16} color="#F3D179" />
             <View>
               <Text style={styles.tableTitle}>{tableName}</Text>
-              <Text style={styles.tableSub}>{floorName}</Text>
+              <Text style={styles.tableSub} numberOfLines={1}>
+                {floorName}
+                {table?.lastMovedFrom
+                  ? ` • Moved from ${table.lastMovedFrom}${table.lastMoveNote ? ` (${table.lastMoveNote})` : ''}`
+                  : ''}
+              </Text>
             </View>
           </View>
         </View>
@@ -744,13 +760,13 @@ export default function TableOrderScreen() {
             </TouchableOpacity>
           )}
 
-          {table && isExistingOrderActive && (
+          {canMoveTable && table && isExistingOrderActive && (
             <TouchableOpacity
               style={styles.topActionBtn}
               onPress={() => setTransferModalVisible(true)}
             >
               <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
-              {!isMobile && <Text style={styles.topActionText}>Transfer</Text>}
+              <Text style={styles.topActionText}>{isMobile ? 'Move' : 'Move Table'}</Text>
             </TouchableOpacity>
           )}
 
@@ -1695,33 +1711,14 @@ export default function TableOrderScreen() {
         </View>
       </Modal>
 
-      {/* Transfer Table Modal */}
-      <Modal visible={transferModalVisible} transparent animationType="fade">
-        <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxWidth: 560 }]}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Transfer {tableName} to Another Table</Text>
-              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setTransferModalVisible(false)}>
-                <Ionicons name="close" size={20} color="#475569" />
-              </TouchableOpacity>
-            </View>
-            <ScrollView contentContainerStyle={styles.tableGridWrap} style={{ maxHeight: 420 }}>
-              {availableTransferTables.map((t) => (
-                <TouchableOpacity
-                  key={t.id}
-                  style={styles.tablePickerCard}
-                  onPress={() => handleTransferTable(t)}
-                >
-                  <Text style={styles.tablePickerName}>{t.name}</Text>
-                  <Text style={styles.tablePickerMeta}>
-                    {getTableFloor(t)} • {t.seats} Seats
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      {/* Move / Transfer Table Modal with Required Note & Audit Log */}
+      <MoveTableModal
+        visible={transferModalVisible}
+        sourceTable={table || null}
+        availableTables={availableTransferTables}
+        onClose={() => setTransferModalVisible(false)}
+        onConfirmMove={handleTransferTable}
+      />
 
       {/* ========================================================================= */}
       {/* CUSTOMER BILL VIEW & ORDER TAKER PAYMENT COLLECTION MODAL */}
