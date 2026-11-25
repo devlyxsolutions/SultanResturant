@@ -8378,38 +8378,6 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     }, originWs);
     pushToFirestoreCloud();
   }
-  return t;
-});
-    }
-
-const nextFingerprint = computeStateFingerprint(serverState);
-if (nextFingerprint === prevFingerprint) {
-  return;
-}
-lastStateFingerprint = nextFingerprint;
-serverState.lastUpdated = Date.now();
-persistState();
-console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
-if (
-  (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
-  (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
-) {
-  broadcastToClients({
-    type: 'FORCE_LOGOUT_DEVICE',
-    revokedSessions: serverState.revokedSessions || {},
-    revokedDeviceIds: serverState.revokedDeviceIds || {},
-    activeStaffSessions: serverState.activeStaffSessions || [],
-    timestamp: Date.now()
-  });
-}
-broadcastToClients({
-  type: 'SERVER_BROADCAST',
-  state: serverState,
-  senderId: senderId || 'SERVER',
-  timestamp: serverState.lastUpdated
-}, originWs);
-pushToFirestoreCloud();
-  }
 }
 
 // ==============================================================
