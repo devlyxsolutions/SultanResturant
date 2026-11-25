@@ -10,6 +10,12 @@ backups/
 web-build/
 expo-env.d.ts
 
+# Live restaurant database files (NEVER track in Git so git pull never wipes server data!)
+server-data.json
+server-data.json.tmp
+SultanRestaurant-App/server-data.json
+SultanRestaurant-App/server-data.json.tmp
+
 # Native
 .kotlin/
 *.orig.*

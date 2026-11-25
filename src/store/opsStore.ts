@@ -29,6 +29,8 @@ export type ServiceRequest = {
   resolvedAt?: number;
 };
 
+export type BeverageStorageMode = 'chiller' | 'extras_store' | 'juice_bar' | 'standard';
+
 export type InventoryItem = {
   id: string;
   itemCode?: string;
@@ -50,6 +52,8 @@ export type InventoryItem = {
   invoiceNo?: string;
   notes?: string;
   updatedAt: number;
+  /** Explicit storage handling for beverages vs prepared drinks vs store items */
+  beverageStorageMode?: BeverageStorageMode;
   /** Floor/Chiller-wise stock breakdown (e.g. { "Ground Floor": 24, "1st Floor": 12, "Rooftop": 18, "Main Store": 100 }) */
   chillerStock?: Record<string, number>;
   /** Minimum warning threshold for individual chillers */
@@ -57,6 +61,104 @@ export type InventoryItem = {
   /** Optional linked POS Menu Item ID for auto deduction upon beverage orders */
   menuItemId?: string;
 };
+
+/** Returns true for drinks prepared fresh at Juice Bar / Kitchen (e.g. Mint Margarita, Shakes, Mojitos, Tea/Coffee) — NEVER stored in Floor Chillers! */
+export function isJuiceBarPreparedName(name?: string, category?: string): boolean {
+  const nm = (name || '').toLowerCase().trim();
+  const cat = (category || '').toLowerCase().trim();
+  if (
+    cat.includes('mocktail') ||
+    cat.includes('shake') ||
+    cat.includes('smoothie') ||
+    cat.includes('hot') ||
+    cat.includes('tea') ||
+    cat.includes('coffee') ||
+    cat.includes('fresh juice')
+  ) {
+    return true;
+  }
+  const preparedKeywords = [
+    'margarita',
+    'colada',
+    'mojito',
+    'lagoon',
+    'fresh lime',
+    'lemonade',
+    'mint chiller',
+    'guava mint',
+    'rooh afza',
+    'roohafza',
+    'shake',
+    'smoothie',
+    'lassi',
+    'cold coffee',
+    'coffee',
+    'cappuccino',
+    'latte',
+    'espresso',
+    'americano',
+    'mocha',
+    'chai',
+    'tea',
+    'kehwa',
+    'green tea',
+    'kashmiri',
+    'hot chocolate',
+    'fresh juice',
+    'orange juice',
+    'apple juice',
+    'pomegranate',
+    'sugarcane',
+  ];
+  return preparedKeywords.some((kw) => nm.includes(kw));
+}
+
+/** Returns true ONLY for packaged cold drinks / bottled water explicitly stored in Floor Chillers. */
+export function isChillerBeverageItem(item?: InventoryItem | null): boolean {
+  if (!item) return false;
+  if (item.beverageStorageMode === 'chiller') return true;
+  if (
+    item.beverageStorageMode === 'extras_store' ||
+    item.beverageStorageMode === 'juice_bar' ||
+    item.beverageStorageMode === 'standard'
+  ) {
+    return false;
+  }
+  const loc = (item.location || '').toLowerCase();
+  if (loc.includes('extras') || loc.includes('juice bar') || loc.includes('cooking') || loc.includes('dry ration') || loc.includes('spice') || loc.includes('freezer')) {
+    return false;
+  }
+  if (isJuiceBarPreparedName(item.name, item.category)) {
+    return false;
+  }
+  const cat = (item.category || '').toLowerCase();
+  const nm = (item.name || '').toLowerCase();
+  // Raw ingredients like Soda Water / Ice / Sugar / Milk belong to kitchen/bar unless explicitly marked 'chiller'
+  if (nm === 'soda water' || nm === 'ice' || nm === 'ice cubes' || nm === 'lemon') {
+    return false;
+  }
+  return (
+    cat === 'beverages' ||
+    cat === 'drinks' ||
+    nm.includes('coca cola') ||
+    nm.includes('coke') ||
+    nm.includes('sprite') ||
+    nm.includes('fanta') ||
+    nm.includes('pepsi') ||
+    nm.includes('7up') ||
+    nm.includes('mountain dew') ||
+    nm.includes('dew can') ||
+    nm.includes('mirinda') ||
+    nm.includes('marinda') ||
+    nm.includes('sting') ||
+    nm.includes('pakola') ||
+    nm.includes('red bull') ||
+    nm.includes('mineral water') ||
+    nm === 'water' ||
+    nm.includes('soft drink') ||
+    nm.includes('cold drink')
+  );
+}
 
 export type StockMovementType = 'receive' | 'usage' | 'wastage' | 'adjust' | 'transfer' | 'handover';
 
@@ -137,7 +239,37 @@ export function getExpiryStatus(item: InventoryItem): {
   };
 }
 
+export type StorageZoneType =
+  | 'main_store'
+  | 'extras_store'
+  | 'kitchen'
+  | 'juice_bar'
+  | 'cold_room'
+  | 'freezer'
+  | 'floor_chiller'
+  | 'packaging'
+  | 'custom';
+
+export type StorageZone = {
+  id: string;
+  name: string;
+  urduName?: string;
+  type: StorageZoneType;
+  floor?: string;
+  inCharge?: string;
+  capacityNote?: string;
+  description?: string;
+  isActive: boolean;
+  isSystem?: boolean;
+  createdAt: number;
+  updatedAt: number;
+};
+
 export const STORAGE_LOCATIONS = [
+  'Main Central Store',
+  'Extras Store',
+  'Juice Bar Station',
+  'Cooking Line / Kitchen',
   'Walk-in Chiller',
   'Deep Freezer #1 (Meat)',
   'Deep Freezer #2 (Poultry)',
@@ -150,9 +282,23 @@ export const STORAGE_LOCATIONS = [
   '2nd Floor Chiller',
   '3rd Floor Chiller',
   'Rooftop Chiller',
-  'Cooking Line / Kitchen',
   'Packaging Store',
 ] as const;
+
+export const DEFAULT_STORAGE_ZONES: StorageZone[] = [
+  { id: 'sz-main-store', name: 'Main Central Store', urduName: 'مرکزی گودام', type: 'main_store', description: 'Bulk inventory, receiving point & dry rations', isActive: true, isSystem: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-extras-store', name: 'Extras Store', urduName: 'ایکسٹرا اسٹور', type: 'extras_store', description: 'Extra beverages, reserve cartons & backup supplies (Not in Floor Chillers)', isActive: true, isSystem: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-juice-bar', name: 'Juice Bar Station', urduName: 'جوس بار اسٹیشن', type: 'juice_bar', description: 'Fresh mocktails, shakes, syrups & bar ingredients', isActive: true, isSystem: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-kitchen', name: 'Cooking Line / Kitchen', urduName: 'کچن اسٹیشنز', type: 'kitchen', description: 'Karahi, Handi, BBQ, Tandoor & Prep Stations', isActive: true, isSystem: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-walkin-chiller', name: 'Walk-in Chiller', urduName: 'واک ان چلر', type: 'cold_room', description: 'Dairy, fresh vegetables & cold prep ingredients', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-freezer-1', name: 'Deep Freezer #1 (Meat)', urduName: 'ڈیپ فریزر (گوشت)', type: 'freezer', description: 'Mutton, beef & marinated red meat storage', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-freezer-2', name: 'Deep Freezer #2 (Poultry)', urduName: 'ڈیپ فریزر (چکن)', type: 'freezer', description: 'Chicken, fish, fries & frozen items', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-dry-a', name: 'Dry Ration Store - Shelf A', urduName: 'ڈرائی راشن شیلف اے', type: 'main_store', description: 'Rice, flour, grains, pulses & cooking oil', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-dry-b', name: 'Dry Ration Store - Shelf B', urduName: 'ڈرائی راشن شیلف بی', type: 'main_store', description: 'Canned goods, sauces, pastes & bakery supplies', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-spices', name: 'Spice & Masala Rack', urduName: 'مصالحہ ریک', type: 'kitchen', description: 'Whole spices, Sultan special masalas & dry herbs', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-bev-cold', name: 'Beverage Cold Room', urduName: 'مشروبات کولڈ روم', type: 'cold_room', description: 'Bulk cold drink crates before floor chiller refill', isActive: true, isSystem: true, createdAt: 1700000000000, updatedAt: 1700000000000 },
+  { id: 'sz-packaging', name: 'Packaging Store', urduName: 'پیکجنگ اسٹور', type: 'packaging', description: 'Takeaway boxes, bags, foil, napkins & disposables', isActive: true, isSystem: false, createdAt: 1700000000000, updatedAt: 1700000000000 },
+];
 
 export const CHILLER_FLOORS = [
   'Ground Floor',
@@ -545,6 +691,9 @@ export const INITIAL_DAMAGES: DamageRecord[] = [];
 export type OpsData = {
   serviceRequests: ServiceRequest[];
   inventory: InventoryItem[];
+  storageZones?: StorageZone[];
+  deletedInventoryIds?: string[];
+  deletedStorageZoneIds?: string[];
   inventoryCategories?: string[];
   assetCategories?: string[];
   expenseCategories?: string[];
@@ -564,6 +713,9 @@ export type OpsData = {
 export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'serviceRequests',
   'inventory',
+  'storageZones',
+  'deletedInventoryIds',
+  'deletedStorageZoneIds',
   'inventoryCategories',
   'assetCategories',
   'expenseCategories',
@@ -603,6 +755,21 @@ type OpsState = OpsData & {
   addInventoryCategory: (category: string) => void;
   renameInventoryCategory: (oldName: string, newName: string) => void;
   deleteInventoryCategory: (category: string) => void;
+
+  // Storage Zones Management
+  addStorageZone: (zone: Omit<StorageZone, 'id' | 'createdAt' | 'updatedAt'>) => StorageZone;
+  updateStorageZone: (id: string, patch: Partial<Omit<StorageZone, 'id' | 'createdAt'>>) => void;
+  deleteStorageZone: (id: string, fallbackLocation?: string) => void;
+  transferStockBetweenZones: (params: {
+    itemId: string;
+    qty: number;
+    fromLocation: string;
+    toLocation: string;
+    mode?: 'move' | 'issue';
+    by?: string;
+    receivedBy?: string;
+    notes?: string;
+  }) => boolean;
   recordStockMovement: (
     itemId: string,
     type: StockMovementType,
@@ -665,7 +832,7 @@ type OpsState = OpsData & {
     reason?: string;
     by?: string;
   }) => void;
-  syncMenuBeveragesToInventory: (menuItems?: { id: string; name: string; category?: string; price: number; urduName?: string }[]) => { added: number; updated: number };
+  syncMenuBeveragesToInventory: (menuItems?: { id: string; name: string; category?: string; price: number; urduName?: string; station?: string; beverageHandling?: string }[]) => { added: number; updated: number; removedPrepared?: number };
 
   // Expenses
   addExpense: (expense: Omit<Expense, 'id' | 'at'> & { at?: number }) => void;
@@ -768,6 +935,9 @@ export const useOpsStore = create<OpsState>()(
     (set, get) => ({
       serviceRequests: [],
       inventory: INITIAL_INVENTORY,
+      storageZones: [...DEFAULT_STORAGE_ZONES],
+      deletedInventoryIds: [],
+      deletedStorageZoneIds: [],
       inventoryCategories: [...INVENTORY_CATEGORIES],
       assetCategories: [...ASSET_CATEGORIES],
       expenseCategories: [...EXPENSE_CATEGORIES],
@@ -870,8 +1040,198 @@ export const useOpsStore = create<OpsState>()(
       },
 
       deleteInventoryItem: (id) => {
-        set((state) => ({ inventory: state.inventory.filter((i) => i.id !== id) }));
+        set((state) => ({
+          inventory: state.inventory.filter((i) => i.id !== id),
+          deletedInventoryIds: Array.from(new Set([...(state.deletedInventoryIds || []), id])).slice(-500),
+        }));
         notifySync();
+      },
+
+      addStorageZone: (zone) => {
+        const now = Date.now();
+        const created: StorageZone = {
+          ...zone,
+          name: zone.name.trim(),
+          urduName: zone.urduName?.trim() || undefined,
+          id: uid('sz-'),
+          createdAt: now,
+          updatedAt: now,
+        };
+        set((state) => {
+          const current = Array.isArray(state.storageZones) && state.storageZones.length > 0
+            ? state.storageZones
+            : [...DEFAULT_STORAGE_ZONES];
+          const exists = current.find((z) => z.name.toLowerCase() === created.name.toLowerCase());
+          if (exists) return state;
+          return {
+            storageZones: [...current, created],
+          };
+        });
+        notifySync();
+        return created;
+      },
+
+      updateStorageZone: (id, patch) => {
+        set((state) => {
+          const current = Array.isArray(state.storageZones) && state.storageZones.length > 0
+            ? state.storageZones
+            : [...DEFAULT_STORAGE_ZONES];
+          const oldZone = current.find((z) => z.id === id);
+          if (!oldZone) return state;
+          const oldName = oldZone.name;
+          const newName = patch.name !== undefined ? patch.name.trim() : oldName;
+          const updatedZones = current.map((z) =>
+            z.id === id
+              ? {
+                  ...z,
+                  ...patch,
+                  name: newName || oldName,
+                  updatedAt: Date.now(),
+                }
+              : z
+          );
+          const renamed = Boolean(newName && newName !== oldName);
+          return {
+            storageZones: updatedZones,
+            inventory: renamed
+              ? state.inventory.map((it) =>
+                  (it.location || 'Main Central Store') === oldName
+                    ? { ...it, location: newName, updatedAt: Date.now() }
+                    : it
+                )
+              : state.inventory,
+            stockMovements: renamed
+              ? state.stockMovements.map((m) => ({
+                  ...m,
+                  fromLocation: m.fromLocation === oldName ? newName : m.fromLocation,
+                  toLocation: m.toLocation === oldName ? newName : m.toLocation,
+                }))
+              : state.stockMovements,
+          };
+        });
+        notifySync();
+      },
+
+      deleteStorageZone: (id, fallbackLocation = 'Main Central Store') => {
+        set((state) => {
+          const current = Array.isArray(state.storageZones) && state.storageZones.length > 0
+            ? state.storageZones
+            : [...DEFAULT_STORAGE_ZONES];
+          const target = current.find((z) => z.id === id);
+          if (!target) return state;
+          const remaining = current.filter((z) => z.id !== id);
+          return {
+            storageZones: remaining.length > 0 ? remaining : [...DEFAULT_STORAGE_ZONES],
+            deletedStorageZoneIds: Array.from(new Set([...(state.deletedStorageZoneIds || []), id])).slice(-300),
+            inventory: state.inventory.map((it) =>
+              it.location === target.name
+                ? { ...it, location: fallbackLocation, updatedAt: Date.now() }
+                : it
+            ),
+          };
+        });
+        notifySync();
+      },
+
+      transferStockBetweenZones: ({ itemId, qty, fromLocation, toLocation, mode = 'move', by, receivedBy, notes }) => {
+        let success = false;
+        set((state) => {
+          const item = state.inventory.find((i) => i.id === itemId);
+          if (!item || !Number.isFinite(qty) || qty <= 0) return state;
+          const cleanFrom = (fromLocation || item.location || 'Main Central Store').trim();
+          const cleanTo = (toLocation || 'Cooking Line / Kitchen').trim();
+          if (cleanFrom === cleanTo && mode === 'move') return state;
+
+          const transferQty = Math.min(qty, Math.max(0, item.stock));
+          const now = Date.now();
+          let nextInventory = [...state.inventory];
+
+          if (mode === 'issue') {
+            // Issue & deduct stock for station consumption (e.g. Main Store -> Kitchen / Juice Bar)
+            nextInventory = nextInventory.map((i) =>
+              i.id === itemId
+                ? { ...i, stock: Math.max(0, Number((i.stock - qty).toFixed(3))), updatedAt: now }
+                : i
+            );
+          } else {
+            // Physical zone relocation / split stack between storage zones
+            if (qty >= item.stock) {
+              // Check if destination already has same item name + unit to merge cleanly
+              const destMatch = nextInventory.find(
+                (i) =>
+                  i.id !== item.id &&
+                  i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+                  (i.location || 'Main Central Store') === cleanTo
+              );
+              if (destMatch) {
+                nextInventory = nextInventory
+                  .filter((i) => i.id !== item.id)
+                  .map((i) =>
+                    i.id === destMatch.id
+                      ? { ...i, stock: Number((i.stock + item.stock).toFixed(3)), updatedAt: now }
+                      : i
+                  );
+              } else {
+                nextInventory = nextInventory.map((i) =>
+                  i.id === itemId ? { ...i, location: cleanTo, updatedAt: now } : i
+                );
+              }
+            } else {
+              // Partial move: reduce source item stock and add/increment in destination zone
+              nextInventory = nextInventory.map((i) =>
+                i.id === itemId
+                  ? { ...i, stock: Math.max(0, Number((i.stock - transferQty).toFixed(3))), updatedAt: now }
+                  : i
+              );
+              const destMatch = nextInventory.find(
+                (i) =>
+                  i.id !== item.id &&
+                  i.name.trim().toLowerCase() === item.name.trim().toLowerCase() &&
+                  (i.location || 'Main Central Store') === cleanTo
+              );
+              if (destMatch) {
+                nextInventory = nextInventory.map((i) =>
+                  i.id === destMatch.id
+                    ? { ...i, stock: Number((i.stock + transferQty).toFixed(3)), updatedAt: now }
+                    : i
+                );
+              } else {
+                nextInventory.push({
+                  ...item,
+                  id: uid('inv'),
+                  itemCode: item.itemCode ? `${item.itemCode}-Z` : undefined,
+                  location: cleanTo,
+                  stock: Number(transferQty.toFixed(3)),
+                  updatedAt: now,
+                });
+              }
+            }
+          }
+
+          const movement: StockMovement = {
+            id: uid('mv'),
+            itemId: item.id,
+            itemName: item.name,
+            itemCode: item.itemCode,
+            unit: item.unit,
+            type: mode === 'issue' ? 'handover' : 'transfer',
+            qty,
+            delta: mode === 'issue' ? -qty : 0,
+            note: `${mode === 'issue' ? 'Station Issue' : 'Zone Transfer'}: ${cleanFrom} ➔ ${cleanTo} (${qty} ${item.unit})${receivedBy ? ` | Received by: ${receivedBy}` : ''}${notes ? ` | ${notes}` : ''}`,
+            by: by || 'Store Manager',
+            at: now,
+            fromLocation: cleanFrom,
+            toLocation: cleanTo,
+          };
+
+          success = true;
+          return {
+            inventory: nextInventory,
+            stockMovements: [movement, ...state.stockMovements].slice(0, MAX_MOVEMENTS),
+          };
+        });
+        if (success) notifySync();
+        return success;
       },
 
       addInventoryCategory: (category) => {
@@ -1171,13 +1531,17 @@ export const useOpsStore = create<OpsState>()(
           let hasChanged = false;
           const newMovements: StockMovement[] = [];
           const updatedInventory = state.inventory.map((invItem) => {
+            // STRICT SEPARATION: Only packaged Chiller Drinks auto-deduct from Floor Chillers (NEVER Juice Bar prepared drinks or Extras Store!)
+            if (!isChillerBeverageItem(invItem)) return invItem;
+
             const target = items.find(
               (it) =>
-                (invItem.menuItemId && it.menuItemId === invItem.menuItemId) ||
-                invItem.id === it.menuItemId ||
-                invItem.name.toLowerCase().trim() === it.name.toLowerCase().trim() ||
-                invItem.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
-                it.name.toLowerCase().includes(invItem.name.toLowerCase().trim())
+                !isJuiceBarPreparedName(it.name) &&
+                ((invItem.menuItemId && it.menuItemId === invItem.menuItemId) ||
+                  invItem.id === it.menuItemId ||
+                  invItem.name.toLowerCase().trim() === it.name.toLowerCase().trim() ||
+                  invItem.name.toLowerCase().includes(it.name.toLowerCase().trim()) ||
+                  it.name.toLowerCase().includes(invItem.name.toLowerCase().trim()))
             );
 
             if (!target || target.qty <= 0) return invItem;
@@ -1273,8 +1637,10 @@ export const useOpsStore = create<OpsState>()(
       syncMenuBeveragesToInventory: (menuItems) => {
         let addedCount = 0;
         let updatedCount = 0;
+        let removedPrepared = 0;
 
-        const defaultBeverages = [
+        // ONLY genuine packaged Chiller Cold Drinks & Bottled Water (NEVER Juice Bar prepared mocktails/shakes/juices!)
+        const defaultChillerBeverages = [
           { id: 'slt-drk-soft-drink', name: 'Soft Drink (Regular)', urduName: 'سافٹ ڈرنک', unit: 'bottles', price: 150, category: 'Beverages' },
           { id: 'slt-drk-water', name: 'Mineral Water 500ml', urduName: 'منرل واٹر', unit: 'bottles', price: 70, category: 'Beverages' },
           { id: 'slt-drk-water-lg', name: 'Mineral Water 1.5L', urduName: 'منرل واٹر بڑا', unit: 'bottles', price: 130, category: 'Beverages' },
@@ -1287,54 +1653,74 @@ export const useOpsStore = create<OpsState>()(
           { id: 'slt-drk-7up-15', name: '7up 1.5L', urduName: 'سیون اپ 1.5 لیٹر', unit: 'bottles', price: 250, category: 'Beverages' },
           { id: 'slt-drk-dew-can', name: 'Mountain Dew Can', urduName: 'ڈیو کین', unit: 'cans', price: 180, category: 'Beverages' },
           { id: 'slt-drk-sting', name: 'Sting Berry Blast', urduName: 'اسٹنگ انرجی', unit: 'bottles', price: 120, category: 'Beverages' },
-          { id: 'slt-drk-mint-lemonade', name: 'Fresh Mint Lemonade', urduName: 'تازہ پودینہ لیمونیڈ', unit: 'glasses', price: 220, category: 'Beverages' },
-          { id: 'slt-drk-roohafza', name: 'Traditional Rooh Afza', urduName: 'روح افزاء شربت', unit: 'bottles', price: 150, category: 'Beverages' },
         ];
 
         set((state) => {
-          const existingInv = [...state.inventory];
-          let changed = false;
+          const deletedIdsToRecord: string[] = [];
+          // Purge any legacy auto-generated Juice Bar mocktails/fresh drinks that were wrongly placed into Chillers
+          let existingInv = state.inventory.filter((it) => {
+            const isLegacyAutoMocktail =
+              (it.id.startsWith('inv-slt-mck-') ||
+                it.id === 'inv-slt-drk-mint-lemonade' ||
+                it.id === 'inv-slt-drk-roohafza') &&
+              isJuiceBarPreparedName(it.name, it.category);
+            if (isLegacyAutoMocktail) {
+              deletedIdsToRecord.push(it.id);
+              removedPrepared++;
+              return false;
+            }
+            return true;
+          });
+
+          let changed = removedPrepared > 0;
 
           const candidates: { id?: string; name: string; urduName?: string; price?: number; category?: string; unit?: string }[] = [];
           if (Array.isArray(menuItems) && menuItems.length > 0) {
             menuItems.forEach((m) => {
-              const cat = (m.category || '').toLowerCase();
+              // Strictly separate Menu Dishes, Juice Bar Prepared Drinks & Extras Store items from Chillers!
+              if (
+                m.beverageHandling === 'juice_bar_prepared' ||
+                m.beverageHandling === 'extras_store' ||
+                m.beverageHandling === 'kitchen_dish'
+              ) {
+                return;
+              }
+              if (isJuiceBarPreparedName(m.name, m.category)) {
+                return;
+              }
               const nm = (m.name || '').toLowerCase();
-              const isBev =
-                cat.includes('drink') ||
-                cat.includes('beverage') ||
-                cat.includes('water') ||
-                cat.includes('juice') ||
-                cat.includes('mocktail') ||
-                cat.includes('cold') ||
-                nm.includes('drink') ||
-                nm.includes('water') ||
-                nm.includes('pepsi') ||
+              const isExplicitChiller = m.beverageHandling === 'chiller_drink';
+              const isPackagedColdDrink =
+                nm.includes('coca cola') ||
                 nm.includes('coke') ||
                 nm.includes('sprite') ||
                 nm.includes('fanta') ||
+                nm.includes('pepsi') ||
                 nm.includes('7up') ||
                 nm.includes('dew') ||
+                nm.includes('mirinda') ||
                 nm.includes('marinda') ||
                 nm.includes('sting') ||
-                nm.includes('soda') ||
-                nm.includes('juice') ||
-                nm.includes('lemonade') ||
-                nm.includes('rooh afza');
-              if (isBev) {
+                nm.includes('pakola') ||
+                nm.includes('red bull') ||
+                nm.includes('mineral water') ||
+                nm === 'water' ||
+                nm.includes('soft drink') ||
+                nm.includes('cold drink');
+              if (isExplicitChiller || isPackagedColdDrink) {
                 candidates.push({
                   id: m.id,
                   name: m.name,
                   urduName: m.urduName,
                   price: m.price,
                   category: 'Beverages',
-                  unit: nm.includes('can') ? 'cans' : 'bottles',
+                  unit: nm.includes('can') || nm.includes('tin') ? 'cans' : 'bottles',
                 });
               }
             });
           }
 
-          defaultBeverages.forEach((d) => {
+          defaultChillerBeverages.forEach((d) => {
             if (!candidates.some((c) => c.name.toLowerCase().trim() === d.name.toLowerCase().trim())) {
               candidates.push(d);
             }
@@ -1346,37 +1732,32 @@ export const useOpsStore = create<OpsState>()(
                 (cand.id && i.menuItemId === cand.id) ||
                 i.name.toLowerCase().trim() === cand.name.toLowerCase().trim() ||
                 (cand.id && i.id === cand.id) ||
-                (cand.name.toLowerCase().includes('soft drink') && i.name.toLowerCase().includes('soft drink')) ||
-                (cand.name.toLowerCase() === 'water' && i.name.toLowerCase().includes('water'))
+                (cand.id && i.id === `inv-${cand.id}`)
             );
 
             if (foundIdx >= 0) {
               const cur = existingInv[foundIdx];
+              // Respect user choice if they moved this beverage to Extras Store or Juice Bar!
+              if (cur.beverageStorageMode === 'extras_store' || cur.beverageStorageMode === 'juice_bar') {
+                return;
+              }
               const curChillers = cur.chillerStock || {};
-              const defaultChillerPerFloor = 24;
               let chillerUpdated = false;
               const nextChillers: Record<string, number> = { ...curChillers };
               CHILLER_FLOORS.forEach((floor) => {
-                if (typeof nextChillers[floor] !== 'number' || nextChillers[floor] <= 0) {
-                  nextChillers[floor] = defaultChillerPerFloor;
+                if (typeof nextChillers[floor] !== 'number') {
+                  nextChillers[floor] = 24;
                   chillerUpdated = true;
                 }
               });
 
-              if (!cur.menuItemId && cand.id) {
+              if (!cur.menuItemId || cur.beverageStorageMode !== 'chiller' || chillerUpdated) {
                 existingInv[foundIdx] = {
                   ...cur,
-                  menuItemId: cand.id,
+                  menuItemId: cur.menuItemId || cand.id,
+                  beverageStorageMode: 'chiller',
                   chillerStock: nextChillers,
                   category: cur.category || 'Beverages',
-                  updatedAt: Date.now(),
-                };
-                changed = true;
-                updatedCount++;
-              } else if (chillerUpdated) {
-                existingInv[foundIdx] = {
-                  ...cur,
-                  chillerStock: nextChillers,
                   updatedAt: Date.now(),
                 };
                 changed = true;
@@ -1392,13 +1773,14 @@ export const useOpsStore = create<OpsState>()(
                 id: cand.id ? `inv-${cand.id}` : uid('inv'),
                 itemCode: `BEV-${Math.floor(100 + Math.random() * 900)}`,
                 name: cand.name,
-                urduName: cand.urduName || 'مشروب',
+                urduName: cand.urduName || 'کولڈ ڈرنک',
                 category: 'Beverages',
                 unit: cand.unit || 'bottles',
-                stock: 160,
+                stock: 120,
                 threshold: 15,
                 costPerUnit: Math.round((cand.price || 150) * 0.5) || 60,
                 location: 'Beverage Cold Room',
+                beverageStorageMode: 'chiller',
                 menuItemId: cand.id,
                 chillerStock: initialChillers,
                 chillerThreshold: 6,
@@ -1415,11 +1797,15 @@ export const useOpsStore = create<OpsState>()(
 
           return {
             inventory: existingInv,
+            deletedInventoryIds:
+              deletedIdsToRecord.length > 0
+                ? Array.from(new Set([...(state.deletedInventoryIds || []), ...deletedIdsToRecord])).slice(-500)
+                : state.deletedInventoryIds,
           };
         });
 
-        if (addedCount > 0 || updatedCount > 0) notifySync();
-        return { added: addedCount, updated: updatedCount };
+        if (addedCount > 0 || updatedCount > 0 || removedPrepared > 0) notifySync();
+        return { added: addedCount, updated: updatedCount, removedPrepared };
       },
 
       addExpense: (expense) => {
@@ -2258,7 +2644,53 @@ export const useOpsStore = create<OpsState>()(
         set((state) => {
           const next: Partial<OpsState> = { dummyPurgeVersion: 1 };
           if (Array.isArray(remote.serviceRequests)) next.serviceRequests = remote.serviceRequests;
-          if (Array.isArray(remote.inventory)) next.inventory = remote.inventory;
+          if (Array.isArray(remote.deletedInventoryIds)) {
+            next.deletedInventoryIds = Array.from(
+              new Set([...(state.deletedInventoryIds || []), ...remote.deletedInventoryIds])
+            ).slice(-500);
+          }
+          if (Array.isArray(remote.deletedStorageZoneIds)) {
+            next.deletedStorageZoneIds = Array.from(
+              new Set([...(state.deletedStorageZoneIds || []), ...remote.deletedStorageZoneIds])
+            ).slice(-300);
+          }
+          const delInvSet = new Set(next.deletedInventoryIds || state.deletedInventoryIds || []);
+          const delZoneSet = new Set(next.deletedStorageZoneIds || state.deletedStorageZoneIds || []);
+
+          if (Array.isArray(remote.inventory)) {
+            if (remote.inventory.length > 0 || state.inventory.every((i) => delInvSet.has(i.id))) {
+              const iMap = new Map<string, InventoryItem>();
+              state.inventory.forEach((c) => {
+                if (c && c.id && !delInvSet.has(c.id)) iMap.set(c.id, c);
+              });
+              remote.inventory.forEach((inc) => {
+                if (!inc || !inc.id || delInvSet.has(inc.id)) return;
+                const prev = iMap.get(inc.id);
+                if (!prev || (inc.updatedAt || 0) >= (prev.updatedAt || 0)) {
+                  iMap.set(inc.id, inc);
+                }
+              });
+              next.inventory = Array.from(iMap.values());
+            }
+          }
+
+          if (Array.isArray(remote.storageZones) && remote.storageZones.length > 0) {
+            const zMap = new Map<string, StorageZone>();
+            const baseZones = Array.isArray(state.storageZones) && state.storageZones.length > 0
+              ? state.storageZones
+              : DEFAULT_STORAGE_ZONES;
+            baseZones.forEach((z) => {
+              if (z && z.id && !delZoneSet.has(z.id)) zMap.set(z.id, z);
+            });
+            remote.storageZones.forEach((inc) => {
+              if (!inc || !inc.id || delZoneSet.has(inc.id)) return;
+              const prev = zMap.get(inc.id);
+              if (!prev || (inc.updatedAt || 0) >= (prev.updatedAt || 0)) {
+                zMap.set(inc.id, inc);
+              }
+            });
+            next.storageZones = Array.from(zMap.values());
+          }
           if (Array.isArray(remote.inventoryCategories) && remote.inventoryCategories.length > 0) {
             next.inventoryCategories = remote.inventoryCategories;
           }
@@ -2329,6 +2761,9 @@ export function getOpsSyncState(): OpsData {
   return {
     serviceRequests: s.serviceRequests,
     inventory: s.inventory,
+    storageZones: s.storageZones || [...DEFAULT_STORAGE_ZONES],
+    deletedInventoryIds: s.deletedInventoryIds || [],
+    deletedStorageZoneIds: s.deletedStorageZoneIds || [],
     inventoryCategories: s.inventoryCategories,
     assetCategories: s.assetCategories || [...ASSET_CATEGORIES],
     expenseCategories: s.expenseCategories || [...EXPENSE_CATEGORIES],

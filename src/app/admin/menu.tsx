@@ -107,6 +107,7 @@ export default function MenuManagement() {
                 imageUri: rem.imageUri || existing?.imageUri || rem.imageUrl,
                 region: rem.region || existing?.region,
                 station: rem.station || existing?.station,
+                beverageHandling: rem.beverageHandling || existing?.beverageHandling,
                 prepTimeMin: rem.prepTimeMin ?? existing?.prepTimeMin,
                 costPrice: rem.costPrice ?? existing?.costPrice,
                 trackStock: rem.trackStock ?? existing?.trackStock,
@@ -157,6 +158,7 @@ export default function MenuManagement() {
   const [itemImageUri, setItemImageUri] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [itemStation, setItemStation] = useState<'main' | 'juice'>('main');
+  const [itemBeverageHandling, setItemBeverageHandling] = useState<'juice_bar_prepared' | 'chiller_drink' | 'extras_store' | 'kitchen_dish'>('kitchen_dish');
   const [itemPrepTime, setItemPrepTime] = useState('15');
   const [itemVariants, setItemVariants] = useState<{ name: string; price: string }[]>([]);
   
@@ -359,6 +361,7 @@ export default function MenuManagement() {
     setItemBadge(isForDeal ? 'Family Deal' : '');
     setItemImageUri('');
     setItemStation('main');
+    setItemBeverageHandling('kitchen_dish');
     setItemPrepTime(isForDeal ? '25' : '15');
     setItemVariants([]);
     setItemTrackStock(true);
@@ -389,6 +392,10 @@ export default function MenuManagement() {
     setItemBadge(item.badge || '');
     setItemImageUri(item.imageUri || '');
     setItemStation((item.station as 'main'|'juice') || 'main');
+    setItemBeverageHandling(
+      item.beverageHandling ||
+      (item.station === 'juice' ? 'juice_bar_prepared' : 'kitchen_dish')
+    );
     setItemPrepTime(item.prepTimeMin ? item.prepTimeMin.toString() : (item.station === 'juice' ? '5' : '15'));
     setItemVariants(item.variants ? item.variants.map(v => ({ name: v.name, price: v.price.toString() })) : []);
     setItemTrackStock(Boolean(item.trackStock));
@@ -695,6 +702,7 @@ export default function MenuManagement() {
       category: finalCategory || itemCategory,
       region: itemRegion.trim() ? itemRegion.trim() : undefined,
       station: itemStation,
+      beverageHandling: itemBeverageHandling,
       prepTimeMin: parsedPrepTime,
       description: itemDescription.trim() || undefined,
       badge: itemBadge.trim() || undefined,
@@ -2592,7 +2600,12 @@ export default function MenuManagement() {
                         styles.stationSelectBtn, 
                         itemStation === 'main' && styles.stationSelectBtnActive
                       ]}
-                      onPress={() => setItemStation('main')}
+                      onPress={() => {
+                        setItemStation('main');
+                        if (itemBeverageHandling === 'juice_bar_prepared') {
+                          setItemBeverageHandling('kitchen_dish');
+                        }
+                      }}
                     >
                       <Ionicons name="restaurant" size={18} color={itemStation === 'main' ? BRAND.burgundy : BRAND.muted} style={{ marginRight: 6 }} />
                       <Text style={[styles.stationSelectText, itemStation === 'main' && styles.stationSelectTextActive]}>
@@ -2607,6 +2620,9 @@ export default function MenuManagement() {
                       ]}
                       onPress={() => {
                         setItemStation('juice');
+                        if (itemBeverageHandling === 'kitchen_dish') {
+                          setItemBeverageHandling('juice_bar_prepared');
+                        }
                         if (itemPrepTime === '15') setItemPrepTime('5');
                       }}
                     >
@@ -2616,6 +2632,73 @@ export default function MenuManagement() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+
+                  {/* Beverage Storage vs Juice Bar Preparation Separation */}
+                  {(itemStation === 'juice' ||
+                    /drink|beverage|mocktail|shake|juice|water|soda|tea|coffee/i.test(itemCategory || '')) && (
+                    <View style={{ marginTop: 14, backgroundColor: '#F8FAFC', padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={[styles.inputLabel, { marginBottom: 6 }]}>
+                        🍹 Beverage Type & Chiller / Store Separation
+                      </Text>
+                      <View style={{ gap: 8 }}>
+                        {[
+                          {
+                            val: 'juice_bar_prepared' as const,
+                            title: '🍹 Prepared Fresh at Juice Bar (جوس بار پر تیار)',
+                            desc: 'e.g. Mint Margarita, Mojito, Shake, Fresh Lime — NOT stored in Floor Chillers',
+                            activeColor: '#059669',
+                            activeBg: '#ECFDF5',
+                          },
+                          {
+                            val: 'chiller_drink' as const,
+                            title: '❄️ Packaged Cold Drink — Floor Chillers (فلور چلر ڈرنک)',
+                            desc: 'e.g. Coke/Sprite Tin, 1.5L Bottle, Mineral Water — Auto-deducts from Floor Chiller',
+                            activeColor: '#0284C7',
+                            activeBg: '#F0F9FF',
+                          },
+                          {
+                            val: 'extras_store' as const,
+                            title: '📦 Extras / Main Store Only (ایکسٹرا اسٹور)',
+                            desc: 'Saved in Extras / Main Store — Separated from Floor Chillers',
+                            activeColor: '#7C3AED',
+                            activeBg: '#F5F3FF',
+                          },
+                        ].map((opt) => {
+                          const selected = itemBeverageHandling === opt.val;
+                          return (
+                            <TouchableOpacity
+                              key={opt.val}
+                              onPress={() => setItemBeverageHandling(opt.val)}
+                              style={{
+                                padding: 10,
+                                borderRadius: 10,
+                                borderWidth: 1.5,
+                                borderColor: selected ? opt.activeColor : '#CBD5E1',
+                                backgroundColor: selected ? opt.activeBg : '#FFFFFF',
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 10,
+                              }}
+                            >
+                              <Ionicons
+                                name={selected ? 'radio-button-on' : 'radio-button-off'}
+                                size={18}
+                                color={selected ? opt.activeColor : '#94A3B8'}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 13, fontWeight: '800', color: selected ? opt.activeColor : '#1E293B' }}>
+                                  {opt.title}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                                  {opt.desc}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
 
                   {/* Cooking / Preparation Time (Minutes) */}
                   <Text style={[styles.inputLabel, { marginTop: 14 }]}>

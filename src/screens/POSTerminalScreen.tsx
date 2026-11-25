@@ -1426,6 +1426,12 @@ export default function POSTerminalScreen({
     showKdsToast(`Pending Bill printed for ${targetTableName}`);
   };
 
+  const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
+  const cartPrepEstimate = useMemo(
+    () => estimateOrderPrepTime(cart, menuItems, undefined),
+    [cart, menuItems]
+  );
+
   if (role !== 'admin' && !can('canAccessPOS')) {
     return (
       <PermissionDeniedScreen
@@ -1456,12 +1462,6 @@ export default function POSTerminalScreen({
       </View>
     );
   }
-
-  const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
-  const cartPrepEstimate = useMemo(
-    () => estimateOrderPrepTime(cart, menuItems, undefined),
-    [cart, menuItems]
-  );
 
   return (
     <SafeAreaView style={[styles.screen, { backgroundColor: '#24050A' }]} edges={['top', 'bottom']}>

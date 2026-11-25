@@ -2433,12 +2433,116 @@ function isLegacyDummyDish(m) {
   return false;
 }
 
-// Load or create state
+// Backup directory & crash-safe live mirror (git-ignored so git pull never wipes live data!)
+const BACKUP_DIR = path.join(__dirname, 'backups');
+const LIVE_MIRROR_FILE = path.join(BACKUP_DIR, 'latest-live-state.json');
+
+function countNonAutoBeverageInventory(invArr) {
+  if (!Array.isArray(invArr)) return 0;
+  return invArr.filter((i) => i && i.id && !String(i.id).startsWith('inv-slt-')).length;
+}
+
+function findBestBackupSnapshot() {
+  try {
+    if (!fs.existsSync(BACKUP_DIR)) return null;
+    const candidates = [];
+    if (fs.existsSync(LIVE_MIRROR_FILE)) {
+      candidates.push(LIVE_MIRROR_FILE);
+    }
+    const files = fs.readdirSync(BACKUP_DIR)
+      .filter((f) => f.endsWith('.json') && f !== 'latest-live-state.json')
+      .sort()
+      .reverse();
+    for (const f of files) {
+      candidates.push(path.join(BACKUP_DIR, f));
+    }
+    let best = null;
+    let bestScore = -1;
+    for (const p of candidates) {
+      try {
+        const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+        const rawInv = countNonAutoBeverageInventory(parsed.inventory);
+        const movs = Array.isArray(parsed.stockMovements) ? parsed.stockMovements.length : 0;
+        const sups = Array.isArray(parsed.suppliers) ? parsed.suppliers.length : 0;
+        const invs = Array.isArray(parsed.invoices) ? parsed.invoices.length : 0;
+        const score = rawInv * 1000 + movs * 10 + sups * 50 + invs;
+        if (score > bestScore && (rawInv > 0 || movs > 0 || invs > 0)) {
+          bestScore = score;
+          best = { path: p, state: parsed, rawInv, movs };
+          // Prefer latest-live-state.json immediately if it already has rich operational data
+          if (p === LIVE_MIRROR_FILE && (rawInv > 0 || movs > 0)) break;
+        }
+      } catch (_) {}
+    }
+    return best;
+  } catch (_) {
+    return null;
+  }
+}
+
+function mergeMissingOpsFromBackup(targetState, backupState) {
+  if (!backupState || typeof backupState !== 'object') return false;
+  let restored = false;
+  const opsArrayKeys = [
+    'inventory',
+    'storageZones',
+    'stockMovements',
+    'chillerHandovers',
+    'suppliers',
+    'purchaseOrders',
+    'supplierPayments',
+    'expenses',
+    'assets',
+    'damageRecords',
+    'recipes',
+    'kitchenSessions',
+    'kitchenConsumption',
+    'kitchenManualUsage',
+    'kitchenCash',
+    'shifts',
+    'serviceRequests',
+    'invoices',
+    'customers',
+    'attendance',
+    'salaryPayments',
+  ];
+  for (const k of opsArrayKeys) {
+    const cur = Array.isArray(targetState[k]) ? targetState[k] : [];
+    const bak = Array.isArray(backupState[k]) ? backupState[k] : [];
+    if (bak.length === 0) continue;
+    if (k === 'inventory') {
+      const curRaw = countNonAutoBeverageInventory(cur);
+      const bakRaw = countNonAutoBeverageInventory(bak);
+      if (cur.length === 0 || (curRaw === 0 && bakRaw > 0)) {
+        const deletedSet = new Set(targetState.deletedInventoryIds || []);
+        const map = new Map();
+        for (const item of bak) {
+          if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
+        }
+        for (const item of cur) {
+          if (item && item.id && !deletedSet.has(item.id)) map.set(item.id, item);
+        }
+        targetState.inventory = Array.from(map.values());
+        restored = true;
+      }
+    } else if (cur.length === 0 && bak.length > 0) {
+      targetState[k] = bak;
+      restored = true;
+    }
+  }
+  return restored;
+}
+
+// Load or create state (with automatic recovery from backups/ if git pull removed or wiped server-data.json!)
 let serverState = { ...INITIAL_STATE };
 try {
   if (fs.existsSync(DATA_FILE)) {
     const raw = fs.readFileSync(DATA_FILE, 'utf8');
     serverState = { ...INITIAL_STATE, ...JSON.parse(raw) };
+    const bestBak = findBestBackupSnapshot();
+    if (bestBak && mergeMissingOpsFromBackup(serverState, bestBak.state)) {
+      console.log(`[Sultan Hub Recovery] Restored missing inventory/ops records from backup: ${path.basename(bestBak.path)}`);
+    }
     if (!Array.isArray(serverState.menuItems) || serverState.menuItems.length === 0) {
       serverState.menuItems = INITIAL_STATE.menuItems;
     } else if (Array.isArray(serverState.menuItems)) {
@@ -2603,8 +2707,13 @@ try {
     fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
     console.log('[Sultan Hub] Loaded saved database from server-data.json');
   } else {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(INITIAL_STATE, null, 2));
-    console.log('[Sultan Hub] Created initial server-data.json');
+    const bestBak = findBestBackupSnapshot();
+    if (bestBak && bestBak.state) {
+      serverState = { ...INITIAL_STATE, ...bestBak.state };
+      console.log(`[Sultan Hub Recovery] Restored full database from ${path.basename(bestBak.path)} after git update.`);
+    }
+    fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
+    console.log('[Sultan Hub] Initialized server-data.json');
   }
 } catch (err) {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
@@ -3072,8 +3181,7 @@ function processServerPrintQueue() {
     });
 }
 
-// Crash-safe atomic debounced file save + daily backup
-const BACKUP_DIR = path.join(__dirname, 'backups');
+// Crash-safe atomic debounced file save + live mirror + daily backup
 let saveTimer = null;
 let lastBackupDate = '';
 function persistState() {
@@ -3085,10 +3193,27 @@ function persistState() {
       fs.writeFileSync(tmpFile, jsonStr);
       fs.renameSync(tmpFile, DATA_FILE);
 
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      const mirrorTmp = `${LIVE_MIRROR_FILE}.tmp`;
+      fs.writeFileSync(mirrorTmp, jsonStr);
+      fs.renameSync(mirrorTmp, LIVE_MIRROR_FILE);
+
       const today = new Date().toISOString().split('T')[0];
-      if (today !== lastBackupDate) {
-        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-        fs.writeFileSync(path.join(BACKUP_DIR, `server-data-${today}.json`), jsonStr);
+      const dailyPath = path.join(BACKUP_DIR, `server-data-${today}.json`);
+      // Only overwrite daily snapshot if new state has >= raw inventory items or daily file doesn't exist yet
+      if (today !== lastBackupDate || !fs.existsSync(dailyPath)) {
+        let allowDailyWrite = true;
+        if (fs.existsSync(dailyPath)) {
+          try {
+            const existingDaily = JSON.parse(fs.readFileSync(dailyPath, 'utf8'));
+            if (countNonAutoBeverageInventory(existingDaily.inventory) > countNonAutoBeverageInventory(serverState.inventory)) {
+              allowDailyWrite = false;
+            }
+          } catch (_) {}
+        }
+        if (allowDailyWrite) {
+          fs.writeFileSync(dailyPath, jsonStr);
+        }
         lastBackupDate = today;
       }
     } catch (e) {
@@ -4362,6 +4487,144 @@ async function handleRequest(req, res) {
   }
 
   // -------------------------------------------------------------
+  // DATABASE BACKUP SNAPSHOTS & 1-CLICK RECOVERY API
+  // -------------------------------------------------------------
+  if (url.pathname === '/api/admin/backups' && req.method === 'GET') {
+    try {
+      const list = [];
+      if (fs.existsSync(BACKUP_DIR)) {
+        const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+        for (const f of files) {
+          try {
+            const p = path.join(BACKUP_DIR, f);
+            const st = fs.statSync(p);
+            const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+            list.push({
+              filename: f,
+              size: st.size,
+              mtime: st.mtimeMs,
+              lastUpdated: parsed.lastUpdated || st.mtimeMs,
+              inventoryCount: Array.isArray(parsed.inventory) ? parsed.inventory.length : 0,
+              rawInventoryCount: countNonAutoBeverageInventory(parsed.inventory),
+              storageZonesCount: Array.isArray(parsed.storageZones) ? parsed.storageZones.length : 0,
+              movementsCount: Array.isArray(parsed.stockMovements) ? parsed.stockMovements.length : 0,
+              suppliersCount: Array.isArray(parsed.suppliers) ? parsed.suppliers.length : 0,
+              expensesCount: Array.isArray(parsed.expenses) ? parsed.expenses.length : 0,
+              invoicesCount: Array.isArray(parsed.invoices) ? parsed.invoices.length : 0,
+            });
+          } catch (_) {}
+        }
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ success: true, backups: list }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/admin/backups/restore' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const filename = path.basename(String(payload?.filename || ''));
+      const mode = payload?.mode === 'full' ? 'full' : 'merge';
+      if (!filename || !filename.endsWith('.json')) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Valid backup filename is required' }));
+        return;
+      }
+      const targetPath = path.join(BACKUP_DIR, filename);
+      if (!fs.existsSync(targetPath)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: `Backup file "${filename}" not found` }));
+        return;
+      }
+      const backupState = JSON.parse(fs.readFileSync(targetPath, 'utf8'));
+
+      // Save safety snapshot before restoring
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      fs.writeFileSync(
+        path.join(BACKUP_DIR, `pre-restore-${Date.now()}.json`),
+        JSON.stringify(serverState, null, 2)
+      );
+
+      if (mode === 'full') {
+        serverState = {
+          ...INITIAL_STATE,
+          ...backupState,
+          tickets: serverState.tickets,
+          activeStaffSessions: serverState.activeStaffSessions,
+          lastUpdated: Date.now(),
+        };
+      } else {
+        // Safe merge: brings back all inventory, zones, movements, suppliers, POs, expenses, assets, recipes without losing newer items or invoices
+        const mergeById = (currArr, bakArr) => {
+          const map = new Map();
+          for (const b of (Array.isArray(bakArr) ? bakArr : [])) {
+            if (b && b.id) map.set(b.id, b);
+          }
+          for (const c of (Array.isArray(currArr) ? currArr : [])) {
+            if (c && c.id) {
+              const prev = map.get(c.id);
+              if (!prev || (Number(c.updatedAt || c.at || 0) >= Number(prev.updatedAt || prev.at || 0))) {
+                map.set(c.id, c);
+              }
+            }
+          }
+          return Array.from(map.values());
+        };
+        serverState.inventory = mergeById(serverState.inventory, backupState.inventory);
+        serverState.storageZones = mergeById(serverState.storageZones, backupState.storageZones);
+        serverState.stockMovements = mergeById(serverState.stockMovements, backupState.stockMovements)
+          .sort((a, b) => (b.at || 0) - (a.at || 0))
+          .slice(0, 500);
+        serverState.chillerHandovers = mergeById(serverState.chillerHandovers, backupState.chillerHandovers)
+          .sort((a, b) => (b.at || 0) - (a.at || 0))
+          .slice(0, 150);
+        serverState.suppliers = mergeById(serverState.suppliers, backupState.suppliers);
+        serverState.purchaseOrders = mergeById(serverState.purchaseOrders, backupState.purchaseOrders);
+        serverState.supplierPayments = mergeById(serverState.supplierPayments, backupState.supplierPayments);
+        serverState.expenses = mergeById(serverState.expenses, backupState.expenses);
+        serverState.assets = mergeById(serverState.assets, backupState.assets);
+        serverState.damageRecords = mergeById(serverState.damageRecords, backupState.damageRecords);
+        serverState.recipes = mergeById(serverState.recipes, backupState.recipes);
+        if ((!serverState.kitchenConsumption || serverState.kitchenConsumption.length === 0) && Array.isArray(backupState.kitchenConsumption)) {
+          serverState.kitchenConsumption = backupState.kitchenConsumption;
+        }
+        if ((!serverState.shifts || serverState.shifts.length === 0) && Array.isArray(backupState.shifts)) {
+          serverState.shifts = backupState.shifts;
+        }
+        serverState.deletedInventoryIds = [];
+        serverState.lastUpdated = Date.now();
+      }
+
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      pushToFirestoreCloud();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'SERVER_RESTORE',
+        timestamp: serverState.lastUpdated,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        inventoryCount: (serverState.inventory || []).length,
+        movementsCount: (serverState.stockMovements || []).length,
+        suppliersCount: (serverState.suppliers || []).length,
+        state: serverState,
+      }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // -------------------------------------------------------------
   // CENTRAL 10-TABLET & 7-PC AUTO-UPDATER ENDPOINTS
   // -------------------------------------------------------------
   if (
@@ -4446,7 +4709,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 25,
+        apkVersion: 26,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -6217,7 +6480,21 @@ function computeStateFingerprint(st) {
       categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
       zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
       customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
-      inventoryLen: Array.isArray(st.inventory) ? st.inventory.length : 0,
+      inventoryState: Array.isArray(st.inventory)
+        ? st.inventory.map(i => `${i?.id}:${i?.stock}:${i?.location || ''}:${i?.beverageStorageMode || ''}:${i?.updatedAt || 0}`).join('|')
+        : '',
+      storageZonesState: Array.isArray(st.storageZones)
+        ? st.storageZones.map(z => `${z?.id}:${z?.name}:${z?.type}:${z?.isActive !== false}:${z?.updatedAt || 0}`).join('|')
+        : '',
+      movementsKey: Array.isArray(st.stockMovements)
+        ? `${st.stockMovements.length}:${st.stockMovements[0]?.id || ''}`
+        : '0',
+      chillerHandoversKey: Array.isArray(st.chillerHandovers)
+        ? `${st.chillerHandovers.length}:${st.chillerHandovers[0]?.id || ''}`
+        : '0',
+      purchaseOrdersKey: Array.isArray(st.purchaseOrders)
+        ? `${st.purchaseOrders.length}:${st.purchaseOrders.map(p => `${p?.id}:${p?.status}:${p?.paidAmount || 0}`).join(',')}`
+        : '0',
       inventoryCategoriesKey: Array.isArray(st.inventoryCategories) ? st.inventoryCategories.join('|') : '',
       assetCategoriesKey: Array.isArray(st.assetCategories) ? st.assetCategories.join('|') : '',
       expenseCategoriesKey: Array.isArray(st.expenseCategories) ? st.expenseCategories.join('|') : '',
@@ -6328,8 +6605,22 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'deletedInventoryIds', 'deletedStorageZoneIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
+
+  // Track explicit deletions for inventory & storageZones so out-of-sync clients never wipe non-deleted items
+  if (!Array.isArray(serverState.deletedInventoryIds)) serverState.deletedInventoryIds = [];
+  if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
+  if (Array.isArray(partialState.deletedInventoryIds) && partialState.deletedInventoryIds.length > 0) {
+    serverState.deletedInventoryIds = Array.from(new Set([...serverState.deletedInventoryIds, ...partialState.deletedInventoryIds])).slice(-500);
+    modified = true;
+  }
+  if (Array.isArray(partialState.deletedStorageZoneIds) && partialState.deletedStorageZoneIds.length > 0) {
+    serverState.deletedStorageZoneIds = Array.from(new Set([...serverState.deletedStorageZoneIds, ...partialState.deletedStorageZoneIds])).slice(-300);
+    modified = true;
+  }
+  const deletedInvSet = new Set(serverState.deletedInventoryIds);
+  const deletedZoneSet = new Set(serverState.deletedStorageZoneIds);
 
   // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
   if (!Array.isArray(serverState.deletedTicketIds)) {
@@ -6747,6 +7038,72 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             sMap.set('st-master', { ...masterOnly });
           }
           serverState.staff = Array.from(sMap.values());
+        } else if (key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds') {
+          // Already merged into serverState sets above
+        } else if (key === 'inventory') {
+          const incInv = Array.isArray(sanitized) ? sanitized : [];
+          const currInv = Array.isArray(serverState.inventory) ? serverState.inventory : [];
+          // Guard: NEVER allow an unhydrated client or empty cloud sync to wipe existing inventory!
+          if (incInv.length === 0 && currInv.length > 0 && !currInv.every((i) => i && deletedInvSet.has(i.id))) {
+            // Ignore empty array wipe attempt
+          } else {
+            const invMap = new Map();
+            for (const c of currInv) {
+              if (c && c.id && !deletedInvSet.has(c.id)) invMap.set(c.id, c);
+            }
+            for (const inc of incInv) {
+              if (!inc || !inc.id || deletedInvSet.has(inc.id)) continue;
+              const prev = invMap.get(inc.id);
+              if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                invMap.set(inc.id, { ...(prev || {}), ...inc });
+              }
+            }
+            const nextInv = Array.from(invMap.values());
+            if (currInv.length - nextInv.length >= 3) {
+              try {
+                if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+                fs.writeFileSync(path.join(BACKUP_DIR, 'pre-inventory-change.json'), JSON.stringify(serverState, null, 2));
+              } catch (_) {}
+            }
+            serverState.inventory = nextInv;
+          }
+        } else if (key === 'storageZones') {
+          const incZones = Array.isArray(sanitized) ? sanitized : [];
+          const currZones = Array.isArray(serverState.storageZones) ? serverState.storageZones : [];
+          if (incZones.length === 0 && currZones.length > 0 && !currZones.every((z) => z && deletedZoneSet.has(z.id))) {
+            // Ignore empty array wipe attempt
+          } else {
+            const zMap = new Map();
+            for (const c of currZones) {
+              if (c && c.id && !deletedZoneSet.has(c.id)) zMap.set(c.id, c);
+            }
+            for (const inc of incZones) {
+              if (!inc || !inc.id || deletedZoneSet.has(inc.id)) continue;
+              const prev = zMap.get(inc.id);
+              if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                zMap.set(inc.id, { ...(prev || {}), ...inc });
+              }
+            }
+            serverState.storageZones = Array.from(zMap.values());
+          }
+        } else if (key === 'stockMovements' || key === 'chillerHandovers') {
+          const incList = Array.isArray(sanitized) ? sanitized : [];
+          const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
+          if (incList.length > 0 || currList.length === 0) {
+            const mMap = new Map();
+            for (const c of currList) { if (c && c.id) mMap.set(c.id, c); }
+            for (const inc of incList) { if (inc && inc.id) mMap.set(inc.id, inc); }
+            const limit = key === 'chillerHandovers' ? 150 : 500;
+            serverState[key] = Array.from(mMap.values()).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
+          }
+        } else if (
+          Array.isArray(sanitized) &&
+          sanitized.length === 0 &&
+          Array.isArray(serverState[key]) &&
+          serverState[key].length > 0 &&
+          ['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'shifts', 'invoices', 'customers', 'kitchenSessions', 'kitchenConsumption', 'attendance', 'salaryPayments'].includes(key)
+        ) {
+          // Guard: NEVER allow an unhydrated client sending [] to wipe non-empty operational ledgers!
         } else {
           serverState[key] = sanitized;
         }
@@ -6908,10 +7265,14 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 salesReturns: serverState.salesReturns || [],
                 serviceRequests: serverState.serviceRequests || [],
                 inventory: serverState.inventory || [],
+                storageZones: serverState.storageZones || [],
+                deletedInventoryIds: serverState.deletedInventoryIds || [],
+                deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
                 inventoryCategories: serverState.inventoryCategories || [],
                 assetCategories: serverState.assetCategories || [],
                 expenseCategories: serverState.expenseCategories || [],
                 stockMovements: serverState.stockMovements || [],
+                chillerHandovers: serverState.chillerHandovers || [],
                 expenses: serverState.expenses || [],
                 suppliers: serverState.suppliers || [],
                 purchaseOrders: serverState.purchaseOrders || [],

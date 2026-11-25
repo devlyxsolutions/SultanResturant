@@ -113,6 +113,7 @@ let sseConnection: any = null;
 let firestoreUnsubscribe: Unsubscribe | null = null;
 let isApplyingRemoteUpdate = false;
 let hasReceivedInitialSync = false;
+let hasHydratedRemoteOps = false;
 let isInitialized = false;
 let hasUnsyncedLocalChanges = false;
 let currentWsUrl = '';
@@ -156,6 +157,7 @@ function applyRemoteStateSafely(state: any, packetId?: string, timestamp?: numbe
     lastProcessedRemoteTimestamp = Date.now();
   }
   hasReceivedInitialSync = true;
+  hasHydratedRemoteOps = true;
   isApplyingRemoteUpdate = true;
   if (debounceMutationTimer) {
     clearTimeout(debounceMutationTimer);
@@ -999,6 +1001,19 @@ function broadcastLocalState(force = false) {
   rememberPacketId(packetId);
   lastProcessedRemoteTimestamp = now;
 
+  const safeOpsPayload: Record<string, any> = {};
+  for (const [k, v] of Object.entries(opsState)) {
+    if (hasHydratedRemoteOps || !Array.isArray(v) || v.length > 0) {
+      safeOpsPayload[k] = v;
+    }
+  }
+  const safeKitchenPayload: Record<string, any> = {};
+  for (const [k, v] of Object.entries(kitchenState)) {
+    if (hasHydratedRemoteOps || !Array.isArray(v) || v.length > 0) {
+      safeKitchenPayload[k] = v;
+    }
+  }
+
   const payload = {
     type: 'CLIENT_UPDATE',
     senderId: DEVICE_ID,
@@ -1033,8 +1048,8 @@ function broadcastLocalState(force = false) {
       revokedSessions: state.revokedSessions || {},
       revokedDeviceIds: state.revokedDeviceIds || {},
       forceLogoutAll: state.forceLogoutAll || null,
-      ...opsState,
-      ...kitchenState,
+      ...safeOpsPayload,
+      ...safeKitchenPayload,
     },
   };
 

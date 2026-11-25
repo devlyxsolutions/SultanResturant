@@ -177,6 +177,8 @@ export type ComboItem = {
   variantName?: string;
 };
 
+export type MenuItemBeverageHandling = 'juice_bar_prepared' | 'chiller_drink' | 'extras_store' | 'kitchen_dish';
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -186,6 +188,8 @@ export type MenuItem = {
   region?: string;
   variants?: MenuVariant[];
   station?: 'main' | 'juice';
+  /** Separates Juice Bar prepared drinks (e.g. Mint Margarita) from Floor Chiller cold drinks & Extras Store */
+  beverageHandling?: MenuItemBeverageHandling;
   prepTimeMin?: number; // Cooking / preparation time in minutes
   available?: boolean;
   stock?: number;
@@ -1255,23 +1259,35 @@ export const useRestaurantStore = create<RestaurantState>()(
               status: 'pending',
             };
 
-            // Trigger opsStore floor beverage deduction safely with floor normalization
+            // Trigger opsStore floor chiller deduction ONLY for packaged chiller beverages (NEVER Juice Bar prepared drinks like Mint Margarita or Extras Store items!)
             try {
               // eslint-disable-next-line @typescript-eslint/no-require-imports
-              const { useOpsStore, normalizeChillerFloor } = require('./opsStore');
+              const { useOpsStore, normalizeChillerFloor, isJuiceBarPreparedName } = require('./opsStore');
               if (useOpsStore && typeof useOpsStore.getState === 'function') {
-                const normFloor = typeof normalizeChillerFloor === 'function' ? normalizeChillerFloor(rawFloor) : rawFloor;
-                useOpsStore.getState().deductFloorBeverageUsage({
-                  floor: normFloor,
-                  items: beverageItems.map((b) => ({
-                    menuItemId: b.item.id,
-                    name: b.item.name,
-                    qty: b.qty,
-                  })),
-                  tableId: table?.id,
-                  tableName: table ? table.name : (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter'),
-                  by: serverName,
+                const chillerOnlyItems = beverageItems.filter((b) => {
+                  const handling = b.item.beverageHandling;
+                  if (handling === 'juice_bar_prepared' || handling === 'extras_store' || handling === 'kitchen_dish') {
+                    return false;
+                  }
+                  if (typeof isJuiceBarPreparedName === 'function' && isJuiceBarPreparedName(b.item.name, b.item.category) && handling !== 'chiller_drink') {
+                    return false;
+                  }
+                  return true;
                 });
+                if (chillerOnlyItems.length > 0) {
+                  const normFloor = typeof normalizeChillerFloor === 'function' ? normalizeChillerFloor(rawFloor) : rawFloor;
+                  useOpsStore.getState().deductFloorBeverageUsage({
+                    floor: normFloor,
+                    items: chillerOnlyItems.map((b) => ({
+                      menuItemId: b.item.id,
+                      name: b.item.name,
+                      qty: b.qty,
+                    })),
+                    tableId: table?.id,
+                    tableName: table ? table.name : (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter'),
+                    by: serverName,
+                  });
+                }
               }
             } catch (_) {}
           }
