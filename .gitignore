@@ -65,4 +65,9 @@ SultanRestaurant-App/Sultan-POS-Tablet.apk
 SultanRestaurant-App/Updates/*.apk
 Updates/*.apk
 
+# runtime persistent audit logs
+system-logs*.ndjson
+SultanRestaurant-App/system-logs*.ndjson
+
+
 

@@ -52,6 +52,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'Kitchen Returns', route: '/admin/kitchen-returns', icon: 'checkmark-done-circle-outline' },
   { label: 'Dish Costing', route: '/admin/costing', icon: 'pricetag-outline' },
   { label: 'Playland Hub', route: '/admin/playland', icon: 'balloon-outline' },
+  { label: 'System Logs & Audit', route: '/admin/system-logs', icon: 'shield-checkmark-outline', badge: 'LIVE' },
   { label: 'System Settings', route: '/admin/settings', icon: 'settings-outline', badge: 'Control' },
 ];
 

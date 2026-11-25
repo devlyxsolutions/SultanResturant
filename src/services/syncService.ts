@@ -852,7 +852,13 @@ function openVerifiedWebSocket(wsUrl: string) {
         // Ignore messages sent by this same device
         if (data.senderId === DEVICE_ID) return;
 
-        if (data.type === 'FORCE_LOGOUT_DEVICE') {
+        if (data.type === 'SYSTEM_LOG_BATCH' && Array.isArray(data.logs) && data.logs.length > 0) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-require-imports
+            const { useSystemLogStore } = require('../store/systemLogStore');
+            useSystemLogStore?.getState()?.pushLogs(data.logs);
+          } catch {}
+        } else if (data.type === 'FORCE_LOGOUT_DEVICE') {
           useRestaurantStore.setState((s) => ({
             ...(Array.isArray(data.activeStaffSessions) ? { activeStaffSessions: data.activeStaffSessions } : {}),
             ...(data.revokedSessions && typeof data.revokedSessions === 'object'

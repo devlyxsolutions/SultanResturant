@@ -10,3 +10,4 @@ export * from './discountStore';
 export * from './roleStore';
 export * from './callStore';
 export * from './sidebarStore';
+export * from './systemLogStore';

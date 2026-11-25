@@ -29,6 +29,278 @@ function getServerLanIp() {
   return '192.168.1.10';
 }
 const DATA_FILE = path.join(__dirname, 'server-data.json');
+const SYSTEM_LOGS_FILE = path.join(__dirname, 'system-logs.ndjson');
+const MAX_SYSTEM_LOGS_IN_MEMORY = 50000;
+const MAX_SYSTEM_LOGS_FILE_BYTES = 50 * 1024 * 1024; // 50 MB auto-rotation
+
+let systemLogsMemory = []; // chronological order (O(1) push; queried newest-first)
+let systemLogSeqCounter = 0;
+const seenSystemLogIds = new Set();
+let pendingDiskLogLines = [];
+let diskLogFlushTimer = null;
+let isFlushingDiskLogs = false;
+
+function loadSystemLogsFromDisk() {
+  try {
+    if (!fs.existsSync(SYSTEM_LOGS_FILE)) return;
+    const raw = fs.readFileSync(SYSTEM_LOGS_FILE, 'utf8');
+    if (!raw) return;
+    const lines = raw.split('\n');
+    const parsed = [];
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      if (!line) continue;
+      try {
+        const obj = JSON.parse(line);
+        if (obj && obj.id) {
+          parsed.push(obj);
+        }
+      } catch (_) {}
+    }
+    systemLogsMemory = parsed.slice(-MAX_SYSTEM_LOGS_IN_MEMORY);
+    for (let i = Math.max(0, systemLogsMemory.length - 4000); i < systemLogsMemory.length; i++) {
+      seenSystemLogIds.add(systemLogsMemory[i].id);
+    }
+    systemLogSeqCounter = systemLogsMemory.reduce((max, l) => Math.max(max, Number(l.seq || 0)), 0);
+    console.log(`[Sultan Hub Audit] Loaded ${systemLogsMemory.length} persistent system log(s) from system-logs.ndjson`);
+  } catch (e) {
+    console.warn('[Sultan Hub Audit] Failed loading system-logs.ndjson:', e.message);
+  }
+}
+
+function flushSystemLogsToDisk() {
+  if (isFlushingDiskLogs || pendingDiskLogLines.length === 0) return;
+  isFlushingDiskLogs = true;
+  const chunk = pendingDiskLogLines.splice(0, 2000).join('\n') + '\n';
+
+  try {
+    if (fs.existsSync(SYSTEM_LOGS_FILE)) {
+      const st = fs.statSync(SYSTEM_LOGS_FILE);
+      if (st.size > MAX_SYSTEM_LOGS_FILE_BYTES) {
+        const archivePath = path.join(__dirname, `system-logs-archive-${Date.now()}.ndjson`);
+        fs.renameSync(SYSTEM_LOGS_FILE, archivePath);
+      }
+    }
+  } catch (_) {}
+
+  fs.appendFile(SYSTEM_LOGS_FILE, chunk, 'utf8', (err) => {
+    if (err) {
+      console.warn('[Sultan Hub Audit] Disk append error:', err.message);
+    }
+    isFlushingDiskLogs = false;
+    if (pendingDiskLogLines.length > 0) {
+      setTimeout(flushSystemLogsToDisk, 40);
+    }
+  });
+}
+
+function scheduleDiskLogFlush(immediate = false) {
+  if (immediate || pendingDiskLogLines.length >= 100) {
+    if (diskLogFlushTimer) {
+      clearTimeout(diskLogFlushTimer);
+      diskLogFlushTimer = null;
+    }
+    flushSystemLogsToDisk();
+    return;
+  }
+  if (!diskLogFlushTimer) {
+    diskLogFlushTimer = setTimeout(() => {
+      diskLogFlushTimer = null;
+      flushSystemLogsToDisk();
+    }, 150);
+  }
+}
+
+function appendSystemLogs(entries, reqMeta = {}) {
+  const list = Array.isArray(entries) ? entries : [entries];
+  if (list.length === 0) return [];
+  const accepted = [];
+  const now = Date.now();
+
+  for (let i = 0; i < list.length; i++) {
+    const raw = list[i];
+    if (!raw || typeof raw !== 'object') continue;
+    const ts = typeof raw.timestamp === 'number' && raw.timestamp > 0 ? raw.timestamp : now;
+    const seq = ++systemLogSeqCounter;
+    const id = raw.id && typeof raw.id === 'string'
+      ? raw.id
+      : `slog_${ts.toString(36)}_${seq.toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+
+    if (seenSystemLogIds.has(id)) continue;
+    seenSystemLogIds.add(id);
+    if (seenSystemLogIds.size > 6000) {
+      const firstKey = seenSystemLogIds.values().next().value;
+      if (firstKey) seenSystemLogIds.delete(firstKey);
+    }
+
+    const normalized = {
+      id,
+      seq,
+      timestamp: ts,
+      isoTime: raw.isoTime || new Date(ts).toISOString(),
+      actorId: String(raw.actorId || 'system'),
+      actorName: String(raw.actorName || 'System'),
+      ...(raw.actorUsername ? { actorUsername: String(raw.actorUsername) } : {}),
+      actorRole: String(raw.actorRole || 'System'),
+      ...(raw.sessionId ? { sessionId: String(raw.sessionId) } : {}),
+      deviceId: String(raw.deviceId || reqMeta.deviceId || 'SERVER_HUB'),
+      deviceName: String(raw.deviceName || reqMeta.deviceName || 'Central POS Hub'),
+      platform: String(raw.platform || 'server'),
+      ip: String(raw.ip || reqMeta.ip || ''),
+      page: String(raw.page || '/server'),
+      module: String(raw.module || 'SYSTEM'),
+      action: String(raw.action || 'EVENT'),
+      actionType: String(raw.actionType || 'SYSTEM'),
+      severity: String(raw.severity || 'info'),
+      ...(raw.entityType ? { entityType: String(raw.entityType) } : {}),
+      ...(raw.entityId ? { entityId: String(raw.entityId) } : {}),
+      ...(raw.entityName ? { entityName: String(raw.entityName) } : {}),
+      ...(typeof raw.amount === 'number' && !Number.isNaN(raw.amount) ? { amount: raw.amount } : {}),
+      summary: String(raw.summary || raw.action || 'System event'),
+      ...(raw.details && typeof raw.details === 'object' ? { details: raw.details } : {}),
+      source: raw.source === 'client' ? 'client' : 'server',
+    };
+
+    systemLogsMemory.push(normalized);
+    pendingDiskLogLines.push(JSON.stringify(normalized));
+    accepted.push(normalized);
+  }
+
+  if (systemLogsMemory.length > MAX_SYSTEM_LOGS_IN_MEMORY) {
+    systemLogsMemory.splice(0, systemLogsMemory.length - MAX_SYSTEM_LOGS_IN_MEMORY);
+  }
+
+  if (accepted.length > 0) {
+    scheduleDiskLogFlush(accepted.length >= 50);
+    try {
+      if (typeof broadcastToClients === 'function') {
+        broadcastToClients({
+          type: 'SYSTEM_LOG_BATCH',
+          logs: accepted,
+          senderId: reqMeta.senderId || 'SERVER_AUDIT',
+          timestamp: now,
+        });
+      }
+    } catch (_) {}
+  }
+
+  return accepted;
+}
+
+function querySystemLogs(filters = {}) {
+  const q = String(filters.q || '').trim().toLowerCase();
+  const role = String(filters.role || '').trim().toLowerCase();
+  const actor = String(filters.actor || '').trim().toLowerCase();
+  const mod = String(filters.module || '').trim().toUpperCase();
+  const actionType = String(filters.actionType || '').trim().toUpperCase();
+  const severity = String(filters.severity || '').trim().toLowerCase();
+  const pageFilter = String(filters.page || '').trim().toLowerCase();
+  const dateFrom = Number(filters.dateFrom || 0);
+  const dateTo = Number(filters.dateTo || 0);
+  const limit = Math.min(1000, Math.max(1, Number(filters.limit || 200)));
+  const offset = Math.max(0, Number(filters.offset || 0));
+
+  const matched = [];
+  for (let i = systemLogsMemory.length - 1; i >= 0; i--) {
+    const l = systemLogsMemory[i];
+    if (!l) continue;
+    if (dateFrom > 0 && l.timestamp < dateFrom) continue;
+    if (dateTo > 0 && l.timestamp > dateTo) continue;
+    if (role && role !== 'all' && String(l.actorRole || '').toLowerCase() !== role) continue;
+    if (actor && actor !== 'all') {
+      const aName = String(l.actorName || '').toLowerCase();
+      const aId = String(l.actorId || '').toLowerCase();
+      const aUser = String(l.actorUsername || '').toLowerCase();
+      if (aName !== actor && aId !== actor && aUser !== actor) continue;
+    }
+    if (mod && mod !== 'ALL' && String(l.module || '').toUpperCase() !== mod) continue;
+    if (actionType && actionType !== 'ALL' && String(l.actionType || '').toUpperCase() !== actionType) continue;
+    if (severity && severity !== 'all' && String(l.severity || '').toLowerCase() !== severity) continue;
+    if (pageFilter && !String(l.page || '').toLowerCase().includes(pageFilter)) continue;
+    if (q) {
+      const hay = `${l.actorName} ${l.actorUsername || ''} ${l.actorRole} ${l.module} ${l.action} ${l.actionType} ${l.summary} ${l.entityName || ''} ${l.entityId || ''} ${l.page} ${l.deviceName} ${l.details ? JSON.stringify(l.details) : ''}`.toLowerCase();
+      if (!hay.includes(q)) continue;
+    }
+    matched.push(l);
+  }
+
+  return {
+    total: systemLogsMemory.length,
+    filteredTotal: matched.length,
+    logs: matched.slice(offset, offset + limit),
+    allMatched: matched,
+  };
+}
+
+function computeSystemLogAnalytics() {
+  const now = Date.now();
+  const startOfToday = new Date();
+  startOfToday.setHours(0, 0, 0, 0);
+  const todayTs = startOfToday.getTime();
+  const hourAgo = now - 60 * 60 * 1000;
+  const minAgo = now - 60 * 1000;
+
+  let todayCount = 0;
+  let lastHourCount = 0;
+  let lastMinuteCount = 0;
+  let criticalCount = 0;
+  let cancelVoidDeleteCount = 0;
+  const byRole = {};
+  const byModule = {};
+  const byActionType = {};
+  const bySeverity = { info: 0, success: 0, warning: 0, critical: 0 };
+  const actorMap = new Map();
+
+  for (let i = 0; i < systemLogsMemory.length; i++) {
+    const l = systemLogsMemory[i];
+    if (!l) continue;
+    if (l.timestamp >= todayTs) todayCount++;
+    if (l.timestamp >= hourAgo) lastHourCount++;
+    if (l.timestamp >= minAgo) lastMinuteCount++;
+    if (l.severity === 'critical') criticalCount++;
+    if (l.actionType === 'CANCEL' || l.actionType === 'VOID' || l.actionType === 'DELETE' || l.actionType === 'REFUND') {
+      cancelVoidDeleteCount++;
+    }
+    const r = l.actorRole || 'System';
+    byRole[r] = (byRole[r] || 0) + 1;
+    const m = l.module || 'SYSTEM';
+    byModule[m] = (byModule[m] || 0) + 1;
+    const at = l.actionType || 'SYSTEM';
+    byActionType[at] = (byActionType[at] || 0) + 1;
+    const sv = l.severity || 'info';
+    bySeverity[sv] = (bySeverity[sv] || 0) + 1;
+
+    const aKey = `${l.actorName || 'System'}::${r}`;
+    const prevA = actorMap.get(aKey);
+    if (prevA) {
+      prevA.count++;
+      if (l.timestamp > prevA.lastSeen) prevA.lastSeen = l.timestamp;
+    } else {
+      actorMap.set(aKey, { name: l.actorName || 'System', role: r, count: 1, lastSeen: l.timestamp });
+    }
+  }
+
+  const topActors = Array.from(actorMap.values())
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20);
+
+  return {
+    totalStored: systemLogsMemory.length,
+    todayCount,
+    lastHourCount,
+    lastMinuteCount,
+    criticalCount,
+    cancelVoidDeleteCount,
+    uniqueActorsCount: actorMap.size,
+    byRole,
+    byModule,
+    byActionType,
+    bySeverity,
+    topActors,
+  };
+}
+
+loadSystemLogsFromDisk();
 let printerHelper = null;
 try {
   printerHelper = require('./printerHelper');
@@ -3671,8 +3943,8 @@ async function handleRequest(req, res) {
 
   const url = new URL(req.url, `http://${req.headers.host}`);
 
-  // Rate Limiting Enforcement (never throttle local print agents or internal sync/print calls)
-  if (!url.pathname.startsWith('/api/print') && !checkRateLimit(clientIp)) {
+  // Rate Limiting Enforcement (never throttle local print agents, high-throughput system audit logs, or internal sync calls)
+  if (!url.pathname.startsWith('/api/print') && !url.pathname.startsWith('/api/system-logs') && !checkRateLimit(clientIp)) {
     res.writeHead(429, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ success: false, error: 'Rate limit reached. Please wait a moment.' }));
     return;
@@ -4021,6 +4293,29 @@ async function handleRequest(req, res) {
       if (kickedSessions.length > 0) {
         console.log(
           `[Sultan Hub Auth] Account "${newSession.username || newSession.staffName}" logged in on ${newSession.deviceName}; auto-logged out ${kickedSessions.length} earlier device(s).`
+        );
+        appendSystemLogs(
+          {
+            actorId: newSession.staffId,
+            actorName: newSession.staffName,
+            actorUsername: newSession.username,
+            actorRole: newSession.role,
+            sessionId: newSession.sessionId,
+            deviceId: newSession.deviceId,
+            deviceName: newSession.deviceName,
+            platform: newSession.platform,
+            page: '/login',
+            module: 'AUTH',
+            action: 'SESSION_AUTO_KICK_PREVIOUS',
+            actionType: 'SECURITY',
+            severity: 'warning',
+            entityType: 'Session',
+            entityId: kickedSessions[0]?.sessionId,
+            entityName: newSession.staffName,
+            summary: `${newSession.staffName} signed in on ${newSession.deviceName} — auto-logged out ${kickedSessions.length} earlier device(s)`,
+            details: { kickedDevices: kickedSessions.map((k) => k.deviceName), newDevice: newSession.deviceName },
+          },
+          { ip: clientIp, deviceId: newSession.deviceId, deviceName: newSession.deviceName }
         );
         broadcastToClients({
           type: 'FORCE_LOGOUT_DEVICE',
@@ -4455,6 +4750,159 @@ async function handleRequest(req, res) {
       users,
       timestamp: Date.now()
     }));
+    return;
+  }
+
+  // -------------------------------------------------------------
+  // HIGH-THROUGHPUT SYSTEM AUDIT & ACTIVITY LOGS API (100+ logs/sec)
+  // -------------------------------------------------------------
+
+  // POST /api/system-logs/batch (Ingest batch of client audit events -> NDJSON + live WS broadcast)
+  if (url.pathname === '/api/system-logs/batch' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const rawLogs = Array.isArray(payload?.logs) ? payload.logs : (payload && payload.action ? [payload] : []);
+      const accepted = appendSystemLogs(rawLogs, {
+        ip: clientIp,
+        senderId: rawLogs[0]?.deviceId || 'CLIENT_AUDIT',
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, ingested: accepted.length, totalStored: systemLogsMemory.length }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  // GET /api/system-logs (Filter, search, paginate & real-time analytics across all roles & modules)
+  if (url.pathname === '/api/system-logs' && req.method === 'GET') {
+    const result = querySystemLogs({
+      q: url.searchParams.get('q') || '',
+      role: url.searchParams.get('role') || '',
+      actor: url.searchParams.get('actor') || '',
+      module: url.searchParams.get('module') || '',
+      actionType: url.searchParams.get('actionType') || '',
+      severity: url.searchParams.get('severity') || '',
+      page: url.searchParams.get('page') || '',
+      dateFrom: Number(url.searchParams.get('dateFrom') || 0),
+      dateTo: Number(url.searchParams.get('dateTo') || 0),
+      limit: Number(url.searchParams.get('limit') || 200),
+      offset: Number(url.searchParams.get('offset') || 0),
+    });
+    const analytics = computeSystemLogAnalytics();
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(
+      JSON.stringify({
+        success: true,
+        total: result.total,
+        filteredTotal: result.filteredTotal,
+        logs: result.logs,
+        analytics,
+        timestamp: Date.now(),
+      })
+    );
+    return;
+  }
+
+  // GET /api/system-logs/export (Download filtered or full logs as CSV or JSON)
+  if (url.pathname === '/api/system-logs/export' && req.method === 'GET') {
+    const format = (url.searchParams.get('format') || 'csv').toLowerCase();
+    const result = querySystemLogs({
+      q: url.searchParams.get('q') || '',
+      role: url.searchParams.get('role') || '',
+      actor: url.searchParams.get('actor') || '',
+      module: url.searchParams.get('module') || '',
+      actionType: url.searchParams.get('actionType') || '',
+      severity: url.searchParams.get('severity') || '',
+      dateFrom: Number(url.searchParams.get('dateFrom') || 0),
+      dateTo: Number(url.searchParams.get('dateTo') || 0),
+      limit: 50000,
+      offset: 0,
+    });
+    const dateStamp = new Date().toISOString().slice(0, 10);
+    if (format === 'json') {
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="sultan-system-logs-${dateStamp}.json"`,
+      });
+      res.end(JSON.stringify({ exportedAt: new Date().toISOString(), count: result.allMatched.length, logs: result.allMatched }, null, 2));
+      return;
+    }
+    const csvEscape = (v) => {
+      const s = v === undefined || v === null ? '' : String(v);
+      return `"${s.replace(/"/g, '""')}"`;
+    };
+    const header = ['Timestamp', 'ID', 'Seq', 'Actor', 'Username', 'Role', 'Module', 'ActionType', 'Action', 'Severity', 'Page', 'Device', 'IP', 'Entity', 'Amount_PKR', 'Summary', 'Details'].join(',');
+    const rows = result.allMatched.map((l) =>
+      [
+        l.isoTime,
+        l.id,
+        l.seq,
+        l.actorName,
+        l.actorUsername || '',
+        l.actorRole,
+        l.module,
+        l.actionType,
+        l.action,
+        l.severity,
+        l.page,
+        l.deviceName,
+        l.ip || '',
+        l.entityName || l.entityId || '',
+        l.amount !== undefined ? l.amount : '',
+        l.summary,
+        l.details ? JSON.stringify(l.details) : '',
+      ].map(csvEscape).join(',')
+    );
+    res.writeHead(200, {
+      'Content-Type': 'text/csv; charset=utf-8',
+      'Content-Disposition': `attachment; filename="sultan-system-logs-${dateStamp}.csv"`,
+    });
+    res.end([header, ...rows].join('\r\n'));
+    return;
+  }
+
+  // POST /api/system-logs/archive (Safely archive current logs to disk before starting fresh log window)
+  if (url.pathname === '/api/system-logs/archive' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const actorName = payload?.actorName || 'Master Admin';
+      const actorRole = payload?.actorRole || 'Master Admin';
+      const archivedCount = systemLogsMemory.length;
+      if (pendingDiskLogLines.length > 0) {
+        try {
+          fs.appendFileSync(SYSTEM_LOGS_FILE, pendingDiskLogLines.splice(0).join('\n') + '\n', 'utf8');
+        } catch (_) {}
+      }
+      let archiveName = '';
+      if (fs.existsSync(SYSTEM_LOGS_FILE)) {
+        archiveName = `system-logs-archive-${Date.now()}.ndjson`;
+        fs.renameSync(SYSTEM_LOGS_FILE, path.join(__dirname, archiveName));
+      }
+      systemLogsMemory = [];
+      seenSystemLogIds.clear();
+      appendSystemLogs(
+        {
+          actorId: payload?.actorId || 'st-master',
+          actorName,
+          actorRole,
+          page: '/admin/system-logs',
+          module: 'ROLES_SECURITY',
+          action: 'ARCHIVE_SYSTEM_LOGS',
+          actionType: 'SECURITY',
+          severity: 'warning',
+          summary: `${actorName} archived ${archivedCount} previous system log(s)${archiveName ? ` into ${archiveName}` : ''}`,
+          details: { archivedCount, archiveName },
+        },
+        { ip: clientIp }
+      );
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, archivedCount, archiveName }));
+    } catch (e) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
     return;
   }
 
@@ -5576,6 +6024,25 @@ async function handleRequest(req, res) {
         timestamp: Date.now(),
         details: `Placed order #${newOrder.orderNumber} (Rs. ${grandTotal.toLocaleString()})`
       });
+      appendSystemLogs(
+        {
+          actorId: newOrder.customer?.id || customerPhone || 'customer',
+          actorName: customerName || 'Customer',
+          actorRole: orderType === 'delivery' ? 'Delivery' : 'Customer',
+          page: orderType === 'dine_in' ? '/menu' : '/api/public/orders',
+          module: 'ONLINE_DELIVERY',
+          action: 'PUBLIC_ORDER_PLACED',
+          actionType: 'PLACE',
+          severity: 'success',
+          entityType: 'OnlineOrder',
+          entityId: newOrder.id,
+          entityName: newOrder.orderNumber,
+          amount: Number(grandTotal || 0),
+          summary: `${customerName || 'Guest'} placed ${orderType.toUpperCase()} order #${newOrder.orderNumber} (${(newOrder.items || []).length} items, Rs. ${Number(grandTotal || 0).toLocaleString()})`,
+          details: { orderNumber: newOrder.orderNumber, orderType, tableName: newOrder.tableName, customerPhone, itemsCount: (newOrder.items || []).length, total: grandTotal },
+        },
+        { ip: clientIp }
+      );
 
       persistState();
 
@@ -5826,6 +6293,25 @@ async function handleRequest(req, res) {
       }
 
       persistState();
+      appendSystemLogs(
+        {
+          actorId: riderName || assignedWaiter || 'staff',
+          actorName: riderName || assignedWaiter || 'Order / Delivery Operator',
+          actorRole: riderName || status === 'OUT_FOR_DELIVERY' || status === 'DELIVERED' ? 'Delivery' : 'Manager',
+          page: '/admin/app-orders',
+          module: 'ONLINE_DELIVERY',
+          action: `ONLINE_ORDER_${status}`,
+          actionType: status === 'CANCELLED' ? 'CANCEL' : 'STATUS_CHANGE',
+          severity: status === 'CANCELLED' ? 'critical' : (status === 'DELIVERED' || status === 'SERVED' ? 'success' : 'info'),
+          entityType: 'OnlineOrder',
+          entityId: order.id,
+          entityName: order.orderNumber,
+          amount: Number(order.total || 0),
+          summary: `Order #${order.orderNumber} (${order.orderType}) marked ${status}${riderName ? ` • Rider: ${riderName}` : ''}${assignedWaiter ? ` • Server: ${assignedWaiter}` : ''}${managerNotes ? ` (${managerNotes})` : ''}`,
+          details: { orderId: order.id, orderNumber: order.orderNumber, status, riderName, riderPhone, assignedWaiter, managerNotes },
+        },
+        { ip: clientIp }
+      );
 
       broadcastToClients({
         type: 'ORDER_STATUS_CHANGED',
@@ -6151,6 +6637,22 @@ async function handleRequest(req, res) {
     serverState.lastUpdated = now;
     lastStateFingerprint = computeStateFingerprint(serverState);
     persistState();
+    appendSystemLogs(
+      {
+        actorId: 'admin',
+        actorName: 'POS Clear All',
+        actorRole: 'Admin',
+        page: '/admin/pos',
+        module: 'POS_ORDERS',
+        action: 'POS_CLEAR_ALL_TABLES_TICKETS',
+        actionType: 'DELETE',
+        severity: 'critical',
+        entityType: 'POS',
+        summary: `CRITICAL: Cleared ALL active POS tickets (${removedIds.length}) and reset occupied tables`,
+        details: { clearedTicketCount: removedIds.length },
+      },
+      { ip: clientIp }
+    );
     broadcastToClients({
       type: 'SERVER_BROADCAST',
       state: serverState,
@@ -6226,6 +6728,24 @@ async function handleRequest(req, res) {
       const primaryResult = results.length === 1
         ? results[0]
         : { success: results.some((r) => r.success), results };
+      appendSystemLogs(
+        {
+          actorId: data.ticket?.server || 'kds',
+          actorName: data.ticket?.server || 'KOT Printer',
+          actorRole: requestedStation === 'juice' ? 'Juice Bar' : 'Kitchen',
+          page: '/api/print/kot',
+          module: 'PRINTING',
+          action: isForceReprint ? 'REPRINT_KOT' : 'PRINT_KOT',
+          actionType: 'PRINT',
+          severity: 'info',
+          entityType: 'Ticket',
+          entityId: tId,
+          entityName: data.ticket?.tableName || tId,
+          summary: `${isForceReprint ? 'Reprinted' : 'Printed'} ${requestedStation.toUpperCase()} KOT #${tId} for ${data.ticket?.tableName || 'Table'}`,
+          details: { ticketId: tId, station: requestedStation, forceReprint: isForceReprint, success: primaryResult?.success },
+        },
+        { ip: clientIp }
+      );
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(primaryResult));
     } catch (err) {
@@ -6254,6 +6774,25 @@ async function handleRequest(req, res) {
       const cfg = getStationPrinterConfig('main');
       const targetPrinter = data.printerName || (cfg && cfg.printerName && cfg.printerName !== 'AUTO' ? cfg.printerName : 'POS-80');
       const result = await printerHelper.printRawBufferToWindows(buffer, targetPrinter, data.invoice.id);
+      appendSystemLogs(
+        {
+          actorId: data.invoice?.server || 'cashier',
+          actorName: data.invoice?.server || 'Cashier POS',
+          actorRole: 'Cashier',
+          page: '/api/print/bill',
+          module: 'PRINTING',
+          action: 'PRINT_THERMAL_BILL',
+          actionType: 'PRINT',
+          severity: 'info',
+          entityType: 'Invoice',
+          entityId: data.invoice?.id,
+          entityName: data.invoice?.tableName || data.invoice?.id,
+          amount: Number(data.invoice?.total || 0),
+          summary: `Printed thermal bill receipt ${data.invoice?.id || ''} (${data.invoice?.tableName || 'Counter'}) — Rs. ${Number(data.invoice?.total || 0).toLocaleString()}`,
+          details: { invoiceId: data.invoice?.id, printer: targetPrinter, total: data.invoice?.total },
+        },
+        { ip: clientIp }
+      );
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, result }));
     } catch (err) {

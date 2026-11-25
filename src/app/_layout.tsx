@@ -12,6 +12,7 @@ import WaiterNotificationHost from '../components/WaiterNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
 import SessionSecurityHost from '../components/SessionSecurityHost';
 import CentralUpdateHost from '../components/CentralUpdateHost';
+import SystemLogHost from '../components/SystemLogHost';
 
 // Ignore benign web font loading timeouts and offline firestore notices in Expo LogBox
 LogBox.ignoreLogs([
@@ -457,6 +458,8 @@ export default function RootLayout() {
       <SessionSecurityHost />
       {/* Central Auto-Updater for 10 Android Tablets & 7 Windows PCs */}
       <CentralUpdateHost />
+      {/* Universal Real-Time System Audit & Activity Logs Interceptor + Page Tracker */}
+      <SystemLogHost />
     </>
   );
 }
