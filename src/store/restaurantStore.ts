@@ -1856,25 +1856,30 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
 
         if (station) {
+          const now = Date.now();
+          const updatedItems = ticket.items.map(item => {
+            const itemSt = resolveMenuCatalogStation(item, state.menuItems, useSettingsStore.getState().settings.kdsAutoRouteBeverages !== false);
+            if ((item.station || itemSt) === station || itemSt === station) {
+              return { ...item, station: itemSt, itemStatus: 'served' as const, completed: true, servedAt: item.servedAt || now };
+            }
+            return { ...item, station: item.station || itemSt };
+          });
+
+          const hasMainItems = updatedItems.some(i => (i.station || 'main') === 'main');
+          const hasJuiceItems = updatedItems.some(i => i.station === 'juice');
           const currentStationStatuses: StationStatusMap = {
-            main: ticket.items.some(i => (i.station || 'main') === 'main')
-              ? (ticket.stationStatuses?.main || ticket.status)
+            main: hasMainItems
+              ? (station === 'main' ? 'served' : (ticket.stationStatuses?.main || (updatedItems.filter(i => (i.station || 'main') === 'main').every(i => i.itemStatus === 'served') ? 'served' : updatedItems.filter(i => (i.station || 'main') === 'main').every(i => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed) ? 'ready' : ticket.status)))
               : undefined,
-            juice: ticket.items.some(i => (i.station || 'main') === 'juice')
-              ? (ticket.stationStatuses?.juice || ticket.status)
+            juice: hasJuiceItems
+              ? (station === 'juice' ? 'served' : (ticket.stationStatuses?.juice || (updatedItems.filter(i => i.station === 'juice').every(i => i.itemStatus === 'served') ? 'served' : updatedItems.filter(i => i.station === 'juice').every(i => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed) ? 'ready' : ticket.status)))
               : undefined,
           };
           currentStationStatuses[station] = 'served';
 
-          const updatedItems = ticket.items.map(item => {
-            if ((item.station || 'main') === station) {
-              return { ...item, itemStatus: 'served' as const, completed: true };
-            }
-            return item;
-          });
-
-          const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
-          const overallStatus = activeStatuses.length > 0 && activeStatuses.every(s => s === 'served')
+          const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
+          const allItemsServed = updatedItems.length > 0 && updatedItems.every(i => i.itemStatus === 'served');
+          const overallStatus: Ticket['status'] = (allItemsServed || (activeStatuses.length > 0 && activeStatuses.every(s => s === 'served')))
             ? 'served'
             : (activeStatuses.every(s => s === 'ready' || s === 'served') ? 'ready' : 'cooking');
 
@@ -1914,38 +1919,45 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (t.id !== ticketId) return t;
 
           if (station) {
+            const now = Date.now();
+            const autoRouteBev = useSettingsStore.getState().settings.kdsAutoRouteBeverages !== false;
+            const updatedItems = t.items.map(item => {
+              const itemSt = resolveMenuCatalogStation(item, state.menuItems, autoRouteBev);
+              if ((item.station || itemSt) === station || itemSt === station) {
+                if (status === 'served') {
+                  return { ...item, station: itemSt, itemStatus: 'served' as const, completed: true, servedAt: item.servedAt || now };
+                } else if (status === 'ready') {
+                  return { ...item, station: itemSt, itemStatus: 'ready' as const, completed: true, readyAt: item.readyAt || now };
+                } else if (status === 'cooking') {
+                  return { ...item, station: itemSt, itemStatus: 'cooking' as const, completed: false };
+                }
+              }
+              return { ...item, station: item.station || itemSt };
+            });
+
+            const hasMainItems = updatedItems.some(i => (i.station || 'main') === 'main');
+            const hasJuiceItems = updatedItems.some(i => i.station === 'juice');
             const currentStationStatuses: StationStatusMap = {
-              main: t.items.some(i => (i.station || 'main') === 'main')
-                ? (t.stationStatuses?.main || t.status)
+              main: hasMainItems
+                ? (station === 'main' ? status : (t.stationStatuses?.main || t.status))
                 : undefined,
-              juice: t.items.some(i => (i.station || 'main') === 'juice')
-                ? (t.stationStatuses?.juice || t.status)
+              juice: hasJuiceItems
+                ? (station === 'juice' ? status : (t.stationStatuses?.juice || t.status))
                 : undefined,
             };
             currentStationStatuses[station] = status;
 
-            const updatedItems = t.items.map(item => {
-              if ((item.station || 'main') === station) {
-                if (status === 'served') {
-                  return { ...item, itemStatus: 'served' as const, completed: true };
-                } else if (status === 'ready') {
-                  return { ...item, itemStatus: 'ready' as const, completed: true, readyAt: item.readyAt || Date.now() };
-                } else if (status === 'cooking') {
-                  return { ...item, itemStatus: 'cooking' as const, completed: false };
-                }
-              }
-              return item;
-            });
-
-            const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+            const activeStatuses = Object.values(currentStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
             let overallStatus: Ticket['status'] = t.status;
             if (activeStatuses.length > 0) {
               if (activeStatuses.every(s => s === 'served')) {
                 overallStatus = 'served';
               } else if (activeStatuses.every(s => s === 'ready' || s === 'served')) {
                 overallStatus = 'ready';
-              } else {
+              } else if (activeStatuses.some(s => s === 'cooking' || s === 'ready' || s === 'served')) {
                 overallStatus = 'cooking';
+              } else {
+                overallStatus = 'pending';
               }
             } else {
               overallStatus = status;
@@ -2018,7 +2030,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               ...t,
               items: updatedItems,
               stationStatuses: currentStationStatuses,
-              status: overallStatus
+              status: overallStatus,
+              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt
             };
           }
 
@@ -3915,29 +3928,51 @@ export const useRestaurantStore = create<RestaurantState>()(
                 // Merge items to preserve item-level 'ready' or 'served' status
                 if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {
                   const itemRank: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
-                  const mergedItems = (finalTicket.items || []).map((curItem) => {
-                    const localItem = local.items.find((li) => li.id === curItem.id);
-                    const remoteItem = rt.items.find((ri) => ri.id === curItem.id);
+                  const mergedItems = (finalTicket.items || []).map((curItem, idx) => {
+                    const localItem = local.items.find((li, lIdx) => li.id === curItem.id && (lIdx === idx || !local.items.some((x, xIdx) => xIdx !== lIdx && x.id === curItem.id))) || local.items.find((li) => li.id === curItem.id);
+                    const remoteItem = rt.items.find((ri, rIdx) => ri.id === curItem.id && (rIdx === idx || !rt.items.some((x, xIdx) => xIdx !== rIdx && x.id === curItem.id))) || rt.items.find((ri) => ri.id === curItem.id);
                     const lRank = localItem?.itemStatus ? itemRank[localItem.itemStatus] ?? 0 : (localItem?.completed ? 2 : 0);
                     const rRank = remoteItem?.itemStatus ? itemRank[remoteItem.itemStatus] ?? 0 : (remoteItem?.completed ? 2 : 0);
                     if (lRank > rRank && localItem) {
-                      return { ...curItem, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt };
+                      return { ...curItem, station: localItem.station || curItem.station, itemStatus: localItem.itemStatus, completed: localItem.completed, readyAt: localItem.readyAt || curItem.readyAt, servedAt: localItem.servedAt || curItem.servedAt };
                     } else if (remoteItem) {
-                      return { ...curItem, itemStatus: remoteItem.itemStatus, completed: remoteItem.completed, readyAt: remoteItem.readyAt };
+                      return { ...curItem, station: remoteItem.station || curItem.station, itemStatus: remoteItem.itemStatus, completed: remoteItem.completed, readyAt: remoteItem.readyAt || curItem.readyAt, servedAt: remoteItem.servedAt || curItem.servedAt };
                     }
                     return curItem;
                   });
                   finalTicket.items = mergedItems;
                 }
 
+                // Ensure station-level 'served' or 'ready' propagates to all items of that station
+                if (Array.isArray(finalTicket.items)) {
+                  finalTicket.items = finalTicket.items.map((it) => {
+                    const st = (it.station || 'main') as 'main' | 'juice';
+                    const stStatus = mergedStationStatuses[st];
+                    if (stStatus === 'served') {
+                      return { ...it, itemStatus: 'served' as const, completed: true };
+                    }
+                    if (stStatus === 'ready' && it.itemStatus !== 'served') {
+                      return { ...it, itemStatus: 'ready' as const, completed: true, readyAt: it.readyAt || finalTicket.readyAt || Date.now() };
+                    }
+                    return it;
+                  });
+                }
+
+                // Only evaluate active station statuses for stations that actually have items on this ticket
+                const hasMainOnTicket = Array.isArray(finalTicket.items) && finalTicket.items.some((it) => (it.station || 'main') === 'main');
+                const hasJuiceOnTicket = Array.isArray(finalTicket.items) && finalTicket.items.some((it) => it.station === 'juice');
+                if (!hasMainOnTicket) delete mergedStationStatuses.main;
+                if (!hasJuiceOnTicket) delete mergedStationStatuses.juice;
+                finalTicket.stationStatuses = mergedStationStatuses;
+
                 // If station statuses indicate served/ready, reflect on overall status
-                const activeStVals = Object.values(mergedStationStatuses).filter(Boolean) as ('cooking' | 'ready' | 'served')[];
+                const activeStVals = Object.values(mergedStationStatuses).filter(Boolean) as ('pending' | 'cooking' | 'ready' | 'served')[];
                 if (activeStVals.length > 0) {
                   if (activeStVals.every((s) => s === 'served')) {
                     finalTicket.status = 'served';
                   } else if (activeStVals.every((s) => s === 'ready' || s === 'served')) {
                     finalTicket.status = 'ready';
-                  } else if (activeStVals.some((s) => s === 'cooking')) {
+                  } else if (activeStVals.some((s) => s === 'cooking' || s === 'ready' || s === 'served')) {
                     finalTicket.status = 'cooking';
                   }
                 }

@@ -1267,7 +1267,7 @@ export async function initSyncService() {
     if (debounceMutationTimer) clearTimeout(debounceMutationTimer);
     debounceMutationTimer = setTimeout(() => {
       broadcastLocalState();
-    }, 50);
+    }, 180);
   };
 
   // Listen to local restaurant store mutations

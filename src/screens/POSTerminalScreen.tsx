@@ -289,6 +289,10 @@ export default function POSTerminalScreen({
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
   const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const activeRunningTickets = useMemo(
+    () => tickets.filter((t) => t && t.status !== 'served'),
+    [tickets]
+  );
   const invoices = useRestaurantStore((state) => state.invoices) || [];
 
   const systemSettings = useSettingsStore((s) => s.settings);
@@ -1836,13 +1840,13 @@ export default function POSTerminalScreen({
         <View style={styles.topBarRight}>
           {/* Running KDS Orders */}
           <TouchableOpacity
-            style={[styles.topActionBtn, tickets.length > 0 && styles.topActionBtnHighlight]}
+            style={[styles.topActionBtn, activeRunningTickets.length > 0 && styles.topActionBtnHighlight]}
             onPress={() => setPendingOrdersModalVisible(true)}
           >
-            <Ionicons name="flame" size={15} color={tickets.length > 0 ? '#F59E0B' : '#F3D179'} />
+            <Ionicons name="flame" size={15} color={activeRunningTickets.length > 0 ? '#F59E0B' : '#F3D179'} />
             {!isMobile && <Text style={styles.topActionText}>Running</Text>}
             <View style={styles.topCountBadge}>
-              <Text style={styles.topCountBadgeText}>{tickets.length}</Text>
+              <Text style={styles.topCountBadgeText}>{activeRunningTickets.length}</Text>
             </View>
           </TouchableOpacity>
 
@@ -1952,9 +1956,9 @@ export default function POSTerminalScreen({
               mobileTab === 'running' && { color: '#FFFFFF', fontWeight: '900' },
             ]}
           >
-            3. Running KDS & Prep Time ({tickets.length})
+            3. Running KDS & Prep Time ({activeRunningTickets.length})
           </Text>
-          {tickets.length > 0 && (
+          {activeRunningTickets.length > 0 && (
             <View
               style={{
                 backgroundColor: mobileTab === 'running' ? '#FFFFFF' : '#FEF3C7',
@@ -1972,7 +1976,7 @@ export default function POSTerminalScreen({
                   fontWeight: '900',
                 }}
               >
-                {tickets.length} Live
+                {activeRunningTickets.length} Live
               </Text>
             </View>
           )}
@@ -3009,7 +3013,7 @@ export default function POSTerminalScreen({
             >
               <View>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>
-                  Running Kitchen Orders & Pending Bills ({tickets.length})
+                  Running Kitchen Orders & Pending Bills ({activeRunningTickets.length} Active{tickets.length > activeRunningTickets.length ? ` • ${tickets.length - activeRunningTickets.length} Dispatched` : ''})
                 </Text>
                 <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
                   Live second-by-second kitchen preparation countdown timer for all active orders
@@ -3051,7 +3055,8 @@ export default function POSTerminalScreen({
                 .map((t) => {
                   const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
                   const prepEst = estimateOrderPrepTime(t.items, menuItems, t.timePlaced, nowTick);
-                  const isReady = t.status === 'ready';
+                  const isServed = t.status === 'served';
+                  const isReady = t.status === 'ready' || isServed;
                   const isOverdue = !isReady && prepEst.remainingSeconds === 0 && prepEst.elapsedSeconds >= prepEst.totalPrepSeconds;
 
                   return (
@@ -3061,7 +3066,7 @@ export default function POSTerminalScreen({
                         backgroundColor: '#FFFFFF',
                         borderRadius: 14,
                         borderWidth: 1.5,
-                        borderColor: isReady ? '#22C55E' : isOverdue ? '#EF4444' : '#E2E8F0',
+                        borderColor: isServed ? '#94A3B8' : isReady ? '#22C55E' : isOverdue ? '#EF4444' : '#E2E8F0',
                         padding: 16,
                         gap: 12,
                       }}
@@ -3074,7 +3079,7 @@ export default function POSTerminalScreen({
                           </Text>
                           <View
                             style={{
-                              backgroundColor: isReady ? '#DCFCE7' : '#FEF3C7',
+                              backgroundColor: isServed ? '#E2E8F0' : isReady ? '#DCFCE7' : '#FEF3C7',
                               paddingHorizontal: 10,
                               paddingVertical: 4,
                               borderRadius: 8,
@@ -3084,10 +3089,10 @@ export default function POSTerminalScreen({
                               style={{
                                 fontSize: 12,
                                 fontWeight: '900',
-                                color: isReady ? '#15803D' : '#B45309',
+                                color: isServed ? '#334155' : isReady ? '#15803D' : '#B45309',
                               }}
                             >
-                              {(t.status || 'pending').toUpperCase()}
+                              {isServed ? 'DISPATCHED / SERVED' : (t.status || 'pending').toUpperCase()}
                             </Text>
                           </View>
                           <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
@@ -3165,7 +3170,7 @@ export default function POSTerminalScreen({
 
                           <View
                             style={{
-                              backgroundColor: isReady ? '#16A34A' : isOverdue ? '#DC2626' : '#D97706',
+                              backgroundColor: isServed ? '#475569' : isReady ? '#16A34A' : isOverdue ? '#DC2626' : '#D97706',
                               paddingHorizontal: 14,
                               paddingVertical: 6,
                               borderRadius: 8,
@@ -3183,11 +3188,13 @@ export default function POSTerminalScreen({
                                 fontVariant: ['tabular-nums'],
                               }}
                             >
-                              {isReady
-                                ? 'ORDER READY TO SERVE'
-                                : prepEst.remainingSeconds > 0
-                                  ? `TIME LEFT: ${prepEst.countdownText}`
-                                  : `OVERDUE (${prepEst.elapsedText} ELAPSED)`}
+                              {isServed
+                                ? 'DISPATCHED FROM KITCHEN'
+                                : isReady
+                                  ? 'ORDER READY TO SERVE'
+                                  : prepEst.remainingSeconds > 0
+                                    ? `TIME LEFT: ${prepEst.countdownText}`
+                                    : `OVERDUE (${prepEst.elapsedText} ELAPSED)`}
                             </Text>
                           </View>
                         </View>
@@ -4025,7 +4032,8 @@ export default function POSTerminalScreen({
                   .map((t) => {
                     const tSub = t.items.reduce((s, i) => s + i.price * i.qty, 0);
                     const prepEst = estimateOrderPrepTime(t.items, menuItems, t.timePlaced, nowTick);
-                    const isReady = t.status === 'ready';
+                    const isServed = t.status === 'served';
+                    const isReady = t.status === 'ready' || isServed;
                     return (
                       <View key={t.id} style={styles.runningOrderCard}>
                         <View style={{ flex: 1, gap: 4 }}>
@@ -4034,37 +4042,39 @@ export default function POSTerminalScreen({
                               {t.tableName || t.tableId?.toUpperCase() || 'TAKEAWAY'}
                             </Text>
                             <View style={styles.runningStatusPill}>
-                              <Text style={styles.runningStatusText}>{(t.status || 'pending').toUpperCase()}</Text>
+                              <Text style={styles.runningStatusText}>{isServed ? 'DISPATCHED' : (t.status || 'pending').toUpperCase()}</Text>
                             </View>
                             <View
                               style={{
                                 flexDirection: 'row',
                                 alignItems: 'center',
                                 gap: 4,
-                                backgroundColor: isReady ? '#DCFCE7' : '#FFFBEB',
+                                backgroundColor: isServed ? '#F1F5F9' : isReady ? '#DCFCE7' : '#FFFBEB',
                                 borderWidth: 1,
-                                borderColor: isReady ? '#22C55E' : '#F59E0B',
+                                borderColor: isServed ? '#94A3B8' : isReady ? '#22C55E' : '#F59E0B',
                                 paddingHorizontal: 8,
                                 paddingVertical: 2,
                                 borderRadius: 6,
                               }}
                             >
                               <Ionicons
-                                name="time-outline"
+                                name={isServed ? 'checkmark-done' : 'time-outline'}
                                 size={13}
-                                color={isReady ? '#15803D' : '#B45309'}
+                                color={isServed ? '#334155' : isReady ? '#15803D' : '#B45309'}
                               />
                               <Text
                                 style={{
                                   fontSize: 11.5,
                                   fontWeight: '900',
-                                  color: isReady ? '#15803D' : '#B45309',
+                                  color: isServed ? '#334155' : isReady ? '#15803D' : '#B45309',
                                   fontVariant: ['tabular-nums'],
                                 }}
                               >
-                                {isReady
-                                  ? 'Ready to Serve!'
-                                  : `Prep: ${prepEst.totalPrepMins}m • Time Left: ${prepEst.remainingSeconds > 0 ? prepEst.countdownText : 'Due now'}`}
+                                {isServed
+                                  ? 'Dispatched from Kitchen'
+                                  : isReady
+                                    ? 'Ready to Serve!'
+                                    : `Prep: ${prepEst.totalPrepMins}m • Time Left: ${prepEst.remainingSeconds > 0 ? prepEst.countdownText : 'Due now'}`}
                               </Text>
                             </View>
                             <Text style={{ fontSize: 12, color: '#64748B' }}>#{t.id.slice(-5)}</Text>

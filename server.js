@@ -3627,19 +3627,28 @@ setInterval(() => {
   for (const ticket of serverState.tickets) {
     if (!ticket || !ticket.id) continue;
 
-    // 1. Pending -> Cooking after 30s
-    if (ticket.status === 'pending') {
+    const hasMainIt = Array.isArray(ticket.items) && ticket.items.some(i => (i?.station || 'main') === 'main');
+    const hasJuiceIt = Array.isArray(ticket.items) && ticket.items.some(i => i?.station === 'juice');
+    if (!ticket.stationStatuses) ticket.stationStatuses = {};
+    if (hasMainIt && !ticket.stationStatuses.main) ticket.stationStatuses.main = ticket.status || 'pending';
+    if (hasJuiceIt && !ticket.stationStatuses.juice) ticket.stationStatuses.juice = ticket.status || 'pending';
+    if (!hasMainIt) delete ticket.stationStatuses.main;
+    if (!hasJuiceIt) delete ticket.stationStatuses.juice;
+
+    // 1. Pending -> Cooking after 30s (checks overall OR per-station pending)
+    const isAnyPending = ticket.status === 'pending' ||
+      (hasMainIt && ticket.stationStatuses.main === 'pending') ||
+      (hasJuiceIt && ticket.stationStatuses.juice === 'pending');
+
+    if (isAnyPending) {
       const placedAt = ticket.timePlaced || now;
       const elapsedMs = now - placedAt;
 
       if (elapsedMs >= 30000 && !autoStartedServerTicketIds.has(ticket.id)) {
         autoStartedServerTicketIds.add(ticket.id);
-        ticket.status = 'cooking';
-        ticket.cookingStartedAt = now;
+        if (ticket.status === 'pending') ticket.status = 'cooking';
+        if (!ticket.cookingStartedAt) ticket.cookingStartedAt = now;
 
-        const hasMainIt = Array.isArray(ticket.items) && ticket.items.some(i => (i?.station || 'main') === 'main');
-        const hasJuiceIt = Array.isArray(ticket.items) && ticket.items.some(i => i?.station === 'juice');
-        if (!ticket.stationStatuses) ticket.stationStatuses = {};
         if (hasMainIt && (!ticket.stationStatuses.main || ticket.stationStatuses.main === 'pending')) {
           ticket.stationStatuses.main = 'cooking';
         }
@@ -3782,29 +3791,44 @@ setInterval(() => {
       }
     }
 
-    // 3. Ready -> Served (Dispatched) after 1.5 minutes (90 seconds)
-    else if (ticket.status === 'ready') {
+    // 3. Ready -> Served (Dispatched) after 1.5 minutes (90 seconds) — works both overall and per-station!
+    else if (
+      ticket.status === 'ready' ||
+      (hasMainIt && ticket.stationStatuses.main === 'ready') ||
+      (hasJuiceIt && ticket.stationStatuses.juice === 'ready')
+    ) {
       const items = Array.isArray(ticket.items) ? ticket.items : [];
       const readyAt = ticket.readyAt || Math.max(0, ...items.map(i => i.readyAt || 0)) || ticket.timePlaced || now;
       const elapsedReadyMs = now - readyAt;
 
       if (elapsedReadyMs >= 90000 && !autoDispatchedServerTicketIds.has(ticket.id)) {
         autoDispatchedServerTicketIds.add(ticket.id);
-        ticket.status = 'served';
-
-        if (!ticket.stationStatuses) {
-          ticket.stationStatuses = { main: 'served', juice: 'served' };
-        } else {
-          if (ticket.stationStatuses.main) ticket.stationStatuses.main = 'served';
-          if (ticket.stationStatuses.juice) ticket.stationStatuses.juice = 'served';
+        if (hasMainIt && ticket.stationStatuses.main === 'ready') {
+          ticket.stationStatuses.main = 'served';
+        }
+        if (hasJuiceIt && ticket.stationStatuses.juice === 'ready') {
+          ticket.stationStatuses.juice = 'served';
         }
 
         if (Array.isArray(ticket.items)) {
-          ticket.items = ticket.items.map(it => ({
-            ...it,
-            itemStatus: 'served',
-            completed: true,
-          }));
+          ticket.items = ticket.items.map(it => {
+            const st = it?.station === 'juice' ? 'juice' : 'main';
+            if (ticket.stationStatuses[st] === 'served' || it.itemStatus === 'ready') {
+              return {
+                ...it,
+                itemStatus: 'served',
+                completed: true,
+              };
+            }
+            return it;
+          });
+        }
+
+        const activeStVals = Object.values(ticket.stationStatuses).filter(Boolean);
+        if (activeStVals.length === 0 || activeStVals.every(s => s === 'served')) {
+          ticket.status = 'served';
+        } else if (activeStVals.every(s => s === 'ready' || s === 'served')) {
+          ticket.status = 'ready';
         }
 
         if (serverState.lastFoodReadyAlert && serverState.lastFoodReadyAlert.ticketId === ticket.id) {
@@ -5622,7 +5646,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 32,
+        apkVersion: 33,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -7766,13 +7790,29 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             }
             chosen.stationStatuses = mergedStationStatuses;
 
+            // Propagate stationStatuses ('served' / 'ready') down to station items so items and stations never desync
+            if (Array.isArray(chosen.items)) {
+              chosen.items = chosen.items.map(it => {
+                const st = it?.station === 'juice' ? 'juice' : 'main';
+                const stStatus = mergedStationStatuses[st];
+                if (stStatus === 'served') {
+                  return { ...it, completed: true, itemStatus: 'served' };
+                }
+                if (stStatus === 'ready' && it.itemStatus !== 'served') {
+                  return { ...it, completed: true, itemStatus: 'ready', readyAt: it.readyAt || chosen.readyAt || Date.now() };
+                }
+                return it;
+              });
+            }
+
             const activeStVals = Object.values(mergedStationStatuses).filter(Boolean);
             if (activeStVals.length > 0) {
               if (activeStVals.every(s => s === 'served')) {
                 chosen.status = 'served';
               } else if (activeStVals.every(s => s === 'ready' || s === 'served')) {
                 chosen.status = 'ready';
-              } else if (activeStVals.some(s => s === 'cooking')) {
+                if (!chosen.readyAt) chosen.readyAt = ext.readyAt || inc.readyAt || Date.now();
+              } else if (activeStVals.some(s => s === 'cooking' || s === 'ready' || s === 'served')) {
                 chosen.status = 'cooking';
               }
             }

@@ -23,6 +23,7 @@ import FullscreenButton from '../../components/FullscreenButton';
 import OrderSlip, { printOrderSlip } from '../../components/OrderSlip';
 import StationPrinterModal from '../../components/StationPrinterModal';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
+import { resolveMenuCatalogStation } from '../../utils/stationRouting';
 import {
   enqueueKdsAutoPrint,
   markKdsTicketPrinted,
@@ -81,6 +82,7 @@ export default function KitchenDisplayScreen() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const tickets = useRestaurantStore((state) => state.tickets);
+  const menuItems = useRestaurantStore((state) => state.menuItems);
   const systemSettings = useSettingsStore((s) => s.settings);
   const toggleItem = useRestaurantStore((state) => state.toggleTicketItem);
   const bumpTicket = useRestaurantStore((state) => state.bumpTicket);
@@ -245,13 +247,16 @@ export default function KitchenDisplayScreen() {
     return () => clearInterval(id);
   }, []);
 
+  const lastTicketMutationRef = useRef<number>(0);
+
   // Real-time sync poll + WebSocket listener for instant Juice Bar KOT alert & auto-print
   useEffect(() => {
     const fetchLiveTickets = async () => {
+      if (Date.now() - lastTicketMutationRef.current < 2500) return;
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
         const res = await fetch(`${baseHttpUrl}/api/sync`);
-        if (res.ok) {
+        if (res.ok && Date.now() - lastTicketMutationRef.current >= 2500) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets)) {
             if (!initialSyncDoneRef.current) {
@@ -269,7 +274,7 @@ export default function KitchenDisplayScreen() {
     };
 
     fetchLiveTickets();
-    const pollInterval = setInterval(fetchLiveTickets, 3500);
+    const pollInterval = setInterval(fetchLiveTickets, 6000);
 
     const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
     let socket: WebSocket | null = null;
@@ -424,14 +429,22 @@ export default function KitchenDisplayScreen() {
     return [...seenOrderKeys.values(), ...withoutOrder];
   }, [tickets]);
 
+  const autoRouteBev = systemSettings.kdsAutoRouteBeverages !== false;
   const stationTickets = uniqueTickets
     .filter((t) => !!t && Array.isArray(t.items))
     .map((t) => {
       const items = Array.isArray(t.items) ? t.items : [];
-      const matchingItems = items.filter((i) => (i?.station || 'main') === stationFilter);
-      const stationStatus = (t.stationStatuses && t.stationStatuses[stationFilter])
+      const matchingItems = items.filter((i) => resolveMenuCatalogStation(i, menuItems, autoRouteBev) === stationFilter);
+      const allMatchingServed = matchingItems.length > 0 && matchingItems.every((i) => i.itemStatus === 'served');
+      const allMatchingReady = matchingItems.length > 0 && matchingItems.every((i) => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed);
+      let stationStatus: Ticket['status'] = (t.stationStatuses && t.stationStatuses[stationFilter])
         ? t.stationStatuses[stationFilter]!
         : t.status;
+      if (t.status === 'served' || allMatchingServed) {
+        stationStatus = 'served';
+      } else if (stationStatus !== 'served' && allMatchingReady) {
+        stationStatus = 'ready';
+      }
 
       return { ...t, items: matchingItems, stationStatus };
     })
@@ -457,6 +470,7 @@ export default function KitchenDisplayScreen() {
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
+    lastTicketMutationRef.current = Date.now();
     const baseHttpUrl = getActiveServerHttpUrl();
     const orderId = (ticket as any).orderId || ticket.orderNumber;
 
@@ -680,6 +694,7 @@ export default function KitchenDisplayScreen() {
                   ]}
                   onPress={() => {
                     if (!isServed) {
+                      lastTicketMutationRef.current = Date.now();
                       toggleItem(item.id, food.id);
                       broadcastImmediately();
                     }
@@ -730,6 +745,7 @@ export default function KitchenDisplayScreen() {
                           <TouchableOpacity
                             style={styles.itemMarkServedBtn}
                             onPress={() => {
+                              lastTicketMutationRef.current = Date.now();
                               markItemServed(item.id, food.id, stationFilter);
                               broadcastImmediately();
                             }}
@@ -747,6 +763,7 @@ export default function KitchenDisplayScreen() {
                         <TouchableOpacity
                           style={styles.itemFastReadyBtn}
                           onPress={() => {
+                            lastTicketMutationRef.current = Date.now();
                             markItemReady(item.id, food.id, stationFilter);
                             broadcastImmediately();
                           }}

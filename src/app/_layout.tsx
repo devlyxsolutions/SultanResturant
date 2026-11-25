@@ -294,57 +294,44 @@ export default function RootLayout() {
             animation: sultanPageLanding 0.35s cubic-bezier(0.16, 1, 0.3, 1) both !important;
           }
 
-          /* 2. UNIVERSAL HOVER: Every Button, Card, Tile, Chip, Box, Row */
-          [role="button"]:not([data-backdrop="true"]),
-          button:not([data-backdrop="true"]),
-          a:not([data-backdrop="true"]),
-          [tabindex="0"]:not([data-backdrop="true"]),
-          [data-card],
-          [data-hover],
-          [data-interactive],
-          [data-tile],
-          [data-box],
-          [data-pill],
-          [data-row],
-          [data-stagger],
-          .interactive-card,
-          .kpi-jewel-card,
-          .stat-card,
-          .info-box {
-            transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-                        box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
-                        filter 0.22s ease,
-                        border-color 0.22s ease !important;
-          }
+          /* 2. UNIVERSAL HOVER: Scoped to Desktop Hover Devices Only (Zero Touch/Scroll Lag) */
+          @media (hover: hover) and (pointer: fine) {
+            [data-card],
+            [data-hover],
+            [data-interactive],
+            [data-tile],
+            [data-box],
+            [data-pill],
+            [data-row],
+            [data-stagger],
+            .interactive-card,
+            .kpi-jewel-card,
+            .stat-card,
+            .info-box {
+              transition: transform 0.16s ease,
+                          box-shadow 0.16s ease,
+                          border-color 0.16s ease;
+            }
 
-          /* Smooth hover lift + shadow + gold accent rim */
-          [role="button"]:not([data-backdrop="true"]):hover,
-          button:not([data-backdrop="true"]):hover,
-          a:not([data-backdrop="true"]):hover,
-          [tabindex="0"]:not([data-backdrop="true"]):hover,
-          [data-card]:hover,
-          [data-hover]:hover,
-          [data-interactive]:hover,
-          [data-tile]:hover,
-          [data-box]:hover,
-          [data-pill]:hover,
-          [data-row]:hover,
-          [data-stagger]:hover,
-          .interactive-card:hover,
-          .kpi-jewel-card:hover,
-          .stat-card:hover,
-          .info-box:hover {
-            transform: translateY(-3.5px) scale(1.008) !important;
-            filter: brightness(1.04) !important;
-            box-shadow: 0 14px 32px rgba(82, 20, 28, 0.14), 0 0 0 1.5px rgba(212, 175, 55, 0.5) !important;
-            z-index: 5 !important;
+            [data-card]:hover,
+            [data-hover]:hover,
+            [data-interactive]:hover,
+            [data-tile]:hover,
+            [data-box]:hover,
+            [data-pill]:hover,
+            [data-row]:hover,
+            [data-stagger]:hover,
+            .interactive-card:hover,
+            .kpi-jewel-card:hover,
+            .stat-card:hover,
+            .info-box:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 10px 24px rgba(82, 20, 28, 0.12), 0 0 0 1.5px rgba(212, 175, 55, 0.45);
+              z-index: 5;
+            }
           }
 
           /* Micro-scale feedback on click / tap */
-          [role="button"]:not([data-backdrop="true"]):active,
-          button:not([data-backdrop="true"]):active,
-          a:not([data-backdrop="true"]):active,
-          [tabindex="0"]:not([data-backdrop="true"]):active,
           [data-card]:active,
           [data-hover]:active,
           [data-interactive]:active,
@@ -353,8 +340,7 @@ export default function RootLayout() {
           [data-pill]:active,
           [data-row]:active,
           .interactive-card:active {
-            transform: translateY(-0.5px) scale(0.975) !important;
-            filter: brightness(0.98) !important;
+            transform: scale(0.985);
           }
 
           /* Sidebar item slide effect */
