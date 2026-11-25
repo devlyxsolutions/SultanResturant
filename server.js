@@ -2439,7 +2439,7 @@ const LIVE_MIRROR_FILE = path.join(BACKUP_DIR, 'latest-live-state.json');
 
 function isLegacyDummyInventoryId(id) {
   const s = String(id || '').trim();
-  return /^inv\d+$/.test(s) || s.startsWith('invmuzolyg');
+  return /^inv\d+$/.test(s) || s.startsWith('invmuzolyg') || s.startsWith('inv-slt-');
 }
 
 function countNonAutoBeverageInventory(invArr) {
@@ -3260,6 +3260,26 @@ function persistState() {
           fs.writeFileSync(dailyPath, jsonStr);
         }
         lastBackupDate = today;
+      }
+
+      // High-water milestone snapshot: whenever custom categories or real inventory grow, lock a milestone backup immediately!
+      const curCatsCount = Array.isArray(serverState.inventoryCategories) ? serverState.inventoryCategories.length : 0;
+      const curRawCount = countNonAutoBeverageInventory(serverState.inventory);
+      if (curCatsCount > 9 || curRawCount > 0) {
+        const milestonePath = path.join(BACKUP_DIR, 'milestone-highwater.json');
+        let curScore = curCatsCount * 50 + curRawCount * 100;
+        let prevScore = -1;
+        if (fs.existsSync(milestonePath)) {
+          try {
+            const prevM = JSON.parse(fs.readFileSync(milestonePath, 'utf8'));
+            const pCats = Array.isArray(prevM.inventoryCategories) ? prevM.inventoryCategories.length : 0;
+            const pRaw = countNonAutoBeverageInventory(prevM.inventory);
+            prevScore = pCats * 50 + pRaw * 100;
+          } catch (_) {}
+        }
+        if (curScore >= prevScore) {
+          fs.writeFileSync(milestonePath, jsonStr);
+        }
       }
     } catch (e) {
       console.error('[Sultan Hub] Failed to save state to disk:', e.message);
@@ -4691,6 +4711,271 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (url.pathname === '/api/admin/backups/deep-scan-recover' && req.method === 'POST') {
+    try {
+      const DEFAULT_CAT_SET = new Set(['meat', 'produce', 'grains', 'dairy', 'pantry', 'beverages', 'fuel', 'packaging', 'supplies']);
+      const localAppData = process.env.LOCALAPPDATA || '';
+      const scanDirs = [];
+      const browserRoots = [
+        path.join(localAppData, 'Google', 'Chrome', 'User Data'),
+        path.join(localAppData, 'Microsoft', 'Edge', 'User Data'),
+        path.join(localAppData, 'BraveSoftware', 'Brave-Browser', 'User Data'),
+        path.join(process.env.APPDATA || '', 'Opera Software', 'Opera Stable'),
+      ];
+      for (const root of browserRoots) {
+        try {
+          if (!root || !fs.existsSync(root)) continue;
+          const entries = fs.readdirSync(root, { withFileTypes: true });
+          for (const ent of entries) {
+            if (ent.isDirectory() && (ent.name === 'Default' || ent.name.startsWith('Profile '))) {
+              const ldb = path.join(root, ent.name, 'Local Storage', 'leveldb');
+              if (fs.existsSync(ldb)) scanDirs.push({ label: `${path.basename(path.dirname(root))}/${ent.name}`, dir: ldb, type: 'leveldb' });
+            }
+          }
+          const directLdb = path.join(root, 'Local Storage', 'leveldb');
+          if (fs.existsSync(directLdb)) scanDirs.push({ label: path.basename(root), dir: directLdb, type: 'leveldb' });
+        } catch (_) {}
+      }
+      const extraBackupDirs = [
+        BACKUP_DIR,
+        'C:\\SultanRestaurant\\backups',
+        'D:\\SultanRestaurant\\backups',
+      ];
+      for (const bd of extraBackupDirs) {
+        if (bd && fs.existsSync(bd)) scanDirs.push({ label: bd, dir: bd, type: 'json' });
+      }
+
+      const foundCats = new Set();
+      const foundItemsMap = new Map();
+      const foundZonesMap = new Map();
+      const foundSuppliersMap = new Map();
+      let bestSource = '';
+
+      const harvestFromParsedState = (st, srcLabel) => {
+        if (!st || typeof st !== 'object') return;
+        const inner = st.state && typeof st.state === 'object' ? st.state : st;
+        let hit = false;
+        if (Array.isArray(inner.inventoryCategories)) {
+          for (const c of inner.inventoryCategories) {
+            const clean = String(c || '').trim();
+            if (clean && !DEFAULT_CAT_SET.has(clean.toLowerCase())) {
+              foundCats.add(clean);
+              hit = true;
+            }
+          }
+          if (inner.inventoryCategories.length > 9) {
+            for (const c of inner.inventoryCategories) {
+              const clean = String(c || '').trim();
+              if (clean) foundCats.add(clean);
+            }
+            hit = true;
+          }
+        }
+        if (Array.isArray(inner.inventory)) {
+          for (const it of inner.inventory) {
+            if (it && it.id && it.name && !isLegacyDummyInventoryId(it.id)) {
+              const prev = foundItemsMap.get(it.id);
+              if (!prev || (Number(it.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                foundItemsMap.set(it.id, it);
+                if (it.category) foundCats.add(String(it.category).trim());
+                hit = true;
+              }
+            }
+          }
+        }
+        if (Array.isArray(inner.storageZones)) {
+          for (const z of inner.storageZones) {
+            if (z && z.id && z.name) foundZonesMap.set(z.id, z);
+          }
+        }
+        if (Array.isArray(inner.suppliers)) {
+          for (const s of inner.suppliers) {
+            if (s && s.id && s.name && !/^sup-\d+$/.test(String(s.id))) foundSuppliersMap.set(s.id, s);
+          }
+        }
+        if (hit && !bestSource) bestSource = srcLabel;
+      };
+
+      const extractBalancedJsonArray = (str, startIdx) => {
+        let depth = 0;
+        let inStr = false;
+        let esc = false;
+        const maxEnd = Math.min(str.length, startIdx + 500000);
+        for (let i = startIdx; i < maxEnd; i++) {
+          const ch = str[i];
+          if (esc) { esc = false; continue; }
+          if (ch === '\\') { esc = true; continue; }
+          if (ch === '"') { inStr = !inStr; continue; }
+          if (inStr) continue;
+          if (ch === '[') depth++;
+          else if (ch === ']') {
+            depth--;
+            if (depth === 0) return str.slice(startIdx, i + 1);
+          }
+        }
+        return null;
+      };
+
+      for (const entry of scanDirs) {
+        try {
+          const files = fs.readdirSync(entry.dir);
+          for (const f of files) {
+            if (f === 'LOCK') continue;
+            const full = path.join(entry.dir, f);
+            if (entry.type === 'json' && f.endsWith('.json')) {
+              try {
+                const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
+                harvestFromParsedState(parsed, `${entry.label}/${f}`);
+              } catch (_) {}
+            } else if (entry.type === 'leveldb' && (f.endsWith('.ldb') || f.endsWith('.log'))) {
+              try {
+                const buf = fs.readFileSync(full);
+                // Decode both UTF-8 and UTF-16LE since Chromium LevelDB stores large localStorage values in UTF-16LE or Latin-1!
+                const candidatesText = [buf.toString('utf8'), buf.toString('utf16le')];
+                for (const txt of candidatesText) {
+                  let searchPos = 0;
+                  while (true) {
+                    const idx = txt.indexOf('"inventoryCategories":[', searchPos);
+                    if (idx === -1) break;
+                    const arrStart = idx + '"inventoryCategories":'.length;
+                    const rawArr = extractBalancedJsonArray(txt, arrStart);
+                    if (rawArr) {
+                      try {
+                        const arr = JSON.parse(rawArr);
+                        harvestFromParsedState({ inventoryCategories: arr }, `${entry.label}/${f}`);
+                      } catch (_) {}
+                    }
+                    searchPos = idx + 23;
+                  }
+                  let invPos = 0;
+                  while (true) {
+                    const idx = txt.indexOf('"inventory":[', invPos);
+                    if (idx === -1) break;
+                    const arrStart = idx + '"inventory":'.length;
+                    const rawArr = extractBalancedJsonArray(txt, arrStart);
+                    if (rawArr) {
+                      try {
+                        const arr = JSON.parse(rawArr);
+                        harvestFromParsedState({ inventory: arr }, `${entry.label}/${f}`);
+                      } catch (_) {}
+                    }
+                    invPos = idx + 13;
+                  }
+                }
+              } catch (_) {}
+            }
+          }
+        } catch (_) {}
+      }
+
+      if (foundCats.size === 0 && foundItemsMap.size === 0) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          found: false,
+          message: 'No custom categories or non-dummy inventory items were found in browser caches or backup folders on this Server PC.',
+        }));
+        return;
+      }
+
+      const mergedCats = Array.from(new Set([...(serverState.inventoryCategories || []), ...Array.from(foundCats)]));
+      const invMap = new Map();
+      for (const c of (serverState.inventory || [])) {
+        if (c && c.id && !isLegacyDummyInventoryId(c.id)) invMap.set(c.id, c);
+      }
+      for (const [id, it] of foundItemsMap.entries()) {
+        const prev = invMap.get(id);
+        if (!prev || (Number(it.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+          invMap.set(id, it);
+        }
+      }
+      serverState.inventoryCategories = mergedCats;
+      serverState.inventory = Array.from(invMap.values());
+      if (foundZonesMap.size > 0) {
+        const zMap = new Map((serverState.storageZones || []).map((z) => [z.id, z]));
+        for (const [zid, z] of foundZonesMap.entries()) zMap.set(zid, z);
+        serverState.storageZones = Array.from(zMap.values());
+      }
+      if (foundSuppliersMap.size > 0) {
+        const sMap = new Map((serverState.suppliers || []).map((s) => [s.id, s]));
+        for (const [sid, s] of foundSuppliersMap.entries()) sMap.set(sid, s);
+        serverState.suppliers = Array.from(sMap.values());
+      }
+      serverState.deletedInventoryIds = [];
+      serverState.deletedInventoryCategories = [];
+      serverState.lastUpdated = Date.now();
+
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      fs.writeFileSync(path.join(BACKUP_DIR, `recovered-cache-${Date.now()}.json`), JSON.stringify(serverState, null, 2));
+
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      pushToFirestoreCloud(true);
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'SERVER_DEEP_RECOVER',
+        timestamp: serverState.lastUpdated,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        found: true,
+        source: bestSource || 'Browser LevelDB Cache',
+        recoveredCategories: mergedCats.length,
+        recoveredItems: serverState.inventory.length,
+        state: serverState,
+      }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/admin/inventory/clean-reset' && req.method === 'POST') {
+    try {
+      const payload = await readRequestBody(req);
+      const clearCategories = Boolean(payload?.clearCategories);
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      fs.writeFileSync(path.join(BACKUP_DIR, `pre-clean-reset-${Date.now()}.json`), JSON.stringify(serverState, null, 2));
+
+      const epoch = Date.now();
+      serverState.inventoryResetEpoch = epoch;
+      serverState.inventory = [];
+      serverState.stockMovements = [];
+      serverState.chillerHandovers = [];
+      serverState.deletedInventoryIds = [];
+      if (clearCategories) {
+        serverState.inventoryCategories = [];
+        serverState.deletedInventoryCategories = ['Meat', 'Produce', 'Grains', 'Dairy', 'Pantry', 'Beverages', 'Fuel', 'Packaging', 'Supplies'];
+      }
+      serverState.lastUpdated = epoch;
+
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      pushToFirestoreCloud(true);
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'SERVER_CLEAN_RESET',
+        timestamp: serverState.lastUpdated,
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({
+        success: true,
+        epoch,
+        state: serverState,
+      }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
   // -------------------------------------------------------------
   // CENTRAL 10-TABLET & 7-PC AUTO-UPDATER ENDPOINTS
   // -------------------------------------------------------------
@@ -4776,7 +5061,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 27,
+        apkVersion: 28,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -6547,6 +6832,7 @@ function computeStateFingerprint(st) {
       categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
       zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
       customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
+      inventoryResetEpoch: Number(st.inventoryResetEpoch || 0),
       inventoryState: Array.isArray(st.inventory)
         ? st.inventory.map(i => `${i?.id}:${i?.stock}:${i?.location || ''}:${i?.beverageStorageMode || ''}:${i?.updatedAt || 0}`).join('|')
         : '',
@@ -6681,19 +6967,34 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
+
+  // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
+  const currInvEpoch = Number(serverState.inventoryResetEpoch || 0);
+  const incInvEpoch = Number(partialState.inventoryResetEpoch || 0);
+  const isStaleInventoryClient = currInvEpoch > 0 && incInvEpoch < currInvEpoch;
+  if (incInvEpoch > currInvEpoch) {
+    serverState.inventoryResetEpoch = incInvEpoch;
+    serverState.inventory = Array.isArray(partialState.inventory)
+      ? partialState.inventory.filter((i) => i && !isLegacyDummyInventoryId(i.id))
+      : [];
+    serverState.inventoryCategories = Array.isArray(partialState.inventoryCategories) ? partialState.inventoryCategories : [];
+    serverState.stockMovements = [];
+    serverState.chillerHandovers = [];
+    modified = true;
+  }
 
   // Track explicit deletions for inventory, storageZones & inventoryCategories so out-of-sync clients never wipe custom categories/items
   if (!Array.isArray(serverState.deletedInventoryIds)) serverState.deletedInventoryIds = [];
   if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
   if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
-  if (Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
+  if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
     serverState.deletedInventoryCategories = Array.from(new Set([...serverState.deletedInventoryCategories, ...partialState.deletedInventoryCategories])).slice(-300);
     modified = true;
   }
   const deletedInvCatSet = new Set((serverState.deletedInventoryCategories || []).map((c) => String(c).toLowerCase()));
-  if (Array.isArray(partialState.deletedInventoryIds) && partialState.deletedInventoryIds.length > 0) {
+  if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryIds) && partialState.deletedInventoryIds.length > 0) {
     serverState.deletedInventoryIds = Array.from(new Set([...serverState.deletedInventoryIds, ...partialState.deletedInventoryIds])).slice(-500);
     modified = true;
   }
@@ -7120,8 +7421,10 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             sMap.set('st-master', { ...masterOnly });
           }
           serverState.staff = Array.from(sMap.values());
-        } else if (key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories') {
+        } else if (key === 'inventoryResetEpoch' || key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories') {
           // Already merged into serverState sets above
+        } else if (isStaleInventoryClient && (key === 'inventory' || key === 'inventoryCategories' || key === 'stockMovements' || key === 'chillerHandovers')) {
+          // Ignore stale pre-reset inventory/categories/movements from older devices!
         } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
           const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
           const currCats = Array.isArray(serverState[key]) ? serverState[key].map((c) => String(c || '').trim()).filter(Boolean) : [];
@@ -7267,6 +7570,8 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       // ==============================================================
       // BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
       // ==============================================================
+      // Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
+      const IS_DEV_WORKSTATION = __dirname.toLowerCase().includes('nizaam digital sol') && process.env.SULTAN_FORCE_CLOUD_SYNC !== '1';
       const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
       const FIRESTORE_PROJECT_ID = "sultan-resturant";
       const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
@@ -7321,7 +7626,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
       }
 
       function pushToFirestoreCloud(forceImmediate = false) {
-        if (isApplyingCloudUpdate) return;
+        if (IS_DEV_WORKSTATION || isApplyingCloudUpdate) return;
         const now = Date.now();
         // If not forced and recently pushed within the interval, debounce to the next interval window
         if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
@@ -7365,6 +7670,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 serviceRequests: serverState.serviceRequests || [],
                 inventory: serverState.inventory || [],
                 storageZones: serverState.storageZones || [],
+                inventoryResetEpoch: serverState.inventoryResetEpoch || 0,
                 deletedInventoryIds: serverState.deletedInventoryIds || [],
                 deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
                 deletedInventoryCategories: serverState.deletedInventoryCategories || [],
@@ -7420,7 +7726,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
 
       let hasInitialFirestorePollCompleted = false;
       async function pollFirestoreCloud() {
-        if (isPushingToFirestore) return;
+        if (IS_DEV_WORKSTATION || isPushingToFirestore) return;
         if (Date.now() < firestoreBackoffUntil) return;
         try {
           const res = await fetch(FIRESTORE_DOC_URL);

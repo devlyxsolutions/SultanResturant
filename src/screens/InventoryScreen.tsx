@@ -97,13 +97,16 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const adjustFloorChillerStock = useOpsStore((s) => s.adjustFloorChillerStock);
   const syncMenuBeveragesToInventory = useOpsStore((s) => s.syncMenuBeveragesToInventory);
 
+  const deletedCategories = useOpsStore((s) => s.deletedInventoryCategories);
+
   const allCategories = useMemo(() => {
-    const base = Array.isArray(storedCategories) && storedCategories.length > 0
-      ? storedCategories
-      : [...INVENTORY_CATEGORIES];
-    const used = inventory.map((i) => i.category).filter(Boolean);
+    const delSet = new Set((deletedCategories || []).map((c) => c.toLowerCase()));
+    const base = Array.isArray(storedCategories)
+      ? storedCategories.filter((c) => !delSet.has(c.toLowerCase()))
+      : [...INVENTORY_CATEGORIES].filter((c) => !delSet.has(c.toLowerCase()));
+    const used = inventory.map((i) => i.category).filter((c) => Boolean(c) && !delSet.has(c.toLowerCase()));
     return Array.from(new Set([...base, ...used]));
-  }, [storedCategories, inventory]);
+  }, [storedCategories, deletedCategories, inventory]);
 
   const activeStorageZones = useMemo(() => {
     const base = Array.isArray(storedZones) && storedZones.length > 0
@@ -540,19 +543,75 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     }
   };
 
-  // Clean up any legacy auto-generated Juice Bar mocktail items out of Floor Chillers once (without auto-dumping Menu items!)
-  useEffect(() => {
-    const hasLegacyMocktailsInChiller = inventory.some(
-      (it) =>
-        (it.id.startsWith('inv-slt-mck-') ||
-          it.id === 'inv-slt-drk-mint-lemonade' ||
-          it.id === 'inv-slt-drk-roohafza') &&
-        isJuiceBarPreparedName(it.name, it.category)
-    );
-    if (hasLegacyMocktailsInChiller) {
-      syncMenuBeveragesToInventory(menuItems);
+  const handleDeepScanBrowserCache = async () => {
+    try {
+      setIsRestoringBackup(true);
+      const base = getActiveServerHttpUrl();
+      const res = await fetch(`${base}/api/admin/backups/deep-scan-recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (json.success && json.found && json.state) {
+        useOpsStore.getState().syncFromServer(json.state);
+        await handleOpenBackupRestoreModal();
+        alertMsg(
+          'Lost Data Recovered!',
+          `Found & restored ${json.recoveredCategories} Categories and ${json.recoveredItems} Inventory Items from ${json.source || 'PC Browser Cache'}!`
+        );
+      } else {
+        alertMsg(
+          'Scan Complete — No Cached Data Found',
+          json.message || 'No older inventory snapshot was found in Chrome/Edge LevelDB or disk backups on the Server PC. If you entered the data on a different PC/Laptop, run Recover-Lost-Data.bat on that PC!'
+        );
+      }
+    } catch (e: any) {
+      alertMsg('Scan Error', e?.message || 'Could not reach server hub.');
+    } finally {
+      setIsRestoringBackup(false);
     }
-  }, [inventory, menuItems, syncMenuBeveragesToInventory]);
+  };
+
+  const handleCleanSlateInventoryReset = async (clearDefaultCategories: boolean) => {
+    const confirmText = clearDefaultCategories
+      ? 'Wipe ALL dummy/old Inventory items AND clear all 9 default categories across Server + Cloud + ALL Tablets so you can add ONLY your own categories & items? (POS orders, Menu, Staff & Invoices remain 100% untouched.)'
+      : 'Wipe ALL dummy/old Inventory items across Server + Cloud + ALL Tablets while keeping your current categories?';
+    const executeClean = async () => {
+      try {
+        setIsRestoringBackup(true);
+        const base = getActiveServerHttpUrl();
+        const res = await fetch(`${base}/api/admin/inventory/clean-reset`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ clearCategories: clearDefaultCategories }),
+        });
+        const json = await res.json();
+        if (json.success && json.state) {
+          useOpsStore.getState().syncFromServer(json.state);
+          setSelectedCategory('All');
+          setShowBackupModal(false);
+          alertMsg(
+            'Clean Slate Ready!',
+            'All dummy/old inventory records are permanently wiped across Server, Cloud & connected devices. They will NEVER come back on sync!'
+          );
+        } else {
+          alertMsg('Reset Failed', json.error || 'Could not perform clean reset.');
+        }
+      } catch (e: any) {
+        alertMsg('Network Error', e?.message || 'Could not connect to server hub.');
+      } finally {
+        setIsRestoringBackup(false);
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmText)) executeClean();
+    } else {
+      Alert.alert('Clean Slate Inventory Reset', confirmText, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Yes, Wipe Dummy Data', style: 'destructive', onPress: executeClean },
+      ]);
+    }
+  };
 
   // Analytics & Summary Metrics
   const metrics = useMemo(() => {
@@ -7040,7 +7099,96 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator={false}>
+            <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+              {/* 1. Deep Scan Browser Cache + Clean Slate Controls */}
+              <View
+                style={{
+                  backgroundColor: '#ECFDF5',
+                  borderWidth: 1,
+                  borderColor: '#6EE7B7',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 10,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#065F46' }}>
+                  🔍 Step 1: Deep Scan PC Browser Cache (Recover Lost Categories & Items)
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#047857' }}>
+                  Scans Chrome, Edge & Brave local storage LevelDB blocks and disk backups on the Server PC to recover overwritten categories & inventory items.
+                </Text>
+                <TouchableOpacity
+                  disabled={isRestoringBackup}
+                  style={{
+                    backgroundColor: '#059669',
+                    paddingVertical: 9,
+                    paddingHorizontal: 14,
+                    borderRadius: 8,
+                    alignSelf: 'flex-start',
+                    opacity: isRestoringBackup ? 0.6 : 1,
+                  }}
+                  onPress={handleDeepScanBrowserCache}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12.5, fontWeight: '800' }}>
+                    {isRestoringBackup ? 'Scanning PC Cache...' : '🔍 Deep Scan Browser Cache & Recover'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              <View
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  borderWidth: 1,
+                  borderColor: '#FECACA',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 14,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#991B1B' }}>
+                  🧹 Clean Slate Reset (Permanently Block All Dummy Data Across Sync)
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#B91C1C' }}>
+                  Wipes all preloaded/dummy inventory items across Server, Cloud & ALL Tablets with a new Sync Epoch so old dummy items or deleted categories NEVER come back!
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity
+                    disabled={isRestoringBackup}
+                    style={{
+                      backgroundColor: '#DC2626',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      opacity: isRestoringBackup ? 0.6 : 1,
+                    }}
+                    onPress={() => handleCleanSlateInventoryReset(true)}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                      🧹 Wipe Dummy Items + Clear Default Categories
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    disabled={isRestoringBackup}
+                    style={{
+                      backgroundColor: '#FFF',
+                      borderWidth: 1,
+                      borderColor: '#DC2626',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      opacity: isRestoringBackup ? 0.6 : 1,
+                    }}
+                    onPress={() => handleCleanSlateInventoryReset(false)}
+                  >
+                    <Text style={{ color: '#DC2626', fontSize: 12, fontWeight: '800' }}>
+                      Wipe Items Only (Keep Current Categories)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
               {isLoadingBackups ? (
                 <Text style={{ fontSize: 13, color: '#64748B', paddingVertical: 20, textAlign: 'center' }}>
                   Scanning server backups folder...

@@ -692,6 +692,7 @@ export type OpsData = {
   serviceRequests: ServiceRequest[];
   inventory: InventoryItem[];
   storageZones?: StorageZone[];
+  inventoryResetEpoch?: number;
   deletedInventoryIds?: string[];
   deletedStorageZoneIds?: string[];
   deletedInventoryCategories?: string[];
@@ -715,6 +716,7 @@ export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'serviceRequests',
   'inventory',
   'storageZones',
+  'inventoryResetEpoch',
   'deletedInventoryIds',
   'deletedStorageZoneIds',
   'deletedInventoryCategories',
@@ -995,9 +997,10 @@ export const useOpsStore = create<OpsState>()(
       addInventoryItem: (item) => {
         set((state) => {
           const cat = (item.category || '').trim();
-          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+          const delCats = new Set((state.deletedInventoryCategories || []).map((d) => d.toLowerCase()));
+          const currentCats = Array.isArray(state.inventoryCategories)
             ? state.inventoryCategories
-            : [...INVENTORY_CATEGORIES];
+            : [...INVENTORY_CATEGORIES].filter((c) => !delCats.has(c.toLowerCase()));
           const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
             ? [...currentCats, cat]
             : currentCats;
@@ -1026,9 +1029,10 @@ export const useOpsStore = create<OpsState>()(
       updateInventoryItem: (id, patch) => {
         set((state) => {
           const cat = (patch.category || '').trim();
-          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+          const delCats = new Set((state.deletedInventoryCategories || []).map((d) => d.toLowerCase()));
+          const currentCats = Array.isArray(state.inventoryCategories)
             ? state.inventoryCategories
-            : [...INVENTORY_CATEGORIES];
+            : [...INVENTORY_CATEGORIES].filter((c) => !delCats.has(c.toLowerCase()));
           const nextCats = cat && !currentCats.some((c) => c.toLowerCase() === cat.toLowerCase())
             ? [...currentCats, cat]
             : currentCats;
@@ -1241,9 +1245,10 @@ export const useOpsStore = create<OpsState>()(
         const clean = (category || '').trim();
         if (!clean) return;
         set((state) => {
-          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+          const delCats = new Set((state.deletedInventoryCategories || []).map((d) => d.toLowerCase()));
+          const currentCats = Array.isArray(state.inventoryCategories)
             ? state.inventoryCategories
-            : [...INVENTORY_CATEGORIES];
+            : [...INVENTORY_CATEGORIES].filter((c) => !delCats.has(c.toLowerCase()));
           const nextDeleted = (state.deletedInventoryCategories || []).filter(
             (d) => d.toLowerCase() !== clean.toLowerCase()
           );
@@ -1263,9 +1268,10 @@ export const useOpsStore = create<OpsState>()(
         const cleanNew = (newName || '').trim();
         if (!cleanOld || !cleanNew || cleanOld === cleanNew) return;
         set((state) => {
-          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+          const delCats = new Set((state.deletedInventoryCategories || []).map((d) => d.toLowerCase()));
+          const currentCats = Array.isArray(state.inventoryCategories)
             ? state.inventoryCategories
-            : [...INVENTORY_CATEGORIES];
+            : [...INVENTORY_CATEGORIES].filter((c) => !delCats.has(c.toLowerCase()));
           const updatedCats = currentCats.map((c) => (c === cleanOld ? cleanNew : c));
           const dedupedCats = Array.from(new Set(updatedCats));
           return {
@@ -1285,12 +1291,13 @@ export const useOpsStore = create<OpsState>()(
         const clean = (category || '').trim();
         if (!clean) return;
         set((state) => {
-          const currentCats = Array.isArray(state.inventoryCategories) && state.inventoryCategories.length > 0
+          const delCats = new Set((state.deletedInventoryCategories || []).map((d) => d.toLowerCase()));
+          const currentCats = Array.isArray(state.inventoryCategories)
             ? state.inventoryCategories
-            : [...INVENTORY_CATEGORIES];
+            : [...INVENTORY_CATEGORIES].filter((c) => !delCats.has(c.toLowerCase()));
           const filtered = currentCats.filter((c) => c !== clean);
           return {
-            inventoryCategories: filtered.length > 0 ? filtered : [...INVENTORY_CATEGORIES],
+            inventoryCategories: filtered,
             deletedInventoryCategories: Array.from(new Set([...(state.deletedInventoryCategories || []), clean])).slice(-300),
           };
         });
@@ -2655,10 +2662,47 @@ export const useOpsStore = create<OpsState>()(
         set((state) => {
           const isDummyInvId = (id?: string) => {
             const s = String(id || '').trim();
-            return /^inv\d+$/.test(s) || s.startsWith('invmuzolyg');
+            return /^inv\d+$/.test(s) || s.startsWith('invmuzolyg') || s.startsWith('inv-slt-');
           };
 
-          const next: Partial<OpsState> = { dummyPurgeVersion: 2 };
+          const remoteEpoch = Number(remote.inventoryResetEpoch || 0);
+          const localEpoch = Number(state.inventoryResetEpoch || 0);
+
+          // If remote is from BEFORE a clean-slate reset we already know about, ignore stale inventory/categories/movements!
+          if (localEpoch > 0 && remoteEpoch < localEpoch) {
+            const nextPartial: Partial<OpsState> = { dummyPurgeVersion: 3 };
+            if (Array.isArray(remote.serviceRequests)) nextPartial.serviceRequests = remote.serviceRequests;
+            if (Array.isArray(remote.expenses)) nextPartial.expenses = [...remote.expenses].sort((a, b) => (b.at || 0) - (a.at || 0));
+            if (Array.isArray(remote.feedback)) nextPartial.feedback = remote.feedback;
+            if (Array.isArray(remote.suppliers)) nextPartial.suppliers = remote.suppliers;
+            if (Array.isArray(remote.purchaseOrders)) nextPartial.purchaseOrders = remote.purchaseOrders;
+            if (Array.isArray(remote.supplierPayments)) nextPartial.supplierPayments = remote.supplierPayments;
+            if (Array.isArray(remote.assets)) nextPartial.assets = remote.assets;
+            if (Array.isArray(remote.damageRecords)) nextPartial.damageRecords = remote.damageRecords;
+            return { ...state, ...nextPartial };
+          }
+
+          // If remote triggered a NEWER clean-slate reset, replace local inventory, categories & movements directly without merging stale local cache!
+          if (remoteEpoch > localEpoch) {
+            return {
+              ...state,
+              dummyPurgeVersion: 3,
+              inventoryResetEpoch: remoteEpoch,
+              inventory: Array.isArray(remote.inventory)
+                ? remote.inventory.filter((i) => i && i.id && !isDummyInvId(i.id))
+                : [],
+              inventoryCategories: Array.isArray(remote.inventoryCategories) ? remote.inventoryCategories : [],
+              deletedInventoryIds: Array.isArray(remote.deletedInventoryIds) ? remote.deletedInventoryIds : [],
+              deletedInventoryCategories: Array.isArray(remote.deletedInventoryCategories) ? remote.deletedInventoryCategories : [],
+              stockMovements: Array.isArray(remote.stockMovements)
+                ? remote.stockMovements.filter((m) => m && !isDummyInvId(m.itemId))
+                : [],
+              chillerHandovers: Array.isArray(remote.chillerHandovers) ? remote.chillerHandovers : [],
+              ...(Array.isArray(remote.storageZones) && remote.storageZones.length > 0 ? { storageZones: remote.storageZones } : {}),
+            };
+          }
+
+          const next: Partial<OpsState> = { dummyPurgeVersion: 3 };
           if (Array.isArray(remote.serviceRequests)) next.serviceRequests = remote.serviceRequests;
           if (Array.isArray(remote.deletedInventoryIds)) {
             next.deletedInventoryIds = Array.from(
@@ -2719,8 +2763,8 @@ export const useOpsStore = create<OpsState>()(
             });
             next.storageZones = Array.from(zMap.values());
           }
-          if (Array.isArray(remote.inventoryCategories) && remote.inventoryCategories.length > 0) {
-            // Additive union so 20+ custom categories are NEVER overwritten by 9 defaults!
+          if (Array.isArray(remote.inventoryCategories)) {
+            // Additive union minus explicitly deleted categories so 20+ custom categories are NEVER overwritten by 9 defaults!
             const seen = new Set<string>();
             const mergedCats: string[] = [];
             [...(state.inventoryCategories || []), ...remote.inventoryCategories].forEach((c) => {
@@ -2731,9 +2775,7 @@ export const useOpsStore = create<OpsState>()(
               seen.add(lw);
               mergedCats.push(clean);
             });
-            if (mergedCats.length > 0) {
-              next.inventoryCategories = mergedCats;
-            }
+            next.inventoryCategories = mergedCats;
           }
           if (Array.isArray(remote.assetCategories) && remote.assetCategories.length > 0) {
             const seen = new Set<string>();
@@ -2768,7 +2810,7 @@ export const useOpsStore = create<OpsState>()(
             const seen = new Set<string>();
             const mergedHandovers: ChillerHandoverRecord[] = [];
             [...(remote.chillerHandovers || []), ...(state.chillerHandovers || [])].forEach((h) => {
-              if (h && h.id && !seen.has(h.id)) {
+              if (h && h.id && !seen.has(h.id) && !isDummyInvId(h.itemId)) {
                 seen.add(h.id);
                 mergedHandovers.push(h);
               }
@@ -2806,15 +2848,16 @@ export const useOpsStore = create<OpsState>()(
           state.supplierPayments = [];
           state.assets = [];
           state.damageRecords = [];
-          state.dummyPurgeVersion = 2;
-        } else if (state && (state.dummyPurgeVersion || 0) < 2) {
-          state.inventory = (state.inventory || []).filter(
-            (i) => i && i.id && !/^inv\d+$/.test(i.id) && !i.id.startsWith('invmuzolyg')
-          );
-          state.stockMovements = (state.stockMovements || []).filter(
-            (m) => m && !/^inv\d+$/.test(m.itemId || '') && !String(m.itemId || '').startsWith('invmuzolyg')
-          );
-          state.dummyPurgeVersion = 2;
+          state.dummyPurgeVersion = 3;
+        } else if (state && (state.dummyPurgeVersion || 0) < 3) {
+          const isLegacyId = (id?: string) => {
+            const s = String(id || '').trim();
+            return /^inv\d+$/.test(s) || s.startsWith('invmuzolyg') || s.startsWith('inv-slt-');
+          };
+          state.inventory = (state.inventory || []).filter((i) => i && i.id && !isLegacyId(i.id));
+          state.stockMovements = (state.stockMovements || []).filter((m) => m && !isLegacyId(m.itemId));
+          state.chillerHandovers = (state.chillerHandovers || []).filter((h) => h && !isLegacyId(h.itemId));
+          state.dummyPurgeVersion = 3;
         }
       },
     }
@@ -2828,6 +2871,7 @@ export function getOpsSyncState(): OpsData {
     serviceRequests: s.serviceRequests,
     inventory: s.inventory,
     storageZones: s.storageZones || [...DEFAULT_STORAGE_ZONES],
+    inventoryResetEpoch: s.inventoryResetEpoch || 0,
     deletedInventoryIds: s.deletedInventoryIds || [],
     deletedStorageZoneIds: s.deletedStorageZoneIds || [],
     deletedInventoryCategories: s.deletedInventoryCategories || [],
