@@ -543,6 +543,42 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     }
   };
 
+  const handleCreateManualSnapshot = async () => {
+    try {
+      setIsRestoringBackup(true);
+      const base = getActiveServerHttpUrl();
+      const res = await fetch(`${base}/api/admin/backups/create`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const json = await res.json();
+      if (json.success) {
+        await handleOpenBackupRestoreModal();
+        alertMsg(
+          'Vault Snapshot Saved!',
+          `Saved "${json.filename}" to both Server Backups and Windows Protected Database Vault (${json.vaultPath || 'LocalAppData'}).`
+        );
+      } else {
+        alertMsg('Backup Error', json.error || 'Could not create backup snapshot.');
+      }
+    } catch (e: any) {
+      alertMsg('Network Error', e?.message || 'Could not connect to server hub.');
+    } finally {
+      setIsRestoringBackup(false);
+    }
+  };
+
+  const handleDownloadBackupFile = async () => {
+    try {
+      const base = getActiveServerHttpUrl();
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        window.open(`${base}/api/admin/backups/export-json`, '_blank');
+      } else {
+        await handleCreateManualSnapshot();
+      }
+    } catch (_) {}
+  };
+
   const handleDeepScanBrowserCache = async () => {
     try {
       setIsRestoringBackup(true);
@@ -7100,6 +7136,60 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
             </View>
 
             <ScrollView style={{ maxHeight: 480 }} showsVerticalScrollIndicator={false}>
+              {/* 0. Permanent Vault Snapshot & 1-Click JSON Download */}
+              <View
+                style={{
+                  backgroundColor: '#EEF2FF',
+                  borderWidth: 1,
+                  borderColor: '#C7D2FE',
+                  borderRadius: 10,
+                  padding: 12,
+                  marginBottom: 10,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#312E81' }}>
+                  🔒 Permanent Windows Vault Protection (Safe Across All Git & EXE Updates)
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#4338CA' }}>
+                  Every category, SKU, supplier, purchase order & expense is automatically mirrored outside Git in Windows AppData Vault (`%LOCALAPPDATA%\SultanRestaurant\DatabaseVault`). You can also lock an instant manual snapshot or download a `.json` backup file anytime:
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  <TouchableOpacity
+                    disabled={isRestoringBackup}
+                    style={{
+                      backgroundColor: '#4F46E5',
+                      paddingVertical: 8,
+                      paddingHorizontal: 14,
+                      borderRadius: 8,
+                      opacity: isRestoringBackup ? 0.6 : 1,
+                    }}
+                    onPress={handleCreateManualSnapshot}
+                  >
+                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                      💾 Lock Instant Backup Snapshot Now
+                    </Text>
+                  </TouchableOpacity>
+                  {Platform.OS === 'web' && (
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#4F46E5',
+                        paddingVertical: 8,
+                        paddingHorizontal: 14,
+                        borderRadius: 8,
+                      }}
+                      onPress={handleDownloadBackupFile}
+                    >
+                      <Text style={{ color: '#4F46E5', fontSize: 12, fontWeight: '800' }}>
+                        ⬇️ Download Full Backup (.json)
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
               {/* 1. Deep Scan Browser Cache + Clean Slate Controls */}
               <View
                 style={{

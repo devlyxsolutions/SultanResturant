@@ -2433,9 +2433,13 @@ function isLegacyDummyDish(m) {
   return false;
 }
 
-// Backup directory & crash-safe live mirror (git-ignored so git pull never wipes live data!)
+// Backup directory & crash-safe live mirror + OS-level Master Database Vault outside Git (immune to git pull / reset / folder changes!)
 const BACKUP_DIR = path.join(__dirname, 'backups');
 const LIVE_MIRROR_FILE = path.join(BACKUP_DIR, 'latest-live-state.json');
+const VAULT_DIR = path.join(process.env.LOCALAPPDATA || 'C:\\SultanRestaurantData', 'SultanRestaurant', 'DatabaseVault');
+const VAULT_DATA_FILE = path.join(VAULT_DIR, 'server-data.json');
+const VAULT_BACKUP_DIR = path.join(VAULT_DIR, 'backups');
+const VAULT_LIVE_MIRROR_FILE = path.join(VAULT_BACKUP_DIR, 'latest-live-state.json');
 
 function isLegacyDummyInventoryId(id) {
   const s = String(id || '').trim();
@@ -2449,37 +2453,49 @@ function countNonAutoBeverageInventory(invArr) {
 
 function findBestBackupSnapshot() {
   try {
-    if (!fs.existsSync(BACKUP_DIR)) return null;
     const candidates = [];
-    if (fs.existsSync(LIVE_MIRROR_FILE)) {
-      candidates.push(LIVE_MIRROR_FILE);
+    for (const f of [
+      VAULT_DATA_FILE,
+      VAULT_LIVE_MIRROR_FILE,
+      LIVE_MIRROR_FILE,
+      path.join(__dirname, 'SultanRestaurant-App', 'server-data.json'),
+      'C:\\SultanRestaurant\\server-data.json',
+    ]) {
+      if (f && fs.existsSync(f)) candidates.push(f);
     }
-    const files = fs.readdirSync(BACKUP_DIR)
-      .filter((f) => f.endsWith('.json') && f !== 'latest-live-state.json')
-      .sort()
-      .reverse();
-    for (const f of files) {
-      candidates.push(path.join(BACKUP_DIR, f));
+    for (const dir of [VAULT_BACKUP_DIR, BACKUP_DIR, 'C:\\SultanRestaurant\\backups']) {
+      if (!dir || !fs.existsSync(dir)) continue;
+      const files = fs.readdirSync(dir)
+        .filter((f) => f.endsWith('.json') && f !== 'latest-live-state.json')
+        .sort()
+        .reverse();
+      for (const f of files) {
+        candidates.push(path.join(dir, f));
+      }
     }
     let best = null;
     let bestScore = -1;
+    const currentEpoch = Number(serverState?.inventoryResetEpoch || 0);
     for (const p of candidates) {
       try {
         const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+        const bakEpoch = Number(parsed.inventoryResetEpoch || 0);
+        if (currentEpoch > 0 && bakEpoch < currentEpoch) continue;
         const rawInv = countNonAutoBeverageInventory(parsed.inventory);
         const cats = Array.isArray(parsed.inventoryCategories) ? parsed.inventoryCategories.length : 0;
         const movs = Array.isArray(parsed.stockMovements)
           ? parsed.stockMovements.filter((m) => m && !isLegacyDummyInventoryId(m.itemId)).length
           : 0;
         const sups = Array.isArray(parsed.suppliers) ? parsed.suppliers.length : 0;
+        const pos = Array.isArray(parsed.purchaseOrders) ? parsed.purchaseOrders.length : 0;
+        const exps = Array.isArray(parsed.expenses) ? parsed.expenses.length : 0;
+        const asts = Array.isArray(parsed.assets) ? parsed.assets.length : 0;
         const invs = Array.isArray(parsed.invoices) ? parsed.invoices.length : 0;
         const customCatsBonus = Math.max(0, cats - 9) * 2000;
-        const score = customCatsBonus + rawInv * 1000 + movs * 10 + sups * 50 + invs;
-        if (score > bestScore && (cats > 9 || rawInv > 0 || movs > 0 || invs > 0)) {
+        const score = customCatsBonus + rawInv * 1000 + sups * 200 + pos * 150 + exps * 80 + asts * 100 + movs * 10 + invs;
+        if (score > bestScore && (cats > 9 || rawInv > 0 || sups > 0 || pos > 0 || exps > 0 || asts > 0 || movs > 0 || invs > 0)) {
           bestScore = score;
           best = { path: p, state: parsed, rawInv, movs, cats };
-          // Only stop early on latest-live-state.json if no daily backup could have more custom categories
-          if (p === LIVE_MIRROR_FILE && cats > 9 && rawInv > 0) break;
         }
       } catch (_) {}
     }
@@ -3262,23 +3278,51 @@ function persistState() {
         lastBackupDate = today;
       }
 
-      // High-water milestone snapshot: whenever custom categories or real inventory grow, lock a milestone backup immediately!
+      // High-water milestone snapshot + External Windows AppData Database Vault (100% immune to Git updates & folder changes!)
+      try {
+        if (!fs.existsSync(VAULT_DIR)) fs.mkdirSync(VAULT_DIR, { recursive: true });
+        if (!fs.existsSync(VAULT_BACKUP_DIR)) fs.mkdirSync(VAULT_BACKUP_DIR, { recursive: true });
+        const vaultTmp = `${VAULT_DATA_FILE}.tmp`;
+        fs.writeFileSync(vaultTmp, jsonStr);
+        fs.renameSync(vaultTmp, VAULT_DATA_FILE);
+        const vaultMirrorTmp = `${VAULT_LIVE_MIRROR_FILE}.tmp`;
+        fs.writeFileSync(vaultMirrorTmp, jsonStr);
+        fs.renameSync(vaultMirrorTmp, VAULT_LIVE_MIRROR_FILE);
+        const vaultDailyPath = path.join(VAULT_BACKUP_DIR, `server-data-${today}.json`);
+        if (!fs.existsSync(vaultDailyPath)) {
+          fs.writeFileSync(vaultDailyPath, jsonStr);
+        }
+      } catch (_) {}
+
       const curCatsCount = Array.isArray(serverState.inventoryCategories) ? serverState.inventoryCategories.length : 0;
       const curRawCount = countNonAutoBeverageInventory(serverState.inventory);
-      if (curCatsCount > 9 || curRawCount > 0) {
-        const milestonePath = path.join(BACKUP_DIR, 'milestone-highwater.json');
-        let curScore = curCatsCount * 50 + curRawCount * 100;
-        let prevScore = -1;
-        if (fs.existsSync(milestonePath)) {
+      const curSupsCount = Array.isArray(serverState.suppliers) ? serverState.suppliers.length : 0;
+      const curPosCount = Array.isArray(serverState.purchaseOrders) ? serverState.purchaseOrders.length : 0;
+      const curExpsCount = Array.isArray(serverState.expenses) ? serverState.expenses.length : 0;
+      const curAstsCount = Array.isArray(serverState.assets) ? serverState.assets.length : 0;
+      if (curCatsCount > 9 || curRawCount > 0 || curSupsCount > 0 || curPosCount > 0 || curExpsCount > 0 || curAstsCount > 0) {
+        const curScore = curCatsCount * 50 + curRawCount * 100 + curSupsCount * 80 + curPosCount * 60 + curExpsCount * 40 + curAstsCount * 60;
+        for (const mDir of [BACKUP_DIR, VAULT_BACKUP_DIR]) {
           try {
-            const prevM = JSON.parse(fs.readFileSync(milestonePath, 'utf8'));
-            const pCats = Array.isArray(prevM.inventoryCategories) ? prevM.inventoryCategories.length : 0;
-            const pRaw = countNonAutoBeverageInventory(prevM.inventory);
-            prevScore = pCats * 50 + pRaw * 100;
+            if (!fs.existsSync(mDir)) fs.mkdirSync(mDir, { recursive: true });
+            const milestonePath = path.join(mDir, 'milestone-highwater.json');
+            let prevScore = -1;
+            if (fs.existsSync(milestonePath)) {
+              try {
+                const prevM = JSON.parse(fs.readFileSync(milestonePath, 'utf8'));
+                const pCats = Array.isArray(prevM.inventoryCategories) ? prevM.inventoryCategories.length : 0;
+                const pRaw = countNonAutoBeverageInventory(prevM.inventory);
+                const pSups = Array.isArray(prevM.suppliers) ? prevM.suppliers.length : 0;
+                const pPos = Array.isArray(prevM.purchaseOrders) ? prevM.purchaseOrders.length : 0;
+                const pExps = Array.isArray(prevM.expenses) ? prevM.expenses.length : 0;
+                const pAsts = Array.isArray(prevM.assets) ? prevM.assets.length : 0;
+                prevScore = pCats * 50 + pRaw * 100 + pSups * 80 + pPos * 60 + pExps * 40 + pAsts * 60;
+              } catch (_) {}
+            }
+            if (curScore >= prevScore) {
+              fs.writeFileSync(milestonePath, jsonStr);
+            }
           } catch (_) {}
-        }
-        if (curScore >= prevScore) {
-          fs.writeFileSync(milestonePath, jsonStr);
         }
       }
     } catch (e) {
@@ -4557,13 +4601,17 @@ async function handleRequest(req, res) {
   if (url.pathname === '/api/admin/backups' && req.method === 'GET') {
     try {
       const list = [];
-      if (fs.existsSync(BACKUP_DIR)) {
-        const files = fs.readdirSync(BACKUP_DIR).filter((f) => f.endsWith('.json')).sort().reverse();
+      const seenNames = new Set();
+      for (const bDir of [BACKUP_DIR, VAULT_BACKUP_DIR]) {
+        if (!bDir || !fs.existsSync(bDir)) continue;
+        const files = fs.readdirSync(bDir).filter((f) => f.endsWith('.json')).sort().reverse();
         for (const f of files) {
+          if (seenNames.has(f)) continue;
           try {
-            const p = path.join(BACKUP_DIR, f);
+            const p = path.join(bDir, f);
             const st = fs.statSync(p);
             const parsed = JSON.parse(fs.readFileSync(p, 'utf8'));
+            seenNames.add(f);
             list.push({
               filename: f,
               size: st.size,
@@ -4581,8 +4629,46 @@ async function handleRequest(req, res) {
           } catch (_) {}
         }
       }
+      list.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({ success: true, backups: list }));
+      res.end(JSON.stringify({ success: true, vaultDir: VAULT_DIR, backups: list }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/admin/backups/create' && req.method === 'POST') {
+    try {
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const filename = `manual-snapshot-${ts}.json`;
+      const jsonStr = JSON.stringify(serverState, null, 2);
+      if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+      fs.writeFileSync(path.join(BACKUP_DIR, filename), jsonStr);
+      try {
+        if (!fs.existsSync(VAULT_BACKUP_DIR)) fs.mkdirSync(VAULT_BACKUP_DIR, { recursive: true });
+        fs.writeFileSync(path.join(VAULT_BACKUP_DIR, filename), jsonStr);
+      } catch (_) {}
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, filename, vaultPath: VAULT_BACKUP_DIR }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/admin/backups/export-json' && req.method === 'GET') {
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      const jsonStr = JSON.stringify(serverState, null, 2);
+      res.writeHead(200, {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Content-Disposition': `attachment; filename="sultan-restaurant-backup-${today}.json"`,
+        'Cache-Control': 'no-store',
+      });
+      res.end(jsonStr);
     } catch (e) {
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: e.message }));
@@ -4600,8 +4686,8 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ success: false, error: 'Valid backup filename is required' }));
         return;
       }
-      const targetPath = path.join(BACKUP_DIR, filename);
-      if (!fs.existsSync(targetPath)) {
+      const targetPath = [path.join(BACKUP_DIR, filename), path.join(VAULT_BACKUP_DIR, filename)].find((p) => fs.existsSync(p));
+      if (!targetPath) {
         res.writeHead(404, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: `Backup file "${filename}" not found` }));
         return;
@@ -5082,7 +5168,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 28,
+        apkVersion: 29,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -6988,7 +7074,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
@@ -7006,10 +7092,16 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
     modified = true;
   }
 
-  // Track explicit deletions for inventory, storageZones & inventoryCategories so out-of-sync clients never wipe custom categories/items
+  // Track explicit deletions for inventory, storageZones, inventoryCategories & operational records so out-of-sync clients never wipe live entries
   if (!Array.isArray(serverState.deletedInventoryIds)) serverState.deletedInventoryIds = [];
   if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
   if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
+  if (!Array.isArray(serverState.deletedRecordIds)) serverState.deletedRecordIds = [];
+  if (Array.isArray(partialState.deletedRecordIds) && partialState.deletedRecordIds.length > 0) {
+    serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...partialState.deletedRecordIds])).slice(-800);
+    modified = true;
+  }
+  const deletedRecSet = new Set(serverState.deletedRecordIds);
   if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
     serverState.deletedInventoryCategories = Array.from(new Set([...serverState.deletedInventoryCategories, ...partialState.deletedInventoryCategories])).slice(-300);
     modified = true;
@@ -7442,10 +7534,30 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             sMap.set('st-master', { ...masterOnly });
           }
           serverState.staff = Array.from(sMap.values());
-        } else if (key === 'inventoryResetEpoch' || key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories') {
+        } else if (key === 'inventoryResetEpoch' || key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories' || key === 'deletedRecordIds') {
           // Already merged into serverState sets above
         } else if (isStaleInventoryClient && (key === 'inventory' || key === 'inventoryCategories' || key === 'stockMovements' || key === 'chillerHandovers')) {
           // Ignore stale pre-reset inventory/categories/movements from older devices!
+        } else if (['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'invoices', 'customers'].includes(key)) {
+          const incArr = Array.isArray(sanitized) ? sanitized : [];
+          const currArr = Array.isArray(serverState[key]) ? serverState[key] : [];
+          if (incArr.length === 0 && currArr.length > 0 && !currArr.every((r) => r && deletedRecSet.has(r.id))) {
+            // Never allow an empty array from an unhydrated client to wipe non-empty ledgers
+          } else {
+            const getRecTs = (r) => Number(r?.updatedAt || r?.resolvedAt || r?.paidAt || r?.deliveryDate || r?.orderDate || r?.at || r?.createdAt || r?.timestamp || 0);
+            const rMap = new Map();
+            for (const c of currArr) {
+              if (c && c.id && !deletedRecSet.has(c.id)) rMap.set(c.id, c);
+            }
+            for (const inc of incArr) {
+              if (!inc || !inc.id || deletedRecSet.has(inc.id)) continue;
+              const prev = rMap.get(inc.id);
+              if (!prev || getRecTs(inc) >= getRecTs(prev)) {
+                rMap.set(inc.id, { ...(prev || {}), ...inc });
+              }
+            }
+            serverState[key] = Array.from(rMap.values());
+          }
         } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
           const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
           const currCats = Array.isArray(serverState[key]) ? serverState[key].map((c) => String(c || '').trim()).filter(Boolean) : [];
@@ -7695,6 +7807,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 deletedInventoryIds: serverState.deletedInventoryIds || [],
                 deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
                 deletedInventoryCategories: serverState.deletedInventoryCategories || [],
+                deletedRecordIds: serverState.deletedRecordIds || [],
                 inventoryCategories: serverState.inventoryCategories || [],
                 assetCategories: serverState.assetCategories || [],
                 expenseCategories: serverState.expenseCategories || [],

@@ -696,6 +696,7 @@ export type OpsData = {
   deletedInventoryIds?: string[];
   deletedStorageZoneIds?: string[];
   deletedInventoryCategories?: string[];
+  deletedRecordIds?: string[];
   inventoryCategories?: string[];
   assetCategories?: string[];
   expenseCategories?: string[];
@@ -720,6 +721,7 @@ export const OPS_SYNC_KEYS: (keyof OpsData)[] = [
   'deletedInventoryIds',
   'deletedStorageZoneIds',
   'deletedInventoryCategories',
+  'deletedRecordIds',
   'inventoryCategories',
   'assetCategories',
   'expenseCategories',
@@ -1861,7 +1863,10 @@ export const useOpsStore = create<OpsState>()(
       },
 
       deleteExpense: (id) => {
-        set((state) => ({ expenses: state.expenses.filter((e) => e.id !== id) }));
+        set((state) => ({
+          expenses: state.expenses.filter((e) => e.id !== id),
+          deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id])).slice(-800),
+        }));
         notifySync();
       },
 
@@ -1967,6 +1972,7 @@ export const useOpsStore = create<OpsState>()(
       deleteSupplier: (id) => {
         set((state) => ({
           suppliers: state.suppliers.filter((s) => s.id !== id),
+          deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id])).slice(-800),
         }));
         notifySync();
       },
@@ -2313,11 +2319,13 @@ export const useOpsStore = create<OpsState>()(
             }
             return s;
           });
+          const removedExpIds = state.expenses.filter((e) => e.sourcePOId === id).map((e) => e.id);
           const nextExpenses = state.expenses.filter((e) => e.sourcePOId !== id);
           return {
             purchaseOrders: state.purchaseOrders.filter((p) => p.id !== id),
             suppliers: updatedSuppliers,
             expenses: nextExpenses,
+            deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id, ...removedExpIds])).slice(-800),
           };
         });
         notifySync();
@@ -2423,11 +2431,13 @@ export const useOpsStore = create<OpsState>()(
             });
           }
 
+          const removedExpIds = state.expenses.filter((e) => e.sourcePaymentId === id).map((e) => e.id);
           return {
             supplierPayments: state.supplierPayments.filter((p) => p.id !== id),
             suppliers: updatedSuppliers,
             purchaseOrders: updatedPOs,
             expenses: state.expenses.filter((e) => e.sourcePaymentId !== id),
+            deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id, ...removedExpIds])).slice(-800),
           };
         });
         notifySync();
@@ -2496,7 +2506,10 @@ export const useOpsStore = create<OpsState>()(
       },
 
       deleteAsset: (id) => {
-        set((state) => ({ assets: state.assets.filter((a) => a.id !== id) }));
+        set((state) => ({
+          assets: state.assets.filter((a) => a.id !== id),
+          deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id])).slice(-800),
+        }));
         notifySync();
       },
 
@@ -2633,7 +2646,10 @@ export const useOpsStore = create<OpsState>()(
       },
 
       deleteDamageRecord: (id) => {
-        set((state) => ({ damageRecords: state.damageRecords.filter((d) => d.id !== id) }));
+        set((state) => ({
+          damageRecords: state.damageRecords.filter((d) => d.id !== id),
+          deletedRecordIds: Array.from(new Set([...(state.deletedRecordIds || []), id])).slice(-800),
+        }));
         notifySync();
       },
 
@@ -2719,8 +2735,14 @@ export const useOpsStore = create<OpsState>()(
               new Set([...(state.deletedInventoryCategories || []), ...remote.deletedInventoryCategories])
             ).slice(-300);
           }
+          if (Array.isArray(remote.deletedRecordIds)) {
+            next.deletedRecordIds = Array.from(
+              new Set([...(state.deletedRecordIds || []), ...remote.deletedRecordIds])
+            ).slice(-800);
+          }
           const delInvSet = new Set(next.deletedInventoryIds || state.deletedInventoryIds || []);
           const delZoneSet = new Set(next.deletedStorageZoneIds || state.deletedStorageZoneIds || []);
+          const delRecSet = new Set(next.deletedRecordIds || state.deletedRecordIds || []);
           const delCatSet = new Set(
             (next.deletedInventoryCategories || state.deletedInventoryCategories || []).map((c) => c.toLowerCase())
           );
@@ -2818,16 +2840,47 @@ export const useOpsStore = create<OpsState>()(
             mergedHandovers.sort((a, b) => (b.at || 0) - (a.at || 0));
             next.chillerHandovers = mergedHandovers.slice(0, 100);
           }
+          const mergeLedgerById = <T extends { id: string }>(localArr: T[], remoteArr: T[], getTs: (x: any) => number): T[] => {
+            const map = new Map<string, T>();
+            for (const c of localArr || []) {
+              if (c && c.id && !delRecSet.has(c.id)) map.set(c.id, c);
+            }
+            for (const inc of remoteArr || []) {
+              if (!inc || !inc.id || delRecSet.has(inc.id)) continue;
+              const prev = map.get(inc.id);
+              if (!prev || getTs(inc) >= getTs(prev)) {
+                map.set(inc.id, inc);
+              }
+            }
+            return Array.from(map.values());
+          };
+
           if (Array.isArray(remote.expenses)) {
-            next.expenses = [...remote.expenses].sort((a, b) => (b.at || 0) - (a.at || 0));
+            next.expenses = mergeLedgerById(state.expenses, remote.expenses, (x) => Number(x.at || 0)).sort(
+              (a, b) => (b.at || 0) - (a.at || 0)
+            );
           }
           if (Array.isArray(remote.feedback)) next.feedback = remote.feedback;
           if (Array.isArray(remote.unavailableItemIds)) next.unavailableItemIds = remote.unavailableItemIds;
-          if (Array.isArray(remote.suppliers)) next.suppliers = remote.suppliers;
-          if (Array.isArray(remote.purchaseOrders)) next.purchaseOrders = remote.purchaseOrders;
-          if (Array.isArray(remote.supplierPayments)) next.supplierPayments = remote.supplierPayments;
-          if (Array.isArray(remote.assets)) next.assets = remote.assets;
-          if (Array.isArray(remote.damageRecords)) next.damageRecords = remote.damageRecords;
+          if (Array.isArray(remote.suppliers)) {
+            next.suppliers = mergeLedgerById(state.suppliers, remote.suppliers, (x) => Number(x.updatedAt || x.createdAt || 0));
+          }
+          if (Array.isArray(remote.purchaseOrders)) {
+            next.purchaseOrders = mergeLedgerById(state.purchaseOrders, remote.purchaseOrders, (x) =>
+              Number(x.deliveryDate || x.orderDate || x.createdAt || 0)
+            );
+          }
+          if (Array.isArray(remote.supplierPayments)) {
+            next.supplierPayments = mergeLedgerById(state.supplierPayments, remote.supplierPayments, (x) => Number(x.paidAt || 0));
+          }
+          if (Array.isArray(remote.assets)) {
+            next.assets = mergeLedgerById(state.assets, remote.assets, (x) => Number(x.updatedAt || x.createdAt || 0));
+          }
+          if (Array.isArray(remote.damageRecords)) {
+            next.damageRecords = mergeLedgerById(state.damageRecords, remote.damageRecords, (x) =>
+              Number(x.resolvedAt || x.createdAt || x.incidentDate || 0)
+            );
+          }
 
           return { ...state, ...next };
         }),
@@ -2875,6 +2928,7 @@ export function getOpsSyncState(): OpsData {
     deletedInventoryIds: s.deletedInventoryIds || [],
     deletedStorageZoneIds: s.deletedStorageZoneIds || [],
     deletedInventoryCategories: s.deletedInventoryCategories || [],
+    deletedRecordIds: s.deletedRecordIds || [],
     inventoryCategories: s.inventoryCategories,
     assetCategories: s.assetCategories || [...ASSET_CATEGORIES],
     expenseCategories: s.expenseCategories || [...EXPENSE_CATEGORIES],
