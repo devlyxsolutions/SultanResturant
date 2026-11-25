@@ -379,6 +379,7 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
     mtime: number;
     inventoryCount: number;
     rawInventoryCount: number;
+    categoriesCount?: number;
     movementsCount: number;
     suppliersCount: number;
     invoicesCount: number;
@@ -7069,7 +7070,7 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
                       <View style={{ flex: 1, minWidth: 200 }}>
                         <Text style={{ fontSize: 13.5, fontWeight: '800', color: '#0F172A' }}>{bf.filename}</Text>
                         <Text style={{ fontSize: 11.5, color: '#475569', marginTop: 2 }}>
-                          📦 {bf.inventoryCount} SKUs ({bf.rawInventoryCount} Raw) • 🔄 {bf.movementsCount} Movements • 🚚 {bf.suppliersCount} Suppliers • 🧾 {bf.invoicesCount} Bills
+                          🏷️ {bf.categoriesCount ?? 9} Categories • 📦 {bf.inventoryCount} SKUs ({bf.rawInventoryCount} Raw) • 🔄 {bf.movementsCount} Movements • 🧾 {bf.invoicesCount} Bills
                         </Text>
                         <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }}>
                           Saved: {new Date(bf.mtime).toLocaleString()} ({Math.round(bf.size / 1024)} KB)
