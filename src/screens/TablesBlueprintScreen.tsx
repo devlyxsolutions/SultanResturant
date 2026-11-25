@@ -1948,6 +1948,7 @@ export default function TablesBlueprintScreen({
           >
             <TouchableOpacity
               style={[styles.cmdBtn, styles.cmdBtnGroup]}
+              activeOpacity={0.82}
               onPress={() =>
                 openReservationModal({
                   mode: 'group_event',
@@ -1956,26 +1957,30 @@ export default function TablesBlueprintScreen({
                 })
               }
             >
-              <Ionicons name="sparkles" size={14} color="#fff" />
-              <Text style={[styles.cmdBtnText, { color: '#fff' }]}>Group / Event</Text>
+              <View style={styles.cmdBtnGroupIcon}>
+                <Ionicons name="calendar" size={13} color="#4A121A" />
+              </View>
+              <Text style={[styles.cmdBtnText, { color: '#3B0B12', fontWeight: '900' }]}>Group / Event</Text>
             </TouchableOpacity>
 
             {canAddTables && (
               <>
                 <TouchableOpacity
                   style={[styles.cmdBtn, styles.cmdBtnPrimary]}
+                  activeOpacity={0.85}
                   onPress={() => openAddTableModal(undefined, undefined, 'single')}
                 >
-                  <Ionicons name="add" size={15} color="#F3D179" />
+                  <Ionicons name="add" size={16} color="#F3D179" />
                   <Text style={[styles.cmdBtnText, { color: '#F3D179' }]}>Add Unit</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
                   style={[styles.cmdBtn, styles.cmdBtnBulk]}
+                  activeOpacity={0.82}
                   onPress={() => openAddTableModal(undefined, undefined, 'bulk')}
                 >
-                  <Ionicons name="copy-outline" size={14} color="#fff" />
-                  <Text style={[styles.cmdBtnText, { color: '#fff' }]}>Bulk Add</Text>
+                  <Ionicons name="copy-outline" size={14} color={BRAND} />
+                  <Text style={[styles.cmdBtnText, { color: BRAND }]}>Bulk Add</Text>
                 </TouchableOpacity>
               </>
             )}
@@ -4609,25 +4614,46 @@ const styles = StyleSheet.create({
   cmdBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 12,
-    paddingVertical: 7.5,
-    borderRadius: 9,
+    justifyContent: 'center',
+    gap: 6,
+    height: 36,
+    paddingHorizontal: 13,
+    borderRadius: 10,
     borderWidth: 1,
   },
   cmdBtnGroup: {
-    backgroundColor: '#6D28D9',
-    borderColor: '#5B21B6',
+    backgroundColor: '#F6E7BE',
+    borderColor: '#D5A943',
+    paddingLeft: 8,
+    paddingRight: 13,
+    shadowColor: '#B8860B',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.14,
+    shadowRadius: 3,
+    elevation: 1,
+  },
+  cmdBtnGroupIcon: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    backgroundColor: '#E8CA79',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   cmdBtnPrimary: {
     backgroundColor: '#4A121A',
     borderColor: '#3B0B12',
+    shadowColor: '#24050A',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.16,
+    shadowRadius: 3,
+    elevation: 1,
   },
   cmdBtnOutline: {
     backgroundColor: '#FAF8F4',
     borderColor: '#DDD6CA',
   },
-  cmdBtnText: { fontWeight: '800', fontSize: 12.5 },
+  cmdBtnText: { fontWeight: '800', fontSize: 12.5, letterSpacing: 0.1 },
   content: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 70 },
 
   // Full-Width Slim Executive KPI Strip
@@ -5457,9 +5483,8 @@ const styles = StyleSheet.create({
   seatingTypeChoiceSub: { fontSize: 11.5, color: '#64748B' },
 
   cmdBtnBulk: {
-    backgroundColor: '#1D4ED8',
-    borderWidth: 1,
-    borderColor: '#1E40AF',
+    backgroundColor: '#F6EDEE',
+    borderColor: '#D6B8BC',
   },
   dialogBulk: {
     width: '94%',
