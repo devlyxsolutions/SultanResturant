@@ -33,20 +33,52 @@ import {
 import { resolveMenuImageUri } from '../../../utils/menuImage';
 import { doesOrderBelongToUser, isOrderTakerUser } from '../../../utils/orderTakerScope';
 
-const NOTE_PRESETS = [
-  'Less Spicy',
-  'Extra Spicy',
-  'No Onion',
-  'Extra Crispy',
-  'Starter First',
-  'Rush Order',
-  'Low Salt',
-  'Pack To-Go',
-  'Less Sugar',
-  'Extra Ice',
-  'Extra Cheese',
-  'Extra Raita',
+const ITEM_NOTE_GROUPS: { label: string; presets: string[] }[] = [
+  {
+    label: 'Spice & Flavor',
+    presets: ['Extra Spicy', 'Medium Spicy', 'Less Spicy', 'Mild / Kids', 'Less Oil', 'Low Salt', 'Extra Gravy', 'Extra Ginger'],
+  },
+  {
+    label: 'Kitchen Prep',
+    presets: ['No Onion', 'No Garlic', 'Well Done', 'Extra Crispy', 'Extra Cheese', 'Extra Raita', 'Separate Sauce'],
+  },
+  {
+    label: 'Drinks & Cold',
+    presets: ['No Ice', 'Less Ice', 'Less Sugar', 'No Sugar', 'Chilled'],
+  },
 ];
+
+const VARIANT_QUICK_NOTES = ['Extra Spicy', 'Less Spicy', 'Less Oil', 'No Onion', 'Well Done'];
+
+const ORDER_NOTE_PRESETS = [
+  'Serve All Together',
+  'Starters First',
+  'VIP Guest',
+  'Separate Plates',
+  'Birthday / Event',
+  'Kids at Table',
+  'Pack Leftovers',
+  'Hot & Fresh',
+];
+
+function toggleCommaNoteToken(current: string, token: string): string {
+  const tokens = current
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const exists = tokens.some((t) => t.toLowerCase() === token.toLowerCase());
+  if (exists) {
+    return tokens.filter((t) => t.toLowerCase() !== token.toLowerCase()).join(', ');
+  }
+  return [...tokens, token].join(', ');
+}
+
+function hasCommaNoteToken(current: string, token: string): boolean {
+  return current
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .includes(token.toLowerCase());
+}
 
 function getCategoryIcon(catName: string): keyof typeof Ionicons.glyphMap {
   const c = (catName || '').toLowerCase().trim();
@@ -175,8 +207,10 @@ export default function TableOrderScreen() {
     return map;
   }, [newCart]);
   const [variantModalItem, setVariantModalItem] = useState<MenuItem | null>(null);
+  const [variantNoteDraft, setVariantNoteDraft] = useState('');
   const [editingNoteItem, setEditingNoteItem] = useState<{ item: MenuItem; notes?: string } | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [orderNotes, setOrderNotes] = useState('');
   const [isRushOrder, setIsRushOrder] = useState(false);
 
   // Table Operations Modals
@@ -363,6 +397,7 @@ export default function TableOrderScreen() {
       return;
     }
     if (item.variants && item.variants.length > 0) {
+      setVariantNoteDraft('');
       setVariantModalItem(item);
       return;
     }
@@ -379,6 +414,7 @@ export default function TableOrderScreen() {
     if (!variantModalItem) return;
     const variantId = `${variantModalItem.id}-${variant.name}`;
     const variantName = `${variantModalItem.name} (${variant.name})`;
+    const cleanNote = variantNoteDraft.trim() || undefined;
     const variantItem: MenuItem = {
       ...variantModalItem,
       id: variantId,
@@ -388,10 +424,14 @@ export default function TableOrderScreen() {
     setNewCart((prev) => {
       const existing = prev.find((i) => i.item.id === variantId);
       if (existing) {
-        return prev.map((i) => (i.item.id === variantId ? { ...i, qty: i.qty + 1 } : i));
+        const mergedNote = cleanNote
+          ? Array.from(new Set([existing.notes, cleanNote].filter(Boolean))).join(', ')
+          : existing.notes;
+        return prev.map((i) => (i.item.id === variantId ? { ...i, qty: i.qty + 1, notes: mergedNote } : i));
       }
-      return [...prev, { item: variantItem, qty: 1 }];
+      return [...prev, { item: variantItem, qty: 1, notes: cleanNote }];
     });
+    setVariantNoteDraft('');
     setVariantModalItem(null);
   };
 
@@ -424,11 +464,11 @@ export default function TableOrderScreen() {
   };
 
   const appendNotePreset = (preset: string) => {
-    if (noteDraft.includes(preset)) {
-      setNoteDraft((prev) => prev.replace(preset, '').replace(/,\s*,/g, ',').trim());
-    } else {
-      setNoteDraft((prev) => (prev ? `${prev}, ${preset}` : preset));
-    }
+    setNoteDraft((prev) => toggleCommaNoteToken(prev, preset));
+  };
+
+  const toggleOrderNotePreset = (preset: string) => {
+    setOrderNotes((prev) => toggleCommaNoteToken(prev, preset));
   };
 
   const filteredItems = useMemo(() => {
@@ -462,8 +502,15 @@ export default function TableOrderScreen() {
     const kotItems = newCart.map((c) => ({
       item: c.item,
       qty: c.qty,
-      notes: [c.notes, isRushOrder ? 'RUSH PRIORITY' : ''].filter(Boolean).join(' • ') || undefined,
+      notes: c.notes?.trim() || undefined,
     }));
+
+    const combinedOrderNote = [
+      isRushOrder ? 'RUSH PRIORITY' : '',
+      orderNotes.trim(),
+    ]
+      .filter(Boolean)
+      .join(' • ') || undefined;
 
     const orderServerName =
       table && table.status !== 'available' && table.server
@@ -479,7 +526,8 @@ export default function TableOrderScreen() {
       orderServerName,
       kotItems,
       isAddOn,
-      orderServerId
+      orderServerId,
+      combinedOrderNote
     );
 
     if (table && table.status !== 'occupied') {
@@ -500,6 +548,7 @@ export default function TableOrderScreen() {
 
     broadcastImmediately();
     setNewCart([]);
+    setOrderNotes('');
     setIsRushOrder(false);
 
     const successMsg = `Round #${roundNum} sent to Kitchen KDS and Juice Bar!`;
@@ -961,41 +1010,108 @@ export default function TableOrderScreen() {
                   </Text>
                 </View>
               ) : (
-                newCart.map((c, idx) => (
-                  <View key={c.item.id} style={styles.ticketRow}>
-                    <View style={styles.ticketRowLeft}>
-                      <Text style={styles.ticketRowIndex}>{idx + 1}.</Text>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.ticketRowName} numberOfLines={1}>
-                          {c.item.name}
-                        </Text>
-                        <TouchableOpacity onPress={() => openNoteModal(c)}>
-                          <Text style={styles.noteLinkText} numberOfLines={1}>
-                            {c.notes ? `📝 ${c.notes}` : '+ Add Kitchen Note'}
+                <>
+                  {newCart.map((c, idx) => (
+                    <View key={c.item.id} style={styles.ticketRow}>
+                      <View style={styles.ticketRowLeft}>
+                        <Text style={styles.ticketRowIndex}>{idx + 1}.</Text>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.ticketRowName} numberOfLines={1}>
+                            {c.item.name}
                           </Text>
+                          <TouchableOpacity
+                            style={[styles.itemNotePillBtn, c.notes && styles.itemNotePillBtnFilled]}
+                            onPress={() => openNoteModal(c)}
+                            activeOpacity={0.75}
+                          >
+                            <Ionicons
+                              name={c.notes ? 'chatbubble-ellipses' : 'create-outline'}
+                              size={12}
+                              color={c.notes ? '#92400E' : '#B45309'}
+                            />
+                            <Text
+                              style={[styles.itemNotePillText, c.notes && styles.itemNotePillTextFilled]}
+                              numberOfLines={2}
+                            >
+                              {c.notes ? `${c.notes}  •  Edit` : 'Add Item Note / Comment'}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+
+                      <View style={styles.ticketRowRight}>
+                        <View style={styles.qtyStepper}>
+                          <TouchableOpacity style={styles.qtyBtn} onPress={() => updateCartQty(c.item.id, -1)}>
+                            <Ionicons name="remove" size={13} color="#1E293B" />
+                          </TouchableOpacity>
+                          <Text style={styles.qtyValText}>{c.qty}</Text>
+                          <TouchableOpacity
+                            style={[styles.qtyBtn, styles.qtyBtnPlus]}
+                            onPress={() => updateCartQty(c.item.id, 1)}
+                          >
+                            <Ionicons name="add" size={13} color="#FFFFFF" />
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => removeFromCart(c.item.id)}>
+                          <Ionicons name="close" size={16} color="#94A3B8" />
                         </TouchableOpacity>
                       </View>
+                    </View>
+                  ))}
+
+                  {/* Overall Order Notes & Special Kitchen Comments Section */}
+                  <View style={styles.overallNotesCard}>
+                    <View style={styles.overallNotesHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <View style={styles.overallNotesIconBox}>
+                          <Ionicons name="chatbox-ellipses-outline" size={15} color="#52141C" />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.overallNotesTitle}>Overall Order Notes & Comments</Text>
+                          <Text style={styles.overallNotesSub}>
+                            Applies to entire KOT on Kitchen & Juice Bar KDS
+                          </Text>
+                        </View>
+                      </View>
+                      {orderNotes.trim().length > 0 && (
+                        <TouchableOpacity
+                          style={styles.overallNotesClearBtn}
+                          onPress={() => setOrderNotes('')}
+                        >
+                          <Text style={styles.overallNotesClearText}>Clear</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
 
-                    <View style={styles.ticketRowRight}>
-                      <View style={styles.qtyStepper}>
-                        <TouchableOpacity style={styles.qtyBtn} onPress={() => updateCartQty(c.item.id, -1)}>
-                          <Ionicons name="remove" size={13} color="#1E293B" />
-                        </TouchableOpacity>
-                        <Text style={styles.qtyValText}>{c.qty}</Text>
-                        <TouchableOpacity
-                          style={[styles.qtyBtn, styles.qtyBtnPlus]}
-                          onPress={() => updateCartQty(c.item.id, 1)}
-                        >
-                          <Ionicons name="add" size={13} color="#FFFFFF" />
-                        </TouchableOpacity>
-                      </View>
-                      <TouchableOpacity onPress={() => removeFromCart(c.item.id)}>
-                        <Ionicons name="close" size={16} color="#94A3B8" />
-                      </TouchableOpacity>
+                    <View style={styles.overallNotesChipsRow}>
+                      {ORDER_NOTE_PRESETS.map((preset) => {
+                        const active = hasCommaNoteToken(orderNotes, preset);
+                        return (
+                          <TouchableOpacity
+                            key={preset}
+                            style={[styles.overallPresetChip, active && styles.overallPresetChipActive]}
+                            onPress={() => toggleOrderNotePreset(preset)}
+                            activeOpacity={0.78}
+                          >
+                            <Text style={[styles.overallPresetChipText, active && styles.overallPresetChipTextActive]}>
+                              {active ? `✓ ${preset}` : `+ ${preset}`}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
                     </View>
+
+                    <TextInput
+                      style={styles.overallNotesInput}
+                      placeholder="Write overall order comments (e.g. Serve starters first, make all Karahi medium spicy, VIP table)..."
+                      placeholderTextColor="#94A3B8"
+                      value={orderNotes}
+                      onChangeText={setOrderNotes}
+                      multiline
+                      numberOfLines={2}
+                    />
                   </View>
-                ))
+                </>
               )}
             </ScrollView>
 
@@ -1049,6 +1165,23 @@ export default function TableOrderScreen() {
                       ~{cartPrepEstimate.totalMins} Mins
                     </Text>
                   </View>
+                </View>
+              )}
+
+              {/* Notes Summary Indicator before Punch */}
+              {newCart.length > 0 && (orderNotes.trim().length > 0 || newCart.some((c) => !!c.notes)) && (
+                <View style={styles.footerNotesSummary}>
+                  <Ionicons name="chatbubble-ellipses" size={14} color="#92400E" />
+                  <Text style={styles.footerNotesSummaryText} numberOfLines={1}>
+                    {[
+                      newCart.filter((c) => !!c.notes).length > 0
+                        ? `${newCart.filter((c) => !!c.notes).length} item note(s)`
+                        : '',
+                      orderNotes.trim() ? `Order Note: ${orderNotes.trim()}` : '',
+                    ]
+                      .filter(Boolean)
+                      .join('  •  ')}
+                  </Text>
                 </View>
               )}
 
@@ -1154,6 +1287,24 @@ export default function TableOrderScreen() {
               );
             })()}
 
+            {activeTickets.some((tk) => !!tk.notes) && (
+              <View style={styles.runningOrderNotesWrap}>
+                {activeTickets
+                  .filter((tk) => !!tk.notes)
+                  .map((tk) => (
+                    <View key={`note-${tk.id}`} style={styles.runningOrderNoteBanner}>
+                      <Ionicons name="chatbox-ellipses" size={15} color="#92400E" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.runningOrderNoteLabel}>
+                          ORDER COMMENT (ROUND #{tk.roundNumber || 1})
+                        </Text>
+                        <Text style={styles.runningOrderNoteText}>{tk.notes}</Text>
+                      </View>
+                    </View>
+                  ))}
+              </View>
+            )}
+
             <ScrollView style={{ flex: 1 }}>
               {alreadyOrderedItems.length === 0 ? (
                 <View style={styles.emptyTicketBox}>
@@ -1184,8 +1335,14 @@ export default function TableOrderScreen() {
                             : remainingSecs > 0
                               ? `Time Left: ${formatCountdownMMSS(remainingSecs)}`
                               : 'Finalizing'}
-                          ) {it.notes ? `• ${it.notes}` : ''}
+                          )
                         </Text>
+                        {it.notes ? (
+                          <View style={styles.runningItemNoteBadge}>
+                            <Ionicons name="pencil" size={11} color="#92400E" />
+                            <Text style={styles.runningItemNoteText}>{it.notes}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       {it.status === 'ready' && (
                         <TouchableOpacity
@@ -1224,67 +1381,133 @@ export default function TableOrderScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Variant Picker Modal */}
-      <Modal visible={!!variantModalItem} transparent animationType="fade">
+      {/* Variant Picker Modal (with optional special cooking note) */}
+      <Modal visible={!!variantModalItem} transparent animationType="fade" onRequestClose={() => setVariantModalItem(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxWidth: 420 }]}>
+          <View style={[styles.modalCard, { maxWidth: 450 }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{variantModalItem?.name}</Text>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>{variantModalItem?.name}</Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B', fontWeight: '600', marginTop: 1 }}>
+                  Optional: add cooking comment, then tap portion size
+                </Text>
+              </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setVariantModalItem(null)}>
                 <Ionicons name="close" size={20} color="#475569" />
               </TouchableOpacity>
             </View>
-            <View style={{ padding: 16, gap: 10 }}>
-              {(variantModalItem?.variants || []).map((v) => (
-                <TouchableOpacity
-                  key={v.name}
-                  style={styles.variantChoiceBtn}
-                  onPress={() => handleVariantSelect(v)}
-                >
-                  <Text style={styles.variantChoiceName}>{v.name}</Text>
-                  <Ionicons name="add-circle" size={20} color="#52141C" />
-                </TouchableOpacity>
-              ))}
+            <View style={{ padding: 16, gap: 12 }}>
+              <View style={{ gap: 6 }}>
+                <Text style={styles.noteGroupTitle}>SPECIAL NOTE FOR THIS DISH (OPTIONAL)</Text>
+                <TextInput
+                  style={styles.textInputField}
+                  placeholder="e.g. Make slightly spicy, extra ginger, less oil..."
+                  placeholderTextColor="#94A3B8"
+                  value={variantNoteDraft}
+                  onChangeText={setVariantNoteDraft}
+                />
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                  {VARIANT_QUICK_NOTES.map((preset) => {
+                    const active = hasCommaNoteToken(variantNoteDraft, preset);
+                    return (
+                      <TouchableOpacity
+                        key={preset}
+                        style={[styles.filterChip, active && styles.filterChipActive]}
+                        onPress={() => setVariantNoteDraft((prev) => toggleCommaNoteToken(prev, preset))}
+                      >
+                        <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                          {active ? `✓ ${preset}` : preset}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              <View style={{ gap: 8 }}>
+                <Text style={styles.noteGroupTitle}>SELECT PORTION / SIZE</Text>
+                {(variantModalItem?.variants || []).map((v) => (
+                  <TouchableOpacity
+                    key={v.name}
+                    style={styles.variantChoiceBtn}
+                    onPress={() => handleVariantSelect(v)}
+                  >
+                    <View>
+                      <Text style={styles.variantChoiceName}>{v.name}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#B45309', marginTop: 2 }}>
+                        Rs. {v.price.toLocaleString()}
+                      </Text>
+                    </View>
+                    <Ionicons name="add-circle" size={22} color="#52141C" />
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* Kitchen Note Modal */}
-      <Modal visible={!!editingNoteItem} transparent animationType="fade">
+      {/* Item-Wise Kitchen Note / Comment Modal */}
+      <Modal visible={!!editingNoteItem} transparent animationType="fade" onRequestClose={() => setEditingNoteItem(null)}>
         <View style={styles.modalBackdrop}>
-          <View style={[styles.modalCard, { maxWidth: 460 }]}>
+          <View style={[styles.modalCard, { maxWidth: 500, maxHeight: '88%' }]}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Kitchen Note: {editingNoteItem?.item.name}</Text>
+              <View style={{ flex: 1, marginRight: 8 }}>
+                <Text style={styles.modalTitle} numberOfLines={1}>
+                  Item Note: {editingNoteItem?.item.name}
+                </Text>
+                <Text style={{ fontSize: 11.5, color: '#64748B', fontWeight: '600', marginTop: 1 }}>
+                  Printed on KOT & highlighted on Kitchen / Juice Bar KDS
+                </Text>
+              </View>
               <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setEditingNoteItem(null)}>
                 <Ionicons name="close" size={20} color="#475569" />
               </TouchableOpacity>
             </View>
-            <View style={{ padding: 16, gap: 12 }}>
+            <ScrollView style={{ padding: 16 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled">
               <TextInput
-                style={styles.textInputField}
-                placeholder="Type special cooking instructions..."
+                style={styles.noteMultiInput}
+                placeholder="Type special cooking instructions (e.g. Make Karahi slightly spicy, extra ginger, less oil)..."
+                placeholderTextColor="#94A3B8"
                 value={noteDraft}
                 onChangeText={setNoteDraft}
+                multiline
+                numberOfLines={3}
+                autoFocus
               />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                {NOTE_PRESETS.map((preset) => {
-                  const active = noteDraft.includes(preset);
-                  return (
-                    <TouchableOpacity
-                      key={preset}
-                      style={[styles.filterChip, active && styles.filterChipActive]}
-                      onPress={() => appendNotePreset(preset)}
-                    >
-                      <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
-                        {preset}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <TouchableOpacity style={styles.modalPrimaryBtn} onPress={saveItemNote}>
-                <Text style={styles.modalPrimaryBtnText}>Save Note</Text>
+
+              {ITEM_NOTE_GROUPS.map((grp) => (
+                <View key={grp.label} style={{ gap: 6 }}>
+                  <Text style={styles.noteGroupTitle}>{grp.label}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {grp.presets.map((preset) => {
+                      const active = hasCommaNoteToken(noteDraft, preset);
+                      return (
+                        <TouchableOpacity
+                          key={preset}
+                          style={[styles.filterChip, active && styles.filterChipActive]}
+                          onPress={() => appendNotePreset(preset)}
+                        >
+                          <Text style={[styles.filterChipText, active && styles.filterChipTextActive]}>
+                            {active ? `✓ ${preset}` : preset}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+            <View style={styles.noteModalFooter}>
+              <TouchableOpacity
+                style={styles.noteModalClearBtn}
+                onPress={() => setNoteDraft('')}
+              >
+                <Text style={styles.noteModalClearText}>Clear</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.modalPrimaryBtn, { flex: 1 }]} onPress={saveItemNote}>
+                <Ionicons name="checkmark-circle" size={16} color="#F3D179" />
+                <Text style={[styles.modalPrimaryBtnText, { color: '#F3D179' }]}>Save Item Comment</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1304,6 +1527,19 @@ export default function TableOrderScreen() {
               </TouchableOpacity>
             </View>
             <ScrollView style={{ maxHeight: 400, padding: 16 }}>
+              {activeTickets
+                .filter((tk) => !!tk.notes)
+                .map((tk) => (
+                  <View key={`m-note-${tk.id}`} style={[styles.runningOrderNoteBanner, { marginBottom: 10 }]}>
+                    <Ionicons name="chatbox-ellipses" size={15} color="#92400E" />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.runningOrderNoteLabel}>
+                        ORDER COMMENT (ROUND #{tk.roundNumber || 1})
+                      </Text>
+                      <Text style={styles.runningOrderNoteText}>{tk.notes}</Text>
+                    </View>
+                  </View>
+                ))}
               {alreadyOrderedItems.map((it, idx) => (
                 <View key={`${it.ticketId}-${it.id}-${idx}`} style={styles.runningOrderCard}>
                   <View style={{ flex: 1 }}>
@@ -1311,8 +1547,14 @@ export default function TableOrderScreen() {
                       {it.qty}× {it.name}
                     </Text>
                     <Text style={styles.runningOrderItems}>
-                      Status: {it.status.toUpperCase()} {it.notes ? `• ${it.notes}` : ''}
+                      Status: {it.status.toUpperCase()}
                     </Text>
+                    {it.notes ? (
+                      <View style={styles.runningItemNoteBadge}>
+                        <Ionicons name="pencil" size={11} color="#92400E" />
+                        <Text style={styles.runningItemNoteText}>{it.notes}</Text>
+                      </View>
+                    ) : null}
                   </View>
                   {it.status === 'ready' && (
                     <TouchableOpacity
@@ -2186,6 +2428,227 @@ const styles = StyleSheet.create({
   },
   tablePickerMeta: {
     fontSize: 11.5,
+    color: '#64748B',
+  },
+  itemNotePillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 7,
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    maxWidth: '100%',
+  },
+  itemNotePillBtnFilled: {
+    backgroundColor: '#FEF3C7',
+    borderColor: '#D5A943',
+  },
+  itemNotePillText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#B45309',
+    flexShrink: 1,
+  },
+  itemNotePillTextFilled: {
+    color: '#78350F',
+    fontWeight: '800',
+  },
+  overallNotesCard: {
+    marginTop: 10,
+    backgroundColor: '#FFFDF8',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E5D5B0',
+    padding: 12,
+    gap: 10,
+  },
+  overallNotesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  overallNotesIconBox: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: '#F6E7BE',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  overallNotesTitle: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#24050A',
+  },
+  overallNotesSub: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+  overallNotesClearBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#FEE2E2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  overallNotesClearText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B91C1C',
+  },
+  overallNotesChipsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+  },
+  overallPresetChip: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDD6CA',
+  },
+  overallPresetChipActive: {
+    backgroundColor: '#52141C',
+    borderColor: '#52141C',
+  },
+  overallPresetChipText: {
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  overallPresetChipTextActive: {
+    color: '#F3D179',
+    fontWeight: '800',
+  },
+  overallNotesInput: {
+    minHeight: 58,
+    borderWidth: 1.5,
+    borderColor: '#DDD6CA',
+    borderRadius: 9,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#0F172A',
+    backgroundColor: '#FFFFFF',
+    textAlignVertical: 'top',
+  },
+  footerNotesSummary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#D5A943',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  footerNotesSummaryText: {
+    flex: 1,
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  runningOrderNotesWrap: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  runningOrderNoteBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1.5,
+    borderColor: '#D5A943',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  runningOrderNoteLabel: {
+    fontSize: 10.5,
+    fontWeight: '900',
+    color: '#92400E',
+    letterSpacing: 0.4,
+  },
+  runningOrderNoteText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#451A03',
+    marginTop: 2,
+  },
+  runningItemNoteBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    backgroundColor: '#FEF3C7',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+  },
+  runningItemNoteText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#78350F',
+  },
+  noteGroupTitle: {
+    fontSize: 11,
+    fontWeight: '900',
+    color: '#64748B',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  noteMultiInput: {
+    minHeight: 74,
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#0F172A',
+    backgroundColor: '#F8FAFC',
+    textAlignVertical: 'top',
+  },
+  noteModalFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+  },
+  noteModalClearBtn: {
+    height: 40,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noteModalClearText: {
+    fontSize: 13,
+    fontWeight: '800',
     color: '#64748B',
   },
 });

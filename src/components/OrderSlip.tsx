@@ -174,6 +174,7 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
         <span>Server: ${ticket.server || 'Staff'}</span>
         <span>Total Qty: ${totalQty}</span>
       </div>
+      ${ticket.notes ? `<div style="border: 2px solid #000; background: #f3f3f3; padding: 5px 7px; margin: 6px 0; border-radius: 3px;"><div style="font-size: 10px; font-weight: 900; letter-spacing: 0.6px;">ORDER NOTE / INSTRUCTIONS:</div><div style="font-size: 13px; font-weight: 900; margin-top: 2px;">${ticket.notes}</div></div>` : ''}
       <table>
         <thead>
           <tr>
@@ -300,6 +301,12 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
           <Text style={styles.metaText}>Round #: {ticket.roundNumber || 2}</Text>
         </View>
       )}
+      {ticket.notes ? (
+        <View style={{ borderWidth: 1.5, borderColor: '#000', backgroundColor: '#F3F4F6', padding: 6, marginVertical: 6, borderRadius: 4 }}>
+          <Text style={{ fontSize: 10, fontWeight: '900', color: '#000' }}>ORDER NOTE / INSTRUCTIONS:</Text>
+          <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#000', marginTop: 2 }}>{ticket.notes}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.dividerDashed} />
 

@@ -654,6 +654,15 @@ export default function KitchenDisplayScreen() {
 
         {/* Ticket Items */}
         <ScrollView style={styles.ticketBody} showsVerticalScrollIndicator={false}>
+          {item.notes ? (
+            <View style={styles.orderNoteBanner}>
+              <Ionicons name="chatbox-ellipses" size={15} color="#FDE68A" style={{ marginTop: 1 }} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.orderNoteBannerLabel}>ORDER COMMENT / INSTRUCTIONS</Text>
+                <Text style={styles.orderNoteBannerText}>{item.notes}</Text>
+              </View>
+            </View>
+          ) : null}
           {items.map((food) => {
             const isItemDone = food.completed || food.itemStatus === 'served' || isServed;
             const isItemReady = food.itemStatus === 'ready';
@@ -1694,8 +1703,38 @@ const styles = StyleSheet.create({
   notesContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
+    gap: 5,
+    marginTop: 5,
+    backgroundColor: 'rgba(213, 169, 67, 0.14)',
+    borderLeftWidth: 3,
+    borderLeftColor: '#D5A943',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  orderNoteBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: '#3B260A',
+    borderWidth: 1.5,
+    borderColor: '#D5A943',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 10,
+  },
+  orderNoteBannerLabel: {
+    color: '#D5A943',
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.6,
+  },
+  orderNoteBannerText: {
+    color: '#FEF3C7',
+    fontSize: 13.5,
+    fontWeight: '800',
+    marginTop: 2,
   },
   foodNotes: {
     color: '#F3D179',

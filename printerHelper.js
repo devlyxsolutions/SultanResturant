@@ -193,6 +193,12 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 
   parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(18) + `${dateStr}\n`, 'ascii'));
   parts.push(Buffer.from(`Staff: ${serverName}`.padEnd(20) + `Qty: ${totalQty}\n`, 'ascii'));
+  if (ticket.notes && String(ticket.notes).trim()) {
+    parts.push(Buffer.from('------------------------------------\n', 'ascii'));
+    parts.push(Buffer.from(esc + '!\x08', 'ascii')); // Bold
+    parts.push(Buffer.from(`ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}\n`, 'ascii'));
+    parts.push(Buffer.from(esc + '!\x00', 'ascii'));
+  }
   parts.push(Buffer.from('====================================\n', 'ascii'));
 
   // Items List
@@ -210,7 +216,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
     parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
 
     if (item.notes) {
-      parts.push(Buffer.from(`     * ${String(item.notes).substring(0, 29)}\n`, 'ascii'));
+      parts.push(Buffer.from(`     * ${String(item.notes).substring(0, 64)}\n`, 'ascii'));
     }
   }
 
@@ -266,6 +272,9 @@ function buildPlainTextKot(ticket, station = 'all') {
     `KOT: #${kotId}`,
     `Time: ${dateStr}`,
     `Staff: ${String(serverName).substring(0, 14)}  Qty: ${totalQty}`,
+    ...(ticket.notes && String(ticket.notes).trim()
+      ? ['------------------------------------', `ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}`]
+      : []),
     '====================================',
     'QTY  ITEM DESCRIPTION',
     '------------------------------------',
@@ -277,7 +286,7 @@ function buildPlainTextKot(ticket, station = 'all') {
     const nameStr = ((item.name || '') + stationBadge).substring(0, 30);
     lines.push(`${qtyStr}${nameStr}`);
     if (item.notes) {
-      lines.push(`     * ${String(item.notes).substring(0, 29)}`);
+      lines.push(`     * ${String(item.notes).substring(0, 64)}`);
     }
   }
 

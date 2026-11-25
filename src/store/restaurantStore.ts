@@ -160,6 +160,7 @@ export type Ticket = {
   items: OrderItem[];
   isAddOn?: boolean;
   roundNumber?: number;
+  notes?: string;
   stationStatuses?: StationStatusMap;
 };
 
@@ -449,7 +450,7 @@ type RestaurantState = {
   clearPendingFloorOrderAlert: (orderId?: string) => void;
   clearBeverageOrderAlert: (alertId?: string) => void;
 
-  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean, serverId?: string) => void;
+  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean, serverId?: string, orderNotes?: string) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   markItemReady: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
   markItemServed: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
@@ -1112,7 +1113,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         return state;
       }),
 
-      placeOrder: (tableId, serverName, orderItems, isAddOn, serverId) => {
+      placeOrder: (tableId, serverName, orderItems, isAddOn, serverId, orderNotes) => {
         const sysSettings = useSettingsStore.getState().settings;
         const autoRouteBev = sysSettings.kdsAutoRouteBeverages !== false;
         const targetMainPrep = sysSettings.kdsTargetPrepMinutes || 15;
@@ -1162,6 +1163,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             status: 'pending',
             isAddOn: isActuallyAddOn,
             roundNumber: isActuallyAddOn ? roundNumber : 1,
+            notes: orderNotes?.trim() || undefined,
             stationStatuses: {
               main: hasMain ? 'pending' : undefined,
               juice: hasJuice ? 'pending' : undefined,
@@ -1287,6 +1289,10 @@ export const useRestaurantStore = create<RestaurantState>()(
                   const found = mergedOrders.find(m => m.id === oi.item.id);
                   if (found) {
                     found.qty += oi.qty;
+                    if (oi.notes?.trim()) {
+                      const parts = [found.notes, oi.notes.trim()].filter(Boolean) as string[];
+                      found.notes = Array.from(new Set(parts)).join(' • ');
+                    }
                   } else {
                     mergedOrders.push({
                       id: oi.item.id,
