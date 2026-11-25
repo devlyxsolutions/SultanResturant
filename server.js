@@ -2682,7 +2682,11 @@ const INITIAL_STATE = {
   revokedSessions: {},
   revokedDeviceIds: {},
   forceLogoutAll: null,
-  chillerHandovers: []
+  chillerHandovers: [],
+  tableMoveLogs: [],
+  cancelledOrderLogs: [],
+  lastTableMoveAlert: null,
+  lastOrderCancelledAlert: null
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -2926,6 +2930,8 @@ try {
     if (!Array.isArray(serverState.serviceRequests)) serverState.serviceRequests = [];
     if (!Array.isArray(serverState.reservations)) serverState.reservations = INITIAL_STATE.reservations || [];
     if (!Array.isArray(serverState.playlandTickets)) serverState.playlandTickets = [];
+    if (!Array.isArray(serverState.tableMoveLogs)) serverState.tableMoveLogs = [];
+    if (!Array.isArray(serverState.cancelledOrderLogs)) serverState.cancelledOrderLogs = [];
     if (!Array.isArray(serverState.activeStaffSessions)) serverState.activeStaffSessions = [];
     if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') serverState.revokedSessions = {};
     if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') serverState.revokedDeviceIds = {};
@@ -7531,6 +7537,14 @@ function computeStateFingerprint(st) {
       lastBillPaidAlert: st.lastBillPaidAlert || null,
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
       pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
+      tableMoveLogsKey: Array.isArray(st.tableMoveLogs)
+        ? `${st.tableMoveLogs.length}:${st.tableMoveLogs[0]?.id || ''}`
+        : '0',
+      cancelledOrderLogsKey: Array.isArray(st.cancelledOrderLogs)
+        ? `${st.cancelledOrderLogs.length}:${st.cancelledOrderLogs[0]?.id || ''}`
+        : '0',
+      lastTableMoveAlert: st.lastTableMoveAlert || null,
+      lastOrderCancelledAlert: st.lastOrderCancelledAlert || null,
       activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
       revokedSessions: Object.keys(st.revokedSessions || {}).sort().join(','),
       revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
@@ -7614,7 +7628,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
@@ -8177,6 +8191,28 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             const limit = key === 'chillerHandovers' ? 150 : 500;
             serverState[key] = Array.from(mMap.values()).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
           }
+        } else if (key === 'tableMoveLogs' || key === 'cancelledOrderLogs') {
+          const incList = Array.isArray(sanitized) ? sanitized : [];
+          const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
+          if (incList.length > 0 || currList.length === 0) {
+            const logMap = new Map();
+            for (const c of currList) { if (c && c.id) logMap.set(c.id, c); }
+            for (const inc of incList) { if (inc && inc.id) logMap.set(inc.id, inc); }
+            serverState[key] = Array.from(logMap.values())
+              .sort((a, b) => (b.timestamp || b.cancelledAt || 0) - (a.timestamp || a.cancelledAt || 0))
+              .slice(0, 1500);
+          }
+        } else if (key === 'lastTableMoveAlert' || key === 'lastOrderCancelledAlert') {
+          const incAlert = sanitized;
+          const currAlert = serverState[key];
+          if (!incAlert) {
+            // Keep live Cashier alerts broadcastable for 60s so concurrent updates from other terminals never swallow them
+            if (currAlert && Date.now() - (currAlert.time || 0) > 60000) {
+              serverState[key] = null;
+            }
+          } else if (!currAlert || (incAlert.time || 0) >= (currAlert.time || 0)) {
+            serverState[key] = incAlert;
+          }
         } else if (
           Array.isArray(sanitized) &&
           sanitized.length === 0 &&
@@ -8378,6 +8414,10 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
                 lastBillPaidAlert: serverState.lastBillPaidAlert,
                 lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+                tableMoveLogs: serverState.tableMoveLogs || [],
+                cancelledOrderLogs: serverState.cancelledOrderLogs || [],
+                lastTableMoveAlert: serverState.lastTableMoveAlert || null,
+                lastOrderCancelledAlert: serverState.lastOrderCancelledAlert || null,
                 roles: serverState.roles,
                 shifts: serverState.shifts,
                 activeShiftId: serverState.activeShiftId,

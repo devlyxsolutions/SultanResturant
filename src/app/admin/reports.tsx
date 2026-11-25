@@ -1,48 +1,48 @@
-import React, { useState, useMemo } from 'react';
+import { Ionicons } from '@expo/vector-icons';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  TextInput,
-  Platform,
+  ActivityIndicator,
   Alert,
   Modal,
-  ActivityIndicator,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
   useWindowDimensions,
+  View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useRestaurantStore } from '../../store/restaurantStore';
-import { useOpsStore } from '../../store/opsStore';
-import { usePlaylandStore } from '../../store/playlandStore';
-import { useKitchenStore } from '../../store/kitchenStore';
-import { useSettingsStore } from '../../store/settingsStore';
-import { useAuthStore } from '../../store/authStore';
-import { money, formatDay, startOfDay, dayKey } from '../../utils/format';
+import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
 import {
-  AnimatedReveal,
   AnimatedCounter,
+  AnimatedReveal,
+  DailyTrendPoint,
+  HorizontalRankedBars,
   MetricGaugeRing,
+  PnLFlowWaterfallChart,
   SvgDonutChart,
-  SvgVerticalBarChart,
   SvgHourlyVelocityChart,
   SvgRevenueTrendChart,
-  HorizontalRankedBars,
-  PnLFlowWaterfallChart,
-  DailyTrendPoint,
+  SvgVerticalBarChart,
 } from '../../components/reports/FinancialCharts';
-import {
-  downloadExecutivePdf,
-  openPrintableExecutivePdf,
-  DEFAULT_PDF_OPTIONS,
-  PdfExportOptions,
-  FinancialReportPdfPayload,
-} from '../../utils/financialPdfExport';
+import { useAuthStore } from '../../store/authStore';
+import { useKitchenStore } from '../../store/kitchenStore';
+import { useOpsStore } from '../../store/opsStore';
+import { usePlaylandStore } from '../../store/playlandStore';
+import { useRestaurantStore } from '../../store/restaurantStore';
 import { useRolePermissions } from '../../store/roleStore';
-import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
+import { useSettingsStore } from '../../store/settingsStore';
+import {
+  DEFAULT_PDF_OPTIONS,
+  downloadExecutivePdf,
+  FinancialReportPdfPayload,
+  openPrintableExecutivePdf,
+  PdfExportOptions,
+} from '../../utils/financialPdfExport';
+import { dayKey, formatDay, money, startOfDay } from '../../utils/format';
 
 const LIGHT = {
   bg: '#F4F6F9',
@@ -78,7 +78,7 @@ const LIGHT = {
   purpleBorder: '#DDD6FE',
 };
 
-type ReportTab = 'visuals' | 'pnl' | 'channels' | 'kitchen' | 'cashflow' | 'tax' | 'menu' | 'shrinkage';
+type ReportTab = 'visuals' | 'pnl' | 'channels' | 'kitchen' | 'cashflow' | 'tax' | 'menu' | 'shrinkage' | 'audit';
 type TimeFilter = 'today' | 'yesterday' | 'week' | 'month' | 'all';
 
 interface PdfPreset {
@@ -93,14 +93,14 @@ const PDF_PRESETS: PdfPreset[] = [
   {
     id: 'full',
     label: 'Full Executive Audit Pack',
-    desc: 'All charts, P&L, cash drawer, kitchen yield, top dishes & invoice appendix',
+    desc: 'All charts, P&L, cash drawer, kitchen yield, table moves, cancelled orders & invoices',
     icon: 'ribbon-outline',
     options: { ...DEFAULT_PDF_OPTIONS, presetName: 'Full Executive Financial Audit Pack' },
   },
   {
     id: 'cfo',
     label: 'CFO P&L & Visual Deck',
-    desc: 'Boardroom summary: KPIs, vector charts, formal P&L & channels',
+    desc: 'Boardroom summary: KPIs, vector charts, formal P&L, moves & cancellations',
     icon: 'stats-chart-outline',
     options: {
       presetName: 'CFO P&L & Executive Charts Summary',
@@ -110,6 +110,7 @@ const PDF_PRESETS: PdfPreset[] = [
       includeTaxAndDiscounts: true,
       includeTopDishes: true,
       includeKitchenAudit: false,
+      includeOpsAudit: true,
       includeInvoiceLedger: false,
       includeSignatures: true,
     },
@@ -117,7 +118,7 @@ const PDF_PRESETS: PdfPreset[] = [
   {
     id: 'kitchen',
     label: 'Kitchen Yield & Wastage Audit',
-    desc: 'Store issued vs cooked vs returned reconciliation & top dishes',
+    desc: 'Store issued vs cooked vs returned reconciliation, cancellations & top dishes',
     icon: 'flame-outline',
     options: {
       presetName: 'Kitchen Production & Wastage Audit Report',
@@ -127,6 +128,7 @@ const PDF_PRESETS: PdfPreset[] = [
       includeTaxAndDiscounts: false,
       includeTopDishes: true,
       includeKitchenAudit: true,
+      includeOpsAudit: true,
       includeInvoiceLedger: false,
       includeSignatures: true,
     },
@@ -134,7 +136,7 @@ const PDF_PRESETS: PdfPreset[] = [
   {
     id: 'tax',
     label: 'GST & Invoices Ledger',
-    desc: 'FBR / PRA tax compliance breakdown & itemized settled invoice ledger',
+    desc: 'FBR / PRA tax compliance breakdown, cancellations & settled invoice ledger',
     icon: 'receipt-outline',
     options: {
       presetName: 'GST Compliance & Settled Invoices Ledger',
@@ -144,6 +146,7 @@ const PDF_PRESETS: PdfPreset[] = [
       includeTaxAndDiscounts: true,
       includeTopDishes: false,
       includeKitchenAudit: false,
+      includeOpsAudit: true,
       includeInvoiceLedger: true,
       includeSignatures: true,
     },
@@ -213,6 +216,7 @@ function DeltaPill({ delta, invert = false }: { delta: number | null; invert?: b
 
 export default function ReportsScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
@@ -220,6 +224,8 @@ export default function ReportsScreen() {
 
   // Stores
   const invoices = useRestaurantStore((s) => s.invoices || []);
+  const tableMoveLogs = useRestaurantStore((s) => s.tableMoveLogs || []);
+  const cancelledOrderLogs = useRestaurantStore((s) => s.cancelledOrderLogs || []);
   const expenses = useOpsStore((s) => s.expenses || []);
   const purchaseOrders = useOpsStore((s) => s.purchaseOrders || []);
   const supplierPayments = useOpsStore((s) => s.supplierPayments || []);
@@ -236,6 +242,24 @@ export default function ReportsScreen() {
   const [activeTab, setActiveTab] = useState<ReportTab>('visuals');
   const [timeFilter, setTimeFilter] = useState<TimeFilter>('today');
   const [nowTs, setNowTs] = useState<number>(() => Date.now());
+
+  useEffect(() => {
+    const requestedTab = typeof params?.tab === 'string' ? params.tab : '';
+    const validTabs: ReportTab[] = [
+      'visuals',
+      'pnl',
+      'channels',
+      'kitchen',
+      'cashflow',
+      'tax',
+      'menu',
+      'shrinkage',
+      'audit',
+    ];
+    if (requestedTab && validTabs.includes(requestedTab as ReportTab)) {
+      setActiveTab(requestedTab as ReportTab);
+    }
+  }, [params?.tab]);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
   const [selectedPresetId, setSelectedPresetId] = useState<string>('full');
@@ -255,12 +279,13 @@ export default function ReportsScreen() {
     const now = nowTs;
     const todayStart = startOfDay(now);
     const dayMs = 86400000;
+    const todayEnd = todayStart + dayMs - 1;
 
     switch (timeFilter) {
       case 'today':
         return {
           start: todayStart,
-          end: now,
+          end: todayEnd,
           prevStart: todayStart - dayMs,
           prevEnd: todayStart,
           prevLabel: 'vs yesterday',
@@ -282,7 +307,7 @@ export default function ReportsScreen() {
       case 'week':
         return {
           start: todayStart - 6 * dayMs,
-          end: now,
+          end: todayEnd,
           prevStart: todayStart - 13 * dayMs,
           prevEnd: todayStart - 6 * dayMs,
           prevLabel: 'vs prior 7d',
@@ -293,7 +318,7 @@ export default function ReportsScreen() {
       case 'month':
         return {
           start: todayStart - 29 * dayMs,
-          end: now,
+          end: todayEnd,
           prevStart: todayStart - 59 * dayMs,
           prevEnd: todayStart - 29 * dayMs,
           prevLabel: 'vs prior 30d',
@@ -305,7 +330,7 @@ export default function ReportsScreen() {
       default:
         return {
           start: 0,
-          end: now,
+          end: todayEnd,
           prevStart: null as number | null,
           prevEnd: null as number | null,
           prevLabel: 'all-time ledger',
@@ -628,12 +653,12 @@ export default function ReportsScreen() {
             item.station === 'juice' || n.includes('margarita') || n.includes('juice') || n.includes('shake')
               ? 'Juice Bar & Drinks'
               : n.includes('kebab') || n.includes('tikka') || n.includes('boti') || n.includes('bbq')
-              ? 'Charcoal BBQ Station'
-              : n.includes('biryani') || n.includes('rice') || n.includes('pulao')
-              ? 'Biryani & Rice Counter'
-              : n.includes('naan') || n.includes('roti') || n.includes('kulcha')
-              ? 'Tandoor & Breads'
-              : 'Handi & Karahi Line';
+                ? 'Charcoal BBQ Station'
+                : n.includes('biryani') || n.includes('rice') || n.includes('pulao')
+                  ? 'Biryani & Rice Counter'
+                  : n.includes('naan') || n.includes('roti') || n.includes('kulcha')
+                    ? 'Tandoor & Breads'
+                    : 'Handi & Karahi Line';
 
           cookedDishesMap[item.name] = {
             name: item.name,
@@ -776,9 +801,34 @@ export default function ReportsScreen() {
         ? Math.min(100, Math.max(0, ((totalCookedRawValue + totalReturnedToStoreValue) / totalStoreIssuedValue) * 100))
         : 100;
 
+    // 7. Table Moves & Cancelled Punched Orders Daily Audit
+    const periodTableMoves = tableMoveLogs
+      .filter((m) => m && (m.timestamp || 0) >= start && (m.timestamp || 0) <= end)
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const tableMovesTotalValue = periodTableMoves.reduce((sum, m) => sum + Number(m.billTotal || 0), 0);
+
+    const periodCancelledOrders = cancelledOrderLogs
+      .filter((c) => c && (c.cancelledAt || 0) >= start && (c.cancelledAt || 0) <= end)
+      .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0));
+    const totalCancelledItemsQty = periodCancelledOrders.reduce((sum, c) => sum + Number(c.totalQty || 0), 0);
+    const totalCancelledOrdersValue = periodCancelledOrders.reduce((sum, c) => sum + Number(c.totalAmount || 0), 0);
+    const periodVoidedInvoices = [...voidedInvoices].sort(
+      (a, b) => (b.voidedAt || b.timePlaced || 0) - (a.voidedAt || a.timePlaced || 0)
+    );
+    const voidedInvoicesValue = periodVoidedInvoices.reduce((sum, inv) => sum + Number(inv.total || 0), 0);
+
     return {
       totalInvoicesCount: validInvoices.length,
       voidedInvoicesCount: voidedInvoices.length,
+      periodVoidedInvoices,
+      voidedInvoicesValue,
+      periodTableMoves,
+      totalTableMovesCount: periodTableMoves.length,
+      tableMovesTotalValue,
+      periodCancelledOrders,
+      totalCancelledOrdersCount: periodCancelledOrders.length,
+      totalCancelledItemsQty,
+      totalCancelledOrdersValue,
       totalOrders,
       averageTicket,
       grossFoodSales,
@@ -861,6 +911,8 @@ export default function ReportsScreen() {
     playlandTickets,
     kitchenSessions,
     kitchenManualUsage,
+    tableMoveLogs,
+    cancelledOrderLogs,
   ]);
 
   function alertMsg(title: string, msg: string) {
@@ -952,6 +1004,43 @@ export default function ReportsScreen() {
         total: inv.total,
         payments: inv.payments,
       })),
+      tableMoveLogs: financialData.periodTableMoves.map((m) => ({
+        id: m.id,
+        fromTableName: m.fromTableName,
+        fromFloor: m.fromFloor,
+        toTableName: m.toTableName,
+        toFloor: m.toFloor,
+        note: m.note,
+        movedBy: m.movedBy,
+        movedByRole: m.movedByRole,
+        activeTicketsCount: m.activeTicketsCount,
+        itemsCount: m.itemsCount,
+        billTotal: m.billTotal,
+        timestamp: m.timestamp,
+      })),
+      cancelledOrderLogs: financialData.periodCancelledOrders.map((c) => ({
+        id: c.id,
+        ticketId: c.ticketId,
+        tableName: c.tableName,
+        floor: c.floor,
+        orderType: c.orderType,
+        server: c.server,
+        cancelledBy: c.cancelledBy,
+        cancelledByRole: c.cancelledByRole,
+        reason: c.reason,
+        source: c.source,
+        items: (c.items || []).map((it) => ({
+          name: it.name,
+          qty: it.qty,
+          price: it.price,
+          lineTotal: it.lineTotal,
+          notes: it.notes,
+        })),
+        totalQty: c.totalQty,
+        totalAmount: c.totalAmount,
+        timePlaced: c.timePlaced,
+        cancelledAt: c.cancelledAt,
+      })),
     },
   });
 
@@ -1030,10 +1119,8 @@ export default function ReportsScreen() {
     const rows = financialData.validInvoices
       .map(
         (inv) =>
-          `"${inv.id}","${new Date(inv.timeSettled || inv.timePlaced).toLocaleString()}","${inv.orderType}","${
-            inv.tableName || 'Takeaway'
-          }","${inv.server || 'Staff'}","${inv.subTotal || inv.total}","${inv.discount || 0}","${inv.tax || 0}","${
-            inv.total
+          `"${inv.id}","${new Date(inv.timeSettled || inv.timePlaced).toLocaleString()}","${inv.orderType}","${inv.tableName || 'Takeaway'
+          }","${inv.server || 'Staff'}","${inv.subTotal || inv.total}","${inv.discount || 0}","${inv.tax || 0}","${inv.total
           }","${(inv.payments || []).map((p) => `${p.type}: Rs.${p.amount}`).join(' | ')}"`
       )
       .join('\n');
@@ -1124,6 +1211,7 @@ export default function ReportsScreen() {
     pdfOptions.includeTaxAndDiscounts,
     pdfOptions.includeTopDishes,
     pdfOptions.includeKitchenAudit,
+    pdfOptions.includeOpsAudit !== false,
     pdfOptions.includeInvoiceLedger,
     pdfOptions.includeSignatures,
   ].filter(Boolean).length;
@@ -1136,6 +1224,7 @@ export default function ReportsScreen() {
     includeTaxAndDiscounts: false,
     includeTopDishes: false,
     includeKitchenAudit: false,
+    includeOpsAudit: false,
     includeInvoiceLedger: false,
     includeSignatures: true,
   };
@@ -1293,6 +1382,16 @@ export default function ReportsScreen() {
               icon: 'alert-circle-outline',
               badge: financialData.netBreakageLoss > 0 ? '!' : undefined,
               badgeColor: LIGHT.rose,
+            },
+            {
+              key: 'audit',
+              label: 'Moves & Cancellations',
+              icon: 'swap-horizontal-outline',
+              badge:
+                financialData.totalTableMovesCount + financialData.totalCancelledOrdersCount > 0
+                  ? `${financialData.totalTableMovesCount + financialData.totalCancelledOrdersCount}`
+                  : undefined,
+              badgeColor: financialData.totalCancelledOrdersCount > 0 ? LIGHT.rose : LIGHT.amber,
             },
           ].map((tab) => {
             const active = activeTab === tab.key;
@@ -1500,15 +1599,36 @@ export default function ReportsScreen() {
             {financialData.voidedInvoicesCount > 0 && (
               <>
                 <View style={styles.healthDivider} />
-                <View style={styles.healthItem}>
+                <TouchableOpacity style={styles.healthItem} onPress={() => setActiveTab('audit')}>
                   <View style={[styles.healthDot, { backgroundColor: LIGHT.rose }]} />
                   <Text style={styles.healthLabel}>Voided Bills</Text>
                   <Text style={[styles.healthVal, { color: LIGHT.rose }]}>
                     {financialData.voidedInvoicesCount}
                   </Text>
-                </View>
+                </TouchableOpacity>
               </>
             )}
+
+            <View style={styles.healthDivider} />
+            <TouchableOpacity style={styles.healthItem} onPress={() => setActiveTab('audit')}>
+              <View style={[styles.healthDot, { backgroundColor: LIGHT.amber }]} />
+              <Text style={styles.healthLabel}>Table Moves</Text>
+              <Text style={[styles.healthVal, { color: LIGHT.amber }]}>
+                {financialData.totalTableMovesCount}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.healthDivider} />
+            <TouchableOpacity style={styles.healthItem} onPress={() => setActiveTab('audit')}>
+              <View style={[styles.healthDot, { backgroundColor: LIGHT.rose }]} />
+              <Text style={styles.healthLabel}>Cancelled KOTs</Text>
+              <Text style={[styles.healthVal, { color: LIGHT.rose }]}>
+                {financialData.totalCancelledOrdersCount}
+                {financialData.totalCancelledOrdersValue > 0
+                  ? ` (${money(financialData.totalCancelledOrdersValue)})`
+                  : ''}
+              </Text>
+            </TouchableOpacity>
           </View>
         </AnimatedReveal>
 
@@ -1722,6 +1842,136 @@ export default function ReportsScreen() {
                         color: '#9333EA',
                       }))}
                   />
+                </View>
+              </View>
+
+              {/* SECTION 3: Daily Floor Moves & Punched Order Cancellations Snapshot */}
+              <View style={{ marginTop: 22 }}>
+                <SectionHeading
+                  step="03"
+                  title="Table Moves & Cancelled Punched Orders"
+                  subtitle="Daily floor table shifts (with notes) and cancelled KOT orders with full dish details"
+                  rightSlot={
+                    <TouchableOpacity
+                      style={styles.inlinePdfBtn}
+                      onPress={() => setActiveTab('audit')}
+                      activeOpacity={0.82}
+                    >
+                      <Ionicons name="list-outline" size={14} color={LIGHT.burgundy} />
+                      <Text style={styles.inlinePdfBtnText}>View Full Details ➔</Text>
+                    </TouchableOpacity>
+                  }
+                />
+
+                <View style={[styles.chartsGrid, { flexDirection: isMobile ? 'column' : 'row' }]}>
+                  {/* Latest Table Moves */}
+                  <View style={[styles.panelCard, { flex: 1, borderColor: LIGHT.amberBorder }]}>
+                    <View style={styles.panelHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="swap-horizontal" size={18} color={LIGHT.amber} />
+                        <Text style={styles.panelTitle}>
+                          Table Moves ({financialData.totalTableMovesCount})
+                        </Text>
+                      </View>
+                      <Text style={styles.panelSub}>
+                        {money(financialData.tableMovesTotalValue)} shifted
+                      </Text>
+                    </View>
+
+                    {financialData.periodTableMoves.length === 0 ? (
+                      <Text style={{ fontSize: 12.5, color: LIGHT.textDim, paddingVertical: 10 }}>
+                        No table moves logged in {timeWindow.label.toLowerCase()}.
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 8 }}>
+                        {financialData.periodTableMoves.slice(0, 4).map((mv) => (
+                          <View
+                            key={mv.id}
+                            style={{
+                              backgroundColor: '#FFFBEB',
+                              borderWidth: 1,
+                              borderColor: '#FDE68A',
+                              borderRadius: 10,
+                              padding: 10,
+                              gap: 4,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: '#92400E' }}>
+                                {mv.fromTableName} ➔ {mv.toTableName}
+                              </Text>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: '#B45309' }}>
+                                {new Date(mv.timestamp).toLocaleTimeString('en-PK', {
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 11.5, color: '#78350F', fontWeight: '600' }}>
+                              By {mv.movedBy}
+                              {mv.movedByRole ? ` (${mv.movedByRole})` : ''} • {mv.activeTicketsCount} KOT •{' '}
+                              {money(mv.billTotal)}
+                            </Text>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>
+                              Note: &ldquo;{mv.note}&rdquo;
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Latest Cancelled Punched Orders */}
+                  <View style={[styles.panelCard, { flex: 1, borderColor: LIGHT.roseBorder }]}>
+                    <View style={styles.panelHeader}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Ionicons name="close-circle" size={18} color={LIGHT.rose} />
+                        <Text style={styles.panelTitle}>
+                          Cancelled Punched Orders ({financialData.totalCancelledOrdersCount})
+                        </Text>
+                      </View>
+                      <Text style={[styles.panelSub, { color: LIGHT.rose, fontWeight: '800' }]}>
+                        {money(financialData.totalCancelledOrdersValue)}
+                      </Text>
+                    </View>
+
+                    {financialData.periodCancelledOrders.length === 0 ? (
+                      <Text style={{ fontSize: 12.5, color: LIGHT.textDim, paddingVertical: 10 }}>
+                        Zero punched orders cancelled in {timeWindow.label.toLowerCase()}.
+                      </Text>
+                    ) : (
+                      <View style={{ gap: 8 }}>
+                        {financialData.periodCancelledOrders.slice(0, 4).map((cn) => (
+                          <View
+                            key={cn.id}
+                            style={{
+                              backgroundColor: '#FFF1F2',
+                              borderWidth: 1,
+                              borderColor: '#FECDD3',
+                              borderRadius: 10,
+                              padding: 10,
+                              gap: 4,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 13, fontWeight: '800', color: '#9F1239' }}>
+                                {cn.ticketId} • {cn.tableName}
+                              </Text>
+                              <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#BE123C' }}>
+                                {money(cn.totalAmount)}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 11.5, color: '#881337', fontWeight: '600' }}>
+                              Cancelled by {cn.cancelledBy} • Reason: &ldquo;{cn.reason}&rdquo;
+                            </Text>
+                            <Text style={{ fontSize: 11.5, color: '#334155', fontWeight: '600' }} numberOfLines={2}>
+                              Dishes: {(cn.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ')}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
                 </View>
               </View>
             </View>
@@ -2319,12 +2569,12 @@ export default function ReportsScreen() {
                         color: st.station.includes('Karahi')
                           ? '#B48214'
                           : st.station.includes('BBQ')
-                          ? '#E11D48'
-                          : st.station.includes('Rice')
-                          ? '#059669'
-                          : st.station.includes('Tandoor')
-                          ? '#D97706'
-                          : '#2563EB',
+                            ? '#E11D48'
+                            : st.station.includes('Rice')
+                              ? '#059669'
+                              : st.station.includes('Tandoor')
+                                ? '#D97706'
+                                : '#2563EB',
                         sublabel: `${money(st.revenue)}`,
                       }))}
                       height={205}
@@ -2491,8 +2741,8 @@ export default function ReportsScreen() {
                                 item.status === 'optimal'
                                   ? styles.reconBadgeOptimal
                                   : item.status === 'alert'
-                                  ? styles.reconBadgeAlert
-                                  : styles.reconBadgeAcceptable,
+                                    ? styles.reconBadgeAlert
+                                    : styles.reconBadgeAcceptable,
                               ]}
                             >
                               <Text
@@ -2501,8 +2751,8 @@ export default function ReportsScreen() {
                                   item.status === 'optimal'
                                     ? { color: '#047857' }
                                     : item.status === 'alert'
-                                    ? { color: '#BE123C' }
-                                    : { color: '#92400E' },
+                                      ? { color: '#BE123C' }
+                                      : { color: '#92400E' },
                                 ]}
                               >
                                 {item.status === 'optimal' ? 'OPTIMAL' : item.status === 'alert' ? 'EXCESS' : 'NORMAL'}
@@ -2915,6 +3165,503 @@ export default function ReportsScreen() {
             </View>
           </AnimatedReveal>
         )}
+
+        {/* ----------------- TAB 8: TABLE MOVES & CANCELLED PUNCHED ORDERS AUDIT ----------------- */}
+        {activeTab === 'audit' && (
+          <AnimatedReveal animKey={animTabKey} delay={40}>
+            <View style={styles.section}>
+              {/* Summary KPI Cards */}
+              <View style={styles.channelGrid}>
+                <View style={[styles.channelCard, { borderColor: LIGHT.amberBorder }]}>
+                  <Text style={[styles.channelLabel, { color: LIGHT.amber }]}>TABLE MOVES</Text>
+                  <Text style={[styles.channelAmount, { color: LIGHT.amber }]}>
+                    {financialData.totalTableMovesCount}
+                  </Text>
+                  <Text style={styles.channelSub}>
+                    Running bills shifted: {money(financialData.tableMovesTotalValue)}
+                  </Text>
+                </View>
+
+                <View style={[styles.channelCard, { borderColor: LIGHT.roseBorder }]}>
+                  <Text style={[styles.channelLabel, { color: LIGHT.rose }]}>CANCELLED PUNCHED ORDERS</Text>
+                  <Text style={[styles.channelAmount, { color: LIGHT.rose }]}>
+                    {financialData.totalCancelledOrdersCount}
+                  </Text>
+                  <Text style={styles.channelSub}>
+                    {financialData.totalCancelledItemsQty} total dish portion(s) cancelled
+                  </Text>
+                </View>
+
+                <View style={[styles.channelCard, { borderColor: LIGHT.roseBorder, backgroundColor: '#FFF1F2' }]}>
+                  <Text style={[styles.channelLabel, { color: LIGHT.roseDark }]}>CANCELLED ORDER VALUE</Text>
+                  <Text style={[styles.channelAmount, { color: LIGHT.roseDark }]}>
+                    {money(financialData.totalCancelledOrdersValue)}
+                  </Text>
+                  <Text style={styles.channelSub}>Pre-billing punched KOT cancellations</Text>
+                </View>
+
+                <View style={[styles.channelCard, { borderColor: LIGHT.purpleBorder }]}>
+                  <Text style={[styles.channelLabel, { color: LIGHT.purple }]}>VOIDED SETTLED BILLS</Text>
+                  <Text style={[styles.channelAmount, { color: LIGHT.purple }]}>
+                    {financialData.voidedInvoicesCount}
+                  </Text>
+                  <Text style={styles.channelSub}>
+                    Value: {money(financialData.voidedInvoicesValue)}
+                  </Text>
+                </View>
+              </View>
+
+              {/* A. TABLE MOVES LOG (WITH NOTES) */}
+              <View style={[styles.panelCard, { marginTop: 16, borderColor: LIGHT.amberBorder }]}>
+                <View style={styles.panelHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Ionicons name="swap-horizontal" size={20} color={LIGHT.amber} />
+                    <View>
+                      <Text style={styles.panelTitle}>
+                        Table Moves Audit Log ({financialData.totalTableMovesCount})
+                      </Text>
+                      <Text style={styles.panelSub}>
+                        Every table transfer with move note, KOT count, shifted bill total &amp; staff attribution
+                      </Text>
+                    </View>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.inlinePdfBtn}
+                    onPress={() => router.push('/admin/system-logs' as any)}
+                    activeOpacity={0.82}
+                  >
+                    <Ionicons name="terminal-outline" size={14} color={LIGHT.burgundy} />
+                    <Text style={styles.inlinePdfBtnText}>Full System Logs</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {financialData.periodTableMoves.length === 0 ? (
+                  <View style={{ padding: 22, alignItems: 'center' }}>
+                    <Ionicons name="checkmark-circle-outline" size={28} color={LIGHT.textDim} />
+                    <Text style={{ color: LIGHT.textDim, fontSize: 13, marginTop: 6 }}>
+                      No table moves recorded for {timeWindow.label} ({timeWindow.shortRange}).
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 10 }}>
+                    {financialData.periodTableMoves.map((mv) => {
+                      const dtStr = new Date(mv.timestamp).toLocaleString('en-PK', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      return (
+                        <View
+                          key={mv.id}
+                          style={{
+                            backgroundColor: '#FFFDF7',
+                            borderWidth: 1,
+                            borderColor: '#FDE68A',
+                            borderLeftWidth: 4,
+                            borderLeftColor: '#D97706',
+                            borderRadius: 12,
+                            padding: 13,
+                            gap: 8,
+                          }}
+                        >
+                          <View
+                            style={{
+                              flexDirection: isMobile ? 'column' : 'row',
+                              justifyContent: 'space-between',
+                              alignItems: isMobile ? 'flex-start' : 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <View
+                                style={{
+                                  backgroundColor: '#FEF3C7',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#B45309' }}>TABLE MOVED</Text>
+                              </View>
+                              <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A' }}>
+                                {mv.fromTableName}
+                                {mv.fromFloor ? ` (${mv.fromFloor})` : ''} ➔ {mv.toTableName}
+                                {mv.toFloor ? ` (${mv.toFloor})` : ''}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <Text style={{ fontSize: 13.5, fontWeight: '900', color: LIGHT.gold }}>
+                                {money(mv.billTotal)}
+                              </Text>
+                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: LIGHT.textMuted }}>
+                                {dtStr}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+                            <Text style={{ fontSize: 12, color: LIGHT.textSecondary }}>
+                              <Text style={{ fontWeight: '800', color: LIGHT.ink }}>Moved By:</Text> {mv.movedBy}
+                              {mv.movedByRole ? ` (${mv.movedByRole})` : ''}
+                            </Text>
+                            {mv.server ? (
+                              <Text style={{ fontSize: 12, color: LIGHT.textSecondary }}>
+                                <Text style={{ fontWeight: '800', color: LIGHT.ink }}>Order Server:</Text> {mv.server}
+                              </Text>
+                            ) : null}
+                            <Text style={{ fontSize: 12, color: LIGHT.textSecondary }}>
+                              <Text style={{ fontWeight: '800', color: LIGHT.ink }}>Active KOTs:</Text>{' '}
+                              {mv.activeTicketsCount} ({mv.itemsCount} item{mv.itemsCount === 1 ? '' : 's'})
+                            </Text>
+                            {mv.ticketIds && mv.ticketIds.length > 0 ? (
+                              <Text style={{ fontSize: 12, color: LIGHT.textMuted }}>
+                                KOTs: {mv.ticketIds.join(', ')}
+                              </Text>
+                            ) : null}
+                          </View>
+
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 7,
+                              backgroundColor: '#FEF3C7',
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                            }}
+                          >
+                            <Ionicons name="document-text-outline" size={15} color="#92400E" />
+                            <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#78350F', flex: 1 }}>
+                              Move Note: &ldquo;{mv.note}&rdquo;
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* B. CANCELLED PUNCHED ORDERS (FULL DISH-BY-DISH DETAILS) */}
+              <View style={[styles.panelCard, { marginTop: 16, borderColor: LIGHT.roseBorder }]}>
+                <View style={styles.panelHeader}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                    <Ionicons name="close-circle-outline" size={20} color={LIGHT.rose} />
+                    <View>
+                      <Text style={styles.panelTitle}>
+                        Cancelled Punched Orders — Detailed Breakdown ({financialData.totalCancelledOrdersCount})
+                      </Text>
+                      <Text style={styles.panelSub}>
+                        Every cancelled KOT, released unpaid table, or removed punched dish with exact items, PKR value &amp; reason
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '900', color: LIGHT.rose }}>
+                    {money(financialData.totalCancelledOrdersValue)}
+                  </Text>
+                </View>
+
+                {financialData.periodCancelledOrders.length === 0 ? (
+                  <View style={{ padding: 22, alignItems: 'center' }}>
+                    <Ionicons name="shield-checkmark-outline" size={28} color={LIGHT.emerald} />
+                    <Text style={{ color: LIGHT.textDim, fontSize: 13, marginTop: 6 }}>
+                      No punched orders were cancelled during {timeWindow.label} ({timeWindow.shortRange}).
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={{ gap: 12 }}>
+                    {financialData.periodCancelledOrders.map((cn) => {
+                      const cancelTimeStr = new Date(cn.cancelledAt).toLocaleString('en-PK', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      const placedTimeStr = cn.timePlaced
+                        ? new Date(cn.timePlaced).toLocaleTimeString('en-PK', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })
+                        : '';
+                      const sourceLabel =
+                        cn.source === 'release_table'
+                          ? 'TABLE RELEASED UNPAID'
+                          : cn.source === 'removed_at_billing'
+                            ? 'REMOVED AT BILLING'
+                            : cn.source === 'purge_all'
+                              ? 'PURGED RUNNING ORDERS'
+                              : 'CANCELLED KOT';
+                      return (
+                        <View
+                          key={cn.id}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderWidth: 1,
+                            borderColor: '#FECDD3',
+                            borderLeftWidth: 4,
+                            borderLeftColor: '#DC2626',
+                            borderRadius: 12,
+                            padding: 13,
+                            gap: 9,
+                          }}
+                        >
+                          {/* Header Row */}
+                          <View
+                            style={{
+                              flexDirection: isMobile ? 'column' : 'row',
+                              justifyContent: 'space-between',
+                              alignItems: isMobile ? 'flex-start' : 'center',
+                              gap: 6,
+                            }}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <View
+                                style={{
+                                  backgroundColor: '#FEE2E2',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 3,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Text style={{ fontSize: 10, fontWeight: '900', color: '#991B1B' }}>
+                                  {sourceLabel}
+                                </Text>
+                              </View>
+                              <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A' }}>
+                                {cn.ticketId} • {cn.tableName}
+                                {cn.floor ? ` (${cn.floor})` : ''}
+                              </Text>
+                              <Text
+                                style={{
+                                  fontSize: 11,
+                                  fontWeight: '700',
+                                  color: LIGHT.textMuted,
+                                  textTransform: 'uppercase',
+                                }}
+                              >
+                                {cn.orderType}
+                                {cn.roundNumber && cn.roundNumber > 1 ? ` • Round #${cn.roundNumber}` : ''}
+                              </Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              <Text style={{ fontSize: 15, fontWeight: '900', color: LIGHT.rose }}>
+                                {money(cn.totalAmount)}
+                              </Text>
+                              <Text style={{ fontSize: 11.5, fontWeight: '700', color: LIGHT.textMuted }}>
+                                {cancelTimeStr}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Attribution Metadata */}
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+                            <Text style={{ fontSize: 12, color: LIGHT.textSecondary }}>
+                              <Text style={{ fontWeight: '800', color: LIGHT.ink }}>Cancelled By:</Text>{' '}
+                              {cn.cancelledBy}
+                              {cn.cancelledByRole ? ` (${cn.cancelledByRole})` : ''}
+                            </Text>
+                            <Text style={{ fontSize: 12, color: LIGHT.textSecondary }}>
+                              <Text style={{ fontWeight: '800', color: LIGHT.ink }}>Punched By / Server:</Text>{' '}
+                              {cn.server}
+                            </Text>
+                            {placedTimeStr ? (
+                              <Text style={{ fontSize: 12, color: LIGHT.textMuted }}>
+                                Punched at {placedTimeStr}
+                                {cn.ticketStatusAtCancel ? ` • Stage: ${cn.ticketStatusAtCancel.toUpperCase()}` : ''}
+                              </Text>
+                            ) : null}
+                          </View>
+
+                          {/* Highlighted Reason Banner */}
+                          <View
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 7,
+                              backgroundColor: '#FFF1F2',
+                              borderWidth: 1,
+                              borderColor: '#FECDD3',
+                              borderRadius: 8,
+                              paddingHorizontal: 10,
+                              paddingVertical: 7,
+                            }}
+                          >
+                            <Ionicons name="alert-circle" size={15} color="#BE123C" />
+                            <Text style={{ fontSize: 12.5, fontWeight: '800', color: '#881337', flex: 1 }}>
+                              Cancel Reason: &ldquo;{cn.reason}&rdquo;
+                            </Text>
+                          </View>
+
+                          {/* Complete Dish-by-Dish Itemized Table */}
+                          <View
+                            style={{
+                              backgroundColor: '#F8FAFC',
+                              borderRadius: 9,
+                              borderWidth: 1,
+                              borderColor: '#E2E8F0',
+                              overflow: 'hidden',
+                            }}
+                          >
+                            <View
+                              style={{
+                                flexDirection: 'row',
+                                backgroundColor: '#F1F5F9',
+                                paddingHorizontal: 10,
+                                paddingVertical: 6,
+                                borderBottomWidth: 1,
+                                borderBottomColor: '#E2E8F0',
+                              }}
+                            >
+                              <Text style={{ flex: 2.4, fontSize: 10.5, fontWeight: '800', color: '#475569' }}>
+                                CANCELLED DISH
+                              </Text>
+                              <Text
+                                style={{
+                                  flex: 0.7,
+                                  fontSize: 10.5,
+                                  fontWeight: '800',
+                                  color: '#475569',
+                                  textAlign: 'center',
+                                }}
+                              >
+                                QTY
+                              </Text>
+                              <Text
+                                style={{
+                                  flex: 1,
+                                  fontSize: 10.5,
+                                  fontWeight: '800',
+                                  color: '#475569',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                UNIT
+                              </Text>
+                              <Text
+                                style={{
+                                  flex: 1.1,
+                                  fontSize: 10.5,
+                                  fontWeight: '800',
+                                  color: '#475569',
+                                  textAlign: 'right',
+                                }}
+                              >
+                                TOTAL
+                              </Text>
+                            </View>
+                            {(cn.items || []).map((it, idx) => (
+                              <View
+                                key={`${cn.id}-${it.id}-${idx}`}
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  paddingHorizontal: 10,
+                                  paddingVertical: 7,
+                                  borderTopWidth: idx > 0 ? 1 : 0,
+                                  borderTopColor: '#E2E8F0',
+                                }}
+                              >
+                                <View style={{ flex: 2.4 }}>
+                                  <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#0F172A' }}>
+                                    {it.name}
+                                  </Text>
+                                  {it.notes ? (
+                                    <Text style={{ fontSize: 11, color: '#64748B' }}>Note: {it.notes}</Text>
+                                  ) : null}
+                                </View>
+                                <Text
+                                  style={{
+                                    flex: 0.7,
+                                    fontSize: 12.5,
+                                    fontWeight: '800',
+                                    color: '#0F172A',
+                                    textAlign: 'center',
+                                  }}
+                                >
+                                  {it.qty}x
+                                </Text>
+                                <Text
+                                  style={{
+                                    flex: 1,
+                                    fontSize: 12,
+                                    color: '#475569',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {money(it.price)}
+                                </Text>
+                                <Text
+                                  style={{
+                                    flex: 1.1,
+                                    fontSize: 12.5,
+                                    fontWeight: '800',
+                                    color: '#BE123C',
+                                    textAlign: 'right',
+                                  }}
+                                >
+                                  {money(it.lineTotal)}
+                                </Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+
+              {/* C. VOIDED SETTLED INVOICES (IF ANY) */}
+              {financialData.periodVoidedInvoices.length > 0 && (
+                <View style={[styles.panelCard, { marginTop: 16, borderColor: LIGHT.purpleBorder }]}>
+                  <View style={styles.panelHeader}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="receipt-outline" size={19} color={LIGHT.purple} />
+                      <Text style={styles.panelTitle}>
+                        Voided Settled Invoices ({financialData.periodVoidedInvoices.length})
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 13.5, fontWeight: '900', color: LIGHT.purple }}>
+                      {money(financialData.voidedInvoicesValue)}
+                    </Text>
+                  </View>
+                  <View style={{ gap: 8 }}>
+                    {financialData.periodVoidedInvoices.map((inv) => (
+                      <View
+                        key={inv.id}
+                        style={{
+                          backgroundColor: '#FAF5FF',
+                          borderWidth: 1,
+                          borderColor: '#E9D5FF',
+                          borderRadius: 10,
+                          padding: 11,
+                          gap: 4,
+                        }}
+                      >
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ fontSize: 13, fontWeight: '800', color: '#581C87' }}>
+                            {inv.id} • {inv.tableName || inv.orderType}
+                          </Text>
+                          <Text style={{ fontSize: 13, fontWeight: '900', color: '#7E22CE' }}>
+                            {money(inv.total)}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 12, color: '#6B21A8', fontWeight: '600' }}>
+                          Voided by {inv.voidedBy || 'Admin'} • Reason: &ldquo;{inv.voidReason || 'Voided'}&rdquo;
+                        </Text>
+                        <Text style={{ fontSize: 11.5, color: '#334155' }}>
+                          Items: {(inv.items || []).map((i) => `${i.qty}x ${i.name}`).join(', ')}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+            </View>
+          </AnimatedReveal>
+        )}
       </ScrollView>
 
       {/* ----------------- EXECUTIVE PDF EXPORT STUDIO MODAL ----------------- */}
@@ -3026,6 +3773,11 @@ export default function ReportsScreen() {
                     key: 'includeKitchenAudit' as const,
                     label: 'Kitchen Store Return & Wastage Reconciliation Table',
                     meta: `${financialData.rawReconciliationList.length} raw items`,
+                  },
+                  {
+                    key: 'includeOpsAudit' as const,
+                    label: 'Table Moves (with Notes) & Cancelled Punched Orders Details',
+                    meta: `${financialData.totalTableMovesCount} moves • ${financialData.totalCancelledOrdersCount} cancelled`,
                   },
                   {
                     key: 'includeInvoiceLedger' as const,

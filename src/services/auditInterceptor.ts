@@ -29,6 +29,8 @@ const IGNORED_ACTIONS = new Set([
   'clearFoodReadyAlert',
   'clearPendingFloorOrderAlert',
   'clearBeverageOrderAlert',
+  'clearTableMoveAlert',
+  'clearOrderCancelledAlert',
   'dismissActiveCall',
   'syncServiceStatus',
   'registerStaffSession',
@@ -249,42 +251,110 @@ const RESTAURANT_HANDLERS: Record<string, ActionDescriptor> = {
     summary: `Marked all ready orders SERVED for ${findTableName(prev, tableId)}`,
     details: { tableId },
   }),
-  dismissTicket: ([ticketId], prev) => {
+  dismissTicket: ([ticketId, options], prev) => {
+    if (options?.isSettlementCleanup) return null;
     const tk = findById(prev?.tickets, ticketId);
+    const items = Array.isArray(tk?.items) ? tk.items : [];
+    const totalAmt = items.reduce((s: number, it: any) => s + Number(it?.price || 0) * Number(it?.qty || 1), 0);
+    const totalQty = items.reduce((s: number, it: any) => s + Number(it?.qty || 1), 0);
+    const reason = typeof options?.reason === 'string' && options.reason.trim() ? options.reason.trim() : '';
+    const itemSummary = items.slice(0, 4).map((i: any) => `${i.qty || 1}x ${i.name}`).join(', ');
     return {
       module: 'POS_ORDERS',
-      action: 'CANCEL_DISMISS_TICKET',
+      action: 'CANCEL_PUNCHED_ORDER',
       actionType: 'CANCEL',
       severity: 'critical',
       entityType: 'Ticket',
       entityId: ticketId,
       entityName: findTicketLabel(prev, ticketId),
-      summary: `Cancelled / dismissed KOT ticket ${findTicketLabel(prev, ticketId)} (${(tk?.items || []).length} items)`,
-      details: { ticketId, tableName: tk?.tableName, items: tk?.items },
+      amount: totalAmt,
+      summary: `Cancelled punched KOT ${findTicketLabel(prev, ticketId)} (${totalQty} items, ${fmtRs(totalAmt)}: ${itemSummary}${items.length > 4 ? ` +${items.length - 4} more` : ''})${reason ? ` • Reason: "${reason}"` : ''}`,
+      details: {
+        ticketId,
+        tableId: tk?.tableId,
+        tableName: tk?.tableName,
+        server: tk?.server,
+        cancelledBy: options?.cancelledBy,
+        reason: reason || 'Cancelled from POS Running Orders',
+        source: options?.source || 'cancel_ticket',
+        totalQty,
+        totalAmount: totalAmt,
+        items: items.map((i: any) => ({ name: i.name, qty: i.qty, price: i.price, lineTotal: (i.price || 0) * (i.qty || 1), notes: i.notes, station: i.station })),
+      },
     };
   },
-  clearTableTickets: ([tableId], prev) => {
-    const count = (prev?.tickets || []).filter((t: any) => t?.tableId === tableId).length;
+  clearTableTickets: ([tableId, options], prev) => {
+    if (options?.isSettlementCleanup) return null;
+    const tableTickets = (prev?.tickets || []).filter((t: any) => t?.tableId === tableId);
+    const count = tableTickets.length;
+    const allItems = tableTickets.flatMap((t: any) => t?.items || []);
+    const totalAmt = allItems.reduce((s: number, it: any) => s + Number(it?.price || 0) * Number(it?.qty || 1), 0);
+    const reason = typeof options?.reason === 'string' && options.reason.trim() ? options.reason.trim() : '';
     return {
       module: 'POS_ORDERS',
-      action: 'CANCEL_CLEAR_TABLE_ORDERS',
+      action: 'CANCEL_TABLE_PUNCHED_ORDERS',
       actionType: 'CANCEL',
       severity: 'critical',
       entityType: 'Table',
       entityId: tableId,
       entityName: findTableName(prev, tableId),
-      summary: `Cleared/cancelled ${count} active KOT ticket(s) on ${findTableName(prev, tableId)}`,
-      details: { tableId, clearedCount: count },
+      amount: totalAmt,
+      summary: `Cancelled ${count} punched KOT(s) & released ${findTableName(prev, tableId)} (${allItems.length} lines, ${fmtRs(totalAmt)})${reason ? ` • Reason: "${reason}"` : ''}`,
+      details: {
+        tableId,
+        clearedCount: count,
+        cancelledBy: options?.cancelledBy,
+        reason: reason || 'Table released without billing',
+        source: options?.source || 'release_table',
+        totalAmount: totalAmt,
+        ticketIds: tableTickets.map((t: any) => t.id),
+        items: allItems.map((i: any) => ({ name: i.name, qty: i.qty, price: i.price, lineTotal: (i.price || 0) * (i.qty || 1) })),
+      },
     };
   },
-  clearAllOldTickets: (_args, prev) => ({
-    module: 'KITCHEN_KDS',
-    action: 'CLEAR_ALL_KDS_TICKETS',
-    actionType: 'DELETE',
+  clearAllOldTickets: ([options], prev) => {
+    if (options?.isSettlementCleanup) return null;
+    const allTickets = prev?.tickets || [];
+    const totalAmt = allTickets.reduce(
+      (sum: number, tk: any) => sum + (tk?.items || []).reduce((s: number, it: any) => s + Number(it?.price || 0) * Number(it?.qty || 1), 0),
+      0
+    );
+    const reason = typeof options?.reason === 'string' && options.reason.trim() ? options.reason.trim() : '';
+    return {
+      module: 'KITCHEN_KDS',
+      action: 'PURGE_ALL_PUNCHED_ORDERS',
+      actionType: 'CANCEL',
+      severity: 'critical',
+      entityType: 'KDS',
+      amount: totalAmt,
+      summary: `Purged/cancelled all ${allTickets.length} active punched KOT tickets (${fmtRs(totalAmt)})${reason ? ` • Reason: "${reason}"` : ''}`,
+      details: {
+        previousTicketCount: allTickets.length,
+        totalAmount: totalAmt,
+        cancelledBy: options?.cancelledBy,
+        reason: reason || 'Purged all running tickets',
+      },
+    };
+  },
+  logCancelledPunchedItems: ([entry]) => ({
+    module: 'POS_ORDERS',
+    action: 'CANCEL_PUNCHED_ITEMS_AT_BILLING',
+    actionType: 'CANCEL',
     severity: 'critical',
-    entityType: 'KDS',
-    summary: `Cleared all ${(prev?.tickets || []).length} active KOT tickets across KDS & POS`,
-    details: { previousTicketCount: (prev?.tickets || []).length },
+    entityType: 'Ticket',
+    entityId: entry?.ticketId,
+    entityName: `${entry?.tableName || entry?.tableId || 'POS'} (${entry?.ticketId || 'Punched'})`,
+    amount: Number(entry?.totalAmount || 0),
+    summary: `Removed ${entry?.totalQty || 0} punched dish(es) (${fmtRs(entry?.totalAmount)}) from ${entry?.tableName || 'order'} during billing • Reason: "${entry?.reason || 'Removed at billing'}"`,
+    details: {
+      ticketId: entry?.ticketId,
+      tableId: entry?.tableId,
+      tableName: entry?.tableName,
+      cancelledBy: entry?.cancelledBy,
+      reason: entry?.reason,
+      items: entry?.items,
+      totalAmount: entry?.totalAmount,
+    },
   }),
   markTableBilled: ([tableId, invoiceId], prev) => {
     const t = findById(prev?.tables, tableId);

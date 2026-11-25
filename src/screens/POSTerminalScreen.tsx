@@ -287,6 +287,7 @@ export default function POSTerminalScreen({
   const dismissTicket = useRestaurantStore((state) => state.dismissTicket);
   const clearTableTickets = useRestaurantStore((state) => state.clearTableTickets);
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
+  const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const invoices = useRestaurantStore((state) => state.invoices) || [];
 
@@ -308,6 +309,25 @@ export default function POSTerminalScreen({
   const [editingNoteItem, setEditingNoteItem] = useState<OrderItem | null>(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [variantNoteDraft, setVariantNoteDraft] = useState('');
+  const [cancelOrderModal, setCancelOrderModal] = useState<{
+    mode: 'ticket' | 'table' | 'all';
+    ticketId?: string;
+    tableId?: string;
+    title: string;
+    subtitle: string;
+    items: OrderItem[];
+    totalAmount: number;
+  } | null>(null);
+  const [cancelReasonDraft, setCancelReasonDraft] = useState('');
+
+  const CANCEL_REASON_PRESETS = [
+    'Customer Changed Mind',
+    'Wrong Item Punched',
+    'Duplicate KOT',
+    'Item Out of Stock',
+    'Guest Left Early',
+    'Kitchen Delay',
+  ];
 
   const ITEM_NOTE_PRESETS = [
     'Less Spicy',
@@ -540,31 +560,31 @@ export default function POSTerminalScreen({
     if (!selectedTableId) return;
     if (!requirePosPerm('posCanReleaseTable', 'release occupied tables without billing')) return;
     const targetTable = tables.find((t) => t.id === selectedTableId);
-    const confirmMsg = `Release ${targetTable ? targetTable.name : 'this table'} and reset running bill?`;
-    if (Platform.OS === 'web') {
-      if (window.confirm(confirmMsg)) {
-        settleBill(selectedTableId);
-        clearTableTickets(selectedTableId);
-        setCart([]);
-        setLoadedCart([]);
-        setSelectedTableId('');
-      }
-    } else {
-      Alert.alert('Release Table', confirmMsg, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Release',
-          style: 'destructive',
-          onPress: () => {
-            settleBill(selectedTableId);
-            clearTableTickets(selectedTableId);
-            setCart([]);
-            setLoadedCart([]);
-            setSelectedTableId('');
-          },
-        },
-      ]);
+    const tableTickets = tickets.filter((tk) => tk.tableId === selectedTableId);
+    const allItems =
+      tableTickets.length > 0
+        ? tableTickets.flatMap((tk) => tk.items || [])
+        : targetTable?.orders || [];
+    const totalAmt = allItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 1), 0);
+
+    if (allItems.length === 0 && tableTickets.length === 0) {
+      settleBill(selectedTableId);
+      setCart([]);
+      setLoadedCart([]);
+      setSelectedTableId('');
+      broadcastImmediately();
+      return;
     }
+
+    setCancelReasonDraft('');
+    setCancelOrderModal({
+      mode: 'table',
+      tableId: selectedTableId,
+      title: `Cancel & Release ${targetTable ? targetTable.name : 'Table'}`,
+      subtitle: `${tableTickets.length || 1} active order(s) • Logged to Daily Cancellation Report`,
+      items: allItems,
+      totalAmount: totalAmt,
+    });
   };
 
   useEffect(() => {
@@ -690,48 +710,93 @@ export default function POSTerminalScreen({
 
   const handleCancelRunningOrder = (ticketId: string) => {
     if (!requirePosPerm('posCanDismissTicket', 'cancel or dismiss running kitchen orders')) return;
-    const confirmMsg = `Cancel and remove Ticket #${ticketId}?`;
-    if (Platform.OS === 'web') {
-      if (window.confirm(confirmMsg)) {
-        dismissTicket(ticketId);
-        if (loadedTicketId === ticketId) setLoadedTicketId(null);
-      }
-    } else {
-      Alert.alert('Cancel Order', confirmMsg, [
-        { text: 'Keep Order', style: 'cancel' },
-        {
-          text: 'Yes, Cancel',
-          style: 'destructive',
-          onPress: () => {
-            dismissTicket(ticketId);
-            if (loadedTicketId === ticketId) setLoadedTicketId(null);
-          },
-        },
-      ]);
-    }
+    const targetTicket = tickets.find((tk) => tk.id === ticketId);
+    const items = targetTicket?.items || [];
+    const totalAmt = items.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 1), 0);
+    setPendingOrdersModalVisible(false);
+    setCancelReasonDraft('');
+    setCancelOrderModal({
+      mode: 'ticket',
+      ticketId,
+      tableId: targetTicket?.tableId,
+      title: `Cancel Punched Order #${ticketId}`,
+      subtitle: `${targetTicket?.tableName || 'Running Order'} • Server: ${targetTicket?.server || 'Staff'}`,
+      items,
+      totalAmount: totalAmt,
+    });
   };
 
   const handleClearAllOrphanTickets = () => {
     if (!requirePosPerm('posCanDismissTicket', 'cancel or purge all running kitchen orders')) return;
-    const confirmMsg = 'Clear all running tickets and release all occupied tables?';
-    if (Platform.OS === 'web') {
-      if (window.confirm(confirmMsg)) {
-        clearAllOldTickets();
-        setLoadedTicketId(null);
-      }
-    } else {
-      Alert.alert('Purge Running Orders', confirmMsg, [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Clear All',
-          style: 'destructive',
-          onPress: () => {
-            clearAllOldTickets();
-            setLoadedTicketId(null);
-          },
-        },
-      ]);
+    const allItems = tickets.flatMap((tk) => tk.items || []);
+    const totalAmt = allItems.reduce((sum, it) => sum + Number(it.price || 0) * Number(it.qty || 1), 0);
+    setPendingOrdersModalVisible(false);
+    setCancelReasonDraft('');
+    setCancelOrderModal({
+      mode: 'all',
+      title: `Cancel All ${tickets.length} Running Punched Orders`,
+      subtitle: 'All active KOTs will be cancelled and recorded in the Daily Audit Report',
+      items: allItems,
+      totalAmount: totalAmt,
+    });
+  };
+
+  const handleConfirmCancelPunchedOrder = () => {
+    if (!cancelOrderModal) return;
+    const reason = cancelReasonDraft.trim();
+    if (!reason) {
+      if (Platform.OS === 'web') window.alert('Please enter or select a cancellation reason for the Daily Report.');
+      else Alert.alert('Reason Required', 'Please enter or select a cancellation reason for the Daily Report.');
+      return;
     }
+    const actorName = user?.name || 'POS Staff';
+    const actorRole =
+      user?.customRoleId === 'role-cashier'
+        ? 'Cashier'
+        : String(user?.role || role || 'Staff');
+
+    if (cancelOrderModal.mode === 'ticket' && cancelOrderModal.ticketId) {
+      dismissTicket(cancelOrderModal.ticketId, {
+        reason,
+        cancelledBy: actorName,
+        cancelledByRole: actorRole,
+        source: 'cancel_ticket',
+      });
+      if (loadedTicketId === cancelOrderModal.ticketId) {
+        setLoadedTicketId(null);
+        setCart([]);
+        setLoadedCart([]);
+      }
+      showKdsToast(`❌ Cancelled #${cancelOrderModal.ticketId} — logged to Daily Report`);
+    } else if (cancelOrderModal.mode === 'table' && cancelOrderModal.tableId) {
+      // Log & clear table tickets BEFORE settling so every punched KOT item is captured accurately
+      clearTableTickets(cancelOrderModal.tableId, {
+        reason,
+        cancelledBy: actorName,
+        cancelledByRole: actorRole,
+        source: 'release_table',
+      });
+      settleBill(cancelOrderModal.tableId);
+      setCart([]);
+      setLoadedCart([]);
+      setSelectedTableId('');
+      showKdsToast(`❌ Cancelled orders & released table — logged to Daily Report`);
+    } else if (cancelOrderModal.mode === 'all') {
+      clearAllOldTickets({
+        reason,
+        cancelledBy: actorName,
+        cancelledByRole: actorRole,
+        source: 'purge_all',
+      });
+      setLoadedTicketId(null);
+      setCart([]);
+      setLoadedCart([]);
+      setSelectedTableId('');
+      showKdsToast(`❌ Cancelled all running orders — logged to Daily Report`);
+    }
+    broadcastImmediately();
+    setCancelOrderModal(null);
+    setCancelReasonDraft('');
   };
 
   // Dual-Screen Customer Display Sync
@@ -1369,14 +1434,64 @@ export default function POSTerminalScreen({
       placeOrder(kotTarget, cashierName, unsentKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
     }
 
+    // Detect if any already-punched KOT items were removed or reduced before billing, and log them to Daily Cancellation Report
+    if (loadedCart.length > 0) {
+      const removedPunchedItems: {
+        id: string;
+        name: string;
+        qty: number;
+        price: number;
+        lineTotal: number;
+        station?: 'main' | 'juice';
+        notes?: string;
+      }[] = [];
+      loadedCart.forEach((loadedItem) => {
+        const finalItem = cart.find((c) => c.id === loadedItem.id);
+        const finalQty = finalItem ? finalItem.qty : 0;
+        if (finalQty < loadedItem.qty) {
+          const diffQty = loadedItem.qty - finalQty;
+          removedPunchedItems.push({
+            id: loadedItem.id,
+            name: loadedItem.name,
+            qty: diffQty,
+            price: loadedItem.price,
+            lineTotal: loadedItem.price * diffQty,
+            station: loadedItem.station,
+            notes: loadedItem.notes,
+          });
+        }
+      });
+      if (removedPunchedItems.length > 0) {
+        const remQty = removedPunchedItems.reduce((s, i) => s + i.qty, 0);
+        const remAmt = removedPunchedItems.reduce((s, i) => s + i.lineTotal, 0);
+        const targetTbl = targetTableId ? tables.find((t) => t.id === targetTableId) : undefined;
+        logCancelledPunchedItems({
+          ticketId: loadedTicketId || invoice.id,
+          tableId: targetTableId || orderType,
+          tableName: targetTableName,
+          floor: targetTbl?.floor || targetTbl?.zone,
+          orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
+          server: selectedServer || user?.name || 'Staff',
+          cancelledBy: user?.name || 'POS Staff',
+          cancelledByRole: user?.customRoleId === 'role-cashier' ? 'Cashier' : String(user?.role || role || 'Staff'),
+          reason: `Removed/reduced from punched order during checkout (Bill ${invoice.id})`,
+          source: 'removed_at_billing',
+          items: removedPunchedItems,
+          totalQty: remQty,
+          totalAmount: remAmt,
+          timePlaced: Date.now(),
+        });
+      }
+    }
+
     saveInvoice(invoice);
 
     if (loadedTicketId) {
-      dismissTicket(loadedTicketId);
+      dismissTicket(loadedTicketId, { isSettlementCleanup: true });
       setLoadedTicketId(null);
     }
     if (targetTableId) {
-      clearTableTickets(targetTableId);
+      clearTableTickets(targetTableId, { isSettlementCleanup: true });
     }
 
     broadcastImmediately();
@@ -1591,7 +1706,7 @@ export default function POSTerminalScreen({
     invoice.notes = `Collected by Order Taker: ${col.collectedByWaiter} (${col.paymentMethod.toUpperCase()}) • Received by Cashier: ${cashierName}${col.notes ? ` • ${col.notes}` : ''}`;
 
     saveInvoice(invoice);
-    clearTableTickets(targetTable.id);
+    clearTableTickets(targetTable.id, { isSettlementCleanup: true });
     settleBill(targetTable.id);
     if (selectedTableId === targetTable.id) {
       setCart([]);
@@ -4083,6 +4198,201 @@ export default function POSTerminalScreen({
                 }}
               >
                 <Text style={styles.modalPrimaryBtnText}>Release Table</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 8B: CANCEL PUNCHED ORDER WITH REASON (DAILY AUDIT)
+          ======================================================== */}
+      <Modal
+        visible={!!cancelOrderModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCancelOrderModal(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 500, overflow: 'hidden' }]}>
+            <View
+              style={[
+                styles.modalHeader,
+                { backgroundColor: '#FEF2F2', borderBottomColor: '#FECACA' },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                <View
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 10,
+                    backgroundColor: '#FEE2E2',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Ionicons name="warning" size={20} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.modalTitle, { color: '#991B1B' }]} numberOfLines={1}>
+                    {cancelOrderModal?.title || 'Cancel Punched Order'}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#B91C1C', fontWeight: '600' }} numberOfLines={1}>
+                    {cancelOrderModal?.subtitle}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setCancelOrderModal(null)}
+              >
+                <Ionicons name="close" size={20} color="#991B1B" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ maxHeight: 420 }} contentContainerStyle={{ padding: 16, gap: 12 }}>
+              {/* Itemized Preview of Punched Dishes Being Cancelled */}
+              {cancelOrderModal && cancelOrderModal.items.length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: '#FFF7ED',
+                    borderWidth: 1,
+                    borderColor: '#FED7AA',
+                    borderRadius: 10,
+                    padding: 12,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: '#9A3412', letterSpacing: 0.5 }}>
+                      PUNCHED ITEMS TO CANCEL ({cancelOrderModal.items.reduce((s, i) => s + Number(i.qty || 1), 0)} QTY)
+                    </Text>
+                    <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#DC2626' }}>
+                      Rs. {cancelOrderModal.totalAmount.toLocaleString()}
+                    </Text>
+                  </View>
+                  {cancelOrderModal.items.slice(0, 10).map((it, idx) => (
+                    <View
+                      key={`${it.id}-${idx}`}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingTop: 4,
+                        borderTopWidth: idx === 0 ? 1 : 0,
+                        borderTopColor: '#FFEDD5',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12.5, fontWeight: '700', color: '#1E293B', flex: 1 }} numberOfLines={1}>
+                        {it.qty}x {it.name}
+                      </Text>
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: '#475569' }}>
+                        Rs. {(Number(it.price || 0) * Number(it.qty || 1)).toLocaleString()}
+                      </Text>
+                    </View>
+                  ))}
+                  {cancelOrderModal.items.length > 10 && (
+                    <Text style={{ fontSize: 11, color: '#9A3412', fontWeight: '700' }}>
+                      +{cancelOrderModal.items.length - 10} more item(s)
+                    </Text>
+                  )}
+                </View>
+              )}
+
+              {/* Quick Reason Chips */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155', letterSpacing: 0.4 }}>
+                  SELECT QUICK REASON (REQUIRED FOR DAILY REPORT)
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 7 }}>
+                  {CANCEL_REASON_PRESETS.map((preset) => {
+                    const active = cancelReasonDraft.trim().toLowerCase() === preset.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={preset}
+                        onPress={() => setCancelReasonDraft(preset)}
+                        style={{
+                          paddingHorizontal: 10,
+                          paddingVertical: 6,
+                          borderRadius: 999,
+                          borderWidth: 1,
+                          borderColor: active ? '#DC2626' : '#CBD5E1',
+                          backgroundColor: active ? '#FEE2E2' : '#F8FAFC',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11.5,
+                            fontWeight: '700',
+                            color: active ? '#991B1B' : '#334155',
+                          }}
+                        >
+                          {preset}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Custom Reason Note Input */}
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>
+                  CANCELLATION REASON / DETAILS *
+                </Text>
+                <TextInput
+                  value={cancelReasonDraft}
+                  onChangeText={setCancelReasonDraft}
+                  placeholder="Write exact reason why this punched order is being cancelled..."
+                  placeholderTextColor="#94A3B8"
+                  multiline
+                  numberOfLines={3}
+                  style={{
+                    borderWidth: 1.5,
+                    borderColor: cancelReasonDraft.trim() ? '#DC2626' : '#CBD5E1',
+                    borderRadius: 10,
+                    padding: 11,
+                    fontSize: 13,
+                    color: '#0F172A',
+                    backgroundColor: '#FFFFFF',
+                    minHeight: 74,
+                    textAlignVertical: 'top',
+                  }}
+                />
+                <Text style={{ fontSize: 11, color: '#64748B' }}>
+                  This cancellation, full dish breakdown, PKR total, and your name ({user?.name || 'Staff'}) will be saved in System Logs & Daily Reports and sent as an alert to Cashier/Management.
+                </Text>
+              </View>
+            </ScrollView>
+
+            <View
+              style={{
+                flexDirection: 'row',
+                gap: 10,
+                padding: 14,
+                borderTopWidth: 1,
+                borderTopColor: '#E2E8F0',
+                backgroundColor: '#F8FAFC',
+              }}
+            >
+              <TouchableOpacity
+                style={[styles.modalSecBtn, { flex: 1 }]}
+                onPress={() => setCancelOrderModal(null)}
+              >
+                <Text style={styles.modalSecBtnText}>Keep Order</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.modalPrimaryBtn,
+                  {
+                    flex: 1.4,
+                    backgroundColor: cancelReasonDraft.trim() ? '#DC2626' : '#FCA5A5',
+                  },
+                ]}
+                onPress={handleConfirmCancelPunchedOrder}
+              >
+                <Text style={styles.modalPrimaryBtnText}>Confirm Cancel & Log</Text>
               </TouchableOpacity>
             </View>
           </View>

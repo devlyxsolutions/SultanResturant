@@ -10,6 +10,7 @@ export interface PdfExportOptions {
   includeTaxAndDiscounts: boolean;
   includeTopDishes: boolean;
   includeKitchenAudit: boolean;
+  includeOpsAudit?: boolean;
   includeInvoiceLedger: boolean;
   includeSignatures: boolean;
 }
@@ -22,6 +23,7 @@ export const DEFAULT_PDF_OPTIONS: PdfExportOptions = {
   includeTaxAndDiscounts: true,
   includeTopDishes: true,
   includeKitchenAudit: true,
+  includeOpsAudit: true,
   includeInvoiceLedger: true,
   includeSignatures: true,
 };
@@ -109,6 +111,37 @@ export interface FinancialReportPdfPayload {
       tax?: number;
       total: number;
       payments?: { type: string; amount: number }[];
+    }[];
+    tableMoveLogs?: {
+      id: string;
+      fromTableName: string;
+      fromFloor?: string;
+      toTableName: string;
+      toFloor?: string;
+      note: string;
+      movedBy: string;
+      movedByRole?: string;
+      activeTicketsCount: number;
+      itemsCount: number;
+      billTotal: number;
+      timestamp: number;
+    }[];
+    cancelledOrderLogs?: {
+      id: string;
+      ticketId: string;
+      tableName: string;
+      floor?: string;
+      orderType?: string;
+      server: string;
+      cancelledBy: string;
+      cancelledByRole?: string;
+      reason: string;
+      source: string;
+      items: { name: string; qty: number; price: number; lineTotal: number; notes?: string }[];
+      totalQty: number;
+      totalAmount: number;
+      timePlaced: number;
+      cancelledAt: number;
     }[];
   };
 }
@@ -462,11 +495,116 @@ export function buildExecutiveFinancialReportHtml(
       </div>`
     : '';
 
+  const moveLogs = Array.isArray(s.tableMoveLogs) ? s.tableMoveLogs : [];
+  const cancelLogs = Array.isArray(s.cancelledOrderLogs) ? s.cancelledOrderLogs : [];
+  const totalCancelledQty = cancelLogs.reduce((acc, c) => acc + Number(c.totalQty || 0), 0);
+  const totalCancelledVal = cancelLogs.reduce((acc, c) => acc + Number(c.totalAmount || 0), 0);
+
+  const opsAuditSection =
+    options.includeOpsAudit !== false
+      ? `
+      <div class="section-block avoid-break">
+        <div class="sec-head"><span class="sec-num">07</span>TABLE MOVES &amp; CANCELLED PUNCHED ORDERS AUDIT</div>
+        <div class="mini-kpi-grid" style="margin-bottom:9px;">
+          <div class="mini-kpi"><span>Table Moves</span><strong class="amber">${moveLogs.length} move(s)</strong></div>
+          <div class="mini-kpi"><span>Cancelled Orders</span><strong class="rose">${cancelLogs.length} order(s)</strong></div>
+          <div class="mini-kpi"><span>Cancelled Dishes</span><strong class="rose">${totalCancelledQty} qty</strong></div>
+          <div class="mini-kpi"><span>Cancelled Value</span><strong class="rose">${esc(money(totalCancelledVal))}</strong></div>
+        </div>
+
+        <div style="font-size:9.5px;font-weight:800;color:#52171B;margin:6px 0 4px;">A. TABLE MOVE LOG (WITH NOTES)</div>
+        <table class="fin-table compact" style="margin-bottom:10px;">
+          <thead>
+            <tr>
+              <th style="width:14%;">Time</th>
+              <th style="width:22%;">From &rarr; To Table</th>
+              <th style="width:16%;">Moved By</th>
+              <th style="width:28%;">Move Note</th>
+              <th class="num" style="width:8%;">KOTs</th>
+              <th class="num" style="width:12%;">Running Bill</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              moveLogs.length === 0
+                ? `<tr><td colspan="6" class="muted" style="text-align:center;padding:8px;">No table moves recorded in this period.</td></tr>`
+                : moveLogs
+                    .slice(0, 60)
+                    .map((mv) => {
+                      const dt = new Date(mv.timestamp).toLocaleString('en-PK', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      return `
+                        <tr>
+                          <td>${esc(dt)}</td>
+                          <td class="bold">${esc(mv.fromTableName)} &rarr; ${esc(mv.toTableName)}${mv.toFloor ? ` <span class="muted">(${esc(mv.toFloor)})</span>` : ''}</td>
+                          <td>${esc(mv.movedBy)}${mv.movedByRole ? ` <span class="muted">(${esc(mv.movedByRole)})</span>` : ''}</td>
+                          <td><strong>${esc(mv.note || 'Table shifted')}</strong></td>
+                          <td class="num">${mv.activeTicketsCount || 0}</td>
+                          <td class="num gold bold">${esc(money(mv.billTotal || 0))}</td>
+                        </tr>`;
+                    })
+                    .join('')
+            }
+          </tbody>
+        </table>
+
+        <div style="font-size:9.5px;font-weight:800;color:#9F1239;margin:6px 0 4px;">B. CANCELLED PUNCHED ORDERS (FULL DISH DETAILS)</div>
+        <table class="fin-table compact">
+          <thead>
+            <tr>
+              <th style="width:13%;">Time</th>
+              <th style="width:15%;">KOT # &amp; Table</th>
+              <th style="width:13%;">Cancelled By</th>
+              <th style="width:18%;">Cancel Reason</th>
+              <th style="width:29%;">Cancelled Dishes Breakdown</th>
+              <th class="num" style="width:12%;">Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${
+              cancelLogs.length === 0
+                ? `<tr><td colspan="6" class="muted" style="text-align:center;padding:8px;">No punched orders were cancelled in this period.</td></tr>`
+                : cancelLogs
+                    .slice(0, 80)
+                    .map((cn) => {
+                      const dt = new Date(cn.cancelledAt).toLocaleString('en-PK', {
+                        day: '2-digit',
+                        month: 'short',
+                        hour: '2-digit',
+                        minute: '2-digit',
+                      });
+                      const dishLines = (cn.items || [])
+                        .map(
+                          (it) =>
+                            `${it.qty}x ${esc(it.name)} (${esc(money(it.lineTotal))})${it.notes ? ` [${esc(it.notes)}]` : ''}`
+                        )
+                        .join('<br/>');
+                      return `
+                        <tr>
+                          <td>${esc(dt)}</td>
+                          <td class="bold">${esc(cn.ticketId)}<br/><span class="muted">${esc(cn.tableName)}${cn.floor ? ` • ${esc(cn.floor)}` : ''}</span></td>
+                          <td>${esc(cn.cancelledBy)}${cn.cancelledByRole ? `<br/><span class="muted">${esc(cn.cancelledByRole)}</span>` : ''}<br/><span class="muted">Srv: ${esc(cn.server)}</span></td>
+                          <td class="rose bold">${esc(cn.reason || 'Cancelled')}</td>
+                          <td>${dishLines || '<span class="muted">No items</span>'}</td>
+                          <td class="num rose bold">${esc(money(cn.totalAmount || 0))}<br/><span class="muted">${cn.totalQty || 0} qty</span></td>
+                        </tr>`;
+                    })
+                    .join('')
+            }
+          </tbody>
+        </table>
+      </div>`
+      : '';
+
   const ledgerSection =
     options.includeInvoiceLedger && s.validInvoices.length > 0
       ? `
       <div class="section-block page-break-before">
-        <div class="sec-head"><span class="sec-num">07</span>SETTLED INVOICES AUDIT LEDGER (${s.validInvoices.length} TRANSACTIONS)</div>
+        <div class="sec-head"><span class="sec-num">08</span>SETTLED INVOICES AUDIT LEDGER (${s.validInvoices.length} TRANSACTIONS)</div>
         <table class="fin-table compact">
           <thead>
             <tr>
@@ -807,6 +945,7 @@ export function buildExecutiveFinancialReportHtml(
   ${taxSection}
   ${dishesSection}
   ${kitchenSection}
+  ${opsAuditSection}
   ${ledgerSection}
   ${signaturesSection}
 

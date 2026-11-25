@@ -9,6 +9,7 @@ import { initCallListener } from '../services/headlessCallService';
 import StockAlarmHost from '../components/StockAlarmHost';
 import IncomingCallHost from '../components/IncomingCallHost';
 import WaiterNotificationHost from '../components/WaiterNotificationHost';
+import CashierOpsNotificationHost from '../components/CashierOpsNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
 import SessionSecurityHost from '../components/SessionSecurityHost';
 import CentralUpdateHost from '../components/CentralUpdateHost';
@@ -452,6 +453,8 @@ export default function RootLayout() {
       <IncomingCallHost />
       {/* Universal Food Ready & Bill Paid Notification Host for Order Takers */}
       <WaiterNotificationHost />
+      {/* Live Cashier & Management Alerts for Table Moves (with Note) & Cancelled Punched Orders */}
+      <CashierOpsNotificationHost />
       {/* Floor Manager Urgent Digital Menu Order Repeating Notification Host */}
       <FloorManagerNotificationHost />
       {/* Multi-Device Security & Concurrent Session Kick Host */}
