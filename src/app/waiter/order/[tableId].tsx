@@ -30,6 +30,7 @@ import {
   useOpsStore,
   useRestaurantStore,
 } from '../../../store';
+import { useSettingsStore } from '../../../store/settingsStore';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
 import { doesOrderBelongToUser, isOrderTakerUser } from '../../../utils/orderTakerScope';
 
@@ -216,6 +217,10 @@ export default function TableOrderScreen() {
   // Table Operations Modals
   const [transferModalVisible, setTransferModalVisible] = useState(false);
   const [runningItemsModalVisible, setRunningItemsModalVisible] = useState(false);
+  const [customerBillModalVisible, setCustomerBillModalVisible] = useState(false);
+  const [waiterPayMethod, setWaiterPayMethod] = useState<'cash' | 'card' | 'online'>('cash');
+  const [waiterTenderedInput, setWaiterTenderedInput] = useState('');
+  const [waiterPayNote, setWaiterPayNote] = useState('');
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -237,7 +242,10 @@ export default function TableOrderScreen() {
   const markItemServed = useRestaurantStore((state) => state.markItemServed);
   const transferTable = useRestaurantStore((state) => state.transferTable);
   const markTableBilled = useRestaurantStore((state) => state.markTableBilled);
+  const recordWaiterPaymentCollection = useRestaurantStore((state) => state.recordWaiterPaymentCollection);
+  const cancelWaiterPaymentCollection = useRestaurantStore((state) => state.cancelWaiterPaymentCollection);
   const updateTable = useRestaurantStore((state) => state.updateTable);
+  const systemSettings = useSettingsStore((state) => state.settings);
 
   const unavailableIds = useOpsStore((state) => state.unavailableItemIds) || [];
   const unavailableSet = useMemo(() => new Set(unavailableIds), [unavailableIds]);
@@ -578,30 +586,85 @@ export default function TableOrderScreen() {
       completed: true,
     }));
     const subTotal = allItems.reduce((s, i) => s + i.price * i.qty, 0);
-    const tax = Math.round(subTotal * 0.16);
-    const total = subTotal + tax;
-    const unpaidInvoice: Invoice = {
-      id: `CHK-${table.name.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
-      orderType: 'dine-in',
+    const tax = systemSettings.taxEnabled ? Math.round(subTotal * ((systemSettings.taxRatePercent || 0) / 100)) : 0;
+    const service = systemSettings.serviceChargeEnabled
+      ? Math.round(subTotal * ((systemSettings.serviceChargePercent || 0) / 100))
+      : 0;
+    const total = subTotal + tax + service;
+    setWaiterTenderedInput(String(total));
+    setCustomerBillModalVisible(true);
+  };
+
+  // Consolidated Customer Bill Items & Totals (for showing bill to customer & collecting payment)
+  const consolidatedOrderedItems = useMemo(() => {
+    const map = new Map<string, { id: string; name: string; price: number; qty: number; notes?: string }>();
+    alreadyOrderedItems.forEach((it) => {
+      const existing = map.get(it.id);
+      if (existing) {
+        existing.qty += it.qty;
+      } else {
+        map.set(it.id, { id: it.id, name: it.name, price: it.price, qty: it.qty, notes: it.notes });
+      }
+    });
+    return Array.from(map.values());
+  }, [alreadyOrderedItems]);
+
+  const billSubTotal = useMemo(
+    () => consolidatedOrderedItems.reduce((s, i) => s + i.price * i.qty, 0),
+    [consolidatedOrderedItems]
+  );
+  const billTax = useMemo(
+    () => (systemSettings.taxEnabled ? Math.round(billSubTotal * ((systemSettings.taxRatePercent || 0) / 100)) : 0),
+    [billSubTotal, systemSettings.taxEnabled, systemSettings.taxRatePercent]
+  );
+  const billServiceCharge = useMemo(
+    () =>
+      systemSettings.serviceChargeEnabled
+        ? Math.round(billSubTotal * ((systemSettings.serviceChargePercent || 0) / 100))
+        : 0,
+    [billSubTotal, systemSettings.serviceChargeEnabled, systemSettings.serviceChargePercent]
+  );
+  const billGrandTotal = useMemo(() => billSubTotal + billTax + billServiceCharge, [billSubTotal, billTax, billServiceCharge]);
+  const billTendered = parseFloat(waiterTenderedInput) || billGrandTotal;
+  const billChangeDue = Math.max(0, billTendered - billGrandTotal);
+
+  const openCustomerBillModal = () => {
+    setWaiterTenderedInput(String(billGrandTotal));
+    setCustomerBillModalVisible(true);
+  };
+
+  const handleConfirmWaiterPaymentCollected = () => {
+    if (!table || consolidatedOrderedItems.length === 0) return;
+    const waiterName = currentStaff?.name || user?.name || table.server || 'Order Taker';
+    const waiterId = currentStaff?.id || user?.staffId || user?.id || table.serverId;
+    const collectedAmt = parseFloat(waiterTenderedInput) || billGrandTotal;
+    if (collectedAmt < billGrandTotal) {
+      const msg = `Collected amount (Rs. ${collectedAmt.toLocaleString()}) cannot be less than Bill Total (Rs. ${billGrandTotal.toLocaleString()}).`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Incomplete Amount', msg);
+      return;
+    }
+
+    recordWaiterPaymentCollection({
       tableId: table.id,
       tableName: table.name,
-      server: table.server || user?.name || 'Order Taker',
-      orderTakenBy: table.server || user?.name || 'Order Taker',
-      cashier: user?.name || 'Order Taker',
-      timePlaced: Date.now(),
-      timeSettled: Date.now(),
-      items: allItems,
-      subTotal,
-      discount: 0,
-      tax,
-      total,
-      payments: [],
-      status: 'unpaid',
-      isUnpaidBill: true,
-    };
-    markTableBilled(table.id, unpaidInvoice.id);
+      floor: floorName,
+      collectedByWaiter: waiterName,
+      collectedByWaiterId: waiterId,
+      subTotal: billSubTotal,
+      tax: billTax,
+      serviceCharge: billServiceCharge,
+      totalAmount: billGrandTotal,
+      tenderedAmount: collectedAmt,
+      changeReturned: Math.max(0, collectedAmt - billGrandTotal),
+      paymentMethod: waiterPayMethod,
+      notes: waiterPayNote.trim() || undefined,
+    });
     broadcastImmediately();
-    printInvoiceReceipt(unpaidInvoice);
+    setCustomerBillModalVisible(false);
+    const okMsg = `Payment of Rs. ${billGrandTotal.toLocaleString()} (${waiterPayMethod.toUpperCase()}) recorded under ${waiterName}!\n\nCashier has been notified. This order will stay PENDING in your name until you hand over the cash/payment to the Cashier.`;
+    if (Platform.OS === 'web') window.alert(okMsg);
+    else Alert.alert('Payment Recorded — Pending Cashier Handover', okMsg);
   };
 
   return (
@@ -644,6 +707,30 @@ export default function TableOrderScreen() {
 
         {/* Right Actions */}
         <View style={styles.topBarRight}>
+          {table && alreadyOrderedItems.length > 0 && (
+            <TouchableOpacity
+              style={[
+                styles.topActionBtn,
+                {
+                  backgroundColor: table.waiterPaymentCollection?.status === 'pending_cashier' ? '#F59E0B' : '#16A34A',
+                  borderColor: table.waiterPaymentCollection?.status === 'pending_cashier' ? '#FDE68A' : '#4ADE80',
+                },
+              ]}
+              onPress={openCustomerBillModal}
+            >
+              <Ionicons
+                name={table.waiterPaymentCollection?.status === 'pending_cashier' ? 'time' : 'receipt'}
+                size={15}
+                color="#FFFFFF"
+              />
+              <Text style={[styles.topActionText, { color: '#FFFFFF', fontWeight: '900' }]}>
+                {table.waiterPaymentCollection?.status === 'pending_cashier'
+                  ? `Pending Cashier (Rs. ${table.waiterPaymentCollection.totalAmount.toLocaleString()})`
+                  : `Show Bill / Collect (Rs. ${billGrandTotal.toLocaleString()})`}
+              </Text>
+            </TouchableOpacity>
+          )}
+
           {alreadyOrderedItems.length > 0 && (
             <TouchableOpacity
               style={styles.topActionBtn}
@@ -1208,11 +1295,31 @@ export default function TableOrderScreen() {
                     </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[styles.secActionBtn, styles.secActionSlip]}
-                    onPress={handleRequestBill}
+                    style={[
+                      styles.secActionBtn,
+                      styles.secActionSlip,
+                      {
+                        backgroundColor: table?.waiterPaymentCollection?.status === 'pending_cashier' ? '#FEF3C7' : '#ECFDF5',
+                        borderColor: table?.waiterPaymentCollection?.status === 'pending_cashier' ? '#F59E0B' : '#10B981',
+                      },
+                    ]}
+                    onPress={openCustomerBillModal}
                   >
-                    <Ionicons name="receipt-outline" size={15} color="#334155" />
-                    <Text style={styles.secActionSlipText}>Print Check</Text>
+                    <Ionicons
+                      name={table?.waiterPaymentCollection?.status === 'pending_cashier' ? 'time' : 'cash-outline'}
+                      size={15}
+                      color={table?.waiterPaymentCollection?.status === 'pending_cashier' ? '#B45309' : '#047857'}
+                    />
+                    <Text
+                      style={[
+                        styles.secActionSlipText,
+                        { color: table?.waiterPaymentCollection?.status === 'pending_cashier' ? '#92400E' : '#065F46' },
+                      ]}
+                    >
+                      {table?.waiterPaymentCollection?.status === 'pending_cashier'
+                        ? `Collected Rs. ${table.waiterPaymentCollection.totalAmount.toLocaleString()} (Pending Cashier)`
+                        : `Show Bill & Collect (Rs. ${billGrandTotal.toLocaleString()})`}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -1611,6 +1718,301 @@ export default function TableOrderScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================================= */}
+      {/* CUSTOMER BILL VIEW & ORDER TAKER PAYMENT COLLECTION MODAL */}
+      {/* ========================================================================= */}
+      <Modal visible={customerBillModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 560, maxHeight: '92%' }]}>
+            <View style={[styles.modalHeader, { backgroundColor: '#24050A' }]}>
+              <View>
+                <Text style={[styles.modalTitle, { color: '#F3D179' }]}>
+                  🧾 Customer Bill & Payment Collection
+                </Text>
+                <Text style={{ fontSize: 12, color: '#E2E8F0', fontWeight: '600', marginTop: 2 }}>
+                  {tableName} ({floorName}) • Server: {currentStaff?.name || user?.name || table?.server || 'Order Taker'}
+                </Text>
+              </View>
+              <TouchableOpacity style={styles.modalCloseBtn} onPress={() => setCustomerBillModalVisible(false)}>
+                <Ionicons name="close" size={20} color="#F3D179" />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ padding: 16 }} keyboardShouldPersistTaps="handled">
+              {/* Pending Cashier Liability Alert if already collected */}
+              {table?.waiterPaymentCollection?.status === 'pending_cashier' && (
+                <View
+                  style={{
+                    backgroundColor: '#FFFBEB',
+                    borderWidth: 2,
+                    borderColor: '#F59E0B',
+                    borderRadius: 12,
+                    padding: 12,
+                    marginBottom: 14,
+                    gap: 6,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Ionicons name="warning" size={20} color="#D97706" />
+                    <Text style={{ fontSize: 13.5, fontWeight: '900', color: '#92400E', flex: 1 }}>
+                      ⏳ PAYMENT PENDING WITH CASHIER (SPEAKING IN {table.waiterPaymentCollection.collectedByWaiter.toUpperCase()}&apos;S NAME)
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 12.5, color: '#78350F', fontWeight: '700' }}>
+                    Collected: Rs. {table.waiterPaymentCollection.totalAmount.toLocaleString()} via{' '}
+                    {table.waiterPaymentCollection.paymentMethod.toUpperCase()} at{' '}
+                    {new Date(table.waiterPaymentCollection.collectedAt).toLocaleTimeString()}
+                  </Text>
+                  <Text style={{ fontSize: 11.5, color: '#B45309', fontWeight: '600' }}>
+                    This order remains PENDING until the Cashier confirms receiving Rs.{' '}
+                    {table.waiterPaymentCollection.totalAmount.toLocaleString()} from{' '}
+                    {table.waiterPaymentCollection.collectedByWaiter} at the POS counter.
+                  </Text>
+                </View>
+              )}
+
+              {/* Customer-Facing Royal Bill Card */}
+              <View
+                style={{
+                  backgroundColor: '#FFFFFF',
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: '#CBD5E1',
+                  padding: 14,
+                  marginBottom: 14,
+                }}
+              >
+                <View style={{ alignItems: 'center', borderBottomWidth: 1.5, borderBottomColor: '#E2E8F0', paddingBottom: 10, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 17, fontWeight: '900', color: '#52141C', letterSpacing: 0.6 }}>
+                    SULTAN RESTAURANT & CAFE
+                  </Text>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#475569', marginTop: 2 }}>
+                    PROVISIONAL CUSTOMER BILL • {tableName.toUpperCase()}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                    {new Date().toLocaleDateString()} • {new Date().toLocaleTimeString()} • Server:{' '}
+                    {currentStaff?.name || user?.name || table?.server || 'Order Taker'}
+                  </Text>
+                </View>
+
+                {/* Header Row */}
+                <View style={{ flexDirection: 'row', paddingBottom: 6, borderBottomWidth: 1, borderBottomColor: '#E2E8F0', marginBottom: 6 }}>
+                  <Text style={{ flex: 1, fontSize: 11.5, fontWeight: '900', color: '#475569' }}>DISH / ITEM</Text>
+                  <Text style={{ width: 45, textAlign: 'center', fontSize: 11.5, fontWeight: '900', color: '#475569' }}>QTY</Text>
+                  <Text style={{ width: 70, textAlign: 'right', fontSize: 11.5, fontWeight: '900', color: '#475569' }}>RATE</Text>
+                  <Text style={{ width: 85, textAlign: 'right', fontSize: 11.5, fontWeight: '900', color: '#475569' }}>TOTAL</Text>
+                </View>
+
+                {consolidatedOrderedItems.map((it) => (
+                  <View
+                    key={it.id}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 6,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#F1F5F9',
+                    }}
+                  >
+                    <View style={{ flex: 1, paddingRight: 6 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>{it.name}</Text>
+                      {it.notes ? (
+                        <Text style={{ fontSize: 11, color: '#B45309', fontWeight: '600' }}>Note: {it.notes}</Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ width: 45, textAlign: 'center', fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                      {it.qty}
+                    </Text>
+                    <Text style={{ width: 70, textAlign: 'right', fontSize: 12.5, fontWeight: '700', color: '#475569' }}>
+                      {it.price.toLocaleString()}
+                    </Text>
+                    <Text style={{ width: 85, textAlign: 'right', fontSize: 13, fontWeight: '900', color: '#0F172A' }}>
+                      {(it.price * it.qty).toLocaleString()}
+                    </Text>
+                  </View>
+                ))}
+
+                {/* Totals */}
+                <View style={{ marginTop: 10, paddingTop: 8, borderTopWidth: 1.5, borderTopColor: '#CBD5E1', gap: 5 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>Subtotal</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                      Rs. {billSubTotal.toLocaleString()}
+                    </Text>
+                  </View>
+                  {billTax > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+                        {systemSettings.taxLabel || 'GST'} ({systemSettings.taxRatePercent || 0}%)
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                        Rs. {billTax.toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+                  {billServiceCharge > 0 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#475569' }}>
+                        Service Charge ({systemSettings.serviceChargePercent || 0}%)
+                      </Text>
+                      <Text style={{ fontSize: 13, fontWeight: '800', color: '#0F172A' }}>
+                        Rs. {billServiceCharge.toLocaleString()}
+                      </Text>
+                    </View>
+                  )}
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      backgroundColor: '#24050A',
+                      borderRadius: 10,
+                      paddingHorizontal: 14,
+                      paddingVertical: 10,
+                      marginTop: 6,
+                    }}
+                  >
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: '#F3D179' }}>GRAND TOTAL PAYABLE</Text>
+                    <Text style={{ fontSize: 20, fontWeight: '900', color: '#FFFFFF' }}>
+                      Rs. {billGrandTotal.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Step 2: Order Taker Payment Collection Form */}
+              <View
+                style={{
+                  backgroundColor: '#F0FDF4',
+                  borderRadius: 12,
+                  borderWidth: 1.5,
+                  borderColor: '#86EFAC',
+                  padding: 14,
+                  gap: 10,
+                  marginBottom: 16,
+                }}
+              >
+                <Text style={{ fontSize: 14, fontWeight: '900', color: '#14532D' }}>
+                  💵 Collect Payment from Customer & Notify Cashier
+                </Text>
+
+                {/* Payment Method Selector */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {(
+                    [
+                      { key: 'cash', label: '💵 Cash', icon: 'cash-outline' },
+                      { key: 'card', label: '💳 Card', icon: 'card-outline' },
+                      { key: 'online', label: '📱 Online', icon: 'phone-portrait-outline' },
+                    ] as const
+                  ).map((m) => {
+                    const active = waiterPayMethod === m.key;
+                    return (
+                      <TouchableOpacity
+                        key={m.key}
+                        style={{
+                          flex: 1,
+                          paddingVertical: 9,
+                          borderRadius: 9,
+                          backgroundColor: active ? '#15803D' : '#FFFFFF',
+                          borderWidth: 1.5,
+                          borderColor: active ? '#15803D' : '#BBF7D0',
+                          alignItems: 'center',
+                        }}
+                        onPress={() => setWaiterPayMethod(m.key)}
+                      >
+                        <Text style={{ fontSize: 12.5, fontWeight: '900', color: active ? '#FFFFFF' : '#166534' }}>
+                          {m.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* Amount Received Input + Change Due */}
+                <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#166534', marginBottom: 4 }}>
+                      Amount Received from Guest (Rs.)
+                    </Text>
+                    <TextInput
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1.5,
+                        borderColor: '#86EFAC',
+                        borderRadius: 9,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        fontSize: 15,
+                        fontWeight: '900',
+                        color: '#0F172A',
+                      }}
+                      keyboardType="numeric"
+                      value={waiterTenderedInput}
+                      onChangeText={setWaiterTenderedInput}
+                      placeholder={String(billGrandTotal)}
+                    />
+                  </View>
+                  <View
+                    style={{
+                      backgroundColor: '#DCFCE7',
+                      borderRadius: 9,
+                      paddingHorizontal: 12,
+                      paddingVertical: 10,
+                      minWidth: 130,
+                      alignItems: 'flex-end',
+                    }}
+                  >
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#166534' }}>CHANGE TO RETURN</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: '#15803D', marginTop: 2 }}>
+                      Rs. {billChangeDue.toLocaleString()}
+                    </Text>
+                  </View>
+                </View>
+
+                <TextInput
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#BBF7D0',
+                    borderRadius: 9,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    fontSize: 12.5,
+                    fontWeight: '700',
+                    color: '#0F172A',
+                  }}
+                  placeholder="Optional payment note (e.g. Rs. 5000 note received, JazzCash ref)..."
+                  placeholderTextColor="#94A3B8"
+                  value={waiterPayNote}
+                  onChangeText={setWaiterPayNote}
+                />
+
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#16A34A',
+                    borderRadius: 10,
+                    paddingVertical: 13,
+                    paddingHorizontal: 16,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 8,
+                  }}
+                  onPress={handleConfirmWaiterPaymentCollected}
+                >
+                  <Ionicons name="checkmark-circle" size={19} color="#FFFFFF" />
+                  <Text style={{ color: '#FFFFFF', fontSize: 13.5, fontWeight: '900' }}>
+                    {table?.waiterPaymentCollection?.status === 'pending_cashier'
+                      ? `Update Collected Payment (Rs. ${billGrandTotal.toLocaleString()})`
+                      : `Payment Collected by Me — Notify Cashier (Rs. ${billGrandTotal.toLocaleString()})`}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </ScrollView>
           </View>
         </View>

@@ -695,6 +695,28 @@ export default function OrderTakerScreen() {
               </Text>
             </View>
           )}
+          {item.waiterPaymentCollection?.status === 'pending_cashier' && (
+            <View
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: '#FFFBEB',
+                borderWidth: 1,
+                borderColor: '#F59E0B',
+                borderRadius: 8,
+                paddingHorizontal: 8,
+                paddingVertical: 5,
+                marginTop: 6,
+                gap: 5,
+              }}
+            >
+              <Ionicons name="cash" size={13} color="#D97706" />
+              <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400E', flex: 1 }} numberOfLines={2}>
+                Rs. {item.waiterPaymentCollection.totalAmount.toLocaleString()} Collected by{' '}
+                {item.waiterPaymentCollection.collectedByWaiter} • Pending Cashier Receive
+              </Text>
+            </View>
+          )}
         </View>
 
         {/* Card Footer Actions */}
@@ -846,6 +868,65 @@ export default function OrderTakerScreen() {
       </View>
 
       {/* Compact Search Bar */}
+      {(() => {
+        const myPendingCashTables = tables.filter((t) => {
+          if (t.status === 'available' || t.waiterPaymentCollection?.status !== 'pending_cashier') return false;
+          if (!isOrderTaker) return true;
+          return (
+            doesOrderBelongToUser(
+              {
+                server: t.waiterPaymentCollection.collectedByWaiter,
+                serverId: t.waiterPaymentCollection.collectedByWaiterId,
+              },
+              user,
+              staff
+            ) || isTableOwnedByUser(t, scopedTickets, user, staff)
+          );
+        });
+        if (myPendingCashTables.length === 0) return null;
+        const totalPendingAmt = myPendingCashTables.reduce(
+          (s, t) => s + (t.waiterPaymentCollection?.totalAmount || 0),
+          0
+        );
+        return (
+          <View
+            style={{
+              backgroundColor: '#FFFBEB',
+              borderWidth: 1.5,
+              borderColor: '#F59E0B',
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              marginBottom: 10,
+              gap: 4,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, flex: 1 }}>
+                <Ionicons name="cash" size={18} color="#D97706" />
+                <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E', flex: 1 }}>
+                  ⏳ Pending Payment in {displayName}&apos;s Name (Waiting for Cashier Receive): Rs.{' '}
+                  {totalPendingAmt.toLocaleString()}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: '#D97706', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '900' }}>
+                  {myPendingCashTables.length} {myPendingCashTables.length === 1 ? 'Order' : 'Orders'} Pending
+                </Text>
+              </View>
+            </View>
+            <Text style={{ fontSize: 11.5, color: '#B45309', fontWeight: '700' }}>
+              Tables:{' '}
+              {myPendingCashTables
+                .map(
+                  (t) =>
+                    `${t.name} (Rs. ${(t.waiterPaymentCollection?.totalAmount || 0).toLocaleString()} • ${t.waiterPaymentCollection?.collectedByWaiter})`
+                )
+                .join('  •  ')}
+            </Text>
+          </View>
+        );
+      })()}
       <View style={styles.compactSearchBar}>
         <Ionicons name="search" size={15} color="#8E8E93" />
         <TextInput

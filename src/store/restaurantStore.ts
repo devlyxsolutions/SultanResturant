@@ -10,6 +10,25 @@ import { normalizeMenuItemImage } from '../utils/menuImage';
 import { useSettingsStore } from './settingsStore';
 import { appStorage } from './storage';
 
+export type WaiterPaymentCollection = {
+  id: string;
+  tableId: string;
+  tableName: string;
+  floor?: string;
+  collectedByWaiter: string;
+  collectedByWaiterId?: string;
+  subTotal: number;
+  tax: number;
+  serviceCharge: number;
+  totalAmount: number;
+  tenderedAmount: number;
+  changeReturned: number;
+  paymentMethod: 'cash' | 'card' | 'online';
+  notes?: string;
+  collectedAt: number;
+  status: 'pending_cashier';
+};
+
 export type Table = {
   id: string;
   name: string;
@@ -28,6 +47,8 @@ export type Table = {
   occupiedSince?: number;
   lastSettledAt?: number;
   reservationId?: string;
+  /** If set, an Order Taker has collected payment from the guest and it is pending handover/receipt by the Cashier. */
+  waiterPaymentCollection?: WaiterPaymentCollection | null;
   /** If set, this table is physically joined to the given primary table (merged reservation / big party). */
   mergedInto?: string;
   x?: number;
@@ -463,6 +484,8 @@ type RestaurantState = {
   updateTicketStatus: (ticketId: string, status: Ticket['status'], station?: 'main' | 'juice') => void;
   serveTableTickets: (tableId: string) => void;
   markTableBilled: (tableId: string, invoiceId?: string) => void;
+  recordWaiterPaymentCollection: (payload: Omit<WaiterPaymentCollection, 'id' | 'collectedAt' | 'status'>) => void;
+  cancelWaiterPaymentCollection: (tableId: string) => void;
   clearBillPaidAlert: (tableIdOrName?: string) => void;
   clearFoodReadyAlert: (alertIdOrTableId?: string) => void;
   settleBill: (tableId: string) => void;
@@ -857,12 +880,14 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     // If a table is marked 'occupied' but has ZERO active tickets left (e.g. tickets were cleared or cancelled),
     // release it to 'available' — UNLESS it is a seated reservation / merged group primary waiting for its first KOT.
     const hasMergedChildren = sanitizedTables.some((other) => other.mergedInto === table.id);
+    const hasPendingWaiterCash = table.waiterPaymentCollection?.status === 'pending_cashier';
     if (
       table.status === 'occupied' &&
       tableTickets.length === 0 &&
       !table.mergedInto &&
       !table.reservationId &&
-      !hasMergedChildren
+      !hasMergedChildren &&
+      !hasPendingWaiterCash
     ) {
       return {
         ...table,
@@ -873,6 +898,7 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         isPaid: false,
         lastInvoiceId: undefined,
         occupiedSince: undefined,
+        waiterPaymentCollection: undefined,
       };
     }
 
@@ -1981,6 +2007,47 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
+      recordWaiterPaymentCollection: (payload) => set((state) => {
+        const now = Date.now();
+        const collection: WaiterPaymentCollection = {
+          ...payload,
+          id: `wpay_${payload.tableId}_${now}`,
+          collectedAt: now,
+          status: 'pending_cashier',
+        };
+        notifySync();
+        return {
+          tables: state.tables.map((t) =>
+            t.id === payload.tableId
+              ? {
+                  ...t,
+                  status: 'occupied',
+                  isPaid: false,
+                  billTotal: payload.totalAmount || t.billTotal || 0,
+                  server: payload.collectedByWaiter || t.server,
+                  serverId: payload.collectedByWaiterId || t.serverId,
+                  occupiedSince: t.occupiedSince || now,
+                  waiterPaymentCollection: collection,
+                }
+              : t
+          ),
+        };
+      }),
+
+      cancelWaiterPaymentCollection: (tableId) => set((state) => {
+        notifySync();
+        return {
+          tables: state.tables.map((t) =>
+            t.id === tableId
+              ? {
+                  ...t,
+                  waiterPaymentCollection: null,
+                }
+              : t
+          ),
+        };
+      }),
+
       clearBillPaidAlert: (tableIdOrName?: string) => set((state) => {
         if (!tableIdOrName) {
           notifySync();
@@ -2051,6 +2118,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               lastSettledAt: now,
               mergedInto: undefined,
               reservationId: undefined,
+              waiterPaymentCollection: undefined,
             } : t
           ),
           reservations: (state.reservations || []).map(r => {

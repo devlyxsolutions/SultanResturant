@@ -1503,6 +1503,109 @@ export default function POSTerminalScreen({
     [cart, menuItems]
   );
 
+  // Live Order Taker Payment Collections Pending Cashier Handover ("Order Taker ke naam par bolti hui pending payments")
+  const pendingWaiterCollections = useMemo(
+    () =>
+      tables.filter(
+        (t) => t && t.status !== 'available' && t.waiterPaymentCollection?.status === 'pending_cashier'
+      ),
+    [tables]
+  );
+
+  const waiterLiabilitySummary = useMemo(() => {
+    const byWaiter = new Map<string, { waiterName: string; totalAmount: number; count: number; tables: string[] }>();
+    pendingWaiterCollections.forEach((t) => {
+      const col = t.waiterPaymentCollection;
+      if (!col) return;
+      const wName = col.collectedByWaiter || t.server || 'Order Taker';
+      const key = wName.trim().toLowerCase();
+      const prev = byWaiter.get(key) || { waiterName: wName, totalAmount: 0, count: 0, tables: [] };
+      prev.totalAmount += col.totalAmount || 0;
+      prev.count += 1;
+      prev.tables.push(t.name);
+      byWaiter.set(key, prev);
+    });
+    return Array.from(byWaiter.values());
+  }, [pendingWaiterCollections]);
+
+  const seenWaiterPayIdsRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    pendingWaiterCollections.forEach((t) => {
+      const col = t.waiterPaymentCollection;
+      if (col && col.id && !seenWaiterPayIdsRef.current.has(col.id)) {
+        seenWaiterPayIdsRef.current.add(col.id);
+        showKdsToast(
+          `💰 Payment Collected by ${col.collectedByWaiter} on ${t.name} (Rs. ${col.totalAmount.toLocaleString()} • ${col.paymentMethod.toUpperCase()}) — Waiting for Cashier Receive!`
+        );
+      }
+    });
+  }, [pendingWaiterCollections]);
+
+  const handleReceiveWaiterPaymentAndSettle = (targetTable: typeof tables[0]) => {
+    if (!requirePosPerm('posCanSettleBill', 'receive Order Taker payment and settle bill')) return;
+    const col = targetTable.waiterPaymentCollection;
+    if (!col) return;
+
+    const tableTickets = tickets.filter((tk) => tk.tableId === targetTable.id);
+    const rawItems: OrderItem[] =
+      tableTickets.length > 0
+        ? tableTickets.flatMap((tk) => (tk.items || []).map((i) => ({ ...i })))
+        : (targetTable.orders || []).map((i) => ({ ...i }));
+    const mergedMap = new Map<string, OrderItem>();
+    rawItems.forEach((it) => {
+      const prev = mergedMap.get(it.id);
+      if (prev) {
+        prev.qty += it.qty;
+      } else {
+        mergedMap.set(it.id, { ...it });
+      }
+    });
+    const finalItems = Array.from(mergedMap.values());
+    const cashierName = user?.name ? `${user.name} (Cashier)` : 'POS Cashier';
+    const payType = col.paymentMethod === 'card' ? 'card' : col.paymentMethod === 'online' ? 'online' : 'cash';
+
+    const invoice = createInvoicePayload({
+      orderType: 'dine-in',
+      server: col.collectedByWaiter || targetTable.server || 'Order Taker',
+      orderTakenBy: col.collectedByWaiter || targetTable.server || 'Order Taker',
+      cashier: cashierName,
+      tableName: targetTable.name,
+      tableId: targetTable.id,
+      items: finalItems,
+      subTotal: col.subTotal || finalItems.reduce((s, i) => s + i.price * i.qty, 0),
+      discount: 0,
+      tax: col.tax || 0,
+      serviceCharge: col.serviceCharge > 0 ? col.serviceCharge : undefined,
+      total: col.totalAmount,
+      payments: [
+        {
+          type: payType as any,
+          amount: col.totalAmount,
+          tendered: col.tenderedAmount || col.totalAmount,
+          change: col.changeReturned || 0,
+        },
+      ],
+      tenderedAmount: col.tenderedAmount || col.totalAmount,
+      changeReturned: col.changeReturned || 0,
+    });
+    invoice.notes = `Collected by Order Taker: ${col.collectedByWaiter} (${col.paymentMethod.toUpperCase()}) • Received by Cashier: ${cashierName}${col.notes ? ` • ${col.notes}` : ''}`;
+
+    saveInvoice(invoice);
+    clearTableTickets(targetTable.id);
+    settleBill(targetTable.id);
+    if (selectedTableId === targetTable.id) {
+      setCart([]);
+      setLoadedCart([]);
+      setOrderNotes('');
+      setSelectedTableId('');
+    }
+    broadcastImmediately();
+    printInvoiceReceipt(invoice);
+    showKdsToast(
+      `✅ Received Rs. ${col.totalAmount.toLocaleString()} from ${col.collectedByWaiter} & settled ${targetTable.name}!`
+    );
+  };
+
   if (role !== 'admin' && !can('canAccessPOS')) {
     return (
       <PermissionDeniedScreen
@@ -1769,6 +1872,150 @@ export default function POSTerminalScreen({
           <TouchableOpacity onPress={() => setKdsStatusToast(null)}>
             <Ionicons name="close" size={18} color="#64748B" />
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* ========================================================================
+          LIVE CASHIER ALERT BANNER: ORDER TAKER COLLECTED PAYMENTS (PENDING CASHIER RECEIVE)
+          ======================================================================== */}
+      {pendingWaiterCollections.length > 0 && (
+        <View
+          style={{
+            backgroundColor: '#FFFBEB',
+            borderBottomWidth: 2,
+            borderBottomColor: '#F59E0B',
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            gap: 8,
+          }}
+        >
+          {/* Row 1: Alert Title + Per-Order-Taker Liability Summary Pills ("Kis Order Taker ke Naam Par Payment Bol Rahi Hai") */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <View
+                style={{
+                  backgroundColor: '#D97706',
+                  paddingHorizontal: 8,
+                  paddingVertical: 3,
+                  borderRadius: 6,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Ionicons name="notifications" size={14} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 11.5, fontWeight: '900' }}>
+                  PENDING CASHIER RECEIVE ({pendingWaiterCollections.length})
+                </Text>
+              </View>
+              <Text style={{ fontSize: 13, fontWeight: '900', color: '#92400E' }}>
+                Order Taker Collected Payments — Waiting for Cashier Handover:
+              </Text>
+            </View>
+
+            {/* Per-Waiter Liability Pills */}
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {waiterLiabilitySummary.map((w) => (
+                <View
+                  key={w.waiterName}
+                  style={{
+                    backgroundColor: '#FEF3C7',
+                    borderWidth: 1.5,
+                    borderColor: '#D97706',
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 4,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                >
+                  <Ionicons name="person" size={12} color="#92400E" />
+                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#78350F' }}>
+                    {w.waiterName}: Rs. {w.totalAmount.toLocaleString()} ({w.count} {w.count === 1 ? 'Order' : 'Orders'} Pending)
+                  </Text>
+                </View>
+              ))}
+            </View>
+          </View>
+
+          {/* Row 2: Actionable Pending Table Collection Cards */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
+            {pendingWaiterCollections.map((t) => {
+              const col = t.waiterPaymentCollection!;
+              return (
+                <View
+                  key={col.id}
+                  style={{
+                    backgroundColor: '#FFFFFF',
+                    borderWidth: 1.5,
+                    borderColor: '#F59E0B',
+                    borderRadius: 10,
+                    paddingHorizontal: 12,
+                    paddingVertical: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#0F172A' }}>{t.name}</Text>
+                      <View style={{ backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400E' }}>
+                          {col.paymentMethod.toUpperCase()}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '900', color: '#15803D' }}>
+                        Rs. {col.totalAmount.toLocaleString()}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#B45309', marginTop: 2 }}>
+                      👤 Collected by: {col.collectedByWaiter} • {new Date(col.collectedAt).toLocaleTimeString()}
+                      {col.notes ? ` • "${col.notes}"` : ''}
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                      }}
+                      onPress={() => {
+                        handleTableSelect(t.id);
+                        setMobileTab('cart');
+                      }}
+                    >
+                      <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#334155' }}>Open Bill</Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#16A34A',
+                        paddingHorizontal: 12,
+                        paddingVertical: 7,
+                        borderRadius: 8,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                      onPress={() => handleReceiveWaiterPaymentAndSettle(t)}
+                    >
+                      <Ionicons name="checkmark-done-circle" size={15} color="#FFFFFF" />
+                      <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFFFFF' }}>
+                        Receive Cash & Settle
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
       )}
 

@@ -5616,7 +5616,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 31,
+        apkVersion: 32,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -7470,6 +7470,7 @@ function computeStateFingerprint(st) {
         server: t.server,
         occupiedSince: t.occupiedSince,
         lastSettledAt: t.lastSettledAt,
+        waiterPayId: t.waiterPaymentCollection?.id || '',
         ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
       })),
       onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
@@ -7892,13 +7893,18 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
                 orders: bestOrders,
                 server: inc.server || curr.server || tableTickets[0].server,
+                waiterPaymentCollection: inc.waiterPaymentCollection !== undefined ? inc.waiterPaymentCollection : curr.waiterPaymentCollection,
               };
             }
 
             // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
+            const hasPendingWaiterPay =
+              (inc.waiterPaymentCollection !== undefined ? inc.waiterPaymentCollection : curr.waiterPaymentCollection)?.status === 'pending_cashier' &&
+              inc.status !== 'available';
             if (
               tableTickets.length === 0 &&
               inc.status !== 'billed' &&
+              !hasPendingWaiterPay &&
               (inc.status === 'available' ||
                 (curr.status === 'occupied' && ((Array.isArray(curr.orders) && curr.orders.length > 0) || (curr.billTotal || 0) > 0)))
             ) {
@@ -7912,6 +7918,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 server: undefined,
                 lastInvoiceId: undefined,
                 occupiedSince: undefined,
+                waiterPaymentCollection: undefined,
                 lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
               };
             }
@@ -8192,7 +8199,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           if (Array.isArray(serverState.tables)) {
             const nowRec = Date.now();
             serverState.tables = serverState.tables.map(t => {
-              if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto) {
+              if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && t.waiterPaymentCollection?.status !== 'pending_cashier') {
                 return {
                   ...t,
                   status: 'available',
@@ -8202,6 +8209,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                   isPaid: false,
                   lastInvoiceId: undefined,
                   occupiedSince: undefined,
+                  waiterPaymentCollection: undefined,
                   lastSettledAt: t.lastSettledAt || nowRec,
                 };
               }
