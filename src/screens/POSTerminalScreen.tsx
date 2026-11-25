@@ -548,8 +548,8 @@ export default function POSTerminalScreen({
     const confirmMsg = `Release ${targetTable ? targetTable.name : 'this table'} and reset running bill?`;
     if (Platform.OS === 'web') {
       if (window.confirm(confirmMsg)) {
-        settleBill(selectedTableId);
         clearTableTickets(selectedTableId);
+        settleBill(selectedTableId);
         setCart([]);
         setLoadedCart([]);
         setSelectedTableId('');
@@ -561,8 +561,8 @@ export default function POSTerminalScreen({
           text: 'Release',
           style: 'destructive',
           onPress: () => {
-            settleBill(selectedTableId);
             clearTableTickets(selectedTableId);
+            settleBill(selectedTableId);
             setCart([]);
             setLoadedCart([]);
             setSelectedTableId('');
@@ -1377,11 +1377,11 @@ export default function POSTerminalScreen({
     saveInvoice(invoice);
 
     if (loadedTicketId) {
-      dismissTicket(loadedTicketId);
+      dismissTicket(loadedTicketId, { isSettlementCleanup: true });
       setLoadedTicketId(null);
     }
     if (targetTableId) {
-      clearTableTickets(targetTableId);
+      clearTableTickets(targetTableId, { isSettlementCleanup: true });
     }
 
     broadcastImmediately();
@@ -1613,7 +1613,7 @@ export default function POSTerminalScreen({
     (invoice as any).waiterPayId = col.id;
 
     saveInvoice(invoice);
-    clearTableTickets(targetTable.id);
+    clearTableTickets(targetTable.id, { isSettlementCleanup: true });
     settleBill(targetTable.id);
     if (selectedTableId === targetTable.id) {
       setCart([]);

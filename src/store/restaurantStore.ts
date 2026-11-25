@@ -2557,6 +2557,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   lastInvoiceId: undefined,
                   occupiedSince: undefined,
                   lastSettledAt: now,
+                  waiterPaymentCollection: null,
                   lastMoveNote: undefined,
                   lastMovedFrom: undefined,
                   lastMovedAt: undefined,
@@ -4271,12 +4272,23 @@ export const useRestaurantStore = create<RestaurantState>()(
           } : {}),
           ...(Array.isArray(remoteState.cancelledOrderLogs) ? {
             cancelledOrderLogs: (() => {
+              const allInvoices = remoteState.invoices || state.invoices || [];
+              const isBogusSettlementCancel = (c: CancelledOrderLog | null | undefined) => {
+                if (!c || c.reason !== 'Table released without billing') return false;
+                const cTime = c.cancelledAt || 0;
+                return allInvoices.some(
+                  (inv: any) =>
+                    inv &&
+                    (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
+                    Math.abs((inv.timeSettled || inv.timePlaced || 0) - cTime) <= 15000
+                );
+              };
               const cMap = new Map<string, CancelledOrderLog>();
               for (const l of (state.cancelledOrderLogs || [])) {
-                if (l && l.id) cMap.set(l.id, l);
+                if (l && l.id && !isBogusSettlementCancel(l)) cMap.set(l.id, l);
               }
               for (const r of remoteState.cancelledOrderLogs) {
-                if (r && r.id) cMap.set(r.id, r);
+                if (r && r.id && !isBogusSettlementCancel(r)) cMap.set(r.id, r);
               }
               return Array.from(cMap.values())
                 .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0))
@@ -4298,6 +4310,18 @@ export const useRestaurantStore = create<RestaurantState>()(
               const inc = remoteState.lastOrderCancelledAlert;
               if (!inc) return null;
               if (inc.time && Math.abs(Date.now() - inc.time) > 20 * 60 * 1000) return null;
+              const allInvoices = remoteState.invoices || state.invoices || [];
+              if (
+                inc.reason === 'Table released without billing' &&
+                allInvoices.some(
+                  (inv: any) =>
+                    inv &&
+                    (inv.tableId === inc.tableId || inv.tableName === inc.tableName) &&
+                    Math.abs((inv.timeSettled || inv.timePlaced || 0) - (inc.time || 0)) <= 15000
+                )
+              ) {
+                return null;
+              }
               const loc = state.lastOrderCancelledAlert;
               if (loc && (loc.time || 0) > (inc.time || 0)) return loc;
               return inc;
@@ -4317,6 +4341,30 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           if (!Array.isArray(state.cancelledOrderLogs)) {
             state.cancelledOrderLogs = [];
+          } else {
+            const allInvoices = state.invoices || [];
+            state.cancelledOrderLogs = state.cancelledOrderLogs.filter((c) => {
+              if (!c || c.reason !== 'Table released without billing') return true;
+              return !allInvoices.some(
+                (inv: any) =>
+                  inv &&
+                  (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
+                  Math.abs((inv.timeSettled || inv.timePlaced || 0) - (c.cancelledAt || 0)) <= 15000
+              );
+            });
+          }
+          if (
+            state.lastOrderCancelledAlert &&
+            state.lastOrderCancelledAlert.reason === 'Table released without billing' &&
+            (state.invoices || []).some(
+              (inv: any) =>
+                inv &&
+                (inv.tableId === state.lastOrderCancelledAlert?.tableId ||
+                  inv.tableName === state.lastOrderCancelledAlert?.tableName) &&
+                Math.abs((inv.timeSettled || inv.timePlaced || 0) - (state.lastOrderCancelledAlert?.time || 0)) <= 15000
+            )
+          ) {
+            state.lastOrderCancelledAlert = null;
           }
           if (Array.isArray(state.tickets)) {
             state.tickets = state.tickets
