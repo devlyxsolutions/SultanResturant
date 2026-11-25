@@ -4449,7 +4449,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
               itemName="dated batches"
             />
           </>
-        )}        </View>
+        )}
+        </View>
       )}
 
       {/* ========================================================================= */}
@@ -6083,7 +6084,8 @@ Please confirm delivery schedule and send invoice copy. Shukriya!`;
 
 
       {/* ========================================================================= */}
-      {/* MODAL 3: MULTI-ITEM GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}      {/* ========================================================================= */}
+      {/* MODAL 3: MULTI-ITEM GOODS RECEIPT NOTE (GRN) VOUCHER SLIP */}
+      {/* ========================================================================= */}
       <Modal visible={showGrnModal} transparent animationType="fade">
         <View style={styles.modalBackdrop}>
           <View style={[styles.modalCard, { maxWidth: 560 }]}>
