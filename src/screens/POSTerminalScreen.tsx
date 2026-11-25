@@ -46,6 +46,7 @@ import {
   useAuthStore,
   useDiscountStore,
   useRestaurantStore,
+  isWaiterPaymentPending,
 } from '../store';
 import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions, type RolePermissions } from '../store/roleStore';
@@ -1508,13 +1509,28 @@ export default function POSTerminalScreen({
   );
 
   // Live Order Taker Payment Collections Pending Cashier Handover ("Order Taker ke naam par bolti hui pending payments")
-  const pendingWaiterCollections = useMemo(
-    () =>
-      tables.filter(
-        (t) => t && t.status !== 'available' && t.waiterPaymentCollection?.status === 'pending_cashier'
-      ),
-    [tables]
-  );
+  // Collections the cashier has already received on this device — hidden instantly, even before the sync round-trip
+  const [receivedWaiterPayIds, setReceivedWaiterPayIds] = useState<string[]>([]);
+  const pendingWaiterCollections = useMemo(() => {
+    const receivedIds = new Set<string>(receivedWaiterPayIds);
+    invoices.forEach((inv: any) => {
+      if (inv?.waiterPayId) receivedIds.add(inv.waiterPayId);
+    });
+    return tables.filter((t) => {
+      if (!t || !isWaiterPaymentPending(t)) return false;
+      const col = t.waiterPaymentCollection!;
+      if (receivedIds.has(col.id)) return false;
+      // Legacy invoices (before waiterPayId) — same table, cashier-received after this collection
+      return !invoices.some(
+        (inv: any) =>
+          !inv?.waiterPayId &&
+          inv?.tableId === t.id &&
+          typeof inv?.notes === 'string' &&
+          inv.notes.startsWith('Collected by Order Taker') &&
+          (inv.timeSettled || inv.timePlaced || 0) >= (col.collectedAt || 0)
+      );
+    });
+  }, [tables, invoices, receivedWaiterPayIds]);
 
   const waiterLiabilitySummary = useMemo(() => {
     const byWaiter = new Map<string, { waiterName: string; totalAmount: number; count: number; tables: string[] }>();
@@ -1549,6 +1565,7 @@ export default function POSTerminalScreen({
     if (!requirePosPerm('posCanSettleBill', 'receive Order Taker payment and settle bill')) return;
     const col = targetTable.waiterPaymentCollection;
     if (!col) return;
+    setReceivedWaiterPayIds((prev) => (prev.includes(col.id) ? prev : [...prev.slice(-50), col.id]));
 
     const tableTickets = tickets.filter((tk) => tk.tableId === targetTable.id);
     const rawItems: OrderItem[] =
@@ -1593,6 +1610,7 @@ export default function POSTerminalScreen({
       changeReturned: col.changeReturned || 0,
     });
     invoice.notes = `Collected by Order Taker: ${col.collectedByWaiter} (${col.paymentMethod.toUpperCase()}) • Received by Cashier: ${cashierName}${col.notes ? ` • ${col.notes}` : ''}`;
+    (invoice as any).waiterPayId = col.id;
 
     saveInvoice(invoice);
     clearTableTickets(targetTable.id);

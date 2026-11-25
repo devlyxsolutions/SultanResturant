@@ -685,15 +685,27 @@ export default function TableOrderScreen() {
       {/* ========================================================
           1. CLEAN TOP COMMAND HEADER
           ======================================================== */}
-      <View style={[styles.topBar, isMobile && { paddingHorizontal: 10 }]}>
-        <View style={styles.topBarLeft}>
+      <View
+        style={[
+          styles.topBar,
+          isMobile && {
+            height: undefined,
+            flexDirection: 'column',
+            alignItems: 'stretch',
+            paddingHorizontal: 10,
+            paddingVertical: 8,
+            gap: 8,
+          },
+        ]}
+      >
+        <View style={isMobile ? { flexDirection: 'row', alignItems: 'center', gap: 8 } : styles.topBarLeft}>
           <TouchableOpacity style={styles.backBtn} onPress={() => router.push('/waiter')}>
             <Ionicons name="arrow-back" size={18} color="#F3D179" />
           </TouchableOpacity>
-          <View style={styles.tableBadge}>
+          <View style={[styles.tableBadge, isMobile && { flex: 1, minWidth: 0 }]}>
             <SeatingTypeIcon type={seatingType} size={16} color="#F3D179" />
-            <View>
-              <Text style={styles.tableTitle}>{tableName}</Text>
+            <View style={isMobile ? { flex: 1, minWidth: 0 } : undefined}>
+              <Text style={styles.tableTitle} numberOfLines={1}>{tableName}</Text>
               <Text style={styles.tableSub} numberOfLines={1}>
                 {floorName}
                 {table?.lastMovedFrom
@@ -702,10 +714,73 @@ export default function TableOrderScreen() {
               </Text>
             </View>
           </View>
+          {isMobile && (
+            <>
+              {alreadyOrderedItems.length > 0 && (
+                <TouchableOpacity style={styles.topActionBtn} onPress={() => setRunningItemsModalVisible(true)}>
+                  <Ionicons name="flame" size={15} color="#F59E0B" />
+                  <View style={styles.topCountBadge}>
+                    <Text style={styles.topCountBadgeText}>{alreadyOrderedItems.length}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+              {canMoveTable && table && isExistingOrderActive && (
+                <TouchableOpacity style={styles.topActionBtn} onPress={() => setTransferModalVisible(true)}>
+                  <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
+                  <Text style={styles.topActionText}>Move</Text>
+                </TouchableOpacity>
+              )}
+              <SyncStatusBadge compact />
+            </>
+          )}
         </View>
 
+        {isMobile ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={[styles.topSearchWrap, { flex: 1, maxWidth: undefined }]}>
+              <Ionicons name="search" size={15} color="#94A3B8" />
+              <TextInput
+                style={[styles.topSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                placeholder="Search dishes..."
+                placeholderTextColor="#94A3B8"
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery('')}>
+                  <Ionicons name="close-circle" size={16} color="#94A3B8" />
+                </TouchableOpacity>
+              )}
+            </View>
+            {table && alreadyOrderedItems.length > 0 && (
+              <TouchableOpacity
+                style={[
+                  styles.topActionBtn,
+                  {
+                    height: 36,
+                    backgroundColor: table.waiterPaymentCollection?.status === 'pending_cashier' ? '#F59E0B' : '#16A34A',
+                    borderColor: table.waiterPaymentCollection?.status === 'pending_cashier' ? '#FDE68A' : '#4ADE80',
+                  },
+                ]}
+                onPress={openCustomerBillModal}
+              >
+                <Ionicons
+                  name={table.waiterPaymentCollection?.status === 'pending_cashier' ? 'time' : 'receipt'}
+                  size={15}
+                  color="#FFFFFF"
+                />
+                <Text style={[styles.topActionText, { color: '#FFFFFF', fontWeight: '900' }]} numberOfLines={1}>
+                  {table.waiterPaymentCollection?.status === 'pending_cashier'
+                    ? `Pending Rs. ${table.waiterPaymentCollection.totalAmount.toLocaleString()}`
+                    : `Bill Rs. ${billGrandTotal.toLocaleString()}`}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+        <>
         {/* Center Search */}
-        <View style={[styles.topSearchWrap, isMobile && { flex: 1 }]}>
+        <View style={styles.topSearchWrap}>
           <Ionicons name="search" size={15} color="#94A3B8" />
           <TextInput
             style={[styles.topSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
@@ -772,6 +847,8 @@ export default function TableOrderScreen() {
 
           <SyncStatusBadge compact />
         </View>
+        </>
+        )}
       </View>
 
       {/* 2. Top Options Bar: 1. Order / Menu Dishes | 2. Current Cart & KOT | 3. Running KDS */}
@@ -782,8 +859,8 @@ export default function TableOrderScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="restaurant" size={16} color={mobileTab === 'menu' ? '#F3D179' : '#475569'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]}>
-            1. Order / Menu Dishes ({filteredItems.length})
+          <Text style={[styles.mobileTabText, mobileTab === 'menu' && styles.mobileTabTextActive]} numberOfLines={1}>
+            {isMobile ? `Menu (${filteredItems.length})` : `1. Order / Menu Dishes (${filteredItems.length})`}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -792,8 +869,10 @@ export default function TableOrderScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="cart" size={16} color={mobileTab === 'cart' ? '#F3D179' : '#475569'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]}>
-            2. Current Cart & KOT ({totalNewQty}{cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})
+          <Text style={[styles.mobileTabText, mobileTab === 'cart' && styles.mobileTabTextActive]} numberOfLines={1}>
+            {isMobile
+              ? `Cart (${totalNewQty})`
+              : `2. Current Cart & KOT (${totalNewQty}${cartPrepEstimate.totalMins > 0 ? ` • ~${cartPrepEstimate.totalMins}m` : ''})`}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -802,8 +881,10 @@ export default function TableOrderScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="flame" size={16} color={mobileTab === 'running' ? '#F3D179' : '#EA580C'} />
-          <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]}>
-            3. Running KDS & Prep Time ({alreadyOrderedItems.length}{runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})
+          <Text style={[styles.mobileTabText, mobileTab === 'running' && styles.mobileTabTextActive]} numberOfLines={1}>
+            {isMobile
+              ? `Running (${alreadyOrderedItems.length}${runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})`
+              : `3. Running KDS & Prep Time (${alreadyOrderedItems.length}${runningPrepEstimate.totalMins > 0 ? ` • ~${runningPrepEstimate.totalMins}m` : ''})`}
           </Text>
         </TouchableOpacity>
       </View>

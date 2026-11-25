@@ -55,7 +55,7 @@ function loadSystemLogsFromDisk() {
         if (obj && obj.id) {
           parsed.push(obj);
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     systemLogsMemory = parsed.slice(-MAX_SYSTEM_LOGS_IN_MEMORY);
     for (let i = Math.max(0, systemLogsMemory.length - 4000); i < systemLogsMemory.length; i++) {
@@ -81,7 +81,7 @@ function flushSystemLogsToDisk() {
         fs.renameSync(SYSTEM_LOGS_FILE, archivePath);
       }
     }
-  } catch (_) {}
+  } catch (_) { }
 
   fs.appendFile(SYSTEM_LOGS_FILE, chunk, 'utf8', (err) => {
     if (err) {
@@ -181,7 +181,7 @@ function appendSystemLogs(entries, reqMeta = {}) {
           timestamp: now,
         });
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   return accepted;
@@ -2682,11 +2682,7 @@ const INITIAL_STATE = {
   revokedSessions: {},
   revokedDeviceIds: {},
   forceLogoutAll: null,
-  chillerHandovers: [],
-  tableMoveLogs: [],
-  cancelledOrderLogs: [],
-  lastTableMoveAlert: null,
-  lastOrderCancelledAlert: null
+  chillerHandovers: []
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -2773,7 +2769,7 @@ function findBestBackupSnapshot() {
           bestScore = score;
           best = { path: p, state: parsed, rawInv, movs, cats };
         }
-      } catch (_) {}
+      } catch (_) { }
     }
     return best;
   } catch (_) {
@@ -2930,8 +2926,6 @@ try {
     if (!Array.isArray(serverState.serviceRequests)) serverState.serviceRequests = [];
     if (!Array.isArray(serverState.reservations)) serverState.reservations = INITIAL_STATE.reservations || [];
     if (!Array.isArray(serverState.playlandTickets)) serverState.playlandTickets = [];
-    if (!Array.isArray(serverState.tableMoveLogs)) serverState.tableMoveLogs = [];
-    if (!Array.isArray(serverState.cancelledOrderLogs)) serverState.cancelledOrderLogs = [];
     if (!Array.isArray(serverState.activeStaffSessions)) serverState.activeStaffSessions = [];
     if (!serverState.revokedSessions || typeof serverState.revokedSessions !== 'object') serverState.revokedSessions = {};
     if (!serverState.revokedDeviceIds || typeof serverState.revokedDeviceIds !== 'object') serverState.revokedDeviceIds = {};
@@ -3548,7 +3542,7 @@ function persistState() {
             if (countNonAutoBeverageInventory(existingDaily.inventory) > countNonAutoBeverageInventory(serverState.inventory)) {
               allowDailyWrite = false;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
         if (allowDailyWrite) {
           fs.writeFileSync(dailyPath, jsonStr);
@@ -3570,7 +3564,7 @@ function persistState() {
         if (!fs.existsSync(vaultDailyPath)) {
           fs.writeFileSync(vaultDailyPath, jsonStr);
         }
-      } catch (_) {}
+      } catch (_) { }
 
       const curCatsCount = Array.isArray(serverState.inventoryCategories) ? serverState.inventoryCategories.length : 0;
       const curRawCount = countNonAutoBeverageInventory(serverState.inventory);
@@ -3595,12 +3589,12 @@ function persistState() {
                 const pExps = Array.isArray(prevM.expenses) ? prevM.expenses.length : 0;
                 const pAsts = Array.isArray(prevM.assets) ? prevM.assets.length : 0;
                 prevScore = pCats * 50 + pRaw * 100 + pSups * 80 + pPos * 60 + pExps * 40 + pAsts * 60;
-              } catch (_) {}
+              } catch (_) { }
             }
             if (curScore >= prevScore) {
               fs.writeFileSync(milestonePath, jsonStr);
             }
-          } catch (_) {}
+          } catch (_) { }
         }
       }
     } catch (e) {
@@ -4903,7 +4897,7 @@ async function handleRequest(req, res) {
       if (pendingDiskLogLines.length > 0) {
         try {
           fs.appendFileSync(SYSTEM_LOGS_FILE, pendingDiskLogLines.splice(0).join('\n') + '\n', 'utf8');
-        } catch (_) {}
+        } catch (_) { }
       }
       let archiveName = '';
       if (fs.existsSync(SYSTEM_LOGS_FILE)) {
@@ -5104,7 +5098,7 @@ async function handleRequest(req, res) {
               expensesCount: Array.isArray(parsed.expenses) ? parsed.expenses.length : 0,
               invoicesCount: Array.isArray(parsed.invoices) ? parsed.invoices.length : 0,
             });
-          } catch (_) {}
+          } catch (_) { }
         }
       }
       list.sort((a, b) => (b.mtime || 0) - (a.mtime || 0));
@@ -5127,7 +5121,7 @@ async function handleRequest(req, res) {
       try {
         if (!fs.existsSync(VAULT_BACKUP_DIR)) fs.mkdirSync(VAULT_BACKUP_DIR, { recursive: true });
         fs.writeFileSync(path.join(VAULT_BACKUP_DIR, filename), jsonStr);
-      } catch (_) {}
+      } catch (_) { }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, filename, vaultPath: VAULT_BACKUP_DIR }));
     } catch (e) {
@@ -5298,7 +5292,7 @@ async function handleRequest(req, res) {
           }
           const directLdb = path.join(root, 'Local Storage', 'leveldb');
           if (fs.existsSync(directLdb)) scanDirs.push({ label: path.basename(root), dir: directLdb, type: 'leveldb' });
-        } catch (_) {}
+        } catch (_) { }
       }
       const extraBackupDirs = [
         BACKUP_DIR,
@@ -5390,7 +5384,7 @@ async function handleRequest(req, res) {
               try {
                 const parsed = JSON.parse(fs.readFileSync(full, 'utf8'));
                 harvestFromParsedState(parsed, `${entry.label}/${f}`);
-              } catch (_) {}
+              } catch (_) { }
             } else if (entry.type === 'leveldb' && (f.endsWith('.ldb') || f.endsWith('.log'))) {
               try {
                 const buf = fs.readFileSync(full);
@@ -5407,7 +5401,7 @@ async function handleRequest(req, res) {
                       try {
                         const arr = JSON.parse(rawArr);
                         harvestFromParsedState({ inventoryCategories: arr }, `${entry.label}/${f}`);
-                      } catch (_) {}
+                      } catch (_) { }
                     }
                     searchPos = idx + 23;
                   }
@@ -5421,15 +5415,15 @@ async function handleRequest(req, res) {
                       try {
                         const arr = JSON.parse(rawArr);
                         harvestFromParsedState({ inventory: arr }, `${entry.label}/${f}`);
-                      } catch (_) {}
+                      } catch (_) { }
                     }
                     invPos = idx + 13;
                   }
                 }
-              } catch (_) {}
+              } catch (_) { }
             }
           }
-        } catch (_) {}
+        } catch (_) { }
       }
 
       // Snappy-aware LevelDB scanner (covers Sultan EXE profile %LOCALAPPDATA%\SultanRestaurant\SultanAppProfile + Chrome/Edge/Brave)
@@ -5451,7 +5445,7 @@ async function handleRequest(req, res) {
             rec.source || 'Sultan EXE / Browser LevelDB'
           );
         }
-      } catch (_) {}
+      } catch (_) { }
 
       if (foundCats.size === 0 && foundItemsMap.size === 0) {
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -7561,14 +7555,6 @@ function computeStateFingerprint(st) {
       lastBillPaidAlert: st.lastBillPaidAlert || null,
       lastFoodReadyAlert: st.lastFoodReadyAlert || null,
       pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
-      tableMoveLogsKey: Array.isArray(st.tableMoveLogs)
-        ? `${st.tableMoveLogs.length}:${st.tableMoveLogs[0]?.id || ''}`
-        : '0',
-      cancelledOrderLogsKey: Array.isArray(st.cancelledOrderLogs)
-        ? `${st.cancelledOrderLogs.length}:${st.cancelledOrderLogs[0]?.id || ''}`
-        : '0',
-      lastTableMoveAlert: st.lastTableMoveAlert || null,
-      lastOrderCancelledAlert: st.lastOrderCancelledAlert || null,
       activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
       revokedSessions: Object.keys(st.revokedSessions || {}).sort().join(','),
       revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
@@ -7652,7 +7638,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
@@ -7917,7 +7903,20 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         if (incomingTables.length > 0) {
           const currentTables = Array.isArray(serverState.tables) ? serverState.tables : [];
           const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
-          const activeTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
+          const activeTickets = (Array.isArray(serverState.tickets) ? serverState.tickets : []).filter(
+            tk => tk && !deletedSet.has(tk.id)
+          );
+          // Order Taker collection: an explicit null/value from the client wins; a collection older than
+          // the latest settlement (lastSettledAt) is stale and must never resurrect the cashier alert.
+          const resolveWaiterPay = (curr, inc) => {
+            const col = Object.prototype.hasOwnProperty.call(inc, 'waiterPaymentCollection')
+              ? inc.waiterPaymentCollection
+              : curr.waiterPaymentCollection;
+            if (!col || col.status !== 'pending_cashier') return null;
+            const settledAt = Math.max(curr.lastSettledAt || 0, inc.lastSettledAt || 0);
+            if (settledAt >= (col.collectedAt || 0)) return null;
+            return col;
+          };
 
           serverState.tables = currentTables.map(curr => {
             const inc = incomingMap.get(curr.id);
@@ -7947,13 +7946,13 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
                 orders: bestOrders,
                 server: inc.server || curr.server || tableTickets[0].server,
-                waiterPaymentCollection: inc.waiterPaymentCollection !== undefined ? inc.waiterPaymentCollection : curr.waiterPaymentCollection,
+                waiterPaymentCollection: resolveWaiterPay(curr, inc),
               };
             }
 
             // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
             const hasPendingWaiterPay =
-              (inc.waiterPaymentCollection !== undefined ? inc.waiterPaymentCollection : curr.waiterPaymentCollection)?.status === 'pending_cashier' &&
+              !!resolveWaiterPay(curr, inc) &&
               inc.status !== 'available';
             if (
               tableTickets.length === 0 &&
@@ -7972,7 +7971,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                 server: undefined,
                 lastInvoiceId: undefined,
                 occupiedSince: undefined,
-                waiterPaymentCollection: undefined,
+                waiterPaymentCollection: null,
                 lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
               };
             }
@@ -8198,7 +8197,7 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
               try {
                 if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
                 fs.writeFileSync(path.join(BACKUP_DIR, 'pre-inventory-change.json'), JSON.stringify(serverState, null, 2));
-              } catch (_) {}
+              } catch (_) { }
             }
             serverState.inventory = nextInv;
           }
@@ -8231,28 +8230,6 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             const limit = key === 'chillerHandovers' ? 150 : 500;
             serverState[key] = Array.from(mMap.values()).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
           }
-        } else if (key === 'tableMoveLogs' || key === 'cancelledOrderLogs') {
-          const incList = Array.isArray(sanitized) ? sanitized : [];
-          const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
-          if (incList.length > 0 || currList.length === 0) {
-            const logMap = new Map();
-            for (const c of currList) { if (c && c.id) logMap.set(c.id, c); }
-            for (const inc of incList) { if (inc && inc.id) logMap.set(inc.id, inc); }
-            serverState[key] = Array.from(logMap.values())
-              .sort((a, b) => (b.timestamp || b.cancelledAt || 0) - (a.timestamp || a.cancelledAt || 0))
-              .slice(0, 1500);
-          }
-        } else if (key === 'lastTableMoveAlert' || key === 'lastOrderCancelledAlert') {
-          const incAlert = sanitized;
-          const currAlert = serverState[key];
-          if (!incAlert) {
-            // Keep live Cashier alerts broadcastable for 60s so concurrent updates from other terminals never swallow them
-            if (currAlert && Date.now() - (currAlert.time || 0) > 60000) {
-              serverState[key] = null;
-            }
-          } else if (!currAlert || (incAlert.time || 0) >= (currAlert.time || 0)) {
-            serverState[key] = incAlert;
-          }
         } else if (
           Array.isArray(sanitized) &&
           sanitized.length === 0 &&
@@ -8274,8 +8251,23 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
           if (Array.isArray(serverState.tables)) {
             const nowRec = Date.now();
+            // Waiter collections that the cashier has already turned into an invoice are finished — find their settle time
+            const receivedWaiterPayAt = (t) => {
+              const col = t.waiterPaymentCollection;
+              if (!col || col.status !== 'pending_cashier') return 0;
+              const inv = (serverState.invoices || []).find(i =>
+                i && (
+                  (i.waiterPayId && i.waiterPayId === col.id) ||
+                  (!i.waiterPayId && i.tableId === t.id &&
+                    typeof i.notes === 'string' && i.notes.startsWith('Collected by Order Taker') &&
+                    (i.timeSettled || i.timePlaced || 0) >= (col.collectedAt || 0))
+                )
+              );
+              return inv ? (inv.timeSettled || inv.timePlaced || nowRec) : 0;
+            };
             serverState.tables = serverState.tables.map(t => {
-              if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && t.waiterPaymentCollection?.status !== 'pending_cashier') {
+              const receivedAt = receivedWaiterPayAt(t);
+              if (receivedAt && !activeTicketByTable.has(t.id)) {
                 return {
                   ...t,
                   status: 'available',
@@ -8285,7 +8277,24 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
                   isPaid: false,
                   lastInvoiceId: undefined,
                   occupiedSince: undefined,
-                  waiterPaymentCollection: undefined,
+                  waiterPaymentCollection: null,
+                  lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt),
+                };
+              }
+              if (receivedAt) {
+                return { ...t, waiterPaymentCollection: null, lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt) };
+              }
+              if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && !(t.waiterPaymentCollection?.status === 'pending_cashier' && (t.lastSettledAt || 0) < (t.waiterPaymentCollection.collectedAt || 0))) {
+                return {
+                  ...t,
+                  status: 'available',
+                  billTotal: 0,
+                  orders: [],
+                  server: undefined,
+                  isPaid: false,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  waiterPaymentCollection: null,
                   lastSettledAt: t.lastSettledAt || nowRec,
                 };
               }
@@ -8321,302 +8330,330 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
           }, originWs);
           pushToFirestoreCloud();
         }
-      }
-
-      // ==============================================================
-      // BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
-      // ==============================================================
-      // Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
-      const IS_DEV_WORKSTATION = process.env.SULTAN_DISABLE_CLOUD_SYNC === '1';
-      const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
-      const FIRESTORE_PROJECT_ID = "sultan-resturant";
-      const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
-
-      let lastProcessedCloudTimestamp = 0;
-      let lastProcessedCloudUpdateTime = '';
-      let isPushingToFirestore = false;
-      let isApplyingCloudUpdate = false;
-      let firestorePushTimer = null;
-      let lastFirestorePushTime = 0;
-      const FIRESTORE_PUSH_INTERVAL = 90 * 1000; // 90 seconds (1.5 minutes) batch interval
-
-      function decodeFirestoreValue(val) {
-        if (!val || typeof val !== 'object') return val;
-        if ('stringValue' in val) return val.stringValue;
-        if ('integerValue' in val) return Number(val.integerValue);
-        if ('doubleValue' in val) return Number(val.doubleValue);
-        if ('booleanValue' in val) return val.booleanValue;
-        if ('nullValue' in val) return null;
-        if ('mapValue' in val) {
-          const fields = val.mapValue.fields || {};
-          const res = {};
-          for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
-          return res;
-        }
-        if ('arrayValue' in val) {
-          const values = val.arrayValue.values || [];
-          return values.map(decodeFirestoreValue);
-        }
-        return val;
-      }
-
-      function encodeFirestoreValue(val) {
-        if (val === null || val === undefined) return { nullValue: null };
-        if (typeof val === 'string') return { stringValue: val };
-        if (typeof val === 'boolean') return { booleanValue: val };
-        if (typeof val === 'number') {
-          if (Number.isInteger(val)) return { integerValue: val.toString() };
-          return { doubleValue: val };
-        }
-        if (Array.isArray(val)) {
-          return { arrayValue: { values: val.map(encodeFirestoreValue) } };
-        }
-        if (typeof val === 'object') {
-          const fields = {};
-          for (const k in val) {
-            if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
-          }
-          return { mapValue: { fields } };
-        }
-        return { stringValue: String(val) };
-      }
-
-      function pushToFirestoreCloud(forceImmediate = false) {
-        if (IS_DEV_WORKSTATION || isApplyingCloudUpdate) return;
-        const now = Date.now();
-        // If not forced and recently pushed within the interval, debounce to the next interval window
-        if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
-          if (!firestorePushTimer) {
-            const delay = FIRESTORE_PUSH_INTERVAL - (now - lastFirestorePushTime);
-            firestorePushTimer = setTimeout(() => {
-              firestorePushTimer = null;
-              pushToFirestoreCloud(true);
-            }, delay);
-          }
-          return;
-        }
-
-        if (firestorePushTimer) {
-          clearTimeout(firestorePushTimer);
-          firestorePushTimer = null;
-        }
-
-        firestorePushTimer = setTimeout(async () => {
-          if (isPushingToFirestore) return;
-          isPushingToFirestore = true;
-          lastFirestorePushTime = Date.now();
-          try {
-            const now = Date.now();
-            lastProcessedCloudTimestamp = now;
-            const payload = {
-              type: 'SERVER_BROADCAST',
-              senderId: 'SERVER_POS_HUB',
-              timestamp: now,
-              state: {
-                tables: serverState.tables,
-                tickets: serverState.tickets,
-                deletedTicketIds: serverState.deletedTicketIds || [],
-                invoices: serverState.invoices || [],
-                customers: serverState.customers || [],
-                reservations: serverState.reservations || [],
-                attendance: serverState.attendance || [],
-                salaryPayments: serverState.salaryPayments || [],
-                feedbacks: serverState.feedbacks || [],
-                salesReturns: serverState.salesReturns || [],
-                serviceRequests: serverState.serviceRequests || [],
-                inventory: serverState.inventory || [],
-                storageZones: serverState.storageZones || [],
-                inventoryResetEpoch: serverState.inventoryResetEpoch || 0,
-                deletedInventoryIds: serverState.deletedInventoryIds || [],
-                deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
-                deletedInventoryCategories: serverState.deletedInventoryCategories || [],
-                deletedRecordIds: serverState.deletedRecordIds || [],
-                inventoryCategories: serverState.inventoryCategories || [],
-                assetCategories: serverState.assetCategories || [],
-                expenseCategories: serverState.expenseCategories || [],
-                stockMovements: serverState.stockMovements || [],
-                chillerHandovers: serverState.chillerHandovers || [],
-                expenses: serverState.expenses || [],
-                suppliers: serverState.suppliers || [],
-                purchaseOrders: serverState.purchaseOrders || [],
-                supplierPayments: serverState.supplierPayments || [],
-                assets: serverState.assets || [],
-                damageRecords: serverState.damageRecords || [],
-                recipes: serverState.recipes || [],
-                kitchenSessions: serverState.kitchenSessions || [],
-                kitchenConsumption: serverState.kitchenConsumption || [],
-                kitchenManualUsage: serverState.kitchenManualUsage || [],
-                kitchenCash: serverState.kitchenCash || [],
-                menuItems: serverState.menuItems,
-                categories: serverState.categories,
-                staff: serverState.staff,
-                onlineOrders: serverState.onlineOrders,
-                pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
-                lastBillPaidAlert: serverState.lastBillPaidAlert,
-                lastFoodReadyAlert: serverState.lastFoodReadyAlert,
-                tableMoveLogs: serverState.tableMoveLogs || [],
-                cancelledOrderLogs: serverState.cancelledOrderLogs || [],
-                lastTableMoveAlert: serverState.lastTableMoveAlert || null,
-                lastOrderCancelledAlert: serverState.lastOrderCancelledAlert || null,
-                roles: serverState.roles,
-                shifts: serverState.shifts,
-                activeShiftId: serverState.activeShiftId,
-                systemSettings: serverState.systemSettings,
-              }
-            };
-            const fields = {};
-            for (const k in payload) {
-              fields[k] = encodeFirestoreValue(payload[k]);
-            }
-            await fetch(FIRESTORE_DOC_URL, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ fields })
-            });
-          } catch (_) {
-            // Local LAN continues seamlessly if cloud is offline
-          } finally {
-            isPushingToFirestore = false;
-          }
-        }, 1500);
-      }
-
-      // Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429
-      let firestorePollInterval = 60000; // poll every 60s instead of 2.5s (reduces reads by 96%)
-      let firestoreBackoffUntil = 0;
-
-      let hasInitialFirestorePollCompleted = false;
-      async function pollFirestoreCloud() {
-        if (IS_DEV_WORKSTATION || isPushingToFirestore) return;
-        if (Date.now() < firestoreBackoffUntil) return;
-        try {
-          const res = await fetch(FIRESTORE_DOC_URL);
-          if (res.status === 429) {
-            // Quota exceeded: back off for 15 minutes before retrying
-            firestoreBackoffUntil = Date.now() + 15 * 60 * 1000;
-            return;
-          }
-          if (!res.ok) return;
-          const doc = await res.json();
-          if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
-          const fields = doc.fields || {};
-          const senderId = fields.senderId?.stringValue;
-          if (hasInitialFirestorePollCompleted && senderId === 'SERVER_POS_HUB') return;
-          const timestamp = Number(fields.timestamp?.integerValue || 0);
-          if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
-          if (hasInitialFirestorePollCompleted && timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
-
-          if (fields.state?.mapValue?.fields) {
-            const decodedState = decodeFirestoreValue(fields.state);
-            if (decodedState && typeof decodedState === 'object') {
-              isApplyingCloudUpdate = true;
-              lastProcessedCloudTimestamp = timestamp || Date.now();
-              if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
-              applyStateUpdate(decodedState, senderId);
-              setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
-            }
-          }
-        } catch (_) {
-          // Network retry next pulse
-        } finally {
-          hasInitialFirestorePollCompleted = true;
-        }
-      }
-
-      // Poll Cloud Firestore FIRST before pushing so a newly started/dev server merges live categories & items instead of overwriting them!
-      pollFirestoreCloud().finally(() => {
-        setTimeout(() => pushToFirestoreCloud(true), 500);
-        setInterval(pollFirestoreCloud, firestorePollInterval);
+        return t;
       });
+    }
 
-      wss.on('connection', (ws, req) => {
-        const remoteIp = req.socket.remoteAddress;
-        console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
-
-        ws.send(JSON.stringify({
-          type: 'INIT_STATE',
-          state: serverState,
-          senderId: 'SERVER',
-          timestamp: Date.now()
-        }));
-
-        ws.on('message', (message) => {
-          try {
-            const data = JSON.parse(message.toString());
-            if (data.type === 'CLIENT_UPDATE' && data.state) {
-              const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
-              console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
-              if (!hasProcessedServerPacket(data.packetId)) {
-                applyStateUpdate(data.state, data.senderId, ws);
-              }
-            } else if (data.type === 'PING') {
-              ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
-            }
-          } catch (e) {
-            console.error('[Sultan Hub] Bad WS message:', e.message);
-          }
-        });
-
-        ws.on('close', () => {
-          console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
-        });
-
-        ws.on('error', (err) => {
-          console.error('[Sultan Hub] WS socket error:', err.message);
-        });
+    const nextFingerprint = computeStateFingerprint(serverState);
+    if (nextFingerprint === prevFingerprint) {
+      return;
+    }
+    lastStateFingerprint = nextFingerprint;
+    serverState.lastUpdated = Date.now();
+    persistState();
+    console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
+    if (
+      (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
+      (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
+    ) {
+      broadcastToClients({
+        type: 'FORCE_LOGOUT_DEVICE',
+        revokedSessions: serverState.revokedSessions || {},
+        revokedDeviceIds: serverState.revokedDeviceIds || {},
+        activeStaffSessions: serverState.activeStaffSessions || [],
+        timestamp: Date.now()
       });
+    }
+    broadcastToClients({
+      type: 'SERVER_BROADCAST',
+      state: serverState,
+      senderId: senderId || 'SERVER',
+      timestamp: serverState.lastUpdated
+    }, originWs);
+    pushToFirestoreCloud();
+  }
+}
 
-      function listenDualStack(srv, port, onSuccess, onError) {
-        if (!srv) return;
-        srv.on('error', (err) => {
-          if (onError) onError(err);
-        });
-        try {
-          srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
-        } catch (_) {
-          srv.listen(Number(port), '0.0.0.0', onSuccess);
+// ==============================================================
+// BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
+// ==============================================================
+// Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
+const IS_DEV_WORKSTATION = process.env.SULTAN_DISABLE_CLOUD_SYNC === '1';
+const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
+const FIRESTORE_PROJECT_ID = "sultan-resturant";
+const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
+
+let lastProcessedCloudTimestamp = 0;
+let lastProcessedCloudUpdateTime = '';
+let isPushingToFirestore = false;
+let isApplyingCloudUpdate = false;
+let firestorePushTimer = null;
+let lastFirestorePushTime = 0;
+const FIRESTORE_PUSH_INTERVAL = 90 * 1000; // 90 seconds (1.5 minutes) batch interval
+
+function decodeFirestoreValue(val) {
+  if (!val || typeof val !== 'object') return val;
+  if ('stringValue' in val) return val.stringValue;
+  if ('integerValue' in val) return Number(val.integerValue);
+  if ('doubleValue' in val) return Number(val.doubleValue);
+  if ('booleanValue' in val) return val.booleanValue;
+  if ('nullValue' in val) return null;
+  if ('mapValue' in val) {
+    const fields = val.mapValue.fields || {};
+    const res = {};
+    for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
+    return res;
+  }
+  if ('arrayValue' in val) {
+    const values = val.arrayValue.values || [];
+    return values.map(decodeFirestoreValue);
+  }
+  return val;
+}
+
+function encodeFirestoreValue(val) {
+  if (val === null || val === undefined) return { nullValue: null };
+  if (typeof val === 'string') return { stringValue: val };
+  if (typeof val === 'boolean') return { booleanValue: val };
+  if (typeof val === 'number') {
+    if (Number.isInteger(val)) return { integerValue: val.toString() };
+    return { doubleValue: val };
+  }
+  if (Array.isArray(val)) {
+    return { arrayValue: { values: val.map(encodeFirestoreValue) } };
+  }
+  if (typeof val === 'object') {
+    const fields = {};
+    for (const k in val) {
+      if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
+    }
+    return { mapValue: { fields } };
+  }
+  return { stringValue: String(val) };
+}
+
+function pushToFirestoreCloud(forceImmediate = false) {
+  if (IS_DEV_WORKSTATION || isApplyingCloudUpdate) return;
+  const now = Date.now();
+  // If not forced and recently pushed within the interval, debounce to the next interval window
+  if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
+    if (!firestorePushTimer) {
+      const delay = FIRESTORE_PUSH_INTERVAL - (now - lastFirestorePushTime);
+      firestorePushTimer = setTimeout(() => {
+        firestorePushTimer = null;
+        pushToFirestoreCloud(true);
+      }, delay);
+    }
+    return;
+  }
+
+  if (firestorePushTimer) {
+    clearTimeout(firestorePushTimer);
+    firestorePushTimer = null;
+  }
+
+  firestorePushTimer = setTimeout(async () => {
+    if (isPushingToFirestore) return;
+    isPushingToFirestore = true;
+    lastFirestorePushTime = Date.now();
+    try {
+      const now = Date.now();
+      lastProcessedCloudTimestamp = now;
+      const payload = {
+        type: 'SERVER_BROADCAST',
+        senderId: 'SERVER_POS_HUB',
+        timestamp: now,
+        state: {
+          tables: serverState.tables,
+          tickets: serverState.tickets,
+          deletedTicketIds: serverState.deletedTicketIds || [],
+          invoices: serverState.invoices || [],
+          customers: serverState.customers || [],
+          reservations: serverState.reservations || [],
+          attendance: serverState.attendance || [],
+          salaryPayments: serverState.salaryPayments || [],
+          feedbacks: serverState.feedbacks || [],
+          salesReturns: serverState.salesReturns || [],
+          serviceRequests: serverState.serviceRequests || [],
+          inventory: serverState.inventory || [],
+          storageZones: serverState.storageZones || [],
+          inventoryResetEpoch: serverState.inventoryResetEpoch || 0,
+          deletedInventoryIds: serverState.deletedInventoryIds || [],
+          deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
+          deletedInventoryCategories: serverState.deletedInventoryCategories || [],
+          deletedRecordIds: serverState.deletedRecordIds || [],
+          inventoryCategories: serverState.inventoryCategories || [],
+          assetCategories: serverState.assetCategories || [],
+          expenseCategories: serverState.expenseCategories || [],
+          stockMovements: serverState.stockMovements || [],
+          chillerHandovers: serverState.chillerHandovers || [],
+          expenses: serverState.expenses || [],
+          suppliers: serverState.suppliers || [],
+          purchaseOrders: serverState.purchaseOrders || [],
+          supplierPayments: serverState.supplierPayments || [],
+          assets: serverState.assets || [],
+          damageRecords: serverState.damageRecords || [],
+          recipes: serverState.recipes || [],
+          kitchenSessions: serverState.kitchenSessions || [],
+          kitchenConsumption: serverState.kitchenConsumption || [],
+          kitchenManualUsage: serverState.kitchenManualUsage || [],
+          kitchenCash: serverState.kitchenCash || [],
+          menuItems: serverState.menuItems,
+          categories: serverState.categories,
+          staff: serverState.staff,
+          onlineOrders: serverState.onlineOrders,
+          pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
+          lastBillPaidAlert: serverState.lastBillPaidAlert,
+          lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+          roles: serverState.roles,
+          shifts: serverState.shifts,
+          activeShiftId: serverState.activeShiftId,
+          systemSettings: serverState.systemSettings,
         }
+      };
+      const fields = {};
+      for (const k in payload) {
+        fields[k] = encodeFirestoreValue(payload[k]);
       }
+      await fetch(FIRESTORE_DOC_URL, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields })
+      });
+    } catch (_) {
+      // Local LAN continues seamlessly if cloud is offline
+    } finally {
+      isPushingToFirestore = false;
+    }
+  }, 1500);
+}
 
-      listenDualStack(
-        server,
-        PORT,
-        () => {
-          console.log(`=================================================`);
-          console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
-          console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
-          console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
-          console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
-          console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
-          console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
-          console.log(`WebSocket URL: ws://localhost:${PORT}`);
-          console.log(`=================================================`);
-        },
-        (err) => {
-          console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
-        }
-      );
+// Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429
+let firestorePollInterval = 60000; // poll every 60s instead of 2.5s (reduces reads by 96%)
+let firestoreBackoffUntil = 0;
 
-      listenDualStack(
-        server5000,
-        5000,
-        () => {
-          console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
-        },
-        (err) => {
-          console.log('[Sultan Hub] Port 5000 listener:', err.message);
-        }
-      );
+let hasInitialFirestorePollCompleted = false;
+async function pollFirestoreCloud() {
+  if (IS_DEV_WORKSTATION || isPushingToFirestore) return;
+  if (Date.now() < firestoreBackoffUntil) return;
+  try {
+    const res = await fetch(FIRESTORE_DOC_URL);
+    if (res.status === 429) {
+      // Quota exceeded: back off for 15 minutes before retrying
+      firestoreBackoffUntil = Date.now() + 15 * 60 * 1000;
+      return;
+    }
+    if (!res.ok) return;
+    const doc = await res.json();
+    if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
+    const fields = doc.fields || {};
+    const senderId = fields.senderId?.stringValue;
+    if (hasInitialFirestorePollCompleted && senderId === 'SERVER_POS_HUB') return;
+    const timestamp = Number(fields.timestamp?.integerValue || 0);
+    if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
+    if (hasInitialFirestorePollCompleted && timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
 
-      if (server80) {
-        listenDualStack(
-          server80,
-          80,
-          () => {
-            console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
-          },
-          (err) => {
-            console.log('[Sultan Hub] Port 80 listener:', err.message);
-          }
-        );
+    if (fields.state?.mapValue?.fields) {
+      const decodedState = decodeFirestoreValue(fields.state);
+      if (decodedState && typeof decodedState === 'object') {
+        isApplyingCloudUpdate = true;
+        lastProcessedCloudTimestamp = timestamp || Date.now();
+        if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
+        applyStateUpdate(decodedState, senderId);
+        setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
       }
+    }
+  } catch (_) {
+    // Network retry next pulse
+  } finally {
+    hasInitialFirestorePollCompleted = true;
+  }
+}
+
+// Poll Cloud Firestore FIRST before pushing so a newly started/dev server merges live categories & items instead of overwriting them!
+pollFirestoreCloud().finally(() => {
+  setTimeout(() => pushToFirestoreCloud(true), 500);
+  setInterval(pollFirestoreCloud, firestorePollInterval);
+});
+
+wss.on('connection', (ws, req) => {
+  const remoteIp = req.socket.remoteAddress;
+  console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
+
+  ws.send(JSON.stringify({
+    type: 'INIT_STATE',
+    state: serverState,
+    senderId: 'SERVER',
+    timestamp: Date.now()
+  }));
+
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message.toString());
+      if (data.type === 'CLIENT_UPDATE' && data.state) {
+        const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
+        console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
+        if (!hasProcessedServerPacket(data.packetId)) {
+          applyStateUpdate(data.state, data.senderId, ws);
+        }
+      } else if (data.type === 'PING') {
+        ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+      }
+    } catch (e) {
+      console.error('[Sultan Hub] Bad WS message:', e.message);
+    }
+  });
+
+  ws.on('close', () => {
+    console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
+  });
+
+  ws.on('error', (err) => {
+    console.error('[Sultan Hub] WS socket error:', err.message);
+  });
+});
+
+function listenDualStack(srv, port, onSuccess, onError) {
+  if (!srv) return;
+  srv.on('error', (err) => {
+    if (onError) onError(err);
+  });
+  try {
+    srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
+  } catch (_) {
+    srv.listen(Number(port), '0.0.0.0', onSuccess);
+  }
+}
+
+listenDualStack(
+  server,
+  PORT,
+  () => {
+    console.log(`=================================================`);
+    console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
+    console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
+    console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
+    console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+    console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
+    console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
+    console.log(`WebSocket URL: ws://localhost:${PORT}`);
+    console.log(`=================================================`);
+  },
+  (err) => {
+    console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
+  }
+);
+
+listenDualStack(
+  server5000,
+  5000,
+  () => {
+    console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+  },
+  (err) => {
+    console.log('[Sultan Hub] Port 5000 listener:', err.message);
+  }
+);
+
+if (server80) {
+  listenDualStack(
+    server80,
+    80,
+    () => {
+      console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+    },
+    (err) => {
+      console.log('[Sultan Hub] Port 80 listener:', err.message);
+    }
+  );
+}
