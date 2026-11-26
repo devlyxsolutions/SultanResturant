@@ -3404,14 +3404,6 @@ const pendingAgentAcks = new Map(); // jobId -> { resolve, timer }
 const REMOTE_JOB_TTL_MS = 10 * 60 * 1000; // 10 mins max queue retention
 const AGENT_ONLINE_TIMEOUT_MS = 180 * 1000; // 3 minutes tolerance for long-poll + WMI printer scan + network jitter
 
-function hasDedicatedSeparateMainAgent(excludeIp) {
-  const m = connectedPrintAgents.main;
-  if (!m || !m.directMain) return false;
-  if (excludeIp && m.ip === excludeIp) return false;
-  if (Array.isArray(longPollWaiters.main) && longPollWaiters.main.length > 0) return true;
-  return (Date.now() - (m.lastSeen || 0)) < AGENT_ONLINE_TIMEOUT_MS;
-}
-
 function touchPrintAgentHeartbeat(station) {
   if (connectedPrintAgents[station]) {
     connectedPrintAgents[station].lastSeen = Date.now();
@@ -3420,28 +3412,12 @@ function touchPrintAgentHeartbeat(station) {
     }
     serverState.lastKnownPrintAgents[station] = connectedPrintAgents[station];
   }
-  if (station === 'juice' && connectedPrintAgents.juice && !hasDedicatedSeparateMainAgent(connectedPrintAgents.juice.ip)) {
-    connectedPrintAgents.main = {
-      ...connectedPrintAgents.juice,
-      station: 'main',
-      bridgedFromJuice: true,
-      lastSeen: Date.now(),
-    };
-    if (!serverState.lastKnownPrintAgents || typeof serverState.lastKnownPrintAgents !== 'object') {
-      serverState.lastKnownPrintAgents = {};
-    }
-    serverState.lastKnownPrintAgents.main = connectedPrintAgents.main;
-  }
 }
 
 function isPrintAgentOnline(station) {
   if (Array.isArray(longPollWaiters[station]) && longPollWaiters[station].length > 0) {
     return true;
   }
-  if (station === 'main' && !hasDedicatedSeparateMainAgent() && Array.isArray(longPollWaiters.juice) && longPollWaiters.juice.length > 0) {
-    return true;
-  }
-  const info = connectedPrintAgents[station] || (station === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
   const info = connectedPrintAgents[station];
   return !!(info && (Date.now() - info.lastSeen) < AGENT_ONLINE_TIMEOUT_MS);
 }
@@ -3456,15 +3432,8 @@ function pruneExpiredRemoteJobs(station) {
 function deliverNextRemoteJobToWaiter(station) {
   pruneExpiredRemoteJobs(station);
   const q = remotePrintQueues[station];
-  if (!q || q.length === 0) return false;
   const waiters = longPollWaiters[station];
   if (!q || q.length === 0 || !waiters || waiters.length === 0) return false;
-
-  let waiters = longPollWaiters[station];
-  if ((!waiters || waiters.length === 0) && station === 'main' && !hasDedicatedSeparateMainAgent()) {
-    waiters = longPollWaiters.juice;
-  }
-  if (!waiters || waiters.length === 0) return false;
 
   const job = q.shift();
   const waiter = waiters.shift();
@@ -7028,10 +6997,8 @@ async function handleRequest(req, res) {
     return;
   }
 
-  // 8.2 Remote Print Agent Long-Poll Endpoint (Used by SultanPrintAgent.ps1 on Juice Bar PC)
   // 8.2 Remote Print Agent Long-Poll Endpoint (Strict Workstation Isolation: 3rd Floor Kitchen vs Ground Floor Juice Bar)
   if (url.pathname === '/api/print-agent/poll' && req.method === 'GET') {
-    const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
     const rawStation = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
     const pcName = url.searchParams.get('pc') || 'Station-PC';
     const station = resolveAgentStation(rawStation, clientIp, pcName);
@@ -7084,178 +7051,161 @@ async function handleRequest(req, res) {
     }
 
     const cfg = getStationPrinterConfig(station);
-    pruneExpiredRemoteJobs('main');
-    pruneExpiredRemoteJobs('juice');
     pruneExpiredRemoteJobs(station);
 
-    // Immediate delivery if job already queued (if this agent also serves 'main', deliver pending Kitchen KOTs first!)
-    const bridgedToMain = station === 'juice' && !hasDedicatedSeparateMainAgent(clientIp);
-    const activeQueueStation = (bridgedToMain && remotePrintQueues.main && remotePrintQueues.main.length > 0)
-      ? 'main'
-      : ((remotePrintQueues[station] && remotePrintQueues[station].length > 0) ? station : null);
-
-    if (activeQueueStation) {
-      const job = remotePrintQueues[activeQueueStation].shift();
-      const jobCfg = getStationPrinterConfig(activeQueueStation);
-      // Immediate delivery ONLY from this workstation's own isolated station queue!
-      if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
-        const job = remotePrintQueues[station].shift();
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({
-          ok: true,
-          configuredPrinter: jobCfg.printerName || 'AUTO',
-          configuredPrinter: cfg.printerName || 'AUTO',
-          jobId: job.jobId,
-          ticketId: job.ticketId,
-          tableName: job.tableName,
-          station: job.station,
-          printerName: job.printerName || jobCfg.printerName || 'AUTO',
-          printerName: job.printerName || cfg.printerName || 'AUTO',
-          rawBase64: job.rawBase64,
-          plainText: job.plainText || '',
-        }));
-        return;
-      }
-
-      // Fast handshake response on initial connect / printer change so Desktop Agent turns GREEN instantly!
-      if (url.searchParams.get('hello') === '1' || changed) {
-        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({
-          ok: true,
-          connected: true,
-          configuredPrinter: cfg.printerName || 'AUTO',
-          jobId: null,
-        }));
-        return;
-      }
-
-      // Hold long-poll open for up to 12 seconds for <10ms instant push when an order arrives
-      const waiter = { res, timer: null };
-      waiter.timer = setTimeout(() => {
-        const list = longPollWaiters[station] || [];
-        const idx = list.indexOf(waiter);
-        if (idx !== -1) list.splice(idx, 1);
-        touchPrintAgentHeartbeat(station);
-        try {
-          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-          res.end(JSON.stringify({ ok: true, configuredPrinter: cfg.printerName || 'AUTO', jobId: null }));
-        } catch (_) { }
-      }, 12000);
-
-      req.on('close', () => {
-        clearTimeout(waiter.timer);
-        const list = longPollWaiters[station] || [];
-        const idx = list.indexOf(waiter);
-        if (idx !== -1) list.splice(idx, 1);
-      });
-
-      if (!longPollWaiters[station]) longPollWaiters[station] = [];
-      longPollWaiters[station].push(waiter);
+    // Immediate delivery ONLY from this workstation's own isolated station queue!
+    if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
+      const job = remotePrintQueues[station].shift();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        ok: true,
+        configuredPrinter: cfg.printerName || 'AUTO',
+        jobId: job.jobId,
+        ticketId: job.ticketId,
+        tableName: job.tableName,
+        station: job.station,
+        printerName: job.printerName || cfg.printerName || 'AUTO',
+        rawBase64: job.rawBase64,
+        plainText: job.plainText || '',
+      }));
       return;
     }
 
-    // 8.3 Remote Print Agent Print Acknowledgment
-    if (url.pathname === '/api/print-agent/ack' && req.method === 'POST') {
-      try {
-        const data = await readRequestBody(req);
-        const station = data.station === 'main' ? 'main' : 'juice';
-        const rawStation = data.station === 'main' ? 'main' : 'juice';
-        const station = resolveAgentStation(rawStation, clientIp, data.pcName);
-        touchPrintAgentHeartbeat(station);
-        const jobId = String(data.jobId || '');
-        const ticketId = String(data.ticketId || '');
-        const success = !!data.success;
-        const printerName = data.printerName || 'Remote Printer';
-        const pcName = data.pcName || 'Station-PC';
-
-        if (success) {
-          console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} PRINTED OK on ${pcName} -> ${printerName}`);
-          broadcastToClients({
-            type: 'TICKET_AUTO_PRINTED',
-            ticketId,
-            station,
-            printer: printerName,
-            pcName,
-            timestamp: Date.now(),
-          });
-        } else {
-          console.warn(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} FAILED on ${pcName}: ${data.error || 'Unknown error'}`);
-        }
-
-        if (jobId && pendingAgentAcks.has(jobId)) {
-          const pending = pendingAgentAcks.get(jobId);
-          clearTimeout(pending.timer);
-          pendingAgentAcks.delete(jobId);
-          pending.resolve({
-            success,
-            station,
-            ticketId,
-            printer: printerName,
-            pcName,
-            error: data.error || undefined,
-          });
-        }
-
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ ok: true }));
-      } catch (err) {
-        res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
-      }
+    // Fast handshake response on initial connect / printer change so Desktop Agent turns GREEN instantly!
+    if (url.searchParams.get('hello') === '1' || changed) {
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        ok: true,
+        connected: true,
+        configuredPrinter: cfg.printerName || 'AUTO',
+        jobId: null,
+      }));
       return;
     }
 
-    // 8.4 Live Station Printer Status & Available Printers Discovery
-    if (url.pathname === '/api/print/status' && req.method === 'GET') {
+    // Hold long-poll open for up to 12 seconds for <10ms instant push when an order arrives
+    const waiter = { res, timer: null };
+    waiter.timer = setTimeout(() => {
+      const list = longPollWaiters[station] || [];
+      const idx = list.indexOf(waiter);
+      if (idx !== -1) list.splice(idx, 1);
+      touchPrintAgentHeartbeat(station);
       try {
-        const viewerStation = url.searchParams.get('station');
-        if (viewerStation === 'main' || viewerStation === 'juice') {
-          registerWorkstationStationIp(clientIp, viewerStation);
-        }
-        const serverWindowsPrinters = (printerHelper && typeof printerHelper.getLocalWindowsPrinters === 'function')
-          ? await printerHelper.getLocalWindowsPrinters()
-          : ['POS-80'];
-
-        const lanIp = getServerLanIp();
-        const hostHeader = req.headers.host || `${lanIp}:${PORT}`;
-        const hasLocalServerThermal = serverWindowsPrinters.some((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || '')));
-        const localThermalName = serverWindowsPrinters.find((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || ''))) || 'POS-80';
-        const formatAgent = (st) => {
-          const a = connectedPrintAgents[st] || (st === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
-          const a = connectedPrintAgents[st];
-          const online = isPrintAgentOnline(st);
-          if (a && online) {
-            return { ...a, station: st, online: true };
-          }
-          return a ? { ...a, station: st, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
-        };
-
-        pruneExpiredRemoteJobs('main');
-        pruneExpiredRemoteJobs('juice');
-
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({
-          serverUrl: `http://${hostHeader}`,
-          lanServerUrl: `http://${lanIp}:${PORT}`,
-          serverWindowsPrinters,
-          kitchen: {
-            config: getStationPrinterConfig('main'),
-            agent: formatAgent('main'),
-            pendingJobs: (remotePrintQueues.main || []).length,
-          },
-          juice: {
-            config: getStationPrinterConfig('juice'),
-            agent: formatAgent('juice'),
-            pendingJobs: (remotePrintQueues.juice || []).length,
-          },
+        res.end(JSON.stringify({ ok: true, configuredPrinter: cfg.printerName || 'AUTO', jobId: null }));
+      } catch (_) { }
+    }, 12000);
+
+    req.on('close', () => {
+      clearTimeout(waiter.timer);
+      const list = longPollWaiters[station] || [];
+      const idx = list.indexOf(waiter);
+      if (idx !== -1) list.splice(idx, 1);
+    });
+
+    if (!longPollWaiters[station]) longPollWaiters[station] = [];
+    longPollWaiters[station].push(waiter);
+    return;
+  }
+
+  // 8.3 Remote Print Agent Print Acknowledgment
+  if (url.pathname === '/api/print-agent/ack' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const rawStation = data.station === 'main' ? 'main' : 'juice';
+      const station = resolveAgentStation(rawStation, clientIp, data.pcName);
+      touchPrintAgentHeartbeat(station);
+      const jobId = String(data.jobId || '');
+      const ticketId = String(data.ticketId || '');
+      const success = !!data.success;
+      const printerName = data.printerName || 'Remote Printer';
+      const pcName = data.pcName || 'Station-PC';
+
+      if (success) {
+        console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} PRINTED OK on ${pcName} -> ${printerName}`);
+        broadcastToClients({
+          type: 'TICKET_AUTO_PRINTED',
+          ticketId,
+          station,
+          printer: printerName,
+          pcName,
           timestamp: Date.now(),
-        }));
-      } catch (err) {
-        res.writeHead(500, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: err.message }));
+        });
+      } else {
+        console.warn(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} FAILED on ${pcName}: ${data.error || 'Unknown error'}`);
       }
-      return;
+
+      if (jobId && pendingAgentAcks.has(jobId)) {
+        const pending = pendingAgentAcks.get(jobId);
+        clearTimeout(pending.timer);
+        pendingAgentAcks.delete(jobId);
+        pending.resolve({
+          success,
+          station,
+          ticketId,
+          printer: printerName,
+          pcName,
+          error: data.error || undefined,
+        });
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
     }
+    return;
+  }
+
+  // 8.4 Live Station Printer Status & Available Printers Discovery
+  if (url.pathname === '/api/print/status' && req.method === 'GET') {
+    try {
+      const viewerStation = url.searchParams.get('station');
+      if (viewerStation === 'main' || viewerStation === 'juice') {
+        registerWorkstationStationIp(clientIp, viewerStation);
+      }
+      const serverWindowsPrinters = (printerHelper && typeof printerHelper.getLocalWindowsPrinters === 'function')
+        ? await printerHelper.getLocalWindowsPrinters()
+        : ['POS-80'];
+
+      const lanIp = getServerLanIp();
+      const hostHeader = req.headers.host || `${lanIp}:${PORT}`;
+      const formatAgent = (st) => {
+        const a = connectedPrintAgents[st];
+        const online = isPrintAgentOnline(st);
+        if (a && online) {
+          return { ...a, station: st, online: true };
+        }
+        return a ? { ...a, station: st, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
+      };
+
+      pruneExpiredRemoteJobs('main');
+      pruneExpiredRemoteJobs('juice');
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        serverUrl: `http://${hostHeader}`,
+        lanServerUrl: `http://${lanIp}:${PORT}`,
+        serverWindowsPrinters,
+        kitchen: {
+          config: getStationPrinterConfig('main'),
+          agent: formatAgent('main'),
+          pendingJobs: (remotePrintQueues.main || []).length,
+        },
+        juice: {
+          config: getStationPrinterConfig('juice'),
+          agent: formatAgent('juice'),
+          pendingJobs: (remotePrintQueues.juice || []).length,
+        },
+        timestamp: Date.now(),
+      }));
+    } catch (err) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
 
     // 8.5 Save Station Printer Routing Configuration
     if (url.pathname === '/api/print/config' && req.method === 'POST') {
