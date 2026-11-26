@@ -37,7 +37,7 @@ export function isPublicCloudHost(): boolean {
 
 /**
  * Returns true if a hostname is a public internet domain (e.g. sultanrestaurant.com.pk,
- * www.sultanrestaurant.com.pk, sultanresturant092.netlify.app) rather than the restaurant's
+ * www.sultanrestaurant.com.pk, sultanrestaurant092.netlify.app) rather than the restaurant's
  * local POS hub (localhost, LAN/IP address, or a dot-less PC name like "sultan-pc").
  */
 export function isPublicCloudHostname(hostname: string): boolean {

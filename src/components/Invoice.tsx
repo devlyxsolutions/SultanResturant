@@ -1021,7 +1021,7 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
               <TouchableOpacity
                 style={[
                   styles.presetPill,
-                  customDomainInput.includes('sultanresturant092.netlify.app') && styles.presetPillActive,
+                  customDomainInput.includes('sultanrestaurant092.netlify.app') && styles.presetPillActive,
                 ]}
                 onPress={() => setCustomDomainInput(PUBLIC_ONLINE_URL)}
                 activeOpacity={0.7}

@@ -3305,7 +3305,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         feedbacks: (state.feedbacks || []).filter(f => f.id !== id)
       })),
 
-      onlineFeedbackUrl: 'https://sultanresturant092.netlify.app',
+      onlineFeedbackUrl: 'https://sultanrestaurant092.netlify.app',
 
       setOnlineFeedbackUrl: (url) => {
         const clean = (url || '').trim().replace(/\/+$/, '');
@@ -3317,13 +3317,14 @@ export const useRestaurantStore = create<RestaurantState>()(
             validHost =
               host.length > 0 &&
               !host.includes('sultan-resturant.web.app') &&
+              !host.includes('sultanresturant092.netlify.app') &&
               !host.endsWith('.lhr.life');
           }
         } catch {
           validHost = false;
         }
         set({
-          onlineFeedbackUrl: validHost ? clean : 'https://sultanresturant092.netlify.app'
+          onlineFeedbackUrl: validHost ? clean : 'https://sultanrestaurant092.netlify.app'
         });
       },
 
@@ -4484,6 +4485,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             if (!c || (!c.startsWith('http://') && !c.startsWith('https://'))) return false;
             if (
               c.includes('sultan-resturant.web.app') ||
+              c.includes('sultanresturant092.netlify.app') ||
               c.includes('.lhr.life')
             ) {
               return false;
@@ -4496,7 +4498,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           };
           if (!isValidOnlineUrl(String(state.onlineFeedbackUrl || ''))) {
-            state.onlineFeedbackUrl = 'https://sultanresturant092.netlify.app';
+            state.onlineFeedbackUrl = 'https://sultanrestaurant092.netlify.app';
           }
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             try {

@@ -7,7 +7,7 @@ import { getActiveServerHttpUrl } from '../services/syncService';
  * Public HTTPS Cloud URL for Sultan Restaurant's Customer Digital Menu & Feedback Portal.
  * Accessible from ANY customer mobile phone on 4G/5G mobile data or any Wi-Fi network!
  */
-export const PUBLIC_ONLINE_URL = 'https://sultanresturant092.netlify.app';
+export const PUBLIC_ONLINE_URL = 'https://sultanrestaurant092.netlify.app';
 /** Official Sultan Restaurant domain (hosted on the same Netlify site once DNS is live). */
 export const OFFICIAL_DOMAIN_URL = 'https://sultanrestaurant.com.pk';
 export const DEFAULT_LAN_IP = '192.168.1.14';
@@ -36,6 +36,7 @@ export function isBlockedForeignUrl(url: string): boolean {
   if (!clean) return true;
   if (
     clean.includes('sultan-resturant.web.app') ||
+    clean.includes('sultanresturant092.netlify.app') || // old dead Netlify site (moved to sultanrestaurant092)
     clean.includes('.lhr.life')
   ) {
     return true;
@@ -60,7 +61,7 @@ export function isValidFeedbackUrl(url?: string): boolean {
  * (Table Digital Menu QR Standees, Feedback QR Codes, WhatsApp Links).
  *
  * CRITICAL: Always resolves to a verified Sultan Restaurant public HTTPS URL
- * (default: https://sultanresturant092.netlify.app) so customers can scan on ANY 4G/5G network!
+ * (default: https://sultanrestaurant092.netlify.app) so customers can scan on ANY 4G/5G network!
  */
 export function getBaseFeedbackUrl(customOverride?: string): string {
   // 1. Explicit public override passed as argument

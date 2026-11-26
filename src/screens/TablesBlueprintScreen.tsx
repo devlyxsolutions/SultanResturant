@@ -350,7 +350,7 @@ export default function TablesBlueprintScreen({
   const [isDownloadingQrPdf, setIsDownloadingQrPdf] = useState(false);
 
   // Dynamic QR Backend URL & Bulk Configuration
-  const onlineFeedbackUrl = useRestaurantStore((s) => s.onlineFeedbackUrl) || 'https://sultanresturant092.netlify.app';
+  const onlineFeedbackUrl = useRestaurantStore((s) => s.onlineFeedbackUrl) || 'https://sultanrestaurant092.netlify.app';
   const setOnlineFeedbackUrl = useRestaurantStore((s) => s.setOnlineFeedbackUrl);
   const [customQrUrlInput, setCustomQrUrlInput] = useState(onlineFeedbackUrl);
   const [showQrUrlConfig, setShowQrUrlConfig] = useState(false);
@@ -607,7 +607,7 @@ export default function TablesBlueprintScreen({
     setBatchQrZoneFilter(seatingTypeFilter);
     setBatchQrModalVisible(true);
     setIsBatchGenerating(true);
-    const targetBase = onlineFeedbackUrl || 'https://sultanresturant092.netlify.app';
+    const targetBase = onlineFeedbackUrl || 'https://sultanrestaurant092.netlify.app';
     const newMap: Record<string, string> = { ...batchQrMap };
     for (const t of enabledTables) {
       if (!newMap[t.id]) {
@@ -4702,7 +4702,7 @@ export default function TablesBlueprintScreen({
                       }}
                       value={customQrUrlInput}
                       onChangeText={setCustomQrUrlInput}
-                      placeholder="e.g. https://sultanresturant092.netlify.app"
+                      placeholder="e.g. https://sultanrestaurant092.netlify.app"
                       autoCapitalize="none"
                       autoCorrect={false}
                     />
@@ -4745,8 +4745,8 @@ export default function TablesBlueprintScreen({
                     <TouchableOpacity
                       style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
                       onPress={() => {
-                        setCustomQrUrlInput('https://sultanresturant092.netlify.app');
-                        handleBulkUpdateQrUrl('https://sultanresturant092.netlify.app');
+                        setCustomQrUrlInput('https://sultanrestaurant092.netlify.app');
+                        handleBulkUpdateQrUrl('https://sultanrestaurant092.netlify.app');
                       }}
                     >
                       <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E293B' }}>Netlify Cloud (Default)</Text>
