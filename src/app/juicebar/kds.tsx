@@ -116,7 +116,10 @@ export default function KitchenDisplayScreen() {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const pollPrinter = async () => {
       try {
-        const res = await fetch(`${window.location.origin}/api/print/status`, { cache: 'no-store' });
+        const base = (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('netlify.app') && !window.location.origin.includes('sultanrestaurant.com.pk'))
+          ? window.location.origin
+          : getActiveServerHttpUrl();
+        const res = await fetch(`${base}/api/print/status?station=juice`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const j = data?.juice;
@@ -290,8 +293,9 @@ export default function KitchenDisplayScreen() {
               useRestaurantStore.getState().syncFromServer({
                 tickets: [msg.ticket, ...currentTickets],
               });
+              const catalog = useRestaurantStore.getState().menuItems || [];
               const stationItems = (msg.ticket.items || []).filter(
-                (it: any) => (it?.station || 'main') === 'juice'
+                (it: any) => resolveMenuCatalogStation(it, catalog, true) === 'juice'
               );
               if (stationItems.length > 0) {
                 playKitchenChime(!!msg.ticket.isAddOn);
@@ -347,7 +351,7 @@ export default function KitchenDisplayScreen() {
       if (!t || !t.id) return false;
       if (seenTicketIdsRef.current.has(t.id)) return false;
       const items = Array.isArray(t.items) ? t.items : [];
-      const matchingItems = items.filter((i) => (i?.station || 'main') === stationFilter);
+      const matchingItems = items.filter((i) => resolveMenuCatalogStation(i, menuItems, true) === stationFilter);
       const stationStatus = (t.stationStatuses && t.stationStatuses[stationFilter]) ? t.stationStatuses[stationFilter]! : t.status;
       return matchingItems.length > 0 && (stationStatus === 'pending' || stationStatus === 'cooking');
     });

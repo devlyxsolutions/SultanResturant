@@ -1,7 +1,7 @@
 import { Platform } from 'react-native';
 import { printOrderSlip } from '../components/OrderSlip';
-import { Ticket } from '../store/restaurantStore';
-import { resolveItemStation } from './stationRouting';
+import { Ticket, useRestaurantStore } from '../store/restaurantStore';
+import { resolveMenuCatalogStation } from './stationRouting';
 
 export type KdsStation = 'main' | 'juice';
 
@@ -222,7 +222,10 @@ export function enqueueKdsAutoPrint(
   if (!options?.forceReprint && !autoEnabled) return false;
 
   const allItems = Array.isArray(ticket.items) ? ticket.items : [];
-  const stationItems = allItems.filter((i) => resolveItemStation(i, true) === station);
+  const catalogMenuItems = useRestaurantStore.getState().menuItems || [];
+  const stationItems = allItems
+    .filter((i) => resolveMenuCatalogStation(i, catalogMenuItems, true) === station)
+    .map((i) => ({ ...i, station }));
   if (stationItems.length === 0) return false;
 
   if (!options?.forceReprint && isKdsTicketPrinted(station, ticket)) {

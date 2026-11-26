@@ -120,22 +120,18 @@ export default function KitchenDisplayScreen() {
         const base = (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('netlify.app') && !window.location.origin.includes('sultanrestaurant.com.pk'))
           ? window.location.origin
           : getActiveServerHttpUrl();
-        const res = await fetch(`${base}/api/print/status`, { cache: 'no-store' });
+        const res = await fetch(`${base}/api/print/status?station=main`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const k = data?.kitchen;
         if (!k?.config) return;
-        const serverWinPrinters: string[] = Array.isArray(data?.serverWindowsPrinters) ? data.serverWindowsPrinters : [];
-        const localThermal = serverWinPrinters.find((p) => /pos|thermal|80|receipt|epson|xprinter/i.test(String(p || '')));
         if (k.config.mode === 'agent') {
-          const isOnline = !!k.agent?.online || !!localThermal;
+          const isOnline = !!k.agent?.online;
           setPrinterStatus({
             online: isOnline,
-            label: k.agent?.online
-              ? (k.agent.activePrinter || 'Kitchen USB')
-              : localThermal
-                ? `Kitchen: ${localThermal}`
-                : 'Kitchen Offline',
+            label: isOnline
+              ? `Kitchen: ${k.agent.activePrinter || 'POS-80'}`
+              : 'Kitchen Offline',
           });
         } else if (k.config.mode === 'network') {
           setPrinterStatus({
@@ -145,7 +141,7 @@ export default function KitchenDisplayScreen() {
         } else {
           setPrinterStatus({
             online: k.config.mode !== 'disabled',
-            label: `Kitchen: ${k.config.printerName || localThermal || 'POS-80'}`,
+            label: `Kitchen: ${k.config.printerName || 'POS-80'}`,
           });
         }
       } catch {}
@@ -293,8 +289,9 @@ export default function KitchenDisplayScreen() {
               useRestaurantStore.getState().syncFromServer({
                 tickets: [msg.ticket, ...currentTickets]
               });
+              const catalog = useRestaurantStore.getState().menuItems || [];
               const stationItems = (msg.ticket.items || []).filter(
-                (it: any) => (it?.station || 'main') === 'main'
+                (it: any) => resolveMenuCatalogStation(it, catalog, true) === 'main'
               );
               if (stationItems.length > 0) {
                 playKitchenChime(!!msg.ticket.isAddOn);
@@ -350,7 +347,7 @@ export default function KitchenDisplayScreen() {
       if (!t || !t.id) return false;
       if (seenTicketIdsRef.current.has(t.id)) return false;
       const items = Array.isArray(t.items) ? t.items : [];
-      const matchingItems = items.filter((i) => (i?.station || 'main') === stationFilter);
+      const matchingItems = items.filter((i) => resolveMenuCatalogStation(i, menuItems, true) === stationFilter);
       const stationStatus = (t.stationStatuses && t.stationStatuses[stationFilter]) ? t.stationStatuses[stationFilter]! : t.status;
       return matchingItems.length > 0 && (stationStatus === 'pending' || stationStatus === 'cooking');
     });
