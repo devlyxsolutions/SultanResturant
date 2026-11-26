@@ -3,15 +3,16 @@ import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
 import { LogBox, Platform, Text, TouchableOpacity, View } from 'react-native';
 import CentralUpdateHost from '../components/CentralUpdateHost';
+import CashierOpsNotificationHost from '../components/CashierOpsNotificationHost';
 import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
 import IncomingCallHost from '../components/IncomingCallHost';
 import SessionSecurityHost from '../components/SessionSecurityHost';
 import StockAlarmHost from '../components/StockAlarmHost';
 import SystemLogHost from '../components/SystemLogHost';
-import { useSettingsStore } from '../store/settingsStore';
 import WaiterNotificationHost from '../components/WaiterNotificationHost';
 import { initCallListener } from '../services/headlessCallService';
 import { initSyncService } from '../services/syncService';
+import { useSettingsStore } from '../store/settingsStore';
 
 // Ignore benign web font loading timeouts and offline firestore notices in Expo LogBox
 LogBox.ignoreLogs([
