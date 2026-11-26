@@ -433,17 +433,16 @@ export default function RootLayout() {
         </View>
       </AppErrorBoundary>
 
-      {/* Live stock / kitchen handover / waiter / cashier / floor manager notification hosts (paused while enableSystemNotifications is false) */}
-      {enableSystemNotifications && (
-        <>
-          <StockAlarmHost />
-          <WaiterNotificationHost />
-          <CashierOpsNotificationHost />
-          <FloorManagerNotificationHost />
-        </>
-      )}
+      {/* Live stock / kitchen handover alarms for admin, manager and kitchen roles (paused while enableSystemNotifications is false) */}
+      {enableSystemNotifications && <StockAlarmHost />}
       {/* Live incoming caller ID popup & quick order routing */}
       <IncomingCallHost />
+      {/* Universal Food Ready & Bill Paid Notification Host for Order Takers */}
+      <WaiterNotificationHost />
+      {/* Live Cashier & Management Alerts for Table Moves (with Note) & Cancelled Punched Orders */}
+      <CashierOpsNotificationHost />
+      {/* Floor Manager Urgent Digital Menu Order Repeating Notification Host */}
+      <FloorManagerNotificationHost />
       {/* Multi-Device Security & Concurrent Session Kick Host */}
       <SessionSecurityHost />
       {/* Central Auto-Updater for 10 Android Tablets & 7 Windows PCs */}

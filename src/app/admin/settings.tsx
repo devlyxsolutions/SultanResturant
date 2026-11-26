@@ -709,8 +709,8 @@ const MODULE_CONTROL_GROUPS: ModuleControlGroup[] = [
       },
       {
         key: 'enableSystemNotifications',
-        label: 'Live System Notifications & Stock Alarms',
-        sub: 'Master switch for floating stock alarm bell, waiter food-ready popups & live operational alert banners',
+        label: 'Live Stock & Inventory Alarms',
+        sub: 'Master switch for floating low-stock / out-of-stock alarm bell & stock notifications',
         isMaster: true,
       },
       {
