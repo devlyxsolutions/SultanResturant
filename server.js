@@ -3318,14 +3318,14 @@ function getStationPrinterConfig(station) {
   }
   return {
     station: 'main',
-    mode: s.kitchenPrinterMode || 'windows', // 'windows' (Server PC USB) | 'network' | 'agent' | 'disabled'
+    mode: s.kitchenPrinterMode || 'agent', // 'agent' (Kitchen PC Print Agent) | 'windows' | 'network' | 'disabled'
     printerName: s.kitchenPrinterName || 'POS-80',
     host: s.kitchenPrinterHost || '',
     port: Number(s.kitchenPrinterPort) || 9100,
   };
 }
 
-// Remote Print Agent Hub (for Juice Bar PC / Remote Station PCs running SultanPrintAgent.exe)
+// Remote Print Agent Hub (for Kitchen PC & Juice Bar PC running SultanPrintAgent)
 const connectedPrintAgents = {
   main: (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.main) || null,
   juice: (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.juice) || null,
@@ -3336,6 +3336,14 @@ const pendingAgentAcks = new Map(); // jobId -> { resolve, timer }
 const REMOTE_JOB_TTL_MS = 10 * 60 * 1000; // 10 mins max queue retention
 const AGENT_ONLINE_TIMEOUT_MS = 180 * 1000; // 3 minutes tolerance for long-poll + WMI printer scan + network jitter
 
+function hasDedicatedSeparateMainAgent(excludeIp) {
+  const m = connectedPrintAgents.main;
+  if (!m || !m.directMain) return false;
+  if (excludeIp && m.ip === excludeIp) return false;
+  if (Array.isArray(longPollWaiters.main) && longPollWaiters.main.length > 0) return true;
+  return (Date.now() - (m.lastSeen || 0)) < AGENT_ONLINE_TIMEOUT_MS;
+}
+
 function touchPrintAgentHeartbeat(station) {
   if (connectedPrintAgents[station]) {
     connectedPrintAgents[station].lastSeen = Date.now();
@@ -3344,13 +3352,28 @@ function touchPrintAgentHeartbeat(station) {
     }
     serverState.lastKnownPrintAgents[station] = connectedPrintAgents[station];
   }
+  if (station === 'juice' && connectedPrintAgents.juice && !hasDedicatedSeparateMainAgent(connectedPrintAgents.juice.ip)) {
+    connectedPrintAgents.main = {
+      ...connectedPrintAgents.juice,
+      station: 'main',
+      bridgedFromJuice: true,
+      lastSeen: Date.now(),
+    };
+    if (!serverState.lastKnownPrintAgents || typeof serverState.lastKnownPrintAgents !== 'object') {
+      serverState.lastKnownPrintAgents = {};
+    }
+    serverState.lastKnownPrintAgents.main = connectedPrintAgents.main;
+  }
 }
 
 function isPrintAgentOnline(station) {
   if (Array.isArray(longPollWaiters[station]) && longPollWaiters[station].length > 0) {
     return true;
   }
-  const info = connectedPrintAgents[station];
+  if (station === 'main' && !hasDedicatedSeparateMainAgent() && Array.isArray(longPollWaiters.juice) && longPollWaiters.juice.length > 0) {
+    return true;
+  }
+  const info = connectedPrintAgents[station] || (station === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
   return !!(info && (Date.now() - info.lastSeen) < AGENT_ONLINE_TIMEOUT_MS);
 }
 
@@ -3364,8 +3387,13 @@ function pruneExpiredRemoteJobs(station) {
 function deliverNextRemoteJobToWaiter(station) {
   pruneExpiredRemoteJobs(station);
   const q = remotePrintQueues[station];
-  const waiters = longPollWaiters[station];
-  if (!q || q.length === 0 || !waiters || waiters.length === 0) return false;
+  if (!q || q.length === 0) return false;
+
+  let waiters = longPollWaiters[station];
+  if ((!waiters || waiters.length === 0) && station === 'main' && !hasDedicatedSeparateMainAgent()) {
+    waiters = longPollWaiters.juice;
+  }
+  if (!waiters || waiters.length === 0) return false;
 
   const job = q.shift();
   const waiter = waiters.shift();
@@ -3462,17 +3490,9 @@ function dispatchStationPrint(ticket, station, options = {}) {
     });
   }
 
-  // Mode 1: Remote Station Print Agent (Default for Juice Bar PC, with automatic local POS-80 fallback for Main Kitchen!)
+  // Mode 1: Remote Station Print Agent (Kitchen PC & Juice Bar PC running SultanPrintAgent)
   if (cfg.mode === 'agent') {
     const agentOnline = isPrintAgentOnline(targetStation);
-    // If Main Kitchen is in 'agent' mode but no remote 'main' agent is running, automatically print to Server PC's local Windows POS-80 printer!
-    if (!agentOnline && targetStation === 'main' && printerHelper && typeof printerHelper.printRawBufferToWindows === 'function') {
-      const fallbackWinPrinter = (options.printerName && options.printerName !== 'AUTO')
-        ? options.printerName
-        : (cfg.printerName && cfg.printerName !== 'AUTO' ? cfg.printerName : 'POS-80');
-      return printerHelper.printRawBufferToWindows(buffer, fallbackWinPrinter, ticketClone.id)
-        .then((res) => ({ ...res, station: targetStation, printer: fallbackWinPrinter }));
-    }
     const job = enqueueRemoteAgentPrintJob(targetStation, ticketClone, buffer, options.printerName);
 
     if (!options.waitForAck) {
@@ -3483,7 +3503,7 @@ function dispatchStationPrint(ticket, station, options = {}) {
         jobId: job.jobId,
         station: targetStation,
         ticketId: ticketClone.id,
-        printer: (connectedPrintAgents[targetStation] && connectedPrintAgents[targetStation].activePrinter) || cfg.printerName || 'Juice Bar Printer',
+        printer: (connectedPrintAgents[targetStation] && connectedPrintAgents[targetStation].activePrinter) || cfg.printerName || 'POS-80',
       });
     }
 
@@ -6949,6 +6969,7 @@ async function handleRequest(req, res) {
 
     connectedPrintAgents[station] = {
       station,
+      directMain: station === 'main',
       pcName,
       activePrinter,
       availablePrinters,
@@ -6973,20 +6994,27 @@ async function handleRequest(req, res) {
     }
 
     const cfg = getStationPrinterConfig(station);
-    pruneExpiredRemoteJobs(station);
+    pruneExpiredRemoteJobs('main');
+    pruneExpiredRemoteJobs('juice');
 
-    // Immediate delivery if job already queued
-    if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
-      const job = remotePrintQueues[station].shift();
+    // Immediate delivery if job already queued (if this agent also serves 'main', deliver pending Kitchen KOTs first!)
+    const bridgedToMain = station === 'juice' && !hasDedicatedSeparateMainAgent(clientIp);
+    const activeQueueStation = (bridgedToMain && remotePrintQueues.main && remotePrintQueues.main.length > 0)
+      ? 'main'
+      : ((remotePrintQueues[station] && remotePrintQueues[station].length > 0) ? station : null);
+
+    if (activeQueueStation) {
+      const job = remotePrintQueues[activeQueueStation].shift();
+      const jobCfg = getStationPrinterConfig(activeQueueStation);
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({
         ok: true,
-        configuredPrinter: cfg.printerName || 'AUTO',
+        configuredPrinter: jobCfg.printerName || 'AUTO',
         jobId: job.jobId,
         ticketId: job.ticketId,
         tableName: job.tableName,
         station: job.station,
-        printerName: job.printerName || cfg.printerName || 'AUTO',
+        printerName: job.printerName || jobCfg.printerName || 'AUTO',
         rawBase64: job.rawBase64,
         plainText: job.plainText || '',
       }));
@@ -7091,25 +7119,12 @@ async function handleRequest(req, res) {
       const hasLocalServerThermal = serverWindowsPrinters.some((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || '')));
       const localThermalName = serverWindowsPrinters.find((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || ''))) || 'POS-80';
       const formatAgent = (st) => {
-        const a = connectedPrintAgents[st];
+        const a = connectedPrintAgents[st] || (st === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
         const online = isPrintAgentOnline(st);
         if (a && online) {
-          return { ...a, online: true };
+          return { ...a, station: st, online: true };
         }
-        // For Main Kitchen: if no remote 'main' agent is connected, seamlessly use the Server PC's local Windows thermal printer (POS-80) so Kitchen is ALWAYS online!
-        if (st === 'main' && hasLocalServerThermal) {
-          return {
-            station: 'main',
-            online: true,
-            pcName: os.hostname(),
-            activePrinter: localThermalName,
-            availablePrinters: serverWindowsPrinters,
-            printEngine: 'SERVER-USB',
-            ip: lanIp,
-            lastSeen: Date.now(),
-          };
-        }
-        return a ? { ...a, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
+        return a ? { ...a, station: st, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
       };
 
       pruneExpiredRemoteJobs('main');
