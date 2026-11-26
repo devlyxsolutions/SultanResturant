@@ -338,7 +338,7 @@ export function printTableStandeeHtml(
           <div class="table-badge-wrap">
             <div class="table-badge-title">${table.name}</div>
           </div>
-          <div class="table-meta-sub">${floorName} • ${unitType} (${table.seats || 4} Seats)</div>
+          <div class="table-meta-sub">${floorName} • ${unitType}</div>
         </div>
 
         <div class="qr-wrap">
@@ -408,7 +408,7 @@ export function buildTablesStandeesHtml(
             <div class="table-badge-wrap">
               <div class="table-badge-title">${table.name}</div>
             </div>
-            <div class="table-meta-sub">${floorName} • ${unitType} (${table.seats || 4} Seats)</div>
+            <div class="table-meta-sub">${floorName} • ${unitType}</div>
           </div>
 
           <div class="qr-wrap">

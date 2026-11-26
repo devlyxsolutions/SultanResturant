@@ -4291,7 +4291,7 @@ export default function TablesBlueprintScreen({
                         Table QR • {qrTable.name}
                       </Text>
                       <Text style={{ fontSize: 12, color: '#64748B' }}>
-                        {getTableFloor(qrTable)} • {getTableSeatingType(qrTable).toUpperCase()} ({qrTable.seats} Seats)
+                        {getTableFloor(qrTable)} • {getTableSeatingType(qrTable) === 'majlis' ? 'Majlis Cabin' : getTableSeatingType(qrTable) === 'couches' ? 'VIP Sofa' : 'Dining Table'}
                       </Text>
                     </View>
                   </View>
@@ -4622,7 +4622,7 @@ export default function TablesBlueprintScreen({
                       >
                         <Text style={{ fontSize: 13, fontWeight: '900', color: '#3A0F12' }}>{tbl.name}</Text>
                         <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>
-                          {getTableFloor(tbl)} • {typeLabel} ({tbl.seats}s)
+                          {getTableFloor(tbl)} • {typeLabel}
                         </Text>
                         <View
                           style={{
