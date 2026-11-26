@@ -85,29 +85,15 @@ export default function CentralUpdateHost() {
                 }
               }
 
-              // 2. Android Tablets: Compare installed APK version & hash with Master Server
-              if (Platform.OS === 'android' && data.apkHash) {
+              // 2. Android Tablets: Strictly compare installed APK version with Master Server apkVersion
+              // (Prevents false update loops when file copy mtimeMs changes for the same version!)
+              if (Platform.OS === 'android') {
                 if (data.apkVersion && Number(data.apkVersion) > INSTALLED_APK_VERSION) {
-                  setPendingApkHash(data.apkHash);
+                  setPendingApkHash(data.apkHash || String(data.apkVersion));
                   setApkDownloadUrl(`${base}${data.apkDownloadUrl || '/api/tablet-update/Sultan-POS-Tablet.apk'}`);
                   setApkUpdateAvailable(true);
-                  return;
-                }
-
-                if (!initialApkHashRef.current) {
-                  const savedHash = await AsyncStorage.getItem(APK_HASH_STORAGE_KEY);
-                  if (!savedHash) {
-                    await AsyncStorage.setItem(APK_HASH_STORAGE_KEY, data.apkHash);
-                    initialApkHashRef.current = data.apkHash;
-                  } else {
-                    initialApkHashRef.current = savedHash;
-                  }
-                }
-
-                if (initialApkHashRef.current && initialApkHashRef.current !== data.apkHash) {
-                  setPendingApkHash(data.apkHash);
-                  setApkDownloadUrl(`${base}${data.apkDownloadUrl || '/api/tablet-update/Sultan-POS-Tablet.apk'}`);
-                  setApkUpdateAvailable(true);
+                } else {
+                  setApkUpdateAvailable(false);
                 }
               }
             } catch {
@@ -133,7 +119,9 @@ export default function CentralUpdateHost() {
       }
       setApkUpdateAvailable(false);
       if (apkDownloadUrl) {
-        await Linking.openURL(apkDownloadUrl);
+        const sep = apkDownloadUrl.includes('?') ? '&' : '?';
+        const freshUrl = `${apkDownloadUrl}${sep}v=${serverVersion}&t=${Date.now()}`;
+        await Linking.openURL(freshUrl);
       }
     } catch { }
   };

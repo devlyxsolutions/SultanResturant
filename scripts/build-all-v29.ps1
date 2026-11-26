@@ -1,8 +1,16 @@
 $ErrorActionPreference = 'Stop'
 
-Write-Host "=== Step 1: Exporting Web Bundle (v29) ==="
+Write-Host "=== Step 1: Exporting Web Bundle (v35) ==="
 npx expo export -p web
 if ($LASTEXITCODE -ne 0) { throw "expo export web failed" }
+
+if (Test-Path "public\_redirects") {
+  Copy-Item -Path "public\_redirects" -Destination "dist\_redirects" -Force
+}
+if (Test-Path "public\site") {
+  if (!(Test-Path "dist\site")) { New-Item -ItemType Directory -Path "dist\site" -Force | Out-Null }
+  Copy-Item -Path "public\site\*" -Destination "dist\site" -Recurse -Force
+}
 
 $webTargets = @(
   "C:\SultanRestaurant\dist",
@@ -68,18 +76,18 @@ $bt = "$env:TEMP\android-build-tools\android-14"
 $baseApk = if (Test-Path "$env:TEMP\sultan_aligned_v14.apk") { "$env:TEMP\sultan_aligned_v14.apk" } elseif (Test-Path "Sultan-POS-Tablet.apk") { "Sultan-POS-Tablet.apk" } else { "" }
 
 if ((Test-Path $java) -and (Test-Path "$bt\zipalign.exe") -and (Test-Path "$env:TEMP\sultan-release-key.jks") -and ($baseApk -ne "")) {
-  Write-Host "=== Step 3: Exporting Android Bundle & Patching APK to v34 ==="
+  Write-Host "=== Step 3: Exporting Android Bundle & Patching APK to v35 ==="
   npx expo export -p android --output-dir dist-android
   if ($LASTEXITCODE -ne 0) { throw "expo export android failed" }
 
   $hbc = (Get-ChildItem -Path "dist-android\_expo\static\js\android\*.hbc" | Select-Object -First 1).FullName
-  $unalignedApk = "$env:TEMP\sultan_unaligned_v34.apk"
-  $alignedApk = "$env:TEMP\sultan_aligned_v34.apk"
-  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v34.apk"
+  $unalignedApk = "$env:TEMP\sultan_unaligned_v35.apk"
+  $alignedApk = "$env:TEMP\sultan_aligned_v35.apk"
+  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v35.apk"
   Remove-Item $unalignedApk, $alignedApk, $signedApk -Force -ErrorAction SilentlyContinue
 
-  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 33 }
-  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 34
+  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 34 }
+  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 35
   if ($LASTEXITCODE -ne 0) { throw "PatchApk failed" }
 
   & "$bt\zipalign.exe" -p -f 4 $unalignedApk $alignedApk

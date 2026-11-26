@@ -3325,6 +3325,7 @@ function getStationPrinterConfig(station) {
   };
 }
 
+// Remote Print Agent Hub (for Kitchen PC & Juice Bar PC running SultanPrintAgent)
 // Remote Print Agent Hub (Strict Workstation Isolation: 3rd Floor Main Kitchen vs Ground Floor Juice Bar)
 function normalizeLanIp(rawIp) {
   const s = String(rawIp || '').trim();
@@ -3386,6 +3387,8 @@ function resolveAgentStation(requestedStation, rawIp, pcName) {
 const initMainAgent = (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.main) || null;
 const initJuiceAgent = (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.juice) || null;
 const connectedPrintAgents = {
+  main: (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.main) || null,
+  juice: (serverState.lastKnownPrintAgents && serverState.lastKnownPrintAgents.juice) || null,
   main: initMainAgent,
   juice: (initJuiceAgent && normalizeLanIp(initJuiceAgent.ip) !== '192.168.1.125' && String(initJuiceAgent.pcName || '').toUpperCase() !== 'DESKTOP-FOH32OM')
     ? initJuiceAgent
@@ -3401,6 +3404,14 @@ const pendingAgentAcks = new Map(); // jobId -> { resolve, timer }
 const REMOTE_JOB_TTL_MS = 10 * 60 * 1000; // 10 mins max queue retention
 const AGENT_ONLINE_TIMEOUT_MS = 180 * 1000; // 3 minutes tolerance for long-poll + WMI printer scan + network jitter
 
+function hasDedicatedSeparateMainAgent(excludeIp) {
+  const m = connectedPrintAgents.main;
+  if (!m || !m.directMain) return false;
+  if (excludeIp && m.ip === excludeIp) return false;
+  if (Array.isArray(longPollWaiters.main) && longPollWaiters.main.length > 0) return true;
+  return (Date.now() - (m.lastSeen || 0)) < AGENT_ONLINE_TIMEOUT_MS;
+}
+
 function touchPrintAgentHeartbeat(station) {
   if (connectedPrintAgents[station]) {
     connectedPrintAgents[station].lastSeen = Date.now();
@@ -3409,12 +3420,28 @@ function touchPrintAgentHeartbeat(station) {
     }
     serverState.lastKnownPrintAgents[station] = connectedPrintAgents[station];
   }
+  if (station === 'juice' && connectedPrintAgents.juice && !hasDedicatedSeparateMainAgent(connectedPrintAgents.juice.ip)) {
+    connectedPrintAgents.main = {
+      ...connectedPrintAgents.juice,
+      station: 'main',
+      bridgedFromJuice: true,
+      lastSeen: Date.now(),
+    };
+    if (!serverState.lastKnownPrintAgents || typeof serverState.lastKnownPrintAgents !== 'object') {
+      serverState.lastKnownPrintAgents = {};
+    }
+    serverState.lastKnownPrintAgents.main = connectedPrintAgents.main;
+  }
 }
 
 function isPrintAgentOnline(station) {
   if (Array.isArray(longPollWaiters[station]) && longPollWaiters[station].length > 0) {
     return true;
   }
+  if (station === 'main' && !hasDedicatedSeparateMainAgent() && Array.isArray(longPollWaiters.juice) && longPollWaiters.juice.length > 0) {
+    return true;
+  }
+  const info = connectedPrintAgents[station] || (station === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
   const info = connectedPrintAgents[station];
   return !!(info && (Date.now() - info.lastSeen) < AGENT_ONLINE_TIMEOUT_MS);
 }
@@ -3429,8 +3456,15 @@ function pruneExpiredRemoteJobs(station) {
 function deliverNextRemoteJobToWaiter(station) {
   pruneExpiredRemoteJobs(station);
   const q = remotePrintQueues[station];
+  if (!q || q.length === 0) return false;
   const waiters = longPollWaiters[station];
   if (!q || q.length === 0 || !waiters || waiters.length === 0) return false;
+
+  let waiters = longPollWaiters[station];
+  if ((!waiters || waiters.length === 0) && station === 'main' && !hasDedicatedSeparateMainAgent()) {
+    waiters = longPollWaiters.juice;
+  }
+  if (!waiters || waiters.length === 0) return false;
 
   const job = q.shift();
   const waiter = waiters.shift();
@@ -3496,12 +3530,14 @@ function dispatchStationPrint(ticket, station, options = {}) {
     return Promise.resolve({ success: false, error: 'Printer helper not available', station: targetStation });
   }
 
+  // Normalize stations first so beverage items NEVER stay on 'main'
   // Normalize stations first and strictly filter items so 'main' NEVER contains Juice Bar items and 'juice' NEVER contains Kitchen items!
   const ticketClone = {
     ...ticket,
     items: Array.isArray(ticket.items) ? ticket.items.map((it) => ({ ...it })) : [],
   };
   if (typeof printerHelper.normalizeTicketStations === 'function') {
+    printerHelper.normalizeTicketStations(ticketClone, serverState.menuItems || [], isAutoRouteBeveragesEnabled());
     printerHelper.normalizeTicketStations(ticketClone, serverState.menuItems || [], true);
   }
   ticketClone.items = ticketClone.items.filter((it) => {
@@ -5804,6 +5840,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
+        apkVersion: 34,
         apkVersion: 35,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
@@ -6991,8 +7028,10 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // 8.2 Remote Print Agent Long-Poll Endpoint (Used by SultanPrintAgent.ps1 on Juice Bar PC)
   // 8.2 Remote Print Agent Long-Poll Endpoint (Strict Workstation Isolation: 3rd Floor Kitchen vs Ground Floor Juice Bar)
   if (url.pathname === '/api/print-agent/poll' && req.method === 'GET') {
+    const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
     const rawStation = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
     const pcName = url.searchParams.get('pc') || 'Station-PC';
     const station = resolveAgentStation(rawStation, clientIp, pcName);
@@ -7045,531 +7084,548 @@ async function handleRequest(req, res) {
     }
 
     const cfg = getStationPrinterConfig(station);
+    pruneExpiredRemoteJobs('main');
+    pruneExpiredRemoteJobs('juice');
     pruneExpiredRemoteJobs(station);
 
-    // Immediate delivery ONLY from this workstation's own isolated station queue!
-    if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
-      const job = remotePrintQueues[station].shift();
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({
-        ok: true,
-        configuredPrinter: cfg.printerName || 'AUTO',
-        jobId: job.jobId,
-        ticketId: job.ticketId,
-        tableName: job.tableName,
-        station: job.station,
-        printerName: job.printerName || cfg.printerName || 'AUTO',
-        rawBase64: job.rawBase64,
-        plainText: job.plainText || '',
-      }));
-      return;
-    }
+    // Immediate delivery if job already queued (if this agent also serves 'main', deliver pending Kitchen KOTs first!)
+    const bridgedToMain = station === 'juice' && !hasDedicatedSeparateMainAgent(clientIp);
+    const activeQueueStation = (bridgedToMain && remotePrintQueues.main && remotePrintQueues.main.length > 0)
+      ? 'main'
+      : ((remotePrintQueues[station] && remotePrintQueues[station].length > 0) ? station : null);
 
-    // Fast handshake response on initial connect / printer change so Desktop Agent turns GREEN instantly!
-    if (url.searchParams.get('hello') === '1' || changed) {
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({
-        ok: true,
-        connected: true,
-        configuredPrinter: cfg.printerName || 'AUTO',
-        jobId: null,
-      }));
-      return;
-    }
-
-    // Hold long-poll open for up to 12 seconds for <10ms instant push when an order arrives
-    const waiter = { res, timer: null };
-    waiter.timer = setTimeout(() => {
-      const list = longPollWaiters[station] || [];
-      const idx = list.indexOf(waiter);
-      if (idx !== -1) list.splice(idx, 1);
-      touchPrintAgentHeartbeat(station);
-      try {
+    if (activeQueueStation) {
+      const job = remotePrintQueues[activeQueueStation].shift();
+      const jobCfg = getStationPrinterConfig(activeQueueStation);
+      // Immediate delivery ONLY from this workstation's own isolated station queue!
+      if (remotePrintQueues[station] && remotePrintQueues[station].length > 0) {
+        const job = remotePrintQueues[station].shift();
         res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-        res.end(JSON.stringify({ ok: true, configuredPrinter: cfg.printerName || 'AUTO', jobId: null }));
-      } catch (_) { }
-    }, 12000);
+        res.end(JSON.stringify({
+          ok: true,
+          configuredPrinter: jobCfg.printerName || 'AUTO',
+          configuredPrinter: cfg.printerName || 'AUTO',
+          jobId: job.jobId,
+          ticketId: job.ticketId,
+          tableName: job.tableName,
+          station: job.station,
+          printerName: job.printerName || jobCfg.printerName || 'AUTO',
+          printerName: job.printerName || cfg.printerName || 'AUTO',
+          rawBase64: job.rawBase64,
+          plainText: job.plainText || '',
+        }));
+        return;
+      }
 
-    req.on('close', () => {
-      clearTimeout(waiter.timer);
-      const list = longPollWaiters[station] || [];
-      const idx = list.indexOf(waiter);
-      if (idx !== -1) list.splice(idx, 1);
-    });
+      // Fast handshake response on initial connect / printer change so Desktop Agent turns GREEN instantly!
+      if (url.searchParams.get('hello') === '1' || changed) {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({
+          ok: true,
+          connected: true,
+          configuredPrinter: cfg.printerName || 'AUTO',
+          jobId: null,
+        }));
+        return;
+      }
 
-    if (!longPollWaiters[station]) longPollWaiters[station] = [];
-    longPollWaiters[station].push(waiter);
-    return;
-  }
+      // Hold long-poll open for up to 12 seconds for <10ms instant push when an order arrives
+      const waiter = { res, timer: null };
+      waiter.timer = setTimeout(() => {
+        const list = longPollWaiters[station] || [];
+        const idx = list.indexOf(waiter);
+        if (idx !== -1) list.splice(idx, 1);
+        touchPrintAgentHeartbeat(station);
+        try {
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify({ ok: true, configuredPrinter: cfg.printerName || 'AUTO', jobId: null }));
+        } catch (_) { }
+      }, 12000);
 
-  // 8.3 Remote Print Agent Print Acknowledgment
-  if (url.pathname === '/api/print-agent/ack' && req.method === 'POST') {
-    try {
-      const data = await readRequestBody(req);
-      const rawStation = data.station === 'main' ? 'main' : 'juice';
-      const station = resolveAgentStation(rawStation, clientIp, data.pcName);
-      touchPrintAgentHeartbeat(station);
-      const jobId = String(data.jobId || '');
-      const ticketId = String(data.ticketId || '');
-      const success = !!data.success;
-      const printerName = data.printerName || 'Remote Printer';
-      const pcName = data.pcName || 'Station-PC';
+      req.on('close', () => {
+        clearTimeout(waiter.timer);
+        const list = longPollWaiters[station] || [];
+        const idx = list.indexOf(waiter);
+        if (idx !== -1) list.splice(idx, 1);
+      });
 
-      if (success) {
-        console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} PRINTED OK on ${pcName} -> ${printerName}`);
+      if (!longPollWaiters[station]) longPollWaiters[station] = [];
+      longPollWaiters[station].push(waiter);
+      return;
+    }
+
+    // 8.3 Remote Print Agent Print Acknowledgment
+    if (url.pathname === '/api/print-agent/ack' && req.method === 'POST') {
+      try {
+        const data = await readRequestBody(req);
+        const station = data.station === 'main' ? 'main' : 'juice';
+        const rawStation = data.station === 'main' ? 'main' : 'juice';
+        const station = resolveAgentStation(rawStation, clientIp, data.pcName);
+        touchPrintAgentHeartbeat(station);
+        const jobId = String(data.jobId || '');
+        const ticketId = String(data.ticketId || '');
+        const success = !!data.success;
+        const printerName = data.printerName || 'Remote Printer';
+        const pcName = data.pcName || 'Station-PC';
+
+        if (success) {
+          console.log(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} PRINTED OK on ${pcName} -> ${printerName}`);
+          broadcastToClients({
+            type: 'TICKET_AUTO_PRINTED',
+            ticketId,
+            station,
+            printer: printerName,
+            pcName,
+            timestamp: Date.now(),
+          });
+        } else {
+          console.warn(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} FAILED on ${pcName}: ${data.error || 'Unknown error'}`);
+        }
+
+        if (jobId && pendingAgentAcks.has(jobId)) {
+          const pending = pendingAgentAcks.get(jobId);
+          clearTimeout(pending.timer);
+          pendingAgentAcks.delete(jobId);
+          pending.resolve({
+            success,
+            station,
+            ticketId,
+            printer: printerName,
+            pcName,
+            error: data.error || undefined,
+          });
+        }
+
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: true }));
+      } catch (err) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 8.4 Live Station Printer Status & Available Printers Discovery
+    if (url.pathname === '/api/print/status' && req.method === 'GET') {
+      try {
+        const viewerStation = url.searchParams.get('station');
+        if (viewerStation === 'main' || viewerStation === 'juice') {
+          registerWorkstationStationIp(clientIp, viewerStation);
+        }
+        const serverWindowsPrinters = (printerHelper && typeof printerHelper.getLocalWindowsPrinters === 'function')
+          ? await printerHelper.getLocalWindowsPrinters()
+          : ['POS-80'];
+
+        const lanIp = getServerLanIp();
+        const hostHeader = req.headers.host || `${lanIp}:${PORT}`;
+        const hasLocalServerThermal = serverWindowsPrinters.some((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || '')));
+        const localThermalName = serverWindowsPrinters.find((p) => /pos|thermal|80|receipt|epson|xprinter|blackcopper/i.test(String(p || ''))) || 'POS-80';
+        const formatAgent = (st) => {
+          const a = connectedPrintAgents[st] || (st === 'main' && !hasDedicatedSeparateMainAgent() ? connectedPrintAgents.juice : null);
+          const a = connectedPrintAgents[st];
+          const online = isPrintAgentOnline(st);
+          if (a && online) {
+            return { ...a, station: st, online: true };
+          }
+          return a ? { ...a, station: st, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
+        };
+
+        pruneExpiredRemoteJobs('main');
+        pruneExpiredRemoteJobs('juice');
+
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify({
+          serverUrl: `http://${hostHeader}`,
+          lanServerUrl: `http://${lanIp}:${PORT}`,
+          serverWindowsPrinters,
+          kitchen: {
+            config: getStationPrinterConfig('main'),
+            agent: formatAgent('main'),
+            pendingJobs: (remotePrintQueues.main || []).length,
+          },
+          juice: {
+            config: getStationPrinterConfig('juice'),
+            agent: formatAgent('juice'),
+            pendingJobs: (remotePrintQueues.juice || []).length,
+          },
+          timestamp: Date.now(),
+        }));
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 8.5 Save Station Printer Routing Configuration
+    if (url.pathname === '/api/print/config' && req.method === 'POST') {
+      try {
+        const data = await readRequestBody(req);
+        if (!serverState.systemSettings || typeof serverState.systemSettings !== 'object') {
+          serverState.systemSettings = {};
+        }
+        const allowedPrinterKeys = [
+          'kitchenPrinterMode', 'kitchenPrinterName', 'kitchenPrinterHost', 'kitchenPrinterPort',
+          'juicePrinterMode', 'juicePrinterName', 'juicePrinterHost', 'juicePrinterPort',
+        ];
+        for (const k of allowedPrinterKeys) {
+          if (data[k] !== undefined) {
+            serverState.systemSettings[k] = data[k];
+          }
+        }
+        serverState.systemSettings.updatedAt = Date.now();
+        persistState();
         broadcastToClients({
-          type: 'TICKET_AUTO_PRINTED',
-          ticketId,
-          station,
-          printer: printerName,
-          pcName,
+          type: 'STATE_UPDATE',
+          state: { systemSettings: serverState.systemSettings },
+          senderId: 'SERVER_PRINTER_CONFIG',
           timestamp: Date.now(),
         });
-      } else {
-        console.warn(`[Sultan Hub Print-Agent] ${station.toUpperCase()} KOT #${ticketId} FAILED on ${pcName}: ${data.error || 'Unknown error'}`);
-      }
-
-      if (jobId && pendingAgentAcks.has(jobId)) {
-        const pending = pendingAgentAcks.get(jobId);
-        clearTimeout(pending.timer);
-        pendingAgentAcks.delete(jobId);
-        pending.resolve({
-          success,
-          station,
-          ticketId,
-          printer: printerName,
-          pcName,
-          error: data.error || undefined,
-        });
-      }
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true }));
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // 8.4 Live Station Printer Status & Available Printers Discovery
-  if (url.pathname === '/api/print/status' && req.method === 'GET') {
-    try {
-      const viewerStation = url.searchParams.get('station');
-      if (viewerStation === 'main' || viewerStation === 'juice') {
-        registerWorkstationStationIp(clientIp, viewerStation);
-      }
-      const serverWindowsPrinters = (printerHelper && typeof printerHelper.getLocalWindowsPrinters === 'function')
-        ? await printerHelper.getLocalWindowsPrinters()
-        : ['POS-80'];
-
-      const lanIp = getServerLanIp();
-      const hostHeader = req.headers.host || `${lanIp}:${PORT}`;
-      const formatAgent = (st) => {
-        const a = connectedPrintAgents[st];
-        const online = isPrintAgentOnline(st);
-        if (a && online) {
-          return { ...a, station: st, online: true };
-        }
-        return a ? { ...a, station: st, online } : { online: false, pcName: null, activePrinter: null, availablePrinters: [] };
-      };
-
-      pruneExpiredRemoteJobs('main');
-      pruneExpiredRemoteJobs('juice');
-
-      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
-      res.end(JSON.stringify({
-        serverUrl: `http://${hostHeader}`,
-        lanServerUrl: `http://${lanIp}:${PORT}`,
-        serverWindowsPrinters,
-        kitchen: {
-          config: getStationPrinterConfig('main'),
-          agent: formatAgent('main'),
-          pendingJobs: (remotePrintQueues.main || []).length,
-        },
-        juice: {
-          config: getStationPrinterConfig('juice'),
-          agent: formatAgent('juice'),
-          pendingJobs: (remotePrintQueues.juice || []).length,
-        },
-        timestamp: Date.now(),
-      }));
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // 8.5 Save Station Printer Routing Configuration
-  if (url.pathname === '/api/print/config' && req.method === 'POST') {
-    try {
-      const data = await readRequestBody(req);
-      if (!serverState.systemSettings || typeof serverState.systemSettings !== 'object') {
-        serverState.systemSettings = {};
-      }
-      const allowedPrinterKeys = [
-        'kitchenPrinterMode', 'kitchenPrinterName', 'kitchenPrinterHost', 'kitchenPrinterPort',
-        'juicePrinterMode', 'juicePrinterName', 'juicePrinterHost', 'juicePrinterPort',
-      ];
-      for (const k of allowedPrinterKeys) {
-        if (data[k] !== undefined) {
-          serverState.systemSettings[k] = data[k];
-        }
-      }
-      serverState.systemSettings.updatedAt = Date.now();
-      persistState();
-      broadcastToClients({
-        type: 'STATE_UPDATE',
-        state: { systemSettings: serverState.systemSettings },
-        senderId: 'SERVER_PRINTER_CONFIG',
-        timestamp: Date.now(),
-      });
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        success: true,
-        kitchen: getStationPrinterConfig('main'),
-        juice: getStationPrinterConfig('juice'),
-      }));
-    } catch (err) {
-      res.writeHead(400, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // 8.6 One-Click Downloadable Dedicated Station Print Agent Setup Pack (.zip - Zero unsigned .exe, Windows 11 Smart App Control safe!)
-  if (url.pathname === '/api/print-agent/download' && req.method === 'GET') {
-    try {
-      const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
-      const psScriptPath = path.join(__dirname, 'JuiceBar-Printer-Agent', 'SultanPrintAgent.ps1');
-      if (!fs.existsSync(psScriptPath) || !printerHelper || typeof printerHelper.buildZipBuffer !== 'function') {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Print Agent script not available on server' }));
-        return;
-      }
-
-      const lanIp = getServerLanIp();
-      const hostRaw = String(req.headers.host || '').split(':')[0].trim().toLowerCase();
-      const isLoopback = !hostRaw || hostRaw === 'localhost' || hostRaw === '127.0.0.1' || hostRaw === '::1' || hostRaw === '[::1]';
-      const resolvedHost = isLoopback ? lanIp : hostRaw;
-      const serverUrl = `http://${resolvedHost}:${PORT}`;
-      const stationLabel = station === 'juice' ? 'JuiceBar' : 'Kitchen';
-      const psScriptData = fs.readFileSync(psScriptPath);
-
-      const agentConfig = [
-        '# Sultan Restaurant Dedicated Station Thermal Print Agent Config (v3.1)',
-        `SERVER=${serverUrl}`,
-        `STATION=${station}`,
-        'PRINTER=AUTO',
-        'MODE=AUTO',
-        'AUTOSTART=true',
-        '',
-      ].join('\r\n');
-
-      const startBat = [
-        '@echo off',
-        `title Sultan ${stationLabel} Printer Agent`,
-        'set "APPDIR=%~dp0"',
-        'cd /d "%APPDIR%"',
-        '',
-        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
-        '  echo.',
-        '  echo ====================================================================',
-        '  echo   ERROR: Please EXTRACT the ZIP file first!',
-        '  echo   Right-click the downloaded ZIP -^> click "Extract All..."',
-        `  echo   Then open the extracted folder and run Start-${stationLabel}-Printer.bat`,
-        '  echo ====================================================================',
-        '  echo.',
-        '  pause',
-        '  exit /b 1',
-        ')',
-        '',
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1"',
-        'exit /b 0',
-        '',
-      ].join('\r\n');
-
-      const testBat = [
-        '@echo off',
-        `title Test Sultan ${stationLabel} Printer`,
-        'set "APPDIR=%~dp0"',
-        'cd /d "%APPDIR%"',
-        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
-        '  echo ERROR: Please EXTRACT the ZIP file first!',
-        '  pause',
-        '  exit /b 1',
-        ')',
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Test',
-        'exit /b 0',
-        '',
-      ].join('\r\n');
-
-      const diagnoseBat = [
-        '@echo off',
-        `title Diagnose Sultan ${stationLabel} Printer`,
-        'set "APPDIR=%~dp0"',
-        'cd /d "%APPDIR%"',
-        'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
-        '  echo ERROR: Please EXTRACT the ZIP file first!',
-        '  pause',
-        '  exit /b 1',
-        ')',
-        'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
-        'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Diagnose',
-        'echo.',
-        'pause',
-        'exit /b 0',
-        '',
-      ].join('\r\n');
-
-      const readmeTxt = [
-        '================================================================',
-        `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP (v3.1)`,
-        '================================================================',
-        '',
-        'STEP 1: RIGHT-CLICK this ZIP file and click "Extract All..." anywhere on this PC.',
-        '        (IMPORTANT: Do NOT run .bat files directly inside the ZIP window!)',
-        'STEP 2: Plug in the USB Thermal Printer and make sure its Windows driver is installed.',
-        `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" ONCE!`,
-        '        - Opens the permanent Desktop Printer Agent window & auto-picks your USB printer.',
-        '        - AUTOMATICALLY installs itself in AppData & enables Windows Boot Auto-Start!',
-        '          (No separate Install-AutoStart file needed! Even if you delete the ZIP later, it keeps running.)',
-        'STEP 4: Click "Print Test Slip" inside the window to confirm printing.',
-        '',
-        `TROUBLESHOOTING: Double-click "Diagnose-${stationLabel}-Printer.bat" to see all detected`,
-        'printers, USB ports, and live connection check to the Sultan Hub.',
-        '',
-        'Windows 11 Safe: 100% pure Microsoft-signed PowerShell (zero unsigned .exe, zero Smart App Control block!).',
-        `- Pre-configured Server Hub: ${serverUrl}`,
-        '',
-      ].join('\r\n');
-
-      const zipBuf = printerHelper.buildZipBuffer([
-        { name: 'SultanPrintAgent.ps1', data: psScriptData },
-        { name: 'agent-config.txt', data: agentConfig },
-        { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
-        { name: `Test-${stationLabel}-Printer.bat`, data: testBat },
-        { name: `Diagnose-${stationLabel}-Printer.bat`, data: diagnoseBat },
-        { name: `README-${stationLabel.toUpperCase()}-PRINTER.txt`, data: readmeTxt },
-      ]);
-
-      res.writeHead(200, {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="Sultan-${stationLabel}-Printer-Setup.zip"`,
-        'Content-Length': zipBuf.length,
-        'Cache-Control': 'no-store',
-      });
-      res.end(zipBuf);
-    } catch (err) {
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
-    }
-    return;
-  }
-
-  // 8.7 Executive A4 Vector Financial Report PDF Generator (Zero external npm deps — uses installed Chrome/Edge headless)
-  if (url.pathname === '/api/reports/export-pdf' && req.method === 'POST') {
-    try {
-      const data = await readRequestBody(req);
-      const html = typeof data?.html === 'string' ? data.html : '';
-      const rawName = typeof data?.filename === 'string' ? data.filename : `Sultan_Financial_Report_${Date.now()}.pdf`;
-      const safeFilename = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.pdf$/i, '') + '.pdf';
-
-      if (!html || html.length < 40) {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+          success: true,
+          kitchen: getStationPrinterConfig('main'),
+          juice: getStationPrinterConfig('juice'),
+        }));
+      } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Missing report HTML payload' }));
-        return;
+        res.end(JSON.stringify({ error: err.message }));
       }
-
-      const browserCandidates = [
-        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
-        'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
-        'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
-      ];
-      const browserBin = browserCandidates.find((p) => {
-        try { return fs.existsSync(p); } catch (_) { return false; }
-      });
-
-      if (!browserBin) {
-        res.writeHead(503, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ error: 'Headless PDF browser not installed on server' }));
-        return;
-      }
-
-      const { execFile } = require('child_process');
-      const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-      const htmlPath = path.join(os.tmpdir(), `sultan_report_${stamp}.html`);
-      const pdfPath = path.join(os.tmpdir(), `sultan_report_${stamp}.pdf`);
-
-      fs.writeFileSync(htmlPath, html, 'utf8');
-      const fileUrl = 'file:///' + htmlPath.replace(/\\/g, '/');
-
-      const pdfBuf = await new Promise((resolve, reject) => {
-        execFile(
-          browserBin,
-          [
-            '--headless=new',
-            '--disable-gpu',
-            '--no-sandbox',
-            '--disable-extensions',
-            '--no-pdf-header-footer',
-            '--run-all-compositor-stages-before-draw',
-            `--print-to-pdf=${pdfPath}`,
-            fileUrl,
-          ],
-          { timeout: 18000, windowsHide: true },
-          (err) => {
-            try {
-              if (fs.existsSync(pdfPath)) {
-                const buf = fs.readFileSync(pdfPath);
-                if (buf.length > 500) {
-                  return resolve(buf);
-                }
-              }
-              return reject(err || new Error('PDF output was empty'));
-            } catch (readErr) {
-              return reject(readErr);
-            } finally {
-              try { fs.unlinkSync(htmlPath); } catch (_) { }
-              try { fs.unlinkSync(pdfPath); } catch (_) { }
-            }
-          }
-        );
-      });
-
-      res.writeHead(200, {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${safeFilename}"`,
-        'Content-Length': pdfBuf.length,
-        'Cache-Control': 'no-store',
-      });
-      res.end(pdfBuf);
-    } catch (err) {
-      console.warn('[Sultan Hub] /api/reports/export-pdf error:', err.message);
-      res.writeHead(500, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: err.message }));
+      return;
     }
-    return;
-  }
 
-  // 8b. Serve Menu Dish Images directly from D:\SultanMenuImages or public/menu-images
-  if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname && url.pathname.startsWith('/menu-images/')) {
-    const fileName = path.basename(decodeURIComponent(url.pathname));
-    const candidates = [
-      path.join('D:\\SultanMenuImages', fileName),
-      path.join(__dirname, 'public', 'menu-images', fileName),
-    ];
-    for (const candidate of candidates) {
-      if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
-        const ext = path.extname(candidate).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-        res.writeHead(200, {
-          'Content-Type': mime,
-          'Cache-Control': 'public, max-age=604800',
-          'Access-Control-Allow-Origin': '*',
-        });
-        if (req.method === 'HEAD') {
-          res.end();
-        } else {
-          fs.createReadStream(candidate).pipe(res);
-        }
-        return;
-      }
-    }
-    res.writeHead(404, { 'Content-Type': 'text/plain' });
-    res.end('Image not found');
-    return;
-  }
-
-  // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
-  if (req.method === 'GET' || req.method === 'HEAD') {
-    const DIST_DIR = process.env.SULTAN_DIST_DIR || path.join(__dirname, 'dist');
-    if (fs.existsSync(DIST_DIR)) {
-      let rawPath = (url.pathname || '/').split('?')[0];
+    // 8.6 One-Click Downloadable Dedicated Station Print Agent Setup Pack (.zip - Zero unsigned .exe, Windows 11 Smart App Control safe!)
+    if (url.pathname === '/api/print-agent/download' && req.method === 'GET') {
       try {
-        rawPath = decodeURIComponent(rawPath);
-      } catch (_) { }
-
-      let filePath = path.join(DIST_DIR, rawPath === '/' ? 'index.html' : rawPath);
-      // Prevent directory traversal
-      if (filePath.startsWith(DIST_DIR)) {
-        if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
-          // Fallback to index.html for client-side Expo router routes (e.g. /admin/dashboard, /pos, /floor-manager)
-          filePath = path.join(DIST_DIR, 'index.html');
+        const station = url.searchParams.get('station') === 'main' ? 'main' : 'juice';
+        const psScriptPath = path.join(__dirname, 'JuiceBar-Printer-Agent', 'SultanPrintAgent.ps1');
+        if (!fs.existsSync(psScriptPath) || !printerHelper || typeof printerHelper.buildZipBuffer !== 'function') {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Print Agent script not available on server' }));
+          return;
         }
 
-        if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
-          const ext = path.extname(filePath).toLowerCase();
-          const mimeTypes = {
-            '.html': 'text/html; charset=utf-8',
-            '.js': 'application/javascript; charset=utf-8',
-            '.css': 'text/css; charset=utf-8',
-            '.json': 'application/json; charset=utf-8',
-            '.png': 'image/png',
-            '.jpg': 'image/jpeg',
-            '.jpeg': 'image/jpeg',
-            '.gif': 'image/gif',
-            '.svg': 'image/svg+xml',
-            '.ico': 'image/x-icon',
-            '.ttf': 'font/ttf',
-            '.woff': 'font/woff',
-            '.woff2': 'font/woff2',
-            '.mp3': 'audio/mpeg',
-            '.wav': 'audio/wav',
-          };
-          const contentType = mimeTypes[ext] || 'application/octet-stream';
-          const isHashed = rawPath.includes('/_expo/') || rawPath.includes('/assets/') || rawPath.includes('/fonts/');
-          const cacheControl = isHashed
-            ? 'public, max-age=31536000, immutable'
-            : 'no-cache, no-store, must-revalidate';
+        const lanIp = getServerLanIp();
+        const hostRaw = String(req.headers.host || '').split(':')[0].trim().toLowerCase();
+        const isLoopback = !hostRaw || hostRaw === 'localhost' || hostRaw === '127.0.0.1' || hostRaw === '::1' || hostRaw === '[::1]';
+        const resolvedHost = isLoopback ? lanIp : hostRaw;
+        const serverUrl = `http://${resolvedHost}:${PORT}`;
+        const stationLabel = station === 'juice' ? 'JuiceBar' : 'Kitchen';
+        const psScriptData = fs.readFileSync(psScriptPath);
 
-          const acceptEncoding = req.headers['accept-encoding'] || '';
-          const canGzip = /\bgzip\b/.test(acceptEncoding) && ['.html', '.js', '.css', '.json', '.svg'].includes(ext);
+        const agentConfig = [
+          '# Sultan Restaurant Dedicated Station Thermal Print Agent Config (v3.1)',
+          `SERVER=${serverUrl}`,
+          `STATION=${station}`,
+          'PRINTER=AUTO',
+          'MODE=AUTO',
+          'AUTOSTART=true',
+          '',
+        ].join('\r\n');
 
-          const headers = {
-            'Content-Type': contentType,
-            'Cache-Control': cacheControl,
+        const startBat = [
+          '@echo off',
+          `title Sultan ${stationLabel} Printer Agent`,
+          'set "APPDIR=%~dp0"',
+          'cd /d "%APPDIR%"',
+          '',
+          'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+          '  echo.',
+          '  echo ====================================================================',
+          '  echo   ERROR: Please EXTRACT the ZIP file first!',
+          '  echo   Right-click the downloaded ZIP -^> click "Extract All..."',
+          `  echo   Then open the extracted folder and run Start-${stationLabel}-Printer.bat`,
+          '  echo ====================================================================',
+          '  echo.',
+          '  pause',
+          '  exit /b 1',
+          ')',
+          '',
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+          'start "" powershell.exe -STA -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1"',
+          'exit /b 0',
+          '',
+        ].join('\r\n');
+
+        const testBat = [
+          '@echo off',
+          `title Test Sultan ${stationLabel} Printer`,
+          'set "APPDIR=%~dp0"',
+          'cd /d "%APPDIR%"',
+          'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+          '  echo ERROR: Please EXTRACT the ZIP file first!',
+          '  pause',
+          '  exit /b 1',
+          ')',
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+          'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Test',
+          'exit /b 0',
+          '',
+        ].join('\r\n');
+
+        const diagnoseBat = [
+          '@echo off',
+          `title Diagnose Sultan ${stationLabel} Printer`,
+          'set "APPDIR=%~dp0"',
+          'cd /d "%APPDIR%"',
+          'if not exist "%APPDIR%SultanPrintAgent.ps1" (',
+          '  echo ERROR: Please EXTRACT the ZIP file first!',
+          '  pause',
+          '  exit /b 1',
+          ')',
+          'powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "Get-ChildItem -LiteralPath $env:APPDIR -ErrorAction SilentlyContinue | Unblock-File -ErrorAction SilentlyContinue" >nul 2>&1',
+          'powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "%APPDIR%SultanPrintAgent.ps1" -Diagnose',
+          'echo.',
+          'pause',
+          'exit /b 0',
+          '',
+        ].join('\r\n');
+
+        const readmeTxt = [
+          '================================================================',
+          `  SULTAN RESTAURANT - ${stationLabel.toUpperCase()} DEDICATED PRINTER SETUP (v3.1)`,
+          '================================================================',
+          '',
+          'STEP 1: RIGHT-CLICK this ZIP file and click "Extract All..." anywhere on this PC.',
+          '        (IMPORTANT: Do NOT run .bat files directly inside the ZIP window!)',
+          'STEP 2: Plug in the USB Thermal Printer and make sure its Windows driver is installed.',
+          `STEP 3: Double-click "Start-${stationLabel}-Printer.bat" ONCE!`,
+          '        - Opens the permanent Desktop Printer Agent window & auto-picks your USB printer.',
+          '        - AUTOMATICALLY installs itself in AppData & enables Windows Boot Auto-Start!',
+          '          (No separate Install-AutoStart file needed! Even if you delete the ZIP later, it keeps running.)',
+          'STEP 4: Click "Print Test Slip" inside the window to confirm printing.',
+          '',
+          `TROUBLESHOOTING: Double-click "Diagnose-${stationLabel}-Printer.bat" to see all detected`,
+          'printers, USB ports, and live connection check to the Sultan Hub.',
+          '',
+          'Windows 11 Safe: 100% pure Microsoft-signed PowerShell (zero unsigned .exe, zero Smart App Control block!).',
+          `- Pre-configured Server Hub: ${serverUrl}`,
+          '',
+        ].join('\r\n');
+
+        const zipBuf = printerHelper.buildZipBuffer([
+          { name: 'SultanPrintAgent.ps1', data: psScriptData },
+          { name: 'agent-config.txt', data: agentConfig },
+          { name: `Start-${stationLabel}-Printer.bat`, data: startBat },
+          { name: `Test-${stationLabel}-Printer.bat`, data: testBat },
+          { name: `Diagnose-${stationLabel}-Printer.bat`, data: diagnoseBat },
+          { name: `README-${stationLabel.toUpperCase()}-PRINTER.txt`, data: readmeTxt },
+        ]);
+
+        res.writeHead(200, {
+          'Content-Type': 'application/zip',
+          'Content-Disposition': `attachment; filename="Sultan-${stationLabel}-Printer-Setup.zip"`,
+          'Content-Length': zipBuf.length,
+          'Cache-Control': 'no-store',
+        });
+        res.end(zipBuf);
+      } catch (err) {
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 8.7 Executive A4 Vector Financial Report PDF Generator (Zero external npm deps — uses installed Chrome/Edge headless)
+    if (url.pathname === '/api/reports/export-pdf' && req.method === 'POST') {
+      try {
+        const data = await readRequestBody(req);
+        const html = typeof data?.html === 'string' ? data.html : '';
+        const rawName = typeof data?.filename === 'string' ? data.filename : `Sultan_Financial_Report_${Date.now()}.pdf`;
+        const safeFilename = rawName.replace(/[^a-zA-Z0-9._-]/g, '_').replace(/\.pdf$/i, '') + '.pdf';
+
+        if (!html || html.length < 40) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Missing report HTML payload' }));
+          return;
+        }
+
+        const browserCandidates = [
+          'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
+          'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe',
+          'C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe',
+        ];
+        const browserBin = browserCandidates.find((p) => {
+          try { return fs.existsSync(p); } catch (_) { return false; }
+        });
+
+        if (!browserBin) {
+          res.writeHead(503, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: 'Headless PDF browser not installed on server' }));
+          return;
+        }
+
+        const { execFile } = require('child_process');
+        const stamp = `${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const htmlPath = path.join(os.tmpdir(), `sultan_report_${stamp}.html`);
+        const pdfPath = path.join(os.tmpdir(), `sultan_report_${stamp}.pdf`);
+
+        fs.writeFileSync(htmlPath, html, 'utf8');
+        const fileUrl = 'file:///' + htmlPath.replace(/\\/g, '/');
+
+        const pdfBuf = await new Promise((resolve, reject) => {
+          execFile(
+            browserBin,
+            [
+              '--headless=new',
+              '--disable-gpu',
+              '--no-sandbox',
+              '--disable-extensions',
+              '--no-pdf-header-footer',
+              '--run-all-compositor-stages-before-draw',
+              `--print-to-pdf=${pdfPath}`,
+              fileUrl,
+            ],
+            { timeout: 18000, windowsHide: true },
+            (err) => {
+              try {
+                if (fs.existsSync(pdfPath)) {
+                  const buf = fs.readFileSync(pdfPath);
+                  if (buf.length > 500) {
+                    return resolve(buf);
+                  }
+                }
+                return reject(err || new Error('PDF output was empty'));
+              } catch (readErr) {
+                return reject(readErr);
+              } finally {
+                try { fs.unlinkSync(htmlPath); } catch (_) { }
+                try { fs.unlinkSync(pdfPath); } catch (_) { }
+              }
+            }
+          );
+        });
+
+        res.writeHead(200, {
+          'Content-Type': 'application/pdf',
+          'Content-Disposition': `attachment; filename="${safeFilename}"`,
+          'Content-Length': pdfBuf.length,
+          'Cache-Control': 'no-store',
+        });
+        res.end(pdfBuf);
+      } catch (err) {
+        console.warn('[Sultan Hub] /api/reports/export-pdf error:', err.message);
+        res.writeHead(500, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: err.message }));
+      }
+      return;
+    }
+
+    // 8b. Serve Menu Dish Images directly from D:\SultanMenuImages or public/menu-images
+    if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname && url.pathname.startsWith('/menu-images/')) {
+      const fileName = path.basename(decodeURIComponent(url.pathname));
+      const candidates = [
+        path.join('D:\\SultanMenuImages', fileName),
+        path.join(__dirname, 'public', 'menu-images', fileName),
+      ];
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+          const ext = path.extname(candidate).toLowerCase();
+          const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+          res.writeHead(200, {
+            'Content-Type': mime,
+            'Cache-Control': 'public, max-age=604800',
             'Access-Control-Allow-Origin': '*',
-          };
+          });
+          if (req.method === 'HEAD') {
+            res.end();
+          } else {
+            fs.createReadStream(candidate).pipe(res);
+          }
+          return;
+        }
+      }
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Image not found');
+      return;
+    }
 
-          const cachedAsset = getCachedStaticAsset(filePath, canGzip);
-          if (cachedAsset) {
-            if (canGzip && cachedAsset.gzipped) {
-              headers['Content-Encoding'] = 'gzip';
-              headers['Content-Length'] = cachedAsset.gzipped.length;
+    // 9. High-Performance Static Web File Server (Serves pre-compiled production SPA from /dist with gzip acceleration)
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      const DIST_DIR = process.env.SULTAN_DIST_DIR || path.join(__dirname, 'dist');
+      if (fs.existsSync(DIST_DIR)) {
+        let rawPath = (url.pathname || '/').split('?')[0];
+        try {
+          rawPath = decodeURIComponent(rawPath);
+        } catch (_) { }
+
+        let filePath = path.join(DIST_DIR, rawPath === '/' ? 'index.html' : rawPath);
+        // Prevent directory traversal
+        if (filePath.startsWith(DIST_DIR)) {
+          if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+            // Fallback to index.html for client-side Expo router routes (e.g. /admin/dashboard, /pos, /floor-manager)
+            filePath = path.join(DIST_DIR, 'index.html');
+          }
+
+          if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+            const ext = path.extname(filePath).toLowerCase();
+            const mimeTypes = {
+              '.html': 'text/html; charset=utf-8',
+              '.js': 'application/javascript; charset=utf-8',
+              '.css': 'text/css; charset=utf-8',
+              '.json': 'application/json; charset=utf-8',
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.gif': 'image/gif',
+              '.svg': 'image/svg+xml',
+              '.ico': 'image/x-icon',
+              '.ttf': 'font/ttf',
+              '.woff': 'font/woff',
+              '.woff2': 'font/woff2',
+              '.mp3': 'audio/mpeg',
+              '.wav': 'audio/wav',
+            };
+            const contentType = mimeTypes[ext] || 'application/octet-stream';
+            const isHashed = rawPath.includes('/_expo/') || rawPath.includes('/assets/') || rawPath.includes('/fonts/');
+            const cacheControl = isHashed
+              ? 'public, max-age=31536000, immutable'
+              : 'no-cache, no-store, must-revalidate';
+
+            const acceptEncoding = req.headers['accept-encoding'] || '';
+            const canGzip = /\bgzip\b/.test(acceptEncoding) && ['.html', '.js', '.css', '.json', '.svg'].includes(ext);
+
+            const headers = {
+              'Content-Type': contentType,
+              'Cache-Control': cacheControl,
+              'Access-Control-Allow-Origin': '*',
+            };
+
+            const cachedAsset = getCachedStaticAsset(filePath, canGzip);
+            if (cachedAsset) {
+              if (canGzip && cachedAsset.gzipped) {
+                headers['Content-Encoding'] = 'gzip';
+                headers['Content-Length'] = cachedAsset.gzipped.length;
+                res.writeHead(200, headers);
+                if (req.method === 'HEAD') {
+                  res.end();
+                  return;
+                }
+                res.end(cachedAsset.gzipped);
+                return;
+              }
+
+              headers['Content-Length'] = cachedAsset.raw.length;
               res.writeHead(200, headers);
               if (req.method === 'HEAD') {
                 res.end();
                 return;
               }
-              res.end(cachedAsset.gzipped);
+              res.end(cachedAsset.raw);
               return;
             }
-
-            headers['Content-Length'] = cachedAsset.raw.length;
-            res.writeHead(200, headers);
-            if (req.method === 'HEAD') {
-              res.end();
-              return;
-            }
-            res.end(cachedAsset.raw);
-            return;
           }
         }
       }
-    }
 
-    // If static files are still compiling or being refreshed, show a polite instant loader rather than JSON
-    if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
-      res.writeHead(200, {
-        'Content-Type': 'text/html; charset=utf-8',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-      });
-      res.end(`<!DOCTYPE html>
+      // If static files are still compiling or being refreshed, show a polite instant loader rather than JSON
+      if (req.method === 'GET' && !url.pathname.startsWith('/api/')) {
+        res.writeHead(200, {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+        });
+        res.end(`<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
@@ -7589,1373 +7645,1373 @@ async function handleRequest(req, res) {
   <p>Loading application resources, please wait a moment...</p>
 </body>
 </html>`);
-      return;
-    }
-  }
-
-  res.writeHead(404, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Endpoint not found', server: 'Sultan Restaurant Hub' }));
-}
-
-// In-memory RAM cache for static web assets (raw + gzipped) for <1ms instant page loads
-const staticAssetCache = new Map();
-
-function getCachedStaticAsset(filePath, canGzip) {
-  try {
-    const stat = fs.statSync(filePath);
-    if (!stat.isFile()) return null;
-    const cacheKey = filePath;
-    const cached = staticAssetCache.get(cacheKey);
-    if (cached && cached.mtimeMs === stat.mtimeMs) {
-      if (canGzip && !cached.gzipped) {
-        cached.gzipped = zlib.gzipSync(cached.raw, { level: 6 });
-      }
-      return cached;
-    }
-    const raw = fs.readFileSync(filePath);
-    const entry = {
-      mtimeMs: stat.mtimeMs,
-      raw,
-      gzipped: canGzip ? zlib.gzipSync(raw, { level: 6 }) : null,
-    };
-    staticAssetCache.set(cacheKey, entry);
-    return entry;
-  } catch (_) {
-    return null;
-  }
-}
-const server = http.createServer(handleRequest);
-const server5000 = http.createServer(handleRequest);
-let server80 = null;
-try {
-  server80 = http.createServer(handleRequest);
-} catch (e) { }
-
-const wss = new WebSocketServer({ noServer: true });
-
-function bindUpgrade(srv) {
-  if (!srv) return;
-  srv.on('upgrade', (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
-    });
-  });
-}
-bindUpgrade(server);
-bindUpgrade(server5000);
-if (server80) bindUpgrade(server80);
-
-function broadcastToClients(msgObj, excludeWs = null) {
-  const payload = JSON.stringify(msgObj);
-  for (const client of wss.clients) {
-    if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
-      client.send(payload);
-    }
-  }
-}
-
-const recentServerPacketIds = new Set();
-function hasProcessedServerPacket(packetId) {
-  if (!packetId || typeof packetId !== 'string') return false;
-  if (recentServerPacketIds.has(packetId)) return true;
-  recentServerPacketIds.add(packetId);
-  if (recentServerPacketIds.size > 300) {
-    const oldest = recentServerPacketIds.values().next().value;
-    if (oldest) recentServerPacketIds.delete(oldest);
-  }
-  return false;
-}
-
-let lastStateFingerprint = '';
-function computeStateFingerprint(st) {
-  try {
-    return JSON.stringify({
-      tickets: st.tickets || [],
-      deletedTicketIds: st.deletedTicketIds || [],
-      deletedTableIds: st.deletedTableIds || [],
-      deletedFloorIds: st.deletedFloorIds || [],
-      floorsLen: Array.isArray(st.floors) ? st.floors.map(f => `${f.id}:${f.name}`).join(',') : '',
-      tables: (st.tables || []).map(t => ({
-        id: t.id,
-        name: t.name,
-        floor: t.floor,
-        seatingType: t.seatingType,
-        seats: t.seats,
-        status: t.status,
-        billTotal: t.billTotal,
-        isPaid: t.isPaid,
-        server: t.server,
-        occupiedSince: t.occupiedSince,
-        lastSettledAt: t.lastSettledAt,
-        waiterPayId: t.waiterPaymentCollection?.id || '',
-        ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
-      })),
-      onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
-      invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
-      menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
-      categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
-      zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
-      customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
-      inventoryResetEpoch: Number(st.inventoryResetEpoch || 0),
-      inventoryState: Array.isArray(st.inventory)
-        ? st.inventory.map(i => `${i?.id}:${i?.stock}:${i?.location || ''}:${i?.beverageStorageMode || ''}:${i?.updatedAt || 0}`).join('|')
-        : '',
-      storageZonesState: Array.isArray(st.storageZones)
-        ? st.storageZones.map(z => `${z?.id}:${z?.name}:${z?.type}:${z?.isActive !== false}:${z?.updatedAt || 0}`).join('|')
-        : '',
-      movementsKey: Array.isArray(st.stockMovements)
-        ? `${st.stockMovements.length}:${st.stockMovements[0]?.id || ''}`
-        : '0',
-      chillerHandoversKey: Array.isArray(st.chillerHandovers)
-        ? `${st.chillerHandovers.length}:${st.chillerHandovers[0]?.id || ''}`
-        : '0',
-      purchaseOrdersKey: Array.isArray(st.purchaseOrders)
-        ? `${st.purchaseOrders.length}:${st.purchaseOrders.map(p => `${p?.id}:${p?.status}:${p?.paidAmount || 0}`).join(',')}`
-        : '0',
-      inventoryCategoriesKey: Array.isArray(st.inventoryCategories) ? st.inventoryCategories.join('|') : '',
-      assetCategoriesKey: Array.isArray(st.assetCategories) ? st.assetCategories.join('|') : '',
-      expenseCategoriesKey: Array.isArray(st.expenseCategories) ? st.expenseCategories.join('|') : '',
-      suppliersLen: Array.isArray(st.suppliers) ? st.suppliers.length : 0,
-      recipesLen: Array.isArray(st.recipes) ? st.recipes.length : 0,
-      expensesLen: Array.isArray(st.expenses) ? st.expenses.length : 0,
-      assetsLen: Array.isArray(st.assets) ? st.assets.length : 0,
-      damagesLen: Array.isArray(st.damageRecords) ? st.damageRecords.length : 0,
-      rolesState: Array.isArray(st.roles)
-        ? st.roles.map(r => ({
-          id: r?.id || '',
-          name: r?.name || '',
-          baseRole: r?.baseRole || '',
-          updatedAt: r?.updatedAt || 0,
-          permissions: r?.permissions || {},
-        }))
-        : [],
-      staffState: Array.isArray(st.staff)
-        ? st.staff.map(s => ({
-          id: s?.id || '',
-          hasSystemAccess: s?.hasSystemAccess !== false,
-          username: s?.username || '',
-          name: s?.name || '',
-          designation: s?.designation || '',
-          role: s?.role || '',
-          customRoleId: s?.customRoleId || '',
-          status: s?.status || '',
-          pin: s?.pin || '',
-          maxDevices: s?.maxConcurrentDevices || 0,
-          permissionOverrides: s?.permissionOverrides || null,
-        }))
-        : [],
-      systemSettingsUpdatedAt: (st.systemSettings && st.systemSettings.updatedAt) || 0,
-      lastBillPaidAlert: st.lastBillPaidAlert || null,
-      lastFoodReadyAlert: st.lastFoodReadyAlert || null,
-      pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
-      activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
-      revokedSessions: Object.keys(st.revokedSessions || {}).sort().join(','),
-      revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
-      shiftsCount: Array.isArray(st.shifts) ? st.shifts.length : 0,
-      activeShiftId: st.activeShiftId || null,
-    });
-  } catch (_) {
-    return String(Date.now());
-  }
-}
-
-const LEGACY_DUMMY_SEED_IDS = {
-  staff: new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']),
-  inventory: new Set(Array.from({ length: 23 }, (_, i) => `inv${i + 1}`)),
-  stockMovements: new Set(['mv-01', 'mv-02', 'mv-03', 'mv-04']),
-  suppliers: new Set(['sup-1', 'sup-2', 'sup-3', 'sup-4', 'sup-5', 'sup-6', 'sup-7', 'sup-8', 'sup-9']),
-  purchaseOrders: new Set(['po-101', 'po-102']),
-  supplierPayments: new Set(['spay-1', 'spay-2']),
-  assets: new Set(['ast-1', 'ast-2', 'ast-3', 'ast-4', 'ast-5', 'ast-6', 'ast-7', 'ast-8']),
-  damageRecords: new Set(['dmg-1', 'dmg-2', 'dmg-3', 'dmg-4', 'dmg-5']),
-  recipes: new Set(['rc-1', 'rc-2', 'rc-3', 'rc-4']),
-  kitchenSessions: new Set(['ks-closed-today-morning', 'ks-active-evening']),
-  kitchenManualUsage: new Set(['mu-1', 'mu-2', 'mu-3', 'mu-4']),
-  customers: new Set(['c1', 'c2', 'c3', 'c4', 'c5']),
-  feedbacks: new Set(['fb-1', 'fb-2']),
-  reservations: new Set(['res-1']),
-  attendance: new Set(Array.from({ length: 11 }, (_, i) => `att-${i + 1}`)),
-  salaryPayments: new Set(['sal-101', 'sal-102', 'sal-103']),
-  appUsers: new Set(['usr-1', 'usr-2']),
-  appUserLogs: new Set(['log-1', 'log-2']),
-};
-
-function sanitizeIncomingSeedData(key, value) {
-  if (!Array.isArray(value)) return value;
-  const seedSet = LEGACY_DUMMY_SEED_IDS[key];
-  if (key === 'staff') {
-    const dummyNames = new Set(['junaid ahsan', 'ali khan', 'chef omar', 'order taker 1', 'order taker 2', 'order taker 3', 'order taker 4', 'sara ahmed', 'hamza malik', 'ali raza', 'tariq juice master', 'rashid mehmood', 'tariq javed', 'usman tariq', 'bilal hassan', 'rohan ali']);
-    return value.filter((item) => {
-      if (!item || !item.id) return false;
-      if (item.id === 'st-master') return true;
-      if (seedSet && seedSet.has(item.id)) return false;
-      const nm = String(item.name || '').trim().toLowerCase();
-      if (nm && dummyNames.has(nm)) return false;
-      return true;
-    });
-  }
-  if (key === 'inventory') {
-    return value.filter((item) => item && item.id && !isLegacyDummyInventoryId(item.id));
-  }
-  if (key === 'stockMovements') {
-    return value.filter(
-      (item) => item && item.id && !seedSet?.has(item.id) && !isLegacyDummyInventoryId(item.itemId)
-    );
-  }
-  if (seedSet) {
-    return value.filter((item) => item && !seedSet.has(item.id));
-  }
-  if (key === 'shifts') {
-    return value.filter((s) => {
-      if (!s) return false;
-      if (s.cashierName === 'Ali Khan' || s.cashierName === 'Sara Ahmed') return false;
-      const note = (s.openingNotes || '').trim();
-      if (
-        note === 'Morning float issued: Rs. 5,000 in petty change.' ||
-        note === 'Dinner rush shift. Rs. 8,000 float given to drawer.'
-      ) {
-        return false;
-      }
-      if (s.cashierName === 'Sara Ahmed' && s.systemTotalSales === 66250 && s.settledOrdersCount === 22) {
-        return false;
-      }
-      return true;
-    });
-  }
-  return value;
-}
-
-function applyStateUpdate(partialState, senderId, originWs = null) {
-  if (!partialState || typeof partialState !== 'object') return;
-
-  const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
-
-  // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
-  let modified = false;
-
-  if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
-  if (Array.isArray(partialState.deletedTableIds) && partialState.deletedTableIds.length > 0) {
-    serverState.deletedTableIds = Array.from(new Set([...serverState.deletedTableIds, ...partialState.deletedTableIds])).slice(-500);
-    modified = true;
-  }
-  const deletedTableSet = new Set(serverState.deletedTableIds);
-
-  if (!Array.isArray(serverState.deletedFloorIds)) serverState.deletedFloorIds = [];
-  if (Array.isArray(partialState.deletedFloorIds) && partialState.deletedFloorIds.length > 0) {
-    serverState.deletedFloorIds = Array.from(new Set([...serverState.deletedFloorIds, ...partialState.deletedFloorIds])).slice(-200);
-    modified = true;
-  }
-  const deletedFloorSet = new Set(serverState.deletedFloorIds);
-
-  // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
-  const currInvEpoch = Number(serverState.inventoryResetEpoch || 0);
-  const incInvEpoch = Number(partialState.inventoryResetEpoch || 0);
-  const isStaleInventoryClient = currInvEpoch > 0 && incInvEpoch < currInvEpoch;
-  if (incInvEpoch > currInvEpoch) {
-    serverState.inventoryResetEpoch = incInvEpoch;
-    serverState.inventory = Array.isArray(partialState.inventory)
-      ? partialState.inventory.filter((i) => i && !isLegacyDummyInventoryId(i.id))
-      : [];
-    serverState.inventoryCategories = Array.isArray(partialState.inventoryCategories) ? partialState.inventoryCategories : [];
-    serverState.stockMovements = [];
-    serverState.chillerHandovers = [];
-    modified = true;
-  }
-
-  // Track explicit deletions for inventory, storageZones, inventoryCategories & operational records so out-of-sync clients never wipe live entries
-  if (!Array.isArray(serverState.deletedInventoryIds)) serverState.deletedInventoryIds = [];
-  if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
-  if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
-  if (!Array.isArray(serverState.deletedRecordIds)) serverState.deletedRecordIds = [];
-  if (Array.isArray(partialState.deletedRecordIds) && partialState.deletedRecordIds.length > 0) {
-    serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...partialState.deletedRecordIds])).slice(-800);
-    modified = true;
-  }
-  const deletedRecSet = new Set(serverState.deletedRecordIds);
-  if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
-    serverState.deletedInventoryCategories = Array.from(new Set([...serverState.deletedInventoryCategories, ...partialState.deletedInventoryCategories])).slice(-300);
-    modified = true;
-  }
-  const deletedInvCatSet = new Set((serverState.deletedInventoryCategories || []).map((c) => String(c).toLowerCase()));
-  if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryIds) && partialState.deletedInventoryIds.length > 0) {
-    serverState.deletedInventoryIds = Array.from(new Set([...serverState.deletedInventoryIds, ...partialState.deletedInventoryIds])).slice(-500);
-    modified = true;
-  }
-  if (Array.isArray(partialState.deletedStorageZoneIds) && partialState.deletedStorageZoneIds.length > 0) {
-    serverState.deletedStorageZoneIds = Array.from(new Set([...serverState.deletedStorageZoneIds, ...partialState.deletedStorageZoneIds])).slice(-300);
-    modified = true;
-  }
-  const deletedInvSet = new Set(serverState.deletedInventoryIds);
-  const deletedZoneSet = new Set(serverState.deletedStorageZoneIds);
-
-  // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
-  if (!Array.isArray(serverState.deletedTicketIds)) {
-    serverState.deletedTicketIds = [];
-  }
-  const incomingDeleted = Array.isArray(partialState.deletedTicketIds) ? partialState.deletedTicketIds : [];
-  const autoRetiredTicketIds = [];
-  if (Array.isArray(partialState.tables) && Array.isArray(serverState.tables)) {
-    const currTableMap = new Map(serverState.tables.map(t => [t.id, t]));
-    for (const incT of partialState.tables) {
-      if (!incT || !incT.id) continue;
-      const currT = currTableMap.get(incT.id);
-      if (!currT) continue;
-      const newlyBilled = currT.status !== 'billed' && incT.status === 'billed' && incT.isPaid;
-      const newlySettledFromBilled = currT.status === 'billed' && incT.status === 'available';
-      const newlySettledByTimestamp =
-        (currT.status === 'occupied' || currT.status === 'billed') &&
-        incT.status === 'available' &&
-        incT.lastSettledAt &&
-        incT.lastSettledAt >= (currT.occupiedSince || 0);
-      if (newlyBilled || newlySettledFromBilled || newlySettledByTimestamp) {
-        const cutoff = incT.lastSettledAt || Date.now();
-        for (const tk of (serverState.tickets || [])) {
-          if (tk && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
-            autoRetiredTicketIds.push(tk.id);
-          }
-        }
+        return;
       }
     }
-  }
-  if (incomingDeleted.length > 0 || autoRetiredTicketIds.length > 0) {
-    serverState.deletedTicketIds = Array.from(
-      new Set([...serverState.deletedTicketIds, ...incomingDeleted, ...autoRetiredTicketIds])
-    ).slice(-400);
-  }
-  const deletedSet = new Set(serverState.deletedTicketIds);
 
-  for (const key of allowedKeys) {
-    if (partialState[key] !== undefined) {
-      if (key === 'deletedTicketIds') {
-        modified = true;
-      } else if (key === 'tickets') {
-        const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
-        const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
-
-        // Status hierarchy: pending -> cooking -> ready -> served
-        const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
-
-        const existingMap = new Map(existingTickets.filter(t => t && t.id).map(t => [t.id, t]));
-        const incomingMap = new Map(incomingTickets.filter(t => t && t.id).map(t => [t.id, t]));
-        // Incoming keys first so newest KOTs appear at the top of KDS/POS
-        const allTicketIds = new Set([...incomingMap.keys(), ...existingMap.keys()]);
-        const mergedList = [];
-
-        for (const tId of allTicketIds) {
-          // Never resurrect a ticket that has been billed, settled, or dismissed
-          if (deletedSet.has(tId)) continue;
-
-          const inc = incomingMap.get(tId);
-          const ext = existingMap.get(tId);
-
-          if (inc && ext) {
-            const extRank = STATUS_RANK[ext.status] ?? 0;
-            const incRank = STATUS_RANK[inc.status] ?? 0;
-            let chosen = extRank > incRank ? { ...ext } : { ...inc };
-
-            // Merge item-level ready/served states
-            if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
-              const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
-              chosen.items = inc.items.map(incIt => {
-                const extIt = extItemsMap.get(incIt.id);
-                if (!extIt) return incIt;
-                const extItRank = extIt.itemStatus ? (STATUS_RANK[extIt.itemStatus] ?? 0) : (extIt.completed ? 2 : 0);
-                const incItRank = incIt.itemStatus ? (STATUS_RANK[incIt.itemStatus] ?? 0) : (incIt.completed ? 2 : 0);
-                if (extItRank > incItRank) {
-                  return { ...incIt, itemStatus: extIt.itemStatus, completed: extIt.completed, readyAt: extIt.readyAt };
-                }
-                return incIt;
-              });
-            }
-
-            // Merge station-level statuses station by station
-            const mergedStationStatuses = {
-              ...(ext.stationStatuses || {}),
-              ...(inc.stationStatuses || {})
-            };
-            for (const st of ['main', 'juice']) {
-              const extStRank = ext.stationStatuses && ext.stationStatuses[st] ? (STATUS_RANK[ext.stationStatuses[st]] ?? 0) : -1;
-              const incStRank = inc.stationStatuses && inc.stationStatuses[st] ? (STATUS_RANK[inc.stationStatuses[st]] ?? 0) : -1;
-              if (extStRank >= 0 || incStRank >= 0) {
-                mergedStationStatuses[st] = extStRank >= incStRank ? ext.stationStatuses[st] : inc.stationStatuses[st];
-              }
-            }
-            chosen.stationStatuses = mergedStationStatuses;
-
-            // Propagate stationStatuses ('served' / 'ready') down to station items so items and stations never desync
-            if (Array.isArray(chosen.items)) {
-              chosen.items = chosen.items.map(it => {
-                const st = it?.station === 'juice' ? 'juice' : 'main';
-                const stStatus = mergedStationStatuses[st];
-                if (stStatus === 'served') {
-                  return { ...it, completed: true, itemStatus: 'served' };
-                }
-                if (stStatus === 'ready' && it.itemStatus !== 'served') {
-                  return { ...it, completed: true, itemStatus: 'ready', readyAt: it.readyAt || chosen.readyAt || Date.now() };
-                }
-                return it;
-              });
-            }
-
-            const activeStVals = Object.values(mergedStationStatuses).filter(Boolean);
-            if (activeStVals.length > 0) {
-              if (activeStVals.every(s => s === 'served')) {
-                chosen.status = 'served';
-              } else if (activeStVals.every(s => s === 'ready' || s === 'served')) {
-                chosen.status = 'ready';
-                if (!chosen.readyAt) chosen.readyAt = ext.readyAt || inc.readyAt || Date.now();
-              } else if (activeStVals.some(s => s === 'cooking' || s === 'ready' || s === 'served')) {
-                chosen.status = 'cooking';
-              }
-            }
-
-            if (chosen.status === 'served' && Array.isArray(chosen.items)) {
-              chosen.items = chosen.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
-            }
-            mergedList.push(chosen);
-          } else if (inc) {
-            if (inc.status === 'served' && Array.isArray(inc.items)) {
-              inc.items = inc.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
-            }
-            mergedList.push(inc);
-          } else if (ext) {
-            // Preserve active server tickets when an out-of-sync client sends a partial/older ticket list
-            mergedList.push(ext);
-          }
-        }
-
-        // Deduplicate tickets by order key to prevent duplicate KOT cards across client-server sync
-        const seenMergedOrders = new Set();
-        const deduplicatedMerged = [];
-        for (const t of mergedList) {
-          const orderKey = t.orderId ? `ord_${t.orderId}` : (t.orderNumber ? `num_${t.orderNumber}` : null);
-          if (orderKey) {
-            if (seenMergedOrders.has(orderKey)) {
-              continue;
-            }
-            seenMergedOrders.add(orderKey);
-          }
-          deduplicatedMerged.push(t);
-        }
-
-        // Normalize item stations across all synced tickets (protects against older waiter APKs missing beverage stations)
-        if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
-          const autoRouteBev = isAutoRouteBeveragesEnabled();
-          for (const tk of deduplicatedMerged) {
-            if (tk && Array.isArray(tk.items) && tk.items.length > 0) {
-              printerHelper.normalizeTicketStations(tk, serverState.menuItems || [], autoRouteBev);
-            }
-          }
-        }
-
-        serverState.tickets = deduplicatedMerged;
-
-        // Auto-print newly placed incoming tickets strictly split by station (main -> Kitchen ONLY, juice -> Juice Bar ONLY)
-        for (const inc of incomingTickets) {
-          if (!inc || !inc.id) continue;
-          if (deletedSet.has(inc.id)) continue;
-          const mergedTicket = deduplicatedMerged.find((t) => t && t.id === inc.id) || inc;
-          if ((mergedTicket.status === 'pending' || mergedTicket.isAddOn) && Array.isArray(mergedTicket.items) && mergedTicket.items.length > 0) {
-            queueAutoPrintTicket(mergedTicket, 'auto');
-          }
-        }
-
-        // Auto-synchronize online orders status with ticket cooking/ready/served state
-        if (Array.isArray(serverState.onlineOrders)) {
-          for (const tk of deduplicatedMerged) {
-            if (!tk || (!tk.orderId && !tk.orderNumber)) continue;
-            const ord = serverState.onlineOrders.find(o =>
-              (tk.orderId && o.id === tk.orderId) ||
-              (tk.orderNumber && o.orderNumber === tk.orderNumber)
-            );
-            if (!ord) continue;
-
-            const isTicketCooking = tk.status === 'cooking' ||
-              (tk.stationStatuses && (tk.stationStatuses.main === 'cooking' || tk.stationStatuses.juice === 'cooking'));
-            const isTicketReady = tk.status === 'ready' ||
-              (tk.stationStatuses && tk.stationStatuses.main === 'ready' && tk.stationStatuses.juice === 'ready');
-            const isTicketServed = tk.status === 'served' ||
-              (tk.stationStatuses && tk.stationStatuses.main === 'served' && tk.stationStatuses.juice === 'served');
-
-            let targetStatus = null;
-            if (isTicketServed && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
-              targetStatus = 'SERVED';
-            } else if (isTicketReady && ord.status !== 'READY' && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
-              targetStatus = 'READY';
-            } else if (isTicketCooking && ord.status === 'CONFIRMED') {
-              targetStatus = 'PREPARING';
-            }
-
-            if (targetStatus && ord.status !== targetStatus) {
-              ord.status = targetStatus;
-              ord.updatedAt = Date.now();
-              console.log(`[Sultan Hub Auto-Sync] Updated order ${ord.orderNumber} status to ${targetStatus} based on ticket ${tk.id}`);
-              broadcastToClients({
-                type: 'ORDER_STATUS_CHANGED',
-                orderId: ord.id,
-                orderNumber: ord.orderNumber,
-                status: targetStatus,
-                riderName: ord.riderName,
-                riderPhone: ord.riderPhone,
-                assignedWaiter: ord.assignedWaiter,
-                timestamp: Date.now()
-              });
-            }
-          }
-        }
-        modified = true;
-      } else if (key === 'tables') {
-        const incomingTables = (Array.isArray(partialState.tables) ? partialState.tables : []).filter(
-          t => t && t.id && !deletedTableSet.has(t.id)
-        );
-        if (incomingTables.length > 0 || (Array.isArray(partialState.tables) && partialState.tables.length === 0 && deletedTableSet.size > 0)) {
-          const currentTables = (Array.isArray(serverState.tables) ? serverState.tables : []).filter(
-            t => t && t.id && !deletedTableSet.has(t.id)
-          );
-          const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
-          const activeTickets = (Array.isArray(serverState.tickets) ? serverState.tickets : []).filter(
-            tk => tk && !deletedSet.has(tk.id)
-          );
-          // Order Taker collection: an explicit null/value from the client wins; a collection older than
-          // the latest settlement (lastSettledAt) is stale and must never resurrect the cashier alert.
-          const resolveWaiterPay = (curr, inc) => {
-            const col = Object.prototype.hasOwnProperty.call(inc, 'waiterPaymentCollection')
-              ? inc.waiterPaymentCollection
-              : curr.waiterPaymentCollection;
-            if (!col || col.status !== 'pending_cashier') return null;
-            const settledAt = Math.max(curr.lastSettledAt || 0, inc.lastSettledAt || 0);
-            if (settledAt >= (col.collectedAt || 0)) return null;
-            return col;
-          };
-
-          serverState.tables = currentTables.map(curr => {
-            const inc = incomingMap.get(curr.id);
-            if (!inc) return curr;
-
-            const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
-
-            // If table has active unbilled tickets on the server, never allow an out-of-sync client to revert it to 'available'
-            if (tableTickets.length > 0 && inc.status !== 'billed') {
-              const ticketTotal = tableTickets.reduce(
-                (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0),
-                0
-              );
-              const ticketOrders = tableTickets.flatMap(tk => (tk.items || []).map(i => ({ ...i })));
-              const base = (inc.status === 'occupied' && (inc.occupiedSince || 0) >= (curr.occupiedSince || 0))
-                ? { ...curr, ...inc }
-                : { ...inc, ...curr };
-              const bestOrders =
-                Array.isArray(base.orders) && base.orders.length >= ticketOrders.length && base.orders.length > 0
-                  ? base.orders
-                  : ticketOrders;
-              return {
-                ...base,
-                status: 'occupied',
-                isPaid: false,
-                occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0) || Date.now(),
-                billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
-                orders: bestOrders,
-                server: inc.server || curr.server || tableTickets[0].server,
-                waiterPaymentCollection: resolveWaiterPay(curr, inc),
-              };
-            }
-
-            // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
-            const hasPendingWaiterPay =
-              !!resolveWaiterPay(curr, inc) &&
-              inc.status !== 'available';
-            if (
-              tableTickets.length === 0 &&
-              inc.status !== 'billed' &&
-              !hasPendingWaiterPay &&
-              (inc.status === 'available' ||
-                (curr.status === 'occupied' && ((Array.isArray(curr.orders) && curr.orders.length > 0) || (curr.billTotal || 0) > 0)))
-            ) {
-              return {
-                ...curr,
-                ...inc,
-                status: 'available',
-                billTotal: 0,
-                orders: [],
-                isPaid: false,
-                server: undefined,
-                lastInvoiceId: undefined,
-                occupiedSince: undefined,
-                waiterPaymentCollection: null,
-                lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
-              };
-            }
-
-            return { ...curr, ...inc };
-          });
-
-          // Append any newly added tables (never resurrect deleted tables or duplicate same floor+name)
-          const existingIds = new Set(serverState.tables.map(t => t.id));
-          const existingFloorNames = new Set(
-            serverState.tables.map(t => `${String(t.floor || t.zone || '').trim().toLowerCase()}::${String(t.name || '').trim().toLowerCase()}`)
-          );
-          for (const inc of incomingTables) {
-            if (!inc || !inc.id || deletedTableSet.has(inc.id)) continue;
-            const fnKey = `${String(inc.floor || inc.zone || '').trim().toLowerCase()}::${String(inc.name || '').trim().toLowerCase()}`;
-            if (!existingIds.has(inc.id) && !existingFloorNames.has(fnKey)) {
-              serverState.tables.push(inc);
-              existingIds.add(inc.id);
-              existingFloorNames.add(fnKey);
-            }
-          }
-          serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
-          modified = true;
-        }
-      } else if (key === 'floors') {
-        const incFloors = Array.isArray(partialState.floors) ? partialState.floors : [];
-        const currFloors = Array.isArray(serverState.floors) ? serverState.floors : [];
-        if (incFloors.length > 0 || (currFloors.length > 0 && deletedFloorSet.size > 0)) {
-          const fMap = new Map();
-          for (const c of currFloors) {
-            if (c && c.id && !deletedFloorSet.has(c.id)) fMap.set(c.id, c);
-          }
-          for (const inc of incFloors) {
-            if (!inc || !inc.id || deletedFloorSet.has(inc.id)) continue;
-            const prev = fMap.get(inc.id);
-            if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
-              fMap.set(inc.id, { ...(prev || {}), ...inc });
-            }
-          }
-          // Deduplicate by case-insensitive floor name (keep latest updatedAt)
-          const byName = new Map();
-          for (const fl of fMap.values()) {
-            const nmKey = String(fl.name || '').trim().toLowerCase();
-            if (!nmKey) continue;
-            const prev = byName.get(nmKey);
-            if (!prev || (Number(fl.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
-              byName.set(nmKey, fl);
-            }
-          }
-          serverState.floors = Array.from(byName.values());
-          serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
-          modified = true;
-        }
-      } else if (key === 'zones') {
-        if (Array.isArray(serverState.floors) && serverState.floors.length > 0) {
-          serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
-        } else if (Array.isArray(partialState.zones) && partialState.zones.length > 0) {
-          serverState.zones = partialState.zones;
-        }
-        modified = true;
-      } else if (key === 'deletedTableIds' || key === 'deletedFloorIds') {
-        if (Array.isArray(serverState.tables) && deletedTableSet.size > 0) {
-          serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
-        }
-        if (Array.isArray(serverState.floors) && deletedFloorSet.size > 0) {
-          serverState.floors = serverState.floors.filter(f => f && f.id && !deletedFloorSet.has(f.id));
-        }
-        modified = true;
-      } else if (key === 'menuItems') {
-        const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
-        if (incoming.length > 0) {
-          for (const m of incoming) {
-            if (!m) continue;
-            if (printerHelper && typeof printerHelper.resolveItemStation === 'function' && m.station !== 'juice' && m.station !== 'main') {
-              m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
-            }
-            const curImg = (m.imageUri || m.imageUrl || '').trim();
-            if (typeof m.id === 'string' && m.id.startsWith('slt-') && (!curImg || curImg.toLowerCase().includes('images.unsplash.com/photo-'))) {
-              m.imageUri = `/menu-images/${m.id}.jpg`;
-              m.imageUrl = m.imageUri;
-            } else if (!m.imageUri && m.imageUrl) {
-              m.imageUri = m.imageUrl;
-            }
-          }
-          serverState.menuItems = incoming;
-          modified = true;
-        }
-      } else if (key === 'categories') {
-        const usedCats = new Set((serverState.menuItems || []).map(m => m.category).filter(Boolean));
-        serverState.categories = ['All', ...Array.from(usedCats)];
-        modified = true;
-      } else if (key === 'regions') {
-        const incomingRegs = Array.isArray(partialState.regions) ? partialState.regions : [];
-        if (incomingRegs.length > 0) {
-          serverState.regions = Array.from(new Set([...(serverState.regions || []), ...incomingRegs]));
-          modified = true;
-        }
-      } else if (key === 'systemSettings') {
-        const incSettings = partialState.systemSettings;
-        if (incSettings && typeof incSettings === 'object') {
-          const currUpdated = (serverState.systemSettings && serverState.systemSettings.updatedAt) || 0;
-          const incUpdated = typeof incSettings.updatedAt === 'number' ? incSettings.updatedAt : 0;
-          if (currUpdated === 0 || incUpdated >= currUpdated) {
-            const prevSys = serverState.systemSettings || {};
-            // Preserve dedicated station printer routing set via /api/print/config so stale client localStorage never overwrites printer settings
-            const preservedPrinterConfig = {};
-            for (const pk of [
-              'kitchenPrinterMode', 'kitchenPrinterName', 'kitchenPrinterHost', 'kitchenPrinterPort',
-              'juicePrinterMode', 'juicePrinterName', 'juicePrinterHost', 'juicePrinterPort',
-            ]) {
-              if (prevSys[pk] !== undefined) {
-                preservedPrinterConfig[pk] = prevSys[pk];
-              }
-            }
-            serverState.systemSettings = {
-              ...prevSys,
-              ...incSettings,
-              ...preservedPrinterConfig,
-            };
-            modified = true;
-          }
-        }
-      } else if (key === 'roles') {
-        if (Array.isArray(partialState.roles) && partialState.roles.length > 0) {
-          serverState.roles = mergeServerRolesSafely(serverState.roles, partialState.roles);
-          modified = true;
-        }
-      } else if (key === 'forceLogoutAll') {
-        if (partialState.forceLogoutAll && typeof partialState.forceLogoutAll === 'object') {
-          const prevTs = serverState.forceLogoutAll?.timestamp || 0;
-          const nextTs = partialState.forceLogoutAll.timestamp || 0;
-          if (nextTs >= prevTs) {
-            serverState.forceLogoutAll = partialState.forceLogoutAll;
-            modified = true;
-          }
-        }
-      } else if (key === 'revokedSessions') {
-        if (partialState.revokedSessions && typeof partialState.revokedSessions === 'object') {
-          const nowR = Date.now();
-          const mergedRev = {
-            ...(serverState.revokedSessions || {}),
-            ...partialState.revokedSessions,
-          };
-          for (const k of Object.keys(mergedRev)) {
-            if (nowR - (mergedRev[k]?.timestamp || 0) > 60 * 60 * 1000) {
-              delete mergedRev[k];
-            }
-          }
-          serverState.revokedSessions = mergedRev;
-          // Also evict any newly revoked sessionIds from activeStaffSessions
-          if (Array.isArray(serverState.activeStaffSessions)) {
-            serverState.activeStaffSessions = serverState.activeStaffSessions.filter(
-              (s) => s && !mergedRev[s.sessionId]
-            );
-          }
-          modified = true;
-        }
-      } else if (key === 'revokedDeviceIds') {
-        if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {
-          serverState.revokedDeviceIds = {
-            ...(serverState.revokedDeviceIds || {}),
-            ...partialState.revokedDeviceIds,
-          };
-          modified = true;
-        }
-      } else if (key === 'activeStaffSessions') {
-        if (Array.isArray(partialState.activeStaffSessions)) {
-          // Safely merge active sessions so a stale client never wipes another independent user's live session
-          const nowS = Date.now();
-          const revokedSet = serverState.revokedSessions || {};
-          const incomingRevoked = partialState.revokedSessions || {};
-          const mergedBySession = new Map();
-          for (const s of (serverState.activeStaffSessions || [])) {
-            if (!s || !s.sessionId) continue;
-            if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
-            if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
-            mergedBySession.set(s.sessionId, s);
-          }
-          for (const s of partialState.activeStaffSessions) {
-            if (!s || !s.sessionId) continue;
-            if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
-            if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
-            mergedBySession.set(s.sessionId, s);
-          }
-          // Deduplicate per deviceId (keep newest session on a given device)
-          const byDevice = new Map();
-          for (const s of mergedBySession.values()) {
-            const prev = byDevice.get(s.deviceId);
-            if (!prev || (s.loginTime || 0) >= (prev.loginTime || 0)) {
-              byDevice.set(s.deviceId, s);
-            }
-          }
-          serverState.activeStaffSessions = Array.from(byDevice.values());
-          modified = true;
-        }
-      } else {
-        const sanitized = sanitizeIncomingSeedData(key, partialState[key]);
-        if (key === 'activeShiftId') {
-          const validShifts = Array.isArray(serverState.shifts) ? serverState.shifts : [];
-          serverState.activeShiftId = sanitized && validShifts.some(s => s && s.id === sanitized && s.status === 'open')
-            ? sanitized
-            : null;
-        } else if (key === 'staff') {
-          const incStaff = Array.isArray(sanitized) ? sanitized : [];
-          const masterOnly = INITIAL_STATE.staff[0];
-          const sMap = new Map();
-          for (const initSt of (INITIAL_STATE.staff || [])) {
-            if (initSt && initSt.id) sMap.set(initSt.id, { ...initSt });
-          }
-          for (const curr of (serverState.staff || [])) {
-            if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
-              sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
-            }
-          }
-          if (incStaff.length > 1) {
-            for (const inc of incStaff) {
-              if (inc && inc.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(inc.id))) {
-                sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
-              }
-            }
-          }
-          if (!sMap.has('st-master') && masterOnly) {
-            sMap.set('st-master', { ...masterOnly });
-          }
-          serverState.staff = Array.from(sMap.values());
-        } else if (key === 'inventoryResetEpoch' || key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories' || key === 'deletedRecordIds') {
-          // Already merged into serverState sets above
-        } else if (isStaleInventoryClient && (key === 'inventory' || key === 'inventoryCategories' || key === 'stockMovements' || key === 'chillerHandovers')) {
-          // Ignore stale pre-reset inventory/categories/movements from older devices!
-        } else if (['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'invoices', 'customers'].includes(key)) {
-          const incArr = Array.isArray(sanitized) ? sanitized : [];
-          const currArr = Array.isArray(serverState[key]) ? serverState[key] : [];
-          if (incArr.length === 0 && currArr.length > 0 && !currArr.every((r) => r && deletedRecSet.has(r.id))) {
-            // Never allow an empty array from an unhydrated client to wipe non-empty ledgers
-          } else {
-            const getRecTs = (r) => Number(r?.updatedAt || r?.resolvedAt || r?.paidAt || r?.deliveryDate || r?.orderDate || r?.at || r?.createdAt || r?.timestamp || 0);
-            const rMap = new Map();
-            for (const c of currArr) {
-              if (c && c.id && !deletedRecSet.has(c.id)) rMap.set(c.id, c);
-            }
-            for (const inc of incArr) {
-              if (!inc || !inc.id || deletedRecSet.has(inc.id)) continue;
-              const prev = rMap.get(inc.id);
-              if (!prev || getRecTs(inc) >= getRecTs(prev)) {
-                rMap.set(inc.id, { ...(prev || {}), ...inc });
-              }
-            }
-            serverState[key] = Array.from(rMap.values());
-          }
-        } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
-          const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
-          const currCats = Array.isArray(serverState[key]) ? serverState[key].map((c) => String(c || '').trim()).filter(Boolean) : [];
-          const activeInvCats = new Set(
-            (Array.isArray(partialState.inventory) ? partialState.inventory : serverState.inventory || [])
-              .map((i) => String(i?.category || '').trim().toLowerCase())
-              .filter(Boolean)
-          );
-          if (key === 'inventoryCategories' && Array.isArray(serverState.deletedInventoryCategories)) {
-            serverState.deletedInventoryCategories = serverState.deletedInventoryCategories.filter(
-              (c) => !activeInvCats.has(String(c || '').trim().toLowerCase())
-            );
-          }
-          // Additive union: a client with only 9 default categories can NEVER wipe 20+ custom categories!
-          const seenLower = new Set();
-          const mergedCats = [];
-          for (const c of [...currCats, ...incCats]) {
-            const lw = c.toLowerCase();
-            if (key === 'inventoryCategories' && deletedInvCatSet.has(lw) && !activeInvCats.has(lw)) continue;
-            if (!seenLower.has(lw)) {
-              seenLower.add(lw);
-              mergedCats.push(c);
-            }
-          }
-          if (mergedCats.length > 0) {
-            serverState[key] = mergedCats;
-          }
-        } else if (key === 'inventory') {
-          const incInv = Array.isArray(sanitized) ? sanitized : [];
-          const currInv = Array.isArray(serverState.inventory) ? serverState.inventory : [];
-          // Guard: NEVER allow an unhydrated client or empty cloud sync to wipe existing inventory!
-          if (incInv.length === 0 && currInv.length > 0 && !currInv.every((i) => i && deletedInvSet.has(i.id))) {
-            // Ignore empty array wipe attempt
-          } else {
-            const invMap = new Map();
-            for (const c of currInv) {
-              if (c && c.id && !deletedInvSet.has(c.id)) invMap.set(c.id, c);
-            }
-            for (const inc of incInv) {
-              if (!inc || !inc.id || deletedInvSet.has(inc.id)) continue;
-              const prev = invMap.get(inc.id);
-              if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
-                invMap.set(inc.id, { ...(prev || {}), ...inc });
-              }
-            }
-            const nextInv = Array.from(invMap.values());
-            if (currInv.length - nextInv.length >= 3) {
-              try {
-                if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-                fs.writeFileSync(path.join(BACKUP_DIR, 'pre-inventory-change.json'), JSON.stringify(serverState, null, 2));
-              } catch (_) { }
-            }
-            serverState.inventory = nextInv;
-          }
-        } else if (key === 'storageZones') {
-          const incZones = Array.isArray(sanitized) ? sanitized : [];
-          const currZones = Array.isArray(serverState.storageZones) ? serverState.storageZones : [];
-          if (incZones.length === 0 && currZones.length > 0 && !currZones.every((z) => z && deletedZoneSet.has(z.id))) {
-            // Ignore empty array wipe attempt
-          } else {
-            const zMap = new Map();
-            for (const c of currZones) {
-              if (c && c.id && !deletedZoneSet.has(c.id)) zMap.set(c.id, c);
-            }
-            for (const inc of incZones) {
-              if (!inc || !inc.id || deletedZoneSet.has(inc.id)) continue;
-              const prev = zMap.get(inc.id);
-              if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
-                zMap.set(inc.id, { ...(prev || {}), ...inc });
-              }
-            }
-            serverState.storageZones = Array.from(zMap.values());
-          }
-        } else if (key === 'stockMovements' || key === 'chillerHandovers') {
-          const incList = Array.isArray(sanitized) ? sanitized : [];
-          const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
-          if (incList.length > 0 || currList.length === 0) {
-            const mMap = new Map();
-            for (const c of currList) { if (c && c.id) mMap.set(c.id, c); }
-            for (const inc of incList) { if (inc && inc.id) mMap.set(inc.id, inc); }
-            const limit = key === 'chillerHandovers' ? 150 : 500;
-            serverState[key] = Array.from(mMap.values()).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
-          }
-        } else if (key === 'tableMoveLogs' || key === 'cancelledOrderLogs') {
-          const isBogusSettlementCancel = (c) => {
-            if (!c || c.reason !== 'Table released without billing') return false;
-            const cTime = c.cancelledAt || c.timestamp || 0;
-            return (serverState.invoices || []).some(
-              (inv) =>
-                inv &&
-                (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
-                Math.abs((inv.timeSettled || inv.timePlaced || 0) - cTime) <= 15000
-            );
-          };
-          const incList = Array.isArray(sanitized) ? sanitized : [];
-          const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
-          if (incList.length > 0 || currList.length === 0) {
-            const logMap = new Map();
-            for (const c of currList) {
-              if (c && c.id && !(key === 'cancelledOrderLogs' && isBogusSettlementCancel(c))) logMap.set(c.id, c);
-            }
-            for (const inc of incList) {
-              if (inc && inc.id && !(key === 'cancelledOrderLogs' && isBogusSettlementCancel(inc))) logMap.set(inc.id, inc);
-            }
-            serverState[key] = Array.from(logMap.values())
-              .sort((a, b) => (b.timestamp || b.cancelledAt || 0) - (a.timestamp || a.cancelledAt || 0))
-              .slice(0, 1500);
-          }
-        } else if (key === 'lastTableMoveAlert' || key === 'lastOrderCancelledAlert') {
-          const incAlert = sanitized;
-          const currAlert = serverState[key];
-          const isBogusAlert =
-            key === 'lastOrderCancelledAlert' &&
-            incAlert &&
-            incAlert.reason === 'Table released without billing' &&
-            (serverState.invoices || []).some(
-              (inv) =>
-                inv &&
-                (inv.tableId === incAlert.tableId || inv.tableName === incAlert.tableName) &&
-                Math.abs((inv.timeSettled || inv.timePlaced || 0) - (incAlert.time || 0)) <= 15000
-            );
-          if (!incAlert || isBogusAlert) {
-            if (isBogusAlert) {
-              serverState[key] = null;
-            } else if (currAlert && Date.now() - (currAlert.time || 0) > 60000) {
-              // Keep live Cashier alerts broadcastable for 60s so concurrent updates from other terminals never swallow them
-              serverState[key] = null;
-            }
-          } else if (!currAlert || (incAlert.time || 0) >= (currAlert.time || 0)) {
-            serverState[key] = incAlert;
-          }
-        } else if (
-          Array.isArray(sanitized) &&
-          sanitized.length === 0 &&
-          Array.isArray(serverState[key]) &&
-          serverState[key].length > 0 &&
-          ['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'shifts', 'invoices', 'customers', 'kitchenSessions', 'kitchenConsumption', 'attendance', 'salaryPayments'].includes(key)
-        ) {
-          // Guard: NEVER allow an unhydrated client sending [] to wipe non-empty operational ledgers!
-        } else {
-          serverState[key] = sanitized;
-        }
-        modified = true;
-      }
-    }
+    res.writeHead(404, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Endpoint not found', server: 'Sultan Restaurant Hub' }));
   }
 
-  if (modified) {
-    // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
-    const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
-    if (Array.isArray(serverState.tables)) {
-      const nowRec = Date.now();
-      // Waiter collections that the cashier has already turned into an invoice are finished — find their settle time
-      const receivedWaiterPayAt = (t) => {
-        const col = t.waiterPaymentCollection;
-        if (!col || col.status !== 'pending_cashier') return 0;
-        const inv = (serverState.invoices || []).find(i =>
-          i && (
-            (i.waiterPayId && i.waiterPayId === col.id) ||
-            (!i.waiterPayId && i.tableId === t.id &&
-              typeof i.notes === 'string' && i.notes.startsWith('Collected by Order Taker') &&
-              (i.timeSettled || i.timePlaced || 0) >= (col.collectedAt || 0))
-          )
-        );
-        return inv ? (inv.timeSettled || inv.timePlaced || nowRec) : 0;
-      };
-      serverState.tables = serverState.tables.map(t => {
-        const receivedAt = receivedWaiterPayAt(t);
-        if (receivedAt && !activeTicketByTable.has(t.id)) {
-          return {
-            ...t,
-            status: 'available',
-            billTotal: 0,
-            orders: [],
-            server: undefined,
-            isPaid: false,
-            lastInvoiceId: undefined,
-            occupiedSince: undefined,
-            waiterPaymentCollection: null,
-            lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt),
-          };
-        }
-        if (receivedAt) {
-          return { ...t, waiterPaymentCollection: null, lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt) };
-        }
-        if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && !(t.waiterPaymentCollection?.status === 'pending_cashier' && (t.lastSettledAt || 0) < (t.waiterPaymentCollection.collectedAt || 0))) {
-          return {
-            ...t,
-            status: 'available',
-            billTotal: 0,
-            orders: [],
-            server: undefined,
-            isPaid: false,
-            lastInvoiceId: undefined,
-            occupiedSince: undefined,
-            waiterPaymentCollection: null,
-            lastSettledAt: t.lastSettledAt || nowRec,
-          };
-        }
-        return t;
-      });
-    }
+  // In-memory RAM cache for static web assets (raw + gzipped) for <1ms instant page loads
+  const staticAssetCache = new Map();
 
-    const nextFingerprint = computeStateFingerprint(serverState);
-    if (nextFingerprint === prevFingerprint) {
-      return;
-    }
-    lastStateFingerprint = nextFingerprint;
-    serverState.lastUpdated = Date.now();
-    persistState();
-    console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
-    if (
-      (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
-      (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
-    ) {
-      broadcastToClients({
-        type: 'FORCE_LOGOUT_DEVICE',
-        revokedSessions: serverState.revokedSessions || {},
-        revokedDeviceIds: serverState.revokedDeviceIds || {},
-        activeStaffSessions: serverState.activeStaffSessions || [],
-        timestamp: Date.now()
-      });
-    }
-    broadcastToClients({
-      type: 'SERVER_BROADCAST',
-      state: serverState,
-      senderId: senderId || 'SERVER',
-      timestamp: serverState.lastUpdated
-    }, originWs);
-    pushToFirestoreCloud();
-  }
-}
-
-// ==============================================================
-// BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
-// ==============================================================
-// Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
-const IS_DEV_WORKSTATION = process.env.SULTAN_DISABLE_CLOUD_SYNC === '1';
-const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
-const FIRESTORE_PROJECT_ID = "sultan-resturant";
-const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
-
-let lastProcessedCloudTimestamp = 0;
-let lastProcessedCloudUpdateTime = '';
-let isPushingToFirestore = false;
-let isApplyingCloudUpdate = false;
-let firestorePushTimer = null;
-let lastFirestorePushTime = 0;
-const FIRESTORE_PUSH_INTERVAL = 90 * 1000; // 90 seconds (1.5 minutes) batch interval
-
-function decodeFirestoreValue(val) {
-  if (!val || typeof val !== 'object') return val;
-  if ('stringValue' in val) return val.stringValue;
-  if ('integerValue' in val) return Number(val.integerValue);
-  if ('doubleValue' in val) return Number(val.doubleValue);
-  if ('booleanValue' in val) return val.booleanValue;
-  if ('nullValue' in val) return null;
-  if ('mapValue' in val) {
-    const fields = val.mapValue.fields || {};
-    const res = {};
-    for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
-    return res;
-  }
-  if ('arrayValue' in val) {
-    const values = val.arrayValue.values || [];
-    return values.map(decodeFirestoreValue);
-  }
-  return val;
-}
-
-function encodeFirestoreValue(val) {
-  if (val === null || val === undefined) return { nullValue: null };
-  if (typeof val === 'string') return { stringValue: val };
-  if (typeof val === 'boolean') return { booleanValue: val };
-  if (typeof val === 'number') {
-    if (Number.isInteger(val)) return { integerValue: val.toString() };
-    return { doubleValue: val };
-  }
-  if (Array.isArray(val)) {
-    return { arrayValue: { values: val.map(encodeFirestoreValue) } };
-  }
-  if (typeof val === 'object') {
-    const fields = {};
-    for (const k in val) {
-      if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
-    }
-    return { mapValue: { fields } };
-  }
-  return { stringValue: String(val) };
-}
-
-function pushToFirestoreCloud(forceImmediate = false) {
-  if (IS_DEV_WORKSTATION || isApplyingCloudUpdate) return;
-  const now = Date.now();
-  // If not forced and recently pushed within the interval, debounce to the next interval window
-  if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
-    if (!firestorePushTimer) {
-      const delay = FIRESTORE_PUSH_INTERVAL - (now - lastFirestorePushTime);
-      firestorePushTimer = setTimeout(() => {
-        firestorePushTimer = null;
-        pushToFirestoreCloud(true);
-      }, delay);
-    }
-    return;
-  }
-
-  if (firestorePushTimer) {
-    clearTimeout(firestorePushTimer);
-    firestorePushTimer = null;
-  }
-
-  firestorePushTimer = setTimeout(async () => {
-    if (isPushingToFirestore) return;
-    isPushingToFirestore = true;
-    lastFirestorePushTime = Date.now();
+  function getCachedStaticAsset(filePath, canGzip) {
     try {
-      const now = Date.now();
-      lastProcessedCloudTimestamp = now;
-      const payload = {
-        type: 'SERVER_BROADCAST',
-        senderId: 'SERVER_POS_HUB',
-        timestamp: now,
-        state: {
-          tables: serverState.tables,
-          deletedTableIds: serverState.deletedTableIds || [],
-          deletedFloorIds: serverState.deletedFloorIds || [],
-          floors: serverState.floors || [],
-          tickets: serverState.tickets,
-          deletedTicketIds: serverState.deletedTicketIds || [],
-          invoices: serverState.invoices || [],
-          customers: serverState.customers || [],
-          reservations: serverState.reservations || [],
-          attendance: serverState.attendance || [],
-          salaryPayments: serverState.salaryPayments || [],
-          feedbacks: serverState.feedbacks || [],
-          salesReturns: serverState.salesReturns || [],
-          serviceRequests: serverState.serviceRequests || [],
-          inventory: serverState.inventory || [],
-          storageZones: serverState.storageZones || [],
-          inventoryResetEpoch: serverState.inventoryResetEpoch || 0,
-          deletedInventoryIds: serverState.deletedInventoryIds || [],
-          deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
-          deletedInventoryCategories: serverState.deletedInventoryCategories || [],
-          deletedRecordIds: serverState.deletedRecordIds || [],
-          inventoryCategories: serverState.inventoryCategories || [],
-          assetCategories: serverState.assetCategories || [],
-          expenseCategories: serverState.expenseCategories || [],
-          stockMovements: serverState.stockMovements || [],
-          chillerHandovers: serverState.chillerHandovers || [],
-          expenses: serverState.expenses || [],
-          suppliers: serverState.suppliers || [],
-          purchaseOrders: serverState.purchaseOrders || [],
-          supplierPayments: serverState.supplierPayments || [],
-          assets: serverState.assets || [],
-          damageRecords: serverState.damageRecords || [],
-          recipes: serverState.recipes || [],
-          kitchenSessions: serverState.kitchenSessions || [],
-          kitchenConsumption: serverState.kitchenConsumption || [],
-          kitchenManualUsage: serverState.kitchenManualUsage || [],
-          kitchenCash: serverState.kitchenCash || [],
-          menuItems: serverState.menuItems,
-          categories: serverState.categories,
-          staff: serverState.staff,
-          onlineOrders: serverState.onlineOrders,
-          pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
-          lastBillPaidAlert: serverState.lastBillPaidAlert,
-          lastFoodReadyAlert: serverState.lastFoodReadyAlert,
-          roles: serverState.roles,
-          shifts: serverState.shifts,
-          activeShiftId: serverState.activeShiftId,
-          systemSettings: serverState.systemSettings,
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) return null;
+      const cacheKey = filePath;
+      const cached = staticAssetCache.get(cacheKey);
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        if (canGzip && !cached.gzipped) {
+          cached.gzipped = zlib.gzipSync(cached.raw, { level: 6 });
         }
-      };
-      const fields = {};
-      for (const k in payload) {
-        fields[k] = encodeFirestoreValue(payload[k]);
+        return cached;
       }
-      await fetch(FIRESTORE_DOC_URL, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fields })
+      const raw = fs.readFileSync(filePath);
+      const entry = {
+        mtimeMs: stat.mtimeMs,
+        raw,
+        gzipped: canGzip ? zlib.gzipSync(raw, { level: 6 }) : null,
+      };
+      staticAssetCache.set(cacheKey, entry);
+      return entry;
+    } catch (_) {
+      return null;
+    }
+  }
+  const server = http.createServer(handleRequest);
+  const server5000 = http.createServer(handleRequest);
+  let server80 = null;
+  try {
+    server80 = http.createServer(handleRequest);
+  } catch (e) { }
+
+  const wss = new WebSocketServer({ noServer: true });
+
+  function bindUpgrade(srv) {
+    if (!srv) return;
+    srv.on('upgrade', (request, socket, head) => {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
+    });
+  }
+  bindUpgrade(server);
+  bindUpgrade(server5000);
+  if (server80) bindUpgrade(server80);
+
+  function broadcastToClients(msgObj, excludeWs = null) {
+    const payload = JSON.stringify(msgObj);
+    for (const client of wss.clients) {
+      if (client !== excludeWs && client.readyState === WebSocket.OPEN) {
+        client.send(payload);
+      }
+    }
+  }
+
+  const recentServerPacketIds = new Set();
+  function hasProcessedServerPacket(packetId) {
+    if (!packetId || typeof packetId !== 'string') return false;
+    if (recentServerPacketIds.has(packetId)) return true;
+    recentServerPacketIds.add(packetId);
+    if (recentServerPacketIds.size > 300) {
+      const oldest = recentServerPacketIds.values().next().value;
+      if (oldest) recentServerPacketIds.delete(oldest);
+    }
+    return false;
+  }
+
+  let lastStateFingerprint = '';
+  function computeStateFingerprint(st) {
+    try {
+      return JSON.stringify({
+        tickets: st.tickets || [],
+        deletedTicketIds: st.deletedTicketIds || [],
+        deletedTableIds: st.deletedTableIds || [],
+        deletedFloorIds: st.deletedFloorIds || [],
+        floorsLen: Array.isArray(st.floors) ? st.floors.map(f => `${f.id}:${f.name}`).join(',') : '',
+        tables: (st.tables || []).map(t => ({
+          id: t.id,
+          name: t.name,
+          floor: t.floor,
+          seatingType: t.seatingType,
+          seats: t.seats,
+          status: t.status,
+          billTotal: t.billTotal,
+          isPaid: t.isPaid,
+          server: t.server,
+          occupiedSince: t.occupiedSince,
+          lastSettledAt: t.lastSettledAt,
+          waiterPayId: t.waiterPaymentCollection?.id || '',
+          ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
+        })),
+        onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
+        invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
+        menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
+        categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
+        zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
+        customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
+        inventoryResetEpoch: Number(st.inventoryResetEpoch || 0),
+        inventoryState: Array.isArray(st.inventory)
+          ? st.inventory.map(i => `${i?.id}:${i?.stock}:${i?.location || ''}:${i?.beverageStorageMode || ''}:${i?.updatedAt || 0}`).join('|')
+          : '',
+        storageZonesState: Array.isArray(st.storageZones)
+          ? st.storageZones.map(z => `${z?.id}:${z?.name}:${z?.type}:${z?.isActive !== false}:${z?.updatedAt || 0}`).join('|')
+          : '',
+        movementsKey: Array.isArray(st.stockMovements)
+          ? `${st.stockMovements.length}:${st.stockMovements[0]?.id || ''}`
+          : '0',
+        chillerHandoversKey: Array.isArray(st.chillerHandovers)
+          ? `${st.chillerHandovers.length}:${st.chillerHandovers[0]?.id || ''}`
+          : '0',
+        purchaseOrdersKey: Array.isArray(st.purchaseOrders)
+          ? `${st.purchaseOrders.length}:${st.purchaseOrders.map(p => `${p?.id}:${p?.status}:${p?.paidAmount || 0}`).join(',')}`
+          : '0',
+        inventoryCategoriesKey: Array.isArray(st.inventoryCategories) ? st.inventoryCategories.join('|') : '',
+        assetCategoriesKey: Array.isArray(st.assetCategories) ? st.assetCategories.join('|') : '',
+        expenseCategoriesKey: Array.isArray(st.expenseCategories) ? st.expenseCategories.join('|') : '',
+        suppliersLen: Array.isArray(st.suppliers) ? st.suppliers.length : 0,
+        recipesLen: Array.isArray(st.recipes) ? st.recipes.length : 0,
+        expensesLen: Array.isArray(st.expenses) ? st.expenses.length : 0,
+        assetsLen: Array.isArray(st.assets) ? st.assets.length : 0,
+        damagesLen: Array.isArray(st.damageRecords) ? st.damageRecords.length : 0,
+        rolesState: Array.isArray(st.roles)
+          ? st.roles.map(r => ({
+            id: r?.id || '',
+            name: r?.name || '',
+            baseRole: r?.baseRole || '',
+            updatedAt: r?.updatedAt || 0,
+            permissions: r?.permissions || {},
+          }))
+          : [],
+        staffState: Array.isArray(st.staff)
+          ? st.staff.map(s => ({
+            id: s?.id || '',
+            hasSystemAccess: s?.hasSystemAccess !== false,
+            username: s?.username || '',
+            name: s?.name || '',
+            designation: s?.designation || '',
+            role: s?.role || '',
+            customRoleId: s?.customRoleId || '',
+            status: s?.status || '',
+            pin: s?.pin || '',
+            maxDevices: s?.maxConcurrentDevices || 0,
+            permissionOverrides: s?.permissionOverrides || null,
+          }))
+          : [],
+        systemSettingsUpdatedAt: (st.systemSettings && st.systemSettings.updatedAt) || 0,
+        lastBillPaidAlert: st.lastBillPaidAlert || null,
+        lastFoodReadyAlert: st.lastFoodReadyAlert || null,
+        pendingFloorOrderAlert: st.pendingFloorOrderAlert || null,
+        activeStaffSessions: (st.activeStaffSessions || []).map(s => `${s.sessionId}:${s.deviceId}:${s.staffId}:${s.loginTime}`),
+        revokedSessions: Object.keys(st.revokedSessions || {}).sort().join(','),
+        revokedDeviceIds: Object.keys(st.revokedDeviceIds || {}).sort().join(','),
+        shiftsCount: Array.isArray(st.shifts) ? st.shifts.length : 0,
+        activeShiftId: st.activeShiftId || null,
       });
     } catch (_) {
-      // Local LAN continues seamlessly if cloud is offline
-    } finally {
-      isPushingToFirestore = false;
+      return String(Date.now());
     }
-  }, 1500);
-}
+  }
 
-// Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429
-let firestorePollInterval = 60000; // poll every 60s instead of 2.5s (reduces reads by 96%)
-let firestoreBackoffUntil = 0;
+  const LEGACY_DUMMY_SEED_IDS = {
+    staff: new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']),
+    inventory: new Set(Array.from({ length: 23 }, (_, i) => `inv${i + 1}`)),
+    stockMovements: new Set(['mv-01', 'mv-02', 'mv-03', 'mv-04']),
+    suppliers: new Set(['sup-1', 'sup-2', 'sup-3', 'sup-4', 'sup-5', 'sup-6', 'sup-7', 'sup-8', 'sup-9']),
+    purchaseOrders: new Set(['po-101', 'po-102']),
+    supplierPayments: new Set(['spay-1', 'spay-2']),
+    assets: new Set(['ast-1', 'ast-2', 'ast-3', 'ast-4', 'ast-5', 'ast-6', 'ast-7', 'ast-8']),
+    damageRecords: new Set(['dmg-1', 'dmg-2', 'dmg-3', 'dmg-4', 'dmg-5']),
+    recipes: new Set(['rc-1', 'rc-2', 'rc-3', 'rc-4']),
+    kitchenSessions: new Set(['ks-closed-today-morning', 'ks-active-evening']),
+    kitchenManualUsage: new Set(['mu-1', 'mu-2', 'mu-3', 'mu-4']),
+    customers: new Set(['c1', 'c2', 'c3', 'c4', 'c5']),
+    feedbacks: new Set(['fb-1', 'fb-2']),
+    reservations: new Set(['res-1']),
+    attendance: new Set(Array.from({ length: 11 }, (_, i) => `att-${i + 1}`)),
+    salaryPayments: new Set(['sal-101', 'sal-102', 'sal-103']),
+    appUsers: new Set(['usr-1', 'usr-2']),
+    appUserLogs: new Set(['log-1', 'log-2']),
+  };
 
-let hasInitialFirestorePollCompleted = false;
-async function pollFirestoreCloud() {
-  if (IS_DEV_WORKSTATION || isPushingToFirestore) return;
-  if (Date.now() < firestoreBackoffUntil) return;
-  try {
-    const res = await fetch(FIRESTORE_DOC_URL);
-    if (res.status === 429) {
-      // Quota exceeded: back off for 15 minutes before retrying
-      firestoreBackoffUntil = Date.now() + 15 * 60 * 1000;
+  function sanitizeIncomingSeedData(key, value) {
+    if (!Array.isArray(value)) return value;
+    const seedSet = LEGACY_DUMMY_SEED_IDS[key];
+    if (key === 'staff') {
+      const dummyNames = new Set(['junaid ahsan', 'ali khan', 'chef omar', 'order taker 1', 'order taker 2', 'order taker 3', 'order taker 4', 'sara ahmed', 'hamza malik', 'ali raza', 'tariq juice master', 'rashid mehmood', 'tariq javed', 'usman tariq', 'bilal hassan', 'rohan ali']);
+      return value.filter((item) => {
+        if (!item || !item.id) return false;
+        if (item.id === 'st-master') return true;
+        if (seedSet && seedSet.has(item.id)) return false;
+        const nm = String(item.name || '').trim().toLowerCase();
+        if (nm && dummyNames.has(nm)) return false;
+        return true;
+      });
+    }
+    if (key === 'inventory') {
+      return value.filter((item) => item && item.id && !isLegacyDummyInventoryId(item.id));
+    }
+    if (key === 'stockMovements') {
+      return value.filter(
+        (item) => item && item.id && !seedSet?.has(item.id) && !isLegacyDummyInventoryId(item.itemId)
+      );
+    }
+    if (seedSet) {
+      return value.filter((item) => item && !seedSet.has(item.id));
+    }
+    if (key === 'shifts') {
+      return value.filter((s) => {
+        if (!s) return false;
+        if (s.cashierName === 'Ali Khan' || s.cashierName === 'Sara Ahmed') return false;
+        const note = (s.openingNotes || '').trim();
+        if (
+          note === 'Morning float issued: Rs. 5,000 in petty change.' ||
+          note === 'Dinner rush shift. Rs. 8,000 float given to drawer.'
+        ) {
+          return false;
+        }
+        if (s.cashierName === 'Sara Ahmed' && s.systemTotalSales === 66250 && s.settledOrdersCount === 22) {
+          return false;
+        }
+        return true;
+      });
+    }
+    return value;
+  }
+
+  function applyStateUpdate(partialState, senderId, originWs = null) {
+    if (!partialState || typeof partialState !== 'object') return;
+
+    const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
+
+    // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tickets, and tables MUST be processed first in order)
+    const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+    let modified = false;
+
+    if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
+    if (Array.isArray(partialState.deletedTableIds) && partialState.deletedTableIds.length > 0) {
+      serverState.deletedTableIds = Array.from(new Set([...serverState.deletedTableIds, ...partialState.deletedTableIds])).slice(-500);
+      modified = true;
+    }
+    const deletedTableSet = new Set(serverState.deletedTableIds);
+
+    if (!Array.isArray(serverState.deletedFloorIds)) serverState.deletedFloorIds = [];
+    if (Array.isArray(partialState.deletedFloorIds) && partialState.deletedFloorIds.length > 0) {
+      serverState.deletedFloorIds = Array.from(new Set([...serverState.deletedFloorIds, ...partialState.deletedFloorIds])).slice(-200);
+      modified = true;
+    }
+    const deletedFloorSet = new Set(serverState.deletedFloorIds);
+
+    // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
+    const currInvEpoch = Number(serverState.inventoryResetEpoch || 0);
+    const incInvEpoch = Number(partialState.inventoryResetEpoch || 0);
+    const isStaleInventoryClient = currInvEpoch > 0 && incInvEpoch < currInvEpoch;
+    if (incInvEpoch > currInvEpoch) {
+      serverState.inventoryResetEpoch = incInvEpoch;
+      serverState.inventory = Array.isArray(partialState.inventory)
+        ? partialState.inventory.filter((i) => i && !isLegacyDummyInventoryId(i.id))
+        : [];
+      serverState.inventoryCategories = Array.isArray(partialState.inventoryCategories) ? partialState.inventoryCategories : [];
+      serverState.stockMovements = [];
+      serverState.chillerHandovers = [];
+      modified = true;
+    }
+
+    // Track explicit deletions for inventory, storageZones, inventoryCategories & operational records so out-of-sync clients never wipe live entries
+    if (!Array.isArray(serverState.deletedInventoryIds)) serverState.deletedInventoryIds = [];
+    if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
+    if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
+    if (!Array.isArray(serverState.deletedRecordIds)) serverState.deletedRecordIds = [];
+    if (Array.isArray(partialState.deletedRecordIds) && partialState.deletedRecordIds.length > 0) {
+      serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...partialState.deletedRecordIds])).slice(-800);
+      modified = true;
+    }
+    const deletedRecSet = new Set(serverState.deletedRecordIds);
+    if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
+      serverState.deletedInventoryCategories = Array.from(new Set([...serverState.deletedInventoryCategories, ...partialState.deletedInventoryCategories])).slice(-300);
+      modified = true;
+    }
+    const deletedInvCatSet = new Set((serverState.deletedInventoryCategories || []).map((c) => String(c).toLowerCase()));
+    if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryIds) && partialState.deletedInventoryIds.length > 0) {
+      serverState.deletedInventoryIds = Array.from(new Set([...serverState.deletedInventoryIds, ...partialState.deletedInventoryIds])).slice(-500);
+      modified = true;
+    }
+    if (Array.isArray(partialState.deletedStorageZoneIds) && partialState.deletedStorageZoneIds.length > 0) {
+      serverState.deletedStorageZoneIds = Array.from(new Set([...serverState.deletedStorageZoneIds, ...partialState.deletedStorageZoneIds])).slice(-300);
+      modified = true;
+    }
+    const deletedInvSet = new Set(serverState.deletedInventoryIds);
+    const deletedZoneSet = new Set(serverState.deletedStorageZoneIds);
+
+    // Pre-collect any ticket IDs explicitly deleted or belonging to tables being newly billed/settled in this update
+    if (!Array.isArray(serverState.deletedTicketIds)) {
+      serverState.deletedTicketIds = [];
+    }
+    const incomingDeleted = Array.isArray(partialState.deletedTicketIds) ? partialState.deletedTicketIds : [];
+    const autoRetiredTicketIds = [];
+    if (Array.isArray(partialState.tables) && Array.isArray(serverState.tables)) {
+      const currTableMap = new Map(serverState.tables.map(t => [t.id, t]));
+      for (const incT of partialState.tables) {
+        if (!incT || !incT.id) continue;
+        const currT = currTableMap.get(incT.id);
+        if (!currT) continue;
+        const newlyBilled = currT.status !== 'billed' && incT.status === 'billed' && incT.isPaid;
+        const newlySettledFromBilled = currT.status === 'billed' && incT.status === 'available';
+        const newlySettledByTimestamp =
+          (currT.status === 'occupied' || currT.status === 'billed') &&
+          incT.status === 'available' &&
+          incT.lastSettledAt &&
+          incT.lastSettledAt >= (currT.occupiedSince || 0);
+        if (newlyBilled || newlySettledFromBilled || newlySettledByTimestamp) {
+          const cutoff = incT.lastSettledAt || Date.now();
+          for (const tk of (serverState.tickets || [])) {
+            if (tk && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
+              autoRetiredTicketIds.push(tk.id);
+            }
+          }
+        }
+      }
+    }
+    if (incomingDeleted.length > 0 || autoRetiredTicketIds.length > 0) {
+      serverState.deletedTicketIds = Array.from(
+        new Set([...serverState.deletedTicketIds, ...incomingDeleted, ...autoRetiredTicketIds])
+      ).slice(-400);
+    }
+    const deletedSet = new Set(serverState.deletedTicketIds);
+
+    for (const key of allowedKeys) {
+      if (partialState[key] !== undefined) {
+        if (key === 'deletedTicketIds') {
+          modified = true;
+        } else if (key === 'tickets') {
+          const incomingTickets = Array.isArray(partialState.tickets) ? partialState.tickets : [];
+          const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
+
+          // Status hierarchy: pending -> cooking -> ready -> served
+          const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
+
+          const existingMap = new Map(existingTickets.filter(t => t && t.id).map(t => [t.id, t]));
+          const incomingMap = new Map(incomingTickets.filter(t => t && t.id).map(t => [t.id, t]));
+          // Incoming keys first so newest KOTs appear at the top of KDS/POS
+          const allTicketIds = new Set([...incomingMap.keys(), ...existingMap.keys()]);
+          const mergedList = [];
+
+          for (const tId of allTicketIds) {
+            // Never resurrect a ticket that has been billed, settled, or dismissed
+            if (deletedSet.has(tId)) continue;
+
+            const inc = incomingMap.get(tId);
+            const ext = existingMap.get(tId);
+
+            if (inc && ext) {
+              const extRank = STATUS_RANK[ext.status] ?? 0;
+              const incRank = STATUS_RANK[inc.status] ?? 0;
+              let chosen = extRank > incRank ? { ...ext } : { ...inc };
+
+              // Merge item-level ready/served states
+              if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
+                const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
+                chosen.items = inc.items.map(incIt => {
+                  const extIt = extItemsMap.get(incIt.id);
+                  if (!extIt) return incIt;
+                  const extItRank = extIt.itemStatus ? (STATUS_RANK[extIt.itemStatus] ?? 0) : (extIt.completed ? 2 : 0);
+                  const incItRank = incIt.itemStatus ? (STATUS_RANK[incIt.itemStatus] ?? 0) : (incIt.completed ? 2 : 0);
+                  if (extItRank > incItRank) {
+                    return { ...incIt, itemStatus: extIt.itemStatus, completed: extIt.completed, readyAt: extIt.readyAt };
+                  }
+                  return incIt;
+                });
+              }
+
+              // Merge station-level statuses station by station
+              const mergedStationStatuses = {
+                ...(ext.stationStatuses || {}),
+                ...(inc.stationStatuses || {})
+              };
+              for (const st of ['main', 'juice']) {
+                const extStRank = ext.stationStatuses && ext.stationStatuses[st] ? (STATUS_RANK[ext.stationStatuses[st]] ?? 0) : -1;
+                const incStRank = inc.stationStatuses && inc.stationStatuses[st] ? (STATUS_RANK[inc.stationStatuses[st]] ?? 0) : -1;
+                if (extStRank >= 0 || incStRank >= 0) {
+                  mergedStationStatuses[st] = extStRank >= incStRank ? ext.stationStatuses[st] : inc.stationStatuses[st];
+                }
+              }
+              chosen.stationStatuses = mergedStationStatuses;
+
+              // Propagate stationStatuses ('served' / 'ready') down to station items so items and stations never desync
+              if (Array.isArray(chosen.items)) {
+                chosen.items = chosen.items.map(it => {
+                  const st = it?.station === 'juice' ? 'juice' : 'main';
+                  const stStatus = mergedStationStatuses[st];
+                  if (stStatus === 'served') {
+                    return { ...it, completed: true, itemStatus: 'served' };
+                  }
+                  if (stStatus === 'ready' && it.itemStatus !== 'served') {
+                    return { ...it, completed: true, itemStatus: 'ready', readyAt: it.readyAt || chosen.readyAt || Date.now() };
+                  }
+                  return it;
+                });
+              }
+
+              const activeStVals = Object.values(mergedStationStatuses).filter(Boolean);
+              if (activeStVals.length > 0) {
+                if (activeStVals.every(s => s === 'served')) {
+                  chosen.status = 'served';
+                } else if (activeStVals.every(s => s === 'ready' || s === 'served')) {
+                  chosen.status = 'ready';
+                  if (!chosen.readyAt) chosen.readyAt = ext.readyAt || inc.readyAt || Date.now();
+                } else if (activeStVals.some(s => s === 'cooking' || s === 'ready' || s === 'served')) {
+                  chosen.status = 'cooking';
+                }
+              }
+
+              if (chosen.status === 'served' && Array.isArray(chosen.items)) {
+                chosen.items = chosen.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
+              }
+              mergedList.push(chosen);
+            } else if (inc) {
+              if (inc.status === 'served' && Array.isArray(inc.items)) {
+                inc.items = inc.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
+              }
+              mergedList.push(inc);
+            } else if (ext) {
+              // Preserve active server tickets when an out-of-sync client sends a partial/older ticket list
+              mergedList.push(ext);
+            }
+          }
+
+          // Deduplicate tickets by order key to prevent duplicate KOT cards across client-server sync
+          const seenMergedOrders = new Set();
+          const deduplicatedMerged = [];
+          for (const t of mergedList) {
+            const orderKey = t.orderId ? `ord_${t.orderId}` : (t.orderNumber ? `num_${t.orderNumber}` : null);
+            if (orderKey) {
+              if (seenMergedOrders.has(orderKey)) {
+                continue;
+              }
+              seenMergedOrders.add(orderKey);
+            }
+            deduplicatedMerged.push(t);
+          }
+
+          // Normalize item stations across all synced tickets (protects against older waiter APKs missing beverage stations)
+          if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
+            const autoRouteBev = isAutoRouteBeveragesEnabled();
+            for (const tk of deduplicatedMerged) {
+              if (tk && Array.isArray(tk.items) && tk.items.length > 0) {
+                printerHelper.normalizeTicketStations(tk, serverState.menuItems || [], autoRouteBev);
+              }
+            }
+          }
+
+          serverState.tickets = deduplicatedMerged;
+
+          // Auto-print newly placed incoming tickets strictly split by station (main -> Kitchen ONLY, juice -> Juice Bar ONLY)
+          for (const inc of incomingTickets) {
+            if (!inc || !inc.id) continue;
+            if (deletedSet.has(inc.id)) continue;
+            const mergedTicket = deduplicatedMerged.find((t) => t && t.id === inc.id) || inc;
+            if ((mergedTicket.status === 'pending' || mergedTicket.isAddOn) && Array.isArray(mergedTicket.items) && mergedTicket.items.length > 0) {
+              queueAutoPrintTicket(mergedTicket, 'auto');
+            }
+          }
+
+          // Auto-synchronize online orders status with ticket cooking/ready/served state
+          if (Array.isArray(serverState.onlineOrders)) {
+            for (const tk of deduplicatedMerged) {
+              if (!tk || (!tk.orderId && !tk.orderNumber)) continue;
+              const ord = serverState.onlineOrders.find(o =>
+                (tk.orderId && o.id === tk.orderId) ||
+                (tk.orderNumber && o.orderNumber === tk.orderNumber)
+              );
+              if (!ord) continue;
+
+              const isTicketCooking = tk.status === 'cooking' ||
+                (tk.stationStatuses && (tk.stationStatuses.main === 'cooking' || tk.stationStatuses.juice === 'cooking'));
+              const isTicketReady = tk.status === 'ready' ||
+                (tk.stationStatuses && tk.stationStatuses.main === 'ready' && tk.stationStatuses.juice === 'ready');
+              const isTicketServed = tk.status === 'served' ||
+                (tk.stationStatuses && tk.stationStatuses.main === 'served' && tk.stationStatuses.juice === 'served');
+
+              let targetStatus = null;
+              if (isTicketServed && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+                targetStatus = 'SERVED';
+              } else if (isTicketReady && ord.status !== 'READY' && ord.status !== 'SERVED' && ord.status !== 'DELIVERED') {
+                targetStatus = 'READY';
+              } else if (isTicketCooking && ord.status === 'CONFIRMED') {
+                targetStatus = 'PREPARING';
+              }
+
+              if (targetStatus && ord.status !== targetStatus) {
+                ord.status = targetStatus;
+                ord.updatedAt = Date.now();
+                console.log(`[Sultan Hub Auto-Sync] Updated order ${ord.orderNumber} status to ${targetStatus} based on ticket ${tk.id}`);
+                broadcastToClients({
+                  type: 'ORDER_STATUS_CHANGED',
+                  orderId: ord.id,
+                  orderNumber: ord.orderNumber,
+                  status: targetStatus,
+                  riderName: ord.riderName,
+                  riderPhone: ord.riderPhone,
+                  assignedWaiter: ord.assignedWaiter,
+                  timestamp: Date.now()
+                });
+              }
+            }
+          }
+          modified = true;
+        } else if (key === 'tables') {
+          const incomingTables = (Array.isArray(partialState.tables) ? partialState.tables : []).filter(
+            t => t && t.id && !deletedTableSet.has(t.id)
+          );
+          if (incomingTables.length > 0 || (Array.isArray(partialState.tables) && partialState.tables.length === 0 && deletedTableSet.size > 0)) {
+            const currentTables = (Array.isArray(serverState.tables) ? serverState.tables : []).filter(
+              t => t && t.id && !deletedTableSet.has(t.id)
+            );
+            const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
+            const activeTickets = (Array.isArray(serverState.tickets) ? serverState.tickets : []).filter(
+              tk => tk && !deletedSet.has(tk.id)
+            );
+            // Order Taker collection: an explicit null/value from the client wins; a collection older than
+            // the latest settlement (lastSettledAt) is stale and must never resurrect the cashier alert.
+            const resolveWaiterPay = (curr, inc) => {
+              const col = Object.prototype.hasOwnProperty.call(inc, 'waiterPaymentCollection')
+                ? inc.waiterPaymentCollection
+                : curr.waiterPaymentCollection;
+              if (!col || col.status !== 'pending_cashier') return null;
+              const settledAt = Math.max(curr.lastSettledAt || 0, inc.lastSettledAt || 0);
+              if (settledAt >= (col.collectedAt || 0)) return null;
+              return col;
+            };
+
+            serverState.tables = currentTables.map(curr => {
+              const inc = incomingMap.get(curr.id);
+              if (!inc) return curr;
+
+              const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
+
+              // If table has active unbilled tickets on the server, never allow an out-of-sync client to revert it to 'available'
+              if (tableTickets.length > 0 && inc.status !== 'billed') {
+                const ticketTotal = tableTickets.reduce(
+                  (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0),
+                  0
+                );
+                const ticketOrders = tableTickets.flatMap(tk => (tk.items || []).map(i => ({ ...i })));
+                const base = (inc.status === 'occupied' && (inc.occupiedSince || 0) >= (curr.occupiedSince || 0))
+                  ? { ...curr, ...inc }
+                  : { ...inc, ...curr };
+                const bestOrders =
+                  Array.isArray(base.orders) && base.orders.length >= ticketOrders.length && base.orders.length > 0
+                    ? base.orders
+                    : ticketOrders;
+                return {
+                  ...base,
+                  status: 'occupied',
+                  isPaid: false,
+                  occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0) || Date.now(),
+                  billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
+                  orders: bestOrders,
+                  server: inc.server || curr.server || tableTickets[0].server,
+                  waiterPaymentCollection: resolveWaiterPay(curr, inc),
+                };
+              }
+
+              // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
+              const hasPendingWaiterPay =
+                !!resolveWaiterPay(curr, inc) &&
+                inc.status !== 'available';
+              if (
+                tableTickets.length === 0 &&
+                inc.status !== 'billed' &&
+                !hasPendingWaiterPay &&
+                (inc.status === 'available' ||
+                  (curr.status === 'occupied' && ((Array.isArray(curr.orders) && curr.orders.length > 0) || (curr.billTotal || 0) > 0)))
+              ) {
+                return {
+                  ...curr,
+                  ...inc,
+                  status: 'available',
+                  billTotal: 0,
+                  orders: [],
+                  isPaid: false,
+                  server: undefined,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  waiterPaymentCollection: null,
+                  lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
+                };
+              }
+
+              return { ...curr, ...inc };
+            });
+
+            // Append any newly added tables (never resurrect deleted tables or duplicate same floor+name)
+            const existingIds = new Set(serverState.tables.map(t => t.id));
+            const existingFloorNames = new Set(
+              serverState.tables.map(t => `${String(t.floor || t.zone || '').trim().toLowerCase()}::${String(t.name || '').trim().toLowerCase()}`)
+            );
+            for (const inc of incomingTables) {
+              if (!inc || !inc.id || deletedTableSet.has(inc.id)) continue;
+              const fnKey = `${String(inc.floor || inc.zone || '').trim().toLowerCase()}::${String(inc.name || '').trim().toLowerCase()}`;
+              if (!existingIds.has(inc.id) && !existingFloorNames.has(fnKey)) {
+                serverState.tables.push(inc);
+                existingIds.add(inc.id);
+                existingFloorNames.add(fnKey);
+              }
+            }
+            serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
+            modified = true;
+          }
+        } else if (key === 'floors') {
+          const incFloors = Array.isArray(partialState.floors) ? partialState.floors : [];
+          const currFloors = Array.isArray(serverState.floors) ? serverState.floors : [];
+          if (incFloors.length > 0 || (currFloors.length > 0 && deletedFloorSet.size > 0)) {
+            const fMap = new Map();
+            for (const c of currFloors) {
+              if (c && c.id && !deletedFloorSet.has(c.id)) fMap.set(c.id, c);
+            }
+            for (const inc of incFloors) {
+              if (!inc || !inc.id || deletedFloorSet.has(inc.id)) continue;
+              const prev = fMap.get(inc.id);
+              if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                fMap.set(inc.id, { ...(prev || {}), ...inc });
+              }
+            }
+            // Deduplicate by case-insensitive floor name (keep latest updatedAt)
+            const byName = new Map();
+            for (const fl of fMap.values()) {
+              const nmKey = String(fl.name || '').trim().toLowerCase();
+              if (!nmKey) continue;
+              const prev = byName.get(nmKey);
+              if (!prev || (Number(fl.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                byName.set(nmKey, fl);
+              }
+            }
+            serverState.floors = Array.from(byName.values());
+            serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
+            modified = true;
+          }
+        } else if (key === 'zones') {
+          if (Array.isArray(serverState.floors) && serverState.floors.length > 0) {
+            serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
+          } else if (Array.isArray(partialState.zones) && partialState.zones.length > 0) {
+            serverState.zones = partialState.zones;
+          }
+          modified = true;
+        } else if (key === 'deletedTableIds' || key === 'deletedFloorIds') {
+          if (Array.isArray(serverState.tables) && deletedTableSet.size > 0) {
+            serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
+          }
+          if (Array.isArray(serverState.floors) && deletedFloorSet.size > 0) {
+            serverState.floors = serverState.floors.filter(f => f && f.id && !deletedFloorSet.has(f.id));
+          }
+          modified = true;
+        } else if (key === 'menuItems') {
+          const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
+          if (incoming.length > 0) {
+            for (const m of incoming) {
+              if (!m) continue;
+              if (printerHelper && typeof printerHelper.resolveItemStation === 'function' && m.station !== 'juice' && m.station !== 'main') {
+                m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+              }
+              const curImg = (m.imageUri || m.imageUrl || '').trim();
+              if (typeof m.id === 'string' && m.id.startsWith('slt-') && (!curImg || curImg.toLowerCase().includes('images.unsplash.com/photo-'))) {
+                m.imageUri = `/menu-images/${m.id}.jpg`;
+                m.imageUrl = m.imageUri;
+              } else if (!m.imageUri && m.imageUrl) {
+                m.imageUri = m.imageUrl;
+              }
+            }
+            serverState.menuItems = incoming;
+            modified = true;
+          }
+        } else if (key === 'categories') {
+          const usedCats = new Set((serverState.menuItems || []).map(m => m.category).filter(Boolean));
+          serverState.categories = ['All', ...Array.from(usedCats)];
+          modified = true;
+        } else if (key === 'regions') {
+          const incomingRegs = Array.isArray(partialState.regions) ? partialState.regions : [];
+          if (incomingRegs.length > 0) {
+            serverState.regions = Array.from(new Set([...(serverState.regions || []), ...incomingRegs]));
+            modified = true;
+          }
+        } else if (key === 'systemSettings') {
+          const incSettings = partialState.systemSettings;
+          if (incSettings && typeof incSettings === 'object') {
+            const currUpdated = (serverState.systemSettings && serverState.systemSettings.updatedAt) || 0;
+            const incUpdated = typeof incSettings.updatedAt === 'number' ? incSettings.updatedAt : 0;
+            if (currUpdated === 0 || incUpdated >= currUpdated) {
+              const prevSys = serverState.systemSettings || {};
+              // Preserve dedicated station printer routing set via /api/print/config so stale client localStorage never overwrites printer settings
+              const preservedPrinterConfig = {};
+              for (const pk of [
+                'kitchenPrinterMode', 'kitchenPrinterName', 'kitchenPrinterHost', 'kitchenPrinterPort',
+                'juicePrinterMode', 'juicePrinterName', 'juicePrinterHost', 'juicePrinterPort',
+              ]) {
+                if (prevSys[pk] !== undefined) {
+                  preservedPrinterConfig[pk] = prevSys[pk];
+                }
+              }
+              serverState.systemSettings = {
+                ...prevSys,
+                ...incSettings,
+                ...preservedPrinterConfig,
+              };
+              modified = true;
+            }
+          }
+        } else if (key === 'roles') {
+          if (Array.isArray(partialState.roles) && partialState.roles.length > 0) {
+            serverState.roles = mergeServerRolesSafely(serverState.roles, partialState.roles);
+            modified = true;
+          }
+        } else if (key === 'forceLogoutAll') {
+          if (partialState.forceLogoutAll && typeof partialState.forceLogoutAll === 'object') {
+            const prevTs = serverState.forceLogoutAll?.timestamp || 0;
+            const nextTs = partialState.forceLogoutAll.timestamp || 0;
+            if (nextTs >= prevTs) {
+              serverState.forceLogoutAll = partialState.forceLogoutAll;
+              modified = true;
+            }
+          }
+        } else if (key === 'revokedSessions') {
+          if (partialState.revokedSessions && typeof partialState.revokedSessions === 'object') {
+            const nowR = Date.now();
+            const mergedRev = {
+              ...(serverState.revokedSessions || {}),
+              ...partialState.revokedSessions,
+            };
+            for (const k of Object.keys(mergedRev)) {
+              if (nowR - (mergedRev[k]?.timestamp || 0) > 60 * 60 * 1000) {
+                delete mergedRev[k];
+              }
+            }
+            serverState.revokedSessions = mergedRev;
+            // Also evict any newly revoked sessionIds from activeStaffSessions
+            if (Array.isArray(serverState.activeStaffSessions)) {
+              serverState.activeStaffSessions = serverState.activeStaffSessions.filter(
+                (s) => s && !mergedRev[s.sessionId]
+              );
+            }
+            modified = true;
+          }
+        } else if (key === 'revokedDeviceIds') {
+          if (partialState.revokedDeviceIds && typeof partialState.revokedDeviceIds === 'object') {
+            serverState.revokedDeviceIds = {
+              ...(serverState.revokedDeviceIds || {}),
+              ...partialState.revokedDeviceIds,
+            };
+            modified = true;
+          }
+        } else if (key === 'activeStaffSessions') {
+          if (Array.isArray(partialState.activeStaffSessions)) {
+            // Safely merge active sessions so a stale client never wipes another independent user's live session
+            const nowS = Date.now();
+            const revokedSet = serverState.revokedSessions || {};
+            const incomingRevoked = partialState.revokedSessions || {};
+            const mergedBySession = new Map();
+            for (const s of (serverState.activeStaffSessions || [])) {
+              if (!s || !s.sessionId) continue;
+              if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
+              if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
+              mergedBySession.set(s.sessionId, s);
+            }
+            for (const s of partialState.activeStaffSessions) {
+              if (!s || !s.sessionId) continue;
+              if (revokedSet[s.sessionId] || incomingRevoked[s.sessionId]) continue;
+              if (nowS - (s.lastActiveTime || s.loginTime || 0) >= 24 * 60 * 60 * 1000) continue;
+              mergedBySession.set(s.sessionId, s);
+            }
+            // Deduplicate per deviceId (keep newest session on a given device)
+            const byDevice = new Map();
+            for (const s of mergedBySession.values()) {
+              const prev = byDevice.get(s.deviceId);
+              if (!prev || (s.loginTime || 0) >= (prev.loginTime || 0)) {
+                byDevice.set(s.deviceId, s);
+              }
+            }
+            serverState.activeStaffSessions = Array.from(byDevice.values());
+            modified = true;
+          }
+        } else {
+          const sanitized = sanitizeIncomingSeedData(key, partialState[key]);
+          if (key === 'activeShiftId') {
+            const validShifts = Array.isArray(serverState.shifts) ? serverState.shifts : [];
+            serverState.activeShiftId = sanitized && validShifts.some(s => s && s.id === sanitized && s.status === 'open')
+              ? sanitized
+              : null;
+          } else if (key === 'staff') {
+            const incStaff = Array.isArray(sanitized) ? sanitized : [];
+            const masterOnly = INITIAL_STATE.staff[0];
+            const sMap = new Map();
+            for (const initSt of (INITIAL_STATE.staff || [])) {
+              if (initSt && initSt.id) sMap.set(initSt.id, { ...initSt });
+            }
+            for (const curr of (serverState.staff || [])) {
+              if (curr && curr.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(curr.id))) {
+                sMap.set(curr.id, { ...(sMap.get(curr.id) || {}), ...curr });
+              }
+            }
+            if (incStaff.length > 1) {
+              for (const inc of incStaff) {
+                if (inc && inc.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(inc.id))) {
+                  sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+                }
+              }
+            }
+            if (!sMap.has('st-master') && masterOnly) {
+              sMap.set('st-master', { ...masterOnly });
+            }
+            serverState.staff = Array.from(sMap.values());
+          } else if (key === 'inventoryResetEpoch' || key === 'deletedInventoryIds' || key === 'deletedStorageZoneIds' || key === 'deletedInventoryCategories' || key === 'deletedRecordIds') {
+            // Already merged into serverState sets above
+          } else if (isStaleInventoryClient && (key === 'inventory' || key === 'inventoryCategories' || key === 'stockMovements' || key === 'chillerHandovers')) {
+            // Ignore stale pre-reset inventory/categories/movements from older devices!
+          } else if (['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'invoices', 'customers'].includes(key)) {
+            const incArr = Array.isArray(sanitized) ? sanitized : [];
+            const currArr = Array.isArray(serverState[key]) ? serverState[key] : [];
+            if (incArr.length === 0 && currArr.length > 0 && !currArr.every((r) => r && deletedRecSet.has(r.id))) {
+              // Never allow an empty array from an unhydrated client to wipe non-empty ledgers
+            } else {
+              const getRecTs = (r) => Number(r?.updatedAt || r?.resolvedAt || r?.paidAt || r?.deliveryDate || r?.orderDate || r?.at || r?.createdAt || r?.timestamp || 0);
+              const rMap = new Map();
+              for (const c of currArr) {
+                if (c && c.id && !deletedRecSet.has(c.id)) rMap.set(c.id, c);
+              }
+              for (const inc of incArr) {
+                if (!inc || !inc.id || deletedRecSet.has(inc.id)) continue;
+                const prev = rMap.get(inc.id);
+                if (!prev || getRecTs(inc) >= getRecTs(prev)) {
+                  rMap.set(inc.id, { ...(prev || {}), ...inc });
+                }
+              }
+              serverState[key] = Array.from(rMap.values());
+            }
+          } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
+            const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
+            const currCats = Array.isArray(serverState[key]) ? serverState[key].map((c) => String(c || '').trim()).filter(Boolean) : [];
+            const activeInvCats = new Set(
+              (Array.isArray(partialState.inventory) ? partialState.inventory : serverState.inventory || [])
+                .map((i) => String(i?.category || '').trim().toLowerCase())
+                .filter(Boolean)
+            );
+            if (key === 'inventoryCategories' && Array.isArray(serverState.deletedInventoryCategories)) {
+              serverState.deletedInventoryCategories = serverState.deletedInventoryCategories.filter(
+                (c) => !activeInvCats.has(String(c || '').trim().toLowerCase())
+              );
+            }
+            // Additive union: a client with only 9 default categories can NEVER wipe 20+ custom categories!
+            const seenLower = new Set();
+            const mergedCats = [];
+            for (const c of [...currCats, ...incCats]) {
+              const lw = c.toLowerCase();
+              if (key === 'inventoryCategories' && deletedInvCatSet.has(lw) && !activeInvCats.has(lw)) continue;
+              if (!seenLower.has(lw)) {
+                seenLower.add(lw);
+                mergedCats.push(c);
+              }
+            }
+            if (mergedCats.length > 0) {
+              serverState[key] = mergedCats;
+            }
+          } else if (key === 'inventory') {
+            const incInv = Array.isArray(sanitized) ? sanitized : [];
+            const currInv = Array.isArray(serverState.inventory) ? serverState.inventory : [];
+            // Guard: NEVER allow an unhydrated client or empty cloud sync to wipe existing inventory!
+            if (incInv.length === 0 && currInv.length > 0 && !currInv.every((i) => i && deletedInvSet.has(i.id))) {
+              // Ignore empty array wipe attempt
+            } else {
+              const invMap = new Map();
+              for (const c of currInv) {
+                if (c && c.id && !deletedInvSet.has(c.id)) invMap.set(c.id, c);
+              }
+              for (const inc of incInv) {
+                if (!inc || !inc.id || deletedInvSet.has(inc.id)) continue;
+                const prev = invMap.get(inc.id);
+                if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                  invMap.set(inc.id, { ...(prev || {}), ...inc });
+                }
+              }
+              const nextInv = Array.from(invMap.values());
+              if (currInv.length - nextInv.length >= 3) {
+                try {
+                  if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+                  fs.writeFileSync(path.join(BACKUP_DIR, 'pre-inventory-change.json'), JSON.stringify(serverState, null, 2));
+                } catch (_) { }
+              }
+              serverState.inventory = nextInv;
+            }
+          } else if (key === 'storageZones') {
+            const incZones = Array.isArray(sanitized) ? sanitized : [];
+            const currZones = Array.isArray(serverState.storageZones) ? serverState.storageZones : [];
+            if (incZones.length === 0 && currZones.length > 0 && !currZones.every((z) => z && deletedZoneSet.has(z.id))) {
+              // Ignore empty array wipe attempt
+            } else {
+              const zMap = new Map();
+              for (const c of currZones) {
+                if (c && c.id && !deletedZoneSet.has(c.id)) zMap.set(c.id, c);
+              }
+              for (const inc of incZones) {
+                if (!inc || !inc.id || deletedZoneSet.has(inc.id)) continue;
+                const prev = zMap.get(inc.id);
+                if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+                  zMap.set(inc.id, { ...(prev || {}), ...inc });
+                }
+              }
+              serverState.storageZones = Array.from(zMap.values());
+            }
+          } else if (key === 'stockMovements' || key === 'chillerHandovers') {
+            const incList = Array.isArray(sanitized) ? sanitized : [];
+            const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
+            if (incList.length > 0 || currList.length === 0) {
+              const mMap = new Map();
+              for (const c of currList) { if (c && c.id) mMap.set(c.id, c); }
+              for (const inc of incList) { if (inc && inc.id) mMap.set(inc.id, inc); }
+              const limit = key === 'chillerHandovers' ? 150 : 500;
+              serverState[key] = Array.from(mMap.values()).sort((a, b) => (b.at || 0) - (a.at || 0)).slice(0, limit);
+            }
+          } else if (key === 'tableMoveLogs' || key === 'cancelledOrderLogs') {
+            const isBogusSettlementCancel = (c) => {
+              if (!c || c.reason !== 'Table released without billing') return false;
+              const cTime = c.cancelledAt || c.timestamp || 0;
+              return (serverState.invoices || []).some(
+                (inv) =>
+                  inv &&
+                  (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
+                  Math.abs((inv.timeSettled || inv.timePlaced || 0) - cTime) <= 15000
+              );
+            };
+            const incList = Array.isArray(sanitized) ? sanitized : [];
+            const currList = Array.isArray(serverState[key]) ? serverState[key] : [];
+            if (incList.length > 0 || currList.length === 0) {
+              const logMap = new Map();
+              for (const c of currList) {
+                if (c && c.id && !(key === 'cancelledOrderLogs' && isBogusSettlementCancel(c))) logMap.set(c.id, c);
+              }
+              for (const inc of incList) {
+                if (inc && inc.id && !(key === 'cancelledOrderLogs' && isBogusSettlementCancel(inc))) logMap.set(inc.id, inc);
+              }
+              serverState[key] = Array.from(logMap.values())
+                .sort((a, b) => (b.timestamp || b.cancelledAt || 0) - (a.timestamp || a.cancelledAt || 0))
+                .slice(0, 1500);
+            }
+          } else if (key === 'lastTableMoveAlert' || key === 'lastOrderCancelledAlert') {
+            const incAlert = sanitized;
+            const currAlert = serverState[key];
+            const isBogusAlert =
+              key === 'lastOrderCancelledAlert' &&
+              incAlert &&
+              incAlert.reason === 'Table released without billing' &&
+              (serverState.invoices || []).some(
+                (inv) =>
+                  inv &&
+                  (inv.tableId === incAlert.tableId || inv.tableName === incAlert.tableName) &&
+                  Math.abs((inv.timeSettled || inv.timePlaced || 0) - (incAlert.time || 0)) <= 15000
+              );
+            if (!incAlert || isBogusAlert) {
+              if (isBogusAlert) {
+                serverState[key] = null;
+              } else if (currAlert && Date.now() - (currAlert.time || 0) > 60000) {
+                // Keep live Cashier alerts broadcastable for 60s so concurrent updates from other terminals never swallow them
+                serverState[key] = null;
+              }
+            } else if (!currAlert || (incAlert.time || 0) >= (currAlert.time || 0)) {
+              serverState[key] = incAlert;
+            }
+          } else if (
+            Array.isArray(sanitized) &&
+            sanitized.length === 0 &&
+            Array.isArray(serverState[key]) &&
+            serverState[key].length > 0 &&
+            ['suppliers', 'purchaseOrders', 'supplierPayments', 'expenses', 'assets', 'damageRecords', 'recipes', 'shifts', 'invoices', 'customers', 'kitchenSessions', 'kitchenConsumption', 'attendance', 'salaryPayments'].includes(key)
+          ) {
+            // Guard: NEVER allow an unhydrated client sending [] to wipe non-empty operational ledgers!
+          } else {
+            serverState[key] = sanitized;
+          }
+          modified = true;
+        }
+      }
+    }
+
+    if (modified) {
+      // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
+      const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+      if (Array.isArray(serverState.tables)) {
+        const nowRec = Date.now();
+        // Waiter collections that the cashier has already turned into an invoice are finished — find their settle time
+        const receivedWaiterPayAt = (t) => {
+          const col = t.waiterPaymentCollection;
+          if (!col || col.status !== 'pending_cashier') return 0;
+          const inv = (serverState.invoices || []).find(i =>
+            i && (
+              (i.waiterPayId && i.waiterPayId === col.id) ||
+              (!i.waiterPayId && i.tableId === t.id &&
+                typeof i.notes === 'string' && i.notes.startsWith('Collected by Order Taker') &&
+                (i.timeSettled || i.timePlaced || 0) >= (col.collectedAt || 0))
+            )
+          );
+          return inv ? (inv.timeSettled || inv.timePlaced || nowRec) : 0;
+        };
+        serverState.tables = serverState.tables.map(t => {
+          const receivedAt = receivedWaiterPayAt(t);
+          if (receivedAt && !activeTicketByTable.has(t.id)) {
+            return {
+              ...t,
+              status: 'available',
+              billTotal: 0,
+              orders: [],
+              server: undefined,
+              isPaid: false,
+              lastInvoiceId: undefined,
+              occupiedSince: undefined,
+              waiterPaymentCollection: null,
+              lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt),
+            };
+          }
+          if (receivedAt) {
+            return { ...t, waiterPaymentCollection: null, lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt) };
+          }
+          if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && !(t.waiterPaymentCollection?.status === 'pending_cashier' && (t.lastSettledAt || 0) < (t.waiterPaymentCollection.collectedAt || 0))) {
+            return {
+              ...t,
+              status: 'available',
+              billTotal: 0,
+              orders: [],
+              server: undefined,
+              isPaid: false,
+              lastInvoiceId: undefined,
+              occupiedSince: undefined,
+              waiterPaymentCollection: null,
+              lastSettledAt: t.lastSettledAt || nowRec,
+            };
+          }
+          return t;
+        });
+      }
+
+      const nextFingerprint = computeStateFingerprint(serverState);
+      if (nextFingerprint === prevFingerprint) {
+        return;
+      }
+      lastStateFingerprint = nextFingerprint;
+      serverState.lastUpdated = Date.now();
+      persistState();
+      console.log(`[Sultan Hub] Synced state update from ${senderId || 'CLIENT'} (tickets: ${(serverState.tickets || []).length}, active ws: ${wss.clients.size})`);
+      if (
+        (partialState.revokedSessions && Object.keys(partialState.revokedSessions).length > 0) ||
+        (partialState.revokedDeviceIds && Object.keys(partialState.revokedDeviceIds).length > 0)
+      ) {
+        broadcastToClients({
+          type: 'FORCE_LOGOUT_DEVICE',
+          revokedSessions: serverState.revokedSessions || {},
+          revokedDeviceIds: serverState.revokedDeviceIds || {},
+          activeStaffSessions: serverState.activeStaffSessions || [],
+          timestamp: Date.now()
+        });
+      }
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: senderId || 'SERVER',
+        timestamp: serverState.lastUpdated
+      }, originWs);
+      pushToFirestoreCloud();
+    }
+  }
+
+  // ==============================================================
+  // BIDIRECTIONAL CLOUD FIRESTORE BRIDGE
+  // ==============================================================
+  // Never allow developer workstation ("Nizaam Digital Sol") to overwrite live Restaurant Cloud Firestore!
+  const IS_DEV_WORKSTATION = process.env.SULTAN_DISABLE_CLOUD_SYNC === '1';
+  const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
+  const FIRESTORE_PROJECT_ID = "sultan-resturant";
+  const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
+
+  let lastProcessedCloudTimestamp = 0;
+  let lastProcessedCloudUpdateTime = '';
+  let isPushingToFirestore = false;
+  let isApplyingCloudUpdate = false;
+  let firestorePushTimer = null;
+  let lastFirestorePushTime = 0;
+  const FIRESTORE_PUSH_INTERVAL = 90 * 1000; // 90 seconds (1.5 minutes) batch interval
+
+  function decodeFirestoreValue(val) {
+    if (!val || typeof val !== 'object') return val;
+    if ('stringValue' in val) return val.stringValue;
+    if ('integerValue' in val) return Number(val.integerValue);
+    if ('doubleValue' in val) return Number(val.doubleValue);
+    if ('booleanValue' in val) return val.booleanValue;
+    if ('nullValue' in val) return null;
+    if ('mapValue' in val) {
+      const fields = val.mapValue.fields || {};
+      const res = {};
+      for (const k in fields) res[k] = decodeFirestoreValue(fields[k]);
+      return res;
+    }
+    if ('arrayValue' in val) {
+      const values = val.arrayValue.values || [];
+      return values.map(decodeFirestoreValue);
+    }
+    return val;
+  }
+
+  function encodeFirestoreValue(val) {
+    if (val === null || val === undefined) return { nullValue: null };
+    if (typeof val === 'string') return { stringValue: val };
+    if (typeof val === 'boolean') return { booleanValue: val };
+    if (typeof val === 'number') {
+      if (Number.isInteger(val)) return { integerValue: val.toString() };
+      return { doubleValue: val };
+    }
+    if (Array.isArray(val)) {
+      return { arrayValue: { values: val.map(encodeFirestoreValue) } };
+    }
+    if (typeof val === 'object') {
+      const fields = {};
+      for (const k in val) {
+        if (val[k] !== undefined) fields[k] = encodeFirestoreValue(val[k]);
+      }
+      return { mapValue: { fields } };
+    }
+    return { stringValue: String(val) };
+  }
+
+  function pushToFirestoreCloud(forceImmediate = false) {
+    if (IS_DEV_WORKSTATION || isApplyingCloudUpdate) return;
+    const now = Date.now();
+    // If not forced and recently pushed within the interval, debounce to the next interval window
+    if (!forceImmediate && now - lastFirestorePushTime < FIRESTORE_PUSH_INTERVAL) {
+      if (!firestorePushTimer) {
+        const delay = FIRESTORE_PUSH_INTERVAL - (now - lastFirestorePushTime);
+        firestorePushTimer = setTimeout(() => {
+          firestorePushTimer = null;
+          pushToFirestoreCloud(true);
+        }, delay);
+      }
       return;
     }
-    if (!res.ok) return;
-    const doc = await res.json();
-    if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
-    const fields = doc.fields || {};
-    const senderId = fields.senderId?.stringValue;
-    if (hasInitialFirestorePollCompleted && senderId === 'SERVER_POS_HUB') return;
-    const timestamp = Number(fields.timestamp?.integerValue || 0);
-    if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
-    if (hasInitialFirestorePollCompleted && timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
 
-    if (fields.state?.mapValue?.fields) {
-      const decodedState = decodeFirestoreValue(fields.state);
-      if (decodedState && typeof decodedState === 'object') {
-        isApplyingCloudUpdate = true;
-        lastProcessedCloudTimestamp = timestamp || Date.now();
-        if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
-        applyStateUpdate(decodedState, senderId);
-        setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
-      }
+    if (firestorePushTimer) {
+      clearTimeout(firestorePushTimer);
+      firestorePushTimer = null;
     }
-  } catch (_) {
-    // Network retry next pulse
-  } finally {
-    hasInitialFirestorePollCompleted = true;
-  }
-}
 
-// Push authoritative local serverState to Cloud Firestore FIRST on boot so stale cloud snapshots never resurrect deleted tables/floors!
-setTimeout(() => pushToFirestoreCloud(true), 500);
-setInterval(pollFirestoreCloud, firestorePollInterval);
-
-wss.on('connection', (ws, req) => {
-  const remoteIp = req.socket.remoteAddress;
-  console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
-
-  ws.send(JSON.stringify({
-    type: 'INIT_STATE',
-    state: serverState,
-    senderId: 'SERVER',
-    timestamp: Date.now()
-  }));
-
-  ws.on('message', (message) => {
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.type === 'CLIENT_UPDATE' && data.state) {
-        const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
-        console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
-        if (!hasProcessedServerPacket(data.packetId)) {
-          applyStateUpdate(data.state, data.senderId, ws);
+    firestorePushTimer = setTimeout(async () => {
+      if (isPushingToFirestore) return;
+      isPushingToFirestore = true;
+      lastFirestorePushTime = Date.now();
+      try {
+        const now = Date.now();
+        lastProcessedCloudTimestamp = now;
+        const payload = {
+          type: 'SERVER_BROADCAST',
+          senderId: 'SERVER_POS_HUB',
+          timestamp: now,
+          state: {
+            tables: serverState.tables,
+            deletedTableIds: serverState.deletedTableIds || [],
+            deletedFloorIds: serverState.deletedFloorIds || [],
+            floors: serverState.floors || [],
+            tickets: serverState.tickets,
+            deletedTicketIds: serverState.deletedTicketIds || [],
+            invoices: serverState.invoices || [],
+            customers: serverState.customers || [],
+            reservations: serverState.reservations || [],
+            attendance: serverState.attendance || [],
+            salaryPayments: serverState.salaryPayments || [],
+            feedbacks: serverState.feedbacks || [],
+            salesReturns: serverState.salesReturns || [],
+            serviceRequests: serverState.serviceRequests || [],
+            inventory: serverState.inventory || [],
+            storageZones: serverState.storageZones || [],
+            inventoryResetEpoch: serverState.inventoryResetEpoch || 0,
+            deletedInventoryIds: serverState.deletedInventoryIds || [],
+            deletedStorageZoneIds: serverState.deletedStorageZoneIds || [],
+            deletedInventoryCategories: serverState.deletedInventoryCategories || [],
+            deletedRecordIds: serverState.deletedRecordIds || [],
+            inventoryCategories: serverState.inventoryCategories || [],
+            assetCategories: serverState.assetCategories || [],
+            expenseCategories: serverState.expenseCategories || [],
+            stockMovements: serverState.stockMovements || [],
+            chillerHandovers: serverState.chillerHandovers || [],
+            expenses: serverState.expenses || [],
+            suppliers: serverState.suppliers || [],
+            purchaseOrders: serverState.purchaseOrders || [],
+            supplierPayments: serverState.supplierPayments || [],
+            assets: serverState.assets || [],
+            damageRecords: serverState.damageRecords || [],
+            recipes: serverState.recipes || [],
+            kitchenSessions: serverState.kitchenSessions || [],
+            kitchenConsumption: serverState.kitchenConsumption || [],
+            kitchenManualUsage: serverState.kitchenManualUsage || [],
+            kitchenCash: serverState.kitchenCash || [],
+            menuItems: serverState.menuItems,
+            categories: serverState.categories,
+            staff: serverState.staff,
+            onlineOrders: serverState.onlineOrders,
+            pendingFloorOrderAlert: serverState.pendingFloorOrderAlert,
+            lastBillPaidAlert: serverState.lastBillPaidAlert,
+            lastFoodReadyAlert: serverState.lastFoodReadyAlert,
+            roles: serverState.roles,
+            shifts: serverState.shifts,
+            activeShiftId: serverState.activeShiftId,
+            systemSettings: serverState.systemSettings,
+          }
+        };
+        const fields = {};
+        for (const k in payload) {
+          fields[k] = encodeFirestoreValue(payload[k]);
         }
-      } else if (data.type === 'PING') {
-        ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+        await fetch(FIRESTORE_DOC_URL, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields })
+        });
+      } catch (_) {
+        // Local LAN continues seamlessly if cloud is offline
+      } finally {
+        isPushingToFirestore = false;
       }
-    } catch (e) {
-      console.error('[Sultan Hub] Bad WS message:', e.message);
+    }, 1500);
+  }
+
+  // Start Cloud Firestore bridge pulse with rate-limiting & exponential backoff on 429
+  let firestorePollInterval = 60000; // poll every 60s instead of 2.5s (reduces reads by 96%)
+  let firestoreBackoffUntil = 0;
+
+  let hasInitialFirestorePollCompleted = false;
+  async function pollFirestoreCloud() {
+    if (IS_DEV_WORKSTATION || isPushingToFirestore) return;
+    if (Date.now() < firestoreBackoffUntil) return;
+    try {
+      const res = await fetch(FIRESTORE_DOC_URL);
+      if (res.status === 429) {
+        // Quota exceeded: back off for 15 minutes before retrying
+        firestoreBackoffUntil = Date.now() + 15 * 60 * 1000;
+        return;
+      }
+      if (!res.ok) return;
+      const doc = await res.json();
+      if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
+      const fields = doc.fields || {};
+      const senderId = fields.senderId?.stringValue;
+      if (hasInitialFirestorePollCompleted && senderId === 'SERVER_POS_HUB') return;
+      const timestamp = Number(fields.timestamp?.integerValue || 0);
+      if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
+      if (hasInitialFirestorePollCompleted && timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
+
+      if (fields.state?.mapValue?.fields) {
+        const decodedState = decodeFirestoreValue(fields.state);
+        if (decodedState && typeof decodedState === 'object') {
+          isApplyingCloudUpdate = true;
+          lastProcessedCloudTimestamp = timestamp || Date.now();
+          if (doc.updateTime) lastProcessedCloudUpdateTime = doc.updateTime;
+          applyStateUpdate(decodedState, senderId);
+          setTimeout(() => { isApplyingCloudUpdate = false; }, 300);
+        }
+      }
+    } catch (_) {
+      // Network retry next pulse
+    } finally {
+      hasInitialFirestorePollCompleted = true;
     }
-  });
-
-  ws.on('close', () => {
-    console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
-  });
-
-  ws.on('error', (err) => {
-    console.error('[Sultan Hub] WS socket error:', err.message);
-  });
-});
-
-function listenDualStack(srv, port, onSuccess, onError) {
-  if (!srv) return;
-  srv.on('error', (err) => {
-    if (onError) onError(err);
-  });
-  try {
-    srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
-  } catch (_) {
-    srv.listen(Number(port), '0.0.0.0', onSuccess);
   }
-}
 
-listenDualStack(
-  server,
-  PORT,
-  () => {
-    console.log(`=================================================`);
-    console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
-    console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
-    console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
-    console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
-    console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
-    console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
-    console.log(`WebSocket URL: ws://localhost:${PORT}`);
-    console.log(`=================================================`);
-  },
-  (err) => {
-    console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
+  // Push authoritative local serverState to Cloud Firestore FIRST on boot so stale cloud snapshots never resurrect deleted tables/floors!
+  setTimeout(() => pushToFirestoreCloud(true), 500);
+  setInterval(pollFirestoreCloud, firestorePollInterval);
+
+  wss.on('connection', (ws, req) => {
+    const remoteIp = req.socket.remoteAddress;
+    console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
+
+    ws.send(JSON.stringify({
+      type: 'INIT_STATE',
+      state: serverState,
+      senderId: 'SERVER',
+      timestamp: Date.now()
+    }));
+
+    ws.on('message', (message) => {
+      try {
+        const data = JSON.parse(message.toString());
+        if (data.type === 'CLIENT_UPDATE' && data.state) {
+          const ticketCount = Array.isArray(data.state.tickets) ? data.state.tickets.length : '?';
+          console.log(`[Sultan Hub] WS CLIENT_UPDATE from ${data.senderId || 'CLIENT'} tickets=${ticketCount}`);
+          if (!hasProcessedServerPacket(data.packetId)) {
+            applyStateUpdate(data.state, data.senderId, ws);
+          }
+        } else if (data.type === 'PING') {
+          ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+        }
+      } catch (e) {
+        console.error('[Sultan Hub] Bad WS message:', e.message);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log(`[Sultan Hub] Device disconnected. Total active: ${wss.clients.size}`);
+    });
+
+    ws.on('error', (err) => {
+      console.error('[Sultan Hub] WS socket error:', err.message);
+    });
+  });
+
+  function listenDualStack(srv, port, onSuccess, onError) {
+    if (!srv) return;
+    srv.on('error', (err) => {
+      if (onError) onError(err);
+    });
+    try {
+      srv.listen({ port: Number(port), host: '::', ipv6Only: false }, onSuccess);
+    } catch (_) {
+      srv.listen(Number(port), '0.0.0.0', onSuccess);
+    }
   }
-);
 
-listenDualStack(
-  server5000,
-  5000,
-  () => {
-    console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
-  },
-  (err) => {
-    console.log('[Sultan Hub] Port 5000 listener:', err.message);
-  }
-);
-
-if (server80) {
   listenDualStack(
-    server80,
-    80,
+    server,
+    PORT,
     () => {
-      console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+      console.log(`=================================================`);
+      console.log(`SULTAN RESTAURANT CENTRAL POS & API HUB ONLINE`);
+      console.log(`Port: ${PORT} (Dual-Stack IPv4 0.0.0.0 + IPv6 ::)`);
+      console.log(`Auth API: http://localhost:${PORT}/api/auth/login`);
+      console.log(`Admin Users API: http://localhost:${PORT}/api/admin/app-users`);
+      console.log(`Public Menu: http://localhost:${PORT}/api/public/menu`);
+      console.log(`Online Orders: http://localhost:${PORT}/api/public/orders`);
+      console.log(`WebSocket URL: ws://localhost:${PORT}`);
+      console.log(`=================================================`);
     },
     (err) => {
-      console.log('[Sultan Hub] Port 80 listener:', err.message);
+      console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
     }
   );
-}
+
+  listenDualStack(
+    server5000,
+    5000,
+    () => {
+      console.log(`Sultan POS Hub also active on Port 5000 (Firewall-Friendly LAN Range)`);
+    },
+    (err) => {
+      console.log('[Sultan Hub] Port 5000 listener:', err.message);
+    }
+  );
+
+  if (server80) {
+    listenDualStack(
+      server80,
+      80,
+      () => {
+        console.log(`Sultan POS Hub also active on Port 80 (Standard WWW HTTP)`);
+      },
+      (err) => {
+        console.log('[Sultan Hub] Port 80 listener:', err.message);
+      }
+    );
+  }
