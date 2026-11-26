@@ -8052,8 +8052,16 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             }
           }
           serverState.floors = Array.from(byName.values());
+          serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
           modified = true;
         }
+      } else if (key === 'zones') {
+        if (Array.isArray(serverState.floors) && serverState.floors.length > 0) {
+          serverState.zones = serverState.floors.map(f => f.name).filter(Boolean);
+        } else if (Array.isArray(partialState.zones) && partialState.zones.length > 0) {
+          serverState.zones = partialState.zones;
+        }
+        modified = true;
       } else if (key === 'deletedTableIds' || key === 'deletedFloorIds') {
         if (Array.isArray(serverState.tables) && deletedTableSet.size > 0) {
           serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
