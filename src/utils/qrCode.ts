@@ -1,6 +1,7 @@
 import QRCode from 'qrcode';
 import { Platform } from 'react-native';
 import { useRestaurantStore } from '../store/restaurantStore';
+import { getActiveServerHttpUrl } from '../services/syncService';
 
 /**
  * Public HTTPS Cloud URL for Sultan Restaurant's Customer Digital Menu & Feedback Portal.
@@ -385,14 +386,13 @@ export function printTableStandeeHtml(
 }
 
 /**
- * Batch Prints multiple table standees with automatic page breaks.
+ * Builds the standalone HTML document for one or more table QR standees.
  */
-export function printAllTablesStandeesHtml(
+export function buildTablesStandeesHtml(
   tablesList: { id: string; name: string; floor?: string; seats?: number; zone?: string; seatingType?: string }[],
-  qrMap: Record<string, string>
-) {
-  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
-
+  qrMap: Record<string, string>,
+  docTitle = 'Sultan Table QR Standees'
+): string {
   const cardsHtml = tablesList.map(table => {
     const qrDataUrl = qrMap[table.id] || '';
     const floorName = table.floor || 'Ground Floor';
@@ -428,12 +428,12 @@ export function printAllTablesStandeesHtml(
     `;
   }).join('');
 
-  const html = `
+  return `
     <!DOCTYPE html>
     <html>
     <head>
       <meta charset="utf-8" />
-      <title>Sultan All Tables QR Standees</title>
+      <title>${docTitle}</title>
       <style>
         @page {
           size: 4in 6in;
@@ -555,6 +555,17 @@ export function printAllTablesStandeesHtml(
     </body>
     </html>
   `;
+}
+
+/**
+ * Batch Prints multiple table standees with automatic page breaks.
+ */
+export function printAllTablesStandeesHtml(
+  tablesList: { id: string; name: string; floor?: string; seats?: number; zone?: string; seatingType?: string }[],
+  qrMap: Record<string, string>
+) {
+  if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+  const html = buildTablesStandeesHtml(tablesList, qrMap, 'Sultan All Tables QR Standees');
 
   let iframe = document.getElementById('table-qr-print-frame') as HTMLIFrameElement | null;
   if (!iframe) {
@@ -581,5 +592,71 @@ export function printAllTablesStandeesHtml(
       iframe?.contentWindow?.print();
     }, 350);
   }
+}
+
+/**
+ * Generates and downloads a real PDF file (.pdf) containing the selected table QR standees
+ * via the Sultan Central Hub (/api/reports/export-pdf), with automatic fallback to print-to-PDF.
+ */
+export async function downloadTablesStandeesPdf(
+  tablesList: { id: string; name: string; floor?: string; seats?: number; zone?: string; seatingType?: string }[],
+  qrMap: Record<string, string>,
+  scopeLabel = 'All_Floors'
+): Promise<{ ok: boolean; filename: string; message: string }> {
+  const dateStamp = new Date().toISOString().slice(0, 10);
+  const cleanScope = (scopeLabel || 'All_Floors').replace(/[^a-z0-9_-]/gi, '_').replace(/_+/g, '_');
+  const filename = `Sultan_QR_Standees_${cleanScope}_${dateStamp}.pdf`;
+  const html = buildTablesStandeesHtml(tablesList, qrMap, filename.replace(/\.pdf$/i, ''));
+
+  try {
+    const base =
+      Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : getActiveServerHttpUrl();
+
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 25000) : null;
+
+    const res = await fetch(`${base}/api/reports/export-pdf`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ html, filename }),
+      ...(controller ? { signal: controller.signal } : {}),
+    });
+    if (timer) clearTimeout(timer);
+
+    if (res.ok && Platform.OS === 'web' && typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const blob = await res.blob();
+      if (blob.size > 500) {
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        setTimeout(() => {
+          try {
+            document.body.removeChild(a);
+            URL.revokeObjectURL(blobUrl);
+          } catch {}
+        }, 1500);
+        return {
+          ok: true,
+          filename,
+          message: `Downloaded ${filename} (${tablesList.length} QR Standees)`,
+        };
+      }
+    }
+  } catch {
+    // Fallback to browser print-to-PDF dialog below
+  }
+
+  printAllTablesStandeesHtml(tablesList, qrMap);
+  return {
+    ok: true,
+    filename,
+    message: 'Opened Print / Save as PDF dialog.',
+  };
 }
 

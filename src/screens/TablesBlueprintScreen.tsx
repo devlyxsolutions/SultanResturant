@@ -33,6 +33,7 @@ import { Reservation, Table, useRestaurantStore } from '../store/restaurantStore
 import { useRolePermissions } from '../store/roleStore';
 import { useSettingsStore } from '../store/settingsStore';
 import {
+  downloadTablesStandeesPdf,
   generateTableQrCode,
   getTableMenuUrl,
   printAllTablesStandeesHtml,
@@ -340,10 +341,13 @@ export default function TablesBlueprintScreen({
   const [isGeneratingQr, setIsGeneratingQr] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
 
-  // Batch Floor Standees Printing
+  // Batch Floor & Zone Standees Printing + PDF Export
   const [batchQrModalVisible, setBatchQrModalVisible] = useState(false);
   const [batchQrMap, setBatchQrMap] = useState<Record<string, string>>({});
   const [isBatchGenerating, setIsBatchGenerating] = useState(false);
+  const [batchQrFloorFilter, setBatchQrFloorFilter] = useState<string>('all');
+  const [batchQrZoneFilter, setBatchQrZoneFilter] = useState<'all' | SeatingZoneType>('all');
+  const [isDownloadingQrPdf, setIsDownloadingQrPdf] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
@@ -573,12 +577,25 @@ export default function TablesBlueprintScreen({
     }
   };
 
+  const batchQrFilteredTables = useMemo(() => {
+    return enabledTables.filter((t) => {
+      if (batchQrFloorFilter !== 'all' && getTableFloor(t).toLowerCase() !== batchQrFloorFilter.toLowerCase()) {
+        return false;
+      }
+      if (batchQrZoneFilter !== 'all' && getTableSeatingType(t) !== batchQrZoneFilter) {
+        return false;
+      }
+      return true;
+    });
+  }, [enabledTables, batchQrFloorFilter, batchQrZoneFilter]);
+
   const openBatchQrModal = async () => {
+    setBatchQrFloorFilter(floorFilter);
+    setBatchQrZoneFilter(seatingTypeFilter);
     setBatchQrModalVisible(true);
     setIsBatchGenerating(true);
-    const targetTables = floorFilter === 'all' ? enabledTables : filteredTables;
     const newMap: Record<string, string> = { ...batchQrMap };
-    for (const t of targetTables) {
+    for (const t of enabledTables) {
       if (!newMap[t.id]) {
         try {
           newMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name);
@@ -587,6 +604,26 @@ export default function TablesBlueprintScreen({
     }
     setBatchQrMap(newMap);
     setIsBatchGenerating(false);
+  };
+
+  const handleDownloadBatchQrPdf = async (list: Table[], scopeName?: string) => {
+    if (!list.length || isDownloadingQrPdf) return;
+    setIsDownloadingQrPdf(true);
+    try {
+      const floorPart = batchQrFloorFilter === 'all' ? 'All_Floors' : batchQrFloorFilter;
+      const zonePart =
+        batchQrZoneFilter === 'all'
+          ? 'All_Zones'
+          : batchQrZoneFilter === 'majlis'
+            ? 'Majlis_Cabins'
+            : batchQrZoneFilter === 'couches'
+              ? 'Sofas'
+              : 'Tables';
+      const label = scopeName || `${floorPart}_${zonePart}`;
+      await downloadTablesStandeesPdf(list, batchQrMap, label);
+    } finally {
+      setIsDownloadingQrPdf(false);
+    }
   };
 
   const handleCopyTableLink = (table: Table) => {
@@ -4356,26 +4393,55 @@ export default function TablesBlueprintScreen({
                 </View>
 
                 <View style={{ gap: 8 }}>
-                  <TouchableOpacity
-                    style={{
-                      backgroundColor: '#B8860B',
-                      paddingVertical: 12,
-                      borderRadius: 10,
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 6,
-                    }}
-                    onPress={() => {
-                      if (qrDataUrl) printTableStandeeHtml(qrTable, qrDataUrl);
-                    }}
-                    disabled={!qrDataUrl}
-                  >
-                    <Ionicons name="print" size={17} color="#FFF" />
-                    <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 13 }}>
-                      Print Luxury Acrylic Table Standee
-                    </Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#B8860B',
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                      }}
+                      onPress={() => {
+                        if (qrDataUrl) printTableStandeeHtml(qrTable, qrDataUrl);
+                      }}
+                      disabled={!qrDataUrl}
+                    >
+                      <Ionicons name="print" size={17} color="#FFF" />
+                      <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 13 }}>
+                        Print Standee
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#3A0F12',
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        borderWidth: 1,
+                        borderColor: '#D5A943',
+                      }}
+                      onPress={() => {
+                        if (qrDataUrl) {
+                          downloadTablesStandeesPdf([qrTable], { [qrTable.id]: qrDataUrl }, `${getTableFloor(qrTable)}_${qrTable.name}`);
+                        }
+                      }}
+                      disabled={!qrDataUrl}
+                    >
+                      <Ionicons name="download-outline" size={17} color="#F3D179" />
+                      <Text style={{ color: '#F3D179', fontWeight: '900', fontSize: 13 }}>
+                        Download PDF
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
 
                   <TouchableOpacity
                     style={{
@@ -4411,15 +4477,17 @@ export default function TablesBlueprintScreen({
         </View>
       </Modal>
 
-      {/* ---------- Batch Floor QRs Modal ---------- */}
+      {/* ---------- Batch Floor & Zone QRs Modal ---------- */}
       <Modal visible={batchQrModalVisible} transparent animationType="fade" onRequestClose={() => setBatchQrModalVisible(false)}>
         <View style={styles.overlay}>
-          <View style={[styles.dialog, { maxWidth: 650, maxHeight: '90%', padding: 20 }]}>
+          <View style={[styles.dialog, { maxWidth: 740, maxHeight: '92%', padding: 20 }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <View>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: '#1C1C1E' }}>Batch Table QR Standees</Text>
-                <Text style={{ fontSize: 12, color: '#64748B' }}>
-                  Print acrylic tent cards for all tables on {floorFilter === 'all' ? 'All Floors' : floorFilter}
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#1C1C1E' }}>
+                  Table QR Code Standees (Print & PDF Download)
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  Select Floor & Seating Zone below to print or download PDF for specific units ({batchQrFilteredTables.length} selected)
                 </Text>
               </View>
               <TouchableOpacity onPress={() => setBatchQrModalVisible(false)}>
@@ -4427,24 +4495,122 @@ export default function TablesBlueprintScreen({
               </TouchableOpacity>
             </View>
 
+            {/* 1. Floor Selector Row */}
+            <View style={{ marginBottom: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+                1. Select Floor (فلور منتخب کریں)
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                <TouchableOpacity
+                  style={[
+                    styles.floorPill,
+                    batchQrFloorFilter === 'all' && styles.floorPillActive,
+                  ]}
+                  onPress={() => setBatchQrFloorFilter('all')}
+                >
+                  <Ionicons name="layers-outline" size={14} color={batchQrFloorFilter === 'all' ? '#24050A' : '#475569'} />
+                  <Text style={[styles.floorPillText, batchQrFloorFilter === 'all' && styles.floorPillTextActive]}>
+                    All Floors ({enabledTables.length})
+                  </Text>
+                </TouchableOpacity>
+                {availableFloors.map((fl) => {
+                  const active = batchQrFloorFilter.toLowerCase() === fl.toLowerCase();
+                  const flCount = enabledTables.filter((t) => getTableFloor(t).toLowerCase() === fl.toLowerCase()).length;
+                  return (
+                    <TouchableOpacity
+                      key={`qr-fl-${fl}`}
+                      style={[styles.floorPill, active && styles.floorPillActive]}
+                      onPress={() => setBatchQrFloorFilter(fl)}
+                    >
+                      <Text style={[styles.floorPillText, active && styles.floorPillTextActive]}>
+                        {fl} ({flCount})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* 2. Seating Zone / Type Selector Row */}
+            <View style={{ marginBottom: 12 }}>
+              <Text style={{ fontSize: 11, fontWeight: '900', color: '#475569', textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 6 }}>
+                2. Select Zone / Unit Type (ٹیبل، صوفہ یا مجلس کیبن)
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {(
+                  [
+                    { key: 'all', label: 'All Zones', icon: 'apps-outline' },
+                    { key: 'tables', label: 'Dining Tables', icon: 'restaurant-outline' },
+                    { key: 'couches', label: 'VIP Sofas', icon: 'bed-outline' },
+                    { key: 'majlis', label: 'Majlis Cabins', icon: 'home-outline' },
+                  ] as const
+                ).map((zOpt) => {
+                  const active = batchQrZoneFilter === zOpt.key;
+                  const floorScoped = enabledTables.filter(
+                    (t) => batchQrFloorFilter === 'all' || getTableFloor(t).toLowerCase() === batchQrFloorFilter.toLowerCase()
+                  );
+                  const zCount =
+                    zOpt.key === 'all'
+                      ? floorScoped.length
+                      : floorScoped.filter((t) => getTableSeatingType(t) === zOpt.key).length;
+                  return (
+                    <TouchableOpacity
+                      key={`qr-zn-${zOpt.key}`}
+                      style={[
+                        styles.floorPill,
+                        active && { backgroundColor: '#3A0F12', borderColor: '#D5A943' },
+                      ]}
+                      onPress={() => setBatchQrZoneFilter(zOpt.key)}
+                    >
+                      <Ionicons
+                        name={zOpt.icon as any}
+                        size={14}
+                        color={active ? '#F3D179' : '#475569'}
+                      />
+                      <Text
+                        style={[
+                          styles.floorPillText,
+                          active && { color: '#F3D179', fontWeight: '900' },
+                        ]}
+                      >
+                        {zOpt.label} ({zCount})
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {isBatchGenerating ? (
               <View style={{ padding: 40, alignItems: 'center', gap: 10 }}>
                 <ActivityIndicator size="large" color="#895B1E" />
                 <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '700' }}>
-                  Generating QR codes for {(floorFilter === 'all' ? enabledTables : filteredTables).length} tables...
+                  Generating QR codes for {batchQrFilteredTables.length} tables...
+                </Text>
+              </View>
+            ) : batchQrFilteredTables.length === 0 ? (
+              <View style={{ padding: 36, alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 12, marginBottom: 14 }}>
+                <Ionicons name="qr-code-outline" size={34} color="#94A3B8" />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: '#334155' }}>
+                  No Units in This Floor / Zone Filter
+                </Text>
+                <Text style={{ fontSize: 12, color: '#64748B' }}>
+                  Choose another Floor or Zone tab above to view QR standees.
                 </Text>
               </View>
             ) : (
-              <ScrollView style={{ maxHeight: 380, marginBottom: 14 }} showsVerticalScrollIndicator={false}>
+              <ScrollView style={{ maxHeight: 340, marginBottom: 14 }} showsVerticalScrollIndicator={false}>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
-                  {(floorFilter === 'all' ? enabledTables : filteredTables).map((tbl) => {
+                  {batchQrFilteredTables.map((tbl) => {
                     const qr = batchQrMap[tbl.id];
+                    const tType = getTableSeatingType(tbl);
+                    const typeLabel = tType === 'majlis' ? 'Majlis' : tType === 'couches' ? 'Sofa' : 'Table';
                     return (
                       <View
                         key={tbl.id}
                         style={{
                           width: '31%',
-                          minWidth: 145,
+                          minWidth: 155,
                           flexGrow: 1,
                           backgroundColor: '#FAF8F5',
                           borderRadius: 10,
@@ -4455,8 +4621,8 @@ export default function TablesBlueprintScreen({
                         }}
                       >
                         <Text style={{ fontSize: 13, fontWeight: '900', color: '#3A0F12' }}>{tbl.name}</Text>
-                        <Text style={{ fontSize: 10, color: '#64748B' }}>
-                          {getTableFloor(tbl)} • {tbl.seats}s
+                        <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '600' }}>
+                          {getTableFloor(tbl)} • {typeLabel} ({tbl.seats}s)
                         </Text>
                         <View
                           style={{
@@ -4477,17 +4643,40 @@ export default function TablesBlueprintScreen({
                             <ActivityIndicator size="small" color="#895B1E" />
                           )}
                         </View>
-                        <TouchableOpacity
-                          style={{
-                            backgroundColor: '#3A0F12',
-                            paddingHorizontal: 8,
-                            paddingVertical: 3,
-                            borderRadius: 4,
-                          }}
-                          onPress={() => printTableStandeeHtml(tbl, qr || '')}
-                        >
-                          <Text style={{ color: '#D5A943', fontSize: 10, fontWeight: '800' }}>Print 1</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          <TouchableOpacity
+                            style={{
+                              backgroundColor: '#B8860B',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 5,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                            }}
+                            onPress={() => printTableStandeeHtml(tbl, qr || '')}
+                          >
+                            <Ionicons name="print-outline" size={11} color="#FFF" />
+                            <Text style={{ color: '#FFF', fontSize: 10, fontWeight: '800' }}>Print</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={{
+                              backgroundColor: '#3A0F12',
+                              paddingHorizontal: 8,
+                              paddingVertical: 4,
+                              borderRadius: 5,
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                            }}
+                            onPress={() =>
+                              downloadTablesStandeesPdf([tbl], { [tbl.id]: qr || '' }, `${getTableFloor(tbl)}_${tbl.name}`)
+                            }
+                          >
+                            <Ionicons name="download-outline" size={11} color="#D5A943" />
+                            <Text style={{ color: '#D5A943', fontSize: 10, fontWeight: '800' }}>PDF</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
                     );
                   })}
@@ -4495,10 +4684,35 @@ export default function TablesBlueprintScreen({
               </ScrollView>
             )}
 
-            <View style={{ flexDirection: 'row', gap: 10, justifyContent: 'flex-end', borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 12 }}>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'flex-end', borderTopWidth: 1, borderTopColor: '#EEE', paddingTop: 12 }}>
               <TouchableOpacity style={styles.ghostBtn} onPress={() => setBatchQrModalVisible(false)}>
                 <Text style={styles.ghostBtnText}>Close</Text>
               </TouchableOpacity>
+
+              <TouchableOpacity
+                style={{
+                  backgroundColor: '#3A0F12',
+                  borderWidth: 1,
+                  borderColor: '#D5A943',
+                  paddingHorizontal: 16,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                  opacity: isBatchGenerating || isDownloadingQrPdf || batchQrFilteredTables.length === 0 ? 0.5 : 1,
+                }}
+                onPress={() => handleDownloadBatchQrPdf(batchQrFilteredTables)}
+                disabled={isBatchGenerating || isDownloadingQrPdf || batchQrFilteredTables.length === 0}
+              >
+                <Ionicons name="download-outline" size={17} color="#F3D179" />
+                <Text style={{ color: '#F3D179', fontWeight: '900', fontSize: 13 }}>
+                  {isDownloadingQrPdf
+                    ? 'Generating PDF...'
+                    : `Download PDF (${batchQrFilteredTables.length})`}
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 style={{
                   backgroundColor: '#B8860B',
@@ -4508,16 +4722,16 @@ export default function TablesBlueprintScreen({
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 6,
+                  opacity: isBatchGenerating || batchQrFilteredTables.length === 0 ? 0.5 : 1,
                 }}
                 onPress={() => {
-                  const targetList = floorFilter === 'all' ? enabledTables : filteredTables;
-                  printAllTablesStandeesHtml(targetList, batchQrMap);
+                  printAllTablesStandeesHtml(batchQrFilteredTables, batchQrMap);
                 }}
-                disabled={isBatchGenerating}
+                disabled={isBatchGenerating || batchQrFilteredTables.length === 0}
               >
                 <Ionicons name="print" size={17} color="#FFF" />
                 <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 13 }}>
-                  Print All {(floorFilter === 'all' ? enabledTables : filteredTables).length} Standees
+                  Print {batchQrFilteredTables.length} Standees
                 </Text>
               </TouchableOpacity>
             </View>
