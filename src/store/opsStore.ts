@@ -926,6 +926,74 @@ function notifySync() {
   }, 0);
 }
 
+const OFFICIAL_SULTAN_CAT_SET = new Set(SULTAN_INVENTORY_CATEGORIES.map((c) => c.toLowerCase()));
+const OLD_PLACEHOLDER_CAT_SET = new Set(['meat', 'produce', 'grains', 'pantry', 'beverages', 'fuel', 'supplies']);
+
+function ensureOfficialSultanCatalog(
+  rawInv: InventoryItem[] | undefined,
+  rawCats: string[] | undefined,
+  rawDelCats: string[] | undefined,
+  delInvSet: Set<string>
+): {
+  inventory: InventoryItem[];
+  inventoryCategories: string[];
+  deletedInventoryCategories: string[];
+} {
+  const currentInv = Array.isArray(rawInv) ? [...rawInv] : [];
+  const existingIds = new Set(currentInv.map((i) => i?.id).filter(Boolean));
+  const existingNameKeys = new Set(
+    currentInv.map((i) => `${(i?.name || '').trim().toLowerCase()}|${(i?.category || '').trim().toLowerCase()}`)
+  );
+
+  for (const seedItem of SULTAN_DEFAULT_INVENTORY) {
+    if (delInvSet.has(seedItem.id)) continue;
+    const key = `${seedItem.name.trim().toLowerCase()}|${seedItem.category.trim().toLowerCase()}`;
+    if (existingIds.has(seedItem.id) || existingNameKeys.has(key)) {
+      continue;
+    }
+    currentInv.push({ ...seedItem });
+    existingIds.add(seedItem.id);
+    existingNameKeys.add(key);
+  }
+
+  const usedInvCats = new Set(currentInv.map((i) => (i?.category || '').trim().toLowerCase()).filter(Boolean));
+  const cleanedDelCats = Array.isArray(rawDelCats)
+    ? rawDelCats.filter((c) => {
+        const lw = String(c || '').trim().toLowerCase();
+        return lw && !OFFICIAL_SULTAN_CAT_SET.has(lw) && !usedInvCats.has(lw);
+      })
+    : [];
+  const delCatLower = new Set(cleanedDelCats.map((c) => c.toLowerCase()));
+
+  const seenCats = new Set<string>();
+  const mergedCats: string[] = [];
+  [...SULTAN_INVENTORY_CATEGORIES, ...(Array.isArray(rawCats) ? rawCats : [])].forEach((c) => {
+    const clean = String(c || '').trim();
+    if (!clean) return;
+    const lw = clean.toLowerCase();
+    if (OLD_PLACEHOLDER_CAT_SET.has(lw) && !usedInvCats.has(lw)) return;
+    if (delCatLower.has(lw) && !usedInvCats.has(lw) && !OFFICIAL_SULTAN_CAT_SET.has(lw)) return;
+    if (seenCats.has(lw)) return;
+    seenCats.add(lw);
+    mergedCats.push(clean);
+  });
+  currentInv.forEach((it) => {
+    const clean = String(it?.category || '').trim();
+    if (!clean) return;
+    const lw = clean.toLowerCase();
+    if (!seenCats.has(lw)) {
+      seenCats.add(lw);
+      mergedCats.push(clean);
+    }
+  });
+
+  return {
+    inventory: currentInv,
+    inventoryCategories: mergedCats,
+    deletedInventoryCategories: cleanedDelCats,
+  };
+}
+
 export const useOpsStore = create<OpsState>()(
   persist(
     (set, get) => ({
@@ -949,7 +1017,7 @@ export const useOpsStore = create<OpsState>()(
       assets: INITIAL_ASSETS,
       damageRecords: INITIAL_DAMAGES,
       dummyPurgeVersion: 3,
-      catalogSeedVersion: 1,
+      catalogSeedVersion: 2,
 
       addServiceRequest: (req) => {
         const duplicate = get().serviceRequests.some(
@@ -2810,6 +2878,18 @@ export const useOpsStore = create<OpsState>()(
             });
             next.inventoryCategories = mergedCats;
           }
+
+          // Guarantee official 19 Sultan categories & 124 catalog items survive stale remote sync packets
+          const ensured = ensureOfficialSultanCatalog(
+            next.inventory ?? state.inventory,
+            next.inventoryCategories ?? state.inventoryCategories,
+            next.deletedInventoryCategories ?? state.deletedInventoryCategories,
+            delInvSet
+          );
+          next.inventory = ensured.inventory;
+          next.inventoryCategories = ensured.inventoryCategories;
+          next.deletedInventoryCategories = ensured.deletedInventoryCategories;
+
           if (Array.isArray(remote.assetCategories) && remote.assetCategories.length > 0) {
             const seen = new Set<string>();
             const mergedAssetCats: string[] = [];
@@ -2923,54 +3003,28 @@ export const useOpsStore = create<OpsState>()(
           state.chillerHandovers = (state.chillerHandovers || []).filter((h) => h && !isLegacyId(h.itemId));
           state.dummyPurgeVersion = 3;
         }
-        // Seed Official Sultan 19 Categories & 124 Inventory Items once (non-destructive additive merge)
-        if (state && (state.catalogSeedVersion || 0) < 1) {
-          const currentInv = Array.isArray(state.inventory) ? [...state.inventory] : [];
-          const existingIds = new Set(currentInv.map((i) => i?.id).filter(Boolean));
-          const existingNameKeys = new Set(
-            currentInv.map((i) => `${(i?.name || '').trim().toLowerCase()}|${(i?.category || '').trim().toLowerCase()}`)
+        // Seed Official Sultan 19 Categories & 124 Inventory Items (non-destructive additive merge + live setState)
+        if (state && ((state.catalogSeedVersion || 0) < 2 || (state.inventory || []).length < 50)) {
+          const delInvSet = new Set(Array.isArray(state.deletedInventoryIds) ? state.deletedInventoryIds : []);
+          const ensured = ensureOfficialSultanCatalog(
+            state.inventory,
+            state.inventoryCategories,
+            state.deletedInventoryCategories,
+            delInvSet
           );
-          const existingBaseNames = new Set(
-            currentInv.map((i) => (i?.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase())
-          );
-
-          for (const seedItem of SULTAN_DEFAULT_INVENTORY) {
-            const key = `${seedItem.name.trim().toLowerCase()}|${seedItem.category.trim().toLowerCase()}`;
-            const baseName = seedItem.name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
-            if (existingIds.has(seedItem.id) || existingNameKeys.has(key) || existingBaseNames.has(baseName)) {
-              continue;
-            }
-            currentInv.push({ ...seedItem });
-            existingIds.add(seedItem.id);
-            existingNameKeys.add(key);
-            existingBaseNames.add(baseName);
-          }
-          state.inventory = currentInv;
-
-          // Build clean categories: 19 official categories + any existing category that still has items or is custom
-          const oldPlaceholderCats = new Set(['meat', 'produce', 'grains', 'pantry', 'beverages', 'fuel', 'supplies']);
-          const usedInvCats = new Set(currentInv.map((i) => (i?.category || '').trim().toLowerCase()).filter(Boolean));
-          const existingCats = Array.isArray(state.inventoryCategories) ? state.inventoryCategories : [];
-          const seenCats = new Set<string>();
-          const mergedCats: string[] = [];
-          [...SULTAN_INVENTORY_CATEGORIES, ...existingCats].forEach((c) => {
-            const clean = String(c || '').trim();
-            if (!clean) return;
-            const lw = clean.toLowerCase();
-            if (oldPlaceholderCats.has(lw) && !usedInvCats.has(lw)) return;
-            if (seenCats.has(lw)) return;
-            seenCats.add(lw);
-            mergedCats.push(clean);
-          });
-          state.inventoryCategories = mergedCats;
-          const officialSet = new Set(SULTAN_INVENTORY_CATEGORIES.map((c) => c.toLowerCase()));
-          if (Array.isArray(state.deletedInventoryCategories)) {
-            state.deletedInventoryCategories = state.deletedInventoryCategories.filter(
-              (c) => !officialSet.has(String(c || '').trim().toLowerCase())
-            );
-          }
-          state.catalogSeedVersion = 1;
-          notifySync();
+          state.inventory = ensured.inventory;
+          state.inventoryCategories = ensured.inventoryCategories;
+          state.deletedInventoryCategories = ensured.deletedInventoryCategories;
+          state.catalogSeedVersion = 2;
+          setTimeout(() => {
+            useOpsStore.setState({
+              inventory: ensured.inventory,
+              inventoryCategories: ensured.inventoryCategories,
+              deletedInventoryCategories: ensured.deletedInventoryCategories,
+              catalogSeedVersion: 2,
+            });
+            notifySync();
+          }, 0);
         }
       },
     }

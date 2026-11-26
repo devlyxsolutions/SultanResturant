@@ -2910,6 +2910,30 @@ try {
     if (Array.isArray(serverState.inventory)) {
       serverState.inventory = serverState.inventory.filter((i) => i && !isLegacyDummyInventoryId(i.id));
     }
+    const OFFICIAL_SULTAN_CATS = [
+      'Spices', 'Baking', 'Dairy', 'Sauces', 'Beverage', 'Packaging', 'Dry Fruits & Nuts',
+      'Snacks & Biscuits', 'Vegetable', 'Grocery', 'Pulses & Lentils', 'Meat & Poultry',
+      'Sea Food', 'Canned & Preserved', 'Pasta', 'Stationary', 'Housekeeping', 'Ghee & Oil', 'Flour & Grains'
+    ];
+    const officialCatLowerSet = new Set(OFFICIAL_SULTAN_CATS.map((c) => c.toLowerCase()));
+    if (Array.isArray(serverState.deletedInventoryCategories)) {
+      serverState.deletedInventoryCategories = serverState.deletedInventoryCategories.filter(
+        (c) => !officialCatLowerSet.has(String(c || '').trim().toLowerCase())
+      );
+    }
+    if (Array.isArray(serverState.inventoryCategories)) {
+      const seenCat = new Set();
+      const mergedOfficial = [];
+      for (const c of [...OFFICIAL_SULTAN_CATS, ...serverState.inventoryCategories]) {
+        const clean = String(c || '').trim();
+        if (!clean) continue;
+        const lw = clean.toLowerCase();
+        if (seenCat.has(lw)) continue;
+        seenCat.add(lw);
+        mergedOfficial.push(clean);
+      }
+      serverState.inventoryCategories = mergedOfficial;
+    }
     if (Array.isArray(serverState.stockMovements)) {
       serverState.stockMovements = serverState.stockMovements.filter(
         (m) => m && !isLegacyDummyInventoryId(m.itemId) && !/^mv-0\d$/.test(String(m.id || ''))
@@ -8291,12 +8315,22 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
           const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
           const currCats = Array.isArray(serverState[key]) ? serverState[key].map((c) => String(c || '').trim()).filter(Boolean) : [];
+          const activeInvCats = new Set(
+            (Array.isArray(partialState.inventory) ? partialState.inventory : serverState.inventory || [])
+              .map((i) => String(i?.category || '').trim().toLowerCase())
+              .filter(Boolean)
+          );
+          if (key === 'inventoryCategories' && Array.isArray(serverState.deletedInventoryCategories)) {
+            serverState.deletedInventoryCategories = serverState.deletedInventoryCategories.filter(
+              (c) => !activeInvCats.has(String(c || '').trim().toLowerCase())
+            );
+          }
           // Additive union: a client with only 9 default categories can NEVER wipe 20+ custom categories!
           const seenLower = new Set();
           const mergedCats = [];
           for (const c of [...currCats, ...incCats]) {
             const lw = c.toLowerCase();
-            if (key === 'inventoryCategories' && deletedInvCatSet.has(lw)) continue;
+            if (key === 'inventoryCategories' && deletedInvCatSet.has(lw) && !activeInvCats.has(lw)) continue;
             if (!seenLower.has(lw)) {
               seenLower.add(lw);
               mergedCats.push(c);
