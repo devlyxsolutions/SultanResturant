@@ -296,10 +296,12 @@ export default function SystemLogsScreen() {
                       ? 'TABLE RELEASE'
                       : 'POS / KOT';
       const itemList = (c.items || []).map((i) => `${i.qty}× ${i.name}`).join(', ');
+      const ts = c.cancelledAt || Date.now();
       byId.set(synId, {
         id: synId,
         seq: 90000 + idx,
-        timestamp: c.cancelledAt || Date.now(),
+        timestamp: ts,
+        isoTime: new Date(ts).toISOString(),
         actorId: c.cancelledBy || 'staff',
         actorName: c.cancelledBy || c.server || 'Staff',
         actorRole: c.cancelledByRole || (c.source === 'order_taker_cancel' ? 'Order Taker' : 'Cashier'),

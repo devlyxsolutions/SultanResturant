@@ -3474,14 +3474,14 @@ export const useRestaurantStore = create<RestaurantState>()(
             id: ri.itemId,
             name: ri.name,
             qty: ri.quantityReturned,
-            price: ri.unitPrice,
-            lineTotal: ri.refundLineTotal,
+            price: ri.price,
+            lineTotal: ri.refundAmount,
           }));
           const totalQty = cItems.reduce((s, i) => s + i.qty, 0);
           const logId = `cncl_${now}_sret_${Math.random().toString(36).substring(2, 6)}`;
           const tbl = invoice.tableId ? state.tables.find(t => t.id === invoice.tableId) : undefined;
           const floor = tbl ? getTableFloor(tbl) : undefined;
-          const cleanReason = `${input.returnType === 'full' ? 'Full' : 'Partial'} Sales Return (${input.reason || 'Return'})${input.notes ? ` - ${input.notes}` : ''}`;
+          const cleanReason = `${input.returnType === 'full' ? 'Full' : 'Partial'} Sales Return (${input.reasonCategory || 'Return'})${input.reasonNotes ? ` - ${input.reasonNotes}` : ''}${input.notes ? ` - ${input.notes}` : ''}`;
           const retLogEntry: CancelledOrderLog = {
             id: logId,
             ticketId: `${returnId} (${invoice.id})`,
