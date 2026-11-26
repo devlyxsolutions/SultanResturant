@@ -283,6 +283,40 @@ const RESTAURANT_HANDLERS: Record<string, ActionDescriptor> = {
       },
     };
   },
+  cancelTicketItem: ([ticketId, itemId, options], prev) => {
+    const tk = findById(prev?.tickets, ticketId);
+    const it = findById(tk?.items, itemId);
+    const cancelQty = options?.qty && options.qty > 0 && it?.qty && options.qty < it.qty ? options.qty : Number(it?.qty || 1);
+    const unitPrice = Number(it?.price || 0);
+    const totalAmt = unitPrice * cancelQty;
+    const reason = typeof options?.reason === 'string' && options.reason.trim() ? options.reason.trim() : 'Item cancelled from Running KOT';
+    const srcLabel = options?.source === 'order_taker_cancel' ? 'Order Taker' : 'POS';
+    return {
+      module: 'POS_ORDERS',
+      action: 'CANCEL_RUNNING_KOT_ITEM',
+      actionType: 'CANCEL',
+      severity: 'critical',
+      entityType: 'TicketItem',
+      entityId: `${ticketId}:${itemId}`,
+      entityName: `${cancelQty}× ${it?.name || itemId} • ${tk?.tableName || tk?.tableId || ticketId}`,
+      amount: totalAmt,
+      summary: `[${srcLabel}] Cancelled ${cancelQty}× "${it?.name || itemId}" (${fmtRs(totalAmt)}) from ${findTicketLabel(prev, ticketId)} • Reason: "${reason}"`,
+      details: {
+        ticketId,
+        itemId,
+        itemName: it?.name,
+        cancelledQty: cancelQty,
+        previousQty: it?.qty,
+        unitPrice,
+        totalAmount: totalAmt,
+        tableId: tk?.tableId,
+        tableName: tk?.tableName,
+        cancelledBy: options?.cancelledBy,
+        source: options?.source || 'cancel_item',
+        reason,
+      },
+    };
+  },
   clearTableTickets: ([tableId, options], prev) => {
     if (options?.isSettlementCleanup) return null;
     const tableTickets = (prev?.tickets || []).filter((t: any) => t?.tableId === tableId);
@@ -336,26 +370,50 @@ const RESTAURANT_HANDLERS: Record<string, ActionDescriptor> = {
       },
     };
   },
-  logCancelledPunchedItems: ([entry]) => ({
-    module: 'POS_ORDERS',
-    action: 'CANCEL_PUNCHED_ITEMS_AT_BILLING',
-    actionType: 'CANCEL',
-    severity: 'critical',
-    entityType: 'Ticket',
-    entityId: entry?.ticketId,
-    entityName: `${entry?.tableName || entry?.tableId || 'POS'} (${entry?.ticketId || 'Punched'})`,
-    amount: Number(entry?.totalAmount || 0),
-    summary: `Removed ${entry?.totalQty || 0} punched dish(es) (${fmtRs(entry?.totalAmount)}) from ${entry?.tableName || 'order'} during billing • Reason: "${entry?.reason || 'Removed at billing'}"`,
-    details: {
-      ticketId: entry?.ticketId,
-      tableId: entry?.tableId,
-      tableName: entry?.tableName,
-      cancelledBy: entry?.cancelledBy,
-      reason: entry?.reason,
-      items: entry?.items,
-      totalAmount: entry?.totalAmount,
-    },
-  }),
+  logCancelledPunchedItems: ([entry]) => {
+    const items = Array.isArray(entry?.items) ? entry.items : [];
+    const itemDesc = items.slice(0, 4).map((i: any) => `${i.qty || 1}× ${i.name}`).join(', ');
+    const srcLabel =
+      entry?.source === 'order_taker_cancel'
+        ? 'ORDER TAKER'
+        : entry?.source === 'removed_at_billing'
+          ? 'POS BILLING'
+          : entry?.source === 'pos_cart_remove'
+            ? 'POS CART'
+            : entry?.source === 'void_invoice'
+              ? 'INVOICE VOID'
+              : entry?.source === 'sales_return'
+                ? 'SALES RETURN'
+                : 'POS';
+    return {
+      module: 'POS_ORDERS',
+      action:
+        entry?.source === 'order_taker_cancel'
+          ? 'CANCEL_ITEM_ORDER_TAKER'
+          : entry?.source === 'pos_cart_remove'
+            ? 'CANCEL_ITEM_POS_CART'
+            : 'CANCEL_PUNCHED_ITEMS_AT_BILLING',
+      actionType: 'CANCEL',
+      severity: 'critical',
+      entityType: 'Ticket',
+      entityId: entry?.ticketId,
+      entityName: `${entry?.tableName || entry?.tableId || 'POS'} (${entry?.ticketId || 'Cancel'})`,
+      amount: Number(entry?.totalAmount || 0),
+      summary: `[${srcLabel}] Cancelled ${entry?.totalQty || 0} item(s) (${fmtRs(entry?.totalAmount)}: ${itemDesc || 'Items'}) on ${entry?.tableName || 'order'} • Reason: "${entry?.reason || 'Cancelled'}"`,
+      details: {
+        ticketId: entry?.ticketId,
+        tableId: entry?.tableId,
+        tableName: entry?.tableName,
+        source: entry?.source,
+        cancelledBy: entry?.cancelledBy,
+        cancelledByRole: entry?.cancelledByRole,
+        reason: entry?.reason,
+        items: entry?.items,
+        totalQty: entry?.totalQty,
+        totalAmount: entry?.totalAmount,
+      },
+    };
+  },
   markTableBilled: ([tableId, invoiceId], prev) => {
     const t = findById(prev?.tables, tableId);
     return {
@@ -445,12 +503,12 @@ const RESTAURANT_HANDLERS: Record<string, ActionDescriptor> = {
     module: 'RETURNS_REFUNDS',
     action: 'PROCESS_SALES_RETURN',
     actionType: 'REFUND',
-    severity: 'warning',
+    severity: 'critical',
     entityType: 'SalesReturn',
     entityId: input?.invoiceId,
     entityName: input?.invoiceId,
     amount: Number(input?.refundAmount || 0),
-    summary: `Processed Sales Return / Refund of ${fmtRs(input?.refundAmount)} against Invoice ${input?.invoiceId} (${input?.reason || 'Return'})`,
+    summary: `[INVOICE RETURN] Processed Sales Return / Refund of ${fmtRs(input?.refundAmount)} against Invoice ${input?.invoiceId} (${input?.reason || 'Return'})`,
     details: { invoiceId: input?.invoiceId, refundAmount: input?.refundAmount, refundMethod: input?.refundMethod, reason: input?.reason, items: input?.items },
   }),
   cancelSalesReturn: ([returnId, by], prev) => {

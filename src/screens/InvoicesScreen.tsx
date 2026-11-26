@@ -838,11 +838,12 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
                         {!isVoided && canVoidInvoice && (
                           <TouchableOpacity
-                            style={styles.actionBtnVoid}
+                            style={[styles.actionBtnVoid, { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, width: 'auto' }]}
                             onPress={() => handleOpenVoidModal(inv)}
                             activeOpacity={0.8}
                           >
-                            <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                            <Ionicons name="close-circle-outline" size={12} color="#DC2626" />
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
                           </TouchableOpacity>
                         )}
                       </View>
@@ -1025,15 +1026,16 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                         </TouchableOpacity>
                       )}
 
-                      {/* Void Button */}
+                      {/* Void / Cancel Button */}
                       {!isVoided && canVoidInvoice && (
                         <TouchableOpacity
-                          style={styles.actionBtnVoid}
+                          style={[styles.actionBtnVoid, { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, width: 'auto' }]}
                           onPress={() => handleOpenVoidModal(inv)}
                           activeOpacity={0.75}
-                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Void Invoice' } as any) : {})}
+                          {...(Platform.OS === 'web' ? ({ className: 'interactive-btn', title: 'Cancel / Void Invoice' } as any) : {})}
                         >
-                          <Ionicons name="trash-outline" size={13} color="#DC2626" />
+                          <Ionicons name="close-circle-outline" size={12} color="#DC2626" />
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
                         </TouchableOpacity>
                       )}
                     </View>

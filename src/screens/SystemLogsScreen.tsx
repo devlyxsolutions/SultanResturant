@@ -23,6 +23,7 @@ import {
   type SystemLogEntry,
 } from '../store/systemLogStore';
 import { useAuthStore } from '../store/authStore';
+import { useRestaurantStore } from '../store/restaurantStore';
 import {
   fetchServerSystemLogs,
   flushAuditLogQueue,
@@ -181,6 +182,7 @@ export default function SystemLogsScreen() {
   const storeAnalytics = useSystemLogStore((s) => s.analytics);
   const isLivePaused = useSystemLogStore((s) => s.isLivePaused);
   const setLivePaused = useSystemLogStore((s) => s.setLivePaused);
+  const cancelledOrderLogs = useRestaurantStore((s) => s.cancelledOrderLogs) || [];
 
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -189,6 +191,7 @@ export default function SystemLogsScreen() {
   const [moduleFilter, setModuleFilter] = useState('ALL');
   const [actionTypeFilter, setActionTypeFilter] = useState<'ALL' | AuditActionType>('ALL');
   const [severityFilter, setSeverityFilter] = useState<'ALL' | AuditSeverity>('ALL');
+  const [cancelOnlyFilter, setCancelOnlyFilter] = useState(false);
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
   const [showFiltersPanel, setShowFiltersPanel] = useState(true);
 
@@ -248,34 +251,108 @@ export default function SystemLogsScreen() {
     return () => clearInterval(iv);
   }, [isLivePaused, loadFromServer]);
 
-  // Merge live WebSocket/client logs seamlessly into current filtered view
+  // Merge live WebSocket/client logs AND synced cancelledOrderLogs seamlessly into current filtered view
   const displayedLogs = useMemo(() => {
     const byId = new Map<string, SystemLogEntry>();
     for (const l of serverLogs) {
       if (l?.id) byId.set(l.id, l);
     }
+    const q = searchQuery.trim().toLowerCase();
+    const dateFrom = getDateFromForPreset(datePreset) || 0;
+    const isCancelEntry = (l: SystemLogEntry) =>
+      ['CANCEL', 'VOID', 'REFUND', 'DELETE'].includes(l.actionType) ||
+      String(l.action || '').toUpperCase().includes('CANCEL') ||
+      String(l.action || '').toUpperCase().includes('VOID') ||
+      String(l.action || '').toUpperCase().includes('RETURN');
+
     if (!isLivePaused) {
-      const q = searchQuery.trim().toLowerCase();
-      const dateFrom = getDateFromForPreset(datePreset) || 0;
       for (const l of liveStoreLogs) {
         if (!l?.id || byId.has(l.id)) continue;
-        if (dateFrom > 0 && l.timestamp < dateFrom) continue;
-        if (roleFilter !== 'ALL' && l.actorRole.toLowerCase() !== roleFilter.toLowerCase()) continue;
-        if (actorFilter !== 'ALL' && l.actorName.toLowerCase() !== actorFilter.toLowerCase()) continue;
-        if (moduleFilter !== 'ALL' && l.module !== moduleFilter) continue;
-        if (actionTypeFilter !== 'ALL' && l.actionType !== actionTypeFilter) continue;
-        if (severityFilter !== 'ALL' && l.severity !== severityFilter) continue;
-        if (q) {
-          const hay = `${l.actorName} ${l.actorUsername || ''} ${l.actorRole} ${l.module} ${l.action} ${l.actionType} ${l.summary} ${l.entityName || ''} ${l.entityId || ''} ${l.page} ${l.deviceName}`.toLowerCase();
-          if (!hay.includes(q)) continue;
-        }
         byId.set(l.id, l);
       }
     }
-    return Array.from(byId.values()).sort((a, b) => (b.timestamp - a.timestamp) || (b.seq - a.seq));
+
+    // Also synthesize any synced CancelledOrderLog from restaurantStore so every Order Taker / POS / Invoice cancel is always visible & highlighted
+    const existingTimestamps = new Set(Array.from(byId.values()).map((x) => `${x.entityId || ''}_${Math.floor((x.timestamp || 0) / 3000)}`));
+    cancelledOrderLogs.forEach((c, idx) => {
+      if (!c || !c.id) return;
+      const synId = `syn_${c.id}`;
+      const timeKey = `${c.ticketId || ''}_${Math.floor((c.cancelledAt || 0) / 3000)}`;
+      if (byId.has(synId) || existingTimestamps.has(timeKey)) return;
+      const srcWhere =
+        c.source === 'order_taker_cancel'
+          ? 'ORDER TAKER'
+          : c.source === 'void_invoice'
+            ? 'INVOICE VOID'
+            : c.source === 'sales_return'
+              ? 'INVOICE RETURN'
+              : c.source === 'online_order_cancel'
+                ? 'ONLINE ORDER'
+                : c.source === 'removed_at_billing'
+                  ? 'POS BILLING'
+                  : c.source === 'pos_cart_remove'
+                    ? 'POS CART'
+                    : c.source === 'release_table'
+                      ? 'TABLE RELEASE'
+                      : 'POS / KOT';
+      const itemList = (c.items || []).map((i) => `${i.qty}× ${i.name}`).join(', ');
+      byId.set(synId, {
+        id: synId,
+        seq: 90000 + idx,
+        timestamp: c.cancelledAt || Date.now(),
+        actorId: c.cancelledBy || 'staff',
+        actorName: c.cancelledBy || c.server || 'Staff',
+        actorRole: c.cancelledByRole || (c.source === 'order_taker_cancel' ? 'Order Taker' : 'Cashier'),
+        module: c.source === 'void_invoice' || c.source === 'sales_return' ? 'INVOICES_BILLING' : 'POS_ORDERS',
+        action: `CANCEL_${String(c.source || 'ORDER').toUpperCase()}`,
+        actionType: c.source === 'void_invoice' ? 'VOID' : c.source === 'sales_return' ? 'REFUND' : 'CANCEL',
+        severity: 'critical',
+        entityType: 'Ticket',
+        entityId: c.ticketId,
+        entityName: `${c.tableName || c.tableId} (${c.ticketId})`,
+        amount: c.totalAmount,
+        summary: `[${srcWhere}] Cancelled ${c.totalQty} item(s) (Rs. ${Number(c.totalAmount || 0).toLocaleString()}: ${itemList || 'Order'}) on ${c.tableName || c.tableId} • Reason: "${c.reason}"`,
+        page: c.source === 'order_taker_cancel' ? '/waiter/order' : c.source === 'void_invoice' ? '/admin/invoices' : '/pos',
+        deviceId: 'synced-ledger',
+        deviceName: srcWhere,
+        platform: 'web',
+        source: 'client',
+        details: {
+          ticketId: c.ticketId,
+          tableId: c.tableId,
+          tableName: c.tableName,
+          floor: c.floor,
+          source: c.source,
+          reason: c.reason,
+          cancelledBy: c.cancelledBy,
+          cancelledByRole: c.cancelledByRole,
+          totalQty: c.totalQty,
+          totalAmount: c.totalAmount,
+          items: c.items,
+        },
+      });
+    });
+
+    return Array.from(byId.values())
+      .filter((l) => {
+        if (dateFrom > 0 && l.timestamp < dateFrom) return false;
+        if (cancelOnlyFilter && !isCancelEntry(l)) return false;
+        if (roleFilter !== 'ALL' && l.actorRole.toLowerCase() !== roleFilter.toLowerCase()) return false;
+        if (actorFilter !== 'ALL' && l.actorName.toLowerCase() !== actorFilter.toLowerCase()) return false;
+        if (moduleFilter !== 'ALL' && l.module !== moduleFilter) return false;
+        if (actionTypeFilter !== 'ALL' && l.actionType !== actionTypeFilter) return false;
+        if (severityFilter !== 'ALL' && l.severity !== severityFilter) return false;
+        if (q) {
+          const hay = `${l.actorName} ${l.actorUsername || ''} ${l.actorRole} ${l.module} ${l.action} ${l.actionType} ${l.summary} ${l.entityName || ''} ${l.entityId || ''} ${l.page} ${l.deviceName}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (b.timestamp - a.timestamp) || (b.seq - a.seq));
   }, [
     serverLogs,
     liveStoreLogs,
+    cancelledOrderLogs,
     isLivePaused,
     searchQuery,
     roleFilter,
@@ -283,6 +360,7 @@ export default function SystemLogsScreen() {
     moduleFilter,
     actionTypeFilter,
     severityFilter,
+    cancelOnlyFilter,
     datePreset,
   ]);
 
@@ -346,6 +424,7 @@ export default function SystemLogsScreen() {
     moduleFilter !== 'ALL' ||
     actionTypeFilter !== 'ALL' ||
     severityFilter !== 'ALL' ||
+    cancelOnlyFilter ||
     datePreset !== 'all';
 
   const resetAllFilters = () => {
@@ -355,6 +434,7 @@ export default function SystemLogsScreen() {
     setModuleFilter('ALL');
     setActionTypeFilter('ALL');
     setSeverityFilter('ALL');
+    setCancelOnlyFilter(false);
     setDatePreset('all');
   };
 
@@ -418,19 +498,67 @@ export default function SystemLogsScreen() {
     const actBadge = getActionBadgeStyle(item.actionType);
     const { time, date } = formatExactTime(item.timestamp);
 
+    const isCancelHighlight =
+      ['CANCEL', 'VOID', 'REFUND', 'DELETE'].includes(item.actionType) ||
+      String(item.action || '').toUpperCase().includes('CANCEL') ||
+      String(item.action || '').toUpperCase().includes('VOID') ||
+      String(item.action || '').toUpperCase().includes('RETURN');
+
+    const cancelOriginLabel = isCancelHighlight
+      ? item.page?.includes('/waiter') || item.actorRole?.toLowerCase().includes('order taker') || item.details?.source === 'order_taker_cancel'
+        ? 'ORDER TAKER'
+        : item.module === 'INVOICES_BILLING' || item.module === 'RETURNS_REFUNDS' || item.actionType === 'VOID' || item.actionType === 'REFUND'
+          ? 'INVOICE / BILL'
+          : item.module === 'ONLINE_DELIVERY' || item.details?.source === 'online_order_cancel'
+            ? 'ONLINE ORDER'
+            : 'POS TERMINAL'
+      : null;
+
+    const cancelledDishes: { name: string; qty?: number }[] =
+      isCancelHighlight && Array.isArray(item.details?.items) ? item.details.items : [];
+
     return (
       <TouchableOpacity
         style={[
           styles.logRow,
           item.severity === 'critical' && styles.logRowCritical,
+          isCancelHighlight && styles.logRowCancelHighlight,
         ]}
         onPress={() => setSelectedLog(item)}
         activeOpacity={0.82}
       >
         {/* Left Severity Accent Strip */}
-        <View style={[styles.severityStripe, { backgroundColor: sev.color }]} />
+        <View style={[styles.severityStripe, { backgroundColor: isCancelHighlight ? '#DC2626' : sev.color }, isCancelHighlight && { width: 8 }]} />
 
         <View style={styles.logRowContent}>
+          {/* Top Highlight Banner for ALL Cancel / Void / Return Events */}
+          {isCancelHighlight && (
+            <View style={styles.cancelHighlightRibbon}>
+              <View style={styles.cancelFlashBadge}>
+                <Ionicons name="warning" size={12} color="#FFFFFF" />
+                <Text style={styles.cancelFlashBadgeText}>
+                  🚨 {item.actionType === 'VOID' ? 'INVOICE VOIDED' : item.actionType === 'REFUND' ? 'RETURN / REFUND' : 'CANCELLED'}
+                </Text>
+              </View>
+              {cancelOriginLabel && (
+                <View style={styles.cancelOriginBadge}>
+                  <Text style={styles.cancelOriginBadgeText}>📍 {cancelOriginLabel}</Text>
+                </View>
+              )}
+              {item.entityName ? (
+                <Text style={styles.cancelEntityText} numberOfLines={1}>
+                  {item.entityName}
+                </Text>
+              ) : null}
+              <View style={{ flex: 1 }} />
+              {typeof item.amount === 'number' && item.amount > 0 && (
+                <View style={styles.cancelAmountBadge}>
+                  <Text style={styles.cancelAmountBadgeText}>- Rs. {item.amount.toLocaleString()}</Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Top Metadata Line */}
           <View style={styles.logTopLine}>
             <View style={styles.timePill}>
@@ -447,7 +575,7 @@ export default function SystemLogsScreen() {
               <Text style={styles.moduleBadgeText}>{item.module.replace(/_/g, ' ')}</Text>
             </View>
 
-            {typeof item.amount === 'number' && item.amount > 0 && (
+            {typeof item.amount === 'number' && item.amount > 0 && !isCancelHighlight && (
               <View style={styles.amountPill}>
                 <Text style={styles.amountPillText}>Rs. {item.amount.toLocaleString()}</Text>
               </View>
@@ -459,9 +587,25 @@ export default function SystemLogsScreen() {
           </View>
 
           {/* Main Human-Readable Summary */}
-          <Text style={styles.logSummary} numberOfLines={2}>
+          <Text style={[styles.logSummary, isCancelHighlight && styles.logSummaryCancelHighlight]} numberOfLines={3}>
             {item.summary}
           </Text>
+
+          {/* Highlighted Cancelled Dishes Chips */}
+          {isCancelHighlight && cancelledDishes.length > 0 && (
+            <View style={styles.cancelDishesBox}>
+              {cancelledDishes.slice(0, 6).map((d, idx) => (
+                <View key={idx} style={styles.cancelDishChip}>
+                  <Text style={styles.cancelDishChipText}>
+                    ✕ {d.qty || 1}× {d.name}
+                  </Text>
+                </View>
+              ))}
+              {cancelledDishes.length > 6 && (
+                <Text style={styles.cancelDishMoreText}>+{cancelledDishes.length - 6} more</Text>
+              )}
+            </View>
+          )}
 
           {/* Bottom Actor / Role / Page / Device Line */}
           <View style={styles.logBottomLine}>
@@ -572,20 +716,20 @@ export default function SystemLogsScreen() {
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.kpiCard, severityFilter === 'critical' && styles.kpiCardActiveDanger]}
-          onPress={() => setSeverityFilter(severityFilter === 'critical' ? 'ALL' : 'critical')}
+          style={[styles.kpiCard, cancelOnlyFilter && styles.kpiCardActiveDanger]}
+          onPress={() => setCancelOnlyFilter(!cancelOnlyFilter)}
           activeOpacity={0.85}
         >
           <View style={[styles.kpiIconBox, { backgroundColor: '#FEF2F2' }]}>
             <Ionicons name="alert-circle" size={18} color="#DC2626" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.kpiLabel}>CANCEL / VOID / DELETE</Text>
+            <Text style={styles.kpiLabel}>🚨 CANCELLATIONS / VOIDS</Text>
             <Text style={[styles.kpiValue, { color: '#DC2626' }]}>
-              {effectiveAnalytics.cancelVoidDeleteCount.toLocaleString()}
+              {Math.max(effectiveAnalytics.cancelVoidDeleteCount, cancelledOrderLogs.length).toLocaleString()}
             </Text>
-            <Text style={styles.kpiSub}>
-              Critical Alerts: {effectiveAnalytics.criticalCount.toLocaleString()} (Tap to filter)
+            <Text style={[styles.kpiSub, cancelOnlyFilter && { color: '#B91C1C', fontWeight: '800' }]}>
+              {cancelOnlyFilter ? 'Showing ONLY Cancellations (Tap to reset)' : 'Order Taker • POS • Invoices (Tap to filter)'}
             </Text>
           </View>
         </TouchableOpacity>
@@ -1332,6 +1476,103 @@ const styles = StyleSheet.create({
   logRowCritical: {
     borderColor: '#FECACA',
     backgroundColor: '#FFFBFB',
+  },
+  logRowCancelHighlight: {
+    borderColor: '#E11D48',
+    borderWidth: 2,
+    backgroundColor: '#FFF1F2',
+    shadowColor: '#BE123C',
+    shadowOpacity: 0.14,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 3,
+  },
+  cancelHighlightRibbon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 6,
+    backgroundColor: '#FFE4E6',
+    borderColor: '#FDA4AF',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    marginBottom: 2,
+  },
+  cancelFlashBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  cancelFlashBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10.5,
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  cancelOriginBadge: {
+    backgroundColor: '#881337',
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  cancelOriginBadgeText: {
+    color: '#FEF08A',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 0.4,
+  },
+  cancelEntityText: {
+    fontSize: 11.5,
+    fontWeight: '800',
+    color: '#881337',
+    maxWidth: 240,
+  },
+  cancelAmountBadge: {
+    backgroundColor: '#991B1B',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  cancelAmountBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+  },
+  logSummaryCancelHighlight: {
+    color: '#9F1239',
+    fontWeight: '900',
+    fontSize: 14,
+  },
+  cancelDishesBox: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+    marginTop: 2,
+  },
+  cancelDishChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCA5A5',
+    paddingHorizontal: 8,
+    paddingVertical: 2.5,
+    borderRadius: 6,
+  },
+  cancelDishChipText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#B91C1C',
+  },
+  cancelDishMoreText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#9F1239',
+    alignSelf: 'center',
   },
   severityStripe: {
     width: 5,

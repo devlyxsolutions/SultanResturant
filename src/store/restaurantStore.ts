@@ -183,7 +183,17 @@ export type CancelledOrderLog = {
   cancelledBy: string;
   cancelledByRole?: string;
   reason: string;
-  source: 'cancel_ticket' | 'release_table' | 'purge_all' | 'removed_at_billing';
+  source:
+    | 'cancel_ticket'
+    | 'cancel_item'
+    | 'order_taker_cancel'
+    | 'pos_cart_remove'
+    | 'release_table'
+    | 'purge_all'
+    | 'removed_at_billing'
+    | 'void_invoice'
+    | 'sales_return'
+    | 'online_order_cancel';
   roundNumber?: number;
   isAddOn?: boolean;
   ticketStatusAtCancel?: string;
@@ -599,6 +609,7 @@ type RestaurantState = {
   clearFoodReadyAlert: (alertIdOrTableId?: string) => void;
   settleBill: (tableId: string) => void;
   dismissTicket: (ticketId: string, options?: TicketCancelOptions) => void;
+  cancelTicketItem: (ticketId: string, itemId: string, options?: TicketCancelOptions & { qty?: number }) => void;
   clearTableTickets: (tableId: string, options?: TicketCancelOptions) => void;
   clearAllOldTickets: (options?: TicketCancelOptions) => void;
   logCancelledPunchedItems: (entry: Omit<CancelledOrderLog, 'id' | 'cancelledAt'>) => void;
@@ -1305,6 +1316,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         } catch (_) {}
 
         set((state) => {
+          const targetOrd = (state.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
           const updatedOrders = (state.onlineOrders || []).map(o => {
             if (o.id === orderId || o.orderNumber === orderId) {
               return { ...o, status: 'CANCELLED' as const, managerNotes: reason };
@@ -1315,9 +1327,69 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (updatedAlert && (updatedAlert.orderId === orderId || updatedAlert.orderNumber === orderId)) {
             updatedAlert = null;
           }
+          let nextCancelledLogs = state.cancelledOrderLogs || [];
+          let nextCancelledAlert = state.lastOrderCancelledAlert || null;
+          if (targetOrd) {
+            const now = Date.now();
+            const actor = resolveCurrentAuthActor();
+            const cItems: CancelledOrderItem[] = (targetOrd.items || []).map((it, idx) => {
+              const q = Number(it.qty || it.quantity || 1);
+              const p = Number(it.unitPrice || it.price || 0);
+              return {
+                id: it.id || `itm_${idx}`,
+                name: it.name,
+                qty: q,
+                price: p,
+                lineTotal: Number(it.totalPrice || p * q),
+                notes: it.notes,
+              };
+            });
+            const totalQty = cItems.reduce((s, i) => s + i.qty, 0);
+            const totalAmount = Number(targetOrd.total || cItems.reduce((s, i) => s + i.lineTotal, 0));
+            const logId = `cncl_${now}_onl_${Math.random().toString(36).substring(2, 6)}`;
+            const cleanReason = (reason || '').trim() || 'Online/QR order cancelled';
+            const entry: CancelledOrderLog = {
+              id: logId,
+              ticketId: targetOrd.orderNumber || targetOrd.id,
+              orderNumber: targetOrd.orderNumber,
+              tableId: targetOrd.tableId || targetOrd.orderType || 'online',
+              tableName: targetOrd.tableName || (targetOrd.orderType === 'delivery' ? 'Online Delivery' : 'Online Order'),
+              floor: targetOrd.floor,
+              orderType: targetOrd.orderType === 'dine_in' ? 'dine-in' : targetOrd.orderType,
+              server: targetOrd.assignedWaiter || 'Online Portal',
+              cancelledBy: actor.name,
+              cancelledByRole: actor.role,
+              reason: cleanReason,
+              source: 'online_order_cancel',
+              items: cItems,
+              totalQty,
+              totalAmount,
+              timePlaced: targetOrd.createdAt || now,
+              cancelledAt: now,
+            };
+            nextCancelledLogs = [entry, ...nextCancelledLogs].slice(0, 1500);
+            nextCancelledAlert = {
+              id: `alert_${logId}`,
+              logId,
+              ticketId: entry.ticketId,
+              tableId: entry.tableId,
+              tableName: entry.tableName,
+              floor: entry.floor,
+              cancelledBy: entry.cancelledBy,
+              cancelledByRole: entry.cancelledByRole,
+              reason: cleanReason,
+              source: 'online_order_cancel',
+              itemsSummary: summarizeCancelledItems(cItems),
+              totalQty,
+              totalAmount,
+              time: now,
+            };
+          }
           return {
             onlineOrders: updatedOrders,
-            pendingFloorOrderAlert: updatedAlert
+            pendingFloorOrderAlert: updatedAlert,
+            cancelledOrderLogs: nextCancelledLogs,
+            lastOrderCancelledAlert: nextCancelledAlert,
           };
         });
         try {
@@ -2482,6 +2554,131 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
+      cancelTicketItem: (ticketId, itemId, options) => set((state) => {
+        const target = (state.tickets || []).find((t) => t.id === ticketId);
+        if (!target) return state;
+        const targetItem = (target.items || []).find((i) => i.id === itemId);
+        if (!targetItem) return state;
+
+        const now = Date.now();
+        const actor = resolveCurrentAuthActor();
+        const cancelQty = options?.qty && options.qty > 0 && options.qty < targetItem.qty ? options.qty : targetItem.qty;
+        const remainingItemQty = targetItem.qty - cancelQty;
+
+        const nextTicketItems =
+          remainingItemQty > 0
+            ? target.items.map((i) => (i.id === itemId ? { ...i, qty: remainingItemQty } : i))
+            : target.items.filter((i) => i.id !== itemId);
+
+        const ticketEmptied = nextTicketItems.length === 0;
+        const nextTickets = ticketEmptied
+          ? (state.tickets || []).filter((t) => t.id !== ticketId)
+          : (state.tickets || []).map((t) => (t.id === ticketId ? { ...t, items: nextTicketItems } : t));
+
+        const targetTable = state.tables.find((t) => t.id === target.tableId);
+        let updatedTables = state.tables;
+        if (target.tableId && target.tableId !== 'takeaway' && target.tableId !== 'delivery') {
+          const tableRemaining = nextTickets.filter((t) => t.tableId === target.tableId);
+          updatedTables = state.tables.map((t) => {
+            if (t.id !== target.tableId) return t;
+            if (tableRemaining.length === 0 && t.status !== 'billed') {
+              return {
+                ...t,
+                status: 'available' as const,
+                billTotal: 0,
+                server: undefined,
+                orders: [],
+                isPaid: false,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                lastSettledAt: now,
+                waiterPaymentCollection: null,
+              };
+            }
+            const newOrders = tableRemaining.flatMap((tk) => (tk.items || []).map((i) => ({ ...i })));
+            const newTotal = tableRemaining.reduce(
+              (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + (it.price || 0) * (it.qty || 1), 0),
+              0
+            );
+            return {
+              ...t,
+              billTotal: newTotal,
+              orders: newOrders,
+            };
+          });
+        }
+
+        const cancelledItems: CancelledOrderItem[] = [
+          {
+            id: targetItem.id,
+            name: targetItem.name,
+            qty: cancelQty,
+            price: targetItem.price || 0,
+            lineTotal: (targetItem.price || 0) * cancelQty,
+            station: targetItem.station,
+            notes: targetItem.notes,
+            itemStatus: targetItem.itemStatus || target.status,
+          },
+        ];
+        const totalAmount = (targetItem.price || 0) * cancelQty;
+        const orderType: 'dine-in' | 'takeaway' | 'delivery' =
+          target.tableId === 'delivery' ? 'delivery' : target.tableId === 'takeaway' ? 'takeaway' : 'dine-in';
+        const cleanReason = (options?.reason || '').trim() || 'Item cancelled from Running KOT';
+        const cancelledBy = (options?.cancelledBy || '').trim() || actor.name;
+        const cancelledByRole = (options?.cancelledByRole || '').trim() || actor.role;
+        const floor = targetTable ? getTableFloor(targetTable) : undefined;
+        const logId = `cncl_${now}_kitem_${Math.random().toString(36).substring(2, 6)}`;
+        const logEntry: CancelledOrderLog = {
+          id: logId,
+          ticketId: target.id,
+          orderNumber: target.orderNumber,
+          tableId: target.tableId,
+          tableName: targetTable?.name || target.tableName || target.tableId,
+          floor,
+          orderType,
+          server: target.server || targetTable?.server || 'Staff',
+          cancelledBy,
+          cancelledByRole,
+          reason: cleanReason,
+          source: options?.source || 'cancel_item',
+          roundNumber: target.roundNumber,
+          isAddOn: target.isAddOn,
+          ticketStatusAtCancel: targetItem.itemStatus || target.status,
+          items: cancelledItems,
+          totalQty: cancelQty,
+          totalAmount,
+          timePlaced: target.timePlaced || now,
+          cancelledAt: now,
+        };
+        const nextCancelledAlert: OrderCancelledAlert = {
+          id: `alert_${logId}`,
+          logId,
+          ticketId: target.id,
+          tableId: target.tableId,
+          tableName: logEntry.tableName,
+          floor,
+          cancelledBy,
+          cancelledByRole,
+          reason: cleanReason,
+          source: logEntry.source,
+          itemsSummary: summarizeCancelledItems(cancelledItems),
+          totalQty: cancelQty,
+          totalAmount,
+          time: now,
+        };
+
+        notifySync();
+        return {
+          tables: updatedTables,
+          tickets: nextTickets,
+          ...(ticketEmptied
+            ? { deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ticketId])).slice(-400) }
+            : {}),
+          cancelledOrderLogs: [logEntry, ...(state.cancelledOrderLogs || [])].slice(0, 1500),
+          lastOrderCancelledAlert: nextCancelledAlert,
+        };
+      }),
+
       clearTableTickets: (tableId, options) => set((state) => {
         const removedTickets = (state.tickets || []).filter(t => t.tableId === tableId);
         const removedIds = removedTickets.map(t => t.id);
@@ -3128,19 +3325,78 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
-      voidInvoice: (invoiceId, reason, voidedBy) => set((state) => ({
-        invoices: state.invoices.map(inv =>
-          inv.id === invoiceId
-            ? {
-              ...inv,
-              status: 'voided' as const,
-              voidReason: reason || 'Voided by authorized manager',
-              voidedAt: Date.now(),
-              voidedBy: voidedBy || 'Staff',
-            }
-            : inv
-        )
-      })),
+      voidInvoice: (invoiceId, reason, voidedBy) => set((state) => {
+        const now = Date.now();
+        const actor = resolveCurrentAuthActor();
+        const targetInv = (state.invoices || []).find(inv => inv.id === invoiceId);
+        let nextCancelledLogs = state.cancelledOrderLogs || [];
+        let nextCancelledAlert = state.lastOrderCancelledAlert || null;
+
+        if (targetInv) {
+          const cancelledItems = buildCancelledItemsList(targetInv.items || []);
+          const totalQty = cancelledItems.reduce((s, i) => s + i.qty, 0);
+          const totalAmount = Number(targetInv.total || cancelledItems.reduce((s, i) => s + i.lineTotal, 0));
+          const cleanReason = (reason || '').trim() || 'Invoice voided by authorized manager';
+          const cancelledBy = (voidedBy || '').trim() || actor.name;
+          const logId = `cncl_${now}_vinv_${Math.random().toString(36).substring(2, 6)}`;
+          const tbl = targetInv.tableId ? state.tables.find(t => t.id === targetInv.tableId) : undefined;
+          const floor = tbl ? getTableFloor(tbl) : undefined;
+          const logEntry: CancelledOrderLog = {
+            id: logId,
+            ticketId: targetInv.id,
+            orderNumber: targetInv.id,
+            tableId: targetInv.tableId || targetInv.orderType || 'invoice',
+            tableName: targetInv.tableName || (targetInv.orderType ? targetInv.orderType.toUpperCase() : `Invoice #${targetInv.id}`),
+            floor,
+            orderType: targetInv.orderType || 'dine-in',
+            server: targetInv.orderTakenBy || targetInv.server || 'Staff',
+            cancelledBy,
+            cancelledByRole: actor.role,
+            reason: cleanReason,
+            source: 'void_invoice',
+            ticketStatusAtCancel: 'voided',
+            items: cancelledItems,
+            totalQty,
+            totalAmount,
+            timePlaced: targetInv.timePlaced || targetInv.timeSettled || now,
+            cancelledAt: now,
+          };
+          nextCancelledLogs = [logEntry, ...nextCancelledLogs].slice(0, 1500);
+          nextCancelledAlert = {
+            id: `alert_${logId}`,
+            logId,
+            ticketId: targetInv.id,
+            tableId: logEntry.tableId,
+            tableName: logEntry.tableName,
+            floor,
+            cancelledBy,
+            cancelledByRole: actor.role,
+            reason: cleanReason,
+            source: 'void_invoice',
+            itemsSummary: summarizeCancelledItems(cancelledItems),
+            totalQty,
+            totalAmount,
+            time: now,
+          };
+        }
+
+        notifySync();
+        return {
+          invoices: state.invoices.map(inv =>
+            inv.id === invoiceId
+              ? {
+                ...inv,
+                status: 'voided' as const,
+                voidReason: reason || 'Voided by authorized manager',
+                voidedAt: now,
+                voidedBy: voidedBy || actor.name || 'Staff',
+              }
+              : inv
+          ),
+          cancelledOrderLogs: nextCancelledLogs,
+          lastOrderCancelledAlert: nextCancelledAlert,
+        };
+      }),
 
       deleteInvoice: (invoiceId) => set((state) => ({
         invoices: state.invoices.filter(inv => inv.id !== invoiceId)
@@ -3213,12 +3469,65 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           });
 
+          const actor = resolveCurrentAuthActor();
+          const cItems: CancelledOrderItem[] = (input.items || []).map((ri) => ({
+            id: ri.itemId,
+            name: ri.name,
+            qty: ri.quantityReturned,
+            price: ri.unitPrice,
+            lineTotal: ri.refundLineTotal,
+          }));
+          const totalQty = cItems.reduce((s, i) => s + i.qty, 0);
+          const logId = `cncl_${now}_sret_${Math.random().toString(36).substring(2, 6)}`;
+          const tbl = invoice.tableId ? state.tables.find(t => t.id === invoice.tableId) : undefined;
+          const floor = tbl ? getTableFloor(tbl) : undefined;
+          const cleanReason = `${input.returnType === 'full' ? 'Full' : 'Partial'} Sales Return (${input.reason || 'Return'})${input.notes ? ` - ${input.notes}` : ''}`;
+          const retLogEntry: CancelledOrderLog = {
+            id: logId,
+            ticketId: `${returnId} (${invoice.id})`,
+            orderNumber: invoice.id,
+            tableId: invoice.tableId || invoice.orderType || 'invoice',
+            tableName: invoice.tableName || (invoice.orderType ? invoice.orderType.toUpperCase() : `Invoice #${invoice.id}`),
+            floor,
+            orderType: invoice.orderType || 'dine-in',
+            server: invoice.orderTakenBy || invoice.server || 'Staff',
+            cancelledBy: input.processedBy || actor.name,
+            cancelledByRole: actor.role,
+            reason: cleanReason,
+            source: 'sales_return',
+            ticketStatusAtCancel: isFullRefund ? 'refunded' : 'partial_return',
+            items: cItems,
+            totalQty,
+            totalAmount: refundAmt,
+            timePlaced: invoice.timeSettled || invoice.timePlaced || now,
+            cancelledAt: now,
+          };
+          const retAlert: OrderCancelledAlert = {
+            id: `alert_${logId}`,
+            logId,
+            ticketId: retLogEntry.ticketId,
+            tableId: retLogEntry.tableId,
+            tableName: retLogEntry.tableName,
+            floor,
+            cancelledBy: retLogEntry.cancelledBy,
+            cancelledByRole: actor.role,
+            reason: cleanReason,
+            source: 'sales_return',
+            itemsSummary: summarizeCancelledItems(cItems),
+            totalQty,
+            totalAmount: refundAmt,
+            time: now,
+          };
+
           success = true;
+          notifySync();
           return {
             salesReturns: [newReturn, ...(state.salesReturns || [])],
             invoices: updatedInvoices,
             customers: updatedCustomers,
             menuItems: updatedMenuItems,
+            cancelledOrderLogs: [retLogEntry, ...(state.cancelledOrderLogs || [])].slice(0, 1500),
+            lastOrderCancelledAlert: retAlert,
           };
         });
 

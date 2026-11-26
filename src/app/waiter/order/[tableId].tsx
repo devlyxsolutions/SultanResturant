@@ -244,6 +244,8 @@ export default function TableOrderScreen() {
   const placeOrder = useRestaurantStore((state) => state.placeOrder);
   const serveTableTickets = useRestaurantStore((state) => state.serveTableTickets);
   const markItemServed = useRestaurantStore((state) => state.markItemServed);
+  const cancelTicketItem = useRestaurantStore((state) => state.cancelTicketItem);
+  const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const transferTable = useRestaurantStore((state) => state.transferTable);
   const markTableBilled = useRestaurantStore((state) => state.markTableBilled);
   const recordWaiterPaymentCollection = useRestaurantStore((state) => state.recordWaiterPaymentCollection);
@@ -448,6 +450,38 @@ export default function TableOrderScreen() {
   };
 
   const updateCartQty = (itemId: string, delta: number) => {
+    if (delta < 0) {
+      const target = newCart.find((i) => i.item.id === itemId);
+      if (target) {
+        const cancelQty = Math.min(target.qty, Math.abs(delta));
+        const actorName = currentStaff?.name || user?.name || 'Order Taker';
+        logCancelledPunchedItems({
+          ticketId: 'CART-DRAFT',
+          tableId: String(tableId || 'table'),
+          tableName,
+          floor: floorName,
+          orderType: isTakeaway ? 'takeaway' : 'dine-in',
+          server: actorName,
+          cancelledBy: actorName,
+          cancelledByRole: user?.role || 'Order Taker',
+          reason: target.qty + delta <= 0 ? 'Item cancelled from Order Taker cart' : 'Item qty reduced in Order Taker cart',
+          source: 'order_taker_cancel',
+          items: [
+            {
+              id: target.item.id,
+              name: target.item.name,
+              qty: cancelQty,
+              price: target.item.price || 0,
+              lineTotal: (target.item.price || 0) * cancelQty,
+              notes: target.notes,
+            },
+          ],
+          totalQty: cancelQty,
+          totalAmount: (target.item.price || 0) * cancelQty,
+          timePlaced: Date.now(),
+        });
+      }
+    }
     setNewCart((prev) =>
       prev
         .map((i) => (i.item.id === itemId ? { ...i, qty: i.qty + delta } : i))
@@ -456,7 +490,79 @@ export default function TableOrderScreen() {
   };
 
   const removeFromCart = (itemId: string) => {
+    const target = newCart.find((i) => i.item.id === itemId);
+    if (target) {
+      const actorName = currentStaff?.name || user?.name || 'Order Taker';
+      logCancelledPunchedItems({
+        ticketId: 'CART-DRAFT',
+        tableId: String(tableId || 'table'),
+        tableName,
+        floor: floorName,
+        orderType: isTakeaway ? 'takeaway' : 'dine-in',
+        server: actorName,
+        cancelledBy: actorName,
+        cancelledByRole: user?.role || 'Order Taker',
+        reason: 'Item cancelled from Order Taker cart',
+        source: 'order_taker_cancel',
+        items: [
+          {
+            id: target.item.id,
+            name: target.item.name,
+            qty: target.qty,
+            price: target.item.price || 0,
+            lineTotal: (target.item.price || 0) * target.qty,
+            notes: target.notes,
+          },
+        ],
+        totalQty: target.qty,
+        totalAmount: (target.item.price || 0) * target.qty,
+        timePlaced: Date.now(),
+      });
+    }
     setNewCart((prev) => prev.filter((i) => i.item.id !== itemId));
+  };
+
+  const clearNewCartWithLog = () => {
+    if (newCart.length > 0) {
+      const actorName = currentStaff?.name || user?.name || 'Order Taker';
+      const items = newCart.map((c) => ({
+        id: c.item.id,
+        name: c.item.name,
+        qty: c.qty,
+        price: c.item.price || 0,
+        lineTotal: (c.item.price || 0) * c.qty,
+        notes: c.notes,
+      }));
+      logCancelledPunchedItems({
+        ticketId: 'CART-CLEAR',
+        tableId: String(tableId || 'table'),
+        tableName,
+        floor: floorName,
+        orderType: isTakeaway ? 'takeaway' : 'dine-in',
+        server: actorName,
+        cancelledBy: actorName,
+        cancelledByRole: user?.role || 'Order Taker',
+        reason: 'Cleared all dishes from Order Taker cart',
+        source: 'order_taker_cancel',
+        items,
+        totalQty: items.reduce((s, i) => s + i.qty, 0),
+        totalAmount: items.reduce((s, i) => s + i.lineTotal, 0),
+        timePlaced: Date.now(),
+      });
+    }
+    setNewCart([]);
+  };
+
+  const handleCancelRunningItem = (ticketId: string, itemId: string, itemName: string) => {
+    if (!ticketId || ticketId === 'ORDER-SAVED') return;
+    const actorName = currentStaff?.name || user?.name || 'Order Taker';
+    cancelTicketItem(ticketId, itemId, {
+      source: 'order_taker_cancel',
+      cancelledBy: actorName,
+      cancelledByRole: String(user?.role || 'Order Taker'),
+      reason: `Cancelled "${itemName}" from Order Taker Running KDS`,
+    });
+    broadcastImmediately();
   };
 
   const openNoteModal = (cartItem: { item: MenuItem; notes?: string }) => {
@@ -1148,9 +1254,9 @@ export default function TableOrderScreen() {
                 NEW KOT ITEMS ({totalNewQty})
               </Text>
               {newCart.length > 0 && (
-                <TouchableOpacity style={styles.clearCartLink} onPress={() => setNewCart([])}>
-                  <Ionicons name="trash-outline" size={13} color="#DC2626" />
-                  <Text style={styles.clearCartLinkText}>Clear</Text>
+                <TouchableOpacity style={styles.clearCartLink} onPress={clearNewCartWithLog}>
+                  <Ionicons name="close-circle-outline" size={13} color="#DC2626" />
+                  <Text style={styles.clearCartLinkText}>Cancel All</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -1212,8 +1318,22 @@ export default function TableOrderScreen() {
                             <Ionicons name="add" size={13} color="#FFFFFF" />
                           </TouchableOpacity>
                         </View>
-                        <TouchableOpacity onPress={() => removeFromCart(c.item.id)}>
-                          <Ionicons name="close" size={16} color="#94A3B8" />
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 2,
+                            backgroundColor: '#FEF2F2',
+                            borderWidth: 1,
+                            borderColor: '#FCA5A5',
+                            paddingHorizontal: 6,
+                            paddingVertical: 3,
+                            borderRadius: 5,
+                          }}
+                          onPress={() => removeFromCart(c.item.id)}
+                        >
+                          <Ionicons name="close" size={11} color="#DC2626" />
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
                         </TouchableOpacity>
                       </View>
                     </View>
@@ -1524,17 +1644,38 @@ export default function TableOrderScreen() {
                           </View>
                         ) : null}
                       </View>
-                      {it.status === 'ready' && (
-                        <TouchableOpacity
-                          style={[styles.modalPrimaryBtn, { backgroundColor: '#16A34A', height: 34 }]}
-                          onPress={() => {
-                            markItemServed(it.ticketId, it.id);
-                            broadcastImmediately();
-                          }}
-                        >
-                          <Text style={styles.modalPrimaryBtnText}>Mark Served</Text>
-                        </TouchableOpacity>
-                      )}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        {it.status === 'ready' && (
+                          <TouchableOpacity
+                            style={[styles.modalPrimaryBtn, { backgroundColor: '#16A34A', height: 30, paddingHorizontal: 10 }]}
+                            onPress={() => {
+                              markItemServed(it.ticketId, it.id);
+                              broadcastImmediately();
+                            }}
+                          >
+                            <Text style={[styles.modalPrimaryBtnText, { fontSize: 11.5 }]}>Mark Served</Text>
+                          </TouchableOpacity>
+                        )}
+                        {it.ticketId !== 'ORDER-SAVED' && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 3,
+                              backgroundColor: '#FEF2F2',
+                              borderWidth: 1,
+                              borderColor: '#FCA5A5',
+                              paddingHorizontal: 7,
+                              paddingVertical: 4,
+                              borderRadius: 6,
+                            }}
+                            onPress={() => handleCancelRunningItem(it.ticketId, it.id, it.name)}
+                          >
+                            <Ionicons name="close-circle" size={12} color="#DC2626" />
+                            <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
                     </View>
                   );
                 })
@@ -1736,17 +1877,38 @@ export default function TableOrderScreen() {
                       </View>
                     ) : null}
                   </View>
-                  {it.status === 'ready' && (
-                    <TouchableOpacity
-                      style={[styles.modalPrimaryBtn, { backgroundColor: '#16A34A', height: 34 }]}
-                      onPress={() => {
-                        markItemServed(it.ticketId, it.id);
-                        broadcastImmediately();
-                      }}
-                    >
-                      <Text style={styles.modalPrimaryBtnText}>Mark Served</Text>
-                    </TouchableOpacity>
-                  )}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    {it.status === 'ready' && (
+                      <TouchableOpacity
+                        style={[styles.modalPrimaryBtn, { backgroundColor: '#16A34A', height: 30, paddingHorizontal: 10 }]}
+                        onPress={() => {
+                          markItemServed(it.ticketId, it.id);
+                          broadcastImmediately();
+                        }}
+                      >
+                        <Text style={[styles.modalPrimaryBtnText, { fontSize: 11.5 }]}>Mark Served</Text>
+                      </TouchableOpacity>
+                    )}
+                    {it.ticketId !== 'ORDER-SAVED' && (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 3,
+                          backgroundColor: '#FEF2F2',
+                          borderWidth: 1,
+                          borderColor: '#FCA5A5',
+                          paddingHorizontal: 7,
+                          paddingVertical: 4,
+                          borderRadius: 6,
+                        }}
+                        onPress={() => handleCancelRunningItem(it.ticketId, it.id, it.name)}
+                      >
+                        <Ionicons name="close-circle" size={12} color="#DC2626" />
+                        <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
               ))}
             </ScrollView>

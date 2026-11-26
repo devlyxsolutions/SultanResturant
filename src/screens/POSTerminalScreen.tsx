@@ -288,6 +288,7 @@ export default function POSTerminalScreen({
   const dismissTicket = useRestaurantStore((state) => state.dismissTicket);
   const clearTableTickets = useRestaurantStore((state) => state.clearTableTickets);
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
+  const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const activeRunningTickets = useMemo(
     () => tickets.filter((t) => t && t.status !== 'served'),
@@ -999,6 +1000,48 @@ export default function POSTerminalScreen({
   };
 
   const updateQty = (id: string, delta: number) => {
+    if (delta < 0) {
+      const target = cart.find((i) => i.id === id);
+      if (target) {
+        const cancelQty = Math.min(target.qty, Math.abs(delta));
+        const isFromLoaded = loadedCart.some((lc) => lc.id === id);
+        const actorName = user?.name || 'Cashier';
+        const tblObj = tables.find((t) => t.id === selectedTableId);
+        logCancelledPunchedItems({
+          ticketId: loadedTicketId || (selectedTableId ? `TBL-${selectedTableId}` : 'POS-CART'),
+          tableId: selectedTableId || orderType,
+          tableName: tblObj?.name || (orderType === 'delivery' ? 'POS Delivery' : 'POS Counter'),
+          floor: tblObj?.floor || tblObj?.zone,
+          orderType,
+          server: selectedServer || actorName,
+          cancelledBy: actorName,
+          cancelledByRole: String(user?.role || role || 'Cashier'),
+          reason:
+            target.qty + delta <= 0
+              ? isFromLoaded
+                ? 'Punched item cancelled at POS billing'
+                : 'Item cancelled from POS cart'
+              : isFromLoaded
+                ? 'Punched item qty reduced at POS billing'
+                : 'Item qty reduced in POS cart',
+          source: isFromLoaded ? 'removed_at_billing' : 'pos_cart_remove',
+          items: [
+            {
+              id: target.id,
+              name: target.name,
+              qty: cancelQty,
+              price: target.price || 0,
+              lineTotal: (target.price || 0) * cancelQty,
+              notes: target.notes,
+              station: target.station,
+            },
+          ],
+          totalQty: cancelQty,
+          totalAmount: (target.price || 0) * cancelQty,
+          timePlaced: Date.now(),
+        });
+      }
+    }
     setCart((prev) =>
       prev
         .map((i) => (i.id === id ? { ...i, qty: i.qty + delta } : i))
@@ -1006,9 +1049,73 @@ export default function POSTerminalScreen({
     );
   };
 
-  const removeFromCart = (id: string) => setCart((prev) => prev.filter((i) => i.id !== id));
+  const removeFromCart = (id: string) => {
+    const target = cart.find((i) => i.id === id);
+    if (target) {
+      const isFromLoaded = loadedCart.some((lc) => lc.id === id);
+      const actorName = user?.name || 'Cashier';
+      const tblObj = tables.find((t) => t.id === selectedTableId);
+      logCancelledPunchedItems({
+        ticketId: loadedTicketId || (selectedTableId ? `TBL-${selectedTableId}` : 'POS-CART'),
+        tableId: selectedTableId || orderType,
+        tableName: tblObj?.name || (orderType === 'delivery' ? 'POS Delivery' : 'POS Counter'),
+        floor: tblObj?.floor || tblObj?.zone,
+        orderType,
+        server: selectedServer || actorName,
+        cancelledBy: actorName,
+        cancelledByRole: String(user?.role || role || 'Cashier'),
+        reason: isFromLoaded ? 'Punched item cancelled at POS billing' : 'Item cancelled from POS cart',
+        source: isFromLoaded ? 'removed_at_billing' : 'pos_cart_remove',
+        items: [
+          {
+            id: target.id,
+            name: target.name,
+            qty: target.qty,
+            price: target.price || 0,
+            lineTotal: (target.price || 0) * target.qty,
+            notes: target.notes,
+            station: target.station,
+          },
+        ],
+        totalQty: target.qty,
+        totalAmount: (target.price || 0) * target.qty,
+        timePlaced: Date.now(),
+      });
+    }
+    setCart((prev) => prev.filter((i) => i.id !== id));
+  };
 
   const clearCart = () => {
+    if (cart.length > 0) {
+      const isFromLoaded = loadedCart.length > 0;
+      const actorName = user?.name || 'Cashier';
+      const tblObj = tables.find((t) => t.id === selectedTableId);
+      const items = cart.map((c) => ({
+        id: c.id,
+        name: c.name,
+        qty: c.qty,
+        price: c.price || 0,
+        lineTotal: (c.price || 0) * c.qty,
+        notes: c.notes,
+        station: c.station,
+      }));
+      logCancelledPunchedItems({
+        ticketId: loadedTicketId || (selectedTableId ? `TBL-${selectedTableId}` : 'POS-CLEAR'),
+        tableId: selectedTableId || orderType,
+        tableName: tblObj?.name || (orderType === 'delivery' ? 'POS Delivery' : 'POS Counter'),
+        floor: tblObj?.floor || tblObj?.zone,
+        orderType,
+        server: selectedServer || actorName,
+        cancelledBy: actorName,
+        cancelledByRole: String(user?.role || role || 'Cashier'),
+        reason: isFromLoaded ? 'Cleared loaded punched order from POS cart' : 'Cleared all items from POS cart',
+        source: isFromLoaded ? 'removed_at_billing' : 'pos_cart_remove',
+        items,
+        totalQty: items.reduce((s, i) => s + i.qty, 0),
+        totalAmount: items.reduce((s, i) => s + i.lineTotal, 0),
+        timePlaced: Date.now(),
+      });
+    }
     setCart([]);
     setLoadedCart([]);
     setOrderNotes('');
@@ -2599,11 +2706,22 @@ export default function POSTerminalScreen({
                             )}
 
                             <TouchableOpacity
-                              style={styles.removeRowBtn}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                gap: 2,
+                                backgroundColor: '#FEF2F2',
+                                borderWidth: 1,
+                                borderColor: '#FCA5A5',
+                                paddingHorizontal: 6,
+                                paddingVertical: 3,
+                                borderRadius: 5,
+                              }}
                               onPress={() => removeFromCart(item.id)}
                               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                             >
-                              <Ionicons name="close" size={15} color="#94A3B8" />
+                              <Ionicons name="close" size={11} color="#DC2626" />
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: '#DC2626' }}>Cancel</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -3004,10 +3122,11 @@ export default function POSTerminalScreen({
                           )}
                           {(role === 'admin' || can('posCanDismissTicket')) && (
                             <TouchableOpacity
-                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', height: 38, width: 38 }]}
+                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', height: 32, paddingHorizontal: 9, flexDirection: 'row', gap: 4 }]}
                               onPress={() => handleCancelRunningOrder(t.id)}
                             >
-                              <Ionicons name="trash-outline" size={16} color="#DC2626" />
+                              <Ionicons name="close-circle" size={13} color="#DC2626" />
+                              <Text style={{ fontSize: 11, fontWeight: '900', color: '#DC2626' }}>Cancel</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -3982,10 +4101,11 @@ export default function POSTerminalScreen({
                           )}
                           {(role === 'admin' || can('posCanDismissTicket')) && (
                             <TouchableOpacity
-                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
+                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', gap: 3 }]}
                               onPress={() => handleCancelRunningOrder(t.id)}
                             >
-                              <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                              <Ionicons name="close-circle" size={12} color="#DC2626" />
+                              <Text style={{ fontSize: 10.5, fontWeight: '900', color: '#DC2626' }}>Cancel</Text>
                             </TouchableOpacity>
                           )}
                         </View>
