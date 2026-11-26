@@ -32,17 +32,21 @@ export function isPublicCloudHost(): boolean {
   if (Platform.OS !== 'web' || typeof window === 'undefined' || !window.location?.hostname) {
     return false;
   }
-  const h = window.location.hostname.toLowerCase();
-  if (
-    h === 'localhost' ||
-    h === '127.0.0.1' ||
-    h === '0.0.0.0' ||
-    h.startsWith('192.168.') ||
-    h.startsWith('10.') ||
-    /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(h)
-  ) {
-    return false;
-  }
+  return isPublicCloudHostname(window.location.hostname);
+}
+
+/**
+ * Returns true if a hostname is a public internet domain (e.g. sultanrestaurant.com.pk,
+ * www.sultanrestaurant.com.pk, sultanresturant092.netlify.app) rather than the restaurant's
+ * local POS hub (localhost, LAN/IP address, or a dot-less PC name like "sultan-pc").
+ */
+export function isPublicCloudHostname(hostname: string): boolean {
+  const h = (hostname || '').trim().toLowerCase();
+  if (!h) return false;
+  if (h === 'localhost' || h === '0.0.0.0' || h.endsWith('.local') || h.endsWith('.lan')) return false;
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(h)) return false; // any raw IPv4 = local hub
+  if (h.includes(':') || h.startsWith('[')) return false; // raw IPv6
+  if (!h.includes('.')) return false; // NetBIOS/PC name on LAN
   return true;
 }
 

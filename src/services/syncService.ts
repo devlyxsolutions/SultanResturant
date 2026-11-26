@@ -13,6 +13,7 @@ import {
   fetchPublicMenuFromCloud,
   isCustomerPortalRoute,
   isPublicCloudHost,
+  isPublicCloudHostname,
   publishPublicMenuToCloud,
   startCloudOrdersListener,
 } from './cloudMenuBridge';
@@ -317,7 +318,7 @@ async function probeLanIp(ip: string, timeoutMs = 900): Promise<boolean> {
 export async function discoverLocalServerIp(): Promise<string | null> {
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const h = window.location.hostname;
-    if (h !== 'localhost' && h !== '127.0.0.1' && !h.includes('vercel.app') && !h.includes('netlify.app')) {
+    if (h !== 'localhost' && h !== '127.0.0.1' && !isPublicCloudHostname(h)) {
       return h;
     }
   }
@@ -411,7 +412,8 @@ export async function resolveDefaultServerIp(): Promise<string> {
   // 1. If running in Web browser, always prefer the browser's current LAN IP host
   if (typeof window !== 'undefined' && window.location?.hostname) {
     const host = window.location.hostname;
-    if (host.includes('netlify.app') || host.includes('vercel.app')) {
+    // Public cloud domains (sultanrestaurant.com.pk, netlify.app) have no local POS hub
+    if (isPublicCloudHostname(host)) {
       return '';
     }
     if (host !== 'localhost' && host !== '127.0.0.1') {

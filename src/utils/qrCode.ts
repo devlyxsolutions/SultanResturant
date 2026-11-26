@@ -8,6 +8,8 @@ import { getActiveServerHttpUrl } from '../services/syncService';
  * Accessible from ANY customer mobile phone on 4G/5G mobile data or any Wi-Fi network!
  */
 export const PUBLIC_ONLINE_URL = 'https://sultanresturant092.netlify.app';
+/** Official Sultan Restaurant domain (hosted on the same Netlify site once DNS is live). */
+export const OFFICIAL_DOMAIN_URL = 'https://sultanrestaurant.com.pk';
 export const DEFAULT_LAN_IP = '192.168.1.14';
 export const DEFAULT_PORT = '8081';
 export const DEFAULT_STABLE_URL = PUBLIC_ONLINE_URL;

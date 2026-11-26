@@ -4734,6 +4734,15 @@ export default function TablesBlueprintScreen({
                   <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
                     <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800' }}>Quick Presets:</Text>
                     <TouchableOpacity
+                      style={{ backgroundColor: '#3A0F12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                      onPress={() => {
+                        setCustomQrUrlInput('https://sultanrestaurant.com.pk');
+                        handleBulkUpdateQrUrl('https://sultanrestaurant.com.pk');
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: '#F3D179' }}>sultanrestaurant.com.pk (Official)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
                       style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
                       onPress={() => {
                         setCustomQrUrlInput('https://sultanresturant092.netlify.app');
