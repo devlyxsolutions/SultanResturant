@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Sultan Restaurant | Royal Mughlai &amp; BBQ Dining</title>
+  <meta name="description" content="Sultan Restaurant - Royal Mughlai & BBQ dining. Signature platters, BBQ, Mandi, Biryani, Turkish dishes, rooftop and family floors, private Majlis cabins and party hall." />
+  <meta name="theme-color" content="#3A0F12" />
+  <meta property="og:title" content="Sultan Restaurant | Royal Mughlai & BBQ Dining" />
+  <meta property="og:description" content="Signature platters, BBQ, Mandi & Biryani. Rooftop, family floor, Majlis cabins and party hall." />
+  <meta property="og:image" content="/menu-images/slt-plt-grand-sultan.jpg" />
+  <meta property="og:type" content="website" />
+  <link rel="icon" href="/site/logo.png" />
+  <style>
+    :root {
+      --burgundy: #3A0F12;
+      --burgundy-deep: #24050A;
+      --gold: #D5A943;
+      --gold-soft: #F3D179;
+      --cream: #FCF8ED;
+      --ink: #1C1C1E;
+      --muted: #6B5B4E;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--cream);
+      line-height: 1.6;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    .wrap { width: min(1140px, 92%); margin: 0 auto; }
+    .serif { font-family: Georgia, "Times New Roman", serif; }
+
+    /* Nav */
+    header {
+      position: sticky; top: 0; z-index: 50;
+      background: rgba(36, 5, 10, 0.94);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid rgba(213, 169, 67, 0.35);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 10px; color: var(--gold-soft); font-weight: 800; letter-spacing: 2px; font-size: 15px; }
+    .brand img { width: 42px; height: 42px; object-fit: contain; }
+    .links { display: flex; gap: 24px; align-items: center; }
+    .links a { color: #EBD9B4; font-size: 14px; font-weight: 600; }
+    .links a:hover { color: var(--gold-soft); }
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 22px; border-radius: 999px; font-weight: 800; font-size: 14px;
+      transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); }
+    .btn-gold { background: linear-gradient(135deg, var(--gold-soft), var(--gold)); color: var(--burgundy-deep); box-shadow: 0 6px 18px rgba(213,169,67,.35); }
+    .btn-ghost { border: 1.5px solid var(--gold); color: var(--gold-soft); }
+    .btn-sm { padding: 8px 16px; font-size: 13px; }
+    .menu-toggle { display: none; background: none; border: 0; color: var(--gold-soft); font-size: 26px; cursor: pointer; }
+
+    /* Hero */
+    .hero {
+      position: relative; color: #fff; overflow: hidden;
+      background:
+        linear-gradient(100deg, rgba(36,5,10,.96) 0%, rgba(58,15,18,.85) 45%, rgba(58,15,18,.35) 100%),
+        url("/menu-images/slt-plt-grand-sultan.jpg") center/cover no-repeat;
+    }
+    .hero .wrap { padding: 110px 0 120px; }
+    .eyebrow { color: var(--gold-soft); letter-spacing: 4px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
+    .hero h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.08; margin: 14px 0 18px; max-width: 640px; }
+    .hero h1 span { color: var(--gold-soft); }
+    .hero p { font-size: 18px; color: #EADBC8; max-width: 540px; }
+    .hero .cta { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
+    .badges { display: flex; gap: 22px; margin-top: 44px; flex-wrap: wrap; color: #EBD9B4; font-size: 14px; font-weight: 600; }
+    .badges div::before { content: "◆ "; color: var(--gold); }
+
+    /* Sections */
+    section { padding: 84px 0; }
+    .sec-head { text-align: center; max-width: 640px; margin: 0 auto 46px; }
+    .sec-head h2 { font-size: clamp(28px, 4vw, 40px); color: var(--burgundy); margin: 8px 0 10px; }
+    .sec-head p { color: var(--muted); }
+    .divider { width: 70px; height: 3px; background: var(--gold); margin: 14px auto 0; border-radius: 2px; }
+
+    /* Dishes */
+    .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    .dish {
+      background: #fff; border-radius: 18px; overflow: hidden;
+      border: 1px solid #EEDFBF; box-shadow: 0 8px 24px rgba(58,15,18,.07);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .dish:hover { transform: translateY(-4px); box-shadow: 0 14px 32px rgba(58,15,18,.14); }
+    .dish img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #f1e7d2; }
+    .dish .body { padding: 16px 18px 20px; }
+    .dish h3 { font-size: 18px; color: var(--burgundy); }
+    .dish p { font-size: 14px; color: var(--muted); margin-top: 4px; }
+    .center-cta { text-align: center; margin-top: 42px; }
+
+    /* Experience */
+    .dark { background: linear-gradient(180deg, var(--burgundy-deep), var(--burgundy)); color: #F5EBDD; }
+    .dark .sec-head h2 { color: var(--gold-soft); }
+    .dark .sec-head p { color: #D9C7AE; }
+    .cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    .card {
+      border: 1px solid rgba(213,169,67,.35); border-radius: 16px; padding: 26px 22px;
+      background: rgba(255,255,255,.04);
+    }
+    .card .icon { font-size: 30px; }
+    .card h3 { color: var(--gold-soft); margin: 10px 0 6px; font-size: 19px; }
+    .card p { color: #D9C7AE; font-size: 14px; }
+
+    /* Events */
+    .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 46px; align-items: center; }
+    .split img { border-radius: 20px; box-shadow: 0 16px 40px rgba(58,15,18,.2); aspect-ratio: 4/3; object-fit: cover; width: 100%; }
+    .split h2 { color: var(--burgundy); font-size: clamp(26px, 3.6vw, 38px); margin: 8px 0 14px; }
+    .split ul { list-style: none; margin: 18px 0 26px; }
+    .split li { padding: 7px 0; color: var(--muted); }
+    .split li::before { content: "✦ "; color: var(--gold); }
+
+    /* Contact */
+    .contact { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .contact .item { background: #fff; border: 1px solid #EEDFBF; border-radius: 16px; padding: 24px; text-align: center; }
+    .contact .item h3 { color: var(--burgundy); font-size: 16px; margin: 8px 0 4px; }
+    .contact .item p, .contact .item a { color: var(--muted); font-size: 15px; word-break: break-word; }
+    .contact .item a { color: var(--burgundy); font-weight: 700; }
+
+    /* Footer */
+    footer { background: var(--burgundy-deep); color: #CDB99B; padding: 40px 0 28px; font-size: 14px; }
+    .foot { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
+    .foot a { color: var(--gold-soft); }
+    .foot .small { font-size: 12px; opacity: .75; margin-top: 18px; text-align: center; width: 100%; }
+
+    /* Mobile */
+    @media (max-width: 820px) {
+      .menu-toggle { display: block; }
+      .links {
+        position: absolute; top: 68px; left: 0; right: 0; flex-direction: column; gap: 0;
+        background: var(--burgundy-deep); border-bottom: 1px solid rgba(213,169,67,.35);
+        display: none; padding: 8px 0 16px;
+      }
+      .links.open { display: flex; }
+      .links a { padding: 12px 0; width: 100%; text-align: center; }
+      .hero .wrap { padding: 80px 0 90px; }
+      .split { grid-template-columns: 1fr; }
+      section { padding: 64px 0; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <a class="brand" href="#top"><img src="/site/logo.png" alt="Sultan Restaurant logo" />SULTAN RESTAURANT</a>
+      <button class="menu-toggle" aria-label="Open menu" onclick="document.getElementById('links').classList.toggle('open')">☰</button>
+      <nav class="links" id="links">
+        <a href="#signature">Signature</a>
+        <a href="#experience">Dining</a>
+        <a href="#events">Events</a>
+        <a href="#contact">Contact</a>
+        <a class="btn btn-gold btn-sm" href="/menu">Order Online</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="top">
+    <section class="hero">
+      <div class="wrap">
+        <div class="eyebrow">Royal Mughlai &amp; BBQ Dining</div>
+        <h1 class="serif">A Feast Worthy of the <span>Sultan</span></h1>
+        <p>Charcoal BBQ, royal platters, Arabic Mandi, Turkish specialities and slow-cooked Biryani, served across our rooftop, family floor and private Majlis cabins.</p>
+        <div class="cta">
+          <a class="btn btn-gold" href="/menu">View Menu &amp; Order</a>
+          <a class="btn btn-ghost" href="#events">Book a Table / Event</a>
+        </div>
+        <div class="badges">
+          <div>Rooftop Dining</div>
+          <div>Family Floor</div>
+          <div>Private Majlis Cabins</div>
+          <div>Party Hall</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="signature">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow" style="color: var(--gold)">From Our Kitchen</div>
+          <h2 class="serif">Signature Dishes</h2>
+          <p>A few favourites our guests keep coming back for.</p>
+          <div class="divider"></div>
+        </div>
+        <div class="grid">
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-plt-grand-sultan.jpg" alt="Grand Sultan Platter" /><div class="body"><h3>Grand Sultan Platter</h3><p>Our royal sharing platter of mixed BBQ for the whole table.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-bbq-mutton-champ.jpg" alt="Mutton Champ" /><div class="body"><h3>Mutton Champ</h3><p>Tender charcoal-grilled mutton chops.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-mnd-lahm.jpg" alt="Lahm Mandi" /><div class="body"><h3>Lahm Mandi</h3><p>Arabic-style mandi rice with slow-cooked lamb.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-bir-mutton-biryani.jpg" alt="Mutton Biryani" /><div class="body"><h3>Mutton Biryani</h3><p>Fragrant dum biryani layered with spiced mutton.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-tur-pasha-gosht.jpg" alt="Pasha Gosht" /><div class="body"><h3>Pasha Gosht</h3><p>A rich Turkish-inspired mutton speciality.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-bbq-malai-boti.jpg" alt="Malai Boti" /><div class="body"><h3>Malai Boti</h3><p>Creamy, melt-in-the-mouth chicken boti off the grill.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-piz-sultan-special.jpg" alt="Sultan Special Pizza" /><div class="body"><h3>Sultan Special Pizza</h3><p>Our house pizza, loaded the Sultan way.</p></div></article>
+          <article class="dish"><img loading="lazy" src="/menu-images/slt-mck-mint-mojito.jpg" alt="Mint Mojito" /><div class="body"><h3>Mint Mojito</h3><p>Refreshing mocktails and fresh juices from our juice bar.</p></div></article>
+        </div>
+        <div class="center-cta"><a class="btn btn-gold" href="/menu">See Full Menu</a></div>
+      </div>
+    </section>
+
+    <section id="experience" class="dark">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow">The Experience</div>
+          <h2 class="serif">Dining Spaces for Every Occasion</h2>
+          <p>Four floors designed for families, friends, celebrations and private gatherings.</p>
+          <div class="divider"></div>
+        </div>
+        <div class="cards">
+          <div class="card"><div class="icon">🏛️</div><h3>Ground Floor</h3><p>Our main dining hall, ideal for quick meals and casual dining.</p></div>
+          <div class="card"><div class="icon">🌙</div><h3>Rooftop</h3><p>Open-air dining under the night sky with fresh BBQ off the grill.</p></div>
+          <div class="card"><div class="icon">👨‍👩‍👧</div><h3>Family Floor</h3><p>A calm, private space for families, with comfortable sofa seating.</p></div>
+          <div class="card"><div class="icon">🎉</div><h3>Party Hall</h3><p>For birthdays, corporate dinners and family events.</p></div>
+          <div class="card"><div class="icon">🕌</div><h3>Majlis Cabins</h3><p>Traditional floor-seating cabins for a royal, private dining experience.</p></div>
+          <div class="card"><div class="icon">📱</div><h3>Scan &amp; Order</h3><p>Scan the QR code on your table to browse the menu and order from your phone.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="events">
+      <div class="wrap split">
+        <img loading="lazy" src="/menu-images/slt-plt-grand-sultan.jpg" alt="Sultan Restaurant platters for events" />
+        <div>
+          <div class="eyebrow" style="color: var(--gold)">Celebrations &amp; Groups</div>
+          <h2 class="serif">Host Your Event at Sultan</h2>
+          <p style="color: var(--muted)">From family dinners to large group bookings, we arrange the seating and the menu so you can enjoy the occasion.</p>
+          <ul>
+            <li>Group &amp; family table reservations</li>
+            <li>Party Hall bookings for birthdays and functions</li>
+            <li>Private Majlis cabins for special gatherings</li>
+            <li>Platters and set menus for large groups</li>
+          </ul>
+          <a class="btn btn-gold" id="bookBtn" href="#contact">Contact Us to Book</a>
+        </div>
+      </div>
+    </section>
+
+    <section id="contact">
+      <div class="wrap">
+        <div class="sec-head">
+          <div class="eyebrow" style="color: var(--gold)">Visit Us</div>
+          <h2 class="serif">Get in Touch</h2>
+          <div class="divider"></div>
+        </div>
+        <div class="contact" id="contactGrid">
+          <div class="item"><div style="font-size:28px">🛵</div><h3>Order Online</h3><a href="/menu">Open Digital Menu</a></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap foot">
+      <div class="brand" style="font-size:14px"><img src="/site/logo.png" alt="" style="width:34px;height:34px" />SULTAN RESTAURANT</div>
+      <div style="display:flex; gap:20px; flex-wrap:wrap">
+        <a href="/menu">Menu</a>
+        <a href="#events">Events</a>
+        <a href="#contact">Contact</a>
+        <a href="/portal">Staff Portal</a>
+      </div>
+      <div class="small">© <span id="yr"></span> Sultan Restaurant. All rights reserved.</div>
+    </div>
+  </footer>
+
+  <script>
+    /* ============================================================
+       RESTAURANT CONTACT DETAILS: fill these in, then redeploy.
+       Empty values are hidden automatically on the website.
+       ============================================================ */
+    var SITE = {
+      phone: '',          // e.g. '+92 300 1234567'
+      whatsapp: '',       // digits only with country code, e.g. '923001234567'
+      address: '',        // full street address
+      mapsUrl: '',        // Google Maps share link
+      hours: '',          // e.g. 'Daily 12:00 PM - 2:00 AM'
+      instagram: '',      // full profile URL
+      facebook: ''        // full page URL
+    };
+
+    (function () {
+      document.getElementById('yr').textContent = new Date().getFullYear();
+      var grid = document.getElementById('contactGrid');
+      function add(icon, title, html) {
+        var d = document.createElement('div');
+        d.className = 'item';
+        d.innerHTML = '<div style="font-size:28px">' + icon + '</div><h3>' + title + '</h3>' + html;
+        grid.appendChild(d);
+      }
+      function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
+      if (SITE.phone) add('📞', 'Call Us', '<a href="tel:' + esc(SITE.phone.replace(/\s+/g, '')) + '">' + esc(SITE.phone) + '</a>');
+      if (SITE.whatsapp) {
+        add('💬', 'WhatsApp', '<a target="_blank" rel="noopener" href="https://wa.me/' + esc(SITE.whatsapp) + '">Chat with us</a>');
+        document.getElementById('bookBtn').href = 'https://wa.me/' + SITE.whatsapp + '?text=' + encodeURIComponent('Assalam o Alaikum, I would like to book a table at Sultan Restaurant.');
+      }
+      if (SITE.address) add('📍', 'Location', '<p>' + esc(SITE.address) + '</p>' + (SITE.mapsUrl ? '<a target="_blank" rel="noopener" href="' + esc(SITE.mapsUrl) + '">Open in Google Maps</a>' : ''));
+      if (SITE.hours) add('🕰️', 'Opening Hours', '<p>' + esc(SITE.hours) + '</p>');
+      var social = [];
+      if (SITE.instagram) social.push('<a target="_blank" rel="noopener" href="' + esc(SITE.instagram) + '">Instagram</a>');
+      if (SITE.facebook) social.push('<a target="_blank" rel="noopener" href="' + esc(SITE.facebook) + '">Facebook</a>');
+      if (social.length) add('✨', 'Follow Us', social.join(' &nbsp;·&nbsp; '));
+    })();
+  </script>
+</body>
+</html>
