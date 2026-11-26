@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FullscreenButton from '../components/FullscreenButton';
-import InvoiceComponent, { printInvoiceReceipt } from '../components/Invoice';
+import InvoiceComponent, { formatStaffWithExactRole, printInvoiceReceipt } from '../components/Invoice';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 import SultanLogo from '../components/SultanLogo';
@@ -1176,9 +1176,9 @@ export default function POSTerminalScreen({
       orderType: derivedOrderType,
       tableId: isTable ? ticket.tableId : undefined,
       tableName: targetTableName,
-      server: ticket.server || user?.name || 'Staff',
-      orderTakenBy: ticket.server || user?.name || 'Staff',
-      cashier: user?.name || 'POS Staff',
+      server: ticket.server ? formatStaffWithExactRole(ticket.server, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      orderTakenBy: ticket.server ? formatStaffWithExactRole(ticket.server, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
       timePlaced: ticket.timePlaced || Date.now(),
       timeSettled: Date.now(),
       items: ticket.items || [],
@@ -1277,9 +1277,9 @@ export default function POSTerminalScreen({
       tableId: selectedTableId || undefined,
       tableName: targetTableName,
       customer: selectedCustomerObj,
-      server: selectedServer || user?.name || 'Staff',
-      orderTakenBy: selectedServer || user?.name || 'Staff',
-      cashier: user?.name || 'POS Staff',
+      server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
       timePlaced: Date.now(),
       timeSettled: Date.now(),
       items: cart,
@@ -1403,19 +1403,20 @@ export default function POSTerminalScreen({
     const targetTableName = selectedTableObj?.name || `Table ${targetTableId}`;
     const wasDineIn = orderType === 'dine-in' && targetTableId;
 
-    const userRoleLabel = user?.role
-      ? user.role.charAt(0).toUpperCase() + user.role.slice(1)
-      : role === 'admin'
-        ? 'Admin'
-        : role === 'floor_manager'
-          ? 'Floor Manager'
-          : 'Cashier';
+    const fallbackRoleLabel =
+      user?.customRoleId === 'role-cashier'
+        ? 'Cashier'
+        : role === 'admin'
+          ? 'Admin'
+          : role === 'floor_manager'
+            ? 'Floor Manager'
+            : 'Cashier';
     const currentUserName = user?.name
-      ? user.name.includes(`(${userRoleLabel})`)
-        ? user.name
-        : `${user.name} (${userRoleLabel})`
+      ? formatStaffWithExactRole(user.name, fallbackRoleLabel)
       : 'POS Cashier';
-    const orderCreator = selectedServer || currentUserName;
+    const orderCreator = selectedServer
+      ? formatStaffWithExactRole(selectedServer, 'Order Taker')
+      : currentUserName;
     const cashierName = currentUserName;
     const changeDueAmount = Math.max(0, totalCollected - total);
 
@@ -1584,9 +1585,9 @@ export default function POSTerminalScreen({
       tableId: selectedTableId || undefined,
       tableName: targetTableName,
       customer: selectedCustomerObj,
-      server: selectedServer || user?.name || 'Staff',
-      orderTakenBy: selectedServer || user?.name || 'Staff',
-      cashier: user?.name || 'POS Staff',
+      server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+      cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
       timePlaced: Date.now(),
       timeSettled: Date.now(),
       items: cart,

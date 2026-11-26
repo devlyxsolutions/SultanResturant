@@ -354,15 +354,21 @@ function buildEscPosBillBuffer(invoice) {
   parts.push(Buffer.from(esc + 'a\x00', 'ascii'));
   parts.push(Buffer.from(`INV: #${String(invoice.id || '').substring(0, 14)}`.padEnd(20) + `${dateStr}\n`, 'ascii'));
   parts.push(Buffer.from(`Type: ${String(invoice.orderType || 'DINE-IN').toUpperCase()}`.padEnd(20) + `${invoice.tableName ? String(invoice.tableName).substring(0, 15) : ''}\n`, 'ascii'));
+  const billedByText = String(invoice.cashier || invoice.server || 'Cashier').replace(/\(Manager\)/i, '(Cashier)');
+  if (invoice.orderTakenBy && invoice.orderTakenBy !== invoice.cashier) {
+    parts.push(Buffer.from(`Order Taken: ${String(invoice.orderTakenBy).substring(0, 22)}\n`, 'ascii'));
+  }
+  parts.push(Buffer.from(`Billed By: ${billedByText.substring(0, 24)}\n`, 'ascii'));
   parts.push(Buffer.from('====================================\n', 'ascii'));
-  parts.push(Buffer.from('QTY  ITEM                     AMOUNT\n', 'ascii'));
+  parts.push(Buffer.from('ITEM             QTY  PRICE    TOTAL\n', 'ascii'));
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   for (const it of items) {
+    const nm = String(it.name || '').substring(0, 16).padEnd(17);
     const q = `${it.qty || 1}x`.padEnd(4);
-    const amt = String(((it.price || 0) * (it.qty || 1)).toLocaleString()).padStart(8);
-    const nm = String(it.name || '').substring(0, 22).padEnd(23);
-    parts.push(Buffer.from(`${q} ${nm}${amt}\n`, 'ascii'));
+    const rate = String(Number(it.price || 0).toLocaleString()).padStart(6);
+    const amt = String(((it.price || 0) * (it.qty || 1)).toLocaleString()).padStart(9);
+    parts.push(Buffer.from(`${nm}${q}${rate}${amt}\n`, 'ascii'));
   }
 
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));

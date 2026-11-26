@@ -21,6 +21,88 @@ type InvoiceProps = {
 };
 
 /**
+ * Resolves the exact staff role/designation from the live staff directory
+ * so receipts always show the person's real role (e.g. "Sharjeel (Cashier)",
+ * "Tanveer (Cashier)", "Bilal (Order Taker)", "Nadeem (Floor Manager)")
+ * instead of the generic route role "(Manager)".
+ */
+export function formatStaffWithExactRole(
+  rawNameOrLabel: string | undefined | null,
+  fallbackRoleLabel: string = 'Cashier'
+): string {
+  const raw = String(rawNameOrLabel || '').trim();
+  if (!raw) return fallbackRoleLabel;
+
+  // Strip trailing parenthetical role or "• Customer" suffix to match staff directory
+  const withoutCustomer = raw.includes('•') ? raw.split('•')[0].trim() : raw;
+  const parenMatch = withoutCustomer.match(/^(.+?)\s*\(([^)]+)\)\s*$/);
+  const baseName = (parenMatch ? parenMatch[1] : withoutCustomer).trim();
+  const existingParenRole = parenMatch ? parenMatch[2].trim() : '';
+
+  if (!baseName) return raw;
+
+  try {
+    const staffList = useRestaurantStore.getState().staff || [];
+    const lowerBase = baseName.toLowerCase();
+    const matched = staffList.find(
+      (s) =>
+        s &&
+        (String(s.name || '').trim().toLowerCase() === lowerBase ||
+          String(s.username || '').trim().toLowerCase() === lowerBase ||
+          String(s.id || '').trim().toLowerCase() === lowerBase)
+    );
+
+    if (matched) {
+      const cRole = String(matched.customRoleId || '').toLowerCase();
+      const sRole = String(matched.role || '').trim();
+      const sRoleLower = sRole.toLowerCase();
+      const desig = String(matched.designation || '').trim();
+      const desigLower = desig.toLowerCase();
+
+      let exactRole = '';
+      if (cRole === 'role-cashier' || sRoleLower === 'cashier' || desigLower === 'cashier') {
+        exactRole = 'Cashier';
+      } else if (
+        cRole === 'role-floor-manager' ||
+        sRoleLower === 'floor manager' ||
+        sRoleLower === 'floor_manager' ||
+        desigLower.includes('f. manager') ||
+        desigLower.includes('floor manager')
+      ) {
+        exactRole = 'Floor Manager';
+      } else if (
+        cRole === 'role-waiter' ||
+        cRole === 'role-order-taker' ||
+        sRoleLower === 'waiter' ||
+        sRoleLower === 'order taker' ||
+        desigLower === 'order taker'
+      ) {
+        exactRole = 'Order Taker';
+      } else if (cRole === 'role-admin' || sRoleLower === 'admin' || matched.id === 'st-master') {
+        exactRole = 'Admin';
+      } else if (cRole === 'role-juicebar' || sRoleLower === 'juicebar' || sRoleLower === 'juice bar') {
+        exactRole = desig || 'Juice Bar';
+      } else if (cRole === 'role-kitchen' || sRoleLower === 'kitchen') {
+        exactRole = 'Kitchen';
+      } else if (desig) {
+        exactRole = desig;
+      } else if (sRole) {
+        exactRole = sRole;
+      } else {
+        exactRole = fallbackRoleLabel;
+      }
+
+      return `${matched.name} (${exactRole})`;
+    }
+  } catch {}
+
+  if (existingParenRole && existingParenRole.toLowerCase() !== 'pos') {
+    return `${baseName} (${existingParenRole})`;
+  }
+  return `${baseName} (${fallbackRoleLabel})`;
+}
+
+/**
  * Universal responsive print engine for Sultan Restaurant receipt slip.
  * Responsive for any printer:
  * - On 80mm / 58mm Thermal Printers: Fits 100% of the roll width with compact thermal typography.
@@ -65,8 +147,10 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
       }
     } catch {}
     const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleString();
-    const orderCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : 'Staff');
-    const cashierName = invoice.cashier || (invoice.server?.toLowerCase().includes('pos') ? invoice.server : 'Manager');
+    const rawCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : '');
+    const rawCashier = invoice.cashier || invoice.server || 'Cashier';
+    const cashierName = formatStaffWithExactRole(rawCashier, 'Cashier');
+    const orderCreator = rawCreator ? formatStaffWithExactRole(rawCreator, 'Order Taker') : cashierName;
     
     const isUnpaidBill = invoice.isUnpaidBill || invoice.status === 'unpaid';
     
@@ -84,13 +168,15 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     text += `INV #: ${invoice.id}\n`;
     text += `Date: ${dateStr}\n`;
     text += `Type: ${invoice.orderType.toUpperCase()}${invoice.tableName ? ` • Table: ${invoice.tableName}` : ''}\n`;
-    text += `Order Taken By: ${orderCreator}\n`;
+    if (orderCreator && orderCreator !== cashierName) {
+      text += `Order Taken By: ${orderCreator}\n`;
+    }
     text += `Billed By: ${cashierName}\n`;
     text += `--------------------------------\n`;
-    text += `Qty  Item               Amount\n`;
+    text += `Item             Qty  Price   Total\n`;
     text += `--------------------------------\n`;
     invoice.items.forEach(i => {
-      text += `${i.qty}x  ${i.name.padEnd(18).substring(0, 18)} Rs. ${(i.price * i.qty).toLocaleString()}\n`;
+      text += `${i.name.padEnd(16).substring(0, 16)} ${String(i.qty + 'x').padEnd(4)} ${String((i.price || 0).toLocaleString()).padStart(5)} ${String(((i.price || 0) * i.qty).toLocaleString()).padStart(7)}\n`;
     });
     text += `--------------------------------\n`;
     text += `Sub Total: Rs. ${(invoice.subTotal || 0).toLocaleString()}\n`;
@@ -138,19 +224,22 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleDateString();
   const timeStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const orderCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : 'Staff');
-  const cashierName = invoice.cashier || (invoice.server?.toLowerCase().includes('pos') ? invoice.server : 'Manager');
+  const rawCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : '');
+  const rawCashier = invoice.cashier || invoice.server || 'Cashier';
+  const cashierName = formatStaffWithExactRole(rawCashier, 'Cashier');
+  const orderCreator = rawCreator ? formatStaffWithExactRole(rawCreator, 'Order Taker') : cashierName;
   const isSameStaff = orderCreator === cashierName;
 
   const itemsHtml = invoice.items.map(item => `
     <tr>
-      <td class="col-qty">${item.qty}x</td>
       <td class="col-item">
         <div style="font-weight: 700;">${item.name}</div>
         ${(item as any).selectedVariant ? `<div style="font-size: 9.5px; font-weight: normal; color: #222;">Option: ${(item as any).selectedVariant}</div>` : ''}
         ${item.notes ? `<div style="font-size: 9px; font-style: italic; color: #333;">* ${item.notes}</div>` : ''}
       </td>
-      <td class="col-amount">${(item.price * item.qty).toLocaleString()}</td>
+      <td class="col-qty">${item.qty}x</td>
+      <td class="col-rate">${(item.price || 0).toLocaleString()}</td>
+      <td class="col-amount">${((item.price || 0) * item.qty).toLocaleString()}</td>
     </tr>
   `).join('');
 
@@ -343,20 +432,28 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
           vertical-align: top;
         }
 
+        .col-item {
+          width: 43%;
+          word-break: break-word;
+          font-weight: 700 !important;
+          padding-right: 3px;
+        }
+
         .col-qty {
-          width: 14%;
+          width: 13%;
+          text-align: center;
           font-weight: 800 !important;
         }
 
-        .col-item {
-          width: 54%;
-          word-break: break-word;
+        .col-rate {
+          width: 21%;
+          text-align: right;
           font-weight: 700 !important;
-          padding-right: 4px;
+          padding-right: 2px;
         }
 
         .col-amount {
-          width: 32%;
+          width: 23%;
           text-align: right;
           font-weight: 800 !important;
         }
@@ -442,7 +539,10 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         ${invoice.tableName ? `<div class="meta-row"><span>Table: ${invoice.tableName}</span></div>` : ''}
 
         ${isSameStaff ? `
-          <div class="meta-row"><span>Staff / Cashier: ${cashierName}</span></div>
+          <div class="meta-row">
+            <span>Billed By:</span>
+            <span class="meta-bold">${cashierName}</span>
+          </div>
         ` : `
           <div class="meta-row">
             <span>Order Taken:</span>
@@ -481,15 +581,17 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
 
         <table>
           <colgroup>
-            <col style="width: 14%;" />
-            <col style="width: 54%;" />
-            <col style="width: 32%;" />
+            <col style="width: 43%;" />
+            <col style="width: 13%;" />
+            <col style="width: 21%;" />
+            <col style="width: 23%;" />
           </colgroup>
           <thead>
             <tr>
-              <th style="text-align: left;">Qty</th>
               <th style="text-align: left;">Item</th>
-              <th style="text-align: right;">Amount</th>
+              <th style="text-align: center;">Qty</th>
+              <th style="text-align: right;">Price</th>
+              <th style="text-align: right;">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -680,8 +782,10 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
   const dateStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleDateString();
   const timeStr = new Date(invoice.timeSettled || invoice.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-  const orderCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : 'Staff');
-  const cashierName = invoice.cashier || (invoice.server?.toLowerCase().includes('pos') ? invoice.server : 'Manager');
+  const rawCreator = invoice.orderTakenBy || (invoice.server && !invoice.server.toLowerCase().includes('pos') ? invoice.server : '');
+  const rawCashier = invoice.cashier || invoice.server || 'Cashier';
+  const cashierName = formatStaffWithExactRole(rawCashier, 'Cashier');
+  const orderCreator = rawCreator ? formatStaffWithExactRole(rawCreator, 'Order Taker') : cashierName;
   const isSameStaff = orderCreator === cashierName;
 
   const handleSaveDomain = () => {
@@ -744,7 +848,8 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
         {/* Order Creator & Cashier Details */}
         {isSameStaff ? (
           <View style={styles.metaRow}>
-            <Text style={styles.metaText}>Staff / Cashier: {cashierName}</Text>
+            <Text style={styles.metaText}>Billed By:</Text>
+            <Text style={[styles.metaText, styles.boldText]}>{cashierName}</Text>
           </View>
         ) : (
           <>
@@ -753,7 +858,7 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
               <Text style={[styles.metaText, styles.boldText]}>{orderCreator}</Text>
             </View>
             <View style={styles.metaRow}>
-              <Text style={styles.metaText}>Billed By (Cashier):</Text>
+              <Text style={styles.metaText}>Billed By:</Text>
               <Text style={[styles.metaText, styles.boldText]}>{cashierName}</Text>
             </View>
           </>
@@ -793,17 +898,21 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
 
         {/* Items Header */}
         <View style={styles.itemHeader}>
-          <Text style={[styles.colText, { width: '15%', fontWeight: 'bold' }]}>Qty</Text>
-          <Text style={[styles.colText, { width: '53%', fontWeight: 'bold' }]}>Item</Text>
-          <Text style={[styles.colText, { width: '32%', textAlign: 'right', fontWeight: 'bold' }]}>Amount</Text>
+          <Text style={[styles.colText, { width: '43%', fontWeight: 'bold' }]}>Item</Text>
+          <Text style={[styles.colText, { width: '13%', textAlign: 'center', fontWeight: 'bold' }]}>Qty</Text>
+          <Text style={[styles.colText, { width: '21%', textAlign: 'right', fontWeight: 'bold' }]}>Price</Text>
+          <Text style={[styles.colText, { width: '23%', textAlign: 'right', fontWeight: 'bold' }]}>Total</Text>
         </View>
 
         {invoice.items.map((item, idx) => (
           <View key={idx} style={styles.itemRow}>
-            <Text style={[styles.colText, { width: '15%', fontWeight: 'bold' }]}>{item.qty}x</Text>
-            <Text style={[styles.colText, { width: '53%' }]}>{item.name}</Text>
-            <Text style={[styles.colText, { width: '32%', textAlign: 'right', fontWeight: 'bold' }]}>
-              {(item.price * item.qty).toLocaleString()}
+            <Text style={[styles.colText, { width: '43%' }]}>{item.name}</Text>
+            <Text style={[styles.colText, { width: '13%', textAlign: 'center', fontWeight: 'bold' }]}>{item.qty}x</Text>
+            <Text style={[styles.colText, { width: '21%', textAlign: 'right' }]}>
+              {(item.price || 0).toLocaleString()}
+            </Text>
+            <Text style={[styles.colText, { width: '23%', textAlign: 'right', fontWeight: 'bold' }]}>
+              {((item.price || 0) * item.qty).toLocaleString()}
             </Text>
           </View>
         ))}

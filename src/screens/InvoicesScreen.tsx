@@ -16,7 +16,7 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
-import { printInvoiceReceipt } from '../components/Invoice';
+import { formatStaffWithExactRole, printInvoiceReceipt } from '../components/Invoice';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import PaginationControl from '../components/PaginationControl';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
@@ -313,13 +313,15 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     text += `Order Type: ${inv.orderType.toUpperCase()}\n`;
     if (inv.tableName) text += `Table: ${inv.tableName}\n`;
 
-    const orderCreator = inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff');
-    const cashierName = inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager');
+    const rawCreator = inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : '');
+    const rawCashier = inv.cashier || inv.server || 'Cashier';
+    const cashierName = formatStaffWithExactRole(rawCashier, 'Cashier');
+    const orderCreator = rawCreator ? formatStaffWithExactRole(rawCreator, 'Order Taker') : cashierName;
     if (orderCreator === cashierName) {
-      text += `Staff / Cashier: ${cashierName}\n`;
+      text += `Billed By: ${cashierName}\n`;
     } else {
       text += `Order Taken By: ${orderCreator}\n`;
-      text += `Billed By (Cashier): ${cashierName}\n`;
+      text += `Billed By: ${cashierName}\n`;
     }
 
     if (inv.customer) {
@@ -331,14 +333,15 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       if (inv.voidReason) text += `Reason: ${inv.voidReason}\n`;
     }
     text += '--------------------------------\n';
-    text += 'Qty  Item                 Amount\n';
+    text += 'Item             Qty  Price   Total\n';
     text += '--------------------------------\n';
     inv.items?.forEach((item) => {
-      const name = item.name.length > 18 ? item.name.substring(0, 16) + '..' : item.name;
+      const name = item.name.length > 16 ? item.name.substring(0, 14) + '..' : item.name;
+      const nameStr = pad(name, 17);
       const qtyStr = pad(`${item.qty}x`, 4);
-      const nameStr = pad(name, 19);
-      const amtStr = padRight(`Rs. ${(item.price * item.qty).toLocaleString()}`, 9);
-      text += `${qtyStr}${nameStr}${amtStr}\n`;
+      const rateStr = padRight(`${(item.price || 0).toLocaleString()}`, 6);
+      const amtStr = padRight(`${((item.price || 0) * item.qty).toLocaleString()}`, 8);
+      text += `${nameStr}${qtyStr}${rateStr}${amtStr}\n`;
     });
     text += '--------------------------------\n';
     text += `${pad('Subtotal:', 20)}${padRight(`Rs. ${(inv.subTotal || 0).toLocaleString()}`, 12)}\n`;
@@ -1336,14 +1339,17 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
                         {/* Order Creator & Cashier Display */}
                         {(() => {
-                          const orderCreator = selectedInvoice.orderTakenBy || (selectedInvoice.server && !selectedInvoice.server.toLowerCase().includes('pos') ? selectedInvoice.server : 'Staff');
-                          const cashierName = selectedInvoice.cashier || (selectedInvoice.server?.toLowerCase().includes('pos') ? selectedInvoice.server : 'Manager');
+                          const rawCreator = selectedInvoice.orderTakenBy || (selectedInvoice.server && !selectedInvoice.server.toLowerCase().includes('pos') ? selectedInvoice.server : '');
+                          const rawCashier = selectedInvoice.cashier || selectedInvoice.server || 'Cashier';
+                          const cashierName = formatStaffWithExactRole(rawCashier, 'Cashier');
+                          const orderCreator = rawCreator ? formatStaffWithExactRole(rawCreator, 'Order Taker') : cashierName;
                           const isSame = orderCreator === cashierName;
 
                           if (isSame) {
                             return (
                               <View style={styles.thermalMetaRow}>
-                                <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>Staff / Cashier: {cashierName}</Text>
+                                <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>Billed By:</Text>
+                                <Text style={[styles.thermalMetaText, { fontWeight: 'bold' }, isSmallMobile && { fontSize: 10 }]}>{cashierName}</Text>
                               </View>
                             );
                           }
@@ -1354,7 +1360,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                                 <Text style={[styles.thermalMetaText, { fontWeight: 'bold' }, isSmallMobile && { fontSize: 10 }]}>{orderCreator}</Text>
                               </View>
                               <View style={styles.thermalMetaRow}>
-                                <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>Billed By (Cashier):</Text>
+                                <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>Billed By:</Text>
                                 <Text style={[styles.thermalMetaText, { fontWeight: 'bold' }, isSmallMobile && { fontSize: 10 }]}>{cashierName}</Text>
                               </View>
                             </>
@@ -1377,17 +1383,21 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
                         {/* Items Header */}
                         <View style={styles.thermalItemHeader}>
-                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '15%' }]}>Qty</Text>
-                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '50%' }]}>Item</Text>
-                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '35%', textAlign: 'right' }]}>Amount</Text>
+                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '43%' }]}>Item</Text>
+                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '13%', textAlign: 'center' }]}>Qty</Text>
+                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '21%', textAlign: 'right' }]}>Price</Text>
+                          <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '23%', textAlign: 'right' }]}>Total</Text>
                         </View>
 
                         {selectedInvoice.items?.map((item, idx) => (
                           <View key={idx} style={styles.thermalItemRow}>
-                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '15%' }]}>{item.qty}x</Text>
-                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '50%' }]}>{item.name}</Text>
-                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '35%', textAlign: 'right' }]}>
-                              {(item.price * item.qty).toLocaleString()}
+                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '43%' }]}>{item.name}</Text>
+                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '13%', textAlign: 'center' }]}>{item.qty}x</Text>
+                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '21%', textAlign: 'right' }]}>
+                              {(item.price || 0).toLocaleString()}
+                            </Text>
+                            <Text style={[styles.thermalCol, isSmallMobile && { fontSize: 10 }, { width: '23%', textAlign: 'right' }]}>
+                              {((item.price || 0) * item.qty).toLocaleString()}
                             </Text>
                           </View>
                         ))}

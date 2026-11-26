@@ -76,18 +76,18 @@ $bt = "$env:TEMP\android-build-tools\android-14"
 $baseApk = if (Test-Path "$env:TEMP\sultan_aligned_v14.apk") { "$env:TEMP\sultan_aligned_v14.apk" } elseif (Test-Path "Sultan-POS-Tablet.apk") { "Sultan-POS-Tablet.apk" } else { "" }
 
 if ((Test-Path $java) -and (Test-Path "$bt\zipalign.exe") -and (Test-Path "$env:TEMP\sultan-release-key.jks") -and ($baseApk -ne "")) {
-  Write-Host "=== Step 3: Exporting Android Bundle & Patching APK to v35 ==="
+  Write-Host "=== Step 3: Exporting Android Bundle & Patching APK to v36 ==="
   npx expo export -p android --output-dir dist-android
   if ($LASTEXITCODE -ne 0) { throw "expo export android failed" }
 
   $hbc = (Get-ChildItem -Path "dist-android\_expo\static\js\android\*.hbc" | Select-Object -First 1).FullName
-  $unalignedApk = "$env:TEMP\sultan_unaligned_v35.apk"
-  $alignedApk = "$env:TEMP\sultan_aligned_v35.apk"
-  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v35.apk"
+  $unalignedApk = "$env:TEMP\sultan_unaligned_v36.apk"
+  $alignedApk = "$env:TEMP\sultan_aligned_v36.apk"
+  $signedApk = "$env:TEMP\Sultan-POS-Tablet-v36.apk"
   Remove-Item $unalignedApk, $alignedApk, $signedApk -Force -ErrorAction SilentlyContinue
 
-  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 34 }
-  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 35
+  $fromVer = if ($baseApk -like "*v14*") { 14 } else { 35 }
+  & $java scripts\PatchApk.java $baseApk $unalignedApk $hbc $fromVer 36
   if ($LASTEXITCODE -ne 0) { throw "PatchApk failed" }
 
   & "$bt\zipalign.exe" -p -f 4 $unalignedApk $alignedApk
