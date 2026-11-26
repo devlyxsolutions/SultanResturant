@@ -723,6 +723,10 @@ export default function TablesBlueprintScreen({
   };
 
   const bulkPreview = useMemo(() => {
+    const targetFloorLower = (formFloor || '').trim().toLowerCase();
+    const floorTables = tables.filter(
+      (t) => getTableFloor(t).trim().toLowerCase() === targetFloorLower
+    );
     const usedNames = new Set(tables.map((t) => (t.name || '').trim().toLowerCase()));
     const generated: {
       rowId: string;
@@ -732,6 +736,17 @@ export default function TablesBlueprintScreen({
       floor: string;
     }[] = [];
     const rowSummaries: Record<string, { count: number; seatsTotal: number; firstName?: string; lastName?: string }> = {};
+
+    // Start continuous floor numbering after the highest existing number on this floor
+    let maxExistingOnFloor = 0;
+    for (const ft of floorTables) {
+      const m = (ft.name || '').trim().match(/(\d+)$/);
+      if (m) {
+        const n = parseInt(m[1], 10);
+        if (!isNaN(n) && n > maxExistingOnFloor) maxExistingOnFloor = n;
+      }
+    }
+    let runningSeqNum = maxExistingOnFloor + 1;
 
     for (const row of bulkRows) {
       const qtyRaw = parseInt(row.quantity, 10);
@@ -743,19 +758,8 @@ export default function TablesBlueprintScreen({
         continue;
       }
       const rawPrefix = row.prefix.length > 0 ? row.prefix : getDefaultBulkPrefix(formFloor, row.seatingType);
-      const padDigits = row.seatingType === 'tables' && !rawPrefix.endsWith(' ') ? 2 : 0;
+      const padDigits = !rawPrefix.endsWith(' ') ? 2 : 0;
 
-      const escapedPrefix = rawPrefix.replace(/[.*+?^$()|[\]\\{}]/g, '\\$&');
-      const suffixRe = new RegExp(`^${escapedPrefix}(\\d+)$`, 'i');
-      let maxExisting = 0;
-      for (const existingName of usedNames) {
-        const m = existingName.match(suffixRe);
-        if (m) {
-          const n = parseInt(m[1], 10);
-          if (!isNaN(n) && n > maxExisting) maxExisting = n;
-        }
-      }
-      let nextNum = maxExisting + 1;
       let firstName: string | undefined;
       let lastName: string | undefined;
       let createdInRow = 0;
@@ -763,9 +767,9 @@ export default function TablesBlueprintScreen({
       for (let i = 0; i < qty; i++) {
         let candidate = '';
         while (true) {
-          const numStr = padDigits > 0 ? String(nextNum).padStart(padDigits, '0') : String(nextNum);
+          const numStr = padDigits > 0 ? String(runningSeqNum).padStart(padDigits, '0') : String(runningSeqNum);
           candidate = `${rawPrefix}${numStr}`.trim();
-          nextNum++;
+          runningSeqNum++;
           if (!usedNames.has(candidate.toLowerCase())) break;
         }
         usedNames.add(candidate.toLowerCase());
