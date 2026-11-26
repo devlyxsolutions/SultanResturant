@@ -3130,6 +3130,30 @@ try {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
 }
 
+function normalizeExactCashierRoleLabels(val) {
+  if (typeof val !== 'string' || !val) return val;
+  return val
+    .replace(/Sharjeel\s*\(Manager\)/gi, 'Sharjeel (Cashier)')
+    .replace(/Tanveer\s*\(Manager\)/gi, 'Tanveer (Cashier)');
+}
+
+function sanitizeInvoicesCashierRoleLabels(list) {
+  if (!Array.isArray(list)) return list;
+  for (const inv of list) {
+    if (!inv || typeof inv !== 'object') continue;
+    if (inv.server) inv.server = normalizeExactCashierRoleLabels(inv.server);
+    if (inv.orderTakenBy) inv.orderTakenBy = normalizeExactCashierRoleLabels(inv.orderTakenBy);
+    if (inv.cashier) inv.cashier = normalizeExactCashierRoleLabels(inv.cashier);
+  }
+  return list;
+}
+
+sanitizeInvoicesCashierRoleLabels(serverState.invoices);
+sanitizeInvoicesCashierRoleLabels(serverState.tickets);
+try {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
+} catch (_) {}
+
 // -------------------------------------------------------------
 // CANONICAL ROLE PERMISSIONS NORMALIZER & SAFE MERGE
 // Ensures legacy roles in server-data.json / older APKs always
@@ -8436,7 +8460,8 @@ async function handleRequest(req, res) {
                   rMap.set(inc.id, { ...(prev || {}), ...inc });
                 }
               }
-              serverState[key] = Array.from(rMap.values());
+              const mergedRecords = Array.from(rMap.values());
+              serverState[key] = key === 'invoices' ? sanitizeInvoicesCashierRoleLabels(mergedRecords) : mergedRecords;
             }
           } else if (key === 'inventoryCategories' || key === 'assetCategories' || key === 'expenseCategories') {
             const incCats = Array.isArray(sanitized) ? sanitized.map((c) => String(c || '').trim()).filter(Boolean) : [];
