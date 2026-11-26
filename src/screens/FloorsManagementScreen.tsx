@@ -17,6 +17,7 @@ import { useRestaurantStore, Floor } from '../store/restaurantStore';
 import { useRolePermissions } from '../store/roleStore';
 import { getFloorMeta, getTableFloor, getTableSeatingType } from '../constants/floors';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
+import { broadcastImmediately } from '../services/syncService';
 
 const BRAND_COLOR = '#4a121a';
 
@@ -177,6 +178,7 @@ export default function FloorsManagementScreen({
       });
       notify('Floor Added', `Successfully created "${name}". You can now add tables, sofas and majlis cabins to it.`);
     }
+    broadcastImmediately();
     setModalVisible(false);
   };
 
@@ -204,6 +206,7 @@ export default function FloorsManagementScreen({
     }
     if (!deleteTarget) return;
     deleteFloor(deleteTarget.id, deleteTablesTogether);
+    broadcastImmediately();
     const deletedName = deleteTarget.name;
     setDeleteTarget(null);
     notify('Floor Deleted', `"${deletedName}" has been removed.`);

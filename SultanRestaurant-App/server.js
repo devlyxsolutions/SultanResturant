@@ -8009,19 +8009,49 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             return { ...curr, ...inc };
           });
 
-          // Append any newly added tables (never resurrect deleted tables)
+          // Append any newly added tables (never resurrect deleted tables or duplicate same floor+name)
           const existingIds = new Set(serverState.tables.map(t => t.id));
+          const existingFloorNames = new Set(
+            serverState.tables.map(t => `${String(t.floor || t.zone || '').trim().toLowerCase()}::${String(t.name || '').trim().toLowerCase()}`)
+          );
           for (const inc of incomingTables) {
-            if (!existingIds.has(inc.id) && !deletedTableSet.has(inc.id)) {
+            if (!inc || !inc.id || deletedTableSet.has(inc.id)) continue;
+            const fnKey = `${String(inc.floor || inc.zone || '').trim().toLowerCase()}::${String(inc.name || '').trim().toLowerCase()}`;
+            if (!existingIds.has(inc.id) && !existingFloorNames.has(fnKey)) {
               serverState.tables.push(inc);
+              existingIds.add(inc.id);
+              existingFloorNames.add(fnKey);
             }
           }
           serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
           modified = true;
         }
       } else if (key === 'floors') {
-        if (Array.isArray(partialState.floors)) {
-          serverState.floors = partialState.floors.filter(f => f && f.id && !deletedFloorSet.has(f.id));
+        const incFloors = Array.isArray(partialState.floors) ? partialState.floors : [];
+        const currFloors = Array.isArray(serverState.floors) ? serverState.floors : [];
+        if (incFloors.length > 0 || (currFloors.length > 0 && deletedFloorSet.size > 0)) {
+          const fMap = new Map();
+          for (const c of currFloors) {
+            if (c && c.id && !deletedFloorSet.has(c.id)) fMap.set(c.id, c);
+          }
+          for (const inc of incFloors) {
+            if (!inc || !inc.id || deletedFloorSet.has(inc.id)) continue;
+            const prev = fMap.get(inc.id);
+            if (!prev || (Number(inc.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+              fMap.set(inc.id, { ...(prev || {}), ...inc });
+            }
+          }
+          // Deduplicate by case-insensitive floor name (keep latest updatedAt)
+          const byName = new Map();
+          for (const fl of fMap.values()) {
+            const nmKey = String(fl.name || '').trim().toLowerCase();
+            if (!nmKey) continue;
+            const prev = byName.get(nmKey);
+            if (!prev || (Number(fl.updatedAt) || 0) >= (Number(prev.updatedAt) || 0)) {
+              byName.set(nmKey, fl);
+            }
+          }
+          serverState.floors = Array.from(byName.values());
           modified = true;
         }
       } else if (key === 'deletedTableIds' || key === 'deletedFloorIds') {
