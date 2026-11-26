@@ -4,153 +4,293 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Sultan Restaurant | Royal Mughlai &amp; BBQ Dining</title>
-  <meta name="description" content="Sultan Restaurant - Royal Mughlai & BBQ dining. Signature platters, BBQ, Mandi, Biryani, Turkish dishes, rooftop and family floors, private Majlis cabins and party hall." />
-  <meta name="theme-color" content="#3A0F12" />
+  <meta name="description" content="Sultan Restaurant - Royal Mughlai & BBQ dining. Signature platters, BBQ, Mandi, Biryani and Turkish dishes. Rooftop, family floor, private Majlis cabins and party hall." />
+  <meta name="theme-color" content="#120306" />
   <meta property="og:title" content="Sultan Restaurant | Royal Mughlai & BBQ Dining" />
   <meta property="og:description" content="Signature platters, BBQ, Mandi & Biryani. Rooftop, family floor, Majlis cabins and party hall." />
   <meta property="og:image" content="/menu-images/slt-plt-grand-sultan.jpg" />
   <meta property="og:type" content="website" />
   <link rel="icon" href="/site/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Nastaliq+Urdu:wght@600;700&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --burgundy: #3A0F12;
+      --night: #120306;
       --burgundy-deep: #24050A;
+      --burgundy: #3A0F12;
+      --wine: #52171B;
       --gold: #D5A943;
       --gold-soft: #F3D179;
+      --gold-dark: #B48214;
       --cream: #FCF8ED;
-      --ink: #1C1C1E;
-      --muted: #6B5B4E;
+      --text-soft: #D9C7AE;
+      /* Islamic 8-point star lattice (inline SVG, zero download) */
+      --lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23D5A943' stroke-width='1'%3E%3Cpath d='M40 4 L50 30 L76 40 L50 50 L40 76 L30 50 L4 40 L30 30 Z'/%3E%3Cpath d='M14.5 14.5 L40 25 L65.5 14.5 L55 40 L65.5 65.5 L40 55 L14.5 65.5 L25 40 Z'/%3E%3Ccircle cx='40' cy='40' r='6'/%3E%3C/g%3E%3C/svg%3E");
     }
     * { box-sizing: border-box; margin: 0; padding: 0; }
     html { scroll-behavior: smooth; }
     body {
-      font-family: "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
-      color: var(--ink);
-      background: var(--cream);
-      line-height: 1.6;
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--night);
+      color: var(--cream);
+      line-height: 1.65;
+      overflow-x: hidden;
     }
+    body.loading { overflow: hidden; }
     a { color: inherit; text-decoration: none; }
     img { max-width: 100%; display: block; }
-    .wrap { width: min(1140px, 92%); margin: 0 auto; }
-    .serif { font-family: Georgia, "Times New Roman", serif; }
+    .wrap { width: min(1180px, 92%); margin: 0 auto; }
+    .cinzel { font-family: "Cinzel", Georgia, serif; }
+    .urdu { font-family: "Noto Nastaliq Urdu", serif; direction: rtl; }
+    .gold-text {
+      background: linear-gradient(100deg, #B48214 0%, #F3D179 30%, #FFF4C9 50%, #F3D179 70%, #B48214 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+      animation: shimmer 6s linear infinite;
+    }
+    @keyframes shimmer { to { background-position: -200% center; } }
 
-    /* Nav */
+    /* ================= SPLASH ================= */
+    #splash {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center; flex-direction: column;
+      background:
+        radial-gradient(circle at 50% 45%, rgba(82, 23, 27, .55) 0%, rgba(18, 3, 6, .98) 60%),
+        var(--lattice) center/80px 80px, var(--night);
+      transition: opacity .8s ease, visibility .8s ease;
+    }
+    #splash::before {
+      content: ""; position: absolute; inset: 0;
+      background: var(--lattice) center/80px 80px; opacity: .06;
+    }
+    #splash.hide { opacity: 0; visibility: hidden; }
+    .splash-crest { position: relative; width: 150px; height: 150px; display: grid; place-items: center; }
+    .splash-crest img { width: 108px; height: 108px; object-fit: contain; animation: breathe 2.4s ease-in-out infinite; filter: drop-shadow(0 0 22px rgba(213,169,67,.45)); }
+    .ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(213,169,67,.55); }
+    .ring.r1 { animation: spin 9s linear infinite; border-style: dashed; }
+    .ring.r2 { inset: -14px; border-color: rgba(213,169,67,.22); animation: spin 14s linear infinite reverse; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes breathe { 0%,100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    .splash-urdu { font-size: 34px; color: var(--gold); margin-top: 26px; line-height: 1.9; }
+    .splash-title { font-family: "Cinzel", serif; font-weight: 900; letter-spacing: 6px; font-size: 22px; color: #fff; }
+    .splash-tag { font-size: 11px; letter-spacing: 4px; color: rgba(213,169,67,.85); font-weight: 800; margin-top: 8px; }
+    .splash-bar { width: 220px; height: 3px; border-radius: 4px; background: rgba(255,255,255,.1); margin-top: 30px; overflow: hidden; }
+    .splash-bar span { display: block; height: 100%; width: 0; background: linear-gradient(90deg, var(--gold-dark), var(--gold-soft)); border-radius: 4px; animation: load 1.8s ease forwards; }
+    @keyframes load { to { width: 100%; } }
+
+    /* ================= ANNOUNCEMENT ================= */
+    #announce {
+      display: none; background: linear-gradient(90deg, var(--gold-dark), var(--gold-soft), var(--gold-dark));
+      color: var(--night); text-align: center; font-weight: 800; font-size: 13.5px; padding: 8px 14px;
+    }
+
+    /* ================= NAV ================= */
     header {
       position: sticky; top: 0; z-index: 50;
-      background: rgba(36, 5, 10, 0.94);
-      backdrop-filter: blur(8px);
-      border-bottom: 1px solid rgba(213, 169, 67, 0.35);
+      background: rgba(18, 3, 6, .82); backdrop-filter: blur(10px);
+      border-bottom: 1px solid rgba(213,169,67,.25);
     }
-    .nav { display: flex; align-items: center; justify-content: space-between; height: 68px; gap: 16px; }
-    .brand { display: flex; align-items: center; gap: 10px; color: var(--gold-soft); font-weight: 800; letter-spacing: 2px; font-size: 15px; }
-    .brand img { width: 42px; height: 42px; object-fit: contain; }
-    .links { display: flex; gap: 24px; align-items: center; }
-    .links a { color: #EBD9B4; font-size: 14px; font-weight: 600; }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 72px; gap: 16px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand img { width: 44px; height: 44px; object-fit: contain; }
+    .brand b { font-family: "Cinzel", serif; letter-spacing: 3px; font-size: 15px; color: var(--gold-soft); display: block; line-height: 1.1; }
+    .brand small { font-size: 10px; letter-spacing: 3px; color: rgba(213,169,67,.7); font-weight: 700; }
+    .links { display: flex; gap: 28px; align-items: center; }
+    .links a { color: var(--text-soft); font-size: 13.5px; font-weight: 600; letter-spacing: .5px; transition: color .2s; }
     .links a:hover { color: var(--gold-soft); }
     .btn {
       display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-      padding: 12px 22px; border-radius: 999px; font-weight: 800; font-size: 14px;
-      transition: transform .15s ease, box-shadow .15s ease;
+      padding: 13px 26px; border-radius: 999px; font-weight: 800; font-size: 14px; letter-spacing: .4px;
+      transition: transform .18s ease, box-shadow .18s ease, background .18s;
     }
-    .btn:hover { transform: translateY(-1px); }
-    .btn-gold { background: linear-gradient(135deg, var(--gold-soft), var(--gold)); color: var(--burgundy-deep); box-shadow: 0 6px 18px rgba(213,169,67,.35); }
-    .btn-ghost { border: 1.5px solid var(--gold); color: var(--gold-soft); }
-    .btn-sm { padding: 8px 16px; font-size: 13px; }
-    .menu-toggle { display: none; background: none; border: 0; color: var(--gold-soft); font-size: 26px; cursor: pointer; }
+    .btn:hover { transform: translateY(-2px); }
+    .btn-gold { background: linear-gradient(135deg, var(--gold-soft), var(--gold) 55%, var(--gold-dark)); color: var(--night) !important; box-shadow: 0 8px 26px rgba(213,169,67,.35); }
+    .btn-gold:hover { box-shadow: 0 12px 34px rgba(213,169,67,.5); }
+    .btn-ghost { border: 1.5px solid rgba(213,169,67,.7); color: var(--gold-soft); }
+    .btn-ghost:hover { background: rgba(213,169,67,.1); }
+    .btn-sm { padding: 9px 18px; font-size: 13px; }
+    .menu-toggle { display: none; background: none; border: 0; color: var(--gold-soft); font-size: 28px; cursor: pointer; }
 
-    /* Hero */
+    /* ================= HERO ================= */
     .hero {
-      position: relative; color: #fff; overflow: hidden;
+      position: relative; min-height: calc(100vh - 72px); display: flex; align-items: center; overflow: hidden;
       background:
-        linear-gradient(100deg, rgba(36,5,10,.96) 0%, rgba(58,15,18,.85) 45%, rgba(58,15,18,.35) 100%),
-        url("/menu-images/slt-plt-grand-sultan.jpg") center/cover no-repeat;
+        radial-gradient(ellipse at 75% 50%, rgba(82,23,27,.85) 0%, rgba(36,5,10,.9) 40%, rgba(18,3,6,1) 75%);
     }
-    .hero .wrap { padding: 110px 0 120px; }
-    .eyebrow { color: var(--gold-soft); letter-spacing: 4px; font-size: 12px; font-weight: 800; text-transform: uppercase; }
-    .hero h1 { font-size: clamp(36px, 6vw, 64px); line-height: 1.08; margin: 14px 0 18px; max-width: 640px; }
-    .hero h1 span { color: var(--gold-soft); }
-    .hero p { font-size: 18px; color: #EADBC8; max-width: 540px; }
-    .hero .cta { display: flex; gap: 14px; margin-top: 32px; flex-wrap: wrap; }
-    .badges { display: flex; gap: 22px; margin-top: 44px; flex-wrap: wrap; color: #EBD9B4; font-size: 14px; font-weight: 600; }
-    .badges div::before { content: "◆ "; color: var(--gold); }
+    .hero::before {
+      content: ""; position: absolute; inset: 0; background: var(--lattice) center/90px 90px; opacity: .07;
+      mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+      -webkit-mask-image: radial-gradient(ellipse at center, #000 30%, transparent 80%);
+    }
+    .hero-grid { position: relative; display: grid; grid-template-columns: 1.1fr .9fr; gap: 56px; align-items: center; padding: 70px 0 90px; }
+    .welcome-urdu { font-size: 26px; color: var(--gold); line-height: 2; }
+    .ornament { display: flex; align-items: center; gap: 14px; color: var(--gold); margin: 6px 0 14px; }
+    .ornament::before, .ornament::after { content: ""; height: 1px; width: 60px; background: linear-gradient(90deg, transparent, var(--gold)); }
+    .ornament::after { background: linear-gradient(90deg, var(--gold), transparent); }
+    .ornament span { font-size: 11px; letter-spacing: 5px; font-weight: 800; text-transform: uppercase; }
+    .hero h1 { font-family: "Cinzel", serif; font-weight: 900; font-size: clamp(38px, 6vw, 72px); line-height: 1.05; letter-spacing: 1px; }
+    .hero h1 .line2 { display: block; font-size: .62em; letter-spacing: 3px; color: #fff; margin-top: 10px; font-weight: 700; }
+    .hero p.lead { font-family: "Cormorant Garamond", serif; font-size: 22px; color: var(--text-soft); max-width: 540px; margin-top: 22px; font-style: italic; }
+    .hero .cta { display: flex; gap: 14px; margin-top: 34px; flex-wrap: wrap; }
+    .hero-stats { display: flex; gap: 34px; margin-top: 46px; flex-wrap: wrap; }
+    .hero-stats div b { display: block; font-family: "Cinzel", serif; font-size: 26px; color: var(--gold-soft); }
+    .hero-stats div span { font-size: 12px; letter-spacing: 2px; color: rgba(217,199,174,.8); text-transform: uppercase; font-weight: 700; }
 
-    /* Sections */
-    section { padding: 84px 0; }
-    .sec-head { text-align: center; max-width: 640px; margin: 0 auto 46px; }
-    .sec-head h2 { font-size: clamp(28px, 4vw, 40px); color: var(--burgundy); margin: 8px 0 10px; }
-    .sec-head p { color: var(--muted); }
-    .divider { width: 70px; height: 3px; background: var(--gold); margin: 14px auto 0; border-radius: 2px; }
+    /* Mihrab (arch) framed dish */
+    .arch-wrap { position: relative; justify-self: center; width: min(420px, 100%); }
+    .arch {
+      position: relative; aspect-ratio: 3/4; border-radius: 210px 210px 18px 18px; overflow: hidden;
+      border: 2px solid rgba(213,169,67,.8);
+      box-shadow: 0 0 0 10px rgba(213,169,67,.08), 0 30px 80px rgba(0,0,0,.6), inset 0 0 60px rgba(0,0,0,.5);
+    }
+    .arch img { width: 100%; height: 100%; object-fit: cover; transform: scale(1.04); animation: slowzoom 18s ease-in-out infinite alternate; }
+    @keyframes slowzoom { to { transform: scale(1.14); } }
+    .arch::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 55%, rgba(18,3,6,.85)); }
+    .arch-outline { position: absolute; inset: -18px; border-radius: 228px 228px 26px 26px; border: 1px solid rgba(213,169,67,.35); pointer-events: none; }
+    .arch-caption { position: absolute; left: 0; right: 0; bottom: 22px; text-align: center; z-index: 2; }
+    .arch-caption b { font-family: "Cinzel", serif; color: var(--gold-soft); letter-spacing: 2px; font-size: 18px; }
+    .arch-caption span { display: block; font-size: 12px; color: var(--text-soft); letter-spacing: 2px; }
+    .crest-badge {
+      position: absolute; top: -28px; left: 50%; transform: translateX(-50%); z-index: 3;
+      width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center;
+      background: radial-gradient(circle, var(--burgundy) 0%, var(--night) 100%);
+      border: 2px solid var(--gold); box-shadow: 0 0 30px rgba(213,169,67,.4);
+    }
+    .crest-badge img { width: 54px; height: 54px; object-fit: contain; }
+    .scroll-hint { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); color: var(--gold); font-size: 11px; letter-spacing: 3px; text-align: center; opacity: .8; }
+    .scroll-hint i { display: block; width: 1px; height: 34px; margin: 6px auto 0; background: linear-gradient(var(--gold), transparent); animation: drip 2s ease-in-out infinite; }
+    @keyframes drip { 0% { transform: scaleY(0); transform-origin: top; } 50% { transform: scaleY(1); transform-origin: top; } 51% { transform-origin: bottom; } 100% { transform: scaleY(0); transform-origin: bottom; } }
+
+    /* ================= SECTIONS ================= */
+    section { padding: 96px 0; position: relative; }
+    .sec-head { text-align: center; max-width: 680px; margin: 0 auto 54px; }
+    .sec-head .urdu { color: var(--gold); font-size: 20px; line-height: 2; }
+    .sec-head h2 { font-family: "Cinzel", serif; font-size: clamp(28px, 4vw, 44px); margin: 4px 0 12px; letter-spacing: 1px; }
+    .sec-head p { color: var(--text-soft); font-family: "Cormorant Garamond", serif; font-size: 20px; font-style: italic; }
+    .sec-head .ornament { justify-content: center; }
+    .alt { background: linear-gradient(180deg, var(--burgundy-deep), var(--night)); }
+    .alt::before { content: ""; position: absolute; inset: 0; background: var(--lattice) center/90px 90px; opacity: .035; pointer-events: none; }
 
     /* Dishes */
-    .grid { display: grid; gap: 22px; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); }
+    .grid { display: grid; gap: 24px; grid-template-columns: repeat(auto-fill, minmax(255px, 1fr)); position: relative; }
     .dish {
-      background: #fff; border-radius: 18px; overflow: hidden;
-      border: 1px solid #EEDFBF; box-shadow: 0 8px 24px rgba(58,15,18,.07);
-      transition: transform .2s ease, box-shadow .2s ease;
+      background: linear-gradient(180deg, rgba(58,15,18,.7), rgba(18,3,6,.9));
+      border: 1px solid rgba(213,169,67,.25); border-radius: 20px; overflow: hidden;
+      transition: transform .25s ease, border-color .25s, box-shadow .25s;
     }
-    .dish:hover { transform: translateY(-4px); box-shadow: 0 14px 32px rgba(58,15,18,.14); }
-    .dish img { width: 100%; aspect-ratio: 4/3; object-fit: cover; background: #f1e7d2; }
-    .dish .body { padding: 16px 18px 20px; }
-    .dish h3 { font-size: 18px; color: var(--burgundy); }
-    .dish p { font-size: 14px; color: var(--muted); margin-top: 4px; }
-    .center-cta { text-align: center; margin-top: 42px; }
+    .dish:hover { transform: translateY(-6px); border-color: rgba(213,169,67,.7); box-shadow: 0 18px 44px rgba(0,0,0,.5), 0 0 0 1px rgba(213,169,67,.3); }
+    .dish .img { overflow: hidden; aspect-ratio: 4/3; background: #2a0a0d; }
+    .dish img { width: 100%; height: 100%; object-fit: cover; transition: transform .5s ease; }
+    .dish:hover img { transform: scale(1.08); }
+    .dish .body { padding: 18px 20px 22px; }
+    .dish h3 { font-family: "Cinzel", serif; font-size: 17px; color: var(--gold-soft); letter-spacing: .5px; }
+    .dish p { font-size: 14px; color: var(--text-soft); margin-top: 6px; }
+    .center-cta { text-align: center; margin-top: 46px; }
 
-    /* Experience */
-    .dark { background: linear-gradient(180deg, var(--burgundy-deep), var(--burgundy)); color: #F5EBDD; }
-    .dark .sec-head h2 { color: var(--gold-soft); }
-    .dark .sec-head p { color: #D9C7AE; }
-    .cards { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+    /* Spaces */
+    .cards { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); position: relative; }
     .card {
-      border: 1px solid rgba(213,169,67,.35); border-radius: 16px; padding: 26px 22px;
-      background: rgba(255,255,255,.04);
+      position: relative; border: 1px solid rgba(213,169,67,.28); border-radius: 18px; padding: 30px 24px;
+      background: rgba(255,255,255,.025); transition: border-color .25s, transform .25s;
     }
+    .card:hover { border-color: rgba(213,169,67,.7); transform: translateY(-4px); }
+    .card::before, .card::after { content: ""; position: absolute; width: 18px; height: 18px; border-color: var(--gold); border-style: solid; opacity: .8; }
+    .card::before { top: 10px; left: 10px; border-width: 1.5px 0 0 1.5px; }
+    .card::after { bottom: 10px; right: 10px; border-width: 0 1.5px 1.5px 0; }
     .card .icon { font-size: 30px; }
-    .card h3 { color: var(--gold-soft); margin: 10px 0 6px; font-size: 19px; }
-    .card p { color: #D9C7AE; font-size: 14px; }
+    .card h3 { font-family: "Cinzel", serif; color: var(--gold-soft); margin: 12px 0 6px; font-size: 19px; }
+    .card p { color: var(--text-soft); font-size: 14px; }
 
     /* Events */
-    .split { display: grid; grid-template-columns: 1.1fr 1fr; gap: 46px; align-items: center; }
-    .split img { border-radius: 20px; box-shadow: 0 16px 40px rgba(58,15,18,.2); aspect-ratio: 4/3; object-fit: cover; width: 100%; }
-    .split h2 { color: var(--burgundy); font-size: clamp(26px, 3.6vw, 38px); margin: 8px 0 14px; }
-    .split ul { list-style: none; margin: 18px 0 26px; }
-    .split li { padding: 7px 0; color: var(--muted); }
-    .split li::before { content: "✦ "; color: var(--gold); }
+    .split { display: grid; grid-template-columns: 1fr 1.05fr; gap: 56px; align-items: center; }
+    .frame { position: relative; }
+    .frame img { border-radius: 22px; aspect-ratio: 4/3; object-fit: cover; width: 100%; border: 2px solid rgba(213,169,67,.6); box-shadow: 0 24px 60px rgba(0,0,0,.55); }
+    .frame::after { content: ""; position: absolute; inset: 16px -16px -16px 16px; border: 1px solid rgba(213,169,67,.35); border-radius: 22px; z-index: -1; }
+    .split h2 { font-family: "Cinzel", serif; font-size: clamp(26px, 3.6vw, 40px); margin: 6px 0 14px; }
+    .split ul { list-style: none; margin: 20px 0 30px; }
+    .split li { padding: 8px 0; color: var(--text-soft); border-bottom: 1px dashed rgba(213,169,67,.18); }
+    .split li::before { content: "✦  "; color: var(--gold); }
 
     /* Contact */
-    .contact { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-    .contact .item { background: #fff; border: 1px solid #EEDFBF; border-radius: 16px; padding: 24px; text-align: center; }
-    .contact .item h3 { color: var(--burgundy); font-size: 16px; margin: 8px 0 4px; }
-    .contact .item p, .contact .item a { color: var(--muted); font-size: 15px; word-break: break-word; }
-    .contact .item a { color: var(--burgundy); font-weight: 700; }
+    .contact { display: grid; gap: 22px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .contact .item {
+      background: linear-gradient(180deg, rgba(58,15,18,.6), rgba(18,3,6,.85)); border: 1px solid rgba(213,169,67,.28);
+      border-radius: 18px; padding: 28px 22px; text-align: center; transition: border-color .25s;
+    }
+    .contact .item:hover { border-color: rgba(213,169,67,.7); }
+    .contact .item .ic { font-size: 30px; }
+    .contact .item h3 { font-family: "Cinzel", serif; color: var(--gold-soft); font-size: 16px; margin: 10px 0 6px; letter-spacing: 1px; }
+    .contact .item p { color: var(--text-soft); font-size: 15px; word-break: break-word; }
+    .contact .item a.link { color: var(--gold-soft); font-weight: 700; font-size: 15px; word-break: break-word; }
+    .contact .item a.link:hover { text-decoration: underline; }
 
     /* Footer */
-    footer { background: var(--burgundy-deep); color: #CDB99B; padding: 40px 0 28px; font-size: 14px; }
+    footer { background: #0B0103; border-top: 1px solid rgba(213,169,67,.25); padding: 46px 0 26px; font-size: 14px; color: var(--text-soft); }
     .foot { display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap; }
-    .foot a { color: var(--gold-soft); }
-    .foot .small { font-size: 12px; opacity: .75; margin-top: 18px; text-align: center; width: 100%; }
+    .foot nav { display: flex; gap: 22px; flex-wrap: wrap; }
+    .foot nav a:hover { color: var(--gold-soft); }
+    .foot .portal-link { color: var(--gold); border: 1px solid rgba(213,169,67,.4); padding: 6px 14px; border-radius: 999px; font-size: 12.5px; font-weight: 700; }
+    .foot .small { font-size: 12px; opacity: .65; margin-top: 22px; text-align: center; width: 100%; }
 
-    /* Mobile */
+    /* Floating WhatsApp */
+    #waFloat {
+      display: none; position: fixed; right: 18px; bottom: 18px; z-index: 60; width: 56px; height: 56px; border-radius: 50%;
+      background: #25D366; color: #fff; place-items: center; font-size: 28px; box-shadow: 0 10px 26px rgba(0,0,0,.4);
+    }
+
+    /* Reveal on scroll */
+    .reveal { opacity: 0; transform: translateY(26px); transition: opacity .8s ease, transform .8s ease; }
+    .reveal.in { opacity: 1; transform: none; }
+
+    @media (max-width: 900px) {
+      .hero-grid { grid-template-columns: 1fr; text-align: center; gap: 70px; padding: 54px 0 90px; }
+      .hero .cta, .hero-stats { justify-content: center; }
+      .hero p.lead { margin-left: auto; margin-right: auto; }
+      .ornament { justify-content: center; }
+      .arch-wrap { width: min(320px, 86%); }
+      .split { grid-template-columns: 1fr; }
+    }
     @media (max-width: 820px) {
       .menu-toggle { display: block; }
       .links {
-        position: absolute; top: 68px; left: 0; right: 0; flex-direction: column; gap: 0;
-        background: var(--burgundy-deep); border-bottom: 1px solid rgba(213,169,67,.35);
-        display: none; padding: 8px 0 16px;
+        position: absolute; top: 72px; left: 0; right: 0; flex-direction: column; gap: 0;
+        background: var(--night); border-bottom: 1px solid rgba(213,169,67,.3); display: none; padding: 8px 0 18px;
       }
       .links.open { display: flex; }
-      .links a { padding: 12px 0; width: 100%; text-align: center; }
-      .hero .wrap { padding: 80px 0 90px; }
-      .split { grid-template-columns: 1fr; }
-      section { padding: 64px 0; }
+      .links a { padding: 13px 0; width: 100%; text-align: center; }
+      section { padding: 70px 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; }
+      .reveal { opacity: 1; transform: none; }
     }
   </style>
 </head>
-<body>
+<body class="loading">
+  <!-- ================= SPLASH SCREEN ================= -->
+  <div id="splash" aria-hidden="true">
+    <div class="splash-crest">
+      <div class="ring r2"></div>
+      <div class="ring r1"></div>
+      <img src="/site/logo.png" alt="" />
+    </div>
+    <div class="splash-urdu urdu">سلطان ریسٹورنٹ</div>
+    <div class="splash-title">SULTAN RESTAURANT</div>
+    <div class="splash-tag">ROYAL MUGHLAI &nbsp;•&nbsp; BBQ DINING</div>
+    <div class="splash-bar"><span></span></div>
+  </div>
+
+  <div id="announce"></div>
+
   <header>
     <div class="wrap nav">
-      <a class="brand" href="#top"><img src="/site/logo.png" alt="Sultan Restaurant logo" />SULTAN RESTAURANT</a>
+      <a class="brand" href="#top">
+        <img src="/site/logo.png" alt="Sultan Restaurant logo" />
+        <span><b>SULTAN</b><small>RESTAURANT</small></span>
+      </a>
       <button class="menu-toggle" aria-label="Open menu" onclick="document.getElementById('links').classList.toggle('open')">☰</button>
-      <nav class="links" id="links">
+      <nav class="links" id="links" onclick="if(event.target.tagName==='A')this.classList.remove('open')">
         <a href="#signature">Signature</a>
         <a href="#experience">Dining</a>
         <a href="#events">Events</a>
@@ -161,92 +301,106 @@
   </header>
 
   <main id="top">
-    <section class="hero">
-      <div class="wrap">
-        <div class="eyebrow">Royal Mughlai &amp; BBQ Dining</div>
-        <h1 class="serif">A Feast Worthy of the <span>Sultan</span></h1>
-        <p>Charcoal BBQ, royal platters, Arabic Mandi, Turkish specialities and slow-cooked Biryani, served across our rooftop, family floor and private Majlis cabins.</p>
-        <div class="cta">
-          <a class="btn btn-gold" href="/menu">View Menu &amp; Order</a>
-          <a class="btn btn-ghost" href="#events">Book a Table / Event</a>
+    <!-- ================= ROYAL HERO ================= -->
+    <section class="hero" style="padding:0">
+      <div class="wrap hero-grid">
+        <div>
+          <div class="welcome-urdu urdu">خوش آمدید</div>
+          <div class="ornament"><span>Since the days of royalty</span></div>
+          <h1><span class="gold-text">SULTAN</span><span class="line2">RESTAURANT</span></h1>
+          <p class="lead" id="heroTagline">Royal Mughlai &amp; BBQ dining, where every table is served like a Sultan's court.</p>
+          <div class="cta">
+            <a class="btn btn-gold" href="/menu">View Menu &amp; Order</a>
+            <a class="btn btn-ghost" href="#events" id="heroBook">Reserve a Table</a>
+          </div>
+          <div class="hero-stats">
+            <div><b>4</b><span>Royal Floors</span></div>
+            <div><b>100+</b><span>Signature Dishes</span></div>
+            <div><b>Majlis</b><span>Private Cabins</span></div>
+          </div>
         </div>
-        <div class="badges">
-          <div>Rooftop Dining</div>
-          <div>Family Floor</div>
-          <div>Private Majlis Cabins</div>
-          <div>Party Hall</div>
+        <div class="arch-wrap">
+          <div class="crest-badge"><img src="/site/logo.png" alt="" /></div>
+          <div class="arch-outline"></div>
+          <div class="arch">
+            <img src="/menu-images/slt-plt-grand-sultan.jpg" alt="Grand Sultan Platter" fetchpriority="high" />
+            <div class="arch-caption"><b>GRAND SULTAN PLATTER</b><span>THE ROYAL FEAST</span></div>
+          </div>
         </div>
       </div>
+      <div class="scroll-hint">SCROLL<i></i></div>
     </section>
 
-    <section id="signature">
+    <!-- ================= SIGNATURE ================= -->
+    <section id="signature" class="alt">
       <div class="wrap">
-        <div class="sec-head">
-          <div class="eyebrow" style="color: var(--gold)">From Our Kitchen</div>
-          <h2 class="serif">Signature Dishes</h2>
-          <p>A few favourites our guests keep coming back for.</p>
-          <div class="divider"></div>
+        <div class="sec-head reveal">
+          <div class="urdu">شاہی ذائقے</div>
+          <h2 class="gold-text">Signature Dishes</h2>
+          <p>Favourites from the royal kitchen that our guests keep coming back for.</p>
         </div>
         <div class="grid">
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-plt-grand-sultan.jpg" alt="Grand Sultan Platter" /><div class="body"><h3>Grand Sultan Platter</h3><p>Our royal sharing platter of mixed BBQ for the whole table.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-bbq-mutton-champ.jpg" alt="Mutton Champ" /><div class="body"><h3>Mutton Champ</h3><p>Tender charcoal-grilled mutton chops.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-mnd-lahm.jpg" alt="Lahm Mandi" /><div class="body"><h3>Lahm Mandi</h3><p>Arabic-style mandi rice with slow-cooked lamb.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-bir-mutton-biryani.jpg" alt="Mutton Biryani" /><div class="body"><h3>Mutton Biryani</h3><p>Fragrant dum biryani layered with spiced mutton.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-tur-pasha-gosht.jpg" alt="Pasha Gosht" /><div class="body"><h3>Pasha Gosht</h3><p>A rich Turkish-inspired mutton speciality.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-bbq-malai-boti.jpg" alt="Malai Boti" /><div class="body"><h3>Malai Boti</h3><p>Creamy, melt-in-the-mouth chicken boti off the grill.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-piz-sultan-special.jpg" alt="Sultan Special Pizza" /><div class="body"><h3>Sultan Special Pizza</h3><p>Our house pizza, loaded the Sultan way.</p></div></article>
-          <article class="dish"><img loading="lazy" src="/menu-images/slt-mck-mint-mojito.jpg" alt="Mint Mojito" /><div class="body"><h3>Mint Mojito</h3><p>Refreshing mocktails and fresh juices from our juice bar.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-plt-grand-sultan.jpg" alt="Grand Sultan Platter" /></div><div class="body"><h3>Grand Sultan Platter</h3><p>Our royal sharing platter of mixed BBQ for the whole table.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-bbq-mutton-champ.jpg" alt="Mutton Champ" /></div><div class="body"><h3>Mutton Champ</h3><p>Tender charcoal-grilled mutton chops.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-mnd-lahm.jpg" alt="Lahm Mandi" /></div><div class="body"><h3>Lahm Mandi</h3><p>Arabic-style mandi rice with slow-cooked lamb.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-bir-mutton-biryani.jpg" alt="Mutton Biryani" /></div><div class="body"><h3>Mutton Biryani</h3><p>Fragrant dum biryani layered with spiced mutton.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-tur-pasha-gosht.jpg" alt="Pasha Gosht" /></div><div class="body"><h3>Pasha Gosht</h3><p>A rich Turkish-inspired mutton speciality.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-bbq-malai-boti.jpg" alt="Malai Boti" /></div><div class="body"><h3>Malai Boti</h3><p>Creamy, melt-in-the-mouth chicken boti off the grill.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-piz-sultan-special.jpg" alt="Sultan Special Pizza" /></div><div class="body"><h3>Sultan Special Pizza</h3><p>Our house pizza, loaded the Sultan way.</p></div></article>
+          <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-mck-mint-mojito.jpg" alt="Mint Mojito" /></div><div class="body"><h3>Mint Mojito</h3><p>Refreshing mocktails and fresh juices from our juice bar.</p></div></article>
         </div>
-        <div class="center-cta"><a class="btn btn-gold" href="/menu">See Full Menu</a></div>
+        <div class="center-cta"><a class="btn btn-gold" href="/menu">Explore the Full Menu</a></div>
       </div>
     </section>
 
-    <section id="experience" class="dark">
+    <!-- ================= SPACES ================= -->
+    <section id="experience">
       <div class="wrap">
-        <div class="sec-head">
-          <div class="eyebrow">The Experience</div>
-          <h2 class="serif">Dining Spaces for Every Occasion</h2>
+        <div class="sec-head reveal">
+          <div class="urdu">شاہی محفل</div>
+          <h2 class="gold-text">Dining Spaces Fit for Royalty</h2>
           <p>Four floors designed for families, friends, celebrations and private gatherings.</p>
-          <div class="divider"></div>
         </div>
         <div class="cards">
-          <div class="card"><div class="icon">🏛️</div><h3>Ground Floor</h3><p>Our main dining hall, ideal for quick meals and casual dining.</p></div>
-          <div class="card"><div class="icon">🌙</div><h3>Rooftop</h3><p>Open-air dining under the night sky with fresh BBQ off the grill.</p></div>
-          <div class="card"><div class="icon">👨‍👩‍👧</div><h3>Family Floor</h3><p>A calm, private space for families, with comfortable sofa seating.</p></div>
-          <div class="card"><div class="icon">🎉</div><h3>Party Hall</h3><p>For birthdays, corporate dinners and family events.</p></div>
-          <div class="card"><div class="icon">🕌</div><h3>Majlis Cabins</h3><p>Traditional floor-seating cabins for a royal, private dining experience.</p></div>
-          <div class="card"><div class="icon">📱</div><h3>Scan &amp; Order</h3><p>Scan the QR code on your table to browse the menu and order from your phone.</p></div>
+          <div class="card reveal"><div class="icon">🏛️</div><h3>Ground Floor</h3><p>Our grand main hall for lunches, dinners and casual dining.</p></div>
+          <div class="card reveal"><div class="icon">🌙</div><h3>Rooftop</h3><p>Open-air dining under the night sky with BBQ fresh off the grill.</p></div>
+          <div class="card reveal"><div class="icon">👨‍👩‍👧</div><h3>Family Floor</h3><p>A calm, private space for families with comfortable sofa seating.</p></div>
+          <div class="card reveal"><div class="icon">🎉</div><h3>Party Hall</h3><p>For birthdays, corporate dinners and family functions.</p></div>
+          <div class="card reveal"><div class="icon">🕌</div><h3>Majlis Cabins</h3><p>Traditional floor-seating cabins for a royal, private experience.</p></div>
+          <div class="card reveal"><div class="icon">📱</div><h3>Scan &amp; Order</h3><p>Scan the QR on your table to browse the menu and order from your phone.</p></div>
         </div>
       </div>
     </section>
 
-    <section id="events">
+    <!-- ================= EVENTS ================= -->
+    <section id="events" class="alt">
       <div class="wrap split">
-        <img loading="lazy" src="/menu-images/slt-plt-grand-sultan.jpg" alt="Sultan Restaurant platters for events" />
-        <div>
-          <div class="eyebrow" style="color: var(--gold)">Celebrations &amp; Groups</div>
-          <h2 class="serif">Host Your Event at Sultan</h2>
-          <p style="color: var(--muted)">From family dinners to large group bookings, we arrange the seating and the menu so you can enjoy the occasion.</p>
+        <div class="frame reveal"><img loading="lazy" src="/menu-images/slt-plt-king-sultan.jpg" alt="Royal platters for events" /></div>
+        <div class="reveal">
+          <div class="urdu" style="color:var(--gold);font-size:20px;line-height:2">تقریبات</div>
+          <h2><span class="gold-text">Host Your Celebration</span><br />at Sultan</h2>
+          <p style="color:var(--text-soft)">From family dinners to large group bookings, we arrange the seating and the menu so you can enjoy the occasion.</p>
           <ul>
             <li>Group &amp; family table reservations</li>
             <li>Party Hall bookings for birthdays and functions</li>
             <li>Private Majlis cabins for special gatherings</li>
-            <li>Platters and set menus for large groups</li>
+            <li>Royal platters and set menus for large groups</li>
           </ul>
           <a class="btn btn-gold" id="bookBtn" href="#contact">Contact Us to Book</a>
         </div>
       </div>
     </section>
 
+    <!-- ================= CONTACT (live from Master Admin portal) ================= -->
     <section id="contact">
       <div class="wrap">
-        <div class="sec-head">
-          <div class="eyebrow" style="color: var(--gold)">Visit Us</div>
-          <h2 class="serif">Get in Touch</h2>
-          <div class="divider"></div>
+        <div class="sec-head reveal">
+          <div class="urdu">رابطہ</div>
+          <h2 class="gold-text">Visit the Sultan</h2>
+          <p>We look forward to welcoming you.</p>
         </div>
         <div class="contact" id="contactGrid">
-          <div class="item"><div style="font-size:28px">🛵</div><h3>Order Online</h3><a href="/menu">Open Digital Menu</a></div>
+          <div class="item"><div class="ic">🛵</div><h3>Order Online</h3><a class="link" href="/menu">Open Digital Menu</a></div>
         </div>
       </div>
     </section>
@@ -254,53 +408,95 @@
 
   <footer>
     <div class="wrap foot">
-      <div class="brand" style="font-size:14px"><img src="/site/logo.png" alt="" style="width:34px;height:34px" />SULTAN RESTAURANT</div>
-      <div style="display:flex; gap:20px; flex-wrap:wrap">
+      <a class="brand" href="#top"><img src="/site/logo.png" alt="" style="width:38px;height:38px" /><span><b>SULTAN</b><small>RESTAURANT</small></span></a>
+      <nav>
         <a href="/menu">Menu</a>
         <a href="#events">Events</a>
         <a href="#contact">Contact</a>
-        <a href="/portal">Staff Portal</a>
-      </div>
+        <span id="socialFoot"></span>
+      </nav>
+      <a class="portal-link" href="/portal">🔐 Staff Portal</a>
       <div class="small">© <span id="yr"></span> Sultan Restaurant. All rights reserved.</div>
     </div>
   </footer>
 
-  <script>
-    /* ============================================================
-       RESTAURANT CONTACT DETAILS: fill these in, then redeploy.
-       Empty values are hidden automatically on the website.
-       ============================================================ */
-    var SITE = {
-      phone: '',          // e.g. '+92 300 1234567'
-      whatsapp: '',       // digits only with country code, e.g. '923001234567'
-      address: '',        // full street address
-      mapsUrl: '',        // Google Maps share link
-      hours: '',          // e.g. 'Daily 12:00 PM - 2:00 AM'
-      instagram: '',      // full profile URL
-      facebook: ''        // full page URL
-    };
+  <a id="waFloat" target="_blank" rel="noopener" aria-label="WhatsApp">💬</a>
 
+  <script>
     (function () {
+      /* ---------- Splash: show at least 1.6s, hide as soon as page is ready (max 4s) ---------- */
+      var start = Date.now();
+      function hideSplash() {
+        var wait = Math.max(0, 1600 - (Date.now() - start));
+        setTimeout(function () {
+          document.getElementById('splash').classList.add('hide');
+          document.body.classList.remove('loading');
+        }, wait);
+      }
+      if (document.readyState === 'complete') hideSplash(); else window.addEventListener('load', hideSplash);
+      setTimeout(hideSplash, 4000);
+
       document.getElementById('yr').textContent = new Date().getFullYear();
-      var grid = document.getElementById('contactGrid');
-      function add(icon, title, html) {
-        var d = document.createElement('div');
-        d.className = 'item';
-        d.innerHTML = '<div style="font-size:28px">' + icon + '</div><h3>' + title + '</h3>' + html;
-        grid.appendChild(d);
-      }
+
+      /* ---------- Reveal on scroll ---------- */
+      var els = document.querySelectorAll('.reveal');
+      if ('IntersectionObserver' in window) {
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+        }, { threshold: 0.12 });
+        els.forEach(function (el) { io.observe(el); });
+      } else { els.forEach(function (el) { el.classList.add('in'); }); }
+
+      /* ---------- Live contact details (managed by Master Admin in Portal → Settings → Website) ---------- */
+      var URL = 'https://firestore.googleapis.com/v1/projects/sultan-resturant/databases/(default)/documents/sultan_restaurant/website_info?key=AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU';
       function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]; }); }
-      if (SITE.phone) add('📞', 'Call Us', '<a href="tel:' + esc(SITE.phone.replace(/\s+/g, '')) + '">' + esc(SITE.phone) + '</a>');
-      if (SITE.whatsapp) {
-        add('💬', 'WhatsApp', '<a target="_blank" rel="noopener" href="https://wa.me/' + esc(SITE.whatsapp) + '">Chat with us</a>');
-        document.getElementById('bookBtn').href = 'https://wa.me/' + SITE.whatsapp + '?text=' + encodeURIComponent('Assalam o Alaikum, I would like to book a table at Sultan Restaurant.');
+      function safeUrl(u) { u = String(u || '').trim(); return /^https?:\/\//i.test(u) ? u : ''; }
+      function render(info) {
+        var grid = document.getElementById('contactGrid');
+        function add(icon, title, html) {
+          var d = document.createElement('div');
+          d.className = 'item reveal in';
+          d.innerHTML = '<div class="ic">' + icon + '</div><h3>' + title + '</h3>' + html;
+          grid.appendChild(d);
+        }
+        if (info.tagline) document.getElementById('heroTagline').textContent = info.tagline + ', where every table is served like a Sultan\u2019s court.';
+        if (info.announcement) { var a = document.getElementById('announce'); a.textContent = info.announcement; a.style.display = 'block'; }
+        if (info.phone) add('📞', 'Call Us', '<a class="link" href="tel:' + esc(info.phone.replace(/[^\d+]/g, '')) + '">' + esc(info.phone) + '</a>');
+        var wa = String(info.whatsapp || '').replace(/[^\d]/g, '');
+        if (wa) {
+          var waLink = 'https://wa.me/' + wa;
+          var bookLink = waLink + '?text=' + encodeURIComponent('Assalam o Alaikum, I would like to reserve a table at Sultan Restaurant.');
+          add('💬', 'WhatsApp', '<a class="link" target="_blank" rel="noopener" href="' + waLink + '">Chat with us</a>');
+          ['bookBtn', 'heroBook'].forEach(function (id) { var b = document.getElementById(id); b.href = bookLink; b.target = '_blank'; b.rel = 'noopener'; });
+          var f = document.getElementById('waFloat'); f.href = waLink; f.style.display = 'grid';
+        }
+        if (info.address) {
+          var maps = safeUrl(info.mapsUrl);
+          add('📍', 'Location', '<p>' + esc(info.address) + '</p>' + (maps ? '<a class="link" target="_blank" rel="noopener" href="' + esc(maps) + '">Open in Google Maps</a>' : ''));
+        } else if (safeUrl(info.mapsUrl)) {
+          add('📍', 'Location', '<a class="link" target="_blank" rel="noopener" href="' + esc(safeUrl(info.mapsUrl)) + '">Open in Google Maps</a>');
+        }
+        if (info.hours) add('🕰️', 'Opening Hours', '<p>' + esc(info.hours) + '</p>');
+        if (info.email) add('✉️', 'Email', '<a class="link" href="mailto:' + esc(info.email) + '">' + esc(info.email) + '</a>');
+        var social = [];
+        [['instagram', 'Instagram'], ['facebook', 'Facebook'], ['tiktok', 'TikTok']].forEach(function (p) {
+          var u = safeUrl(info[p[0]]);
+          if (u) social.push('<a class="link" target="_blank" rel="noopener" href="' + esc(u) + '">' + p[1] + '</a>');
+        });
+        if (social.length) {
+          add('✨', 'Follow Us', social.join(' &nbsp;·&nbsp; '));
+          document.getElementById('socialFoot').innerHTML = social.join(' &nbsp; ').replace(/class="link"/g, '');
+        }
       }
-      if (SITE.address) add('📍', 'Location', '<p>' + esc(SITE.address) + '</p>' + (SITE.mapsUrl ? '<a target="_blank" rel="noopener" href="' + esc(SITE.mapsUrl) + '">Open in Google Maps</a>' : ''));
-      if (SITE.hours) add('🕰️', 'Opening Hours', '<p>' + esc(SITE.hours) + '</p>');
-      var social = [];
-      if (SITE.instagram) social.push('<a target="_blank" rel="noopener" href="' + esc(SITE.instagram) + '">Instagram</a>');
-      if (SITE.facebook) social.push('<a target="_blank" rel="noopener" href="' + esc(SITE.facebook) + '">Facebook</a>');
-      if (social.length) add('✨', 'Follow Us', social.join(' &nbsp;·&nbsp; '));
+      fetch(URL, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.fields) return;
+          var info = {};
+          Object.keys(d.fields).forEach(function (k) { var v = d.fields[k]; info[k] = v.stringValue != null ? v.stringValue : (v.integerValue != null ? v.integerValue : ''); });
+          render(info);
+        })
+        .catch(function () { /* website still works without contact details */ });
     })();
   </script>
 </body>

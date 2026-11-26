@@ -49,11 +49,13 @@ import {
   resetMenuToFactoryDefaults,
   resetAllOperationalData,
 } from '../../utils/systemDataControl';
+import { publishWebsiteInfoToCloud } from '../../services/cloudMenuBridge';
 
-type SettingsTab = 'general' | 'billing' | 'modules' | 'crud' | 'roles' | 'users' | 'sync' | 'data';
+type SettingsTab = 'general' | 'website' | 'billing' | 'modules' | 'crud' | 'roles' | 'users' | 'sync' | 'data';
 
 const TABS: { id: SettingsTab; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: 'general', label: 'Branding', icon: 'storefront-outline' },
+  { id: 'website', label: 'Website', icon: 'globe-outline' },
   { id: 'billing', label: 'Billing & Tax', icon: 'cash-outline' },
   { id: 'modules', label: 'Modules', icon: 'apps-outline' },
   { id: 'crud', label: 'CRUD Permissions', icon: 'key-outline' },
@@ -961,6 +963,38 @@ export default function AdminSettingsScreen() {
   const handleDiscardChanges = () => {
     setDraft({ ...settings });
     showToast('Unsaved changes discarded');
+  };
+
+  // Master Admin only: public website contact details
+  const isMasterAdmin =
+    currentUser?.staffId === 'st-master' ||
+    currentUser?.id === 'st-master' ||
+    (currentUser?.username || '').toLowerCase() === 'master';
+  const visibleTabs = TABS.filter((t) => t.id !== 'website' || isMasterAdmin);
+  const [isPublishingWebsite, setIsPublishingWebsite] = useState(false);
+
+  const handlePublishWebsite = async () => {
+    if (!isMasterAdmin) return;
+    setIsPublishingWebsite(true);
+    try {
+      const { updatedAt: _omit, ...cleanDraft } = draft;
+      updateSettings(cleanDraft);
+      const ok = await publishWebsiteInfoToCloud();
+      if (ok) {
+        updateSettings({ websitePublishedAt: Date.now() });
+      }
+      const saved = useSettingsStore.getState().settings;
+      prevSettingsRef.current = saved;
+      setDraft({ ...saved });
+      broadcastImmediately();
+      showToast(
+        ok
+          ? 'Website updated! Contact details are now live on the website.'
+          : 'Saved locally, but website publish failed. Check internet and try again.'
+      );
+    } finally {
+      setIsPublishingWebsite(false);
+    }
   };
 
   useEffect(() => {
@@ -2484,7 +2518,7 @@ export default function AdminSettingsScreen() {
       {/* Horizontal Tab Bar */}
       <View style={styles.tabBarWrap}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabBar}>
-          {TABS.map((tab) => {
+          {visibleTabs.map((tab) => {
             const active = activeTab === tab.id;
             return (
               <TouchableOpacity
@@ -2589,6 +2623,130 @@ export default function AdminSettingsScreen() {
               (v) => applySettingPatchImmediate({ showQrOnReceipt: v })
             )}
             {renderSaveFooter()}
+          </View>
+        )}
+
+        {/* 1b. PUBLIC WEBSITE (Master Admin only) */}
+        {activeTab === 'website' && isMasterAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Public Website Contact Details</Text>
+            <Text style={{ fontSize: 12.5, color: '#6B5B4E', marginBottom: 14, lineHeight: 18 }}>
+              Ye details restaurant ki public website par show hongi. Jo field khali chhorenge wo website par nazar nahi aayegi.
+              Neeche &quot;Publish to Website&quot; dabane se website foran update ho jayegi.
+            </Text>
+
+            <View style={[styles.grid, isCompact && styles.gridCol]}>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Phone Number</Text>
+                <TextInput style={styles.input} value={draft.phone} onChangeText={(t) => updateDraft({ phone: t })} placeholder="0300-1234567" />
+              </View>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>WhatsApp Number</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteWhatsapp}
+                  onChangeText={(t) => updateDraft({ websiteWhatsapp: t })}
+                  placeholder="923001234567 (country code ke saath)"
+                  keyboardType="phone-pad"
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldBoxFull}>
+              <Text style={styles.label}>Restaurant Address</Text>
+              <TextInput style={styles.input} value={draft.address} onChangeText={(t) => updateDraft({ address: t })} placeholder="Full street address, city" />
+            </View>
+
+            <View style={[styles.grid, isCompact && styles.gridCol]}>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Google Maps Link</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteMapsUrl}
+                  onChangeText={(t) => updateDraft({ websiteMapsUrl: t })}
+                  placeholder="https://maps.app.goo.gl/..."
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Opening Hours</Text>
+                <TextInput style={styles.input} value={draft.websiteHours} onChangeText={(t) => updateDraft({ websiteHours: t })} placeholder="Daily 12:00 PM - 2:00 AM" />
+              </View>
+            </View>
+
+            <View style={[styles.grid, isCompact && styles.gridCol]}>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Email</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteEmail}
+                  onChangeText={(t) => updateDraft({ websiteEmail: t })}
+                  placeholder="info@sultanrestaurant.com.pk"
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </View>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Instagram Link</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteInstagram}
+                  onChangeText={(t) => updateDraft({ websiteInstagram: t })}
+                  placeholder="https://instagram.com/..."
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={[styles.grid, isCompact && styles.gridCol]}>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>Facebook Link</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteFacebook}
+                  onChangeText={(t) => updateDraft({ websiteFacebook: t })}
+                  placeholder="https://facebook.com/..."
+                  autoCapitalize="none"
+                />
+              </View>
+              <View style={styles.fieldBox}>
+                <Text style={styles.label}>TikTok Link</Text>
+                <TextInput
+                  style={styles.input}
+                  value={draft.websiteTiktok}
+                  onChangeText={(t) => updateDraft({ websiteTiktok: t })}
+                  placeholder="https://tiktok.com/@..."
+                  autoCapitalize="none"
+                />
+              </View>
+            </View>
+
+            <View style={styles.fieldBoxFull}>
+              <Text style={styles.label}>Announcement Bar (optional)</Text>
+              <TextInput
+                style={styles.input}
+                value={draft.websiteAnnouncement}
+                onChangeText={(t) => updateDraft({ websiteAnnouncement: t })}
+                placeholder="e.g. Grand Opening! 20% off on family platters this week"
+              />
+            </View>
+
+            <View style={styles.divider} />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 12, justifyContent: 'space-between' }}>
+              <Text style={{ fontSize: 12, color: '#6B5B4E' }}>
+                {draft.websitePublishedAt
+                  ? `Last published: ${new Date(draft.websitePublishedAt).toLocaleString()}`
+                  : 'Abhi tak website par publish nahi hua'}
+              </Text>
+              <TouchableOpacity
+                style={[styles.saveBtn, isPublishingWebsite && { opacity: 0.6 }]}
+                onPress={handlePublishWebsite}
+                disabled={isPublishingWebsite}
+              >
+                <Ionicons name="globe-outline" size={16} color="#140306" />
+                <Text style={styles.saveBtnText}>{isPublishingWebsite ? 'Publishing...' : 'Save & Publish to Website'}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         )}
 

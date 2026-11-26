@@ -106,6 +106,17 @@ export interface SystemSettings {
   autoSyncEnabled: boolean;
   cloudBackupEnabled: boolean;
 
+  // 5. Public Website Contact Details (editable by Master Admin only, published to the website)
+  websiteWhatsapp: string;
+  websiteEmail: string;
+  websiteMapsUrl: string;
+  websiteHours: string;
+  websiteInstagram: string;
+  websiteFacebook: string;
+  websiteTiktok: string;
+  websiteAnnouncement: string;
+  websitePublishedAt: number;
+
   updatedAt: number;
 }
 
@@ -207,6 +218,16 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
 
   autoSyncEnabled: true,
   cloudBackupEnabled: true,
+
+  websiteWhatsapp: '',
+  websiteEmail: '',
+  websiteMapsUrl: '',
+  websiteHours: '',
+  websiteInstagram: '',
+  websiteFacebook: '',
+  websiteTiktok: '',
+  websiteAnnouncement: '',
+  websitePublishedAt: 0,
 
   updatedAt: 0,
 };

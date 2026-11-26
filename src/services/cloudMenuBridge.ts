@@ -16,6 +16,7 @@ import { useOpsStore } from '../store/opsStore';
 import { useSettingsStore } from '../store/settingsStore';
 
 const PUBLIC_MENU_DOC_PATH = ['sultan_restaurant', 'public_menu'] as const;
+const WEBSITE_INFO_DOC_PATH = ['sultan_restaurant', 'website_info'] as const;
 const LIVE_STATE_DOC_PATH = ['sultan_restaurant', 'live_state'] as const;
 const CLOUD_ORDERS_COLLECTION = 'sultan_cloud_orders';
 
@@ -126,6 +127,41 @@ export function publishPublicMenuToCloud(force = false): void {
     setDoc(doc(db, PUBLIC_MENU_DOC_PATH[0], PUBLIC_MENU_DOC_PATH[1]), payload).catch(() => {});
   } catch {
     // Non-blocking background publish
+  }
+}
+
+/**
+ * Publishes the public website contact details (set by Master Admin in Settings → Website)
+ * to Cloud Firestore. The static website at the domain homepage reads this document live.
+ * Only customer-safe fields are published.
+ */
+export async function publishWebsiteInfoToCloud(): Promise<boolean> {
+  if (!isFirebaseConfigured) return false;
+  const db = getFirestoreDb();
+  if (!db) return false;
+  try {
+    const s = useSettingsStore.getState().settings;
+    const clean = (v: unknown) => String(v ?? '').trim();
+    const payload = {
+      restaurantName: clean(s.restaurantName),
+      tagline: clean(s.tagline),
+      phone: clean(s.phone),
+      address: clean(s.address),
+      whatsapp: clean(s.websiteWhatsapp).replace(/[^\d]/g, ''),
+      email: clean(s.websiteEmail),
+      mapsUrl: clean(s.websiteMapsUrl),
+      hours: clean(s.websiteHours),
+      instagram: clean(s.websiteInstagram),
+      facebook: clean(s.websiteFacebook),
+      tiktok: clean(s.websiteTiktok),
+      announcement: clean(s.websiteAnnouncement),
+      updatedAt: Date.now(),
+    };
+    await setDoc(doc(db, WEBSITE_INFO_DOC_PATH[0], WEBSITE_INFO_DOC_PATH[1]), payload);
+    return true;
+  } catch (err) {
+    console.warn('Website info publish failed:', err);
+    return false;
   }
 }
 
