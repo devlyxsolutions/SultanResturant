@@ -1031,30 +1031,6 @@ export default function TableOrderScreen() {
                   <Text style={styles.activeCatCountText}>{filteredItems.length} items</Text>
                 </View>
               </View>
-              {regions.length > 0 && (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.cuisinePillsRow}>
-                  <TouchableOpacity
-                    style={[styles.cuisinePill, activeRegion === 'ALL' && styles.cuisinePillActive]}
-                    onPress={() => setActiveRegion('ALL')}
-                  >
-                    <Text style={[styles.cuisinePillText, activeRegion === 'ALL' && styles.cuisinePillTextActive]}>
-                      All Cuisines
-                    </Text>
-                  </TouchableOpacity>
-                  {regions.map((r) => {
-                    const active = activeRegion.toLowerCase() === r.toLowerCase();
-                    return (
-                      <TouchableOpacity
-                        key={r}
-                        style={[styles.cuisinePill, active && styles.cuisinePillActive]}
-                        onPress={() => setActiveRegion(active ? 'ALL' : r)}
-                      >
-                        <Text style={[styles.cuisinePillText, active && styles.cuisinePillTextActive]}>{r}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
             </View>
 
             <FlatList

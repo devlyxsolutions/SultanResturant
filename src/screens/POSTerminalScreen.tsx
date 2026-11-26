@@ -2215,7 +2215,7 @@ export default function POSTerminalScreen({
             -------------------------------------------------------- */}
         {mobileTab === 'menu' && (
           <View style={styles.catalogPane}>
-            {/* Slim Filter Strip: Active Category Title + Cuisine Pills */}
+            {/* Slim Filter Strip: Active Category Title */}
             <View style={styles.catalogFilterBar}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Text style={styles.activeCatTitle}>
@@ -2225,35 +2225,6 @@ export default function POSTerminalScreen({
                   <Text style={styles.activeCatCountText}>{filteredItems.length} items</Text>
                 </View>
               </View>
-
-              {regions.length > 0 && systemSettings.posShowCuisineFilter !== false && (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={styles.cuisinePillsRow}
-                >
-                  <TouchableOpacity
-                    style={[styles.cuisinePill, activeRegion === 'ALL' && styles.cuisinePillActive]}
-                    onPress={() => setActiveRegion('ALL')}
-                  >
-                    <Text style={[styles.cuisinePillText, activeRegion === 'ALL' && styles.cuisinePillTextActive]}>
-                      All Cuisines
-                    </Text>
-                  </TouchableOpacity>
-                  {regions.map((r) => {
-                    const active = activeRegion.toLowerCase() === r.toLowerCase();
-                    return (
-                      <TouchableOpacity
-                        key={r}
-                        style={[styles.cuisinePill, active && styles.cuisinePillActive]}
-                        onPress={() => setActiveRegion(active ? 'ALL' : r)}
-                      >
-                        <Text style={[styles.cuisinePillText, active && styles.cuisinePillTextActive]}>{r}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              )}
             </View>
 
             {/* Dish Grid */}
