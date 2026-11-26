@@ -2932,8 +2932,13 @@ try {
     if (!Array.isArray(serverState.playlandRides) || serverState.playlandRides.length === 0) {
       serverState.playlandRides = DEFAULT_PLAYLAND_RIDES;
     }
-    if (!serverState.tables || serverState.tables.length < 10 || !serverState.tables.some(t => t.seatingType === 'majlis')) {
-      serverState.tables = INITIAL_STATE.tables;
+    if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
+    if (!Array.isArray(serverState.deletedFloorIds)) serverState.deletedFloorIds = [];
+    if (!Array.isArray(serverState.tables)) {
+      serverState.tables = [];
+    } else if (serverState.deletedTableIds.length > 0) {
+      const delTblSet = new Set(serverState.deletedTableIds);
+      serverState.tables = serverState.tables.filter(t => t && t.id && !delTblSet.has(t.id));
     }
     const LEGACY_DUMMY_STAFF_SET = new Set(['st1', 'st2', 'st3', 'st4', 'st5', 'st6', 'st7', 'st-ot1', 'st-ot2', 'st-ot3', 'st-ot4', 'st-fm1', 'st-fm2', 'st-c1', 'st-c2', 'st1794730033364']);
     const LEGACY_DUMMY_STAFF_NAMES = new Set(['junaid ahsan', 'ali khan', 'chef omar', 'order taker 1', 'order taker 2', 'order taker 3', 'order taker 4', 'sara ahmed', 'hamza malik', 'ali raza', 'tariq juice master', 'rashid mehmood', 'tariq javed', 'usman tariq', 'bilal hassan', 'rohan ali']);
@@ -8618,11 +8623,9 @@ async function pollFirestoreCloud() {
   }
 }
 
-// Poll Cloud Firestore FIRST before pushing so a newly started/dev server merges live categories & items instead of overwriting them!
-pollFirestoreCloud().finally(() => {
-  setTimeout(() => pushToFirestoreCloud(true), 500);
-  setInterval(pollFirestoreCloud, firestorePollInterval);
-});
+// Push authoritative local serverState to Cloud Firestore FIRST on boot so stale cloud snapshots never resurrect deleted tables/floors!
+setTimeout(() => pushToFirestoreCloud(true), 500);
+setInterval(pollFirestoreCloud, firestorePollInterval);
 
 wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;
