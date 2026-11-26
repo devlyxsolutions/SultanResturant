@@ -550,6 +550,8 @@ export type Floor = {
 
 type RestaurantState = {
   tables: Table[];
+  deletedTableIds?: string[];
+  deletedFloorIds?: string[];
   tickets: Ticket[];
   deletedTicketIds?: string[];
   invoices: Invoice[];
@@ -1090,6 +1092,8 @@ export const useRestaurantStore = create<RestaurantState>()(
   persist(
     (set, get) => ({
       tables: INITIAL_TABLES,
+      deletedTableIds: [],
+      deletedFloorIds: [],
       invoices: [],
       salesReturns: [],
       customers: INITIAL_CUSTOMERS,
@@ -3465,7 +3469,8 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       deleteTable: (id) => {
         set((state) => ({
-          tables: state.tables.filter(t => t.id !== id)
+          tables: state.tables.filter(t => t.id !== id),
+          deletedTableIds: Array.from(new Set([...(state.deletedTableIds || []), id])).slice(-500),
         }));
         notifySync();
       },
@@ -3478,7 +3483,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             id: newId,
             order: (state.floors || []).length + 1,
           };
-          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const currentFloors = Array.isArray(state.floors) ? state.floors : INITIAL_FLOORS;
           const updatedFloors = [...currentFloors, newFloor];
           const updatedZones = state.zones.includes(floor.name) ? state.zones : [...state.zones, floor.name];
           return {
@@ -3491,7 +3496,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       updateFloor: (id, updates) => {
         set((state) => {
-          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const currentFloors = Array.isArray(state.floors) ? state.floors : INITIAL_FLOORS;
           const target = currentFloors.find((f) => f.id === id);
           if (!target) return state;
 
@@ -3548,7 +3553,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       deleteFloor: (id, cascadeDeleteTables = false) => {
         set((state) => {
-          const currentFloors = state.floors && state.floors.length > 0 ? state.floors : INITIAL_FLOORS;
+          const currentFloors = Array.isArray(state.floors) ? state.floors : INITIAL_FLOORS;
           const target = currentFloors.find((f) => f.id === id);
           if (!target) return state;
 
@@ -3556,10 +3561,16 @@ export const useRestaurantStore = create<RestaurantState>()(
           const updatedFloors = currentFloors.filter((f) => f.id !== id);
           const updatedZones = state.zones.filter((z) => z.toLowerCase() !== floorName);
 
+          const removedTableIds: string[] = [];
           const updatedTables = cascadeDeleteTables
             ? state.tables.filter((t) => {
-              const tFloor = (t.floor || t.zone || '').toLowerCase();
-              return tFloor !== floorName;
+              const tFloor = getTableFloor(t).toLowerCase();
+              const rawFloor = (t.floor || t.zone || '').toLowerCase();
+              if (tFloor === floorName || rawFloor === floorName) {
+                removedTableIds.push(t.id);
+                return false;
+              }
+              return true;
             })
             : state.tables;
 
@@ -3567,6 +3578,8 @@ export const useRestaurantStore = create<RestaurantState>()(
             floors: updatedFloors,
             zones: updatedZones,
             tables: updatedTables,
+            deletedFloorIds: Array.from(new Set([...(state.deletedFloorIds || []), id])).slice(-200),
+            deletedTableIds: Array.from(new Set([...(state.deletedTableIds || []), ...removedTableIds])).slice(-500),
           };
         });
         notifySync();
@@ -4018,36 +4031,47 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           }
 
-          let rawTables = state.tables;
-          if (Array.isArray(remoteState.tables) && remoteState.tables.length > 0) {
+          const mergedDeletedTableIds = Array.from(
+            new Set([...(state.deletedTableIds || []), ...((remoteState as any).deletedTableIds || [])])
+          ).slice(-500);
+          const deletedTableSet = new Set(mergedDeletedTableIds);
+          const mergedDeletedFloorIds = Array.from(
+            new Set([...(state.deletedFloorIds || []), ...((remoteState as any).deletedFloorIds || [])])
+          ).slice(-200);
+          const deletedFloorSet = new Set(mergedDeletedFloorIds);
+
+          let rawTables = (state.tables || []).filter((t) => t && !deletedTableSet.has(t.id));
+          if (Array.isArray(remoteState.tables)) {
             const localTableMap = new Map((state.tables || []).map((t) => [t.id, t]));
-            rawTables = remoteState.tables.map((rawRt) => {
-              // A waiter collection older than the last settlement is stale — drop it
-              const rt =
-                rawRt.waiterPaymentCollection && !isWaiterPaymentPending(rawRt)
-                  ? { ...rawRt, waiterPaymentCollection: null }
-                  : rawRt;
-              const lt = localTableMap.get(rt.id);
-              if (!lt) return rt;
-              if (
-                lt.status === 'occupied' &&
-                rt.status === 'available' &&
-                (lt.occupiedSince || 0) > (rt.lastSettledAt || 0)
-              ) {
-                return lt;
-              }
-              // Local settlement is newer than the server's occupied snapshot (push still in flight) — keep local
-              if (
-                lt.status === 'available' &&
-                rt.status !== 'available' &&
-                (lt.lastSettledAt || 0) > 0 &&
-                (lt.lastSettledAt || 0) >= (rt.occupiedSince || 0) &&
-                (lt.lastSettledAt || 0) > (rt.lastSettledAt || 0)
-              ) {
-                return lt;
-              }
-              return rt;
-            });
+            rawTables = remoteState.tables
+              .filter((rt) => rt && !deletedTableSet.has(rt.id))
+              .map((rawRt) => {
+                // A waiter collection older than the last settlement is stale — drop it
+                const rt =
+                  rawRt.waiterPaymentCollection && !isWaiterPaymentPending(rawRt)
+                    ? { ...rawRt, waiterPaymentCollection: null }
+                    : rawRt;
+                const lt = localTableMap.get(rt.id);
+                if (!lt) return rt;
+                if (
+                  lt.status === 'occupied' &&
+                  rt.status === 'available' &&
+                  (lt.occupiedSince || 0) > (rt.lastSettledAt || 0)
+                ) {
+                  return lt;
+                }
+                // Local settlement is newer than the server's occupied snapshot (push still in flight) — keep local
+                if (
+                  lt.status === 'available' &&
+                  rt.status !== 'available' &&
+                  (lt.lastSettledAt || 0) > 0 &&
+                  (lt.lastSettledAt || 0) >= (rt.occupiedSince || 0) &&
+                  (lt.lastSettledAt || 0) > (rt.lastSettledAt || 0)
+                ) {
+                  return lt;
+                }
+                return rt;
+              });
           }
           const finalTickets = mergedTickets || state.tickets || [];
           const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
@@ -4055,6 +4079,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           return {
             ...state,
             tables: reconciledTables,
+            deletedTableIds: mergedDeletedTableIds,
+            deletedFloorIds: mergedDeletedFloorIds,
             deletedTicketIds: mergedDeletedIds,
             ...(mergedTickets ? { tickets: mergedTickets } : {}),
           ...(remoteState.invoices ? {
@@ -4083,7 +4109,11 @@ export const useRestaurantStore = create<RestaurantState>()(
             regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
           } : {}),
           ...(remoteState.zones ? { zones: remoteState.zones } : {}),
-          ...(remoteState.floors ? { floors: remoteState.floors } : {}),
+          ...(Array.isArray(remoteState.floors)
+            ? {
+                floors: remoteState.floors.filter((f) => f && !deletedFloorSet.has(f.id)),
+              }
+            : {}),
           ...(remoteState.staff ? {
             staff: (() => {
               const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
@@ -4411,7 +4441,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             } catch {}
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
-          if (!state.floors || !Array.isArray(state.floors) || state.floors.length === 0) {
+          if (!Array.isArray(state.floors)) {
             state.floors = INITIAL_FLOORS;
           }
           if (!Array.isArray(state.attendance)) {

@@ -1,15 +1,14 @@
-import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Constants from 'expo-constants';
+import { onValue, ref, set } from 'firebase/database';
+import { doc, getDoc, onSnapshot, setDoc, Unsubscribe } from 'firebase/firestore';
+import { Platform } from 'react-native';
+import { getKitchenSyncState, useKitchenStore } from '../store/kitchenStore';
+import { getOpsSyncState, useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
-import { useOpsStore, getOpsSyncState } from '../store/opsStore';
-import { useKitchenStore, getKitchenSyncState } from '../store/kitchenStore';
 import { useRoleStore } from '../store/roleStore';
-import { useShiftStore } from '../store/shiftStore';
 import { useSettingsStore } from '../store/settingsStore';
-import { isFirebaseConfigured, getFirebaseDb, getFirestoreDb, FIREBASE_REST_BASE_URL } from './firebase';
-import { ref, onValue, set } from 'firebase/database';
-import { doc, getDoc, setDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
+import { useShiftStore } from '../store/shiftStore';
 import {
   fetchPublicMenuFromCloud,
   isCustomerPortalRoute,
@@ -17,6 +16,7 @@ import {
   publishPublicMenuToCloud,
   startCloudOrdersListener,
 } from './cloudMenuBridge';
+import { FIREBASE_REST_BASE_URL, getFirebaseDb, getFirestoreDb, isFirebaseConfigured } from './firebase';
 
 export type SyncStatus = 'connected' | 'connecting' | 'offline';
 
@@ -47,7 +47,7 @@ export function getStableDeviceId(): string {
           tabId = Math.random().toString(36).substring(2, 6);
           window.sessionStorage?.setItem('@sultan_tab_id', tabId);
         }
-      } catch {}
+      } catch { }
       const stored = window.localStorage.getItem(STORAGE_KEY_DEVICE_ID);
       if (stored && stored.length > 5) {
         cachedDeviceId = tabId ? `${stored}_${tabId}` : stored;
@@ -58,7 +58,7 @@ export function getStableDeviceId(): string {
       cachedDeviceId = tabId ? `${created}_${tabId}` : created;
       return cachedDeviceId;
     }
-  } catch {}
+  } catch { }
   cachedDeviceId = `dev_${Platform.OS}_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 7)}`;
   return cachedDeviceId;
 }
@@ -262,7 +262,7 @@ function notifyListeners() {
   statusListeners.forEach((fn) => {
     try {
       fn(info);
-    } catch {}
+    } catch { }
   });
 }
 
@@ -365,7 +365,7 @@ export async function discoverLocalServerIp(): Promise<string | null> {
         isLanConnected = true;
         try {
           await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, winner);
-        } catch {}
+        } catch { }
         connectWebSocket();
         return winner;
       }
@@ -394,13 +394,13 @@ export async function discoverLocalServerIp(): Promise<string | null> {
           isLanConnected = true;
           try {
             await AsyncStorage.setItem(STORAGE_KEY_SERVER_IP, found);
-          } catch {}
+          } catch { }
           connectWebSocket();
           return found;
         }
       }
     }
-  } catch {} finally {
+  } catch { } finally {
     isDiscoveringLan = false;
   }
   return null;
@@ -426,7 +426,7 @@ export async function resolveDefaultServerIp(): Promise<string> {
     if (saved && saved.trim() && saved.trim() !== '192.168.1.4' && saved.trim() !== '192.168.1.14') {
       return saved.trim();
     }
-  } catch {}
+  } catch { }
 
   // 3. Check build-time environment variable
   const envUrl = process.env.EXPO_PUBLIC_SYNC_SERVER_URL;
@@ -502,7 +502,7 @@ async function fetchInitialFirebaseState() {
       }
     } catch {
       // Trigger auto-discovery in background if default IP didn't respond
-      discoverLocalServerIp().catch(() => {});
+      discoverLocalServerIp().catch(() => { });
     }
   }
 
@@ -541,7 +541,7 @@ async function fetchInitialFirebaseState() {
           isRtdbAccessible = true;
         }
       }
-    } catch (_) {}
+    } catch (_) { }
   }
 
   hasReceivedInitialSync = true;
@@ -556,7 +556,7 @@ function initWebSSE() {
   if (sseConnection) {
     try {
       sseConnection.close();
-    } catch {}
+    } catch { }
     sseConnection = null;
   }
 
@@ -589,7 +589,7 @@ function initWebSSE() {
     sse.onerror = () => {
       try {
         sse.close();
-      } catch {}
+      } catch { }
       sseConnection = null;
     };
   } catch (err) {
@@ -645,7 +645,7 @@ function initFirebaseSync() {
     if (firestoreUnsubscribe) {
       try {
         firestoreUnsubscribe();
-      } catch {}
+      } catch { }
       firestoreUnsubscribe = null;
     }
 
@@ -756,7 +756,7 @@ async function pollLocalLanFallback() {
     if (timer) clearTimeout(timer);
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       isLanConnected = false;
-      discoverLocalServerIp().catch(() => {});
+      discoverLocalServerIp().catch(() => { });
     }
   }
 }
@@ -787,7 +787,7 @@ function connectWebSocket(forceReconnect = false) {
     try {
       ws.onclose = null;
       ws.close();
-    } catch {}
+    } catch { }
     ws = null;
   }
 
@@ -826,7 +826,7 @@ function openVerifiedWebSocket(wsUrl: string) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         try {
           ws.send(JSON.stringify({ type: 'PING' }));
-        } catch {}
+        } catch { }
       }
 
       // Flush any offline local orders immediately upon reconnection
@@ -839,7 +839,7 @@ function openVerifiedWebSocket(wsUrl: string) {
         if (ws && ws.readyState === WebSocket.OPEN) {
           try {
             ws.send(JSON.stringify({ type: 'PING' }));
-          } catch {}
+          } catch { }
         }
       }, 5000);
     };
@@ -857,30 +857,30 @@ function openVerifiedWebSocket(wsUrl: string) {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { useSystemLogStore } = require('../store/systemLogStore');
             useSystemLogStore?.getState()?.pushLogs(data.logs);
-          } catch {}
+          } catch { }
         } else if (data.type === 'FORCE_LOGOUT_DEVICE') {
           useRestaurantStore.setState((s) => ({
             ...(Array.isArray(data.activeStaffSessions) ? { activeStaffSessions: data.activeStaffSessions } : {}),
             ...(data.revokedSessions && typeof data.revokedSessions === 'object'
               ? {
-                  revokedSessions: {
-                    ...(s.revokedSessions || {}),
-                    ...data.revokedSessions,
-                  },
-                }
+                revokedSessions: {
+                  ...(s.revokedSessions || {}),
+                  ...data.revokedSessions,
+                },
+              }
               : {}),
             ...(data.revokedDeviceIds && typeof data.revokedDeviceIds === 'object'
               ? {
-                  revokedDeviceIds: {
-                    ...(s.revokedDeviceIds || {}),
-                    ...data.revokedDeviceIds,
-                  },
-                }
+                revokedDeviceIds: {
+                  ...(s.revokedDeviceIds || {}),
+                  ...data.revokedDeviceIds,
+                },
+              }
               : {}),
             ...(data.forceLogoutAll && typeof data.forceLogoutAll === 'object'
               ? {
-                  forceLogoutAll: data.forceLogoutAll,
-                }
+                forceLogoutAll: data.forceLogoutAll,
+              }
               : {}),
           }));
         } else if (data.type === 'INIT_STATE' || data.type === 'SERVER_BROADCAST') {
@@ -958,7 +958,7 @@ function openVerifiedWebSocket(wsUrl: string) {
         pingTimer = null;
       }
       // Auto-discover server IP on the local router in case subnet changed (e.g. 192.168.0.x <-> 192.168.100.x)
-      discoverLocalServerIp().catch(() => {});
+      discoverLocalServerIp().catch(() => { });
       // Reconnect after 3s
       reconnectTimer = setTimeout(() => {
         connectWebSocket();
@@ -970,7 +970,7 @@ function openVerifiedWebSocket(wsUrl: string) {
       syncStatus = 'offline';
       notifyListeners();
     }
-    discoverLocalServerIp().catch(() => {});
+    discoverLocalServerIp().catch(() => { });
     reconnectTimer = setTimeout(() => {
       connectWebSocket();
     }, 3500);
@@ -1027,6 +1027,9 @@ function broadcastLocalState(force = false) {
     timestamp: now,
     state: {
       tables: state.tables,
+      deletedTableIds: state.deletedTableIds || [],
+      deletedFloorIds: state.deletedFloorIds || [],
+      floors: state.floors || [],
       tickets: state.tickets,
       deletedTicketIds: state.deletedTicketIds || [],
       invoices: state.invoices,
@@ -1046,10 +1049,6 @@ function broadcastLocalState(force = false) {
       lastBillPaidAlert: state.lastBillPaidAlert,
       lastFoodReadyAlert: state.lastFoodReadyAlert,
       foodReadyAlerts: state.foodReadyAlerts || [],
-      tableMoveLogs: state.tableMoveLogs || [],
-      cancelledOrderLogs: state.cancelledOrderLogs || [],
-      lastTableMoveAlert: state.lastTableMoveAlert || null,
-      lastOrderCancelledAlert: state.lastOrderCancelledAlert || null,
       roles: roleState.roles,
       shifts: shiftState.shifts,
       activeShiftId: shiftState.activeShiftId,
@@ -1111,14 +1110,14 @@ function broadcastLocalState(force = false) {
                       .then((r) => {
                         if (r.ok) hasUnsyncedLocalChanges = false;
                       })
-                      .catch(() => {});
+                      .catch(() => { });
                   }
                 }
               })
-              .catch(() => {});
+              .catch(() => { });
           }
         });
-    } catch {}
+    } catch { }
   }
 
   // 3. Cloud Firebase (Fallback only when LAN is disconnected / offline)
@@ -1129,7 +1128,7 @@ function broadcastLocalState(force = false) {
     if (activePutAbortController) {
       try {
         activePutAbortController.abort();
-      } catch {}
+      } catch { }
       activePutAbortController = null;
     }
 
@@ -1150,7 +1149,7 @@ function broadcastLocalState(force = false) {
           .catch((err) => {
             console.warn('[SyncService] Firestore write error:', err);
           });
-      } catch {}
+      } catch { }
     }
 
     // B. Via Firebase Realtime DB Web SDK
@@ -1158,10 +1157,10 @@ function broadcastLocalState(force = false) {
     if (db) {
       try {
         const stateRef = ref(db, 'sultan_restaurant/live_state');
-        set(stateRef, payload).catch(() => {});
+        set(stateRef, payload).catch(() => { });
         const lastUpdatedRef = ref(db, 'sultan_restaurant/last_updated');
-        set(lastUpdatedRef, now).catch(() => {});
-      } catch {}
+        set(lastUpdatedRef, now).catch(() => { });
+      } catch { }
     }
 
     // C. Direct HTTP REST PUT (guaranteed to deliver across all platforms and networks if RTDB active)
@@ -1183,7 +1182,7 @@ function broadcastLocalState(force = false) {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(now),
-          }).catch(() => {});
+          }).catch(() => { });
 
           lastSyncedAt = Date.now();
           totalSyncedEvents++;
@@ -1233,16 +1232,16 @@ export async function initSyncService() {
           notifyListeners();
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     return;
   }
 
   try {
     currentServerAddress = await resolveDefaultServerIp();
-  } catch {}
+  } catch { }
   if (!isPublicCloudHost()) {
     connectWebSocket();
-    discoverLocalServerIp().catch(() => {});
+    discoverLocalServerIp().catch(() => { });
     if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
     lanHttpPollTimer = setInterval(pollLocalLanFallback, 2200);
   }
@@ -1310,7 +1309,7 @@ export async function forceSyncNow(): Promise<boolean> {
         reconnect();
         return true;
       }
-    } catch {}
+    } catch { }
   }
 
   // 2. If current IP didn't answer, auto-discover LAN Server IP and retry
@@ -1326,7 +1325,7 @@ export async function forceSyncNow(): Promise<boolean> {
           applyRemoteStateSafely(serverState.state || serverState);
           return true;
         }
-      } catch {}
+      } catch { }
     }
   }
 

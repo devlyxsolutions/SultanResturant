@@ -7486,8 +7486,15 @@ function computeStateFingerprint(st) {
     return JSON.stringify({
       tickets: st.tickets || [],
       deletedTicketIds: st.deletedTicketIds || [],
+      deletedTableIds: st.deletedTableIds || [],
+      deletedFloorIds: st.deletedFloorIds || [],
+      floorsLen: Array.isArray(st.floors) ? st.floors.map(f => `${f.id}:${f.name}`).join(',') : '',
       tables: (st.tables || []).map(t => ({
         id: t.id,
+        name: t.name,
+        floor: t.floor,
+        seatingType: t.seatingType,
+        seats: t.seats,
         status: t.status,
         billTotal: t.billTotal,
         isPaid: t.isPaid,
@@ -7637,9 +7644,23 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
 
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
-  // Merge state keys safely (deletedTicketIds, tickets, and tables MUST be processed first in order)
-  const allowedKeys = ['deletedTicketIds', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tickets, and tables MUST be processed first in order)
+  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
+
+  if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
+  if (Array.isArray(partialState.deletedTableIds) && partialState.deletedTableIds.length > 0) {
+    serverState.deletedTableIds = Array.from(new Set([...serverState.deletedTableIds, ...partialState.deletedTableIds])).slice(-500);
+    modified = true;
+  }
+  const deletedTableSet = new Set(serverState.deletedTableIds);
+
+  if (!Array.isArray(serverState.deletedFloorIds)) serverState.deletedFloorIds = [];
+  if (Array.isArray(partialState.deletedFloorIds) && partialState.deletedFloorIds.length > 0) {
+    serverState.deletedFloorIds = Array.from(new Set([...serverState.deletedFloorIds, ...partialState.deletedFloorIds])).slice(-200);
+    modified = true;
+  }
+  const deletedFloorSet = new Set(serverState.deletedFloorIds);
 
   // Epoch barrier: if server executed a Clean Slate Reset, ignore pre-reset inventory/categories/movements from stale devices!
   const currInvEpoch = Number(serverState.inventoryResetEpoch || 0);
@@ -7899,9 +7920,13 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
         }
         modified = true;
       } else if (key === 'tables') {
-        const incomingTables = Array.isArray(partialState.tables) ? partialState.tables : [];
-        if (incomingTables.length > 0) {
-          const currentTables = Array.isArray(serverState.tables) ? serverState.tables : [];
+        const incomingTables = (Array.isArray(partialState.tables) ? partialState.tables : []).filter(
+          t => t && t.id && !deletedTableSet.has(t.id)
+        );
+        if (incomingTables.length > 0 || (Array.isArray(partialState.tables) && partialState.tables.length === 0 && deletedTableSet.size > 0)) {
+          const currentTables = (Array.isArray(serverState.tables) ? serverState.tables : []).filter(
+            t => t && t.id && !deletedTableSet.has(t.id)
+          );
           const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
           const activeTickets = (Array.isArray(serverState.tickets) ? serverState.tickets : []).filter(
             tk => tk && !deletedSet.has(tk.id)
@@ -7979,15 +8004,29 @@ function applyStateUpdate(partialState, senderId, originWs = null) {
             return { ...curr, ...inc };
           });
 
-          // Append any newly added tables
+          // Append any newly added tables (never resurrect deleted tables)
           const existingIds = new Set(serverState.tables.map(t => t.id));
           for (const inc of incomingTables) {
-            if (!existingIds.has(inc.id)) {
+            if (!existingIds.has(inc.id) && !deletedTableSet.has(inc.id)) {
               serverState.tables.push(inc);
             }
           }
+          serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
           modified = true;
         }
+      } else if (key === 'floors') {
+        if (Array.isArray(partialState.floors)) {
+          serverState.floors = partialState.floors.filter(f => f && f.id && !deletedFloorSet.has(f.id));
+          modified = true;
+        }
+      } else if (key === 'deletedTableIds' || key === 'deletedFloorIds') {
+        if (Array.isArray(serverState.tables) && deletedTableSet.size > 0) {
+          serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
+        }
+        if (Array.isArray(serverState.floors) && deletedFloorSet.size > 0) {
+          serverState.floors = serverState.floors.filter(f => f && f.id && !deletedFloorSet.has(f.id));
+        }
+        modified = true;
       } else if (key === 'menuItems') {
         const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
         if (incoming.length > 0) {
@@ -8471,6 +8510,9 @@ function pushToFirestoreCloud(forceImmediate = false) {
         timestamp: now,
         state: {
           tables: serverState.tables,
+          deletedTableIds: serverState.deletedTableIds || [],
+          deletedFloorIds: serverState.deletedFloorIds || [],
+          floors: serverState.floors || [],
           tickets: serverState.tickets,
           deletedTicketIds: serverState.deletedTicketIds || [],
           invoices: serverState.invoices || [],
