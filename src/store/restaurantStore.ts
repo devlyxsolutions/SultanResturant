@@ -3310,20 +3310,20 @@ export const useRestaurantStore = create<RestaurantState>()(
       setOnlineFeedbackUrl: (url) => {
         const clean = (url || '').trim().replace(/\/+$/, '');
         const lower = clean.toLowerCase();
-        let validSultanHost = false;
+        let validHost = false;
         try {
           if (lower.startsWith('http://') || lower.startsWith('https://')) {
             const host = (new URL(lower).hostname || '').toLowerCase();
-            validSultanHost =
-              host.includes('sultan') &&
+            validHost =
+              host.length > 0 &&
               !host.includes('sultan-resturant.web.app') &&
               !host.endsWith('.lhr.life');
           }
         } catch {
-          validSultanHost = false;
+          validHost = false;
         }
         set({
-          onlineFeedbackUrl: validSultanHost ? clean : 'https://sultanresturant092.netlify.app'
+          onlineFeedbackUrl: validHost ? clean : 'https://sultanresturant092.netlify.app'
         });
       },
 
@@ -4478,14 +4478,11 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!Array.isArray(state.onlineOrders)) {
             state.onlineOrders = [];
           }
-          // Sanitize onlineFeedbackUrl on boot so stale LAN IPs or unrelated app URLs never leak into Sultan QR codes
-          const isValidSultanUrl = (candidate: string): boolean => {
+          // Sanitize onlineFeedbackUrl on boot so dead hosts never leak into Sultan QR codes
+          const isValidOnlineUrl = (candidate: string): boolean => {
             const c = candidate.trim().toLowerCase();
             if (!c || (!c.startsWith('http://') && !c.startsWith('https://'))) return false;
             if (
-              c.includes('localhost') ||
-              c.includes('127.0.0.1') ||
-              /https?:\/\/(192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(c) ||
               c.includes('sultan-resturant.web.app') ||
               c.includes('.lhr.life')
             ) {
@@ -4493,18 +4490,18 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
             try {
               const host = (new URL(c).hostname || '').toLowerCase();
-              return host.includes('sultan');
+              return host.length > 0;
             } catch {
               return false;
             }
           };
-          if (!isValidSultanUrl(String(state.onlineFeedbackUrl || ''))) {
+          if (!isValidOnlineUrl(String(state.onlineFeedbackUrl || ''))) {
             state.onlineFeedbackUrl = 'https://sultanresturant092.netlify.app';
           }
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             try {
               const storedUrl = window.localStorage.getItem('sultan_feedback_online_url') || '';
-              if (storedUrl && !isValidSultanUrl(storedUrl)) {
+              if (storedUrl && !isValidOnlineUrl(storedUrl)) {
                 window.localStorage.removeItem('sultan_feedback_online_url');
               }
             } catch {}

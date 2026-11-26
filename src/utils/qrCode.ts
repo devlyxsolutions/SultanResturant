@@ -38,28 +38,17 @@ export function isBlockedForeignUrl(url: string): boolean {
   ) {
     return true;
   }
-  try {
-    const parsed = new URL(clean.startsWith('http') ? clean : `https://${clean}`);
-    const host = (parsed.hostname || '').toLowerCase();
-    // Strictly require a Sultan Restaurant domain (e.g., sultanresturant092.netlify.app, sultanrestaurant.com.pk)
-    if (!host || !host.includes('sultan')) {
-      return true;
-    }
-  } catch {
-    return true;
-  }
   return false;
 }
 
 /**
- * Validates that a customer QR URL is publicly reachable over mobile networks (4G/5G),
- * belongs to Sultan Restaurant, and is not localhost, a private LAN IP, or a foreign app URL.
+ * Validates that a customer QR URL is a valid reachable HTTP or HTTPS URL,
+ * and is not a known dead/stale host.
  */
 export function isValidFeedbackUrl(url?: string): boolean {
   if (!url || !url.trim()) return false;
   const clean = url.trim().toLowerCase();
   if (!clean.startsWith('http://') && !clean.startsWith('https://')) return false;
-  if (isPrivateLanUrl(clean)) return false;
   if (isBlockedForeignUrl(clean)) return false;
   return true;
 }

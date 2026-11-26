@@ -349,6 +349,19 @@ export default function TablesBlueprintScreen({
   const [batchQrZoneFilter, setBatchQrZoneFilter] = useState<'all' | SeatingZoneType>('all');
   const [isDownloadingQrPdf, setIsDownloadingQrPdf] = useState(false);
 
+  // Dynamic QR Backend URL & Bulk Configuration
+  const onlineFeedbackUrl = useRestaurantStore((s) => s.onlineFeedbackUrl) || 'https://sultanresturant092.netlify.app';
+  const setOnlineFeedbackUrl = useRestaurantStore((s) => s.setOnlineFeedbackUrl);
+  const [customQrUrlInput, setCustomQrUrlInput] = useState(onlineFeedbackUrl);
+  const [showQrUrlConfig, setShowQrUrlConfig] = useState(false);
+  const [isBulkUpdatingQrUrl, setIsBulkUpdatingQrUrl] = useState(false);
+
+  useEffect(() => {
+    if (onlineFeedbackUrl) {
+      setCustomQrUrlInput(onlineFeedbackUrl);
+    }
+  }, [onlineFeedbackUrl]);
+
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(timer);
@@ -594,16 +607,50 @@ export default function TablesBlueprintScreen({
     setBatchQrZoneFilter(seatingTypeFilter);
     setBatchQrModalVisible(true);
     setIsBatchGenerating(true);
+    const targetBase = onlineFeedbackUrl || 'https://sultanresturant092.netlify.app';
     const newMap: Record<string, string> = { ...batchQrMap };
     for (const t of enabledTables) {
       if (!newMap[t.id]) {
         try {
-          newMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name);
+          newMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name, targetBase);
         } catch { }
       }
     }
     setBatchQrMap(newMap);
     setIsBatchGenerating(false);
+  };
+
+  const handleBulkUpdateQrUrl = async (targetOverride?: string) => {
+    const raw = (targetOverride !== undefined ? targetOverride : customQrUrlInput || '').trim();
+    if (!raw) {
+      notify('Invalid URL', 'Please enter a valid website/portal URL.');
+      return;
+    }
+    const clean = raw.replace(/\/+$/, '');
+    setIsBulkUpdatingQrUrl(true);
+    try {
+      setOnlineFeedbackUrl(clean);
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          window.localStorage.setItem('sultan_feedback_online_url', clean);
+        } catch {}
+      }
+      broadcastImmediately();
+      // Re-generate QR codes for ALL enabled tables with the new URL
+      const freshMap: Record<string, string> = {};
+      for (const t of enabledTables) {
+        freshMap[t.id] = await generateTableQrCode(t.id, t.floor, t.name, clean);
+      }
+      setBatchQrMap(freshMap);
+      notify(
+        'QR Codes Updated in Bulk!',
+        `All ${enabledTables.length} table QR codes & invoices now link to:\n${clean}`
+      );
+    } catch (err) {
+      console.warn('Failed bulk QR update:', err);
+    } finally {
+      setIsBulkUpdatingQrUrl(false);
+    }
   };
 
   const handleDownloadBatchQrPdf = async (list: Table[], scopeName?: string) => {
@@ -4579,6 +4626,138 @@ export default function TablesBlueprintScreen({
                   );
                 })}
               </ScrollView>
+            </View>
+
+            {/* 3. QR Backend Destination URL & Bulk Config */}
+            <View
+              style={{
+                backgroundColor: '#FCF8ED',
+                borderColor: '#E8D5A5',
+                borderWidth: 1,
+                borderRadius: 10,
+                padding: 10,
+                marginBottom: 12,
+              }}
+            >
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, overflow: 'hidden' }}>
+                  <Ionicons name="link" size={15} color="#895B1E" />
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: '#1C1C1E' }}>
+                    Destination URL:
+                  </Text>
+                  <Text
+                    style={{
+                      fontSize: 11,
+                      color: '#0284C7',
+                      fontWeight: '700',
+                      textDecorationLine: 'underline',
+                    }}
+                    numberOfLines={1}
+                  >
+                    {onlineFeedbackUrl}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  style={{
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 6,
+                    backgroundColor: showQrUrlConfig ? '#3A0F12' : '#FFFFFF',
+                    borderWidth: 1,
+                    borderColor: '#3A0F12',
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                  onPress={() => setShowQrUrlConfig(!showQrUrlConfig)}
+                >
+                  <Ionicons
+                    name={showQrUrlConfig ? 'chevron-up' : 'settings-outline'}
+                    size={13}
+                    color={showQrUrlConfig ? '#F3D179' : '#3A0F12'}
+                  />
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: showQrUrlConfig ? '#F3D179' : '#3A0F12' }}>
+                    {showQrUrlConfig ? 'Close Settings' : 'Change Backend Link (بلک میں لنک بدلیں)'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {showQrUrlConfig && (
+                <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#EAD9B8' }}>
+                  <Text style={{ fontSize: 11, color: '#475569', marginBottom: 6 }}>
+                    Apna naya domain ya portal link enter karein. "Bulk Update" dabane se tamaam {enabledTables.length} seating units foran naye link par update ho jayenge:
+                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                    <TextInput
+                      style={{
+                        flex: 1,
+                        backgroundColor: '#FFFFFF',
+                        borderWidth: 1,
+                        borderColor: '#CBD5E1',
+                        borderRadius: 6,
+                        paddingHorizontal: 10,
+                        paddingVertical: 7,
+                        fontSize: 12,
+                        color: '#1C1C1E',
+                      }}
+                      value={customQrUrlInput}
+                      onChangeText={setCustomQrUrlInput}
+                      placeholder="e.g. https://sultanresturant092.netlify.app"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#3A0F12',
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 6,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 5,
+                      }}
+                      onPress={() => handleBulkUpdateQrUrl()}
+                      disabled={isBulkUpdatingQrUrl}
+                    >
+                      {isBulkUpdatingQrUrl ? (
+                        <ActivityIndicator size="small" color="#F3D179" />
+                      ) : (
+                        <Ionicons name="sync" size={14} color="#F3D179" />
+                      )}
+                      <Text style={{ color: '#F3D179', fontWeight: '900', fontSize: 12 }}>
+                        Bulk Update All QRs
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Presets */}
+                  <View style={{ flexDirection: 'row', gap: 6, marginTop: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <Text style={{ fontSize: 10, color: '#64748B', fontWeight: '800' }}>Quick Presets:</Text>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                      onPress={() => {
+                        setCustomQrUrlInput('https://sultanresturant092.netlify.app');
+                        handleBulkUpdateQrUrl('https://sultanresturant092.netlify.app');
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E293B' }}>Netlify Cloud (Default)</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#E2E8F0', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                      onPress={() => {
+                        const origin =
+                          typeof window !== 'undefined' && window.location?.origin
+                            ? window.location.origin
+                            : 'http://192.168.1.14:8081';
+                        setCustomQrUrlInput(origin);
+                        handleBulkUpdateQrUrl(origin);
+                      }}
+                    >
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#1E293B' }}>Local Server IP</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
             </View>
 
             {isBatchGenerating ? (
