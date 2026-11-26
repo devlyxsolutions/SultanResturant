@@ -79,6 +79,7 @@ export interface SystemSettings {
   enableInventoryModule: boolean;
   enableSuppliersModule: boolean;
   enableDamagesModule: boolean;
+  enableSystemNotifications: boolean;
   lowStockAlertThreshold: number;
   blockOutOfStockPosOrders: boolean;
 
@@ -194,6 +195,7 @@ export const DEFAULT_SYSTEM_SETTINGS: SystemSettings = {
   enableInventoryModule: true,
   enableSuppliersModule: true,
   enableDamagesModule: true,
+  enableSystemNotifications: false,
   lowStockAlertThreshold: 10,
   blockOutOfStockPosOrders: false,
 

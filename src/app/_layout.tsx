@@ -1,19 +1,17 @@
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import React, { useEffect } from 'react';
-import { Platform, View, Text, TouchableOpacity, LogBox } from 'react-native';
-import * as Font from 'expo-font';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { initSyncService } from '../services/syncService';
-import { initCallListener } from '../services/headlessCallService';
-import StockAlarmHost from '../components/StockAlarmHost';
-import IncomingCallHost from '../components/IncomingCallHost';
-import WaiterNotificationHost from '../components/WaiterNotificationHost';
-import CashierOpsNotificationHost from '../components/CashierOpsNotificationHost';
-import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
-import SessionSecurityHost from '../components/SessionSecurityHost';
+import { LogBox, Platform, Text, TouchableOpacity, View } from 'react-native';
 import CentralUpdateHost from '../components/CentralUpdateHost';
+import { FloorManagerNotificationHost } from '../components/FloorManagerNotificationHost';
+import IncomingCallHost from '../components/IncomingCallHost';
+import SessionSecurityHost from '../components/SessionSecurityHost';
+import StockAlarmHost from '../components/StockAlarmHost';
 import SystemLogHost from '../components/SystemLogHost';
+import { useSettingsStore } from '../store/settingsStore';
+import WaiterNotificationHost from '../components/WaiterNotificationHost';
+import { initCallListener } from '../services/headlessCallService';
+import { initSyncService } from '../services/syncService';
 
 // Ignore benign web font loading timeouts and offline firestore notices in Expo LogBox
 LogBox.ignoreLogs([
@@ -35,7 +33,7 @@ LogBox.ignoreLogs([
   'onStartShouldSetResponder',
 ]);
 
-SplashScreen.preventAutoHideAsync().catch(() => {});
+SplashScreen.preventAutoHideAsync().catch(() => { });
 
 // Global Web Font Patch & Error Guard against external browser extension crashes, font timeouts & network stalls
 if (Platform.OS === 'web') {
@@ -59,7 +57,7 @@ if (Platform.OS === 'web') {
         }
         return originalConsoleError(...args);
       };
-    } catch (_) {}
+    } catch (_) { }
   }
 
   // 1. Intercept document.fonts.load so vector icon queries resolve immediately without hitting 12000ms timeout
@@ -73,7 +71,7 @@ if (Platform.OS === 'web') {
         }
         return originalFontsLoad(font, text);
       };
-    } catch (_) {}
+    } catch (_) { }
   }
 
   if (typeof window !== 'undefined') {
@@ -170,6 +168,8 @@ class AppErrorBoundary extends React.Component<
 }
 
 export default function RootLayout() {
+  const enableSystemNotifications = useSettingsStore((s) => s.settings?.enableSystemNotifications === true);
+
   useEffect(() => {
     // Safely warm-up vector icons on web without throwing unhandled rejections
     if (Platform.OS === 'web') {
@@ -181,7 +181,7 @@ export default function RootLayout() {
           );
           fontIonicons.load().then((loaded: any) => {
             (document as any).fonts?.add(loaded);
-          }).catch(() => {});
+          }).catch(() => { });
 
           const fontMCI = new (window as any).FontFace(
             'material-community',
@@ -189,13 +189,13 @@ export default function RootLayout() {
           );
           fontMCI.load().then((loaded: any) => {
             (document as any).fonts?.add(loaded);
-          }).catch(() => {});
+          }).catch(() => { });
         }
-      } catch (_) {}
+      } catch (_) { }
     }
 
     // Hide splash screen immediately once layout mounts
-    SplashScreen.hideAsync().catch(() => {});
+    SplashScreen.hideAsync().catch(() => { });
 
     // Defer sync and background services slightly so first UI frame paints instantaneously
     const syncTimer = setTimeout(() => {
@@ -433,16 +433,17 @@ export default function RootLayout() {
         </View>
       </AppErrorBoundary>
 
-      {/* Live stock / kitchen handover alarms for admin, manager and kitchen roles */}
-      <StockAlarmHost />
+      {/* Live stock / kitchen handover / waiter / cashier / floor manager notification hosts (paused while enableSystemNotifications is false) */}
+      {enableSystemNotifications && (
+        <>
+          <StockAlarmHost />
+          <WaiterNotificationHost />
+          <CashierOpsNotificationHost />
+          <FloorManagerNotificationHost />
+        </>
+      )}
       {/* Live incoming caller ID popup & quick order routing */}
       <IncomingCallHost />
-      {/* Universal Food Ready & Bill Paid Notification Host for Order Takers */}
-      <WaiterNotificationHost />
-      {/* Live Cashier & Management Alerts for Table Moves (with Note) & Cancelled Punched Orders */}
-      <CashierOpsNotificationHost />
-      {/* Floor Manager Urgent Digital Menu Order Repeating Notification Host */}
-      <FloorManagerNotificationHost />
       {/* Multi-Device Security & Concurrent Session Kick Host */}
       <SessionSecurityHost />
       {/* Central Auto-Updater for 10 Android Tablets & 7 Windows PCs */}

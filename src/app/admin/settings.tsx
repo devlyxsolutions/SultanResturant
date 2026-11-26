@@ -708,6 +708,12 @@ const MODULE_CONTROL_GROUPS: ModuleControlGroup[] = [
         isMaster: true,
       },
       {
+        key: 'enableSystemNotifications',
+        label: 'Live System Notifications & Stock Alarms',
+        sub: 'Master switch for floating stock alarm bell, waiter food-ready popups & live operational alert banners',
+        isMaster: true,
+      },
+      {
         key: 'blockOutOfStockPosOrders',
         label: 'Block Out-of-Stock Items in POS',
         sub: 'Prevent ordering dishes when tracked recipe/inventory stock hits zero',
