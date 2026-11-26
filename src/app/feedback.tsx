@@ -46,6 +46,13 @@ export default function CustomerFeedbackScreen() {
   const invoices = useRestaurantStore((state) => state.invoices);
   const addFeedback = useRestaurantStore((state) => state.addFeedback);
 
+  // Automatically redirect feedback QR scans to official website https://sultanrestaurant.com.pk
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.location.replace('https://sultanrestaurant.com.pk/');
+    }
+  }, []);
+
   // Search/Lookup state if no invoiceId or not found
   const [lookupInput, setLookupInput] = useState(params.invoiceId || '');
 

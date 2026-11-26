@@ -7,7 +7,7 @@ import { getActiveServerHttpUrl } from '../services/syncService';
  * Public HTTPS Cloud URL for Sultan Restaurant's Customer Digital Menu & Feedback Portal.
  * Accessible from ANY customer mobile phone on 4G/5G mobile data or any Wi-Fi network!
  */
-export const PUBLIC_ONLINE_URL = 'https://sultanrestaurant092.netlify.app';
+export const PUBLIC_ONLINE_URL = 'https://sultanrestaurant.com.pk';
 /** Official Sultan Restaurant domain (hosted on the same Netlify site once DNS is live). */
 export const OFFICIAL_DOMAIN_URL = 'https://sultanrestaurant.com.pk';
 export const DEFAULT_LAN_IP = '192.168.1.14';
@@ -36,8 +36,10 @@ export function isBlockedForeignUrl(url: string): boolean {
   if (!clean) return true;
   if (
     clean.includes('sultan-resturant.web.app') ||
-    clean.includes('sultanresturant092.netlify.app') || // old dead Netlify site (moved to sultanrestaurant092)
-    clean.includes('.lhr.life')
+    clean.includes('sultanresturant092.netlify.app') ||
+    clean.includes('sultanrestaurant092.netlify.app') || // auto-upgrade legacy Netlify subdomain to official sultanrestaurant.com.pk
+    clean.includes('.lhr.life') ||
+    isPrivateLanUrl(clean)
   ) {
     return true;
   }
@@ -111,11 +113,11 @@ export function getBaseFeedbackUrl(customOverride?: string): string {
 }
 
 /**
- * Builds the direct URL to the item-wise feedback page for a specific invoice.
+ * Builds the direct URL for the receipt/feedback QR code -> opens official website https://sultanrestaurant.com.pk
  */
-export function getInvoiceFeedbackUrl(invoiceId: string, customBaseUrl?: string): string {
+export function getInvoiceFeedbackUrl(_invoiceId: string, customBaseUrl?: string): string {
   const base = getBaseFeedbackUrl(customBaseUrl);
-  return `${base}/feedback?invoiceId=${encodeURIComponent(invoiceId)}`;
+  return base;
 }
 
 /**

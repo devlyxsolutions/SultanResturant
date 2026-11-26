@@ -350,7 +350,7 @@ export default function TablesBlueprintScreen({
   const [isDownloadingQrPdf, setIsDownloadingQrPdf] = useState(false);
 
   // Dynamic QR Backend URL & Bulk Configuration
-  const onlineFeedbackUrl = useRestaurantStore((s) => s.onlineFeedbackUrl) || 'https://sultanrestaurant092.netlify.app';
+  const onlineFeedbackUrl = useRestaurantStore((s) => s.onlineFeedbackUrl) || 'https://sultanrestaurant.com.pk';
   const setOnlineFeedbackUrl = useRestaurantStore((s) => s.setOnlineFeedbackUrl);
   const [customQrUrlInput, setCustomQrUrlInput] = useState(onlineFeedbackUrl);
   const [showQrUrlConfig, setShowQrUrlConfig] = useState(false);
@@ -607,7 +607,7 @@ export default function TablesBlueprintScreen({
     setBatchQrZoneFilter(seatingTypeFilter);
     setBatchQrModalVisible(true);
     setIsBatchGenerating(true);
-    const targetBase = onlineFeedbackUrl || 'https://sultanrestaurant092.netlify.app';
+    const targetBase = onlineFeedbackUrl || 'https://sultanrestaurant.com.pk';
     const newMap: Record<string, string> = { ...batchQrMap };
     for (const t of enabledTables) {
       if (!newMap[t.id]) {

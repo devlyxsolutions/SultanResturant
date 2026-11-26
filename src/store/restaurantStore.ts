@@ -4,9 +4,9 @@ import { persist } from 'zustand/middleware';
 import { SULTAN_DEFAULT_CATEGORIES, SULTAN_DEFAULT_MENU, SULTAN_DEFAULT_REGIONS } from '../constants/defaultMenu';
 import { getTableFloor, getTableSeatingType } from '../constants/floors';
 import type { SalesReturn } from '../types/returns';
-import type { RolePermissions } from './roleStore';
-import { resolveItemStation, resolveMenuCatalogStation } from '../utils/stationRouting';
 import { normalizeMenuItemImage } from '../utils/menuImage';
+import { resolveMenuCatalogStation } from '../utils/stationRouting';
+import type { RolePermissions } from './roleStore';
 import { useSettingsStore } from './settingsStore';
 import { appStorage } from './storage';
 
@@ -184,16 +184,16 @@ export type CancelledOrderLog = {
   cancelledByRole?: string;
   reason: string;
   source:
-    | 'cancel_ticket'
-    | 'cancel_item'
-    | 'order_taker_cancel'
-    | 'pos_cart_remove'
-    | 'release_table'
-    | 'purge_all'
-    | 'removed_at_billing'
-    | 'void_invoice'
-    | 'sales_return'
-    | 'online_order_cancel';
+  | 'cancel_ticket'
+  | 'cancel_item'
+  | 'order_taker_cancel'
+  | 'pos_cart_remove'
+  | 'release_table'
+  | 'purge_all'
+  | 'removed_at_billing'
+  | 'void_invoice'
+  | 'sales_return'
+  | 'online_order_cancel';
   roundNumber?: number;
   isAddOn?: boolean;
   ticketStatusAtCancel?: string;
@@ -1015,7 +1015,7 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     const activeCookingOrReady = tableTickets.filter(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready');
     const hasUnbilledTickets = tableTickets.some(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
 
-      if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
+    if (activeCookingOrReady.length > 0 || (hasUnbilledTickets && !table.isPaid)) {
       const ticketTotal = tableTickets.reduce((sum, t) =>
         sum + (t.items || []).reduce((itemSum, item) => itemSum + ((item.price || 0) * (item.qty || 1)), 0),
         0
@@ -1093,13 +1093,13 @@ function resolveCurrentAuthActor(): { name: string; role: string } {
         u.customRoleId === 'role-cashier'
           ? 'Cashier'
           : u.customRoleId === 'role-waiter'
-          ? 'Order Taker'
-          : u.customRoleId === 'role-floor-manager'
-          ? 'Floor Manager'
-          : String(u.role || 'Staff');
+            ? 'Order Taker'
+            : u.customRoleId === 'role-floor-manager'
+              ? 'Floor Manager'
+              : String(u.role || 'Staff');
       return { name: String(u.name || 'Staff'), role: roleLabel };
     }
-  } catch {}
+  } catch { }
   return { name: 'Staff', role: 'Staff' };
 }
 
@@ -1172,7 +1172,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (typeof getActiveServerHttpUrl === 'function') {
             apiBase = getActiveServerHttpUrl();
           }
-        } catch (_) {}
+        } catch (_) { }
         let serverTicket: Ticket | null = null;
         try {
           const res = await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
@@ -1186,7 +1186,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               serverTicket = data.ticket;
             }
           }
-        } catch (_) {}
+        } catch (_) { }
 
         set((state) => {
           const order = (state.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
@@ -1294,7 +1294,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             status: 'CONFIRMED',
             assignedWaiter: assignedWaiter || 'Floor Manager Confirmed',
           });
-        } catch (_) {}
+        } catch (_) { }
         notifySync();
       },
 
@@ -1306,14 +1306,14 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (typeof getActiveServerHttpUrl === 'function') {
             apiBase = getActiveServerHttpUrl();
           }
-        } catch (_) {}
+        } catch (_) { }
         try {
           await fetch(`${apiBase}/api/public/orders/${orderId}/status`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ status: 'CANCELLED', managerNotes: reason || 'Rejected by Floor Manager' })
           });
-        } catch (_) {}
+        } catch (_) { }
 
         set((state) => {
           const targetOrd = (state.onlineOrders || []).find(o => o.id === orderId || o.orderNumber === orderId);
@@ -1399,7 +1399,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             status: 'CANCELLED',
             managerNotes: reason || 'Rejected by Floor Manager',
           });
-        } catch (_) {}
+        } catch (_) { }
         notifySync();
       },
 
@@ -1446,7 +1446,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             if (activeUser && (!serverName || activeUser.name?.trim().toLowerCase() === serverName.trim().toLowerCase())) {
               resolvedServerId = activeUser.staffId || activeUser.id;
             }
-          } catch {}
+          } catch { }
         }
         set((state) => {
           const table = state.tables.find(t => t.id === tableId);
@@ -1605,7 +1605,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   });
                 }
               }
-            } catch (_) {}
+            } catch (_) { }
           }
 
           return {
@@ -1716,11 +1716,11 @@ export const useRestaurantStore = create<RestaurantState>()(
         const targetOrdId = ticket.orderId || ticket.orderNumber;
         const updatedOnlineOrders = targetOrdId
           ? (state.onlineOrders || []).map(o => {
-              if (o.id === targetOrdId || o.orderNumber === targetOrdId) {
-                return { ...o, status: 'PREPARING' as const };
-              }
-              return o;
-            })
+            if (o.id === targetOrdId || o.orderNumber === targetOrdId) {
+              return { ...o, status: 'PREPARING' as const };
+            }
+            return o;
+          })
           : state.onlineOrders;
 
         if (targetOrdId) {
@@ -1732,13 +1732,13 @@ export const useRestaurantStore = create<RestaurantState>()(
               method: 'PATCH',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ status: 'PREPARING' })
-            }).catch(() => {});
-          } catch (_) {}
+            }).catch(() => { });
+          } catch (_) { }
           try {
             // eslint-disable-next-line @typescript-eslint/no-require-imports
             const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
             syncCloudOrderStatus(targetOrdId, { status: 'PREPARING', estimatedDeliveryMinutes: maxPrep });
-          } catch (_) {}
+          } catch (_) { }
         }
 
         notifySync();
@@ -2102,7 +2102,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   // eslint-disable-next-line @typescript-eslint/no-require-imports
                   const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                   syncCloudOrderStatus(t.orderId, { status: 'READY' });
-                } catch (_) {}
+                } catch (_) { }
               }
             } else if (status === 'cooking') {
               const stationItems = t.items
@@ -2127,7 +2127,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   // eslint-disable-next-line @typescript-eslint/no-require-imports
                   const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                   syncCloudOrderStatus(t.orderId, { status: 'PREPARING' });
-                } catch (_) {}
+                } catch (_) { }
               }
             } else if (status === 'served') {
               if (updatedAlert && updatedAlert.ticketId === t.id && (updatedAlert.station === station || updatedAlert.station === 'all')) {
@@ -2138,7 +2138,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   // eslint-disable-next-line @typescript-eslint/no-require-imports
                   const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                   syncCloudOrderStatus(t.orderId, { status: 'SERVED' });
-                } catch (_) {}
+                } catch (_) { }
               }
             }
 
@@ -2176,7 +2176,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                 syncCloudOrderStatus(t.orderId, { status: 'READY' });
-              } catch (_) {}
+              } catch (_) { }
             }
           } else if (status === 'cooking') {
             const allItemsSummary = t.items.map(i => `${i.qty}x ${i.name}`).join(', ');
@@ -2198,7 +2198,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                 syncCloudOrderStatus(t.orderId, { status: 'PREPARING' });
-              } catch (_) {}
+              } catch (_) { }
             }
           } else if (status === 'served') {
             if (updatedAlert && updatedAlert.ticketId === t.id) {
@@ -2209,7 +2209,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 // eslint-disable-next-line @typescript-eslint/no-require-imports
                 const { syncCloudOrderStatus } = require('../services/cloudMenuBridge');
                 syncCloudOrderStatus(t.orderId, { status: 'SERVED' });
-              } catch (_) {}
+              } catch (_) { }
             }
           }
 
@@ -2323,15 +2323,15 @@ export const useRestaurantStore = create<RestaurantState>()(
           tables: state.tables.map((t) =>
             t.id === payload.tableId
               ? {
-                  ...t,
-                  status: 'occupied',
-                  isPaid: false,
-                  billTotal: payload.totalAmount || t.billTotal || 0,
-                  server: payload.collectedByWaiter || t.server,
-                  serverId: payload.collectedByWaiterId || t.serverId,
-                  occupiedSince: t.occupiedSince || now,
-                  waiterPaymentCollection: collection,
-                }
+                ...t,
+                status: 'occupied',
+                isPaid: false,
+                billTotal: payload.totalAmount || t.billTotal || 0,
+                server: payload.collectedByWaiter || t.server,
+                serverId: payload.collectedByWaiterId || t.serverId,
+                occupiedSince: t.occupiedSince || now,
+                waiterPaymentCollection: collection,
+              }
               : t
           ),
         };
@@ -2343,9 +2343,9 @@ export const useRestaurantStore = create<RestaurantState>()(
           tables: state.tables.map((t) =>
             t.id === tableId
               ? {
-                  ...t,
-                  waiterPaymentCollection: null,
-                }
+                ...t,
+                waiterPaymentCollection: null,
+              }
               : t
           ),
         };
@@ -2496,8 +2496,8 @@ export const useRestaurantStore = create<RestaurantState>()(
             target.tableId === 'delivery'
               ? 'delivery'
               : target.tableId === 'takeaway'
-              ? 'takeaway'
-              : 'dine-in';
+                ? 'takeaway'
+                : 'dine-in';
           const cleanReason = (options?.reason || '').trim() || 'Cancelled from POS Running Orders';
           const cancelledBy = (options?.cancelledBy || '').trim() || actor.name;
           const cancelledByRole = (options?.cancelledByRole || '').trim() || actor.role;
@@ -2779,21 +2779,21 @@ export const useRestaurantStore = create<RestaurantState>()(
           tables: state.tables.map(t =>
             t.id === tableId && t.status !== 'billed'
               ? {
-                  ...t,
-                  status: 'available',
-                  billTotal: 0,
-                  server: undefined,
-                  orders: [],
-                  isPaid: false,
-                  lastInvoiceId: undefined,
-                  occupiedSince: undefined,
-                  lastSettledAt: now,
-                  waiterPaymentCollection: null,
-                  lastMoveNote: undefined,
-                  lastMovedFrom: undefined,
-                  lastMovedAt: undefined,
-                  lastMovedBy: undefined,
-                }
+                ...t,
+                status: 'available',
+                billTotal: 0,
+                server: undefined,
+                orders: [],
+                isPaid: false,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                lastSettledAt: now,
+                waiterPaymentCollection: null,
+                lastMoveNote: undefined,
+                lastMovedFrom: undefined,
+                lastMovedAt: undefined,
+                lastMovedBy: undefined,
+              }
               : t
           ),
           tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
@@ -2808,8 +2808,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           // eslint-disable-next-line @typescript-eslint/no-require-imports
           const { getActiveServerHttpUrl } = require('../services/syncService');
           const apiBase = typeof getActiveServerHttpUrl === 'function' ? getActiveServerHttpUrl() : 'http://192.168.100.3:5050';
-          fetch(`${apiBase}/api/pos/clear-all`, { method: 'POST' }).catch(() => {});
-        } catch {}
+          fetch(`${apiBase}/api/pos/clear-all`, { method: 'POST' }).catch(() => { });
+        } catch { }
         set((state) => {
           const allTickets = state.tickets || [];
           const removedIds = allTickets.map(t => t.id);
@@ -2881,22 +2881,22 @@ export const useRestaurantStore = create<RestaurantState>()(
             tables: state.tables.map(t =>
               t.status === 'occupied' || t.status === 'billed'
                 ? {
-                    ...t,
-                    status: 'available',
-                    billTotal: 0,
-                    server: undefined,
-                    orders: [],
-                    isPaid: false,
-                    lastInvoiceId: undefined,
-                    occupiedSince: undefined,
-                    lastSettledAt: now,
-                    mergedInto: undefined,
-                    reservationId: undefined,
-                    lastMoveNote: undefined,
-                    lastMovedFrom: undefined,
-                    lastMovedAt: undefined,
-                    lastMovedBy: undefined,
-                  }
+                  ...t,
+                  status: 'available',
+                  billTotal: 0,
+                  server: undefined,
+                  orders: [],
+                  isPaid: false,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  lastSettledAt: now,
+                  mergedInto: undefined,
+                  reservationId: undefined,
+                  lastMoveNote: undefined,
+                  lastMovedFrom: undefined,
+                  lastMovedAt: undefined,
+                  lastMovedBy: undefined,
+                }
                 : t
             ),
             tickets: [],
@@ -3614,7 +3614,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         feedbacks: (state.feedbacks || []).filter(f => f.id !== id)
       })),
 
-      onlineFeedbackUrl: 'https://sultanrestaurant092.netlify.app',
+      onlineFeedbackUrl: 'https://sultanrestaurant.com.pk',
 
       setOnlineFeedbackUrl: (url) => {
         const clean = (url || '').trim().replace(/\/+$/, '');
@@ -3633,7 +3633,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           validHost = false;
         }
         set({
-          onlineFeedbackUrl: validHost ? clean : 'https://sultanrestaurant092.netlify.app'
+          onlineFeedbackUrl: validHost ? clean : 'https://sultanrestaurant.com.pk'
         });
       },
 
@@ -3887,8 +3887,8 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           const updatedReservations = nameChanged
             ? (state.reservations || []).map((r) =>
-                r.floor && r.floor.toLowerCase() === oldName.toLowerCase() ? { ...r, floor: newName } : r
-              )
+              r.floor && r.floor.toLowerCase() === oldName.toLowerCase() ? { ...r, floor: newName } : r
+            )
             : state.reservations;
 
           const updatedStaff = nameChanged
@@ -4264,7 +4264,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (typeof markApplyingRemoteUpdate === 'function') {
             markApplyingRemoteUpdate(350);
           }
-        } catch {}
+        } catch { }
 
         set((state) => {
           const STATUS_RANK: Record<string, number> = { pending: 0, cooking: 1, ready: 2, served: 3 };
@@ -4447,34 +4447,34 @@ export const useRestaurantStore = create<RestaurantState>()(
             deletedFloorIds: mergedDeletedFloorIds,
             deletedTicketIds: mergedDeletedIds,
             ...(mergedTickets ? { tickets: mergedTickets } : {}),
-          ...(remoteState.invoices ? {
-            invoices: (() => {
-              const remoteList = remoteState.invoices || [];
-              const remoteMap = new Map(remoteList.map(i => [i.id, i]));
-              const localUnsynced = state.invoices.filter(i => !remoteMap.has(i.id));
-              return [...localUnsynced, ...remoteList];
-            })()
-          } : {}),
-          ...(remoteState.menuItems !== undefined ? {
-            menuItems: (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
-              .filter((m) => !isLegacyDummyDish(m))
-              .map(normalizeMenuItemImage)
-          } : {}),
-          ...(remoteState.categories ? {
-            categories: (() => {
-              const activeItems = remoteState.menuItems !== undefined
-                ? (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
-                : (state.menuItems || []);
-              const usedCats = new Set(activeItems.map((m: any) => m?.category).filter(Boolean));
-              return Array.from(new Set(['All', ...Array.from(usedCats)]));
-            })()
-          } : {}),
-          ...(remoteState.regions ? {
-            regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
-          } : {}),
-          ...(remoteState.zones ? { zones: remoteState.zones } : {}),
-          ...(Array.isArray(remoteState.floors)
-            ? {
+            ...(remoteState.invoices ? {
+              invoices: (() => {
+                const remoteList = remoteState.invoices || [];
+                const remoteMap = new Map(remoteList.map(i => [i.id, i]));
+                const localUnsynced = state.invoices.filter(i => !remoteMap.has(i.id));
+                return [...localUnsynced, ...remoteList];
+              })()
+            } : {}),
+            ...(remoteState.menuItems !== undefined ? {
+              menuItems: (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
+                .filter((m) => !isLegacyDummyDish(m))
+                .map(normalizeMenuItemImage)
+            } : {}),
+            ...(remoteState.categories ? {
+              categories: (() => {
+                const activeItems = remoteState.menuItems !== undefined
+                  ? (Array.isArray(remoteState.menuItems) ? remoteState.menuItems : [])
+                  : (state.menuItems || []);
+                const usedCats = new Set(activeItems.map((m: any) => m?.category).filter(Boolean));
+                return Array.from(new Set(['All', ...Array.from(usedCats)]));
+              })()
+            } : {}),
+            ...(remoteState.regions ? {
+              regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
+            } : {}),
+            ...(remoteState.zones ? { zones: remoteState.zones } : {}),
+            ...(Array.isArray(remoteState.floors)
+              ? {
                 floors: (() => {
                   const fMap = new Map<string, Floor>();
                   for (const rf of remoteState.floors) {
@@ -4492,252 +4492,252 @@ export const useRestaurantStore = create<RestaurantState>()(
                   return Array.from(fMap.values());
                 })(),
               }
-            : {}),
-          ...(remoteState.staff ? {
-            staff: (() => {
-              const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
-                (s) => s && s.id && !isLegacyDummyStaff(s)
-              );
-              const sMap = new Map<string, StaffMember>();
-              for (const initS of INITIAL_STAFF) {
-                sMap.set(initS.id, { ...initS });
-              }
-              for (const rem of cleanRemote) {
-                const base = sMap.get(rem.id);
-                const merged: StaffMember = {
-                  ...(base || {}),
-                  ...rem,
-                };
-                if (base?.hasSystemAccess && (!rem.pin || rem.hasSystemAccess === false)) {
-                  merged.hasSystemAccess = true;
-                  merged.username = rem.username || base.username;
-                  merged.pin = rem.pin || base.pin;
-                }
-                sMap.set(rem.id, merged);
-              }
-              return Array.from(sMap.values());
-            })()
-          } : {}),
-          ...(remoteState.attendance ? { attendance: remoteState.attendance } : {}),
-          ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
-          ...(remoteState.customers ? { customers: remoteState.customers } : {}),
-          ...(Array.isArray(remoteState.reservations) ? {
-            reservations: (() => {
-              const resMap = new Map<string, Reservation>();
-              for (const localR of (state.reservations || [])) {
-                if (localR && localR.id) resMap.set(localR.id, localR);
-              }
-              for (const remR of remoteState.reservations) {
-                if (!remR || !remR.id) continue;
-                const prev = resMap.get(remR.id);
-                if (!prev || (remR.updatedAt || remR.createdAt || 0) >= (prev.updatedAt || prev.createdAt || 0)) {
-                  resMap.set(remR.id, remR);
-                }
-              }
-              return Array.from(resMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            })()
-          } : {}),
-          ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
-          ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
-          ...(remoteState.lastBeverageOrderAlert !== undefined ? { lastBeverageOrderAlert: remoteState.lastBeverageOrderAlert } : {}),
-          ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
-          ...(remoteState.feedbacks ? { feedbacks: remoteState.feedbacks } : {}),
-          ...(Array.isArray(remoteState.activeStaffSessions) ? { activeStaffSessions: remoteState.activeStaffSessions } : {}),
-          ...(remoteState.revokedSessions ? {
-            revokedSessions: {
-              ...(state.revokedSessions || {}),
-              ...remoteState.revokedSessions,
-            }
-          } : {}),
-          ...(remoteState.revokedDeviceIds ? {
-            revokedDeviceIds: (() => {
-              const merged = {
-                ...(state.revokedDeviceIds || {}),
-                ...remoteState.revokedDeviceIds,
-              };
-              const nowClean = Date.now();
-              const clean: typeof merged = {};
-              for (const k of Object.keys(merged)) {
-                const entry = merged[k];
-                if (entry && entry.sessionId && nowClean - (entry.timestamp || 0) < 60 * 60 * 1000) {
-                  clean[k] = entry;
-                }
-              }
-              return clean;
-            })()
-          } : {}),
-          ...(remoteState.forceLogoutAll && typeof remoteState.forceLogoutAll === 'object' ? {
-            forceLogoutAll:
-              !state.forceLogoutAll || (remoteState.forceLogoutAll.timestamp || 0) >= (state.forceLogoutAll.timestamp || 0)
-                ? remoteState.forceLogoutAll
-                : state.forceLogoutAll,
-          } : {}),
-          ...(remoteState.lastBillPaidAlert !== undefined ? {
-            lastBillPaidAlert: (() => {
-              const incoming = remoteState.lastBillPaidAlert;
-              if (!incoming) return null;
-              // Validate that table still exists and is currently billed / paid
-              const matchingTable = reconciledTables.find(
-                t => t.id === incoming.tableId || t.name.trim().toLowerCase() === incoming.tableName.trim().toLowerCase()
-              );
-              if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid)) {
-                return null;
-              }
-              // If alert is older than 30 minutes (with skew buffer), discard
-              if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
-                return null;
-              }
-              return incoming;
-            })()
-          } : (
-            state.lastBillPaidAlert ? {
-              lastBillPaidAlert: (() => {
-                const local = state.lastBillPaidAlert;
-                const matchingTable = reconciledTables.find(
-                  t => t.id === local.tableId || t.name.trim().toLowerCase() === local.tableName.trim().toLowerCase()
+              : {}),
+            ...(remoteState.staff ? {
+              staff: (() => {
+                const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
+                  (s) => s && s.id && !isLegacyDummyStaff(s)
                 );
-                if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid) || (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000)) {
-                  return null;
+                const sMap = new Map<string, StaffMember>();
+                for (const initS of INITIAL_STAFF) {
+                  sMap.set(initS.id, { ...initS });
                 }
-                return local;
+                for (const rem of cleanRemote) {
+                  const base = sMap.get(rem.id);
+                  const merged: StaffMember = {
+                    ...(base || {}),
+                    ...rem,
+                  };
+                  if (base?.hasSystemAccess && (!rem.pin || rem.hasSystemAccess === false)) {
+                    merged.hasSystemAccess = true;
+                    merged.username = rem.username || base.username;
+                    merged.pin = rem.pin || base.pin;
+                  }
+                  sMap.set(rem.id, merged);
+                }
+                return Array.from(sMap.values());
               })()
-            } : {}
-          )),
-          ...(remoteState.lastFoodReadyAlert !== undefined ? {
-            lastFoodReadyAlert: (() => {
-              const incoming = remoteState.lastFoodReadyAlert;
-              if (!incoming) return null;
-              const isNonTable = incoming.tableId === 'takeaway' || incoming.tableId === 'delivery';
-              if (!isNonTable) {
+            } : {}),
+            ...(remoteState.attendance ? { attendance: remoteState.attendance } : {}),
+            ...(remoteState.salaryPayments ? { salaryPayments: remoteState.salaryPayments } : {}),
+            ...(remoteState.customers ? { customers: remoteState.customers } : {}),
+            ...(Array.isArray(remoteState.reservations) ? {
+              reservations: (() => {
+                const resMap = new Map<string, Reservation>();
+                for (const localR of (state.reservations || [])) {
+                  if (localR && localR.id) resMap.set(localR.id, localR);
+                }
+                for (const remR of remoteState.reservations) {
+                  if (!remR || !remR.id) continue;
+                  const prev = resMap.get(remR.id);
+                  if (!prev || (remR.updatedAt || remR.createdAt || 0) >= (prev.updatedAt || prev.createdAt || 0)) {
+                    resMap.set(remR.id, remR);
+                  }
+                }
+                return Array.from(resMap.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+              })()
+            } : {}),
+            ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
+            ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
+            ...(remoteState.lastBeverageOrderAlert !== undefined ? { lastBeverageOrderAlert: remoteState.lastBeverageOrderAlert } : {}),
+            ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),
+            ...(remoteState.feedbacks ? { feedbacks: remoteState.feedbacks } : {}),
+            ...(Array.isArray(remoteState.activeStaffSessions) ? { activeStaffSessions: remoteState.activeStaffSessions } : {}),
+            ...(remoteState.revokedSessions ? {
+              revokedSessions: {
+                ...(state.revokedSessions || {}),
+                ...remoteState.revokedSessions,
+              }
+            } : {}),
+            ...(remoteState.revokedDeviceIds ? {
+              revokedDeviceIds: (() => {
+                const merged = {
+                  ...(state.revokedDeviceIds || {}),
+                  ...remoteState.revokedDeviceIds,
+                };
+                const nowClean = Date.now();
+                const clean: typeof merged = {};
+                for (const k of Object.keys(merged)) {
+                  const entry = merged[k];
+                  if (entry && entry.sessionId && nowClean - (entry.timestamp || 0) < 60 * 60 * 1000) {
+                    clean[k] = entry;
+                  }
+                }
+                return clean;
+              })()
+            } : {}),
+            ...(remoteState.forceLogoutAll && typeof remoteState.forceLogoutAll === 'object' ? {
+              forceLogoutAll:
+                !state.forceLogoutAll || (remoteState.forceLogoutAll.timestamp || 0) >= (state.forceLogoutAll.timestamp || 0)
+                  ? remoteState.forceLogoutAll
+                  : state.forceLogoutAll,
+            } : {}),
+            ...(remoteState.lastBillPaidAlert !== undefined ? {
+              lastBillPaidAlert: (() => {
+                const incoming = remoteState.lastBillPaidAlert;
+                if (!incoming) return null;
+                // Validate that table still exists and is currently billed / paid
                 const matchingTable = reconciledTables.find(
                   t => t.id === incoming.tableId || t.name.trim().toLowerCase() === incoming.tableName.trim().toLowerCase()
                 );
-                const hasActiveTicket = finalTickets.some(
-                  tk => tk.tableId === incoming.tableId && tk.status !== 'served'
-                );
-                if ((!matchingTable || matchingTable.status === 'available') && !hasActiveTicket) {
+                if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid)) {
                   return null;
                 }
-              }
-              if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
-                return null;
-              }
-              return incoming;
-            })()
-          } : (
-            state.lastFoodReadyAlert ? {
-              lastFoodReadyAlert: (() => {
-                const local = state.lastFoodReadyAlert;
-                const isNonTable = local.tableId === 'takeaway' || local.tableId === 'delivery';
-                if (!isNonTable) {
+                // If alert is older than 30 minutes (with skew buffer), discard
+                if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
+                  return null;
+                }
+                return incoming;
+              })()
+            } : (
+              state.lastBillPaidAlert ? {
+                lastBillPaidAlert: (() => {
+                  const local = state.lastBillPaidAlert;
                   const matchingTable = reconciledTables.find(
                     t => t.id === local.tableId || t.name.trim().toLowerCase() === local.tableName.trim().toLowerCase()
                   );
+                  if (!matchingTable || (matchingTable.status !== 'billed' && !matchingTable.isPaid) || (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000)) {
+                    return null;
+                  }
+                  return local;
+                })()
+              } : {}
+            )),
+            ...(remoteState.lastFoodReadyAlert !== undefined ? {
+              lastFoodReadyAlert: (() => {
+                const incoming = remoteState.lastFoodReadyAlert;
+                if (!incoming) return null;
+                const isNonTable = incoming.tableId === 'takeaway' || incoming.tableId === 'delivery';
+                if (!isNonTable) {
+                  const matchingTable = reconciledTables.find(
+                    t => t.id === incoming.tableId || t.name.trim().toLowerCase() === incoming.tableName.trim().toLowerCase()
+                  );
                   const hasActiveTicket = finalTickets.some(
-                    tk => tk.tableId === local.tableId && tk.status !== 'served'
+                    tk => tk.tableId === incoming.tableId && tk.status !== 'served'
                   );
                   if ((!matchingTable || matchingTable.status === 'available') && !hasActiveTicket) {
                     return null;
                   }
                 }
-                if (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000) {
+                if (incoming.time && Math.abs(Date.now() - incoming.time) > 30 * 60 * 1000) {
                   return null;
                 }
-                return local;
+                return incoming;
               })()
-            } : {}
-          )),
-          foodReadyAlerts: (() => {
-            const combined = [
-              ...(Array.isArray(remoteState.foodReadyAlerts) ? remoteState.foodReadyAlerts : []),
-              ...(remoteState.lastFoodReadyAlert ? [remoteState.lastFoodReadyAlert] : []),
-              ...(Array.isArray(state.foodReadyAlerts) ? state.foodReadyAlerts : []),
-              ...(state.lastFoodReadyAlert ? [state.lastFoodReadyAlert] : []),
-            ];
-            const map = new Map<string, FoodReadyAlert>();
-            const nowMs = Date.now();
-            for (const a of combined) {
-              if (!a || !a.id) continue;
-              if (a.time && Math.abs(nowMs - a.time) > 30 * 60 * 1000) continue;
-              if (!map.has(a.id)) map.set(a.id, a);
-            }
-            return Array.from(map.values())
-              .sort((a, b) => (b.time || 0) - (a.time || 0))
-              .slice(0, 25);
-          })(),
-          ...(Array.isArray(remoteState.tableMoveLogs) ? {
-            tableMoveLogs: (() => {
-              const mMap = new Map<string, TableMoveLog>();
-              for (const l of (state.tableMoveLogs || [])) {
-                if (l && l.id) mMap.set(l.id, l);
+            } : (
+              state.lastFoodReadyAlert ? {
+                lastFoodReadyAlert: (() => {
+                  const local = state.lastFoodReadyAlert;
+                  const isNonTable = local.tableId === 'takeaway' || local.tableId === 'delivery';
+                  if (!isNonTable) {
+                    const matchingTable = reconciledTables.find(
+                      t => t.id === local.tableId || t.name.trim().toLowerCase() === local.tableName.trim().toLowerCase()
+                    );
+                    const hasActiveTicket = finalTickets.some(
+                      tk => tk.tableId === local.tableId && tk.status !== 'served'
+                    );
+                    if ((!matchingTable || matchingTable.status === 'available') && !hasActiveTicket) {
+                      return null;
+                    }
+                  }
+                  if (local.time && Math.abs(Date.now() - local.time) > 30 * 60 * 1000) {
+                    return null;
+                  }
+                  return local;
+                })()
+              } : {}
+            )),
+            foodReadyAlerts: (() => {
+              const combined = [
+                ...(Array.isArray(remoteState.foodReadyAlerts) ? remoteState.foodReadyAlerts : []),
+                ...(remoteState.lastFoodReadyAlert ? [remoteState.lastFoodReadyAlert] : []),
+                ...(Array.isArray(state.foodReadyAlerts) ? state.foodReadyAlerts : []),
+                ...(state.lastFoodReadyAlert ? [state.lastFoodReadyAlert] : []),
+              ];
+              const map = new Map<string, FoodReadyAlert>();
+              const nowMs = Date.now();
+              for (const a of combined) {
+                if (!a || !a.id) continue;
+                if (a.time && Math.abs(nowMs - a.time) > 30 * 60 * 1000) continue;
+                if (!map.has(a.id)) map.set(a.id, a);
               }
-              for (const r of remoteState.tableMoveLogs) {
-                if (r && r.id) mMap.set(r.id, r);
-              }
-              return Array.from(mMap.values())
-                .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
-                .slice(0, 1500);
-            })()
-          } : {}),
-          ...(Array.isArray(remoteState.cancelledOrderLogs) ? {
-            cancelledOrderLogs: (() => {
-              const allInvoices = remoteState.invoices || state.invoices || [];
-              const isBogusSettlementCancel = (c: CancelledOrderLog | null | undefined) => {
-                if (!c || c.reason !== 'Table released without billing') return false;
-                const cTime = c.cancelledAt || 0;
-                return allInvoices.some(
-                  (inv: any) =>
-                    inv &&
-                    (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
-                    Math.abs((inv.timeSettled || inv.timePlaced || 0) - cTime) <= 15000
-                );
-              };
-              const cMap = new Map<string, CancelledOrderLog>();
-              for (const l of (state.cancelledOrderLogs || [])) {
-                if (l && l.id && !isBogusSettlementCancel(l)) cMap.set(l.id, l);
-              }
-              for (const r of remoteState.cancelledOrderLogs) {
-                if (r && r.id && !isBogusSettlementCancel(r)) cMap.set(r.id, r);
-              }
-              return Array.from(cMap.values())
-                .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0))
-                .slice(0, 1500);
-            })()
-          } : {}),
-          ...(remoteState.lastTableMoveAlert !== undefined ? {
-            lastTableMoveAlert: (() => {
-              const inc = remoteState.lastTableMoveAlert;
-              if (!inc) return null;
-              if (inc.time && Math.abs(Date.now() - inc.time) > 20 * 60 * 1000) return null;
-              const loc = state.lastTableMoveAlert;
-              if (loc && (loc.time || 0) > (inc.time || 0)) return loc;
-              return inc;
-            })()
-          } : {}),
-          ...(remoteState.lastOrderCancelledAlert !== undefined ? {
-            lastOrderCancelledAlert: (() => {
-              const inc = remoteState.lastOrderCancelledAlert;
-              if (!inc) return null;
-              if (inc.time && Math.abs(Date.now() - inc.time) > 20 * 60 * 1000) return null;
-              const allInvoices = remoteState.invoices || state.invoices || [];
-              if (
-                inc.reason === 'Table released without billing' &&
-                allInvoices.some(
-                  (inv: any) =>
-                    inv &&
-                    (inv.tableId === inc.tableId || inv.tableName === inc.tableName) &&
-                    Math.abs((inv.timeSettled || inv.timePlaced || 0) - (inc.time || 0)) <= 15000
-                )
-              ) {
-                return null;
-              }
-              const loc = state.lastOrderCancelledAlert;
-              if (loc && (loc.time || 0) > (inc.time || 0)) return loc;
-              return inc;
-            })()
-          } : {}),
-        };
-      });
+              return Array.from(map.values())
+                .sort((a, b) => (b.time || 0) - (a.time || 0))
+                .slice(0, 25);
+            })(),
+            ...(Array.isArray(remoteState.tableMoveLogs) ? {
+              tableMoveLogs: (() => {
+                const mMap = new Map<string, TableMoveLog>();
+                for (const l of (state.tableMoveLogs || [])) {
+                  if (l && l.id) mMap.set(l.id, l);
+                }
+                for (const r of remoteState.tableMoveLogs) {
+                  if (r && r.id) mMap.set(r.id, r);
+                }
+                return Array.from(mMap.values())
+                  .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
+                  .slice(0, 1500);
+              })()
+            } : {}),
+            ...(Array.isArray(remoteState.cancelledOrderLogs) ? {
+              cancelledOrderLogs: (() => {
+                const allInvoices = remoteState.invoices || state.invoices || [];
+                const isBogusSettlementCancel = (c: CancelledOrderLog | null | undefined) => {
+                  if (!c || c.reason !== 'Table released without billing') return false;
+                  const cTime = c.cancelledAt || 0;
+                  return allInvoices.some(
+                    (inv: any) =>
+                      inv &&
+                      (inv.tableId === c.tableId || inv.tableName === c.tableName) &&
+                      Math.abs((inv.timeSettled || inv.timePlaced || 0) - cTime) <= 15000
+                  );
+                };
+                const cMap = new Map<string, CancelledOrderLog>();
+                for (const l of (state.cancelledOrderLogs || [])) {
+                  if (l && l.id && !isBogusSettlementCancel(l)) cMap.set(l.id, l);
+                }
+                for (const r of remoteState.cancelledOrderLogs) {
+                  if (r && r.id && !isBogusSettlementCancel(r)) cMap.set(r.id, r);
+                }
+                return Array.from(cMap.values())
+                  .sort((a, b) => (b.cancelledAt || 0) - (a.cancelledAt || 0))
+                  .slice(0, 1500);
+              })()
+            } : {}),
+            ...(remoteState.lastTableMoveAlert !== undefined ? {
+              lastTableMoveAlert: (() => {
+                const inc = remoteState.lastTableMoveAlert;
+                if (!inc) return null;
+                if (inc.time && Math.abs(Date.now() - inc.time) > 20 * 60 * 1000) return null;
+                const loc = state.lastTableMoveAlert;
+                if (loc && (loc.time || 0) > (inc.time || 0)) return loc;
+                return inc;
+              })()
+            } : {}),
+            ...(remoteState.lastOrderCancelledAlert !== undefined ? {
+              lastOrderCancelledAlert: (() => {
+                const inc = remoteState.lastOrderCancelledAlert;
+                if (!inc) return null;
+                if (inc.time && Math.abs(Date.now() - inc.time) > 20 * 60 * 1000) return null;
+                const allInvoices = remoteState.invoices || state.invoices || [];
+                if (
+                  inc.reason === 'Table released without billing' &&
+                  allInvoices.some(
+                    (inv: any) =>
+                      inv &&
+                      (inv.tableId === inc.tableId || inv.tableName === inc.tableName) &&
+                      Math.abs((inv.timeSettled || inv.timePlaced || 0) - (inc.time || 0)) <= 15000
+                  )
+                ) {
+                  return null;
+                }
+                const loc = state.lastOrderCancelledAlert;
+                if (loc && (loc.time || 0) > (inc.time || 0)) return loc;
+                return inc;
+              })()
+            } : {}),
+          };
+        });
       },
     }),
     {
@@ -4788,13 +4788,14 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!Array.isArray(state.onlineOrders)) {
             state.onlineOrders = [];
           }
-          // Sanitize onlineFeedbackUrl on boot so dead hosts never leak into Sultan QR codes
+          // Sanitize onlineFeedbackUrl on boot so dead hosts or old netlify URLs auto-upgrade to official sultanrestaurant.com.pk
           const isValidOnlineUrl = (candidate: string): boolean => {
             const c = candidate.trim().toLowerCase();
             if (!c || (!c.startsWith('http://') && !c.startsWith('https://'))) return false;
             if (
               c.includes('sultan-resturant.web.app') ||
               c.includes('sultanresturant092.netlify.app') ||
+              c.includes('sultanrestaurant092.netlify.app') ||
               c.includes('.lhr.life')
             ) {
               return false;
@@ -4807,7 +4808,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           };
           if (!isValidOnlineUrl(String(state.onlineFeedbackUrl || ''))) {
-            state.onlineFeedbackUrl = 'https://sultanrestaurant092.netlify.app';
+            state.onlineFeedbackUrl = 'https://sultanrestaurant.com.pk';
           }
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
             try {
@@ -4815,7 +4816,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               if (storedUrl && !isValidOnlineUrl(storedUrl)) {
                 window.localStorage.removeItem('sultan_feedback_online_url');
               }
-            } catch {}
+            } catch { }
           }
           state.tables = reconcileTablesWithTickets(state.tables, state.tickets);
           if (!Array.isArray(state.floors)) {

@@ -1,10 +1,15 @@
-# Official domain: www -> apex
-https://www.sultanrestaurant.com.pk/*  https://sultanrestaurant.com.pk/:splat  301!
+# Redirect Netlify subdomain & www & feedback QR links to official domain https://sultanrestaurant.com.pk
+https://sultanrestaurant092.netlify.app/feedback*  https://sultanrestaurant.com.pk/        301!
+https://sultanrestaurant092.netlify.app/*          https://sultanrestaurant.com.pk/:splat  301!
+https://www.sultanrestaurant.com.pk/feedback*      https://sultanrestaurant.com.pk/        301!
+https://www.sultanrestaurant.com.pk/*              https://sultanrestaurant.com.pk/:splat  301!
+https://sultanrestaurant.com.pk/feedback*          https://sultanrestaurant.com.pk/        301!
+/feedback*                                         /site/index.html                        200!
 
 # Public website on the homepage & pure view-only Digital Menu (online front only; LAN POS hub is not affected)
 /               /site/index.html   200!
 /digital-menu   /site/menu.html    200!
 /digital-menu/  /site/menu.html    200!
 
-# Staff portal + Expo Router SPA routes (/portal, /menu, /feedback, /admin, ...)
+# Staff portal + Expo Router SPA routes (/portal, /menu, /admin, ...)
 /*       /index.html        200
