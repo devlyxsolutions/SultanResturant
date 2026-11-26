@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { SULTAN_DEFAULT_INVENTORY, SULTAN_INVENTORY_CATEGORIES } from '../constants/defaultInventory';
 import { appStorage } from './storage';
 
 /**
@@ -139,6 +140,7 @@ export function isChillerBeverageItem(item?: InventoryItem | null): boolean {
   }
   return (
     cat === 'beverages' ||
+    cat === 'beverage' ||
     cat === 'drinks' ||
     nm.includes('coca cola') ||
     nm.includes('coke') ||
@@ -387,17 +389,7 @@ export const EXPENSE_CATEGORIES = [
   'Other',
 ] as const;
 
-export const INVENTORY_CATEGORIES = [
-  'Meat',
-  'Produce',
-  'Grains',
-  'Dairy',
-  'Pantry',
-  'Beverages',
-  'Fuel',
-  'Packaging',
-  'Supplies',
-] as const;
+export const INVENTORY_CATEGORIES = SULTAN_INVENTORY_CATEGORIES;
 
 // ---------- Helpers ----------
 
@@ -420,9 +412,9 @@ export function getStockLevel(item: InventoryItem): StockLevel {
   return 'ok';
 }
 
-// ---------- Seed data (intentionally empty for clean production launch) ----------
+// ---------- Official Sultan Restaurant Inventory Catalog (19 Categories, 124 Items) ----------
 
-export const INITIAL_INVENTORY: InventoryItem[] = [];
+export const INITIAL_INVENTORY: InventoryItem[] = SULTAN_DEFAULT_INVENTORY;
 
 export const INITIAL_STOCK_MOVEMENTS: StockMovement[] = [];
 
@@ -745,6 +737,7 @@ type NewServiceRequest = {
 
 type OpsState = OpsData & {
   dummyPurgeVersion?: number;
+  catalogSeedVersion?: number;
   // Service requests
   addServiceRequest: (req: NewServiceRequest) => boolean;
   acknowledgeRequest: (id: string, by: string) => void;
@@ -955,7 +948,8 @@ export const useOpsStore = create<OpsState>()(
       supplierPayments: INITIAL_SUPPLIER_PAYMENTS,
       assets: INITIAL_ASSETS,
       damageRecords: INITIAL_DAMAGES,
-      dummyPurgeVersion: 1,
+      dummyPurgeVersion: 3,
+      catalogSeedVersion: 1,
 
       addServiceRequest: (req) => {
         const duplicate = get().serviceRequests.some(
@@ -2783,16 +2777,36 @@ export const useOpsStore = create<OpsState>()(
             next.storageZones = Array.from(zMap.values());
           }
           if (Array.isArray(remote.inventoryCategories)) {
-            // Additive union minus explicitly deleted categories so 20+ custom categories are NEVER overwritten by 9 defaults!
+            // Additive union minus explicitly deleted categories (never hide a category that currently has active items!)
+            const activeInvCats = new Set(
+              (next.inventory || state.inventory || [])
+                .map((i) => (i?.category || '').trim().toLowerCase())
+                .filter(Boolean)
+            );
+            if (Array.isArray(next.deletedInventoryCategories)) {
+              next.deletedInventoryCategories = next.deletedInventoryCategories.filter(
+                (c) => !activeInvCats.has(String(c || '').trim().toLowerCase())
+              );
+            }
             const seen = new Set<string>();
             const mergedCats: string[] = [];
             [...(state.inventoryCategories || []), ...remote.inventoryCategories].forEach((c) => {
               const clean = String(c || '').trim();
               if (!clean) return;
               const lw = clean.toLowerCase();
-              if (delCatSet.has(lw) || seen.has(lw)) return;
+              if ((delCatSet.has(lw) && !activeInvCats.has(lw)) || seen.has(lw)) return;
               seen.add(lw);
               mergedCats.push(clean);
+            });
+            // Also guarantee every category actively used by an inventory item is listed
+            (next.inventory || state.inventory || []).forEach((it) => {
+              const clean = String(it?.category || '').trim();
+              if (!clean) return;
+              const lw = clean.toLowerCase();
+              if (!seen.has(lw)) {
+                seen.add(lw);
+                mergedCats.push(clean);
+              }
             });
             next.inventoryCategories = mergedCats;
           }
@@ -2908,6 +2922,55 @@ export const useOpsStore = create<OpsState>()(
           state.stockMovements = (state.stockMovements || []).filter((m) => m && !isLegacyId(m.itemId));
           state.chillerHandovers = (state.chillerHandovers || []).filter((h) => h && !isLegacyId(h.itemId));
           state.dummyPurgeVersion = 3;
+        }
+        // Seed Official Sultan 19 Categories & 124 Inventory Items once (non-destructive additive merge)
+        if (state && (state.catalogSeedVersion || 0) < 1) {
+          const currentInv = Array.isArray(state.inventory) ? [...state.inventory] : [];
+          const existingIds = new Set(currentInv.map((i) => i?.id).filter(Boolean));
+          const existingNameKeys = new Set(
+            currentInv.map((i) => `${(i?.name || '').trim().toLowerCase()}|${(i?.category || '').trim().toLowerCase()}`)
+          );
+          const existingBaseNames = new Set(
+            currentInv.map((i) => (i?.name || '').replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase())
+          );
+
+          for (const seedItem of SULTAN_DEFAULT_INVENTORY) {
+            const key = `${seedItem.name.trim().toLowerCase()}|${seedItem.category.trim().toLowerCase()}`;
+            const baseName = seedItem.name.replace(/\s*\([^)]*\)\s*$/, '').trim().toLowerCase();
+            if (existingIds.has(seedItem.id) || existingNameKeys.has(key) || existingBaseNames.has(baseName)) {
+              continue;
+            }
+            currentInv.push({ ...seedItem });
+            existingIds.add(seedItem.id);
+            existingNameKeys.add(key);
+            existingBaseNames.add(baseName);
+          }
+          state.inventory = currentInv;
+
+          // Build clean categories: 19 official categories + any existing category that still has items or is custom
+          const oldPlaceholderCats = new Set(['meat', 'produce', 'grains', 'pantry', 'beverages', 'fuel', 'supplies']);
+          const usedInvCats = new Set(currentInv.map((i) => (i?.category || '').trim().toLowerCase()).filter(Boolean));
+          const existingCats = Array.isArray(state.inventoryCategories) ? state.inventoryCategories : [];
+          const seenCats = new Set<string>();
+          const mergedCats: string[] = [];
+          [...SULTAN_INVENTORY_CATEGORIES, ...existingCats].forEach((c) => {
+            const clean = String(c || '').trim();
+            if (!clean) return;
+            const lw = clean.toLowerCase();
+            if (oldPlaceholderCats.has(lw) && !usedInvCats.has(lw)) return;
+            if (seenCats.has(lw)) return;
+            seenCats.add(lw);
+            mergedCats.push(clean);
+          });
+          state.inventoryCategories = mergedCats;
+          const officialSet = new Set(SULTAN_INVENTORY_CATEGORIES.map((c) => c.toLowerCase()));
+          if (Array.isArray(state.deletedInventoryCategories)) {
+            state.deletedInventoryCategories = state.deletedInventoryCategories.filter(
+              (c) => !officialSet.has(String(c || '').trim().toLowerCase())
+            );
+          }
+          state.catalogSeedVersion = 1;
+          notifySync();
         }
       },
     }

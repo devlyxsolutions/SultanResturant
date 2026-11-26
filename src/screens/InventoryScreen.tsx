@@ -105,11 +105,12 @@ export default function InventoryScreen({ backRoute = '/manager/dashboard' }: Pr
   const deletedCategories = useOpsStore((s) => s.deletedInventoryCategories);
 
   const allCategories = useMemo(() => {
+    const used = inventory.map((i) => i.category).filter((c): c is string => Boolean(c && c.trim()));
+    const usedLower = new Set(used.map((c) => c.trim().toLowerCase()));
     const delSet = new Set((deletedCategories || []).map((c) => c.toLowerCase()));
     const base = Array.isArray(storedCategories)
-      ? storedCategories.filter((c) => !delSet.has(c.toLowerCase()))
-      : [...INVENTORY_CATEGORIES].filter((c) => !delSet.has(c.toLowerCase()));
-    const used = inventory.map((i) => i.category).filter((c) => Boolean(c) && !delSet.has(c.toLowerCase()));
+      ? storedCategories.filter((c) => !delSet.has(c.toLowerCase()) || usedLower.has(c.toLowerCase()))
+      : [...INVENTORY_CATEGORIES].filter((c) => !delSet.has(c.toLowerCase()) || usedLower.has(c.toLowerCase()));
     return Array.from(new Set([...base, ...used]));
   }, [storedCategories, deletedCategories, inventory]);
 
