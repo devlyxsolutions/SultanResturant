@@ -1,8 +1,10 @@
 # Official domain: www -> apex
 https://www.sultanrestaurant.com.pk/*  https://sultanrestaurant.com.pk/:splat  301!
 
-# Public website on the homepage (online front only; LAN POS hub is not affected)
-/        /site/index.html   200!
+# Public website on the homepage & pure view-only Digital Menu (online front only; LAN POS hub is not affected)
+/               /site/index.html   200!
+/digital-menu   /site/menu.html    200!
+/digital-menu/  /site/menu.html    200!
 
 # Staff portal + Expo Router SPA routes (/portal, /menu, /feedback, /admin, ...)
 /*       /index.html        200

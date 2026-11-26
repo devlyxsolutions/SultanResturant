@@ -109,6 +109,8 @@
     .btn-gold:hover { box-shadow: 0 12px 34px rgba(213,169,67,.5); }
     .btn-ghost { border: 1.5px solid rgba(213,169,67,.7); color: var(--gold-soft); }
     .btn-ghost:hover { background: rgba(213,169,67,.1); }
+    .btn-burgundy { background: linear-gradient(135deg, #52171B, #3A0F12); border: 1.5px solid var(--gold); color: var(--gold-soft) !important; box-shadow: 0 8px 24px rgba(0,0,0,.38); }
+    .btn-burgundy:hover { background: linear-gradient(135deg, #641D22, #461216); box-shadow: 0 12px 30px rgba(213,169,67,.28); }
     .btn-sm { padding: 9px 18px; font-size: 13px; }
     .menu-toggle { display: none; background: none; border: 0; color: var(--gold-soft); font-size: 28px; cursor: pointer; }
 
@@ -295,6 +297,7 @@
         <a href="#experience">Dining</a>
         <a href="#events">Events</a>
         <a href="#contact">Contact</a>
+        <a class="btn btn-ghost btn-sm" href="/digital-menu">See Digital Menu</a>
         <a class="btn btn-gold btn-sm" href="/menu">Order Online</a>
       </nav>
     </div>
@@ -310,7 +313,8 @@
           <h1><span class="gold-text">SULTAN</span><span class="line2">RESTAURANT</span></h1>
           <p class="lead" id="heroTagline">Royal Mughlai &amp; BBQ dining, where every table is served like a Sultan's court.</p>
           <div class="cta">
-            <a class="btn btn-gold" href="/menu">View Menu &amp; Order</a>
+            <a class="btn btn-gold" href="/digital-menu">See Digital Menu</a>
+            <a class="btn btn-burgundy" href="/menu">Order Online</a>
             <a class="btn btn-ghost" href="#events" id="heroBook">Reserve a Table</a>
           </div>
           <div class="hero-stats">
@@ -349,7 +353,10 @@
           <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-piz-sultan-special.jpg" alt="Sultan Special Pizza" /></div><div class="body"><h3>Sultan Special Pizza</h3><p>Our house pizza, loaded the Sultan way.</p></div></article>
           <article class="dish reveal"><div class="img"><img loading="lazy" src="/menu-images/slt-mck-mint-mojito.jpg" alt="Mint Mojito" /></div><div class="body"><h3>Mint Mojito</h3><p>Refreshing mocktails and fresh juices from our juice bar.</p></div></article>
         </div>
-        <div class="center-cta"><a class="btn btn-gold" href="/menu">Explore the Full Menu</a></div>
+        <div class="center-cta" style="display:flex;justify-content:center;gap:14px;flex-wrap:wrap">
+          <a class="btn btn-gold" href="/digital-menu">See Full Digital Menu</a>
+          <a class="btn btn-ghost" href="/menu">Order Online</a>
+        </div>
       </div>
     </section>
 
@@ -400,7 +407,8 @@
           <p>We look forward to welcoming you.</p>
         </div>
         <div class="contact" id="contactGrid">
-          <div class="item"><div class="ic">🛵</div><h3>Order Online</h3><a class="link" href="/menu">Open Digital Menu</a></div>
+          <div class="item"><div class="ic">📖</div><h3>Digital Menu</h3><a class="link" href="/digital-menu">Browse Dishes &amp; Prices</a></div>
+          <div class="item"><div class="ic">🛵</div><h3>Order Online</h3><a class="link" href="/menu">Place Online Order</a></div>
         </div>
       </div>
     </section>
@@ -410,7 +418,8 @@
     <div class="wrap foot">
       <a class="brand" href="#top"><img src="/site/logo.png" alt="" style="width:38px;height:38px" /><span><b>SULTAN</b><small>RESTAURANT</small></span></a>
       <nav>
-        <a href="/menu">Menu</a>
+        <a href="/digital-menu">Digital Menu</a>
+        <a href="/menu">Order Online</a>
         <a href="#events">Events</a>
         <a href="#contact">Contact</a>
         <span id="socialFoot"></span>

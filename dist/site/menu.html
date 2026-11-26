@@ -1,0 +1,691 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Digital Menu | Sultan Restaurant</title>
+  <meta name="description" content="Explore the Royal Digital Menu of Sultan Restaurant — Signature Platters, BBQ, Karahi, Handi, Mandi, Biryani, Turkish Cuisine, Pizza, Desserts & Fresh Mocktails." />
+  <meta name="theme-color" content="#120306" />
+  <link rel="icon" href="/site/logo.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700;900&family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Noto+Nastaliq+Urdu:wght@600;700&family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --night: #120306;
+      --burgundy-deep: #1E0509;
+      --burgundy: #3A0F12;
+      --wine: #52171B;
+      --gold: #D5A943;
+      --gold-soft: #F3D179;
+      --gold-dark: #B48214;
+      --cream: #FCF8ED;
+      --text-soft: #D9C7AE;
+      --muted: #A9957B;
+      --lattice: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='80' height='80' viewBox='0 0 80 80'%3E%3Cg fill='none' stroke='%23D5A943' stroke-width='1'%3E%3Cpath d='M40 4 L50 30 L76 40 L50 50 L40 76 L30 50 L4 40 L30 30 Z'/%3E%3Cpath d='M14.5 14.5 L40 25 L65.5 14.5 L55 40 L65.5 65.5 L40 55 L14.5 65.5 L25 40 Z'/%3E%3Ccircle cx='40' cy='40' r='6'/%3E%3C/g%3E%3C/svg%3E");
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
+      background: var(--night);
+      color: var(--cream);
+      line-height: 1.55;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: inherit; text-decoration: none; }
+    img { max-width: 100%; display: block; }
+    .wrap { width: min(1220px, 93%); margin: 0 auto; }
+    .urdu { font-family: "Noto Nastaliq Urdu", serif; direction: rtl; }
+    .gold-text {
+      background: linear-gradient(100deg, #B48214 0%, #F3D179 35%, #FFF4C9 52%, #F3D179 70%, #B48214 100%);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+
+    /* ================= TOP HEADER ================= */
+    header {
+      position: sticky; top: 0; z-index: 60;
+      background: rgba(18, 3, 6, .92); backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(213,169,67,.28);
+    }
+    .nav { display: flex; align-items: center; justify-content: space-between; height: 66px; gap: 12px; }
+    .nav-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+    .back-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 14px; border-radius: 999px; font-size: 13px; font-weight: 700;
+      color: var(--gold-soft); border: 1px solid rgba(213,169,67,.4); background: rgba(213,169,67,.08);
+      transition: background .18s, border-color .18s;
+      white-space: nowrap;
+    }
+    .back-btn:hover { background: rgba(213,169,67,.18); border-color: var(--gold); }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .brand img { width: 38px; height: 38px; object-fit: contain; flex-shrink: 0; }
+    .brand b { font-family: "Cinzel", serif; letter-spacing: 2.5px; font-size: 14px; color: var(--gold-soft); display: block; line-height: 1.1; }
+    .brand small { font-size: 9.5px; letter-spacing: 2.5px; color: rgba(213,169,67,.72); font-weight: 700; }
+    .btn-order {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 9px 18px; border-radius: 999px; font-weight: 800; font-size: 13px; letter-spacing: .3px;
+      background: linear-gradient(135deg, var(--gold-soft), var(--gold) 55%, var(--gold-dark));
+      color: var(--night) !important; box-shadow: 0 6px 20px rgba(213,169,67,.3);
+      transition: transform .18s, box-shadow .18s; white-space: nowrap;
+    }
+    .btn-order:hover { transform: translateY(-1px); box-shadow: 0 10px 28px rgba(213,169,67,.45); }
+
+    /* ================= HERO BANNER ================= */
+    .menu-hero {
+      position: relative; padding: 38px 0 28px; text-align: center;
+      background: radial-gradient(ellipse at 50% 0%, rgba(82,23,27,.72) 0%, rgba(18,3,6,1) 75%);
+      border-bottom: 1px solid rgba(213,169,67,.18);
+    }
+    .menu-hero::before {
+      content: ""; position: absolute; inset: 0; background: var(--lattice) center/80px 80px; opacity: .055; pointer-events: none;
+    }
+    .menu-hero .wrap { position: relative; }
+    .menu-hero .urdu { font-size: 24px; color: var(--gold); line-height: 1.9; }
+    .menu-hero h1 { font-family: "Cinzel", serif; font-size: clamp(26px, 4.5vw, 44px); font-weight: 900; letter-spacing: 2px; margin-top: 2px; }
+    .menu-hero p { font-family: "Cormorant Garamond", serif; font-size: 19px; font-style: italic; color: var(--text-soft); margin-top: 6px; }
+    .menu-meta-pills { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .meta-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 700;
+      background: rgba(255,255,255,.04); border: 1px solid rgba(213,169,67,.28); color: var(--gold-soft);
+    }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #22C55E; box-shadow: 0 0 8px #22C55E; }
+
+    /* ================= STICKY CONTROLS ================= */
+    .controls-bar {
+      position: sticky; top: 66px; z-index: 50;
+      background: rgba(22, 4, 8, .96); backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(213,169,67,.22);
+      padding: 12px 0 10px;
+    }
+    .controls-top { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .search-box {
+      flex: 1; min-width: 220px; position: relative; display: flex; align-items: center;
+    }
+    .search-box input {
+      width: 100%; height: 42px; border-radius: 12px;
+      border: 1.5px solid rgba(213,169,67,.35); background: rgba(255,255,255,.06);
+      color: var(--cream); padding: 0 38px 0 38px; font-size: 14px; font-weight: 500; outline: none;
+      transition: border-color .2s, background .2s;
+    }
+    .search-box input::placeholder { color: var(--muted); }
+    .search-box input:focus { border-color: var(--gold); background: rgba(255,255,255,.09); }
+    .search-ic { position: absolute; left: 13px; color: var(--gold); font-size: 15px; pointer-events: none; }
+    .search-clear {
+      position: absolute; right: 10px; background: none; border: 0; color: var(--muted);
+      font-size: 18px; cursor: pointer; display: none; padding: 2px 6px;
+    }
+    .search-clear.show { display: block; }
+    .view-switch {
+      display: inline-flex; background: rgba(255,255,255,.05); border: 1px solid rgba(213,169,67,.3);
+      border-radius: 10px; padding: 3px; gap: 3px;
+    }
+    .view-btn {
+      border: 0; background: transparent; color: var(--text-soft); padding: 7px 12px; border-radius: 7px;
+      font-size: 12.5px; font-weight: 700; cursor: pointer; transition: background .15s, color .15s;
+    }
+    .view-btn.active { background: var(--gold); color: var(--night); }
+
+    .cat-strip {
+      display: flex; gap: 8px; overflow-x: auto; padding: 10px 0 4px;
+      scrollbar-width: none; -webkit-overflow-scrolling: touch;
+    }
+    .cat-strip::-webkit-scrollbar { display: none; }
+    .cat-pill {
+      flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 15px; border-radius: 999px; font-size: 13px; font-weight: 700; cursor: pointer;
+      border: 1px solid rgba(213,169,67,.28); background: rgba(255,255,255,.035); color: var(--text-soft);
+      transition: all .18s;
+    }
+    .cat-pill:hover { border-color: rgba(213,169,67,.65); color: var(--gold-soft); }
+    .cat-pill.active {
+      background: linear-gradient(135deg, var(--gold-soft), var(--gold));
+      border-color: var(--gold-soft); color: var(--night); font-weight: 800;
+      box-shadow: 0 4px 14px rgba(213,169,67,.3);
+    }
+    .cat-pill span {
+      font-size: 11px; padding: 1px 6px; border-radius: 999px;
+      background: rgba(213,169,67,.16); color: var(--gold-soft);
+    }
+    .cat-pill.active span { background: rgba(18,3,6,.16); color: var(--night); }
+
+    /* ================= MENU CONTENT ================= */
+    main { padding: 28px 0 70px; }
+    .cat-section { margin-bottom: 44px; }
+    .cat-heading {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding-bottom: 12px; margin-bottom: 20px;
+      border-bottom: 1px solid rgba(213,169,67,.25);
+    }
+    .cat-heading h2 {
+      font-family: "Cinzel", serif; font-size: clamp(19px, 2.5vw, 25px); color: var(--gold-soft);
+      letter-spacing: 1px; display: flex; align-items: center; gap: 10px;
+    }
+    .cat-heading h2::before { content: "✦"; color: var(--gold); font-size: 16px; }
+    .cat-heading small {
+      font-size: 12px; font-weight: 700; color: var(--muted);
+      padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(213,169,67,.22);
+      white-space: nowrap;
+    }
+
+    /* Cards Grid View */
+    .dish-grid { display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); }
+    .dish-card {
+      background: linear-gradient(180deg, rgba(58,15,18,.58), rgba(20,4,7,.92));
+      border: 1px solid rgba(213,169,67,.24); border-radius: 18px; overflow: hidden;
+      display: flex; flex-direction: column; cursor: pointer;
+      transition: transform .22s ease, border-color .22s, box-shadow .22s;
+    }
+    .dish-card:hover { transform: translateY(-4px); border-color: rgba(213,169,67,.7); box-shadow: 0 16px 36px rgba(0,0,0,.45); }
+    .dish-card.sold-out { opacity: .62; }
+    .dish-thumb { position: relative; aspect-ratio: 4/3; background: #26070B; overflow: hidden; }
+    .dish-thumb img { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }
+    .dish-card:hover .dish-thumb img { transform: scale(1.06); }
+    .dish-thumb.no-img { display: grid; place-items: center; background: radial-gradient(circle, #3A0F12, #180306); }
+    .dish-thumb.no-img img { width: 72px; height: 72px; object-fit: contain; opacity: .55; }
+    .badge-chip {
+      position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 800; letter-spacing: .3px;
+      background: rgba(18,3,6,.86); border: 1px solid var(--gold); color: var(--gold-soft);
+    }
+    .sold-badge {
+      position: absolute; top: 10px; right: 10px; padding: 4px 10px; border-radius: 999px;
+      font-size: 11px; font-weight: 800; background: #991B1B; color: #fff;
+    }
+    .dish-body { padding: 15px 17px 17px; display: flex; flex-direction: column; flex: 1; gap: 8px; }
+    .dish-title-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+    .dish-name { font-family: "Cinzel", serif; font-size: 16px; font-weight: 700; color: var(--cream); line-height: 1.3; }
+    .dish-price { font-size: 15.5px; font-weight: 900; color: var(--gold-soft); white-space: nowrap; }
+    .dish-desc { font-size: 13px; color: var(--text-soft); line-height: 1.5; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .variants-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; padding-top: 6px; }
+    .var-chip {
+      font-size: 11.5px; font-weight: 700; padding: 4px 9px; border-radius: 8px;
+      background: rgba(213,169,67,.1); border: 1px solid rgba(213,169,67,.3); color: var(--gold-soft);
+    }
+    .var-chip b { color: #fff; font-weight: 800; margin-left: 4px; }
+
+    /* Compact List View */
+    .dish-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); }
+    .list-row {
+      display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 14px; cursor: pointer;
+      background: linear-gradient(135deg, rgba(58,15,18,.48), rgba(20,4,7,.85));
+      border: 1px solid rgba(213,169,67,.22); transition: border-color .2s, background .2s;
+    }
+    .list-row:hover { border-color: rgba(213,169,67,.65); background: rgba(58,15,18,.68); }
+    .list-row.sold-out { opacity: .6; }
+    .list-img { width: 68px; height: 68px; border-radius: 11px; overflow: hidden; flex-shrink: 0; background: #26070B; }
+    .list-img img { width: 100%; height: 100%; object-fit: cover; }
+    .list-info { flex: 1; min-width: 0; }
+    .list-info .dish-name { font-size: 15px; }
+    .list-info .dish-desc { font-size: 12px; -webkit-line-clamp: 1; margin-top: 2px; }
+    .list-price-col { text-align: right; flex-shrink: 0; }
+
+    /* Empty State */
+    .empty {
+      text-align: center; padding: 64px 20px; border-radius: 20px;
+      border: 1px dashed rgba(213,169,67,.3); background: rgba(255,255,255,.02);
+    }
+    .empty h3 { font-family: "Cinzel", serif; color: var(--gold-soft); font-size: 20px; margin-bottom: 8px; }
+    .empty p { color: var(--text-soft); font-size: 14px; }
+
+    /* Dish Lightbox Modal */
+    .modal-bg {
+      position: fixed; inset: 0; z-index: 100; background: rgba(8, 1, 3, .82); backdrop-filter: blur(6px);
+      display: none; align-items: center; justify-content: center; padding: 18px;
+    }
+    .modal-bg.open { display: flex; }
+    .modal-card {
+      width: min(520px, 100%); max-height: 90vh; overflow-y: auto; border-radius: 22px;
+      background: linear-gradient(180deg, #28080D, #120306);
+      border: 1.5px solid rgba(213,169,67,.6); box-shadow: 0 30px 80px rgba(0,0,0,.75);
+      position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 12px; right: 12px; z-index: 5;
+      width: 36px; height: 36px; border-radius: 50%; border: 1px solid rgba(213,169,67,.6);
+      background: rgba(18,3,6,.85); color: var(--gold-soft); font-size: 20px; cursor: pointer;
+      display: grid; place-items: center;
+    }
+    .modal-photo { aspect-ratio: 16/10; background: #26070B; overflow: hidden; }
+    .modal-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .modal-body { padding: 20px 22px 24px; }
+    .modal-cat { font-size: 11px; letter-spacing: 2px; text-transform: uppercase; color: var(--gold); font-weight: 800; }
+    .modal-title { font-family: "Cinzel", serif; font-size: 24px; color: var(--cream); margin-top: 4px; }
+    .modal-desc { font-size: 14.5px; color: var(--text-soft); margin-top: 10px; line-height: 1.6; }
+    .modal-prices { margin-top: 18px; display: grid; gap: 8px; }
+    .modal-price-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 10px 14px; border-radius: 12px;
+      background: rgba(213,169,67,.09); border: 1px solid rgba(213,169,67,.3);
+    }
+    .modal-price-row span { font-size: 13.5px; font-weight: 700; color: var(--cream); }
+    .modal-price-row b { font-size: 16px; font-weight: 900; color: var(--gold-soft); }
+
+    /* Bottom Gentle Order CTA */
+    .bottom-banner {
+      margin-top: 24px; padding: 26px 24px; border-radius: 20px; text-align: center;
+      background: linear-gradient(135deg, rgba(58,15,18,.78), rgba(20,4,7,.94));
+      border: 1px solid rgba(213,169,67,.35);
+      display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    }
+    .bottom-banner h3 { font-family: "Cinzel", serif; color: var(--gold-soft); font-size: 19px; text-align: left; }
+    .bottom-banner p { color: var(--text-soft); font-size: 13.5px; text-align: left; margin-top: 2px; }
+    .bottom-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+
+    footer { background: #0B0103; border-top: 1px solid rgba(213,169,67,.22); padding: 26px 0; text-align: center; font-size: 12.5px; color: var(--muted); }
+
+    @media (max-width: 640px) {
+      .nav { height: 60px; }
+      .controls-bar { top: 60px; }
+      .brand small { display: none; }
+      .dish-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+      .dish-body { padding: 10px 11px 12px; }
+      .dish-name { font-size: 13.5px; }
+      .dish-price { font-size: 13px; }
+      .dish-list { grid-template-columns: 1fr; }
+      .bottom-banner { justify-content: center; text-align: center; }
+      .bottom-banner h3, .bottom-banner p { text-align: center; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap nav">
+      <div class="nav-left">
+        <a class="back-btn" href="/">← Home</a>
+        <a class="brand" href="/">
+          <img src="/site/logo.png" alt="Sultan Restaurant" />
+          <span><b>SULTAN</b><small>ROYAL MENU</small></span>
+        </a>
+      </div>
+      <a class="btn-order" href="/menu">🛵 Order Online</a>
+    </div>
+  </header>
+
+  <section class="menu-hero">
+    <div class="wrap">
+      <div class="urdu">شاہی مینیو</div>
+      <h1 class="gold-text">DIGITAL MENU</h1>
+      <p>Browse our complete royal kitchen menu, portions &amp; prices</p>
+      <div class="menu-meta-pills">
+        <span class="meta-pill"><span class="live-dot"></span><span id="liveStatus">Live Kitchen Prices</span></span>
+        <span class="meta-pill" id="dishStats">Loading dishes...</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="controls-bar">
+    <div class="wrap">
+      <div class="controls-top">
+        <div class="search-box">
+          <span class="search-ic">🔍</span>
+          <input id="searchInput" type="search" placeholder="Search Karahi, BBQ, Biryani, Mandi, Pizza, Drinks..." autocomplete="off" />
+          <button id="clearSearch" class="search-clear" aria-label="Clear search">×</button>
+        </div>
+        <div class="view-switch" role="group" aria-label="Layout view">
+          <button id="btnCards" class="view-btn active" type="button">Cards</button>
+          <button id="btnList" class="view-btn" type="button">Price List</button>
+        </div>
+      </div>
+      <div class="cat-strip" id="catStrip"></div>
+    </div>
+  </div>
+
+  <main class="wrap">
+    <div id="menuRoot"></div>
+
+    <div class="bottom-banner">
+      <div>
+        <h3>Ready to Order?</h3>
+        <p>Switch to our online ordering portal for delivery, takeaway, or dine-in table orders.</p>
+      </div>
+      <div class="bottom-actions">
+        <a class="back-btn" href="/">← Back to Website</a>
+        <a class="btn-order" href="/menu">🛵 Go to Order Online →</a>
+      </div>
+    </div>
+  </main>
+
+  <footer>
+    <div class="wrap">© <span id="yr"></span> Sultan Restaurant. Prices are in Pakistani Rupees (Rs.).</div>
+  </footer>
+
+  <!-- Dish Detail Lightbox Modal (View Only) -->
+  <div id="dishModal" class="modal-bg" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <button id="closeModal" class="modal-close" aria-label="Close">×</button>
+      <div class="modal-photo" id="modalPhoto"></div>
+      <div class="modal-body">
+        <div class="modal-cat" id="modalCat"></div>
+        <h3 class="modal-title" id="modalTitle"></h3>
+        <p class="modal-desc" id="modalDesc"></p>
+        <div class="modal-prices" id="modalPrices"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function () {
+      document.getElementById('yr').textContent = new Date().getFullYear();
+
+      var state = {
+        items: [],
+        categories: [],
+        unavailable: {},
+        activeCategory: 'ALL',
+        search: '',
+        viewMode: 'cards',
+      };
+
+      var els = {
+        catStrip: document.getElementById('catStrip'),
+        menuRoot: document.getElementById('menuRoot'),
+        dishStats: document.getElementById('dishStats'),
+        liveStatus: document.getElementById('liveStatus'),
+        searchInput: document.getElementById('searchInput'),
+        clearSearch: document.getElementById('clearSearch'),
+        btnCards: document.getElementById('btnCards'),
+        btnList: document.getElementById('btnList'),
+        modal: document.getElementById('dishModal'),
+        closeModal: document.getElementById('closeModal'),
+        modalPhoto: document.getElementById('modalPhoto'),
+        modalCat: document.getElementById('modalCat'),
+        modalTitle: document.getElementById('modalTitle'),
+        modalDesc: document.getElementById('modalDesc'),
+        modalPrices: document.getElementById('modalPrices'),
+      };
+
+      function esc(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+          return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+        });
+      }
+
+      function fmtRs(n) {
+        var num = Number(n || 0);
+        return 'Rs. ' + (isFinite(num) ? Math.round(num).toLocaleString('en-PK') : '0');
+      }
+
+      function resolveImg(item) {
+        var raw = String(item.imageUri || item.imageUrl || '').trim();
+        if (raw && !raw.includes('images.unsplash.com/photo-')) return raw;
+        if (item.id && String(item.id).indexOf('slt-') === 0) return '/menu-images/' + item.id + '.jpg';
+        return '';
+      }
+
+      function decodeFsValue(val) {
+        if (!val || typeof val !== 'object') return null;
+        if ('stringValue' in val) return val.stringValue;
+        if ('integerValue' in val) return Number(val.integerValue);
+        if ('doubleValue' in val) return Number(val.doubleValue);
+        if ('booleanValue' in val) return Boolean(val.booleanValue);
+        if ('nullValue' in val) return null;
+        if ('arrayValue' in val) {
+          return (val.arrayValue.values || []).map(decodeFsValue);
+        }
+        if ('mapValue' in val) {
+          var obj = {};
+          var fields = val.mapValue.fields || {};
+          Object.keys(fields).forEach(function (k) { obj[k] = decodeFsValue(fields[k]); });
+          return obj;
+        }
+        return null;
+      }
+
+      function applyCatalog(rawItems, rawCats, unavailableIds, sourceLabel) {
+        var cleanItems = (rawItems || []).filter(function (m) {
+          return m && m.name && m.available !== false;
+        });
+        if (!cleanItems.length) return;
+
+        var catOrder = [];
+        var seenCat = {};
+        (rawCats || []).forEach(function (c) {
+          var s = String(c || '').trim();
+          if (s && s.toLowerCase() !== 'all' && !seenCat[s.toLowerCase()]) {
+            seenCat[s.toLowerCase()] = s;
+            catOrder.push(s);
+          }
+        });
+        cleanItems.forEach(function (m) {
+          var s = String(m.category || 'Specials').trim();
+          if (s && !seenCat[s.toLowerCase()]) {
+            seenCat[s.toLowerCase()] = s;
+            catOrder.push(s);
+          }
+        });
+
+        // Keep only categories that have at least 1 dish
+        var counts = {};
+        cleanItems.forEach(function (m) {
+          var k = String(m.category || 'Specials').trim().toLowerCase();
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        state.categories = catOrder.filter(function (c) { return counts[c.toLowerCase()] > 0; });
+        state.items = cleanItems;
+        state.unavailable = {};
+        (unavailableIds || []).forEach(function (id) { state.unavailable[id] = true; });
+        els.dishStats.textContent = cleanItems.length + ' Dishes • ' + state.categories.length + ' Categories';
+        if (sourceLabel) els.liveStatus.textContent = sourceLabel;
+        renderAll();
+      }
+
+      function getFilteredItems() {
+        var q = state.search.trim().toLowerCase();
+        return state.items.filter(function (item) {
+          if (state.activeCategory !== 'ALL') {
+            if (String(item.category || '').trim().toLowerCase() !== state.activeCategory.toLowerCase()) return false;
+          }
+          if (q) {
+            var hay = (item.name + ' ' + (item.category || '') + ' ' + (item.description || '') + ' ' + (item.region || '')).toLowerCase();
+            if (hay.indexOf(q) === -1) return false;
+          }
+          return true;
+        });
+      }
+
+      function renderCategories() {
+        var counts = {};
+        state.items.forEach(function (m) {
+          var k = String(m.category || '').trim().toLowerCase();
+          counts[k] = (counts[k] || 0) + 1;
+        });
+        var html = '<button type="button" class="cat-pill ' + (state.activeCategory === 'ALL' ? 'active' : '') + '" data-cat="ALL">All Dishes<span>' + state.items.length + '</span></button>';
+        state.categories.forEach(function (c) {
+          var isAct = state.activeCategory.toLowerCase() === c.toLowerCase();
+          html += '<button type="button" class="cat-pill ' + (isAct ? 'active' : '') + '" data-cat="' + esc(c) + '">' + esc(c) + '<span>' + (counts[c.toLowerCase()] || 0) + '</span></button>';
+        });
+        els.catStrip.innerHTML = html;
+      }
+
+      function renderPriceLabel(item) {
+        if (Array.isArray(item.variants) && item.variants.length > 0) {
+          var minP = Math.min.apply(null, item.variants.map(function (v) { return Number(v.price || 0); }));
+          return 'From ' + fmtRs(minP);
+        }
+        return fmtRs(item.price);
+      }
+
+      function renderDishCard(item) {
+        var img = resolveImg(item);
+        var soldOut = !!state.unavailable[item.id];
+        var variantsHtml = '';
+        if (Array.isArray(item.variants) && item.variants.length > 0) {
+          variantsHtml = '<div class="variants-row">' + item.variants.map(function (v) {
+            return '<span class="var-chip">' + esc(v.name) + '<b>' + fmtRs(v.price) + '</b></span>';
+          }).join('') + '</div>';
+        }
+        return (
+          '<article class="dish-card' + (soldOut ? ' sold-out' : '') + '" data-id="' + esc(item.id) + '">' +
+            '<div class="dish-thumb' + (img ? '' : ' no-img') + '">' +
+              (img
+                ? '<img loading="lazy" src="' + esc(img) + '" alt="' + esc(item.name) + '" onerror="this.parentNode.classList.add(\'no-img\');this.src=\'/site/logo.png\';" />'
+                : '<img src="/site/logo.png" alt="" />') +
+              (item.badge ? '<span class="badge-chip">' + esc(item.badge) + '</span>' : '') +
+              (soldOut ? '<span class="sold-badge">Unavailable</span>' : '') +
+            '</div>' +
+            '<div class="dish-body">' +
+              '<div class="dish-title-row">' +
+                '<div class="dish-name">' + esc(item.name) + '</div>' +
+                '<div class="dish-price">' + renderPriceLabel(item) + '</div>' +
+              '</div>' +
+              (item.description ? '<p class="dish-desc">' + esc(item.description) + '</p>' : '') +
+              variantsHtml +
+            '</div>' +
+          '</article>'
+        );
+      }
+
+      function renderDishListRow(item) {
+        var img = resolveImg(item);
+        var soldOut = !!state.unavailable[item.id];
+        var variantsHtml = '';
+        if (Array.isArray(item.variants) && item.variants.length > 0) {
+          variantsHtml = '<div class="variants-row" style="padding-top:5px">' + item.variants.map(function (v) {
+            return '<span class="var-chip">' + esc(v.name) + '<b>' + fmtRs(v.price) + '</b></span>';
+          }).join('') + '</div>';
+        }
+        return (
+          '<article class="list-row' + (soldOut ? ' sold-out' : '') + '" data-id="' + esc(item.id) + '">' +
+            '<div class="list-img"><img loading="lazy" src="' + esc(img || '/site/logo.png') + '" alt="' + esc(item.name) + '" onerror="this.src=\'/site/logo.png\';" /></div>' +
+            '<div class="list-info">' +
+              '<div class="dish-name">' + esc(item.name) + (soldOut ? ' <span style="font-size:11px;color:#FCA5A5">(Unavailable)</span>' : '') + '</div>' +
+              (item.description ? '<p class="dish-desc">' + esc(item.description) + '</p>' : '') +
+              variantsHtml +
+            '</div>' +
+            '<div class="list-price-col"><div class="dish-price">' + renderPriceLabel(item) + '</div></div>' +
+          '</article>'
+        );
+      }
+
+      function renderAll() {
+        renderCategories();
+        var list = getFilteredItems();
+        if (!list.length) {
+          els.menuRoot.innerHTML = '<div class="empty"><h3>No Dishes Found</h3><p>Try another search term or select "All Dishes".</p></div>';
+          return;
+        }
+
+        // Group by category preserving canonical category order
+        var groups = {};
+        list.forEach(function (it) {
+          var c = String(it.category || 'Specials').trim();
+          if (!groups[c]) groups[c] = [];
+          groups[c].push(it);
+        });
+        var orderedCats = state.categories.filter(function (c) { return groups[c] && groups[c].length; });
+        Object.keys(groups).forEach(function (c) {
+          if (orderedCats.indexOf(c) === -1) orderedCats.push(c);
+        });
+
+        var isList = state.viewMode === 'list';
+        var html = orderedCats.map(function (cat) {
+          var dishes = groups[cat];
+          return (
+            '<section class="cat-section">' +
+              '<div class="cat-heading"><h2>' + esc(cat) + '</h2><small>' + dishes.length + (dishes.length === 1 ? ' Dish' : ' Dishes') + '</small></div>' +
+              '<div class="' + (isList ? 'dish-list' : 'dish-grid') + '">' +
+                dishes.map(isList ? renderDishListRow : renderDishCard).join('') +
+              '</div>' +
+            '</section>'
+          );
+        }).join('');
+
+        els.menuRoot.innerHTML = html;
+      }
+
+      function openDishModal(id) {
+        var item = state.items.find(function (x) { return String(x.id) === String(id); });
+        if (!item) return;
+        var img = resolveImg(item);
+        els.modalPhoto.innerHTML = img
+          ? '<img src="' + esc(img) + '" alt="' + esc(item.name) + '" onerror="this.src=\'/site/logo.png\';" />'
+          : '<div style="height:100%;display:grid;place-items:center"><img src="/site/logo.png" style="width:90px;height:90px;object-fit:contain;opacity:.6" /></div>';
+        els.modalCat.textContent = [item.category, item.region, item.badge].filter(Boolean).join(' • ');
+        els.modalTitle.textContent = item.name;
+        els.modalDesc.textContent = item.description || 'Prepared fresh to order in the Sultan Royal Kitchen.';
+        if (Array.isArray(item.variants) && item.variants.length > 0) {
+          els.modalPrices.innerHTML = item.variants.map(function (v) {
+            return '<div class="modal-price-row"><span>' + esc(v.name) + '</span><b>' + fmtRs(v.price) + '</b></div>';
+          }).join('');
+        } else {
+          els.modalPrices.innerHTML = '<div class="modal-price-row"><span>Standard Serving</span><b>' + fmtRs(item.price) + '</b></div>';
+        }
+        els.modal.classList.add('open');
+      }
+
+      // Event delegation
+      els.catStrip.addEventListener('click', function (e) {
+        var btn = e.target.closest('.cat-pill');
+        if (!btn) return;
+        state.activeCategory = btn.getAttribute('data-cat') || 'ALL';
+        renderAll();
+        window.scrollTo({ top: Math.max(0, document.querySelector('.controls-bar').offsetTop - 68), behavior: 'smooth' });
+      });
+
+      els.menuRoot.addEventListener('click', function (e) {
+        var card = e.target.closest('[data-id]');
+        if (card) openDishModal(card.getAttribute('data-id'));
+      });
+
+      els.searchInput.addEventListener('input', function () {
+        state.search = els.searchInput.value || '';
+        els.clearSearch.classList.toggle('show', state.search.length > 0);
+        renderAll();
+      });
+
+      els.clearSearch.addEventListener('click', function () {
+        els.searchInput.value = '';
+        state.search = '';
+        els.clearSearch.classList.remove('show');
+        renderAll();
+      });
+
+      els.btnCards.addEventListener('click', function () {
+        state.viewMode = 'cards';
+        els.btnCards.classList.add('active');
+        els.btnList.classList.remove('active');
+        renderAll();
+      });
+
+      els.btnList.addEventListener('click', function () {
+        state.viewMode = 'list';
+        els.btnList.classList.add('active');
+        els.btnCards.classList.remove('active');
+        renderAll();
+      });
+
+      els.closeModal.addEventListener('click', function () { els.modal.classList.remove('open'); });
+      els.modal.addEventListener('click', function (e) { if (e.target === els.modal) els.modal.classList.remove('open'); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') els.modal.classList.remove('open'); });
+
+      // 1. Instant static catalog load (<100ms)
+      fetch('/site/menu-data.json')
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (d && Array.isArray(d.menuItems)) {
+            applyCatalog(d.menuItems, d.categories, [], 'Royal Menu Catalog');
+          }
+        })
+        .catch(function () {});
+
+      // 2. Live Firestore public_menu sync (auto-updates prices, new dishes & sold-out status from POS)
+      var FS_URL = 'https://firestore.googleapis.com/v1/projects/sultan-resturant/databases/(default)/documents/sultan_restaurant/public_menu?key=AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU';
+      fetch(FS_URL, { cache: 'no-store' })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (doc) {
+          if (!doc || !doc.fields) return;
+          var items = decodeFsValue(doc.fields.menuItems);
+          var cats = decodeFsValue(doc.fields.categories);
+          var unavail = decodeFsValue(doc.fields.unavailableItemIds);
+          if (Array.isArray(items) && items.length > 0) {
+            applyCatalog(items, Array.isArray(cats) ? cats : [], Array.isArray(unavail) ? unavail : [], 'Live Kitchen Menu');
+          }
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
