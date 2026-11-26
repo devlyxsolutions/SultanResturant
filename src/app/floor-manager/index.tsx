@@ -234,7 +234,7 @@ export default function FloorManagerScreen() {
     if (floors && floors.length > 0) {
       return floors.map((f) => f.name);
     }
-    return ['Ground Floor', '1st Floor', '2nd Floor', 'Rooftop'];
+    return ['Ground Floor', 'Rooftop', 'Family Floor', 'Party Hall'];
   }, [floors]);
 
   // Tables strictly on this floor

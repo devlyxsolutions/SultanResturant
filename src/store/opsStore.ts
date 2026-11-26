@@ -278,9 +278,8 @@ export const STORAGE_LOCATIONS = [
   'Spice & Masala Rack',
   'Beverage Cold Room',
   'Ground Floor Chiller',
-  '1st Floor Chiller',
-  '2nd Floor Chiller',
-  '3rd Floor Chiller',
+  'Family Floor Chiller',
+  'Party Hall Chiller',
   'Rooftop Chiller',
   'Packaging Store',
 ] as const;
@@ -302,10 +301,9 @@ export const DEFAULT_STORAGE_ZONES: StorageZone[] = [
 
 export const CHILLER_FLOORS = [
   'Ground Floor',
-  '1st Floor',
-  '2nd Floor',
-  '3rd Floor',
   'Rooftop',
+  'Family Floor',
+  'Party Hall',
 ] as const;
 
 export type ChillerFloor = typeof CHILLER_FLOORS[number];
@@ -314,9 +312,8 @@ export function normalizeChillerFloor(rawFloor?: string): ChillerFloor {
   if (!rawFloor) return 'Ground Floor';
   const f = rawFloor.trim().toLowerCase();
   if (f.includes('roof') || f.includes('terrace') || f.includes('rt')) return 'Rooftop';
-  if (f.includes('3') || f.includes('third')) return '3rd Floor';
-  if (f.includes('2') || f.includes('second')) return '2nd Floor';
-  if (f.includes('1') || f.includes('first')) return '1st Floor';
+  if (f.includes('party') || f.includes('banquet') || f.includes('pa') || f.includes('2') || f.includes('3')) return 'Party Hall';
+  if (f.includes('family') || f.includes('fa') || f.includes('1') || f.includes('first')) return 'Family Floor';
   if (f.includes('ground') || f === 'g' || f === 'gf' || f === '0') return 'Ground Floor';
   return 'Ground Floor';
 }

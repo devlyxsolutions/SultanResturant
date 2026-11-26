@@ -3191,7 +3191,13 @@ export default function CustomerMenuScreen() {
 
             {/* Floor Tabs */}
             <View style={styles.floorTabsRow}>
-              {['Ground Floor', '1st Floor', '2nd Floor', 'Rooftop'].map((fl) => (
+              {Array.from(
+                new Set(
+                  tables.length > 0
+                    ? tables.map((t) => t.floor || t.zone || 'Ground Floor')
+                    : ['Ground Floor', 'Rooftop', 'Family Floor', 'Party Hall']
+                )
+              ).map((fl) => (
                 <TouchableOpacity
                   key={fl}
                   style={[

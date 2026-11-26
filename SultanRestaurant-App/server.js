@@ -535,36 +535,85 @@ const DEFAULT_PLAYLAND_RIDES = [
   }
 ];
 
-// Initial state template
+// Initial state template (Canonical 4 Floors & 63 Real Sultan Restaurant Seating Units)
 const INITIAL_STATE = {
+  floors: [
+    { id: 'fl-gf', name: 'Ground Floor', shortCode: 'GF', prefix: 'GF-', color: '#1976D2', icon: 'restaurant-outline', description: '', order: 1 },
+    { id: 'fl-rt', name: 'Rooftop', shortCode: 'RT', prefix: 'R', color: '#E65100', icon: 'moon-outline', description: 'Open-air BBQ & Sky Majlis', order: 2 },
+    { id: 'fl-1795684812562-f3w', name: 'Family Floor', shortCode: 'FA', prefix: 'FA', color: '#1976D2', icon: 'business-outline', description: '', order: 3 },
+    { id: 'fl-1795685577395-254', name: 'Party Hall', shortCode: 'PA', prefix: 'PA', color: '#6A1B9A', icon: 'restaurant-outline', description: '', order: 4 }
+  ],
   tables: [
-    // Ground Floor
-    { id: '1', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-01', seats: 4, status: 'available' },
-    { id: '2', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'T-02', seats: 4, status: 'available' },
-    { id: '3', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
-    { id: '4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
-    { id: '5', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
+    // Rooftop (16 Units)
+    { id: 't-1795680804698-0-e3uz', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-01', name: 'R-M-01', seats: 6, status: 'available' },
+    { id: 't-1795680804698-1-dpau', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-02', name: 'R-M-02', seats: 6, status: 'available' },
+    { id: 't-1795680804698-2-iiig', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-03', name: 'R-M-03', seats: 6, status: 'available' },
+    { id: 't-1795680804698-3-hlck', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-04', name: 'R-M-04', seats: 6, status: 'available' },
+    { id: 't-1795680804698-4-10tx', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-05', name: 'R-M-05', seats: 6, status: 'available' },
+    { id: 't-1795680804698-5-1ven', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'R-M-06', name: 'R-M-06', seats: 10, status: 'available' },
+    { id: 't-1795680864962-0-pte7', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-07', seats: 4, status: 'available' },
+    { id: 't-1795680864962-1-ltml', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-08', seats: 4, status: 'available' },
+    { id: 't-1795680864962-2-ip4r', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-09', seats: 4, status: 'available' },
+    { id: 't-1795680864962-3-zekl', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-10', seats: 4, status: 'available' },
+    { id: 't-1795680864962-4-jcbg', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-11', seats: 4, status: 'available' },
+    { id: 't-1795680864962-5-4aq3', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-12', seats: 4, status: 'available' },
+    { id: 't-1795680864962-6-2e2r', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-13', seats: 4, status: 'available' },
+    { id: 't-1795680864962-7-buur', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-14', seats: 4, status: 'available' },
+    { id: 't-1795680864962-8-jp45', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-15', seats: 4, status: 'available' },
+    { id: 't-1795680864962-9-m3is', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-16', seats: 4, status: 'available' },
 
-    // 1st Floor
-    { id: 'f1-t1', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T01', seats: 4, status: 'available' },
-    { id: 'f1-t2', floor: '1st Floor', zone: '1st Floor', seatingType: 'tables', name: 'F1-T02', seats: 6, status: 'available' },
-    { id: 'f1-c1', floor: '1st Floor', zone: '1st Floor', seatingType: 'couches', name: 'Couch 1', seats: 6, status: 'available' },
-    { id: 'f1-m1', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 8, status: 'available' },
-    { id: 'f1-m2', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 2', name: 'Cabin 2', seats: 10, status: 'available' },
-    { id: 'f1-m3', floor: '1st Floor', zone: '1st Floor', seatingType: 'majlis', cabinNumber: 'Cabin 3', name: 'Cabin 3', seats: 12, status: 'available' },
+    // Ground Floor (16 Units)
+    { id: 't-1795682315689-0-oeje', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'G-01', seats: 4, status: 'available' },
+    { id: 't-1795682315689-1-tkdo', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'G-02', seats: 4, status: 'available' },
+    { id: 't-1795682315689-2-q7m0', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'G-03', seats: 4, status: 'available' },
+    { id: 't-1795682315689-3-qcb4', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'G-04', seats: 4, status: 'available' },
+    { id: 't-1795682315689-4-mdeb', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'couches', name: 'G-05', seats: 4, status: 'available' },
+    { id: 't-1795682315689-5-n98v', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'G-06', seats: 4, status: 'available' },
+    { id: 't-1795682315689-6-0a82', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'G-07', seats: 4, status: 'available' },
+    { id: 't-1795682315689-7-io4e', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'G-08', seats: 4, status: 'available' },
+    { id: 't-1795682315689-8-3xft', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'G-09', seats: 4, status: 'available' },
+    { id: 't-1795682315689-9-zz7k', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'tables', name: 'G-10', seats: 4, status: 'available' },
+    { id: 't-1795682315689-10-beqw', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-11', name: 'G-M-11', seats: 6, status: 'available' },
+    { id: 't-1795682315689-11-dm4u', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-12', name: 'G-M-12', seats: 6, status: 'available' },
+    { id: 't-1795682315689-12-fcgs', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-13', name: 'G-M-13', seats: 6, status: 'available' },
+    { id: 't-1795682315689-13-k088', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-14', name: 'G-M-14', seats: 6, status: 'available' },
+    { id: 't-1795682315689-14-22rh', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-15', name: 'G-M-15', seats: 6, status: 'available' },
+    { id: 't-1795682315689-15-cwiq', floor: 'Ground Floor', zone: 'Ground Floor', seatingType: 'majlis', cabinNumber: 'G-M-16', name: 'G-M-16', seats: 6, status: 'available' },
 
-    // 2nd Floor
-    { id: 'f2-t1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'tables', name: 'F2-T01', seats: 4, status: 'available' },
-    { id: 'f2-m1', floor: '2nd Floor', zone: '2nd Floor', seatingType: 'majlis', cabinNumber: 'Cabin 1', name: 'Cabin 1', seats: 10, status: 'available' },
+    // Family Floor (25 Units)
+    { id: 't-1795684898082-0-c43f', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'couches', name: 'F-01', seats: 4, status: 'available' },
+    { id: 't-1795684898082-1-8y57', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'couches', name: 'F-02', seats: 4, status: 'available' },
+    { id: 't-1795684898082-2-71c8', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'couches', name: 'F-03', seats: 4, status: 'available' },
+    { id: 't-1795684898082-3-7u0o', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'couches', name: 'F-04', seats: 4, status: 'available' },
+    { id: 't-1795684898082-4-q748', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'couches', name: 'F-05', seats: 4, status: 'available' },
+    { id: 't-1795684898082-5-n92t', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-06', seats: 4, status: 'available' },
+    { id: 't-1795684898082-6-6w27', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-07', seats: 4, status: 'available' },
+    { id: 't-1795684898082-7-fo87', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-08', seats: 4, status: 'available' },
+    { id: 't-1795684898082-8-1jyb', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-09', seats: 4, status: 'available' },
+    { id: 't-1795684898082-9-w035', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-10', seats: 4, status: 'available' },
+    { id: 't-1795684898082-10-0ajv', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-11', seats: 2, status: 'available' },
+    { id: 't-1795684898082-11-5vkm', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-12', seats: 2, status: 'available' },
+    { id: 't-1795684898082-12-3bz7', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-13', seats: 2, status: 'available' },
+    { id: 't-1795684898082-13-9xn2', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-14', seats: 2, status: 'available' },
+    { id: 't-1795684898082-14-8mw4', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-15', seats: 2, status: 'available' },
+    { id: 't-1795684898082-15-x35d', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-16', seats: 2, status: 'available' },
+    { id: 't-1795684898082-16-v3ca', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'tables', name: 'F-C-17', seats: 2, status: 'available' },
+    { id: 't-1795684898082-17-oy96', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-18', name: 'F-M-18', seats: 6, status: 'available' },
+    { id: 't-1795684898082-18-cg1e', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-19', name: 'F-M-19', seats: 6, status: 'available' },
+    { id: 't-1795684898082-19-p5uj', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-20', name: 'F-M-20', seats: 6, status: 'available' },
+    { id: 't-1795684898082-20-gxcn', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-21', name: 'F-M-21', seats: 6, status: 'available' },
+    { id: 't-1795684898082-21-1w0l', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-22', name: 'F-M-22', seats: 6, status: 'available' },
+    { id: 't-1795684898082-22-xk9k', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-23', name: 'F-M-23', seats: 6, status: 'available' },
+    { id: 't-1795684898082-23-pfw8', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-24', name: 'F-M-24', seats: 6, status: 'available' },
+    { id: 't-1795684898082-24-ihzu', floor: 'Family Floor', zone: 'Family Floor', seatingType: 'majlis', cabinNumber: 'F-M-25', name: 'F-M-25', seats: 6, status: 'available' },
 
-    // 3rd Floor
-    { id: 'f3-t1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'tables', name: 'F3-T01', seats: 6, status: 'available' },
-    { id: 'f3-m1', floor: '3rd Floor', zone: '3rd Floor', seatingType: 'majlis', cabinNumber: 'Royal Cabin 1', name: 'Royal Cabin 1', seats: 14, status: 'available' },
-
-    // Rooftop
-    { id: 'rt-1', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'tables', name: 'R-01', seats: 4, status: 'available' },
-    { id: 'rt-2', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Sky Cabin 1', name: 'Sky Cabin 1', seats: 8, status: 'available' },
-    { id: 'rt-3', floor: 'Rooftop', zone: 'Rooftop', seatingType: 'majlis', cabinNumber: 'Sky Cabin 2', name: 'Sky Cabin 2', seats: 8, status: 'available' }
+    // Party Hall (6 Units)
+    { id: 't-1795685616203-0-kx93', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-01', seats: 4, status: 'available' },
+    { id: 't-1795685616203-1-7o3e', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-02', seats: 4, status: 'available' },
+    { id: 't-1795685616203-2-vpqh', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-03', seats: 4, status: 'available' },
+    { id: 't-1795685616203-3-layw', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-04', seats: 4, status: 'available' },
+    { id: 't-1795685616203-4-2g0w', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-05', seats: 4, status: 'available' },
+    { id: 't-1795685616203-5-05me', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-06', seats: 4, status: 'available' }
   ],
   tickets: [],
   onlineOrders: [],
@@ -2595,7 +2644,7 @@ const INITIAL_STATE = {
     "Ice Cream",
     "Cold Drinks & Water"
   ],
-  zones: ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
+  zones: ['Ground Floor', 'Rooftop', 'Family Floor', 'Party Hall'],
   regions: ['Pakistani', 'Chinese', 'Continental', 'Arabic', 'Turkish', 'Fast Food', 'Italian'],
   staff: [
     { id: 'st-master', hasSystemAccess: true, username: 'master', name: 'Master Admin', phone: '+92 300 0000001', role: 'Admin', customRoleId: 'role-admin', pin: '0000', status: 'Active', shift: 'Morning', joinedDate: '2025-01-01', designation: 'Master System Owner (Independent)' },

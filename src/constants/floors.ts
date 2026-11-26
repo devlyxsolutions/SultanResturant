@@ -70,7 +70,7 @@ export type FloorTemplate = {
   };
 };
 
-/** Sultan Restaurant runs 5 floors. Order here = display order everywhere. */
+/** Sultan Restaurant active floors. Order here = default display order everywhere. */
 export const FLOOR_TEMPLATE: FloorTemplate[] = [
   {
     zone: 'Ground Floor',
@@ -78,54 +78,12 @@ export const FLOOR_TEMPLATE: FloorTemplate[] = [
     prefix: 'G',
     icon: 'restaurant-outline',
     color: '#2E7D32',
-    blurb: 'Family dining hall & takeaway counter',
-    seats: [4, 4, 4, 4, 6, 6, 2, 2, 8, 4],
+    blurb: 'Family dining hall, VIP Sofas & Majlis Cabins',
+    seats: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 6, 6, 6, 6, 6, 6],
     zones: {
-      tables: [4, 4, 4, 4, 6, 6],
-      couches: [6, 6],
-      majlis: [8, 10],
-    },
-  },
-  {
-    zone: '1st Floor',
-    short: '1F',
-    prefix: 'F1',
-    icon: 'people-outline',
-    color: '#1976D2',
-    blurb: 'Family hall, Sofas & Traditional Majlis',
-    seats: [4, 4, 4, 4, 6, 6, 6, 8, 2, 2],
-    zones: {
-      tables: [4, 4, 4, 6],
-      couches: [4, 6, 6],
-      majlis: [6, 8, 10, 12], // 4 Cabins with specific capacities
-    },
-  },
-  {
-    zone: '2nd Floor',
-    short: '2F',
-    prefix: 'F2',
-    icon: 'sparkles-outline',
-    color: '#6A1B9A',
-    blurb: 'Banquet hall & Executive lounges',
-    seats: [10, 10, 12, 12, 8, 8, 6, 6],
-    zones: {
-      tables: [10, 10, 12, 12],
-      couches: [8, 8],
-      majlis: [10, 12],
-    },
-  },
-  {
-    zone: '3rd Floor',
-    short: '3F',
-    prefix: 'F3',
-    icon: 'diamond-outline',
-    color: '#B8860B',
-    blurb: 'VIP lounges, Royal Majlis & Private rooms',
-    seats: [6, 8, 8, 10, 12, 6],
-    zones: {
-      tables: [6, 8],
-      couches: [8, 8],
-      majlis: [10, 12, 14], // 3 Royal Cabins
+      couches: [4, 4, 4, 4, 4],
+      tables: [4, 4, 4, 4, 4],
+      majlis: [6, 6, 6, 6, 6, 6],
     },
   },
   {
@@ -134,12 +92,37 @@ export const FLOOR_TEMPLATE: FloorTemplate[] = [
     prefix: 'R',
     icon: 'moon-outline',
     color: '#E65100',
-    blurb: 'Open-air BBQ & Sky Majlis',
-    seats: [4, 4, 4, 6, 6, 2, 2, 8, 4, 4],
+    blurb: 'Open-air BBQ, Dining Tables & Sky Majlis',
+    seats: [6, 6, 6, 6, 6, 10, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
     zones: {
-      tables: [4, 4, 4, 6],
-      couches: [6, 6],
-      majlis: [8, 8],
+      majlis: [6, 6, 6, 6, 6, 10],
+      tables: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4],
+    },
+  },
+  {
+    zone: 'Family Floor',
+    short: 'FA',
+    prefix: 'F',
+    icon: 'people-outline',
+    color: '#1976D2',
+    blurb: 'Family hall, Sofas, 2-Seater Tables & Traditional Majlis',
+    seats: [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2, 6, 6, 6, 6, 6, 6, 6, 6],
+    zones: {
+      couches: [4, 4, 4, 4, 4],
+      tables: [4, 4, 4, 4, 4, 2, 2, 2, 2, 2, 2, 2],
+      majlis: [6, 6, 6, 6, 6, 6, 6, 6],
+    },
+  },
+  {
+    zone: 'Party Hall',
+    short: 'PA',
+    prefix: 'P',
+    icon: 'sparkles-outline',
+    color: '#6A1B9A',
+    blurb: 'Banquet & Party Hall dining tables',
+    seats: [4, 4, 4, 4, 4, 4],
+    zones: {
+      tables: [4, 4, 4, 4, 4, 4],
     },
   },
 ];
@@ -195,19 +178,16 @@ export function getTableFloor(t: { floor?: string; zone?: string; name?: string 
   const directMatch = FLOOR_ORDER.find((f) => f.toLowerCase() === z.toLowerCase());
   if (directMatch) return directMatch;
   if (z.toLowerCase().includes('ground')) return 'Ground Floor';
-  if (z.toLowerCase().includes('1st') || z.toLowerCase().includes('first')) return '1st Floor';
-  if (z.toLowerCase().includes('2nd') || z.toLowerCase().includes('second')) return '2nd Floor';
-  if (z.toLowerCase().includes('3rd') || z.toLowerCase().includes('third')) return '3rd Floor';
+  if (z.toLowerCase().includes('family') || z.toLowerCase().includes('1st') || z.toLowerCase().includes('first')) return 'Family Floor';
+  if (z.toLowerCase().includes('party') || z.toLowerCase().includes('banquet') || z.toLowerCase().includes('2nd')) return 'Party Hall';
   if (z.toLowerCase().includes('rooftop')) return 'Rooftop';
 
   const name = (t.name || '').trim().toUpperCase();
-  if (name.startsWith('G-') || name.startsWith('G0') || name.startsWith('G1')) return 'Ground Floor';
-  if (name.startsWith('F1') || name.startsWith('1F') || name.startsWith('MC-')) return '1st Floor';
-  if (name.startsWith('F2') || name.startsWith('2F')) return '2nd Floor';
-  if (name.startsWith('F3') || name.startsWith('3F')) return '3rd Floor';
-  if (name.startsWith('R-') || name.startsWith('RT')) return 'Rooftop';
-  if (z.toLowerCase().includes('vip')) return '3rd Floor';
-  if (z.toLowerCase().includes('banquet')) return '2nd Floor';
+  if (name.startsWith('G-') || name.startsWith('GM-') || name.startsWith('G0') || name.startsWith('G1')) return 'Ground Floor';
+  if (name.startsWith('F-') || name.startsWith('FM-') || name.startsWith('FC-') || name.startsWith('F1') || name.startsWith('FA')) return 'Family Floor';
+  if (name.startsWith('P-') || name.startsWith('PA')) return 'Party Hall';
+  if (name.startsWith('R-') || name.startsWith('RM-') || name.startsWith('RT') || /^R\d/.test(name)) return 'Rooftop';
+  if (z) return z;
   return 'Ground Floor';
 }
 

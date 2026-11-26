@@ -17,7 +17,7 @@ import PermissionDeniedScreen from '../../components/PermissionDeniedScreen';
 import SultanLogo from '../../components/SultanLogo';
 import AttendanceTab from '../../components/staff/AttendanceTab';
 import PayrollTab from '../../components/staff/PayrollTab';
-import { sortFloors } from '../../constants/floors';
+import { getTableFloor, sortFloors } from '../../constants/floors';
 import { broadcastImmediately } from '../../services/syncService';
 import {
   INITIAL_STAFF,
@@ -118,16 +118,12 @@ export default function StaffManagementScreen({
 
   const [activeTab, setActiveTab] = useState<'staff' | 'attendance' | 'payroll'>('staff');
 
+  const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
   const availableFloors = sortFloors(
     Array.from(
       new Set([
-        ...zones,
-        ...tables.map((t) => t.zone),
-        'Ground Floor',
-        '1st Floor',
-        '2nd Floor',
-        '3rd Floor',
-        'Rooftop',
+        ...(dynamicFloors.length > 0 ? dynamicFloors.map((f) => f.name) : zones),
+        ...tables.map((t) => getTableFloor(t)),
       ].filter(Boolean))
     )
   );

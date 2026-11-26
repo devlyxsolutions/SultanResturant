@@ -40,11 +40,16 @@ export default function FloorOverviewScreen({ backRoute = '/manager/dashboard' }
 
   const [selectedFloor, setSelectedFloor] = useState<string>('All');
 
-  // Discover all distinct zones from tables, plus the standard 5 floors
-  const allZones = sortFloors([
-    ...FLOOR_TEMPLATE.map((f) => f.zone),
-    ...tables.map((t) => t.zone),
-  ]);
+  const dynamicFloors = useRestaurantStore((s) => s.floors) || [];
+  // Discover all distinct zones from configured floors & tables
+  const allZones = sortFloors(
+    Array.from(
+      new Set([
+        ...(dynamicFloors.length > 0 ? dynamicFloors.map((f) => f.name) : FLOOR_TEMPLATE.map((f) => f.zone)),
+        ...tables.map((t) => getTableFloor(t)),
+      ].filter(Boolean))
+    )
+  );
 
   // Aggregate stats per floor
   const floorStats = allZones.map((zone) => {
