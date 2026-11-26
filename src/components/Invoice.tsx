@@ -26,6 +26,24 @@ type InvoiceProps = {
  * "Tanveer (Cashier)", "Bilal (Order Taker)", "Nadeem (Floor Manager)")
  * instead of the generic route role "(Manager)".
  */
+const KNOWN_STAFF_EXACT_ROLES: Record<string, string> = {
+  sharjeel: 'Cashier',
+  tanveer: 'Cashier',
+  shakeel: 'G. Manager',
+  nadeem: 'Floor Manager',
+  'adil shah': 'Floor Manager',
+  adil: 'Floor Manager',
+  zulfiqar: 'Order Taker',
+  bilal: 'Order Taker',
+  madhia: 'Order Taker',
+  tehreem: 'Order Taker',
+  tahir: 'Order Taker',
+  sheroz: 'Juice Bar',
+  zahid: 'Store Keeper',
+  'master admin': 'Admin',
+  master: 'Admin',
+};
+
 export function formatStaffWithExactRole(
   rawNameOrLabel: string | undefined | null,
   fallbackRoleLabel: string = 'Cashier'
@@ -40,10 +58,10 @@ export function formatStaffWithExactRole(
   const existingParenRole = parenMatch ? parenMatch[2].trim() : '';
 
   if (!baseName) return raw;
+  const lowerBase = baseName.toLowerCase();
 
   try {
     const staffList = useRestaurantStore.getState().staff || [];
-    const lowerBase = baseName.toLowerCase();
     const matched = staffList.find(
       (s) =>
         s &&
@@ -60,7 +78,12 @@ export function formatStaffWithExactRole(
       const desigLower = desig.toLowerCase();
 
       let exactRole = '';
-      if (cRole === 'role-cashier' || sRoleLower === 'cashier' || desigLower === 'cashier') {
+      if (
+        cRole === 'role-cashier' ||
+        sRoleLower === 'cashier' ||
+        desigLower === 'cashier' ||
+        KNOWN_STAFF_EXACT_ROLES[lowerBase] === 'Cashier'
+      ) {
         exactRole = 'Cashier';
       } else if (
         cRole === 'role-floor-manager' ||
@@ -86,6 +109,8 @@ export function formatStaffWithExactRole(
         exactRole = 'Kitchen';
       } else if (desig) {
         exactRole = desig;
+      } else if (KNOWN_STAFF_EXACT_ROLES[lowerBase]) {
+        exactRole = KNOWN_STAFF_EXACT_ROLES[lowerBase];
       } else if (sRole) {
         exactRole = sRole;
       } else {
@@ -95,6 +120,10 @@ export function formatStaffWithExactRole(
       return `${matched.name} (${exactRole})`;
     }
   } catch {}
+
+  if (KNOWN_STAFF_EXACT_ROLES[lowerBase]) {
+    return `${baseName} (${KNOWN_STAFF_EXACT_ROLES[lowerBase]})`;
+  }
 
   if (existingParenRole && existingParenRole.toLowerCase() !== 'pos') {
     return `${baseName} (${existingParenRole})`;

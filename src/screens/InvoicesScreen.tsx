@@ -786,7 +786,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                           {formatDateTime(inv.timeSettled || inv.timePlaced)} • {itemsCount} items
                         </Text>
                         <Text style={styles.mobileMetaSubText} numberOfLines={1}>
-                          Server: {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')} • Cashier: {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
+                          Server: {formatStaffWithExactRole(inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : inv.cashier || 'Staff'), 'Order Taker')} • Cashier: {formatStaffWithExactRole(inv.cashier || inv.server || 'Cashier', 'Cashier')}
                           {inv.customer ? ` • ${inv.customer.name}` : ''}
                         </Text>
                       </View>
@@ -935,11 +935,11 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                       <View style={{ gap: 2 }}>
                         <Text style={styles.rowStaffText} numberOfLines={1}>
                           <Text style={styles.rowStaffLabel}>Server: </Text>
-                          {inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : 'Staff')}
+                          {formatStaffWithExactRole(inv.orderTakenBy || (inv.server && !inv.server.toLowerCase().includes('pos') ? inv.server : inv.cashier || 'Staff'), 'Order Taker')}
                         </Text>
                         <Text style={styles.rowStaffText} numberOfLines={1}>
                           <Text style={styles.rowStaffLabel}>Cashier: </Text>
-                          {inv.cashier || (inv.server?.toLowerCase().includes('pos') ? inv.server : 'Manager')}
+                          {formatStaffWithExactRole(inv.cashier || inv.server || 'Cashier', 'Cashier')}
                         </Text>
                         {inv.customer && (
                           <Text style={styles.rowCustomerText} numberOfLines={1}>
@@ -1165,13 +1165,13 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                         <View style={styles.metaDetailRow}>
                           <Text style={styles.metaDetailKey}>Order Taken By</Text>
                           <Text style={styles.metaDetailVal}>
-                            {selectedInvoice.orderTakenBy || (selectedInvoice.server && !selectedInvoice.server.toLowerCase().includes('pos') ? selectedInvoice.server : 'Staff')}
+                            {formatStaffWithExactRole(selectedInvoice.orderTakenBy || (selectedInvoice.server && !selectedInvoice.server.toLowerCase().includes('pos') ? selectedInvoice.server : selectedInvoice.cashier || 'Staff'), 'Order Taker')}
                           </Text>
                         </View>
                         <View style={styles.metaDetailRow}>
-                          <Text style={styles.metaDetailKey}>Billed By (Cashier)</Text>
+                          <Text style={styles.metaDetailKey}>Billed By</Text>
                           <Text style={styles.metaDetailVal}>
-                            {selectedInvoice.cashier || (selectedInvoice.server?.toLowerCase().includes('pos') ? selectedInvoice.server : 'Manager')}
+                            {formatStaffWithExactRole(selectedInvoice.cashier || selectedInvoice.server || 'Cashier', 'Cashier')}
                           </Text>
                         </View>
                         {selectedInvoice.customer && (

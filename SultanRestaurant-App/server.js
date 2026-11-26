@@ -5810,7 +5810,7 @@ async function handleRequest(req, res) {
         exeHash,
         apkHash,
         apkVersion: 34,
-        apkVersion: 36,
+        apkVersion: 37,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
