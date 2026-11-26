@@ -13,6 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { getActiveServerHttpUrl } from '../services/syncService';
 import { printKdsTestSlip, KdsStation } from '../utils/kdsAutoPrint';
+import { useSettingsStore } from '../store/settingsStore';
 
 type PrinterMode = 'agent' | 'windows' | 'network' | 'disabled';
 
@@ -174,6 +175,9 @@ export default function StationPrinterModal({
         body: JSON.stringify(payload),
       });
       if (res.ok) {
+        try {
+          useSettingsStore.getState().updateSettings(payload as any);
+        } catch {}
         setFeedback({ type: 'ok', text: 'Printer routing saved & synced across all terminals!' });
         await fetchStatus(false);
       } else {

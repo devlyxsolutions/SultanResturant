@@ -117,15 +117,25 @@ export default function KitchenDisplayScreen() {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
     const pollPrinter = async () => {
       try {
-        const res = await fetch(`${window.location.origin}/api/print/status`, { cache: 'no-store' });
+        const base = (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.origin && !window.location.origin.includes('netlify.app') && !window.location.origin.includes('sultanrestaurant.com.pk'))
+          ? window.location.origin
+          : getActiveServerHttpUrl();
+        const res = await fetch(`${base}/api/print/status`, { cache: 'no-store' });
         if (!res.ok) return;
         const data = await res.json();
         const k = data?.kitchen;
         if (!k?.config) return;
+        const serverWinPrinters: string[] = Array.isArray(data?.serverWindowsPrinters) ? data.serverWindowsPrinters : [];
+        const localThermal = serverWinPrinters.find((p) => /pos|thermal|80|receipt|epson|xprinter/i.test(String(p || '')));
         if (k.config.mode === 'agent') {
+          const isOnline = !!k.agent?.online || !!localThermal;
           setPrinterStatus({
-            online: !!k.agent?.online,
-            label: k.agent?.online ? (k.agent.activePrinter || 'Kitchen USB') : 'Kitchen Offline',
+            online: isOnline,
+            label: k.agent?.online
+              ? (k.agent.activePrinter || 'Kitchen USB')
+              : localThermal
+                ? `Kitchen: ${localThermal}`
+                : 'Kitchen Offline',
           });
         } else if (k.config.mode === 'network') {
           setPrinterStatus({
@@ -135,7 +145,7 @@ export default function KitchenDisplayScreen() {
         } else {
           setPrinterStatus({
             online: k.config.mode !== 'disabled',
-            label: k.config.printerName || 'POS-80',
+            label: `Kitchen: ${k.config.printerName || localThermal || 'POS-80'}`,
           });
         }
       } catch {}

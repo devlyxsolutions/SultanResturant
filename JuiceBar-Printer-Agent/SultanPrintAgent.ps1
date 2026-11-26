@@ -1445,8 +1445,10 @@ try {
     $pollTimer.add_Tick({
         if (-not $script:App.Running) { return }
 
-        # Auto-refresh Windows printers every 15s (picks up newly plugged/installed USB printers live!)
-        if (([DateTime]::UtcNow - $script:App.LastPrinterRefreshAt).TotalSeconds -ge 15) {
+        # Auto-refresh Windows printers: every 120s when a physical printer is already active (avoids 5s WMI freeze between polls), or every 15s if still searching
+        $hasActivePhysical = ($script:App.PrinterObjects | Where-Object { -not $_.IsVirtual } | Measure-Object).Count -gt 0
+        $refreshIntervalSec = if ($hasActivePhysical) { 120 } else { 15 }
+        if (([DateTime]::UtcNow - $script:App.LastPrinterRefreshAt).TotalSeconds -ge $refreshIntervalSec) {
             Refresh-PrintersUi | Out-Null
         }
 
