@@ -104,14 +104,40 @@ function normalizeTicketStations(ticket, menuItems = [], autoRouteBeverages = tr
   // Keep stationStatuses strictly aligned with items actually present on this ticket
   const prevStatuses = ticket.stationStatuses || {};
   const fallbackStatus = ticket.status || 'pending';
+  const STATUS_RANK = { pending: 0, cooking: 1, ready: 2, served: 3 };
+  const deriveStationFromItems = (itemsList) => {
+    if (!Array.isArray(itemsList) || itemsList.length === 0) return fallbackStatus;
+    if (itemsList.every((it) => it && (it.itemStatus === 'served'))) return 'served';
+    if (itemsList.every((it) => it && (it.itemStatus === 'ready' || it.itemStatus === 'served' || it.completed))) return 'ready';
+    if (itemsList.some((it) => it && (it.itemStatus === 'cooking' || it.itemStatus === 'ready' || it.itemStatus === 'served' || it.completed))) return 'cooking';
+    return fallbackStatus;
+  };
+  const pickHigherStatus = (a, b) => {
+    const rA = a && STATUS_RANK[a] !== undefined ? STATUS_RANK[a] : -1;
+    const rB = b && STATUS_RANK[b] !== undefined ? STATUS_RANK[b] : -1;
+    return rA >= rB ? (a || b || 'pending') : (b || a || 'pending');
+  };
   const nextStatuses = {};
   if (hasMain) {
-    nextStatuses.main = prevStatuses.main || fallbackStatus;
+    nextStatuses.main = pickHigherStatus(prevStatuses.main, deriveStationFromItems(mainItems));
   }
   if (hasJuice) {
-    nextStatuses.juice = prevStatuses.juice || fallbackStatus;
+    nextStatuses.juice = pickHigherStatus(prevStatuses.juice, deriveStationFromItems(juiceItems));
   }
   ticket.stationStatuses = nextStatuses;
+
+  // Reconcile overall ticket.status with active stationStatuses so a single-station or all-served ticket never stays stuck in 'cooking'/'ready'
+  const activeVals = Object.values(nextStatuses).filter(Boolean);
+  if (activeVals.length > 0) {
+    if (activeVals.every((s) => s === 'served')) {
+      ticket.status = 'served';
+    } else if (activeVals.every((s) => s === 'ready' || s === 'served')) {
+      ticket.status = 'ready';
+      if (!ticket.readyAt) ticket.readyAt = Date.now();
+    } else if (activeVals.some((s) => s === 'cooking' || s === 'ready' || s === 'served')) {
+      if (ticket.status === 'pending') ticket.status = 'cooking';
+    }
+  }
 
   return { hasMain, hasJuice, mainItems, juiceItems };
 }

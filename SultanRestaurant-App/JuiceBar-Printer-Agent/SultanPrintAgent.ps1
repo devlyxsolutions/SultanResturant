@@ -459,16 +459,15 @@ function Send-PlainTextViaGdiDriver {
             $fontReg = $null
             $brush = $null
             try {
-                $fontTitle = New-Object System.Drawing.Font("Consolas", 10.0, [System.Drawing.FontStyle]::Bold)
-                $fontSub   = New-Object System.Drawing.Font("Consolas", 9.0, [System.Drawing.FontStyle]::Bold)
-                $fontItem  = New-Object System.Drawing.Font("Consolas", 8.8, [System.Drawing.FontStyle]::Bold)
-                $fontReg   = New-Object System.Drawing.Font("Consolas", 8.0, [System.Drawing.FontStyle]::Regular)
+                $fontTitle = New-Object System.Drawing.Font("Consolas", 11.5, [System.Drawing.FontStyle]::Bold)
+                $fontSub   = New-Object System.Drawing.Font("Consolas", 10.0, [System.Drawing.FontStyle]::Bold)
+                $fontItem  = New-Object System.Drawing.Font("Consolas", 9.5, [System.Drawing.FontStyle]::Bold)
+                $fontReg   = New-Object System.Drawing.Font("Consolas", 8.5, [System.Drawing.FontStyle]::Regular)
                 $brush     = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::Black)
 
-                # Safe 63.5mm (250 hundredths of an inch) left-anchored printable width so 80mm/72mm thermal heads never clip right side
-                $pageW = 250
+                $pageW = [Math]::Max(240, [Math]::Min(310, $e.PageBounds.Width - 6))
                 $maxY  = [Math]::Max(400, $e.PageBounds.Height - 20)
-                $y = 2.0
+                $y = 4.0
 
                 while ($script:GdiPrintIndex -lt $script:GdiPrintLines.Count) {
                     $line = [string]$script:GdiPrintLines[$script:GdiPrintIndex]
@@ -1446,8 +1445,10 @@ try {
     $pollTimer.add_Tick({
         if (-not $script:App.Running) { return }
 
-        # Auto-refresh Windows printers every 15s (picks up newly plugged/installed USB printers live!)
-        if (([DateTime]::UtcNow - $script:App.LastPrinterRefreshAt).TotalSeconds -ge 15) {
+        # Auto-refresh Windows printers: every 120s when a physical printer is already active (avoids 5s WMI freeze between polls), or every 15s if still searching
+        $hasActivePhysical = ($script:App.PrinterObjects | Where-Object { -not $_.IsVirtual } | Measure-Object).Count -gt 0
+        $refreshIntervalSec = if ($hasActivePhysical) { 120 } else { 15 }
+        if (([DateTime]::UtcNow - $script:App.LastPrinterRefreshAt).TotalSeconds -ge $refreshIntervalSec) {
             Refresh-PrintersUi | Out-Null
         }
 
