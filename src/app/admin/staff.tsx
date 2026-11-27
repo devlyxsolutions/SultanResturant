@@ -29,6 +29,7 @@ import {
   useRestaurantStore,
 } from '../../store/restaurantStore';
 import {
+  BaseRoleType,
   useRolePermissions,
   useRoleStore,
 } from '../../store/roleStore';
@@ -113,10 +114,14 @@ export default function StaffManagementScreen({
     }
   }, [rawStaff]);
 
-  const { roles } = useRoleStore();
+  const { roles, addRole } = useRoleStore();
   const systemSettings = useSettingsStore((s) => s.settings);
 
   const [activeTab, setActiveTab] = useState<'staff' | 'attendance' | 'payroll'>('staff');
+  const [showInlineRoleCreator, setShowInlineRoleCreator] = useState(false);
+  const [newRoleNameInput, setNewRoleNameInput] = useState('');
+  const [newRoleBaseType, setNewRoleBaseType] = useState<BaseRoleType>('manager');
+  const [newRoleColor, setNewRoleColor] = useState('#B48214');
 
   const dynamicFloors = useRestaurantStore((state) => state.floors) || [];
   const availableFloors = sortFloors(
@@ -287,6 +292,8 @@ export default function StaffManagementScreen({
     setFormAddress('');
     setFormBankDetails('');
     setFormError('');
+    setShowInlineRoleCreator(false);
+    setNewRoleNameInput('');
     setModalVisible(true);
   };
 
@@ -332,7 +339,44 @@ export default function StaffManagementScreen({
     setFormAddress(member.address || '');
     setFormBankDetails(member.bankAccountDetails || '');
     setFormError('');
+    setShowInlineRoleCreator(false);
+    setNewRoleNameInput('');
     setModalVisible(true);
+  };
+
+  const handleCreateInlineRole = () => {
+    const cleanRoleName = newRoleNameInput.trim();
+    if (!cleanRoleName) {
+      setFormError('Please enter a name for the new role');
+      return;
+    }
+    const existingRole = roles.find((r) => r.name.trim().toLowerCase() === cleanRoleName.toLowerCase());
+    if (existingRole) {
+      setFormRole(existingRole.name);
+      setFormCustomRoleId(existingRole.id);
+      setShowInlineRoleCreator(false);
+      setNewRoleNameInput('');
+      return;
+    }
+    const templateRole =
+      roles.find((r) => r.baseRole === newRoleBaseType) ||
+      roles.find((r) => r.id === 'role-manager') ||
+      roles[0];
+    const newId = addRole({
+      name: cleanRoleName,
+      description: `Custom role (${cleanRoleName}) created in Staff & HR`,
+      badgeColor: newRoleColor,
+      icon: 'shield-checkmark',
+      isSystem: false,
+      baseRole: newRoleBaseType,
+      permissions: { ...(templateRole?.permissions || roles[0].permissions) },
+    });
+    setFormRole(cleanRoleName);
+    setFormCustomRoleId(newId);
+    setShowInlineRoleCreator(false);
+    setNewRoleNameInput('');
+    setFormError('');
+    broadcastImmediately();
   };
 
   const handleSaveStaff = () => {
@@ -1067,11 +1111,17 @@ export default function StaffManagementScreen({
                 <Text style={styles.formLabel}>Full Name *</Text>
                 <TextInput
                   style={styles.formInput}
-                  placeholder="e.g. Fateh Sher / Zulfiqar / Sweeper"
+                  placeholder="e.g. Qasim / Fateh Sher / Zulfiqar"
                   placeholderTextColor="#A0A0A5"
                   value={formName}
                   onChangeText={(val) => {
+                    const prevAutoSlug = formName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
                     setFormName(val);
+                    // If Login ID was empty or matched the old name, keep it in sync automatically
+                    if (!formUsername.trim() || formUsername.trim().toLowerCase() === prevAutoSlug) {
+                      const nextSlug = val.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+                      if (nextSlug) setFormUsername(nextSlug);
+                    }
                     if (formError) setFormError('');
                   }}
                 />
@@ -1202,9 +1252,37 @@ export default function StaffManagementScreen({
                 >
                   {/* Unique Login ID / Username */}
                   <View style={styles.formGroup}>
-                    <Text style={[styles.formLabel, { color: '#065F46' }]}>
-                      Login ID / Username (Unique Login ID) *
-                    </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={[styles.formLabel, { color: '#065F46', marginBottom: 0 }]}>
+                        Login ID / Username (Unique Login ID) *
+                      </Text>
+                      {Boolean(
+                        formName.trim() &&
+                        formUsername.trim() &&
+                        formName.trim().toLowerCase().replace(/[^a-z0-9]+/g, '') !==
+                          formUsername.trim().toLowerCase().replace(/[^a-z0-9]+/g, '')
+                      ) && (
+                        <TouchableOpacity
+                          onPress={() => {
+                            const suggestedName =
+                              formUsername.trim().charAt(0).toUpperCase() + formUsername.trim().slice(1);
+                            setFormName(suggestedName);
+                          }}
+                          style={{
+                            backgroundColor: '#DCFCE7',
+                            borderWidth: 1,
+                            borderColor: '#22C55E',
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#15803D' }}>
+                            Set Full Name to &quot;{formUsername.trim().charAt(0).toUpperCase() + formUsername.trim().slice(1)}&quot;
+                          </Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
                     <TextInput
                       style={[styles.formInput, { backgroundColor: '#FFFFFF', borderColor: '#6EE7B7' }]}
                       placeholder="e.g. ordertaker1, cashier1, shakeel, master"
@@ -1258,37 +1336,151 @@ export default function StaffManagementScreen({
                 </View>
               )}
 
-              {/* Dynamic Role / Department Selection (Built-in + Custom Roles) */}
+              {/* Dynamic Role / Department Selection (Built-in + Custom Roles + Inline Role Creator) */}
               <View style={styles.formGroup}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6, flexWrap: 'wrap', gap: 6 }}>
                   <Text style={styles.formLabel}>
                     {formHasSystemAccess ? 'Assigned System Role *' : 'Department / Role Category'}
                   </Text>
-                  {role === 'admin' && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
-                      onPress={() => {
-                        setModalVisible(false);
-                        router.push('/admin/settings' as any);
+                      onPress={() => setShowInlineRoleCreator((prev) => !prev)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 4,
+                        backgroundColor: '#FEF3C7',
+                        borderWidth: 1,
+                        borderColor: '#D4AF37',
+                        paddingHorizontal: 9,
+                        paddingVertical: 4,
+                        borderRadius: 6,
                       }}
                     >
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>
-                        Manage Roles in Settings
+                      <Ionicons name={showInlineRoleCreator ? 'close-circle' : 'add-circle'} size={13} color={BRAND.burgundy} />
+                      <Text style={{ fontSize: 11, fontWeight: '800', color: BRAND.burgundy }}>
+                        {showInlineRoleCreator ? 'Close' : '+ Add New Role'}
                       </Text>
                     </TouchableOpacity>
-                  )}
+                    {role === 'admin' && (
+                      <TouchableOpacity
+                        onPress={() => {
+                          setModalVisible(false);
+                          router.push('/admin/settings' as any);
+                        }}
+                      >
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: BRAND.burgundy }}>
+                          Role Permissions
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
                 </View>
+
+                {showInlineRoleCreator && (
+                  <View
+                    style={{
+                      backgroundColor: '#FFFBEB',
+                      borderWidth: 1.5,
+                      borderColor: '#F59E0B',
+                      borderRadius: 10,
+                      padding: 10,
+                      marginBottom: 10,
+                      gap: 8,
+                    }}
+                  >
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: BRAND.burgundy }}>
+                      Create &amp; Assign New System Role
+                    </Text>
+                    <TextInput
+                      style={[styles.formInput, { backgroundColor: '#FFFFFF', borderColor: '#FCD34D' }]}
+                      placeholder="Role Name (e.g. GRO, Supervisor, Head Cashier, Hostess)"
+                      placeholderTextColor="#A0A0A5"
+                      value={newRoleNameInput}
+                      onChangeText={setNewRoleNameInput}
+                    />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#475569' }}>
+                      Portal Access Type (Login Destination):
+                    </Text>
+                    <View style={styles.pillsRow}>
+                      {(
+                        [
+                          { val: 'manager', label: 'Manager / POS Portal' },
+                          { val: 'floor_manager', label: 'Floor Manager' },
+                          { val: 'waiter', label: 'Order Taker / Waiter' },
+                          { val: 'kitchen', label: 'Kitchen KDS' },
+                          { val: 'juicebar', label: 'Juice Bar KDS' },
+                          { val: 'playland', label: 'Playland' },
+                        ] as { val: BaseRoleType; label: string }[]
+                      ).map((opt) => {
+                        const active = newRoleBaseType === opt.val;
+                        return (
+                          <TouchableOpacity
+                            key={opt.val}
+                            style={[
+                              styles.formPill,
+                              active && { backgroundColor: BRAND.burgundy, borderColor: BRAND.burgundy },
+                            ]}
+                            onPress={() => setNewRoleBaseType(opt.val)}
+                          >
+                            <Text style={[styles.formPillText, active && styles.formPillTextActive]}>
+                              {opt.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 2 }}>
+                      <View style={{ flexDirection: 'row', gap: 6 }}>
+                        {['#52171B', '#B48214', '#0D9488', '#2563EB', '#7C3AED', '#059669', '#DC2626'].map((hex) => (
+                          <TouchableOpacity
+                            key={hex}
+                            onPress={() => setNewRoleColor(hex)}
+                            style={{
+                              width: 22,
+                              height: 22,
+                              borderRadius: 11,
+                              backgroundColor: hex,
+                              borderWidth: newRoleColor === hex ? 2.5 : 1,
+                              borderColor: newRoleColor === hex ? '#000' : '#FFF',
+                            }}
+                          />
+                        ))}
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleCreateInlineRole}
+                        style={{
+                          backgroundColor: BRAND.burgundy,
+                          paddingHorizontal: 14,
+                          paddingVertical: 7,
+                          borderRadius: 8,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 4,
+                        }}
+                      >
+                        <Ionicons name="checkmark-circle" size={14} color="#FFFFFF" />
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>
+                          Create &amp; Select Role
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
 
                 <View style={styles.pillsRow}>
                   {roles.map((r) => {
-                    const isSelected = formCustomRoleId === r.id || formRole.toLowerCase() === r.name.toLowerCase();
+                    const isSelected =
+                      formCustomRoleId === r.id ||
+                      (!formCustomRoleId && formRole.toLowerCase() === r.name.toLowerCase());
                     return (
                       <TouchableOpacity
                         key={r.id}
                         style={[
                           styles.formPill,
                           isSelected && {
-                            backgroundColor: r.badgeColor,
-                            borderColor: r.badgeColor,
+                            backgroundColor: r.badgeColor || BRAND.burgundy,
+                            borderColor: r.badgeColor || BRAND.burgundy,
                           },
                         ]}
                         onPress={() => {

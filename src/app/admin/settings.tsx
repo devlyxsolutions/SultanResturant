@@ -1127,7 +1127,12 @@ export default function AdminSettingsScreen() {
       setRoleModalVisible(false);
       showToast(`Updated role "${rName.trim()}"`);
     } else {
-      const sourceRole = rCloneFromId !== 'none' ? roles.find((r) => r.id === rCloneFromId) : null;
+      const sourceRole =
+        rCloneFromId === 'blank'
+          ? null
+          : rCloneFromId !== 'none'
+            ? roles.find((r) => r.id === rCloneFromId)
+            : roles.find((r) => r.baseRole === rBaseRole) || roles.find((r) => r.id === 'role-manager');
       const initialPerms: RolePermissions = sourceRole
         ? { ...sourceRole.permissions }
         : { ...EMPTY_PERMISSIONS };
@@ -4694,7 +4699,7 @@ export default function AdminSettingsScreen() {
                 {roles.map((r) => {
                   const selected = uCustomRoleId
                     ? uCustomRoleId === r.id
-                    : (uRole || '').toLowerCase() === r.baseRole;
+                    : (uRole || '').toLowerCase() === r.name.toLowerCase() || (uRole || '').toLowerCase() === r.baseRole;
                   return (
                     <TouchableOpacity
                       key={r.id}
@@ -4704,9 +4709,7 @@ export default function AdminSettingsScreen() {
                         const staffRoleValue =
                           r.id === 'role-cashier' || r.name.toLowerCase() === 'cashier'
                             ? 'Cashier'
-                            : r.baseRole === 'custom'
-                              ? 'manager'
-                              : r.baseRole;
+                            : r.name;
                         setURole(staffRoleValue as StaffRole);
                       }}
                     >
@@ -4814,6 +4817,14 @@ export default function AdminSettingsScreen() {
                       onPress={() => setRCloneFromId('none')}
                     >
                       <Text style={[styles.chipText, rCloneFromId === 'none' && styles.chipTextActive]}>
+                        Base Portal Default
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.chip, rCloneFromId === 'blank' && styles.chipActive]}
+                      onPress={() => setRCloneFromId('blank')}
+                    >
+                      <Text style={[styles.chipText, rCloneFromId === 'blank' && styles.chipTextActive]}>
                         Start Blank (0/{ALL_PERMISSION_KEYS.length})
                       </Text>
                     </TouchableOpacity>

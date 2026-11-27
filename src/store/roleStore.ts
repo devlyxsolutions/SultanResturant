@@ -1020,18 +1020,30 @@ export const useRoleStore = create<RoleState>()(
           const now = Date.now();
           const currentMap = new Map(current.roles.map((r) => [r.id, r]));
 
-          // Protect very recent (<8s) in-flight local edits from being rolled back by a stale server echo
+          // Protect very recent (<12s) in-flight local edits and newly added roles from being rolled back by a stale server echo
           const merged = normalizedIncoming.map((incRole) => {
             const localRole = currentMap.get(incRole.id);
             if (
               localRole &&
               (localRole.updatedAt || 0) > (incRole.updatedAt || 0) &&
-              now - (localRole.updatedAt || 0) < 8000
+              now - (localRole.updatedAt || 0) < 12000
             ) {
               return localRole;
             }
             return incRole;
           });
+          const incomingIds = new Set(merged.map((r) => r.id));
+          for (const localRole of current.roles) {
+            if (
+              localRole &&
+              localRole.id &&
+              !incomingIds.has(localRole.id) &&
+              now - (localRole.updatedAt || localRole.createdAt || 0) < 12000
+            ) {
+              merged.push(localRole);
+              incomingIds.add(localRole.id);
+            }
+          }
 
           try {
             if (JSON.stringify(current.roles) === JSON.stringify(merged)) {

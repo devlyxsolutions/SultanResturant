@@ -470,6 +470,8 @@ export type SalaryPayment = {
 
 export type StaffMember = {
   id: string;
+  /** Timestamp of latest profile edit so newer name/username/PIN/role edits always win over stale client syncs */
+  updatedAt?: number;
   /** Whether this employee is allowed to sign in to the POS / System (false for HR/Attendance-only staff like sweepers, helpers, dishwashers). */
   hasSystemAccess?: boolean;
   /** Unique Login ID / Username for independent per-account sign-in (e.g. "master", "ordertaker1"). */
@@ -3961,7 +3963,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       addStaff: (newStaff) => {
         set((state) => {
           const existingList = state.staff || [];
-          const uniqueId = `st_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
+          const now = Date.now();
+          const uniqueId = `st_${now.toString(36)}_${Math.random().toString(36).substring(2, 6)}`;
           let autoUsername = (newStaff.username || '').trim().toLowerCase().replace(/\s+/g, '');
           if (!autoUsername && newStaff.hasSystemAccess !== false && newStaff.name) {
             const baseSlug = newStaff.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
@@ -3975,15 +3978,16 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           }
           return {
-            staff: [...existingList, { ...newStaff, id: uniqueId, username: autoUsername || undefined }],
+            staff: [...existingList, { ...newStaff, id: uniqueId, username: autoUsername || undefined, updatedAt: now }],
           };
         });
         notifySync();
       },
 
       updateStaff: (id, staffUpdates) => {
+        const now = Date.now();
         set((state) => ({
-          staff: (state.staff || []).map(s => s.id === id ? { ...s, ...staffUpdates } : s)
+          staff: (state.staff || []).map(s => s.id === id ? { ...s, ...staffUpdates, updatedAt: now } : s)
         }));
         notifySync();
       },
@@ -4519,25 +4523,39 @@ export const useRestaurantStore = create<RestaurantState>()(
               : {}),
             ...(remoteState.staff ? {
               staff: (() => {
+                const nowMs = Date.now();
                 const cleanRemote = (Array.isArray(remoteState.staff) ? remoteState.staff : []).filter(
                   (s) => s && s.id && !isLegacyDummyStaff(s)
                 );
+                const localMap = new Map<string, StaffMember>((state.staff || []).filter(s => s && s.id).map(s => [s.id, s]));
                 const sMap = new Map<string, StaffMember>();
                 for (const initS of INITIAL_STAFF) {
                   sMap.set(initS.id, { ...initS });
                 }
                 for (const rem of cleanRemote) {
                   const base = sMap.get(rem.id);
+                  const local = localMap.get(rem.id);
+                  // Preserve very recent (<12s) local staff edits so an in-flight server echo never reverts a name/username/role change!
+                  if (local && (local.updatedAt || 0) > (rem.updatedAt || 0) && nowMs - (local.updatedAt || 0) < 12000) {
+                    sMap.set(rem.id, { ...(base || {}), ...rem, ...local });
+                    continue;
+                  }
                   const merged: StaffMember = {
                     ...(base || {}),
                     ...rem,
                   };
-                  if (base?.hasSystemAccess && (!rem.pin || rem.hasSystemAccess === false)) {
+                  if (base?.hasSystemAccess && rem.hasSystemAccess !== false && !rem.pin) {
                     merged.hasSystemAccess = true;
                     merged.username = rem.username || base.username;
                     merged.pin = rem.pin || base.pin;
                   }
                   sMap.set(rem.id, merged);
+                }
+                // Also preserve any newly added local staff (<12s old) not yet in remote snapshot
+                for (const loc of localMap.values()) {
+                  if (!sMap.has(loc.id) && (loc.updatedAt || 0) > 0 && nowMs - (loc.updatedAt || 0) < 12000) {
+                    sMap.set(loc.id, loc);
+                  }
                 }
                 return Array.from(sMap.values());
               })()

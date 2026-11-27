@@ -3278,25 +3278,24 @@ function mergeServerRolesSafely(existingRoles, incomingRoles) {
   if (incList.length === 0) return extList;
   if (extList.length === 0) return incList;
 
-  const extMaxTs = extList.reduce((m, r) => Math.max(m, Number(r?.updatedAt) || 0), 0);
-  const incMaxTs = incList.reduce((m, r) => Math.max(m, Number(r?.updatedAt) || 0), 0);
-
-  // If incoming payload is strictly older than our saved roles (e.g. stale mobile APK reconnecting), preserve existing
-  if (extMaxTs > 0 && incMaxTs > 0 && incMaxTs < extMaxTs) {
-    return extList;
+  const roleMap = new Map();
+  for (const extRole of extList) {
+    if (extRole && extRole.id) roleMap.set(extRole.id, extRole);
   }
-
-  const extMap = new Map(extList.filter(r => r && r.id).map(r => [r.id, r]));
-  return incList.map((incRole) => {
-    const extRole = extMap.get(incRole.id);
-    if (!extRole) return incRole;
+  for (const incRole of incList) {
+    if (!incRole || !incRole.id) continue;
+    const extRole = roleMap.get(incRole.id);
+    if (!extRole) {
+      roleMap.set(incRole.id, incRole);
+      continue;
+    }
     const extTs = Number(extRole.updatedAt) || 0;
     const incTs = Number(incRole.updatedAt) || 0;
-    if (extTs > incTs) {
-      return extRole;
+    if (incTs >= extTs) {
+      roleMap.set(incRole.id, incRole);
     }
-    return incRole;
-  });
+  }
+  return Array.from(roleMap.values());
 }
 
 // Normalize saved roles on startup so every role has complete POS + CRUD permission keys
@@ -7809,13 +7808,19 @@ async function handleRequest(req, res) {
         staffState: Array.isArray(st.staff)
           ? st.staff.map(s => ({
             id: s?.id || '',
+            updatedAt: s?.updatedAt || 0,
             hasSystemAccess: s?.hasSystemAccess !== false,
             username: s?.username || '',
             name: s?.name || '',
+            phone: s?.phone || '',
             designation: s?.designation || '',
             role: s?.role || '',
             customRoleId: s?.customRoleId || '',
             status: s?.status || '',
+            shift: s?.shift || '',
+            assignedZone: s?.assignedZone || '',
+            assignedZones: s?.assignedZones || [],
+            monthlySalary: s?.monthlySalary || 0,
             pin: s?.pin || '',
             maxDevices: s?.maxConcurrentDevices || 0,
             permissionOverrides: s?.permissionOverrides || null,
@@ -8487,7 +8492,13 @@ async function handleRequest(req, res) {
             if (incStaff.length > 1) {
               for (const inc of incStaff) {
                 if (inc && inc.id && (!LEGACY_DUMMY_SEED_IDS.staff.has(inc.id))) {
-                  sMap.set(inc.id, { ...(sMap.get(inc.id) || {}), ...inc });
+                  const prev = sMap.get(inc.id);
+                  const prevTs = Number(prev?.updatedAt) || 0;
+                  const incTs = Number(inc?.updatedAt) || 0;
+                  // Never let an older client with updatedAt=0 overwrite a newer staff edit!
+                  if (!prev || incTs >= prevTs) {
+                    sMap.set(inc.id, { ...(prev || {}), ...inc });
+                  }
                 }
               }
             }
