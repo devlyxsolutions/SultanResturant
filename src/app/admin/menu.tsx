@@ -735,14 +735,26 @@ export default function MenuManagement() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+              id: editingItem ? editingItem.id : undefined,
               name: itemPayload.name,
               price: itemPayload.price,
+              costPrice: itemPayload.costPrice,
               category: itemPayload.category,
+              region: itemPayload.region,
+              station: itemPayload.station,
+              beverageHandling: itemPayload.beverageHandling,
+              prepTimeMin: itemPayload.prepTimeMin,
               description: itemPayload.description,
               imageUrl: itemPayload.imageUri,
               imageUri: itemPayload.imageUri,
               badge: itemPayload.badge,
               variants: itemPayload.variants,
+              trackStock: itemPayload.trackStock,
+              stockQty: itemPayload.stockQty,
+              lowStockThreshold: itemPayload.lowStockThreshold,
+              isDeal: itemPayload.isDeal,
+              dealItems: itemPayload.dealItems,
+              dealOriginalPrice: itemPayload.dealOriginalPrice,
             }),
           });
           if (res.ok) {
@@ -2450,7 +2462,7 @@ export default function MenuManagement() {
                   
                   {itemImageUri ? (
                     <View style={styles.imagePreviewContainer}>
-                      <Image source={{ uri: itemImageUri }} style={styles.imagePreview} resizeMode="cover" />
+                      <Image source={{ uri: resolveMenuImageUri(itemImageUri) || itemImageUri }} style={styles.imagePreview} resizeMode="cover" />
                       <View style={{ flex: 1 }}>
                         <Text style={{ fontWeight: '700', fontSize: 13, color: BRAND.ink }}>Photo Attached</Text>
                         <Text style={{ fontSize: 11, color: BRAND.muted, marginVertical: 4 }} numberOfLines={1}>
@@ -2816,7 +2828,7 @@ export default function MenuManagement() {
                   <View style={styles.imagePreviewContainer}>
                     {itemImageUri ? (
                       <View style={styles.previewImageWrap}>
-                        <Image source={{ uri: itemImageUri }} style={styles.imagePreview} />
+                        <Image source={{ uri: resolveMenuImageUri(itemImageUri) || itemImageUri }} style={styles.imagePreview} />
                         <View style={styles.previewActiveBadge}>
                           <Ionicons name="checkmark-circle" size={12} color="#fff" />
                           <Text style={styles.previewActiveBadgeText}>Active Image</Text>

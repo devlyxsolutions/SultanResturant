@@ -3757,6 +3757,20 @@ function persistState() {
         if (!fs.existsSync(vaultDailyPath)) {
           fs.writeFileSync(vaultDailyPath, jsonStr);
         }
+        // Mirror live database across C:\SultanRestaurant and workspace so both directories always stay 100% in sync!
+        for (const extraDataFile of [
+          'C:\\SultanRestaurant\\server-data.json',
+          'C:\\Users\\Nizaam Digital Sol\\Desktop\\SultanResturant\\server-data.json',
+          'C:\\Users\\Nizaam Digital Sol\\Desktop\\SultanRestaurant-App\\server-data.json',
+        ]) {
+          try {
+            if (path.resolve(extraDataFile) !== path.resolve(DATA_FILE) && fs.existsSync(path.dirname(extraDataFile))) {
+              const extTmp = `${extraDataFile}.tmp`;
+              fs.writeFileSync(extTmp, jsonStr);
+              fs.renameSync(extTmp, extraDataFile);
+            }
+          } catch (_) { }
+        }
       } catch (_) { }
 
       const curCatsCount = Array.isArray(serverState.inventoryCategories) ? serverState.inventoryCategories.length : 0;
@@ -5153,11 +5167,11 @@ async function handleRequest(req, res) {
   // ADMIN MENU MANAGEMENT (Category-wise with Image Upload/URL)
   // -------------------------------------------------------------
 
-  // POST /api/admin/menu-items (Add dish with category & picture)
+  // POST /api/admin/menu-items (Add or Upsert dish with category & picture)
   if (url.pathname === '/api/admin/menu-items' && req.method === 'POST') {
     try {
       const payload = await readRequestBody(req);
-      const { name, price, category, description, imageUrl, imageUri, badge, preparationTimeMinutes, variants } = payload;
+      const { id, name, price, costPrice, category, region, station, beverageHandling, prepTimeMin, description, imageUrl, imageUri, badge, preparationTimeMinutes, variants, trackStock, stockQty, lowStockThreshold, isDeal, dealItems, dealOriginalPrice } = payload;
 
       if (!name || price === undefined || !category) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -5165,43 +5179,71 @@ async function handleRequest(req, res) {
         return;
       }
 
-      const newItem = {
-        id: `m-${Date.now()}`,
+      if (!serverState.menuItems) serverState.menuItems = [];
+      const existingIdx = serverState.menuItems.findIndex(
+        (m) => m && ((id && m.id === id) || (!id && String(m.name || '').trim().toLowerCase() === String(name).trim().toLowerCase()))
+      );
+      const existing = existingIdx >= 0 ? serverState.menuItems[existingIdx] : null;
+      const itemId = id || existing?.id || `m-${Date.now()}`;
+      const rawImg = (imageUri || imageUrl || existing?.imageUri || existing?.imageUrl || '').trim();
+      const resolvedImg = rawImg || (String(itemId).startsWith('slt-') ? `/menu-images/${itemId}.jpg` : 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80');
+
+      const savedItem = {
+        ...(existing || {}),
+        id: itemId,
         name: name.trim(),
         price: Number(price),
+        ...(costPrice !== undefined ? { costPrice: Number(costPrice) } : {}),
         category: category.trim(),
-        description: description ? description.trim() : `${name} prepared freshly at Sultan Restaurant.`,
-        imageUri: imageUrl || imageUri || 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80',
-        badge: badge ? badge.trim() : undefined,
-        rating: 4.9,
-        preparationTimeMinutes: preparationTimeMinutes ? Number(preparationTimeMinutes) : 20,
-        isAvailable: true,
-        variants: Array.isArray(variants) ? variants : undefined
+        ...(region !== undefined ? { region: region || undefined } : {}),
+        ...(station ? { station } : {}),
+        ...(beverageHandling ? { beverageHandling } : {}),
+        ...(prepTimeMin !== undefined ? { prepTimeMin: Number(prepTimeMin) } : {}),
+        description: description ? description.trim() : (existing?.description || `${name} prepared freshly at Sultan Restaurant.`),
+        imageUri: resolvedImg,
+        imageUrl: resolvedImg,
+        badge: badge !== undefined ? (badge ? badge.trim() : undefined) : existing?.badge,
+        rating: existing?.rating || 4.9,
+        preparationTimeMinutes: preparationTimeMinutes ? Number(preparationTimeMinutes) : (Number(prepTimeMin) || existing?.preparationTimeMinutes || 20),
+        isAvailable: existing?.isAvailable !== false,
+        variants: Array.isArray(variants) ? variants : existing?.variants,
+        ...(trackStock !== undefined ? { trackStock: Boolean(trackStock) } : {}),
+        ...(stockQty !== undefined ? { stockQty: Number(stockQty) } : {}),
+        ...(lowStockThreshold !== undefined ? { lowStockThreshold: Number(lowStockThreshold) } : {}),
+        ...(isDeal !== undefined ? { isDeal: Boolean(isDeal) } : {}),
+        ...(dealItems !== undefined ? { dealItems } : {}),
+        ...(dealOriginalPrice !== undefined ? { dealOriginalPrice: Number(dealOriginalPrice) } : {}),
+        updatedAt: Date.now(),
       };
 
-      if (!serverState.menuItems) serverState.menuItems = [];
-      serverState.menuItems.unshift(newItem);
+      if (existingIdx >= 0) {
+        serverState.menuItems[existingIdx] = savedItem;
+      } else {
+        serverState.menuItems.unshift(savedItem);
+      }
 
       // Auto-register category if not present
       if (!serverState.categories) serverState.categories = ['All'];
-      if (!serverState.categories.includes(newItem.category)) {
-        serverState.categories.push(newItem.category);
+      if (!serverState.categories.includes(savedItem.category)) {
+        serverState.categories.push(savedItem.category);
       }
 
       persistState();
+      pushToFirestoreCloud(true);
 
       // Real-time broadcast to mobile app and web POS!
       broadcastToClients({
-        type: 'MENU_ITEM_ADDED',
-        item: sanitizeMenuItem(newItem),
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'ADMIN_MENU_SAVE',
         timestamp: Date.now()
       });
 
-      res.writeHead(201, { 'Content-Type': 'application/json' });
+      res.writeHead(existingIdx >= 0 ? 200 : 201, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         success: true,
-        data: sanitizeMenuItem(newItem),
-        message: `Dish "${newItem.name}" added successfully and synced to Mobile App!`
+        data: sanitizeMenuItem(savedItem),
+        message: `Dish "${savedItem.name}" saved & synced permanently!`
       }));
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
@@ -5833,7 +5875,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 40,
+        apkVersion: 41,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -7485,12 +7527,16 @@ async function handleRequest(req, res) {
       return;
     }
 
-    // 8b. Serve Menu Dish Images directly from D:\SultanMenuImages or public/menu-images
+    // 8b. Serve Menu Dish Images directly from D:\SultanMenuImages, public/menu-images, dist/menu-images, or DatabaseVault/menu-images
     if ((req.method === 'GET' || req.method === 'HEAD') && url.pathname && url.pathname.startsWith('/menu-images/')) {
       const fileName = path.basename(decodeURIComponent(url.pathname));
       const candidates = [
+        path.join(VAULT_DIR, 'menu-images', fileName),
         path.join('D:\\SultanMenuImages', fileName),
         path.join(__dirname, 'public', 'menu-images', fileName),
+        path.join(__dirname, 'dist', 'menu-images', fileName),
+        'C:\\SultanRestaurant\\public\\menu-images\\' + fileName,
+        'C:\\SultanRestaurant\\dist\\menu-images\\' + fileName,
       ];
       for (const candidate of candidates) {
         if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
@@ -7721,7 +7767,9 @@ async function handleRequest(req, res) {
         })),
         onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
         invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
-        menuLen: Array.isArray(st.menuItems) ? st.menuItems.length : 0,
+        menuLen: Array.isArray(st.menuItems)
+          ? st.menuItems.map(m => `${m?.id}:${m?.name}:${m?.price}:${(m?.imageUri || m?.imageUrl || '').slice(0, 48)}:${m?.updatedAt || 0}`).join('|')
+          : '0',
         categoriesLen: Array.isArray(st.categories) ? st.categories.length : 0,
         zonesLen: Array.isArray(st.zones) ? st.zones.length : 0,
         customersLen: Array.isArray(st.customers) ? st.customers.length : 0,
@@ -8283,17 +8331,27 @@ async function handleRequest(req, res) {
         } else if (key === 'menuItems') {
           const incoming = Array.isArray(partialState.menuItems) ? partialState.menuItems.filter(m => !isLegacyDummyDish(m)) : [];
           if (incoming.length > 0) {
+            const existingMap = new Map((serverState.menuItems || []).filter(m => m && m.id).map(m => [m.id, m]));
             for (const m of incoming) {
               if (!m) continue;
+              const prev = existingMap.get(m.id);
               if (printerHelper && typeof printerHelper.resolveItemStation === 'function' && m.station !== 'juice' && m.station !== 'main') {
-                m.station = printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
+                m.station = prev?.station || printerHelper.resolveItemStation(m, INITIAL_STATE.menuItems, true);
               }
-              const curImg = (m.imageUri || m.imageUrl || '').trim();
+              let curImg = (m.imageUri || m.imageUrl || '').trim();
+              const prevImg = (prev?.imageUri || prev?.imageUrl || '').trim();
+              // Preserve custom uploaded / custom URL images stored on the server if an older client sends a default path
+              const prevIsCustom = prevImg && !prevImg.startsWith('/menu-images/') && !prevImg.toLowerCase().includes('images.unsplash.com/photo-');
+              const curIsDefault = !curImg || curImg.startsWith('/menu-images/') || curImg.toLowerCase().includes('images.unsplash.com/photo-');
+              if (prevIsCustom && curIsDefault && (Number(prev?.updatedAt) || 0) > (Number(m.updatedAt) || 0)) {
+                curImg = prevImg;
+              }
               if (typeof m.id === 'string' && m.id.startsWith('slt-') && (!curImg || curImg.toLowerCase().includes('images.unsplash.com/photo-'))) {
                 m.imageUri = `/menu-images/${m.id}.jpg`;
                 m.imageUrl = m.imageUri;
-              } else if (!m.imageUri && m.imageUrl) {
-                m.imageUri = m.imageUrl;
+              } else if (curImg) {
+                m.imageUri = curImg;
+                m.imageUrl = curImg;
               }
             }
             serverState.menuItems = incoming;
@@ -8703,6 +8761,7 @@ async function handleRequest(req, res) {
   const FIRESTORE_API_KEY = "AIzaSyAzsBG5kc0gFf83DJaluvF42sk_m-9JdAU";
   const FIRESTORE_PROJECT_ID = "sultan-resturant";
   const FIRESTORE_DOC_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/live_state?key=${FIRESTORE_API_KEY}`;
+  const FIRESTORE_PUBLIC_MENU_URL = `https://firestore.googleapis.com/v1/projects/${FIRESTORE_PROJECT_ID}/databases/(default)/documents/sultan_restaurant/public_menu?key=${FIRESTORE_API_KEY}`;
 
   let lastProcessedCloudTimestamp = 0;
   let lastProcessedCloudUpdateTime = '';
@@ -8843,6 +8902,37 @@ async function handleRequest(req, res) {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ fields })
+        });
+
+        // Also publish public_menu to Cloud Firestore so sultanrestaurant.com.pk website & digital menu always show live dishes & images
+        const publicMenuPayload = {
+          menuItems: (serverState.menuItems || []).map(sanitizeMenuItem),
+          categories: serverState.categories || [],
+          regions: serverState.regions || [],
+          floors: serverState.floors || [],
+          tables: (serverState.tables || []).map(t => ({
+            id: t.id,
+            name: t.name,
+            floor: t.floor || t.zone || 'Ground Floor',
+            zone: t.zone || t.floor || 'Ground Floor',
+            seatingType: t.seatingType || 'tables',
+            cabinNumber: t.cabinNumber || '',
+            seats: t.seats || 4,
+            status: t.status || 'available',
+          })),
+          unavailableItemIds: serverState.unavailableItemIds || [],
+          enableOnlineOrders: serverState.systemSettings?.enableOnlineOrders !== false,
+          enableDigitalQrMenu: serverState.systemSettings?.enableDigitalQrMenu !== false,
+          updatedAt: now,
+        };
+        const pubFields = {};
+        for (const pk in publicMenuPayload) {
+          pubFields[pk] = encodeFirestoreValue(publicMenuPayload[pk]);
+        }
+        await fetch(FIRESTORE_PUBLIC_MENU_URL, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fields: pubFields })
         });
       } catch (_) {
         // Local LAN continues seamlessly if cloud is offline
