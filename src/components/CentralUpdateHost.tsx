@@ -15,8 +15,8 @@ import { getActiveServerHttpUrl } from '../services/syncService';
 import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 
 export const INSTALLED_APK_VERSION = 44;
-export const INSTALLED_WEB_VERSION = 48;
-export const APP_VERSION_LABEL = `v${INSTALLED_APK_VERSION}`;
+export const INSTALLED_WEB_VERSION = 49;
+export const APP_VERSION_LABEL = Platform.OS === 'web' ? `v${INSTALLED_WEB_VERSION}` : `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
 export default function CentralUpdateHost() {
@@ -64,13 +64,47 @@ export default function CentralUpdateHost() {
               }
 
               // 1. Web / Windows Desktop PCs: Auto-reload UI immediately when Master Server dist/ or webVersion changes
-              if (Platform.OS === 'web') {
-                if (remoteWebVer > INSTALLED_WEB_VERSION && typeof window !== 'undefined') {
+              if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                const clearCachesAndReload = async () => {
+                  try {
+                    if ('caches' in window && window.caches?.keys) {
+                      const keys = await window.caches.keys();
+                      await Promise.all(keys.map((k) => window.caches.delete(k)));
+                    }
+                  } catch { }
+                  try {
+                    window.location?.reload();
+                  } catch { }
+                };
+
+                // If running via localhost/127.0.0.1 fallback, check if Master LAN hub (192.168.1.10:5050) has a newer webVersion
+                const host = window.location?.hostname || '';
+                if (host === 'localhost' || host === '127.0.0.1') {
+                  try {
+                    const mCtrl = new AbortController();
+                    const mTimer = setTimeout(() => mCtrl.abort(), 1500);
+                    const mRes = await fetch(
+                      `http://192.168.1.10:5050/api/app-update/info?apkVer=${INSTALLED_APK_VERSION}&webVer=${INSTALLED_WEB_VERSION}&t=${Date.now()}`,
+                      { signal: mCtrl.signal, headers: { 'Cache-Control': 'no-cache' } }
+                    );
+                    clearTimeout(mTimer);
+                    if (mRes.ok) {
+                      const masterData = await mRes.json();
+                      const masterWebVer = Number(masterData?.webVersion || 0);
+                      if (masterWebVer > Math.max(INSTALLED_WEB_VERSION, remoteWebVer)) {
+                        window.location.href = `http://192.168.1.10:5050${window.location.pathname}${window.location.search}`;
+                        return;
+                      }
+                    }
+                  } catch { }
+                }
+
+                if (remoteWebVer > INSTALLED_WEB_VERSION) {
                   try {
                     const reloadKey = `sultan_reloaded_web_v${remoteWebVer}`;
                     if (!window.sessionStorage?.getItem(reloadKey)) {
                       window.sessionStorage?.setItem(reloadKey, '1');
-                      window.location.reload();
+                      void clearCachesAndReload();
                       return;
                     }
                   } catch { }
@@ -80,9 +114,7 @@ export default function CentralUpdateHost() {
                     initialWebHashRef.current = data.webBundleHash;
                   } else if (initialWebHashRef.current !== data.webBundleHash) {
                     initialWebHashRef.current = data.webBundleHash;
-                    if (typeof window !== 'undefined' && window.location) {
-                      window.location.reload();
-                    }
+                    void clearCachesAndReload();
                   }
                 }
               }

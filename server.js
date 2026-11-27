@@ -6096,8 +6096,8 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 48;
-      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 48) to force-reload
+      const targetWebVer = 49;
+      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 49) to force-reload
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : 44;
 
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });

@@ -3488,6 +3488,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               if ((t.reservationId === id || prevAllIds.includes(t.id)) && t.status === 'reserved') {
                 return { ...t, status: 'available' as const, billTotal: 0, orders: [], occupiedSince: undefined, lastSettledAt: now, reservationId: undefined, mergedInto: undefined };
               }
+              return t;
             }).map(t => {
               if (t.id === updatedRes.tableId) {
                 return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: undefined };
