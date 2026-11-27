@@ -5833,8 +5833,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 34,
-        apkVersion: 38,
+        apkVersion: 39,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -5999,7 +5998,7 @@ async function handleRequest(req, res) {
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       success: true,
-      floors: availableFloors.length > 0 ? availableFloors : ['Ground Floor', '1st Floor', '2nd Floor', '3rd Floor', 'Rooftop'],
+      floors: availableFloors.length > 0 ? availableFloors : ['Ground Floor', 'Family Floor', 'Party Hall', 'Rooftop'],
       data: tables,
       timestamp: Date.now()
     }));

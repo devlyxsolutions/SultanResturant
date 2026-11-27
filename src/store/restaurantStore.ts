@@ -4390,20 +4390,42 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           }
 
+          const remoteDeletedTableSet = new Set<string>(
+            Array.isArray((remoteState as any).deletedTableIds) ? (remoteState as any).deletedTableIds : []
+          );
+          const remoteActiveTableIds = new Set<string>(
+            Array.isArray(remoteState.tables)
+              ? remoteState.tables.filter((t) => t && t.id && !remoteDeletedTableSet.has(t.id)).map((t) => t.id)
+              : []
+          );
+          // Never allow a client's stale local deletedTableIds to hide a table that is actively alive on the Master Server!
           const mergedDeletedTableIds = Array.from(
-            new Set([...(state.deletedTableIds || []), ...((remoteState as any).deletedTableIds || [])])
-          ).slice(-500);
+            new Set([...(state.deletedTableIds || []), ...Array.from(remoteDeletedTableSet)])
+          )
+            .filter((id) => !remoteActiveTableIds.has(id))
+            .slice(-500);
           const deletedTableSet = new Set(mergedDeletedTableIds);
+
+          const remoteDeletedFloorSet = new Set<string>(
+            Array.isArray((remoteState as any).deletedFloorIds) ? (remoteState as any).deletedFloorIds : []
+          );
+          const remoteActiveFloorIds = new Set<string>(
+            Array.isArray(remoteState.floors)
+              ? remoteState.floors.filter((f) => f && f.id && !remoteDeletedFloorSet.has(f.id)).map((f) => f.id)
+              : []
+          );
           const mergedDeletedFloorIds = Array.from(
-            new Set([...(state.deletedFloorIds || []), ...((remoteState as any).deletedFloorIds || [])])
-          ).slice(-200);
+            new Set([...(state.deletedFloorIds || []), ...Array.from(remoteDeletedFloorSet)])
+          )
+            .filter((id) => !remoteActiveFloorIds.has(id))
+            .slice(-200);
           const deletedFloorSet = new Set(mergedDeletedFloorIds);
 
           let rawTables = (state.tables || []).filter((t) => t && !deletedTableSet.has(t.id));
-          if (Array.isArray(remoteState.tables)) {
+          if (Array.isArray(remoteState.tables) && remoteState.tables.length > 0) {
             const localTableMap = new Map((state.tables || []).map((t) => [t.id, t]));
             const remoteCleaned = remoteState.tables
-              .filter((rt) => rt && !deletedTableSet.has(rt.id))
+              .filter((rt) => rt && rt.id && !deletedTableSet.has(rt.id))
               .map((rawRt) => {
                 // A waiter collection older than the last settlement is stale — drop it
                 const rt =
@@ -4431,11 +4453,19 @@ export const useRestaurantStore = create<RestaurantState>()(
                 }
                 return rt;
               });
-            const remoteTableIdSet = new Set(remoteCleaned.map((rt) => rt.id));
-            const localUnsyncedTables = (state.tables || []).filter(
-              (lt) => lt && lt.id && !remoteTableIdSet.has(lt.id) && !deletedTableSet.has(lt.id)
-            );
-            rawTables = [...remoteCleaned, ...localUnsyncedTables];
+            // Deduplicate by floor::name so the exact server table layout (e.g. 16 Rooftop, 16 Ground, 25 Family, 6 Party Hall) is identical on every device
+            const seenTableIds = new Set<string>();
+            const seenFloorNames = new Set<string>();
+            const deduplicatedRemoteTables: Table[] = [];
+            for (const rt of remoteCleaned) {
+              const fnKey = `${String(rt.floor || rt.zone || '').trim().toLowerCase()}::${String(rt.name || '').trim().toLowerCase()}`;
+              if (!seenTableIds.has(rt.id) && !seenFloorNames.has(fnKey)) {
+                seenTableIds.add(rt.id);
+                seenFloorNames.add(fnKey);
+                deduplicatedRemoteTables.push(rt);
+              }
+            }
+            rawTables = deduplicatedRemoteTables;
           }
           const finalTickets = mergedTickets || state.tickets || [];
           const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
@@ -4473,23 +4503,17 @@ export const useRestaurantStore = create<RestaurantState>()(
               regions: Array.from(new Set([...(state.regions || SULTAN_DEFAULT_REGIONS), ...remoteState.regions]))
             } : {}),
             ...(remoteState.zones ? { zones: remoteState.zones } : {}),
-            ...(Array.isArray(remoteState.floors)
+            ...(Array.isArray(remoteState.floors) && remoteState.floors.length > 0
               ? {
                 floors: (() => {
-                  const fMap = new Map<string, Floor>();
+                  const byName = new Map<string, Floor>();
                   for (const rf of remoteState.floors) {
-                    if (rf && rf.id && !deletedFloorSet.has(rf.id)) fMap.set(rf.id, rf);
+                    if (!rf || !rf.id || deletedFloorSet.has(rf.id)) continue;
+                    const nmKey = String(rf.name || '').trim().toLowerCase();
+                    if (!nmKey) continue;
+                    byName.set(nmKey, rf);
                   }
-                  for (const lf of (state.floors || [])) {
-                    if (lf && lf.id && !deletedFloorSet.has(lf.id)) {
-                      const prev = fMap.get(lf.id);
-                      // Prefer local floor edit when local updatedAt is newer or floor isn't on server yet
-                      if (!prev || ((lf as any).updatedAt || 0) >= ((prev as any).updatedAt || 0)) {
-                        fMap.set(lf.id, { ...(prev || {}), ...lf });
-                      }
-                    }
-                  }
-                  return Array.from(fMap.values());
+                  return Array.from(byName.values()).sort((a, b) => (a.order || 99) - (b.order || 99));
                 })(),
               }
               : {}),

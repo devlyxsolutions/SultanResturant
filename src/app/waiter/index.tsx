@@ -325,8 +325,9 @@ export default function OrderTakerScreen() {
         ? selectedFloor
         : 'All';
 
-  // 3. Scoped tables by Floor authorization, seating zone toggles, selected floor tab & Order Taker ownership
-  // Order Takers see Available tables (to take new orders) + ONLY Occupied/Billed tables where THEY placed the order!
+  // 3. Scoped tables by Floor authorization, seating zone toggles & selected floor tab
+  // CRITICAL: Every Order Taker on an authorized floor MUST see ALL tables/majlis/couches on that floor
+  // (whether free or occupied by any staff member) so table counts (e.g. 16 on Rooftop) are always 100% identical across all devices!
   const scopedByFloorTables = useMemo(() => {
     return tables.filter((t) => {
       const tType = getTableSeatingType(t);
@@ -339,12 +340,9 @@ export default function OrderTakerScreen() {
       if (activeFloor !== 'All' && tableFloor.toLowerCase() !== activeFloor.toLowerCase()) {
         return false;
       }
-      if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
-        return isTableOwnedByUser(t, scopedTickets, user, staff);
-      }
       return true;
     });
-  }, [tables, isAllFloors, authorizedFloors, activeFloor, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating, isOrderTaker, scopedTickets, user, staff]);
+  }, [tables, isAllFloors, authorizedFloors, activeFloor, systemSettings.enableMajlisSeating, systemSettings.enableCouchSeating]);
 
   // 4. Zone Breakdown Summary (how many Tables, Couches, Majlis Cabins on this floor)
   const zoneSummary = useMemo(() => {
@@ -379,7 +377,7 @@ export default function OrderTakerScreen() {
     return false;
   };
 
-  // Status breakdown counts on this scoped floor (strictly using scopedTickets for Order Takers)
+  // Status breakdown counts on this scoped floor
   const statusCounts = useMemo(() => {
     let free = 0;
     let occupied = 0;
@@ -388,7 +386,7 @@ export default function OrderTakerScreen() {
     let reserved = 0;
 
     scopedByFloorTables.forEach((table) => {
-      const tableTickets = scopedTickets.filter((t) => t.tableId === table.id);
+      const tableTickets = tickets.filter((t) => t.tableId === table.id && t.status !== 'served');
       const isFoodReady = tableTickets.some(isTicketReadyForPickup);
       const isTableBilled = table.status === 'billed' || table.isPaid;
       if (isFoodReady) ready++;
@@ -399,7 +397,7 @@ export default function OrderTakerScreen() {
     });
 
     return { free, occupied, ready, billed, reserved };
-  }, [scopedByFloorTables, scopedTickets]);
+  }, [scopedByFloorTables, tickets]);
 
   // 5. Final Visible Tables filtered by Seating Type, Status Tab & Search
   const visibleTables = useMemo(() => {
@@ -416,7 +414,7 @@ export default function OrderTakerScreen() {
         if (!matchName && !matchGuest) return false;
       }
       if (statusFilter !== 'all') {
-        const tableTickets = scopedTickets.filter((tk) => tk.tableId === t.id);
+        const tableTickets = tickets.filter((tk) => tk.tableId === t.id && tk.status !== 'served');
         const isFoodReady = tableTickets.some(isTicketReadyForPickup);
         const isTableBilled = t.status === 'billed' || t.isPaid;
         const isOccupied = t.status === 'occupied';
@@ -429,7 +427,7 @@ export default function OrderTakerScreen() {
       }
       return true;
     });
-  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, scopedTickets, reservations]);
+  }, [scopedByFloorTables, seatingTypeFilter, statusFilter, search, tickets, reservations]);
 
   // 6. Filter ready tickets strictly to THIS Order Taker's orders (or authorized floors for Admin/Manager)
   const readyTickets = scopedTickets.filter((t) => {
@@ -481,7 +479,7 @@ export default function OrderTakerScreen() {
     const isGroupRes = isGroupReservation(tableRes);
     const primaryGroupTable = item.mergedInto ? tables.find((t) => t.id === item.mergedInto) : undefined;
 
-    const tableTickets = scopedTickets.filter((t) => t.tableId === item.id);
+    const tableTickets = tickets.filter((t) => t.tableId === item.id && t.status !== 'served');
     const isFoodReady = tableTickets.some(isTicketReadyForPickup);
     const isCooking = tableTickets.some((t) => (t.status === 'pending' || t.status === 'cooking') && !isFoodReady);
     const roundCount = tableTickets.length;
@@ -998,10 +996,10 @@ export default function OrderTakerScreen() {
                 ]}
               >
                 All Floors ({tables.filter((t) => {
-                  if (!isAllFloors && !authorizedFloors.includes(getTableFloor(t))) return false;
-                  if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
-                    return isTableOwnedByUser(t, scopedTickets, user, staff);
-                  }
+                  const tType = getTableSeatingType(t);
+                  if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                  if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
+                  if (!isAllFloors && !authorizedFloors.some((af) => af.toLowerCase() === getTableFloor(t).toLowerCase())) return false;
                   return true;
                 }).length})
               </Text>
@@ -1009,10 +1007,10 @@ export default function OrderTakerScreen() {
 
             {authorizedFloors.map((floor) => {
               const count = tables.filter((t) => {
+                const tType = getTableSeatingType(t);
+                if (tType === 'majlis' && systemSettings.enableMajlisSeating === false) return false;
+                if (tType === 'couches' && systemSettings.enableCouchSeating === false) return false;
                 if (getTableFloor(t).toLowerCase() !== floor.toLowerCase()) return false;
-                if (isOrderTaker && (t.status === 'occupied' || t.status === 'billed' || t.isPaid)) {
-                  return isTableOwnedByUser(t, scopedTickets, user, staff);
-                }
                 return true;
               }).length;
               const meta = getFloorMeta(floor, dynamicFloors);

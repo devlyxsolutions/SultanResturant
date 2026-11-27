@@ -14,7 +14,7 @@ import { usePathname } from 'expo-router';
 import { getActiveServerHttpUrl } from '../services/syncService';
 import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 
-export const INSTALLED_APK_VERSION = 38;
+export const INSTALLED_APK_VERSION = 39;
 export const APP_VERSION_LABEL = `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
