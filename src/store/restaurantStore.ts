@@ -1029,7 +1029,16 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     if (table.status === 'billed') return table;
 
     const tableTickets = safeTickets.filter(
-      t => t && !t.isSettled && t.tableId === table.id && t.tableId !== 'SETTLED-HISTORY' && t.tableId !== 'SETTLED-ORDER'
+      t =>
+        t &&
+        !t.isSettled &&
+        !t.isMinusKot &&
+        t.kotType !== 'MINUS' &&
+        !String(t.id || '').toUpperCase().startsWith('MINUS') &&
+        !String(t.id || '').toUpperCase().startsWith('CANCEL') &&
+        t.tableId === table.id &&
+        t.tableId !== 'SETTLED-HISTORY' &&
+        t.tableId !== 'SETTLED-ORDER'
     );
     const activeCookingOrReady = tableTickets.filter(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready');
     const hasUnbilledTickets = tableTickets.some(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
@@ -1040,7 +1049,20 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         0
       );
 
-      const ticketOrders = tableTickets.flatMap(t => (t.items || []).map(i => ({ ...i })));
+      const ticketOrders: OrderItem[] = [];
+      tableTickets.forEach(t => {
+        (t.items || []).forEach(i => {
+          const norm = (i.name || '').trim().toLowerCase();
+          const existing = ticketOrders.find(
+            o => o.id === i.id || (norm && (o.name || '').trim().toLowerCase() === norm)
+          );
+          if (existing) {
+            existing.qty += i.qty || 1;
+          } else {
+            ticketOrders.push({ ...i });
+          }
+        });
+      });
       const orders = (table.orders && table.orders.length >= ticketOrders.length && table.orders.length > 0)
         ? table.orders
         : ticketOrders;
@@ -2452,9 +2474,9 @@ export const useRestaurantStore = create<RestaurantState>()(
               remainingMinus.has(it.id)
                 ? it.id
                 : Array.from(remainingMinus.keys()).find((k) => {
-                    const m = remainingMinus.get(k);
-                    return m && m.name.trim().toLowerCase() === (it.name || '').trim().toLowerCase();
-                  });
+                  const m = remainingMinus.get(k);
+                  return m && m.name.trim().toLowerCase() === (it.name || '').trim().toLowerCase();
+                });
 
             if (matchKey) {
               const rem = remainingMinus.get(matchKey)!;
@@ -2466,7 +2488,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 const leftQty = it.qty - deduct;
                 if (leftQty > 0) {
                   const prevNote = (it.notes || '').trim();
-                  const tag = `[MINUS -${deduct}x]`;
+                  const tag = `[CANCELLED -${deduct}x]`;
                   nextTkItems.push({
                     ...it,
                     qty: leftQty,
@@ -2510,10 +2532,10 @@ export const useRestaurantStore = create<RestaurantState>()(
           tickets: updatedTickets,
           ...(nextDeletedIds.length > 0
             ? {
-                deletedTicketIds: Array.from(
-                  new Set([...(state.deletedTicketIds || []), ...nextDeletedIds])
-                ).slice(-400),
-              }
+              deletedTicketIds: Array.from(
+                new Set([...(state.deletedTicketIds || []), ...nextDeletedIds])
+              ).slice(-400),
+            }
             : {}),
         };
       }),
@@ -3466,7 +3488,6 @@ export const useRestaurantStore = create<RestaurantState>()(
               if ((t.reservationId === id || prevAllIds.includes(t.id)) && t.status === 'reserved') {
                 return { ...t, status: 'available' as const, billTotal: 0, orders: [], occupiedSince: undefined, lastSettledAt: now, reservationId: undefined, mergedInto: undefined };
               }
-              return t;
             }).map(t => {
               if (t.id === updatedRes.tableId) {
                 return { ...t, status: 'reserved' as const, reservationId: id, mergedInto: undefined };

@@ -42,6 +42,7 @@ import { broadcastImmediately, getActiveServerHttpUrl } from '../services/syncSe
 import {
   EventDiscount,
   Invoice,
+  isWaiterPaymentPending,
   MenuItem,
   OrderItem,
   Payment,
@@ -49,7 +50,6 @@ import {
   useAuthStore,
   useDiscountStore,
   useRestaurantStore,
-  isWaiterPaymentPending,
 } from '../store';
 import { useOpsStore } from '../store/opsStore';
 import { useRolePermissions, type RolePermissions } from '../store/roleStore';
@@ -548,17 +548,18 @@ export default function POSTerminalScreen({
       .slice(0, 8);
   }, [invoices]);
 
-  // Select Table & Load Running Orders
-  const handleTableSelect = (tId: string) => {
-    setSelectedTableId(tId);
-    setOrderType('dine-in');
-    setTableModalVisible(false);
+  const normalizeCartItemName = (name?: string) => (name || '').trim().toLowerCase();
 
+  const computeTableBaseline = (tId: string) => {
     const targetTable = tables.find((t) => t.id === tId || t.name.toLowerCase() === tId.toLowerCase());
     const tableTickets = tickets.filter(
       (t) =>
         t &&
         !t.isSettled &&
+        !t.isMinusKot &&
+        t.kotType !== 'MINUS' &&
+        !String(t.id || '').toUpperCase().startsWith('MINUS') &&
+        !String(t.id || '').toUpperCase().startsWith('CANCEL') &&
         t.tableId !== 'SETTLED-HISTORY' &&
         t.tableId !== 'SETTLED-ORDER' &&
         (t.tableId === tId || (targetTable && t.tableId === targetTable.id))
@@ -567,7 +568,19 @@ export default function POSTerminalScreen({
       (max, t) => Math.max(max, t.itemsUpdatedAt || t.timePlaced || 0),
       0
     );
-    let combinedItems: OrderItem[] = [];
+
+    const combinedItems: OrderItem[] = [];
+    const mergeOrderItem = (item: OrderItem) => {
+      const norm = normalizeCartItemName(item.name);
+      const existing = combinedItems.find(
+        (i) => i.id === item.id || (norm && normalizeCartItemName(i.name) === norm)
+      );
+      if (existing) {
+        existing.qty += item.qty;
+      } else {
+        combinedItems.push({ ...item });
+      }
+    };
 
     if (
       targetTable &&
@@ -575,26 +588,22 @@ export default function POSTerminalScreen({
       targetTable.orders.length > 0 &&
       (targetTable.status === 'billed' || (targetTable.ordersUpdatedAt || 0) >= latestTicketTime)
     ) {
-      combinedItems = targetTable.orders.map((o) => ({ ...o }));
+      targetTable.orders.forEach(mergeOrderItem);
     } else {
       if (tableTickets.length > 0) {
         tableTickets.forEach((ticket) => {
-          ticket.items.forEach((ti) => {
-            const existing = combinedItems.find((i) => i.id === ti.id && i.name === ti.name);
-            if (existing) {
-              existing.qty += ti.qty;
-            } else {
-              combinedItems.push({ ...ti });
-            }
-          });
+          (ticket.items || []).forEach(mergeOrderItem);
         });
       }
       if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
         if (combinedItems.length === 0) {
-          combinedItems = targetTable.orders.map((o) => ({ ...o }));
+          targetTable.orders.forEach(mergeOrderItem);
         } else if (!targetTable.ordersUpdatedAt) {
           targetTable.orders.forEach((to) => {
-            const existing = combinedItems.find((i) => i.id === to.id || i.name === to.name);
+            const norm = normalizeCartItemName(to.name);
+            const existing = combinedItems.find(
+              (i) => i.id === to.id || (norm && normalizeCartItemName(i.name) === norm)
+            );
             if (!existing) {
               combinedItems.push({ ...to });
             }
@@ -602,6 +611,35 @@ export default function POSTerminalScreen({
         }
       }
     }
+
+    return { targetTable, tableTickets, combinedItems };
+  };
+
+  const buildCartSignature = (list: OrderItem[]) =>
+    list
+      .map((i) => `${i.id}:${normalizeCartItemName(i.name)}:${i.qty}`)
+      .sort()
+      .join('|');
+
+  // Keep POS cart in sync with live table updates from waiters/other PCs when cashier has no unsaved local edits
+  useEffect(() => {
+    if (orderType !== 'dine-in' || !selectedTableId) return;
+    if (buildCartSignature(cart) !== buildCartSignature(loadedCart)) return;
+
+    const { combinedItems } = computeTableBaseline(selectedTableId);
+    if (buildCartSignature(combinedItems) !== buildCartSignature(loadedCart)) {
+      setCart(combinedItems);
+      setLoadedCart(JSON.parse(JSON.stringify(combinedItems)));
+    }
+  }, [orderType, selectedTableId, tables, tickets]);
+
+  // Select Table & Load Running Orders
+  const handleTableSelect = (tId: string) => {
+    setSelectedTableId(tId);
+    setOrderType('dine-in');
+    setTableModalVisible(false);
+
+    const { targetTable, tableTickets, combinedItems } = computeTableBaseline(tId);
 
     const foundWaiter =
       targetTable?.server || tableTickets.find((t) => t.server && !t.server.toLowerCase().includes('pos'))?.server;
@@ -1278,63 +1316,125 @@ export default function POSTerminalScreen({
     );
     return baseMenu
       ? {
-          ...baseMenu,
-          id: ci.id,
-          name: ci.name,
-          price: ci.price,
-          station: ci.station || baseMenu.station || 'main',
-        }
+        ...baseMenu,
+        id: ci.id,
+        name: ci.name,
+        price: ci.price,
+        station: ci.station || baseMenu.station || 'main',
+      }
       : {
-          id: ci.id,
-          name: ci.name,
-          price: ci.price,
-          category: 'Mains',
-          station: ci.station || 'main',
-        };
+        id: ci.id,
+        name: ci.name,
+        price: ci.price,
+        category: 'Mains',
+        station: ci.station || 'main',
+      };
   };
 
   const buildCartDeltas = () => {
     const addedKotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
     const minusKotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
 
-    // Aggregate quantities by item ID across cart and loadedCart
-    const cartMap = new Map<string, { item: OrderItem; qty: number }>();
+    // Aggregate current cart by canonical key (item ID, falling back to normalized name)
+    const cartMap = new Map<string, { item: OrderItem; qty: number; normName: string }>();
+    const findCanonicalKey = (
+      map: Map<string, { item: OrderItem; qty: number; normName: string }>,
+      id: string,
+      normName: string
+    ) => {
+      if (map.has(id)) return id;
+      for (const [k, v] of map.entries()) {
+        if (normName && v.normName === normName) return k;
+      }
+      return id;
+    };
+
     cart.forEach((c) => {
-      const prev = cartMap.get(c.id);
+      const normName = normalizeCartItemName(c.name);
+      const key = findCanonicalKey(cartMap, c.id, normName);
+      const prev = cartMap.get(key);
       if (prev) prev.qty += c.qty;
-      else cartMap.set(c.id, { item: c, qty: c.qty });
+      else cartMap.set(key, { item: c, qty: c.qty, normName });
     });
 
-    const loadedMap = new Map<string, { item: OrderItem; qty: number }>();
+    // Baseline = loadedCart merged with live active table tickets/orders (prevents duplicate KOTs on stale loadedCart)
+    const baseMap = new Map<string, { item: OrderItem; qty: number; normName: string }>();
     loadedCart.forEach((lc) => {
-      const prev = loadedMap.get(lc.id);
+      const normName = normalizeCartItemName(lc.name);
+      const key = findCanonicalKey(baseMap, lc.id, normName);
+      const prev = baseMap.get(key);
       if (prev) prev.qty += lc.qty;
-      else loadedMap.set(lc.id, { item: lc, qty: lc.qty });
+      else baseMap.set(key, { item: lc, qty: lc.qty, normName });
     });
 
-    cartMap.forEach(({ item: cItem, qty: cQty }, id) => {
-      const lQty = loadedMap.get(id)?.qty || 0;
+    let hasLiveTableOrders = false;
+    if (orderType === 'dine-in' && selectedTableId) {
+      const { targetTable, tableTickets, combinedItems } = computeTableBaseline(selectedTableId);
+      hasLiveTableOrders = tableTickets.length > 0 || Boolean(targetTable?.orders && targetTable.orders.length > 0);
+      if (loadedCart.length === 0) {
+        combinedItems.forEach((bi) => {
+          const normName = normalizeCartItemName(bi.name);
+          const key = findCanonicalKey(baseMap, bi.id, normName);
+          const prev = baseMap.get(key);
+          if (prev) prev.qty = Math.max(prev.qty, bi.qty);
+          else baseMap.set(key, { item: bi, qty: bi.qty, normName });
+        });
+      } else {
+        // Also incorporate any live active ticket quantities that exceed loadedCart (e.g. concurrent waiter order)
+        const liveTicketTotals = new Map<string, { item: OrderItem; qty: number; normName: string }>();
+        tableTickets.forEach((tk) => {
+          (tk.items || []).forEach((ti) => {
+            const normName = normalizeCartItemName(ti.name);
+            const key = findCanonicalKey(liveTicketTotals, ti.id, normName);
+            const prev = liveTicketTotals.get(key);
+            if (prev) prev.qty += ti.qty;
+            else liveTicketTotals.set(key, { item: ti, qty: ti.qty, normName });
+          });
+        });
+        liveTicketTotals.forEach(({ item: lItem, qty: liveQty, normName }) => {
+          const key = findCanonicalKey(baseMap, lItem.id, normName);
+          const prev = baseMap.get(key);
+          if (prev) prev.qty = Math.max(prev.qty, liveQty);
+          else baseMap.set(key, { item: lItem, qty: liveQty, normName });
+        });
+      }
+    }
+
+    const hasPriorSentOrder = loadedCart.length > 0 || hasLiveTableOrders;
+    const matchedBaseKeys = new Set<string>();
+
+    cartMap.forEach(({ item: cItem, qty: cQty, normName }, cartKey) => {
+      const baseKey = findCanonicalKey(baseMap, cartKey, normName);
+      const baseEntry = baseMap.get(baseKey);
+      if (baseEntry) matchedBaseKeys.add(baseKey);
+      const lQty = baseEntry?.qty || 0;
       if (cQty > lQty) {
         addedKotItems.push({
           item: resolveMenuObjForCartItem(cItem),
           qty: cQty - lQty,
           notes: cItem.notes,
         });
+      } else if (lQty > cQty) {
+        minusKotItems.push({
+          item: resolveMenuObjForCartItem(cItem),
+          qty: lQty - cQty,
+          notes: cItem.notes,
+        });
       }
     });
 
-    loadedMap.forEach(({ item: lItem, qty: lQty }, id) => {
-      const cQty = cartMap.get(id)?.qty || 0;
-      if (lQty > cQty) {
+    baseMap.forEach(({ item: lItem, qty: lQty }, baseKey) => {
+      if (matchedBaseKeys.has(baseKey)) return;
+      if (lQty > 0) {
         minusKotItems.push({
           item: resolveMenuObjForCartItem(lItem),
-          qty: lQty - cQty,
+          qty: lQty,
           notes: lItem.notes,
         });
       }
     });
 
-    return { addedKotItems, minusKotItems };
+    return { addedKotItems, minusKotItems, hasPriorSentOrder };
   };
 
   const dispatchDirectKotPrint = async (ticketPayload: any, forceReprint = false) => {
@@ -1354,7 +1454,7 @@ export default function POSTerminalScreen({
   };
 
   const syncCartDeltasToKitchenAndTable = (targetId: string, targetName: string, serverLabel: string) => {
-    const { addedKotItems, minusKotItems } = buildCartDeltas();
+    const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
     const isTableTarget = Boolean(targetId && targetId !== 'takeaway' && targetId !== 'delivery');
     const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
 
@@ -1368,8 +1468,8 @@ export default function POSTerminalScreen({
         );
       }
       if (canSendKds) {
-        const minusTicket = {
-          id: `MINUS-${Math.floor(Math.random() * 9000) + 1000}`,
+        const cancelTicket = {
+          id: `CANCEL-${Math.floor(Math.random() * 9000) + 1000}`,
           tableId: targetId,
           tableName: targetName,
           server: serverLabel,
@@ -1377,7 +1477,7 @@ export default function POSTerminalScreen({
           status: 'pending',
           isMinusKot: true,
           kotType: 'MINUS',
-          notes: orderNotes.trim() ? `MINUS ITEMS • ${orderNotes.trim()}` : 'MINUS / REDUCED FROM BILL',
+          notes: orderNotes.trim() ? `CANCEL / MINUS • ${orderNotes.trim()}` : 'CANCELLED / MINUS ITEM FROM BILL',
           items: minusKotItems.map((m) => ({
             id: m.item.id,
             name: m.item.name,
@@ -1389,7 +1489,7 @@ export default function POSTerminalScreen({
             itemStatus: 'pending',
           })),
         };
-        dispatchDirectKotPrint(minusTicket, true);
+        dispatchDirectKotPrint(cancelTicket, true);
       }
     }
 
@@ -1398,7 +1498,7 @@ export default function POSTerminalScreen({
         targetId,
         serverLabel,
         addedKotItems,
-        loadedCart.length > 0,
+        hasPriorSentOrder,
         undefined,
         orderNotes.trim() || undefined
       );
@@ -1408,7 +1508,7 @@ export default function POSTerminalScreen({
       }
     }
 
-    return { addedKotItems, minusKotItems };
+    return { addedKotItems, minusKotItems, hasPriorSentOrder };
   };
 
   const sendToKitchen = () => {
@@ -1429,14 +1529,13 @@ export default function POSTerminalScreen({
           ? 'Delivery'
           : 'Takeaway';
 
-    const { addedKotItems, minusKotItems } = buildCartDeltas();
+    const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
 
     if (addedKotItems.length === 0 && minusKotItems.length === 0) {
-      showKdsToast('All items in cart are already synced with KDS.');
+      showKdsToast('All items in cart are already sent to Kitchen & Juice Bar (no new Add-On or Cancel items).');
       return;
     }
 
-    const isAddOn = loadedCart.length > 0;
     const serverLabel = selectedCustomerObj?.name
       ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
       : `${user?.name || 'Staff'} (POS)`;
@@ -1453,54 +1552,18 @@ export default function POSTerminalScreen({
     syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
     broadcastImmediately();
 
-    const latestTicket = useRestaurantStore.getState().tickets?.[0];
-    const pendingSlipId = latestTicket?.id
-      ? `PND-${latestTicket.id.replace(/^KOT-/, '')}`
-      : `PND-${Date.now().toString().slice(-4)}`;
-
-    if (cart.length > 0) {
-      const pendingSlipInvoice: Invoice = {
-        id: pendingSlipId,
-        orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
-        tableId: selectedTableId || undefined,
-        tableName: targetTableName,
-        customer: selectedCustomerObj,
-        server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
-        orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
-        cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
-        timePlaced: Date.now(),
-        timeSettled: Date.now(),
-        items: cart,
-        subTotal,
-        discount: discountVal,
-        tax,
-        serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
-        total,
-        payments: [],
-        status: 'unpaid',
-        isUnpaidBill: true,
-        notes: `Temporary / Pending Bill • Sent to ${stationSummary}${latestTicket?.id ? ` (${latestTicket.id})` : ''}`,
-      };
-      printInvoiceReceipt(pendingSlipInvoice);
-    }
-
-    if (orderType === 'dine-in') {
-      setLoadedCart(JSON.parse(JSON.stringify(cart)));
-    } else {
-      setCart([]);
-      setLoadedCart([]);
-      setOrderNotes('');
-      setLoadedTicketId(null);
-      setSelectedCustomerId('');
-      setSelectedEventCampaign(null);
-      setDiscountAmount('0');
-    }
+    // Sync loadedCart baseline without wiping cart (so customer bill/collection remains intact)
+    setLoadedCart(JSON.parse(JSON.stringify(cart)));
 
     const deltaSummaryParts = [];
-    if (addedKotItems.length > 0) deltaSummaryParts.push(`+${addedKotItems.reduce((s, i) => s + i.qty, 0)} Added`);
-    if (minusKotItems.length > 0) deltaSummaryParts.push(`-${minusKotItems.reduce((s, i) => s + i.qty, 0)} Minus`);
+    if (addedKotItems.length > 0) {
+      deltaSummaryParts.push(`${hasPriorSentOrder ? 'ADD-ON ' : ''}+${addedKotItems.reduce((s, i) => s + i.qty, 0)}`);
+    }
+    if (minusKotItems.length > 0) {
+      deltaSummaryParts.push(`CANCEL -${minusKotItems.reduce((s, i) => s + i.qty, 0)}`);
+    }
     showKdsToast(
-      minusKotItems.length > 0 || isAddOn
+      minusKotItems.length > 0 || hasPriorSentOrder
         ? `${deltaSummaryParts.join(' / ')} KOT sent to ${stationSummary} (${targetTableName})`
         : `Order sent to ${stationSummary} (${targetTableName}) • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
     );
@@ -1646,12 +1709,12 @@ export default function POSTerminalScreen({
     });
 
     const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
-    const { addedKotItems, minusKotItems } = buildCartDeltas();
+    const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
     const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
 
     if (minusKotItems.length > 0 && canSendKds) {
-      const minusTicket = {
-        id: `MINUS-${Math.floor(Math.random() * 9000) + 1000}`,
+      const cancelTicket = {
+        id: `CANCEL-${Math.floor(Math.random() * 9000) + 1000}`,
         tableId: kotTarget,
         tableName: targetTableName,
         server: cashierName,
@@ -1659,7 +1722,7 @@ export default function POSTerminalScreen({
         status: 'pending',
         isMinusKot: true,
         kotType: 'MINUS',
-        notes: 'MINUS / REDUCED AT FINAL BILLING',
+        notes: 'CANCELLED / REDUCED AT FINAL BILLING',
         items: minusKotItems.map((m) => ({
           id: m.item.id,
           name: m.item.name,
@@ -1671,10 +1734,10 @@ export default function POSTerminalScreen({
           itemStatus: 'pending',
         })),
       };
-      dispatchDirectKotPrint(minusTicket, true);
+      dispatchDirectKotPrint(cancelTicket, true);
     }
 
-    // Clear prior table tickets BEFORE dispatching any final brand-new unsent KOT items on settlement
+    // Clear prior table tickets BEFORE dispatching any brand-new unsent walk-in KOT
     if (loadedTicketId) {
       dismissTicket(loadedTicketId, { isSettlementCleanup: true });
       setLoadedTicketId(null);
@@ -1683,8 +1746,9 @@ export default function POSTerminalScreen({
       clearTableTickets(targetTableId, { isSettlementCleanup: true });
     }
 
-    if (addedKotItems.length > 0 && canSendKds) {
-      placeOrder(kotTarget, cashierName, addedKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
+    // Never re-send already-sent table orders on settlement; only print KOT for a brand-new walk-in order
+    if (!hasPriorSentOrder && addedKotItems.length > 0 && canSendKds) {
+      placeOrder(kotTarget, cashierName, addedKotItems, false, undefined, orderNotes.trim() || undefined);
       const latestTicket = useRestaurantStore.getState().tickets?.[0];
       if (latestTicket) {
         dispatchDirectKotPrint(latestTicket, false);
@@ -1771,17 +1835,14 @@ export default function POSTerminalScreen({
   const handlePrintUnpaidBill = () => {
     if (!requirePosPerm('posCanPrintUnpaidBill', 'print provisional unpaid bills')) return;
     if (cart.length === 0 && loadedCart.length === 0) return;
+    if (orderType === 'dine-in' && !selectedTableId) {
+      setTableModalVisible(true);
+      showKdsToast('Please select the table first before printing Temporary / Pending Bill.');
+      return;
+    }
 
     const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
     const targetTableName = targetTable ? targetTable.name : orderType === 'dine-in' ? 'Table' : orderType.toUpperCase();
-
-    // Sync any newly added or minus'd items to Kitchen & Juice Bar KDS (exact +ADD / -MINUS slips) and table orders
-    const tId = orderType === 'dine-in' && selectedTableId ? selectedTableId : orderType;
-    const serverLabel = selectedCustomerObj?.name
-      ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
-      : `${user?.name || 'Staff'} (POS)`;
-    const { addedKotItems, minusKotItems } = syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
-    setLoadedCart(JSON.parse(JSON.stringify(cart)));
 
     const unpaidInvoice: Invoice = {
       id: `TMP-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
@@ -1813,11 +1874,7 @@ export default function POSTerminalScreen({
     if (cart.length > 0) {
       printInvoiceReceipt(unpaidInvoice);
     }
-    const deltaNote =
-      addedKotItems.length > 0 || minusKotItems.length > 0
-        ? ` (+${addedKotItems.reduce((s, i) => s + i.qty, 0)} Added / -${minusKotItems.reduce((s, i) => s + i.qty, 0)} Minus KOT printed)`
-        : '';
-    showKdsToast(`Temporary / Pending Bill printed for ${targetTableName}${deltaNote}`);
+    showKdsToast(`Temporary / Pending Bill printed for ${targetTableName} (No KOT resent)`);
   };
 
   const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);

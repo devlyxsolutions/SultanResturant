@@ -15,6 +15,7 @@ import { getActiveServerHttpUrl } from '../services/syncService';
 import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 
 export const INSTALLED_APK_VERSION = 44;
+export const INSTALLED_WEB_VERSION = 48;
 export const APP_VERSION_LABEL = `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
@@ -43,7 +44,7 @@ export default function CentralUpdateHost() {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 3500);
         const res = await fetch(
-          `${base}/api/app-update/info?apkVer=${INSTALLED_APK_VERSION}&t=${Date.now()}`,
+          `${base}/api/app-update/info?apkVer=${INSTALLED_APK_VERSION}&webVer=${INSTALLED_WEB_VERSION}&t=${Date.now()}`,
           {
             signal: controller.signal,
             headers: { 'Cache-Control': 'no-cache' },
@@ -57,15 +58,16 @@ export default function CentralUpdateHost() {
 
               setIsServerConnected(true);
               const remoteVer = Number(data.apkVersion || INSTALLED_APK_VERSION);
+              const remoteWebVer = Number(data.webVersion || data.apkVersion || INSTALLED_WEB_VERSION);
               if (remoteVer > 0) {
                 setServerVersion(remoteVer);
               }
 
-              // 1. Web / Windows Desktop PCs: Auto-reload UI immediately when Master Server dist/ or version changes
+              // 1. Web / Windows Desktop PCs: Auto-reload UI immediately when Master Server dist/ or webVersion changes
               if (Platform.OS === 'web') {
-                if (remoteVer > INSTALLED_APK_VERSION && typeof window !== 'undefined') {
+                if (remoteWebVer > INSTALLED_WEB_VERSION && typeof window !== 'undefined') {
                   try {
-                    const reloadKey = `sultan_reloaded_for_v${remoteVer}`;
+                    const reloadKey = `sultan_reloaded_web_v${remoteWebVer}`;
                     if (!window.sessionStorage?.getItem(reloadKey)) {
                       window.sessionStorage?.setItem(reloadKey, '1');
                       window.location.reload();
