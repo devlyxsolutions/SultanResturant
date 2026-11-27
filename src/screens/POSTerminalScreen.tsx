@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -446,6 +447,56 @@ export default function POSTerminalScreen({
   const searchInputRef = useRef<any>(null);
   const prefilledRef = useRef<string | null>(null);
   const prefilledCustRef = useRef<string | null>(null);
+  const hasHydratedDraftRef = useRef(false);
+
+  // Power-outage / sudden restart protection: restore unsent POS cart draft on boot
+  useEffect(() => {
+    if (prefillTableId || prefillCustomerId || prefillCustomerPhone) {
+      hasHydratedDraftRef.current = true;
+      return;
+    }
+    let cancelled = false;
+    AsyncStorage.getItem('@sultan_pos_draft_cart_v1')
+      .then((raw) => {
+        if (cancelled) return;
+        if (raw) {
+          try {
+            const draft = JSON.parse(raw);
+            if (draft && Array.isArray(draft.cart) && draft.cart.length > 0) {
+              setCart(draft.cart);
+              if (Array.isArray(draft.loadedCart)) setLoadedCart(draft.loadedCart);
+              if (draft.orderType) setOrderType(draft.orderType);
+              if (draft.selectedTableId) setSelectedTableId(String(draft.selectedTableId));
+              if (typeof draft.orderNotes === 'string') setOrderNotes(draft.orderNotes);
+              if (typeof draft.selectedServer === 'string') setSelectedServer(draft.selectedServer);
+              if (typeof draft.discountAmount === 'string') setDiscountAmount(draft.discountAmount);
+            }
+          } catch { }
+        }
+      })
+      .catch(() => { })
+      .finally(() => {
+        hasHydratedDraftRef.current = true;
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!hasHydratedDraftRef.current) return;
+    const payload = {
+      cart,
+      loadedCart,
+      selectedTableId,
+      orderType,
+      orderNotes,
+      selectedServer,
+      discountAmount,
+      savedAt: Date.now(),
+    };
+    AsyncStorage.setItem('@sultan_pos_draft_cart_v1', JSON.stringify(payload)).catch(() => { });
+  }, [cart, loadedCart, selectedTableId, orderType, orderNotes, selectedServer, discountAmount]);
 
   const availableFloors = useMemo(() => {
     const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);

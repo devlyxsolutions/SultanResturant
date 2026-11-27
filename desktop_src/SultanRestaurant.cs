@@ -916,7 +916,7 @@ namespace SultanRestaurantDesktop
                 try
                 {
                     Uri u = new Uri(baseServer);
-                    masterReachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 700);
+                    masterReachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 1500);
                 }
                 catch {}
 
@@ -1165,10 +1165,10 @@ namespace SultanRestaurantDesktop
                 try
                 {
                     Uri u = new Uri(baseServer);
-                    bool reachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 300);
+                    bool reachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 1500);
                     if (!reachable)
                     {
-                        if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 150))
+                        if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 350))
                         {
                             string err;
                             ProcessHelper.StartHub(out err);

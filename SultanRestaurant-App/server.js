@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const zlib = require('zlib');
+const dgram = require('dgram');
 const WebSocket = require('ws');
 const WebSocketServer = WebSocket.Server;
 
@@ -29,6 +30,9 @@ function getServerLanIp() {
   return '192.168.1.10';
 }
 const DATA_FILE = path.join(__dirname, 'server-data.json');
+const SERVER_INSTANCE_ID = 'SRV_' + String(os.hostname() || 'PC').replace(/[^a-zA-Z0-9_-]/g, '') + '_' + getServerLanIp();
+const discoveredLanPeers = new Map();
+const knownRemoteLanIps = new Set(['192.168.1.10']);
 const SYSTEM_LOGS_FILE = path.join(__dirname, 'system-logs.ndjson');
 const MAX_SYSTEM_LOGS_IN_MEMORY = 50000;
 const MAX_SYSTEM_LOGS_FILE_BYTES = 50 * 1024 * 1024; // 50 MB auto-rotation
@@ -2900,12 +2904,59 @@ function mergeMissingOpsFromBackup(targetState, backupState) {
   return restored;
 }
 
-// Load or create state (with automatic recovery from backups/ if git pull removed or wiped server-data.json!)
+// Crash-safe corrupt-resistant multi-mirror state loader (survives sudden power loss mid-write)
+function loadBestAvailableStateOnBoot() {
+  const candidates = [
+    DATA_FILE,
+    LIVE_MIRROR_FILE,
+    VAULT_DATA_FILE,
+    VAULT_LIVE_MIRROR_FILE,
+    'C:\\SultanRestaurant\\server-data.json',
+    'C:\\Users\\Nizaam Digital Sol\\Desktop\\SultanRestaurant-App\\server-data.json',
+  ];
+  let bestObj = null;
+  let bestSource = '';
+  let bestScoreTs = -1;
+
+  for (const fp of candidates) {
+    try {
+      if (!fp || !fs.existsSync(fp)) continue;
+      const raw = fs.readFileSync(fp, 'utf8');
+      if (!raw || raw.trim().length < 20) continue;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') continue;
+      const hasCore = (Array.isArray(parsed.tables) && parsed.tables.length > 0) || (Array.isArray(parsed.menuItems) && parsed.menuItems.length > 0);
+      if (!hasCore) continue;
+      const ts = Number(parsed.lastUpdated || 0);
+      const isPrimary = path.resolve(fp) === path.resolve(DATA_FILE);
+      // Prefer newest valid snapshot; on equal timestamp prefer primary DATA_FILE
+      if (!bestObj || ts > bestScoreTs || (ts === bestScoreTs && isPrimary)) {
+        bestObj = parsed;
+        bestScoreTs = ts;
+        bestSource = fp;
+      }
+    } catch (_) { }
+  }
+
+  if (!bestObj) {
+    const bestBak = findBestBackupSnapshot();
+    if (bestBak && bestBak.state) {
+      bestObj = bestBak.state;
+      bestSource = bestBak.path;
+    }
+  }
+  return { state: bestObj, source: bestSource };
+}
+
+// Load or create state (with automatic recovery from mirrors/vault/backups if power cut corrupted server-data.json!)
 let serverState = { ...INITIAL_STATE };
 try {
-  if (fs.existsSync(DATA_FILE)) {
-    const raw = fs.readFileSync(DATA_FILE, 'utf8');
-    serverState = { ...INITIAL_STATE, ...JSON.parse(raw) };
+  const loadedBoot = loadBestAvailableStateOnBoot();
+  if (loadedBoot.state) {
+    serverState = { ...INITIAL_STATE, ...loadedBoot.state };
+    if (loadedBoot.source && path.resolve(loadedBoot.source) !== path.resolve(DATA_FILE)) {
+      console.log(`[Sultan Hub Recovery] Recovered latest database from mirror/backup: ${loadedBoot.source}`);
+    }
     // Purge legacy Nov-13 dummy seed inventory & movements on startup so dummy items never appear
     if (Array.isArray(serverState.inventory)) {
       serverState.inventory = serverState.inventory.filter((i) => i && !isLegacyDummyInventoryId(i.id));
@@ -3175,7 +3226,8 @@ try {
     if (Array.isArray(serverState.tables)) {
       const nowInit = Date.now();
       serverState.tables = serverState.tables.map(t => {
-        if (t.status === 'occupied' && !activeTicketTableIds.has(t.id) && !t.mergedInto) {
+        const hasUnpaidOrders = !t.isPaid && ((Array.isArray(t.orders) && t.orders.length > 0) || (t.billTotal || 0) > 0);
+        if (t.status === 'occupied' && !activeTicketTableIds.has(t.id) && !hasUnpaidOrders && !t.reservationId && !t.mergedInto) {
           return {
             ...t,
             status: 'available',
@@ -3851,22 +3903,43 @@ function processServerPrintQueue() {
     });
 }
 
-// Crash-safe atomic debounced file save + live mirror + daily backup
+// Crash-safe atomic disk write with fs.fsyncSync so sudden power cuts never lose orders or corrupt JSON
+function writeJsonFileCrashSafe(filePath, contentStr) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  const tmpFile = `${filePath}.tmp`;
+  const fd = fs.openSync(tmpFile, 'w');
+  try {
+    fs.writeSync(fd, contentStr, 0, 'utf8');
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  fs.renameSync(tmpFile, filePath);
+}
+
+// Crash-safe immediate primary flush + debounced vault/daily/cross-folder mirrors
 let saveTimer = null;
 let lastBackupDate = '';
+function persistStateImmediateOnly() {
+  try {
+    const jsonStr = JSON.stringify(serverState, null, 2);
+    writeJsonFileCrashSafe(DATA_FILE, jsonStr);
+    writeJsonFileCrashSafe(LIVE_MIRROR_FILE, jsonStr);
+    return jsonStr;
+  } catch (e) {
+    console.error('[Sultan Hub] Immediate disk flush error:', e.message);
+    return null;
+  }
+}
+
 function persistState() {
+  const jsonStr = persistStateImmediateOnly();
   if (saveTimer) clearTimeout(saveTimer);
   saveTimer = setTimeout(() => {
     try {
-      const jsonStr = JSON.stringify(serverState, null, 2);
-      const tmpFile = `${DATA_FILE}.tmp`;
-      fs.writeFileSync(tmpFile, jsonStr);
-      fs.renameSync(tmpFile, DATA_FILE);
-
+      const payloadStr = jsonStr || JSON.stringify(serverState, null, 2);
       if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
-      const mirrorTmp = `${LIVE_MIRROR_FILE}.tmp`;
-      fs.writeFileSync(mirrorTmp, jsonStr);
-      fs.renameSync(mirrorTmp, LIVE_MIRROR_FILE);
 
       const today = new Date().toISOString().split('T')[0];
       const dailyPath = path.join(BACKUP_DIR, `server-data-${today}.json`);
@@ -3882,7 +3955,7 @@ function persistState() {
           } catch (_) { }
         }
         if (allowDailyWrite) {
-          fs.writeFileSync(dailyPath, jsonStr);
+          writeJsonFileCrashSafe(dailyPath, payloadStr);
         }
         lastBackupDate = today;
       }
@@ -3891,15 +3964,11 @@ function persistState() {
       try {
         if (!fs.existsSync(VAULT_DIR)) fs.mkdirSync(VAULT_DIR, { recursive: true });
         if (!fs.existsSync(VAULT_BACKUP_DIR)) fs.mkdirSync(VAULT_BACKUP_DIR, { recursive: true });
-        const vaultTmp = `${VAULT_DATA_FILE}.tmp`;
-        fs.writeFileSync(vaultTmp, jsonStr);
-        fs.renameSync(vaultTmp, VAULT_DATA_FILE);
-        const vaultMirrorTmp = `${VAULT_LIVE_MIRROR_FILE}.tmp`;
-        fs.writeFileSync(vaultMirrorTmp, jsonStr);
-        fs.renameSync(vaultMirrorTmp, VAULT_LIVE_MIRROR_FILE);
+        writeJsonFileCrashSafe(VAULT_DATA_FILE, payloadStr);
+        writeJsonFileCrashSafe(VAULT_LIVE_MIRROR_FILE, payloadStr);
         const vaultDailyPath = path.join(VAULT_BACKUP_DIR, `server-data-${today}.json`);
         if (!fs.existsSync(vaultDailyPath)) {
-          fs.writeFileSync(vaultDailyPath, jsonStr);
+          writeJsonFileCrashSafe(vaultDailyPath, payloadStr);
         }
         // Mirror live database across C:\SultanRestaurant and workspace so both directories always stay 100% in sync!
         for (const extraDataFile of [
@@ -3909,9 +3978,7 @@ function persistState() {
         ]) {
           try {
             if (path.resolve(extraDataFile) !== path.resolve(DATA_FILE) && fs.existsSync(path.dirname(extraDataFile))) {
-              const extTmp = `${extraDataFile}.tmp`;
-              fs.writeFileSync(extTmp, jsonStr);
-              fs.renameSync(extTmp, extraDataFile);
+              writeJsonFileCrashSafe(extraDataFile, payloadStr);
             }
           } catch (_) { }
         }
@@ -3943,15 +4010,24 @@ function persistState() {
               } catch (_) { }
             }
             if (curScore >= prevScore) {
-              fs.writeFileSync(milestonePath, jsonStr);
+              writeJsonFileCrashSafe(milestonePath, payloadStr);
             }
           } catch (_) { }
         }
       }
     } catch (e) {
-      console.error('[Sultan Hub] Failed to save state to disk:', e.message);
+      console.error('[Sultan Hub] Failed to save mirror state to disk:', e.message);
     }
   }, 400);
+}
+
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
+  try {
+    process.on(sig, () => {
+      persistStateImmediateOnly();
+      process.exit(0);
+    });
+  } catch (_) { }
 }
 
 // -------------------------------------------------------------
@@ -4334,7 +4410,11 @@ async function handleRequest(req, res) {
     res.end(JSON.stringify({
       status: 'online',
       server: 'Sultan Central POS & Mobile Hub',
+      instanceId: SERVER_INSTANCE_ID,
+      lastUpdated: Number(serverState.lastUpdated || 0),
+      fingerprint: lastStateFingerprint,
       clientsCount: wss ? wss.clients.size : 0,
+      peersCount: discoveredLanPeers ? discoveredLanPeers.size : 0,
       activeMenuCount: (serverState.menuItems || []).length,
       registeredAppUsers: (serverState.appUsers || []).length,
       timestamp: Date.now()
@@ -7084,10 +7164,14 @@ async function handleRequest(req, res) {
     try {
       const data = await readRequestBody(req);
       const clientIp = req.socket?.remoteAddress || 'unknown';
+      const cleanIp = String(clientIp).replace(/^::ffff:/, '').trim();
+      if (cleanIp && cleanIp !== '127.0.0.1' && cleanIp !== '::1' && cleanIp !== getServerLanIp()) {
+        knownRemoteLanIps.add(cleanIp);
+      }
       const ticketCount = Array.isArray(data?.state?.tickets) ? data.state.tickets.length : '?';
       console.log(`[Sultan Hub] HTTP POST /api/sync from ${data.senderId || clientIp} (${clientIp}) tickets=${ticketCount}`);
       if (data.state && !hasProcessedServerPacket(data.packetId)) {
-        applyStateUpdate(data.state, data.senderId);
+        applyStateUpdate(data.state, data.senderId, null, { skipPeerPush: Boolean(data.isPeerServer) });
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: true, timestamp: Date.now(), state: serverState }));
@@ -8058,7 +8142,7 @@ async function handleRequest(req, res) {
     return value;
   }
 
-  function applyStateUpdate(partialState, senderId, originWs = null) {
+  function applyStateUpdate(partialState, senderId, originWs = null, options = {}) {
     if (!partialState || typeof partialState !== 'object') return;
 
     const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
@@ -8475,13 +8559,59 @@ async function handleRequest(req, res) {
               if (!inc) return curr;
 
               const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
-
-              // Preserve Temporary / Pending Bill updates and item add/minus edits
+              const currReleaseTs = Math.max(Number(curr.lastSettledAt) || 0, Number(curr.lastMovedAt) || 0);
+              const currOccTs = Math.max(Number(curr.occupiedSince) || 0, Number(curr.ordersUpdatedAt) || 0);
+              const incReleaseTs = Math.max(Number(inc.lastSettledAt) || 0, Number(inc.lastMovedAt) || 0);
+              const incOccTs = Math.max(Number(inc.occupiedSince) || 0, Number(inc.ordersUpdatedAt) || 0);
               const currOrdersAt = Number(curr.ordersUpdatedAt) || 0;
               const incOrdersAt = Number(inc.ordersUpdatedAt) || 0;
+
+              // Explicit release to 'available' from another terminal (only if no active unbilled tickets remain)
+              const hasPendingWaiterPay =
+                !!resolveWaiterPay(curr, inc) &&
+                inc.status !== 'available';
+
+              // Case 1: Table already settled on server — reject stale 'occupied'/'billed' echoes with older timestamps
+              if (
+                curr.status === 'available' &&
+                (inc.status === 'occupied' || inc.status === 'billed') &&
+                tableTickets.length === 0 &&
+                currReleaseTs > 0 &&
+                incOccTs > 0 &&
+                incOccTs <= currReleaseTs
+              ) {
+                return curr;
+              }
+
+              // Case 2: Table is occupied/billed/reserved and other PC explicitly releases it to 'available'
+              if (
+                (curr.status === 'occupied' || curr.status === 'billed' || curr.status === 'reserved') &&
+                inc.status === 'available' &&
+                tableTickets.length === 0 &&
+                !hasPendingWaiterPay &&
+                (incReleaseTs >= currOccTs || incReleaseTs === 0)
+              ) {
+                return {
+                  ...curr,
+                  ...inc,
+                  status: 'available',
+                  billTotal: 0,
+                  orders: [],
+                  isPaid: false,
+                  server: undefined,
+                  serverId: undefined,
+                  lastInvoiceId: undefined,
+                  occupiedSince: undefined,
+                  reservationId: undefined,
+                  waiterPaymentCollection: null,
+                  lastSettledAt: Math.max(currReleaseTs, incReleaseTs, Date.now()),
+                };
+              }
+
+              // Preserve Temporary / Pending Bill updates and item add/minus edits
               if (inc.status === 'billed' || curr.status === 'billed') {
                 if (inc.status === 'available') {
-                  // Explicit settlement/release wins below
+                  // Only allow release if active tickets are cleared (handled in Case 2 above if tableTickets === 0)
                 } else if (incOrdersAt >= currOrdersAt && (inc.status === 'billed' || inc.orders)) {
                   const nextOrders = Array.isArray(inc.orders) ? inc.orders : (Array.isArray(curr.orders) ? curr.orders : []);
                   const nextBill = typeof inc.billTotal === 'number'
@@ -8523,7 +8653,7 @@ async function handleRequest(req, res) {
                   ...base,
                   status: 'occupied',
                   isPaid: false,
-                  occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0) || Date.now(),
+                  occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0, currReleaseTs + 1) || Date.now(),
                   billTotal: resolvedBill,
                   orders: bestOrders,
                   ordersUpdatedAt: Math.max(currOrdersAt, incOrdersAt) || undefined,
@@ -8532,29 +8662,18 @@ async function handleRequest(req, res) {
                 };
               }
 
-              // If no active tickets remain for this table and it had an order or is being cleared/settled, release it to 'available'
-              const hasPendingWaiterPay =
-                !!resolveWaiterPay(curr, inc) &&
-                inc.status !== 'available';
+              // Case 3: Table is available and another PC newly occupies, reserves, or bills it
               if (
-                tableTickets.length === 0 &&
-                inc.status !== 'billed' &&
-                !hasPendingWaiterPay &&
-                (inc.status === 'available' ||
-                  (curr.status === 'occupied' && ((Array.isArray(curr.orders) && curr.orders.length > 0) || (curr.billTotal || 0) > 0)))
+                curr.status === 'available' &&
+                inc.status !== 'available' &&
+                (incOccTs > currReleaseTs || tableTickets.length > 0 || inc.status === 'reserved')
               ) {
                 return {
                   ...curr,
                   ...inc,
-                  status: 'available',
-                  billTotal: 0,
-                  orders: [],
-                  isPaid: false,
-                  server: undefined,
-                  lastInvoiceId: undefined,
-                  occupiedSince: undefined,
-                  waiterPaymentCollection: null,
-                  lastSettledAt: inc.lastSettledAt || curr.lastSettledAt || Date.now(),
+                  occupiedSince: inc.status === 'occupied'
+                    ? Math.max(incOccTs, currReleaseTs + 1, Date.now())
+                    : inc.occupiedSince,
                 };
               }
 
@@ -8969,7 +9088,12 @@ async function handleRequest(req, res) {
 
     if (modified) {
       // Reconcile tables with active tickets so any table whose tickets were all removed is released to 'available'
-      const activeTicketByTable = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+      const activeTicketByTable = new Set(
+        (serverState.tickets || [])
+          .filter(tk => tk && !tk.isSettled && tk.tableId !== 'SETTLED-HISTORY' && tk.tableId !== 'SETTLED-ORDER')
+          .map(tk => tk.tableId)
+          .filter(Boolean)
+      );
       if (Array.isArray(serverState.tables)) {
         const nowRec = Date.now();
         // Waiter collections that the cashier has already turned into an invoice are finished — find their settle time
@@ -9005,7 +9129,15 @@ async function handleRequest(req, res) {
           if (receivedAt) {
             return { ...t, waiterPaymentCollection: null, lastSettledAt: Math.max(t.lastSettledAt || 0, receivedAt) };
           }
-          if (t.status === 'occupied' && !activeTicketByTable.has(t.id) && !t.mergedInto && !(t.waiterPaymentCollection?.status === 'pending_cashier' && (t.lastSettledAt || 0) < (t.waiterPaymentCollection.collectedAt || 0))) {
+          const hasUnpaidTableOrders = !t.isPaid && ((Array.isArray(t.orders) && t.orders.length > 0) || (t.billTotal || 0) > 0);
+          if (
+            t.status === 'occupied' &&
+            !activeTicketByTable.has(t.id) &&
+            !hasUnpaidTableOrders &&
+            !t.reservationId &&
+            !t.mergedInto &&
+            !(t.waiterPaymentCollection?.status === 'pending_cashier' && (t.lastSettledAt || 0) < (t.waiterPaymentCollection.collectedAt || 0))
+          ) {
             return {
               ...t,
               status: 'available',
@@ -9049,6 +9181,9 @@ async function handleRequest(req, res) {
         senderId: senderId || 'SERVER',
         timestamp: serverState.lastUpdated
       }, originWs);
+      if (!options?.skipPeerPush) {
+        pushStateToLanPeers();
+      }
       pushToFirestoreCloud();
     }
   }
@@ -9141,7 +9276,7 @@ async function handleRequest(req, res) {
         lastProcessedCloudTimestamp = now;
         const payload = {
           type: 'SERVER_BROADCAST',
-          senderId: 'SERVER_POS_HUB',
+          senderId: SERVER_INSTANCE_ID,
           timestamp: now,
           state: {
             tables: serverState.tables,
@@ -9262,7 +9397,7 @@ async function handleRequest(req, res) {
       if (doc.updateTime && doc.updateTime === lastProcessedCloudUpdateTime) return;
       const fields = doc.fields || {};
       const senderId = fields.senderId?.stringValue;
-      if (hasInitialFirestorePollCompleted && senderId === 'SERVER_POS_HUB') return;
+      if (hasInitialFirestorePollCompleted && (senderId === SERVER_INSTANCE_ID || senderId === 'SERVER_POS_HUB')) return;
       const timestamp = Number(fields.timestamp?.integerValue || 0);
       if (timestamp && timestamp === lastProcessedCloudTimestamp) return;
       if (hasInitialFirestorePollCompleted && timestamp && serverState.lastUpdated && timestamp < serverState.lastUpdated) return;
@@ -9309,7 +9444,13 @@ async function handleRequest(req, res) {
             applyStateUpdate(data.state, data.senderId, ws);
           }
         } else if (data.type === 'PING') {
-          ws.send(JSON.stringify({ type: 'PONG', timestamp: Date.now() }));
+          ws.send(JSON.stringify({
+            type: 'PONG',
+            instanceId: SERVER_INSTANCE_ID,
+            lastUpdated: Number(serverState.lastUpdated || 0),
+            fingerprint: lastStateFingerprint,
+            timestamp: Date.now()
+          }));
         }
       } catch (e) {
         console.error('[Sultan Hub] Bad WS message:', e.message);
@@ -9383,3 +9524,183 @@ async function handleRequest(req, res) {
       }
     );
   }
+
+  // ==============================================================
+  // LAN PEER-TO-PEER SERVER MESH (Ground <-> Top Floor Cashier PCs)
+  // Auto-discovers any secondary Sultan server on the LAN via UDP 5052
+  // + HTTP /health probes and keeps both servers 100% synchronized.
+  // ==============================================================
+  const PEER_UDP_PORT = 5052;
+  let isPullingFromPeer = false;
+
+  async function pullFromLanPeer(peerUrl) {
+    if (!peerUrl || isPullingFromPeer) return;
+    isPullingFromPeer = true;
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 2000) : null;
+      const res = await fetch(`${peerUrl}/api/sync`, {
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return;
+      const peerState = await res.json();
+      if (peerState && typeof peerState === 'object') {
+        const peerInfo = discoveredLanPeers.get(peerUrl);
+        if (peerInfo) {
+          peerInfo.lastSeen = Date.now();
+          if (peerState.lastUpdated) peerInfo.lastUpdated = Number(peerState.lastUpdated);
+        }
+        applyStateUpdate(peerState, `PEER_${peerUrl}`, null, { skipPeerPush: true });
+      }
+    } catch (_) { } finally {
+      isPullingFromPeer = false;
+    }
+  }
+
+  function pushStateToLanPeers() {
+    if (!discoveredLanPeers || discoveredLanPeers.size === 0) return;
+    const now = Date.now();
+    const packetId = `${SERVER_INSTANCE_ID}_${now}_${Math.random().toString(36).substring(2, 6)}`;
+    const body = JSON.stringify({
+      type: 'PEER_SYNC',
+      senderId: SERVER_INSTANCE_ID,
+      packetId,
+      isPeerServer: true,
+      timestamp: now,
+      state: serverState,
+    });
+    for (const [peerUrl, info] of discoveredLanPeers.entries()) {
+      if (!info || now - (info.lastSeen || 0) > 60000) {
+        discoveredLanPeers.delete(peerUrl);
+        continue;
+      }
+      fetch(`${peerUrl}/api/sync`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body,
+      }).catch(() => { });
+    }
+  }
+
+  function registerOrSyncPeer(peerUrl, healthData) {
+    if (!peerUrl || !healthData || !healthData.ok) return;
+    if (healthData.instanceId && healthData.instanceId === SERVER_INSTANCE_ID) return;
+    const prev = discoveredLanPeers.get(peerUrl);
+    const prevTs = prev ? Number(prev.lastUpdated || 0) : 0;
+    const remoteTs = Number(healthData.lastUpdated || 0);
+    const isNewPeer = !prev;
+    discoveredLanPeers.set(peerUrl, {
+      instanceId: healthData.instanceId || peerUrl,
+      lastSeen: Date.now(),
+      lastUpdated: remoteTs,
+      fingerprint: healthData.fingerprint || '',
+    });
+    if (isNewPeer) {
+      console.log(`[Sultan Hub Peer-Mesh] Connected to peer Cashier server at ${peerUrl} (${healthData.instanceId || 'peer'})`);
+    }
+    if (
+      (isNewPeer && remoteTs > 0) ||
+      (remoteTs > prevTs && remoteTs > Number(serverState.lastUpdated || 0)) ||
+      (healthData.fingerprint && healthData.fingerprint !== lastStateFingerprint && remoteTs >= Number(serverState.lastUpdated || 0))
+    ) {
+      pullFromLanPeer(peerUrl);
+    }
+  }
+
+  async function probePeerHealth(peerIp) {
+    if (!peerIp || peerIp === '127.0.0.1' || peerIp === 'localhost' || peerIp === getServerLanIp()) return;
+    const peerUrl = `http://${peerIp}:${PORT}`;
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 900) : null;
+      const res = await fetch(`${peerUrl}/health`, {
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+      if (timer) clearTimeout(timer);
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data && String(data.server || '').toLowerCase().includes('sultan')) {
+        registerOrSyncPeer(peerUrl, {
+          ok: true,
+          instanceId: data.instanceId,
+          lastUpdated: data.lastUpdated,
+          fingerprint: data.fingerprint,
+        });
+      }
+    } catch (_) { }
+  }
+
+  function initLanPeerMesh() {
+    let udpSock = null;
+    try {
+      udpSock = dgram.createSocket({ type: 'udp4', reuseAddr: true });
+      udpSock.on('error', () => { });
+      udpSock.on('message', (buf, rinfo) => {
+        try {
+          const msg = JSON.parse(buf.toString('utf8'));
+          if (!msg || msg.type !== 'SULTAN_HUB_BEACON') return;
+          if (!msg.instanceId || msg.instanceId === SERVER_INSTANCE_ID) return;
+          const peerIp = rinfo && rinfo.address ? rinfo.address : msg.ip;
+          if (!peerIp || peerIp === '127.0.0.1') return;
+          const peerPort = Number(msg.port || PORT);
+          const peerUrl = `http://${peerIp}:${peerPort}`;
+          knownRemoteLanIps.add(peerIp);
+          registerOrSyncPeer(peerUrl, {
+            ok: true,
+            instanceId: msg.instanceId,
+            lastUpdated: msg.lastUpdated,
+            fingerprint: msg.fingerprint,
+          });
+        } catch (_) { }
+      });
+      udpSock.bind(PEER_UDP_PORT, () => {
+        try {
+          udpSock.setBroadcast(true);
+        } catch (_) { }
+      });
+    } catch (_) {
+      udpSock = null;
+    }
+
+    setInterval(() => {
+      // 1. Send UDP discovery beacon on all local IPv4 subnets
+      if (udpSock) {
+        try {
+          const beacon = Buffer.from(
+            JSON.stringify({
+              type: 'SULTAN_HUB_BEACON',
+              instanceId: SERVER_INSTANCE_ID,
+              ip: getServerLanIp(),
+              port: Number(PORT),
+              lastUpdated: Number(serverState.lastUpdated || 0),
+              fingerprint: lastStateFingerprint,
+            })
+          );
+          const targets = new Set(['255.255.255.255']);
+          const ifaces = os.networkInterfaces();
+          for (const name of Object.keys(ifaces)) {
+            for (const info of ifaces[name] || []) {
+              if (!info || info.internal || info.family !== 'IPv4' || !info.address) continue;
+              const parts = info.address.split('.');
+              if (parts.length === 4) {
+                targets.add(`${parts[0]}.${parts[1]}.${parts[2]}.255`);
+              }
+            }
+          }
+          for (const bIp of targets) {
+            try {
+              udpSock.send(beacon, 0, beacon.length, PEER_UDP_PORT, bIp);
+            } catch (_) { }
+          }
+        } catch (_) { }
+      }
+
+      // 2. Fallback HTTP /health probe for known LAN IPs (works even if UDP broadcasts are blocked by firewall/AP)
+      for (const remoteIp of Array.from(knownRemoteLanIps).slice(0, 12)) {
+        probePeerHealth(remoteIp);
+      }
+    }, 3000);
+  }
+
+  initLanPeerMesh();

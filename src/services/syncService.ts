@@ -285,9 +285,12 @@ export function subscribeToSyncStatus(listener: (info: SyncInfo) => void) {
   };
 }
 
-/** Verifies that a given HTTP base URL hosts Sultan Restaurant's Central POS Hub (and NOT another POS app on port 5050). */
-async function verifySultanServer(httpUrl: string, timeoutMs = 950): Promise<boolean> {
-  if (!httpUrl) return false;
+/** Fetches health metadata from a candidate Sultan Hub endpoint */
+async function fetchSultanHealth(
+  httpUrl: string,
+  timeoutMs = 950
+): Promise<{ ok: boolean; instanceId?: string; lastUpdated?: number }> {
+  if (!httpUrl) return { ok: false };
   try {
     const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
@@ -296,17 +299,27 @@ async function verifySultanServer(httpUrl: string, timeoutMs = 950): Promise<boo
       ...(controller ? { signal: controller.signal } : {}),
     });
     if (timer) clearTimeout(timer);
-    if (!res.ok) return false;
+    if (!res.ok) return { ok: false };
     const data = await res.json();
     const serverName = String(data?.server || '').toLowerCase();
     // Strictly require Sultan server identity — never sync with unrelated POS servers on the same machine
     if (!serverName || !serverName.includes('sultan')) {
-      return false;
+      return { ok: false };
     }
-    return Boolean(data && data.status === 'online');
+    return {
+      ok: Boolean(data && data.status === 'online'),
+      instanceId: data?.instanceId ? String(data.instanceId) : undefined,
+      lastUpdated: typeof data?.lastUpdated === 'number' ? data.lastUpdated : undefined,
+    };
   } catch {
-    return false;
+    return { ok: false };
   }
+}
+
+/** Verifies that a given HTTP base URL hosts Sultan Restaurant's Central POS Hub (and NOT another POS app on port 5050). */
+async function verifySultanServer(httpUrl: string, timeoutMs = 950): Promise<boolean> {
+  const h = await fetchSultanHealth(httpUrl, timeoutMs);
+  return h.ok;
 }
 
 /** Probes a candidate LAN IP to check if Sultan Central POS Hub is running there */
@@ -715,14 +728,70 @@ function initFirebaseSync() {
 
 let lastServerKnownUpdated = 0;
 let lastWsReceivedAt = 0;
+let peerLanHubHttpUrl = '';
+let lastPeerProbeAt = 0;
+let lastPeerKnownUpdated = 0;
 
-async function pollLocalLanFallback() {
-  if (isApplyingRemoteUpdate) return;
-  // Only poll via HTTP fallback when WebSocket is disconnected OR no WS traffic arrived in the last 12s
-  if (ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsReceivedAt < 12000 && hasReceivedInitialSync) {
+function isLoopbackHost(addr: string): boolean {
+  const clean = (addr || '').trim().toLowerCase();
+  return clean === '127.0.0.1' || clean === 'localhost' || clean.startsWith('127.0.0.1:') || clean.startsWith('localhost:');
+}
+
+async function resolvePeerLanMasterHub(localHttpUrl: string): Promise<string> {
+  const now = Date.now();
+  if (now - lastPeerProbeAt < 10000) return peerLanHubHttpUrl;
+  lastPeerProbeAt = now;
+  try {
+    const localHealth = await fetchSultanHealth(localHttpUrl, 700);
+    const localId = localHealth.instanceId;
+    let savedIp = '';
+    try {
+      savedIp = (await AsyncStorage.getItem(STORAGE_KEY_SERVER_IP)) || '';
+    } catch { }
+    const candidates = Array.from(
+      new Set([
+        savedIp && !isLoopbackHost(savedIp) ? parseServerEndpoints(savedIp).httpUrl : '',
+        `http://192.168.1.10:${SERVER_PORT}`,
+      ].filter(Boolean))
+    );
+    for (const cand of candidates) {
+      if (!cand || cand === localHttpUrl) continue;
+      const h = await fetchSultanHealth(cand, 700);
+      if (h.ok && (!localId || !h.instanceId || h.instanceId !== localId)) {
+        peerLanHubHttpUrl = cand;
+        return peerLanHubHttpUrl;
+      }
+    }
+  } catch { }
+  peerLanHubHttpUrl = '';
+  return '';
+}
+
+async function pollLocalLanFallback(forcePull = false) {
+  if (!forcePull && isApplyingRemoteUpdate) return;
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  // If running on localhost/127.0.0.1 (e.g. second Cashier PC), keep checking if a Master LAN Hub is reachable too
+  if (httpUrl && isLoopbackHost(currentServerAddress)) {
+    resolvePeerLanMasterHub(httpUrl)
+      .then(async (peerUrl) => {
+        if (!peerUrl || peerUrl === httpUrl) return;
+        try {
+          const pRes = await fetch(`${peerUrl}/api/sync`);
+          if (!pRes.ok) return;
+          const pState = await pRes.json();
+          const pTs = Number(pState?.lastUpdated || pState?.timestamp || 0);
+          if (pState && typeof pState === 'object' && (!lastPeerKnownUpdated || pTs !== lastPeerKnownUpdated)) {
+            if (pTs) lastPeerKnownUpdated = pTs;
+            applyRemoteStateSafely(pState.state || pState, pState.packetId, pTs || Date.now());
+          }
+        } catch { }
+      })
+      .catch(() => { });
+  }
+  // Only poll via HTTP fallback when forced OR when WebSocket is disconnected OR no WS traffic arrived in the last 10s
+  if (!forcePull && ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsReceivedAt < 10000 && hasReceivedInitialSync) {
     return;
   }
-  const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (!httpUrl) return;
   if (!(await verifySultanServer(httpUrl, 900))) {
     isLanConnected = false;
@@ -741,7 +810,7 @@ async function pollLocalLanFallback() {
         isLanConnected = true;
         syncStatus = 'connected';
         const srvTs = Number(serverState.lastUpdated || serverState.timestamp || 0);
-        if (!hasReceivedInitialSync || !srvTs || srvTs !== lastServerKnownUpdated) {
+        if (!hasReceivedInitialSync || forcePull || !srvTs || srvTs !== lastServerKnownUpdated) {
           if (srvTs) lastServerKnownUpdated = srvTs;
           applyRemoteStateSafely(serverState.state || serverState, serverState.packetId, srvTs || Date.now());
         } else {
@@ -836,20 +905,29 @@ function openVerifiedWebSocket(wsUrl: string) {
         broadcastLocalState(true);
       }
 
-      // Start keep-alive ping every 5s so lastWsReceivedAt stays fresh
+      // Start keep-alive & state-drift check ping every 2.5s so both Cashier PCs stay tightly synchronized
       pingTimer = setInterval(() => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           try {
             ws.send(JSON.stringify({ type: 'PING' }));
           } catch { }
         }
-      }, 5000);
+      }, 2500);
     };
 
     ws.onmessage = (event) => {
       try {
-        lastWsReceivedAt = Date.now();
         const data = JSON.parse(event.data as string);
+
+        if (data.type === 'PONG') {
+          if (data.lastUpdated && Number(data.lastUpdated) !== lastServerKnownUpdated) {
+            pollLocalLanFallback(true).catch(() => { });
+          } else {
+            lastWsReceivedAt = Date.now();
+          }
+          return;
+        }
+        lastWsReceivedAt = Date.now();
 
         // Ignore messages sent by this same device
         if (data.senderId === DEVICE_ID) return;
@@ -1080,6 +1158,15 @@ function broadcastLocalState(force = false) {
   // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed fallback delivery + auto-discovery retry)
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (httpUrl) {
+    if (peerLanHubHttpUrl && peerLanHubHttpUrl !== httpUrl) {
+      try {
+        fetch(`${peerLanHubHttpUrl}/api/sync`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+        }).catch(() => { });
+      } catch { }
+    }
     try {
       fetch(`${httpUrl}/api/sync`, {
         method: 'POST',

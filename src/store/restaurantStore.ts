@@ -1058,12 +1058,16 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     }
 
     // If a table is marked 'occupied' but has ZERO active tickets left (e.g. tickets were cleared or cancelled),
-    // release it to 'available' — UNLESS it is a seated reservation / merged group primary waiting for its first KOT.
+    // release it to 'available' — UNLESS it still has unpaid orders/billTotal, is a seated reservation,
+    // merged group primary, or has pending waiter cash handover.
     const hasMergedChildren = sanitizedTables.some((other) => other.mergedInto === table.id);
     const hasPendingWaiterCash = isWaiterPaymentPending(table);
+    const hasUnpaidTableOrders =
+      !table.isPaid && ((Array.isArray(table.orders) && table.orders.length > 0) || (table.billTotal || 0) > 0);
     if (
       table.status === 'occupied' &&
       tableTickets.length === 0 &&
+      !hasUnpaidTableOrders &&
       !table.mergedInto &&
       !table.reservationId &&
       !hasMergedChildren &&
@@ -1078,6 +1082,7 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         isPaid: false,
         lastInvoiceId: undefined,
         occupiedSince: undefined,
+        lastSettledAt: table.lastSettledAt || Date.now(),
         waiterPaymentCollection: null,
       };
     }
@@ -1144,6 +1149,16 @@ function capTicketsWithHistory(tickets: Ticket[], maxHistory = 500): Ticket[] {
   }
   history.sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
   return [...active, ...history.slice(0, maxHistory)];
+}
+
+const localTableMutationAt = new Map<string, number>();
+function markLocalTableMutated(tableId?: string) {
+  if (!tableId || tableId === 'SETTLED-HISTORY' || tableId === 'SETTLED-ORDER') return;
+  localTableMutationAt.set(tableId, Date.now());
+  if (localTableMutationAt.size > 300) {
+    const oldest = localTableMutationAt.keys().next().value;
+    if (oldest) localTableMutationAt.delete(oldest);
+  }
 }
 
 let isNotifyPending = false;
@@ -1528,6 +1543,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           } catch { }
         }
         set((state) => {
+          markLocalTableMutated(tableId);
           const table = state.tables.find(t => t.id === tableId);
           const existingTickets = state.tickets.filter(t => !t.isSettled && t.tableId === tableId);
           const isActuallyAddOn = isAddOn !== undefined ? isAddOn : existingTickets.length > 0;
@@ -2337,6 +2353,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       serveTableTickets: (tableId) => set((state) => {
+        markLocalTableMutated(tableId);
         const isTicketReady = (t: Ticket) =>
           t.tableId === tableId &&
           (t.status === 'ready' ||
@@ -2379,6 +2396,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       markTableBilled: (tableId, invoiceId, updatedOrders, updatedBillTotal) => set((state) => {
+        markLocalTableMutated(tableId);
         const now = Date.now();
 
         notifySync();
@@ -2406,6 +2424,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       reconcileTableCartItems: (tableId, finalCart, finalSubTotal, minusItems) => set((state) => {
+        markLocalTableMutated(tableId);
         const now = Date.now();
         const remainingMinus = new Map<string, { id: string; name: string; qty: number }>();
         (minusItems || []).forEach((m) => {
@@ -2500,6 +2519,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       recordWaiterPaymentCollection: (payload) => set((state) => {
+        markLocalTableMutated(payload.tableId);
         const now = Date.now();
         const collection: WaiterPaymentCollection = {
           ...payload,
@@ -2527,6 +2547,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       cancelWaiterPaymentCollection: (tableId) => set((state) => {
+        markLocalTableMutated(tableId);
         notifySync();
         return {
           tables: state.tables.map((t) =>
@@ -2576,6 +2597,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       settleBill: (tableId) => set((state) => {
+        markLocalTableMutated(tableId);
         const targetTable = state.tables.find(t => t.id === tableId);
         const targetTableName = targetTable?.name;
         const alert = state.lastBillPaidAlert;
@@ -2637,6 +2659,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       dismissTicket: (ticketId, options) => set((state) => {
         const target = (state.tickets || []).find(t => t.id === ticketId);
+        if (target?.tableId) markLocalTableMutated(target.tableId);
         const now = Date.now();
         const isSettlement = Boolean(options?.isSettlementCleanup);
         const remainingTickets = isSettlement
@@ -2756,6 +2779,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       cancelTicketItem: (ticketId, itemId, options) => set((state) => {
         const target = (state.tickets || []).find((t) => t.id === ticketId);
         if (!target) return state;
+        if (target.tableId) markLocalTableMutated(target.tableId);
         const targetItem = (target.items || []).find((i) => i.id === itemId);
         if (!targetItem) return state;
 
@@ -2879,6 +2903,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       }),
 
       clearTableTickets: (tableId, options) => set((state) => {
+        markLocalTableMutated(tableId);
         const removedTickets = (state.tickets || []).filter(t => t.tableId === tableId);
         const removedIds = removedTickets.map(t => t.id);
         const targetTable = state.tables.find(t => t.id === tableId);
@@ -3157,6 +3182,8 @@ export const useRestaurantStore = create<RestaurantState>()(
         const cleanNote = (note || '').trim();
         const now = Date.now();
         const actor = resolveCurrentAuthActor();
+        markLocalTableMutated(fromTableId);
+        markLocalTableMutated(toTableId);
         set((state) => {
           const fromTable = state.tables.find(t => t.id === fromTableId);
           const toTable = state.tables.find(t => t.id === toTableId);
@@ -3212,6 +3239,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 isPaid: false,
                 lastInvoiceId: undefined,
                 occupiedSince: undefined,
+                lastSettledAt: now,
                 reservationId: undefined,
                 waiterPaymentCollection: null,
                 lastMoveNote: undefined,
@@ -3307,6 +3335,9 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       mergeTables: (primaryTableId, secondaryTableId) => {
+        const now = Date.now();
+        markLocalTableMutated(primaryTableId);
+        markLocalTableMutated(secondaryTableId);
         set((state) => {
           const primary = state.tables.find(t => t.id === primaryTableId);
           const secondary = state.tables.find(t => t.id === secondaryTableId);
@@ -3345,6 +3376,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 isPaid: false,
                 lastInvoiceId: undefined,
                 occupiedSince: undefined,
+                lastSettledAt: now,
                 mergedInto: undefined,
                 reservationId: undefined,
               };
@@ -3420,6 +3452,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!targetRes) return state;
 
           const now = Date.now();
+          markLocalTableMutated(targetRes.tableId);
+          markLocalTableMutated(updates.tableId);
           const updatedRes: Reservation = { ...targetRes, ...updates, updatedAt: now };
           updatedRes.linkedTableIds = (updatedRes.linkedTableIds || []).filter(tid => tid !== updatedRes.tableId);
 
@@ -3430,7 +3464,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             // Release all previously held tables for this reservation, then reserve the new set
             updatedTables = updatedTables.map(t => {
               if ((t.reservationId === id || prevAllIds.includes(t.id)) && t.status === 'reserved') {
-                return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+                return { ...t, status: 'available' as const, billTotal: 0, orders: [], occupiedSince: undefined, lastSettledAt: now, reservationId: undefined, mergedInto: undefined };
               }
               return t;
             }).map(t => {
@@ -3456,17 +3490,19 @@ export const useRestaurantStore = create<RestaurantState>()(
         set((state) => {
           const targetRes = (state.reservations || []).find(r => r.id === id);
           if (!targetRes) return state;
+          const now = Date.now();
           const allIds = [targetRes.tableId, ...(targetRes.linkedTableIds || [])];
+          allIds.forEach(tid => markLocalTableMutated(tid));
 
           const updatedTables = state.tables.map(t => {
             if ((allIds.includes(t.id) || t.reservationId === id) && t.status === 'reserved') {
-              return { ...t, status: 'available' as const, reservationId: undefined, mergedInto: undefined };
+              return { ...t, status: 'available' as const, billTotal: 0, orders: [], occupiedSince: undefined, lastSettledAt: now, reservationId: undefined, mergedInto: undefined };
             }
             return t;
           });
 
           return {
-            reservations: (state.reservations || []).map(r => r.id === id ? { ...r, status: 'cancelled' as const, updatedAt: Date.now() } : r),
+            reservations: (state.reservations || []).map(r => r.id === id ? { ...r, status: 'cancelled' as const, updatedAt: now } : r),
             tables: updatedTables
           };
         });
@@ -3479,6 +3515,8 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (!targetRes) return state;
           const linked = targetRes.linkedTableIds || [];
           const now = Date.now();
+          markLocalTableMutated(targetRes.tableId);
+          linked.forEach(tid => markLocalTableMutated(tid));
 
           const updatedTables = state.tables.map(t => {
             if (t.id === targetRes.tableId) {
@@ -4014,6 +4052,8 @@ export const useRestaurantStore = create<RestaurantState>()(
       },
 
       updateTable: (id, updatedTable) => {
+        markLocalTableMutated(id);
+        const now = Date.now();
         set((state) => {
           let alert = state.lastBillPaidAlert;
           if (updatedTable.status === 'available' && alert) {
@@ -4026,7 +4066,31 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
           }
           return {
-            tables: state.tables.map(t => t.id === id ? { ...t, ...updatedTable } : t),
+            tables: state.tables.map(t => {
+              if (t.id !== id) return t;
+              const nextStatus = updatedTable.status || t.status;
+              if (updatedTable.status === 'available') {
+                return {
+                  ...t,
+                  ...updatedTable,
+                  status: 'available',
+                  billTotal: 0,
+                  orders: [],
+                  isPaid: false,
+                  occupiedSince: undefined,
+                  lastSettledAt: updatedTable.lastSettledAt || now,
+                };
+              }
+              if (updatedTable.status === 'occupied') {
+                return {
+                  ...t,
+                  ...updatedTable,
+                  status: 'occupied',
+                  occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1, updatedTable.occupiedSince || 0, now),
+                };
+              }
+              return { ...t, ...updatedTable, status: nextStatus };
+            }),
             lastBillPaidAlert: alert
           };
         });
@@ -4662,20 +4726,27 @@ export const useRestaurantStore = create<RestaurantState>()(
                     : rawRt;
                 const lt = localTableMap.get(rt.id);
                 if (!lt) return rt;
+                const localMutatedAt = localTableMutationAt.get(rt.id) || 0;
+                const isRecentLocalMutation = Date.now() - localMutatedAt < 8000;
+                const remoteReleaseTs = Math.max(rt.lastSettledAt || 0, rt.lastMovedAt || 0);
+                const localOccTs = Math.max(lt.occupiedSince || 0, lt.ordersUpdatedAt || 0, lt.lastMovedAt || 0);
                 if (
+                  isRecentLocalMutation &&
                   lt.status === 'occupied' &&
                   rt.status === 'available' &&
-                  (lt.occupiedSince || 0) > (rt.lastSettledAt || 0)
+                  localOccTs > remoteReleaseTs
                 ) {
                   return lt;
                 }
-                // Local settlement is newer than the server's occupied snapshot (push still in flight) — keep local
+                const localReleaseTs = Math.max(lt.lastSettledAt || 0, lt.lastMovedAt || 0);
+                const remoteOccTs = Math.max(rt.occupiedSince || 0, rt.ordersUpdatedAt || 0, rt.lastMovedAt || 0);
                 if (
+                  isRecentLocalMutation &&
                   lt.status === 'available' &&
                   rt.status !== 'available' &&
-                  (lt.lastSettledAt || 0) > 0 &&
-                  (lt.lastSettledAt || 0) >= (rt.occupiedSince || 0) &&
-                  (lt.lastSettledAt || 0) > (rt.lastSettledAt || 0)
+                  localReleaseTs > 0 &&
+                  localReleaseTs >= remoteOccTs &&
+                  localReleaseTs > remoteReleaseTs
                 ) {
                   return lt;
                 }
