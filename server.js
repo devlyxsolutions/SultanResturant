@@ -5880,7 +5880,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 42,
+        apkVersion: 43,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -9133,6 +9133,10 @@ async function handleRequest(req, res) {
     },
     (err) => {
       console.log(`[Sultan Hub] Port ${PORT} listener:`, err.message);
+      if (err && err.code === 'EADDRINUSE') {
+        console.error(`[Sultan Hub] Port ${PORT} already in use — exiting duplicate process cleanly.`);
+        process.exit(0);
+      }
     }
   );
 

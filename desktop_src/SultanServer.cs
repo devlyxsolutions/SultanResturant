@@ -387,7 +387,7 @@ namespace SultanRestaurantServer
 
         private void CheckServerHealth()
         {
-            bool online = IsPortListening("127.0.0.1", 5050, 300);
+            bool online = IsPortListening("127.0.0.1", 5050, 1500);
             if (online)
             {
                 lblStatusDot.ForeColor = Color.FromArgb(34, 197, 94);
@@ -448,7 +448,11 @@ namespace SultanRestaurantServer
 
         public void StartNodeServer()
         {
-            if (IsPortListening("127.0.0.1", 5050, 400))
+            if (serverProcess != null && !serverProcess.HasExited)
+            {
+                return;
+            }
+            if (IsPortListening("127.0.0.1", 5050, 1500))
             {
                 LogMessage("Server is already running on Port 5050.");
                 return;
