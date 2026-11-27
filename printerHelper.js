@@ -196,10 +196,17 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
 
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
-  // Table / Order Type (Double-height + bold so long table names never cut off on the side)
+  const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const kotHeading = kotId.startsWith('KOT') ? `KOT #${kotId.replace(/^KOT-?/i, '')}` : `KOT #${kotId}`;
+  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 28);
+
+  // 1. Large Prominent KOT Number at the Top (Double-width + Double-height + Bold)
+  parts.push(Buffer.from(esc + '!\x38', 'ascii'));
+  parts.push(Buffer.from(`${kotHeading}\n`, 'ascii'));
+
+  // 2. Large Prominent Table Number directly below KOT Number (Double-height + Bold)
   parts.push(Buffer.from(esc + '!\x18', 'ascii'));
-  const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 30);
-  parts.push(Buffer.from(`[ ${tableText} ]\n`, 'ascii'));
+  parts.push(Buffer.from(`TABLE: ${tableText}\n`, 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
@@ -213,12 +220,11 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
     month: 'short',
   });
 
-  const kotId = String(ticket.id || 'N/A').substring(0, 14);
   const serverName = String(ticket.server || ticket.orderTakenBy || 'Staff').substring(0, 14);
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
-  parts.push(Buffer.from(`KOT: #${kotId}`.padEnd(18) + `${dateStr}\n`, 'ascii'));
-  parts.push(Buffer.from(`Staff: ${serverName}`.padEnd(20) + `Qty: ${totalQty}\n`, 'ascii'));
+  parts.push(Buffer.from(`Time: ${dateStr}`.padEnd(22) + `Qty: ${totalQty}\n`, 'ascii'));
+  parts.push(Buffer.from(`Staff: ${serverName}\n`, 'ascii'));
   if (ticket.notes && String(ticket.notes).trim()) {
     parts.push(Buffer.from('------------------------------------\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x08', 'ascii')); // Bold
@@ -285,7 +291,8 @@ function buildPlainTextKot(ticket, station = 'all') {
     day: '2-digit',
     month: 'short',
   });
-  const kotId = ticket.id || 'N/A';
+  const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const kotHeading = kotId.startsWith('KOT') ? `KOT #${kotId.replace(/^KOT-?/i, '')}` : `KOT #${kotId}`;
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
@@ -293,11 +300,11 @@ function buildPlainTextKot(ticket, station = 'all') {
     stationTitle,
     ticket.isAddOn ? `*** ADD-ON ROUND #${ticket.roundNumber || 2} ***` : '--- NEW ORDER ---',
     '------------------------------------',
-    `[ ${tableText.substring(0, 30)} ]`,
+    kotHeading,
+    `TABLE: ${tableText.substring(0, 28)}`,
     '------------------------------------',
-    `KOT: #${kotId}`,
-    `Time: ${dateStr}`,
-    `Staff: ${String(serverName).substring(0, 14)}  Qty: ${totalQty}`,
+    `Time: ${dateStr}  Qty: ${totalQty}`,
+    `Staff: ${String(serverName).substring(0, 18)}`,
     ...(ticket.notes && String(ticket.notes).trim()
       ? ['------------------------------------', `ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}`]
       : []),

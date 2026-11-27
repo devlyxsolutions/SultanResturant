@@ -27,6 +27,8 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
   }
 
   const stationTitle = options?.stationLabel || 'KITCHEN KOT';
+  const rawKotId = String(ticket.id || 'N/A').toUpperCase();
+  const kotDisplay = rawKotId.startsWith('KOT') ? `KOT #${rawKotId.replace(/^KOT-?/i, '')}` : `KOT #${rawKotId}`;
   const date = new Date(ticket.timePlaced || Date.now()).toLocaleString('en-PK', {
     hour: '2-digit',
     minute: '2-digit',
@@ -111,16 +113,28 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
           margin-top: 3px;
           border-radius: 3px;
         }
-        .table-banner {
+        .kot-banner {
           text-align: center;
-          font-size: 22px;
+          font-size: 25px;
           font-weight: 900;
           padding: 6px 4px;
           background: #000;
           color: #fff;
           border-radius: 4px;
-          margin: 6px 0;
+          margin: 6px 0 4px 0;
           letter-spacing: 1.5px;
+        }
+        .table-banner {
+          text-align: center;
+          font-size: 22px;
+          font-weight: 900;
+          padding: 5px 4px;
+          background: #fff;
+          color: #000;
+          border: 2.5px solid #000;
+          border-radius: 4px;
+          margin: 0 0 6px 0;
+          letter-spacing: 1.2px;
         }
         .divider {
           border-top: 2px solid #000;
@@ -165,14 +179,14 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
         <h2 class="logo-title">${stationTitle}</h2>
         <div class="logo-sub">${ticket.isAddOn ? `ADD-ON ROUND #${ticket.roundNumber || 2}` : 'NEW ORDER'}</div>
       </div>
-      <div class="table-banner">${ticket.tableName || 'Counter'}</div>
+      <div class="kot-banner">${kotDisplay}</div>
+      <div class="table-banner">TABLE: ${ticket.tableName || 'Counter'}</div>
       <div class="meta-row">
-        <span>KOT: ${ticket.id}</span>
-        <span>${date}</span>
+        <span>Time: ${date}</span>
+        <span>Total Qty: ${totalQty}</span>
       </div>
       <div class="meta-row">
         <span>Server: ${ticket.server || 'Staff'}</span>
-        <span>Total Qty: ${totalQty}</span>
       </div>
       ${ticket.notes ? `<div style="border: 2px solid #000; background: #f3f3f3; padding: 5px 7px; margin: 6px 0; border-radius: 3px;"><div style="font-size: 10px; font-weight: 900; letter-spacing: 0.6px;">ORDER NOTE / INSTRUCTIONS:</div><div style="font-size: 13px; font-weight: 900; margin-top: 2px;">${ticket.notes}</div></div>` : ''}
       <table>
@@ -285,15 +299,25 @@ export default function OrderSlip({ ticket }: OrderSlipProps) {
         <Text style={styles.logoSubText}>{ticket.isAddOn ? 'ADD-ON ORDER' : 'NEW ORDER'}</Text>
       </View>
 
+      {/* Prominent KOT # on Top & Table # Below */}
+      <View style={{ backgroundColor: '#000', paddingVertical: 7, paddingHorizontal: 8, borderRadius: 6, marginTop: 4, alignItems: 'center' }}>
+        <Text style={{ color: '#fff', fontSize: 22, fontWeight: '900', letterSpacing: 1.2 }}>
+          {String(ticket.id || '').toUpperCase().startsWith('KOT')
+            ? `KOT #${String(ticket.id).replace(/^KOT-?/i, '')}`
+            : `KOT #${ticket.id}`}
+        </Text>
+      </View>
+      <View style={{ borderWidth: 2, borderColor: '#000', backgroundColor: '#fff', paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6, marginTop: 5, marginBottom: 6, alignItems: 'center' }}>
+        <Text style={{ color: '#000', fontSize: 19, fontWeight: '900', letterSpacing: 1 }}>
+          TABLE: {ticket.tableName || 'N/A'}
+        </Text>
+      </View>
+
       <View style={styles.divider} />
 
       {/* Meta */}
       <View style={styles.metaRow}>
-        <Text style={styles.metaText}>Ticket #: {ticket.id}</Text>
         <Text style={styles.metaText}>{date}</Text>
-      </View>
-      <View style={styles.metaRow}>
-        <Text style={styles.metaTextBold}>Table: {ticket.tableName || 'N/A'}</Text>
         <Text style={styles.metaText}>Server: {ticket.server || 'Staff'}</Text>
       </View>
       {ticket.isAddOn && (

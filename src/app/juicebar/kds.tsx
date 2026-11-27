@@ -589,7 +589,10 @@ export default function KitchenDisplayScreen() {
               )}
             </View>
             <Text style={styles.ticketTable} numberOfLines={1}>
-              {item.tableName} • {item.server}
+              TABLE: {item.tableName}
+            </Text>
+            <Text style={{ fontSize: 12.5, fontWeight: '800', color: 'rgba(0,0,0,0.75)', marginTop: 1 }} numberOfLines={1}>
+              Server: {item.server}
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 6 }}>
@@ -1646,9 +1649,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
   ticketId: {
-    fontSize: 20,
+    fontSize: 23,
     fontWeight: '900',
     color: '#000',
+    letterSpacing: 0.5,
   },
   readyTag: {
     backgroundColor: '#fff',
@@ -1662,10 +1666,10 @@ const styles = StyleSheet.create({
     color: '#007AFF',
   },
   ticketTable: {
-    fontSize: 15,
-    fontWeight: '800',
-    color: 'rgba(0,0,0,0.85)',
-    marginTop: 2,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#000',
+    marginTop: 3,
   },
   timeBadge: {
     flexDirection: 'row',
