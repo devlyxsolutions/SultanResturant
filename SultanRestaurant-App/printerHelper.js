@@ -179,6 +179,13 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from(gs + 'L\x00\x00', 'ascii'));
   parts.push(Buffer.from(gs + 'W\x00\x02', 'ascii'));
 
+  const isMinus = !!(
+    ticket.isMinusKot ||
+    ticket.kotType === 'MINUS' ||
+    String(ticket.id || '').toUpperCase().startsWith('MINUS')
+  );
+  const isAdd = !isMinus && !!(ticket.isAddOn || ticket.kotType === 'ADD');
+
   // Center: Header (Sultan Restaurant word removed per user request)
   parts.push(Buffer.from(esc + 'a\x01', 'ascii')); // Align center
   parts.push(Buffer.from(esc + '!\x18', 'ascii')); // Double height + bold
@@ -188,8 +195,14 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from(stationTitle + '\n', 'ascii'));
 
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
-  if (ticket.isAddOn) {
-    parts.push(Buffer.from(`*** ADD-ON ROUND #${ticket.roundNumber || 2} ***\n`, 'ascii'));
+  if (isMinus) {
+    parts.push(Buffer.from(esc + '!\x18', 'ascii'));
+    parts.push(Buffer.from('*** [ - MINUS / CANCEL ITEM ] ***\n', 'ascii'));
+    parts.push(Buffer.from(esc + '!\x08', 'ascii'));
+    parts.push(Buffer.from('*** DO NOT PREPARE / REDUCE QTY ***\n', 'ascii'));
+    parts.push(Buffer.from(esc + '!\x00', 'ascii'));
+  } else if (isAdd) {
+    parts.push(Buffer.from(`*** [ + ADD ITEM / ROUND #${ticket.roundNumber || 2} ] ***\n`, 'ascii'));
   } else {
     parts.push(Buffer.from('--- NEW ORDER ---\n', 'ascii'));
   }
@@ -197,7 +210,11 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
-  const kotHeading = kotId.startsWith('KOT') ? `KOT #${kotId.replace(/^KOT-?/i, '')}` : `KOT #${kotId}`;
+  const kotHeading = isMinus
+    ? `MINUS #${kotId.replace(/^(KOT|MINUS)-?/i, '')}`
+    : kotId.startsWith('KOT')
+      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+      : `KOT #${kotId}`;
   const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 28);
 
   // 1. Large Prominent KOT Number at the Top (Double-width + Double-height + Bold)
@@ -223,7 +240,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   const serverName = String(ticket.server || ticket.orderTakenBy || 'Staff').substring(0, 14);
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
-  parts.push(Buffer.from(`Time: ${dateStr}`.padEnd(22) + `Qty: ${totalQty}\n`, 'ascii'));
+  parts.push(Buffer.from(`Time: ${dateStr}`.padEnd(22) + `Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}\n`, 'ascii'));
   parts.push(Buffer.from(`Staff: ${serverName}\n`, 'ascii'));
   if (ticket.notes && String(ticket.notes).trim()) {
     parts.push(Buffer.from('------------------------------------\n', 'ascii'));
@@ -238,9 +255,11 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   for (const item of activeItems) {
-    const qtyStr = `${item.qty || 1}x`.padEnd(5);
+    const qtyPrefix = isMinus ? `-${item.qty || 1}x` : isAdd ? `+${item.qty || 1}x` : `${item.qty || 1}x`;
+    const qtyStr = qtyPrefix.padEnd(6);
     const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
-    const nameStr = ((item.name || '') + stationBadge).substring(0, 31);
+    const opBadge = isMinus ? ' [MINUS]' : isAdd ? ' [ADD]' : '';
+    const nameStr = ((item.name || '') + opBadge + stationBadge).substring(0, 30);
 
     // Print item with double height/bold
     parts.push(Buffer.from(esc + '!\x18', 'ascii')); // Double height + bold
@@ -257,7 +276,12 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   // Footer: Centered
   parts.push(Buffer.from(esc + 'a\x01', 'ascii')); // Align center
   parts.push(Buffer.from(esc + '!\x01', 'ascii')); // Bold
-  parts.push(Buffer.from(`TOTAL ITEMS: ${totalQty}\n`, 'ascii'));
+  const totalLabel = isMinus
+    ? `TOTAL MINUS ITEMS: -${totalQty}`
+    : isAdd
+      ? `TOTAL ADDED ITEMS: +${totalQty}`
+      : `TOTAL ITEMS: ${totalQty}`;
+  parts.push(Buffer.from(`${totalLabel}\n`, 'ascii'));
   parts.push(Buffer.from(esc + '!\x00', 'ascii'));
   parts.push(Buffer.from('Powered & Designed by Nizaam Digital Solution\n', 'ascii'));
 
@@ -284,6 +308,13 @@ function buildPlainTextKot(ticket, station = 'all') {
   if (station === 'juice') stationTitle = 'JUICE BAR KOT';
   else if (station === 'main') stationTitle = 'MAIN KITCHEN KOT';
 
+  const isMinus = !!(
+    ticket.isMinusKot ||
+    ticket.kotType === 'MINUS' ||
+    String(ticket.id || '').toUpperCase().startsWith('MINUS')
+  );
+  const isAdd = !isMinus && !!(ticket.isAddOn || ticket.kotType === 'ADD');
+
   const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase();
   const dateStr = new Date(ticket.timePlaced || Date.now()).toLocaleString('en-PK', {
     hour: '2-digit',
@@ -292,18 +323,27 @@ function buildPlainTextKot(ticket, station = 'all') {
     month: 'short',
   });
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
-  const kotHeading = kotId.startsWith('KOT') ? `KOT #${kotId.replace(/^KOT-?/i, '')}` : `KOT #${kotId}`;
+  const kotHeading = isMinus
+    ? `MINUS #${kotId.replace(/^(KOT|MINUS)-?/i, '')}`
+    : kotId.startsWith('KOT')
+      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+      : `KOT #${kotId}`;
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   const lines = [
     stationTitle,
-    ticket.isAddOn ? `*** ADD-ON ROUND #${ticket.roundNumber || 2} ***` : '--- NEW ORDER ---',
+    isMinus
+      ? '*** [ - MINUS / CANCEL ITEM ] ***'
+      : isAdd
+        ? `*** [ + ADD ITEM / ROUND #${ticket.roundNumber || 2} ] ***`
+        : '--- NEW ORDER ---',
+    ...(isMinus ? ['*** DO NOT PREPARE / REDUCE QTY ***'] : []),
     '------------------------------------',
     kotHeading,
     `TABLE: ${tableText.substring(0, 28)}`,
     '------------------------------------',
-    `Time: ${dateStr}  Qty: ${totalQty}`,
+    `Time: ${dateStr}  Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}`,
     `Staff: ${String(serverName).substring(0, 18)}`,
     ...(ticket.notes && String(ticket.notes).trim()
       ? ['------------------------------------', `ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}`]
@@ -314,9 +354,11 @@ function buildPlainTextKot(ticket, station = 'all') {
   ];
 
   for (const item of activeItems) {
-    const qtyStr = `${item.qty || 1}x`.padEnd(5);
+    const qtyPrefix = isMinus ? `-${item.qty || 1}x` : isAdd ? `+${item.qty || 1}x` : `${item.qty || 1}x`;
+    const qtyStr = qtyPrefix.padEnd(6);
     const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
-    const nameStr = ((item.name || '') + stationBadge).substring(0, 30);
+    const opBadge = isMinus ? ' [MINUS]' : isAdd ? ' [ADD]' : '';
+    const nameStr = ((item.name || '') + opBadge + stationBadge).substring(0, 30);
     lines.push(`${qtyStr}${nameStr}`);
     if (item.notes) {
       lines.push(`     * ${String(item.notes).substring(0, 64)}`);
@@ -324,7 +366,13 @@ function buildPlainTextKot(ticket, station = 'all') {
   }
 
   lines.push('====================================');
-  lines.push(`TOTAL ITEMS: ${totalQty}`);
+  lines.push(
+    isMinus
+      ? `TOTAL MINUS ITEMS: -${totalQty}`
+      : isAdd
+        ? `TOTAL ADDED ITEMS: +${totalQty}`
+        : `TOTAL ITEMS: ${totalQty}`
+  );
   lines.push('Powered & Designed by Nizaam Digital Solution');
 
   return lines.join('\n');
@@ -353,7 +401,7 @@ function buildEscPosBillBuffer(invoice) {
   parts.push(Buffer.from('LUXURY DINING & BANQUET\n', 'ascii'));
   if (isUnpaid) {
     parts.push(Buffer.from(esc + '!\x08', 'ascii'));
-    parts.push(Buffer.from('*** UNPAID PROVISIONAL BILL ***\n', 'ascii'));
+    parts.push(Buffer.from('*** TEMPORARY / PENDING BILL ***\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x00', 'ascii'));
   }
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));

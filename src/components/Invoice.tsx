@@ -190,8 +190,8 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     text += ` Tel: ${brandPhone}${brandNtn ? ` • NTN: ${brandNtn}` : ''}\n`;
     text += `--------------------------------\n`;
     if (isUnpaidBill) {
-      text += `*** UNPAID BILL / PROVISIONAL CHECK ***\n`;
-      text += `*** (غیر ادا شدہ بل / کچا بل) ***\n`;
+      text += `*** TEMPORARY / PENDING BILL ***\n`;
+      text += `*** (عارضی بل / ادائیگی باقی ہے) ***\n`;
       text += `--------------------------------\n`;
     }
     text += `INV #: ${invoice.id}\n`;
@@ -275,7 +275,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
   const paymentsHtml = isUnpaidBill ? `
     <div style="border: 2px dashed #b91c1c; background-color: #fef2f2; padding: 7px; margin: 8px 0; text-align: center;">
       <div style="font-size: 13.5px; font-weight: 900; color: #b91c1c; letter-spacing: 0.5px;">
-        *** PAYMENT PENDING (ادائیگی باقی ہے) ***
+        *** TEMPORARY / PENDING BILL (ادائیگی باقی ہے) ***
       </div>
       <div style="font-size: 12px; font-weight: 800; color: #1e293b; margin-top: 3px;">
         TOTAL UNPAID DUE: Rs. ${(invoice.total || 0).toLocaleString()}

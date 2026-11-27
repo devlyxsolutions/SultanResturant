@@ -474,16 +474,16 @@ function Send-PlainTextViaGdiDriver {
                     $useFont = $fontReg
                     $center = $false
 
-                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT" -or $line -match '^KOT\s*#' -or $line -match '^TABLE:\s*') {
+                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT" -or $line -match '^(KOT|MINUS)\s*#' -or $line -match '^TABLE:\s*' -or $line -match 'MINUS / CANCEL ITEM') {
                         $useFont = $fontTitle
                         $center = $true
                     } elseif ($line -match '^(JUICE BAR|MAIN KITCHEN|KITCHEN|\[ .+\]|---|\*\*\*)') {
                         $useFont = $fontSub
                         $center = $true
-                    } elseif ($line -match '^TOTAL ITEMS:' -or $line -match '^SULTAN .*KOT$' -or $line -match '^SULTAN PRINT AGENT') {
+                    } elseif ($line -match '^TOTAL (ITEMS|MINUS ITEMS|ADDED ITEMS):' -or $line -match '^SULTAN .*KOT$' -or $line -match '^SULTAN PRINT AGENT') {
                         $useFont = $fontSub
                         $center = $true
-                    } elseif ($line -match '^\d+x\s+') {
+                    } elseif ($line -match '^[+-]?\d+x\s+') {
                         $useFont = $fontItem
                     }
 

@@ -46,6 +46,7 @@ export type Table = {
   lastInvoiceId?: string;
   occupiedSince?: number;
   lastSettledAt?: number;
+  ordersUpdatedAt?: number;
   reservationId?: string;
   /** If set, an Order Taker has collected payment from the guest and it is pending handover/receipt by the Cashier. */
   waiterPaymentCollection?: WaiterPaymentCollection | null;
@@ -296,6 +297,9 @@ export type Ticket = {
   stationStatuses?: StationStatusMap;
   lastMovedAt?: number;
   movedFromTableId?: string;
+  itemsUpdatedAt?: number;
+  isMinusKot?: boolean;
+  kotType?: 'NEW' | 'ADD' | 'MINUS';
 };
 
 export type MenuVariant = {
@@ -606,7 +610,13 @@ type RestaurantState = {
   bumpTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   updateTicketStatus: (ticketId: string, status: Ticket['status'], station?: 'main' | 'juice') => void;
   serveTableTickets: (tableId: string) => void;
-  markTableBilled: (tableId: string, invoiceId?: string) => void;
+  markTableBilled: (tableId: string, invoiceId?: string, updatedOrders?: OrderItem[], updatedBillTotal?: number) => void;
+  reconcileTableCartItems: (
+    tableId: string,
+    finalCart: OrderItem[],
+    finalSubTotal: number,
+    minusItems?: { id: string; name: string; qty: number }[]
+  ) => void;
   recordWaiterPaymentCollection: (payload: Omit<WaiterPaymentCollection, 'id' | 'collectedAt' | 'status'>) => void;
   cancelWaiterPaymentCollection: (tableId: string) => void;
   clearBillPaidAlert: (tableIdOrName?: string) => void;
@@ -2285,32 +2295,124 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
-      markTableBilled: (tableId, invoiceId) => set((state) => {
-        const table = state.tables.find(t => t.id === tableId);
-        const amount = table?.billTotal || 0;
-        const tableName = table ? table.name : `Table ${tableId}`;
+      markTableBilled: (tableId, invoiceId, updatedOrders, updatedBillTotal) => set((state) => {
         const now = Date.now();
-        const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
 
         notifySync();
         return {
-          tables: state.tables.map(t =>
-            t.id === tableId ? {
+          tables: state.tables.map(t => {
+            if (t.id !== tableId) return t;
+            const nextOrders = Array.isArray(updatedOrders) ? updatedOrders.map(i => ({ ...i })) : t.orders;
+            const nextBillTotal =
+              typeof updatedBillTotal === 'number'
+                ? updatedBillTotal
+                : Array.isArray(updatedOrders)
+                  ? updatedOrders.reduce((s, it) => s + (it.price || 0) * (it.qty || 1), 0)
+                  : (t.billTotal || 0);
+            return {
               ...t,
-              status: 'billed',
-              isPaid: true,
-              lastInvoiceId: invoiceId
-            } : t
-          ),
-          tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
-          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
-          lastBillPaidAlert: {
-            id: `bill_${tableId}_${now}`,
-            tableId,
-            tableName,
-            billTotal: amount,
-            time: now
+              status: 'billed' as const,
+              isPaid: false,
+              lastInvoiceId: invoiceId,
+              orders: nextOrders,
+              billTotal: nextBillTotal,
+              ordersUpdatedAt: Array.isArray(updatedOrders) ? now : (t.ordersUpdatedAt || now),
+            };
+          }),
+        };
+      }),
+
+      reconcileTableCartItems: (tableId, finalCart, finalSubTotal, minusItems) => set((state) => {
+        const now = Date.now();
+        const remainingMinus = new Map<string, { id: string; name: string; qty: number }>();
+        (minusItems || []).forEach((m) => {
+          if (m && m.qty > 0) {
+            const key = String(m.id || m.name);
+            const prev = remainingMinus.get(key);
+            if (prev) prev.qty += m.qty;
+            else remainingMinus.set(key, { ...m });
           }
+        });
+
+        const nextDeletedIds: string[] = [];
+        const updatedTickets: Ticket[] = [];
+        // Walk tickets newest-first when deducting minus quantities
+        for (const tk of state.tickets || []) {
+          if (tk.tableId !== tableId || remainingMinus.size === 0) {
+            updatedTickets.push(tk);
+            continue;
+          }
+
+          let tkChanged = false;
+          const nextTkItems: OrderItem[] = [];
+          for (const it of tk.items || []) {
+            const matchKey =
+              remainingMinus.has(it.id)
+                ? it.id
+                : Array.from(remainingMinus.keys()).find((k) => {
+                    const m = remainingMinus.get(k);
+                    return m && m.name.trim().toLowerCase() === (it.name || '').trim().toLowerCase();
+                  });
+
+            if (matchKey) {
+              const rem = remainingMinus.get(matchKey)!;
+              if (rem.qty > 0 && it.qty > 0) {
+                const deduct = Math.min(it.qty, rem.qty);
+                rem.qty -= deduct;
+                if (rem.qty <= 0) remainingMinus.delete(matchKey);
+                tkChanged = true;
+                const leftQty = it.qty - deduct;
+                if (leftQty > 0) {
+                  const prevNote = (it.notes || '').trim();
+                  const tag = `[MINUS -${deduct}x]`;
+                  nextTkItems.push({
+                    ...it,
+                    qty: leftQty,
+                    notes: prevNote ? `${prevNote} • ${tag}` : tag,
+                  });
+                }
+                continue;
+              }
+            }
+            nextTkItems.push(it);
+          }
+
+          if (tkChanged) {
+            if (nextTkItems.length === 0) {
+              nextDeletedIds.push(tk.id);
+              continue;
+            }
+            updatedTickets.push({
+              ...tk,
+              items: nextTkItems,
+              itemsUpdatedAt: now,
+            });
+          } else {
+            updatedTickets.push(tk);
+          }
+        }
+
+        const updatedTables = state.tables.map((t) => {
+          if (t.id !== tableId) return t;
+          return {
+            ...t,
+            orders: finalCart.map((i) => ({ ...i })),
+            billTotal: finalSubTotal,
+            ordersUpdatedAt: now,
+          };
+        });
+
+        notifySync();
+        return {
+          tables: updatedTables,
+          tickets: updatedTickets,
+          ...(nextDeletedIds.length > 0
+            ? {
+                deletedTicketIds: Array.from(
+                  new Set([...(state.deletedTicketIds || []), ...nextDeletedIds])
+                ).slice(-400),
+              }
+            : {}),
         };
       }),
 

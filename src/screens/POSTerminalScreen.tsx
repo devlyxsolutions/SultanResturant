@@ -37,7 +37,7 @@ import {
   publishCustomerDisplayState,
   subscribeToCustomerDisplay,
 } from '../services/customerDisplaySync';
-import { broadcastImmediately } from '../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../services/syncService';
 import {
   EventDiscount,
   Invoice,
@@ -288,6 +288,7 @@ export default function POSTerminalScreen({
   const settleBill = useRestaurantStore((state) => state.settleBill);
   const transferTable = useRestaurantStore((state) => state.transferTable);
   const markTableBilled = useRestaurantStore((state) => state.markTableBilled);
+  const reconcileTableCartItems = useRestaurantStore((state) => state.reconcileTableCartItems);
   const dismissTicket = useRestaurantStore((state) => state.dismissTicket);
   const clearTableTickets = useRestaurantStore((state) => state.clearTableTickets);
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
@@ -505,30 +506,43 @@ export default function POSTerminalScreen({
         (targetTable &&
           (t.tableId === targetTable.id || t.tableName?.trim().toLowerCase() === targetTable.name.trim().toLowerCase()))
     );
+    const latestTicketTime = tableTickets.reduce(
+      (max, t) => Math.max(max, t.itemsUpdatedAt || t.timePlaced || 0),
+      0
+    );
     let combinedItems: OrderItem[] = [];
 
-    if (tableTickets.length > 0) {
-      tableTickets.forEach((ticket) => {
-        ticket.items.forEach((ti) => {
-          const existing = combinedItems.find((i) => i.id === ti.id && i.name === ti.name);
-          if (existing) {
-            existing.qty += ti.qty;
-          } else {
-            combinedItems.push({ ...ti });
-          }
+    if (
+      targetTable &&
+      Array.isArray(targetTable.orders) &&
+      targetTable.orders.length > 0 &&
+      (targetTable.status === 'billed' || (targetTable.ordersUpdatedAt || 0) >= latestTicketTime)
+    ) {
+      combinedItems = targetTable.orders.map((o) => ({ ...o }));
+    } else {
+      if (tableTickets.length > 0) {
+        tableTickets.forEach((ticket) => {
+          ticket.items.forEach((ti) => {
+            const existing = combinedItems.find((i) => i.id === ti.id && i.name === ti.name);
+            if (existing) {
+              existing.qty += ti.qty;
+            } else {
+              combinedItems.push({ ...ti });
+            }
+          });
         });
-      });
-    }
-    if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
-      if (combinedItems.length === 0) {
-        combinedItems = targetTable.orders.map((o) => ({ ...o }));
-      } else {
-        targetTable.orders.forEach((to) => {
-          const existing = combinedItems.find((i) => i.id === to.id || i.name === to.name);
-          if (!existing) {
-            combinedItems.push({ ...to });
-          }
-        });
+      }
+      if (targetTable && targetTable.orders && targetTable.orders.length > 0) {
+        if (combinedItems.length === 0) {
+          combinedItems = targetTable.orders.map((o) => ({ ...o }));
+        } else if (!targetTable.ordersUpdatedAt) {
+          targetTable.orders.forEach((to) => {
+            const existing = combinedItems.find((i) => i.id === to.id || i.name === to.name);
+            if (!existing) {
+              combinedItems.push({ ...to });
+            }
+          });
+        }
       }
     }
 
@@ -1201,44 +1215,148 @@ export default function POSTerminalScreen({
     showKdsToast(`Pending Slip printed for ${targetTableName}`);
   };
 
-  const buildUnsentKotItems = () => {
-    const list: { item: MenuItem; qty: number; notes?: string }[] = [];
-    cart.forEach((cartItem) => {
-      const loadedQty = loadedCart
-        .filter((lc) => lc.id === cartItem.id)
-        .reduce((s, lc) => s + lc.qty, 0);
-      if (cartItem.qty > loadedQty) {
-        const baseMenu = menuItems.find(
-          (m) => m.id === cartItem.id || cartItem.id.startsWith(`${m.id}-`)
-        );
-        const itemObj: MenuItem = baseMenu
-          ? {
-            ...baseMenu,
-            id: cartItem.id,
-            name: cartItem.name,
-            price: cartItem.price,
-            station: cartItem.station || baseMenu.station || 'main',
-          }
-          : {
-            id: cartItem.id,
-            name: cartItem.name,
-            price: cartItem.price,
-            category: 'Mains',
-            station: cartItem.station || 'main',
-          };
-        list.push({
-          item: itemObj,
-          qty: cartItem.qty - loadedQty,
-          notes: cartItem.notes,
+  const resolveMenuObjForCartItem = (ci: { id: string; name: string; price: number; station?: 'main' | 'juice' }): MenuItem => {
+    const baseMenu = menuItems.find(
+      (m) => m.id === ci.id || ci.id.startsWith(`${m.id}-`)
+    );
+    return baseMenu
+      ? {
+          ...baseMenu,
+          id: ci.id,
+          name: ci.name,
+          price: ci.price,
+          station: ci.station || baseMenu.station || 'main',
+        }
+      : {
+          id: ci.id,
+          name: ci.name,
+          price: ci.price,
+          category: 'Mains',
+          station: ci.station || 'main',
+        };
+  };
+
+  const buildCartDeltas = () => {
+    const addedKotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
+    const minusKotItems: { item: MenuItem; qty: number; notes?: string }[] = [];
+
+    // Aggregate quantities by item ID across cart and loadedCart
+    const cartMap = new Map<string, { item: OrderItem; qty: number }>();
+    cart.forEach((c) => {
+      const prev = cartMap.get(c.id);
+      if (prev) prev.qty += c.qty;
+      else cartMap.set(c.id, { item: c, qty: c.qty });
+    });
+
+    const loadedMap = new Map<string, { item: OrderItem; qty: number }>();
+    loadedCart.forEach((lc) => {
+      const prev = loadedMap.get(lc.id);
+      if (prev) prev.qty += lc.qty;
+      else loadedMap.set(lc.id, { item: lc, qty: lc.qty });
+    });
+
+    cartMap.forEach(({ item: cItem, qty: cQty }, id) => {
+      const lQty = loadedMap.get(id)?.qty || 0;
+      if (cQty > lQty) {
+        addedKotItems.push({
+          item: resolveMenuObjForCartItem(cItem),
+          qty: cQty - lQty,
+          notes: cItem.notes,
         });
       }
     });
-    return list;
+
+    loadedMap.forEach(({ item: lItem, qty: lQty }, id) => {
+      const cQty = cartMap.get(id)?.qty || 0;
+      if (lQty > cQty) {
+        minusKotItems.push({
+          item: resolveMenuObjForCartItem(lItem),
+          qty: lQty - cQty,
+          notes: lItem.notes,
+        });
+      }
+    });
+
+    return { addedKotItems, minusKotItems };
+  };
+
+  const dispatchDirectKotPrint = async (ticketPayload: any, forceReprint = false) => {
+    try {
+      const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+      if (!base || !ticketPayload) return;
+      await fetch(`${base}/api/print/kot`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ticket: ticketPayload,
+          station: 'all',
+          forceReprint,
+        }),
+      });
+    } catch { }
+  };
+
+  const syncCartDeltasToKitchenAndTable = (targetId: string, targetName: string, serverLabel: string) => {
+    const { addedKotItems, minusKotItems } = buildCartDeltas();
+    const isTableTarget = Boolean(targetId && targetId !== 'takeaway' && targetId !== 'delivery');
+    const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
+
+    if (minusKotItems.length > 0) {
+      if (isTableTarget) {
+        reconcileTableCartItems(
+          targetId,
+          cart,
+          subTotal,
+          minusKotItems.map((m) => ({ id: m.item.id, name: m.item.name, qty: m.qty }))
+        );
+      }
+      if (canSendKds) {
+        const minusTicket = {
+          id: `MINUS-${Math.floor(Math.random() * 9000) + 1000}`,
+          tableId: targetId,
+          tableName: targetName,
+          server: serverLabel,
+          timePlaced: Date.now(),
+          status: 'pending',
+          isMinusKot: true,
+          kotType: 'MINUS',
+          notes: orderNotes.trim() ? `MINUS ITEMS • ${orderNotes.trim()}` : 'MINUS / REDUCED FROM BILL',
+          items: minusKotItems.map((m) => ({
+            id: m.item.id,
+            name: m.item.name,
+            price: m.item.price,
+            qty: m.qty,
+            notes: m.notes,
+            station: m.item.station || 'main',
+            completed: false,
+            itemStatus: 'pending',
+          })),
+        };
+        dispatchDirectKotPrint(minusTicket, true);
+      }
+    }
+
+    if (addedKotItems.length > 0 && canSendKds) {
+      placeOrder(
+        targetId,
+        serverLabel,
+        addedKotItems,
+        loadedCart.length > 0,
+        undefined,
+        orderNotes.trim() || undefined
+      );
+      const latestTicket = useRestaurantStore.getState().tickets?.[0];
+      if (latestTicket) {
+        dispatchDirectKotPrint(latestTicket, false);
+      }
+    }
+
+    return { addedKotItems, minusKotItems };
   };
 
   const sendToKitchen = () => {
     if (!requirePosPerm('posCanSendKot', 'dispatch KOT tickets to Kitchen')) return;
-    if (cart.length === 0) return;
+    if (cart.length === 0 && loadedCart.length === 0) return;
     if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
       setTableModalVisible(true);
       return;
@@ -1254,10 +1372,10 @@ export default function POSTerminalScreen({
           ? 'Delivery'
           : 'Takeaway';
 
-    const kotItems = buildUnsentKotItems();
+    const { addedKotItems, minusKotItems } = buildCartDeltas();
 
-    if (kotItems.length === 0) {
-      showKdsToast('All items in cart are already sent to KDS.');
+    if (addedKotItems.length === 0 && minusKotItems.length === 0) {
+      showKdsToast('All items in cart are already synced with KDS.');
       return;
     }
 
@@ -1266,15 +1384,16 @@ export default function POSTerminalScreen({
       ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
       : `${user?.name || 'Staff'} (POS)`;
 
-    const hasMain = kotItems.some((k) => (k.item.station || 'main') === 'main');
-    const hasJuice = kotItems.some((k) => (k.item.station || 'main') === 'juice');
+    const changedItems = [...addedKotItems, ...minusKotItems];
+    const hasMain = changedItems.some((k) => (k.item.station || 'main') === 'main');
+    const hasJuice = changedItems.some((k) => (k.item.station || 'main') === 'juice');
     const stationSummary = hasMain && hasJuice ? 'Kitchen + Juice KDS' : hasJuice ? 'Juice Bar KDS' : 'Kitchen KDS';
     const sentPrepEst = estimateOrderPrepTime(
-      kotItems.map((k) => ({ id: k.item.id, name: k.item.name, qty: k.qty, prepTimeMin: k.item.prepTimeMin, category: k.item.category })),
+      changedItems.map((k) => ({ id: k.item.id, name: k.item.name, qty: k.qty, prepTimeMin: k.item.prepTimeMin, category: k.item.category })),
       menuItems
     );
 
-    placeOrder(tId, serverLabel, kotItems, isAddOn, undefined, orderNotes.trim() || undefined);
+    syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
     broadcastImmediately();
 
     const latestTicket = useRestaurantStore.getState().tickets?.[0];
@@ -1282,29 +1401,31 @@ export default function POSTerminalScreen({
       ? `PND-${latestTicket.id.replace(/^KOT-/, '')}`
       : `PND-${Date.now().toString().slice(-4)}`;
 
-    const pendingSlipInvoice: Invoice = {
-      id: pendingSlipId,
-      orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
-      tableId: selectedTableId || undefined,
-      tableName: targetTableName,
-      customer: selectedCustomerObj,
-      server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
-      orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
-      cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
-      timePlaced: Date.now(),
-      timeSettled: Date.now(),
-      items: cart,
-      subTotal,
-      discount: discountVal,
-      tax,
-      serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
-      total,
-      payments: [],
-      status: 'unpaid',
-      isUnpaidBill: true,
-      notes: `Pending Slip • Sent to ${stationSummary}${latestTicket?.id ? ` (${latestTicket.id})` : ''}`,
-    };
-    printInvoiceReceipt(pendingSlipInvoice);
+    if (cart.length > 0) {
+      const pendingSlipInvoice: Invoice = {
+        id: pendingSlipId,
+        orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
+        tableId: selectedTableId || undefined,
+        tableName: targetTableName,
+        customer: selectedCustomerObj,
+        server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+        orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
+        cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
+        timePlaced: Date.now(),
+        timeSettled: Date.now(),
+        items: cart,
+        subTotal,
+        discount: discountVal,
+        tax,
+        serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
+        total,
+        payments: [],
+        status: 'unpaid',
+        isUnpaidBill: true,
+        notes: `Temporary / Pending Bill • Sent to ${stationSummary}${latestTicket?.id ? ` (${latestTicket.id})` : ''}`,
+      };
+      printInvoiceReceipt(pendingSlipInvoice);
+    }
 
     if (orderType === 'dine-in') {
       setLoadedCart(JSON.parse(JSON.stringify(cart)));
@@ -1318,9 +1439,12 @@ export default function POSTerminalScreen({
       setDiscountAmount('0');
     }
 
+    const deltaSummaryParts = [];
+    if (addedKotItems.length > 0) deltaSummaryParts.push(`+${addedKotItems.reduce((s, i) => s + i.qty, 0)} Added`);
+    if (minusKotItems.length > 0) deltaSummaryParts.push(`-${minusKotItems.reduce((s, i) => s + i.qty, 0)} Minus`);
     showKdsToast(
-      isAddOn
-        ? `Add-on sent to ${stationSummary} • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
+      minusKotItems.length > 0 || isAddOn
+        ? `${deltaSummaryParts.join(' / ')} KOT sent to ${stationSummary} (${targetTableName})`
         : `Order sent to ${stationSummary} (${targetTableName}) • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
     );
   };
@@ -1464,9 +1588,36 @@ export default function POSTerminalScreen({
       changeReturned: changeDueAmount,
     });
 
-    const unsentKotItems = buildUnsentKotItems();
+    const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
+    const { addedKotItems, minusKotItems } = buildCartDeltas();
+    const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
 
-    // Clean up prior tickets BEFORE dispatching any brand-new unsent KOT items on settlement
+    if (minusKotItems.length > 0 && canSendKds) {
+      const minusTicket = {
+        id: `MINUS-${Math.floor(Math.random() * 9000) + 1000}`,
+        tableId: kotTarget,
+        tableName: targetTableName,
+        server: cashierName,
+        timePlaced: Date.now(),
+        status: 'pending',
+        isMinusKot: true,
+        kotType: 'MINUS',
+        notes: 'MINUS / REDUCED AT FINAL BILLING',
+        items: minusKotItems.map((m) => ({
+          id: m.item.id,
+          name: m.item.name,
+          price: m.item.price,
+          qty: m.qty,
+          notes: m.notes,
+          station: m.item.station || 'main',
+          completed: false,
+          itemStatus: 'pending',
+        })),
+      };
+      dispatchDirectKotPrint(minusTicket, true);
+    }
+
+    // Clear prior table tickets BEFORE dispatching any final brand-new unsent KOT items on settlement
     if (loadedTicketId) {
       dismissTicket(loadedTicketId, { isSettlementCleanup: true });
       setLoadedTicketId(null);
@@ -1475,12 +1626,20 @@ export default function POSTerminalScreen({
       clearTableTickets(targetTableId, { isSettlementCleanup: true });
     }
 
-    if (unsentKotItems.length > 0 && systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false) {
-      const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
-      placeOrder(kotTarget, cashierName, unsentKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
+    if (addedKotItems.length > 0 && canSendKds) {
+      placeOrder(kotTarget, cashierName, addedKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
+      const latestTicket = useRestaurantStore.getState().tickets?.[0];
+      if (latestTicket) {
+        dispatchDirectKotPrint(latestTicket, false);
+      }
     }
 
     saveInvoice(invoice);
+
+    // Release Dine-In table & clear table items immediately after collecting payment
+    if (wasDineIn && targetTableId) {
+      settleBill(targetTableId);
+    }
 
     broadcastImmediately();
 
@@ -1540,16 +1699,6 @@ export default function POSTerminalScreen({
     setSelectedTableId('');
 
     printInvoiceReceipt(invoice);
-
-    if (wasDineIn && systemSettings.posEnableTableReleaseConfirm !== false) {
-      setTableDecisionModal({
-        tableId: targetTableId,
-        tableName: targetTableName,
-        invoice,
-      });
-    } else if (wasDineIn && targetTableId) {
-      settleBill(targetTableId);
-    }
   };
 
   const updatePayment = (idx: number, field: 'type' | 'amount', value: string) => {
@@ -1564,24 +1713,21 @@ export default function POSTerminalScreen({
 
   const handlePrintUnpaidBill = () => {
     if (!requirePosPerm('posCanPrintUnpaidBill', 'print provisional unpaid bills')) return;
-    if (cart.length === 0) return;
+    if (cart.length === 0 && loadedCart.length === 0) return;
 
     const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
     const targetTableName = targetTable ? targetTable.name : orderType === 'dine-in' ? 'Table' : orderType.toUpperCase();
 
-    // Ensure any unsent cart items are also dispatched to Kitchen/Juice KDS before printing provisional bill
-    const unsentKotItems = buildUnsentKotItems();
-    if (unsentKotItems.length > 0 && systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false) {
-      const tId = orderType === 'dine-in' && selectedTableId ? selectedTableId : orderType;
-      const serverLabel = selectedCustomerObj?.name
-        ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
-        : `${user?.name || 'Staff'} (POS)`;
-      placeOrder(tId, serverLabel, unsentKotItems, loadedCart.length > 0, undefined, orderNotes.trim() || undefined);
-      setLoadedCart(JSON.parse(JSON.stringify(cart)));
-    }
+    // Sync any newly added or minus'd items to Kitchen & Juice Bar KDS (exact +ADD / -MINUS slips) and table orders
+    const tId = orderType === 'dine-in' && selectedTableId ? selectedTableId : orderType;
+    const serverLabel = selectedCustomerObj?.name
+      ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
+      : `${user?.name || 'Staff'} (POS)`;
+    const { addedKotItems, minusKotItems } = syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
+    setLoadedCart(JSON.parse(JSON.stringify(cart)));
 
     const unpaidInvoice: Invoice = {
-      id: `CHK-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
+      id: `TMP-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
       orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
       tableId: selectedTableId || undefined,
       tableName: targetTableName,
@@ -1600,15 +1746,21 @@ export default function POSTerminalScreen({
       payments: [],
       status: 'unpaid',
       isUnpaidBill: true,
-      notes: 'Provisional Unpaid Bill',
+      notes: 'Temporary / Pending Bill (Payment Due at Cashier)',
     };
 
     if (selectedTableId) {
-      markTableBilled(selectedTableId, unpaidInvoice.id);
+      markTableBilled(selectedTableId, unpaidInvoice.id, cart, subTotal);
     }
     broadcastImmediately();
-    printInvoiceReceipt(unpaidInvoice);
-    showKdsToast(`Pending Bill printed for ${targetTableName}`);
+    if (cart.length > 0) {
+      printInvoiceReceipt(unpaidInvoice);
+    }
+    const deltaNote =
+      addedKotItems.length > 0 || minusKotItems.length > 0
+        ? ` (+${addedKotItems.reduce((s, i) => s + i.qty, 0)} Added / -${minusKotItems.reduce((s, i) => s + i.qty, 0)} Minus KOT printed)`
+        : '';
+    showKdsToast(`Temporary / Pending Bill printed for ${targetTableName}${deltaNote}`);
   };
 
   const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
@@ -2964,10 +3116,10 @@ export default function POSTerminalScreen({
                         style={[
                           styles.secActionBtn,
                           styles.secActionKot,
-                          (cart.length === 0 || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.5 },
+                          ((cart.length === 0 && loadedCart.length === 0) || (role !== 'admin' && !can('posCanSendKot'))) && { opacity: 0.5 },
                         ]}
                         onPress={sendToKitchen}
-                        disabled={cart.length === 0}
+                        disabled={cart.length === 0 && loadedCart.length === 0}
                       >
                         <Ionicons name="flame" size={15} color="#B45309" />
                         <Text style={styles.secActionKotText}>Send KOT (F8)</Text>
@@ -2975,12 +3127,16 @@ export default function POSTerminalScreen({
 
                       {(role === 'admin' || can('posCanPrintUnpaidBill')) && (
                         <TouchableOpacity
-                          style={[styles.secActionBtn, styles.secActionSlip, cart.length === 0 && { opacity: 0.5 }]}
+                          style={[
+                            styles.secActionBtn,
+                            styles.secActionSlip,
+                            cart.length === 0 && loadedCart.length === 0 && { opacity: 0.5 },
+                          ]}
                           onPress={handlePrintUnpaidBill}
-                          disabled={cart.length === 0}
+                          disabled={cart.length === 0 && loadedCart.length === 0}
                         >
                           <Ionicons name="print-outline" size={15} color="#475569" />
-                          <Text style={styles.secActionSlipText}>Pending Bill</Text>
+                          <Text style={styles.secActionSlipText}>Pending / Temp Bill</Text>
                         </TouchableOpacity>
                       )}
                     </View>
@@ -3486,13 +3642,17 @@ export default function POSTerminalScreen({
                       >
                         {primaryTable
                           ? `Joined with ${primaryTable.name}${res && isGroup ? ` (${res.guestsCount}G)` : ''}`
-                          : isBusy
+                          : t.status === 'billed' && !t.isPaid
                             ? !hidePrices && runningBill > 0
-                              ? `${res && isGroup ? `Group ${res.guestsCount}G • ` : ''}Occupied • Rs. ${runningBill.toLocaleString()}`
-                              : res && isGroup
-                                ? `Seated Group • ${res.guestsCount} Guests`
-                                : 'Occupied'
-                            : 'Available'}
+                              ? `TEMP BILL • Rs. ${runningBill.toLocaleString()}`
+                              : 'Temp / Pending Bill'
+                            : isBusy
+                              ? !hidePrices && runningBill > 0
+                                ? `${res && isGroup ? `Group ${res.guestsCount}G • ` : ''}Occupied • Rs. ${runningBill.toLocaleString()}`
+                                : res && isGroup
+                                  ? `Seated Group • ${res.guestsCount} Guests`
+                                  : 'Occupied'
+                              : 'Available'}
                       </Text>
                     )}
                     {isBusy && !primaryTable && (

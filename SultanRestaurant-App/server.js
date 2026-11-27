@@ -5880,7 +5880,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 43,
+        apkVersion: 44,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -8081,8 +8081,16 @@ async function handleRequest(req, res) {
                 chosen.movedFromTableId = ext.movedFromTableId || inc.tableId;
               }
 
-              // Merge item-level ready/served states
-              if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
+              // If items on a ticket were reconciled/minus'd from POS, trust the newer items list
+              const extItemsAt = Number(ext.itemsUpdatedAt) || 0;
+              const incItemsAt = Number(inc.itemsUpdatedAt) || 0;
+              if (extItemsAt > incItemsAt) {
+                chosen.items = ext.items;
+                chosen.itemsUpdatedAt = extItemsAt;
+              } else if (incItemsAt > extItemsAt) {
+                chosen.items = inc.items;
+                chosen.itemsUpdatedAt = incItemsAt;
+              } else if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
                 const extItemsMap = new Map(ext.items.map(it => [it.id, it]));
                 chosen.items = inc.items.map(incIt => {
                   const extIt = extItemsMap.get(incIt.id);
@@ -8286,6 +8294,30 @@ async function handleRequest(req, res) {
 
               const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
 
+              // Preserve Temporary / Pending Bill updates and item add/minus edits
+              const currOrdersAt = Number(curr.ordersUpdatedAt) || 0;
+              const incOrdersAt = Number(inc.ordersUpdatedAt) || 0;
+              if (inc.status === 'billed' || curr.status === 'billed') {
+                if (inc.status === 'available') {
+                  // Explicit settlement/release wins below
+                } else if (incOrdersAt >= currOrdersAt && (inc.status === 'billed' || inc.orders)) {
+                  const nextOrders = Array.isArray(inc.orders) ? inc.orders : (Array.isArray(curr.orders) ? curr.orders : []);
+                  const nextBill = typeof inc.billTotal === 'number'
+                    ? inc.billTotal
+                    : nextOrders.reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0);
+                  return {
+                    ...curr,
+                    ...inc,
+                    status: 'billed',
+                    isPaid: false,
+                    orders: nextOrders,
+                    billTotal: nextBill,
+                    ordersUpdatedAt: incOrdersAt || currOrdersAt || Date.now(),
+                    waiterPaymentCollection: resolveWaiterPay(curr, inc),
+                  };
+                }
+              }
+
               // If table has active unbilled tickets on the server, never allow an out-of-sync client to revert it to 'available'
               if (tableTickets.length > 0 && inc.status !== 'billed') {
                 const ticketTotal = tableTickets.reduce(
@@ -8296,17 +8328,23 @@ async function handleRequest(req, res) {
                 const base = (inc.status === 'occupied' && (inc.occupiedSince || 0) >= (curr.occupiedSince || 0))
                   ? { ...curr, ...inc }
                   : { ...inc, ...curr };
-                const bestOrders =
-                  Array.isArray(base.orders) && base.orders.length >= ticketOrders.length && base.orders.length > 0
+                const useNewerOrders = incOrdersAt > currOrdersAt && Array.isArray(inc.orders);
+                const bestOrders = useNewerOrders
+                  ? inc.orders
+                  : Array.isArray(base.orders) && base.orders.length >= ticketOrders.length && base.orders.length > 0
                     ? base.orders
                     : ticketOrders;
+                const resolvedBill = useNewerOrders && typeof inc.billTotal === 'number'
+                  ? inc.billTotal
+                  : Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal);
                 return {
                   ...base,
                   status: 'occupied',
                   isPaid: false,
                   occupiedSince: Math.max(curr.occupiedSince || 0, inc.occupiedSince || 0) || Date.now(),
-                  billTotal: Math.max(curr.billTotal || 0, inc.billTotal || 0, ticketTotal),
+                  billTotal: resolvedBill,
                   orders: bestOrders,
+                  ordersUpdatedAt: Math.max(currOrdersAt, incOrdersAt) || undefined,
                   server: inc.server || curr.server || tableTickets[0].server,
                   waiterPaymentCollection: resolveWaiterPay(curr, inc),
                 };

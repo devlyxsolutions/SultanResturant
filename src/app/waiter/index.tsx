@@ -471,6 +471,7 @@ export default function OrderTakerScreen() {
   const renderTable = ({ item }: { item: typeof tables[0] }) => {
     const isOccupied = item.status === 'occupied';
     const isBilled = item.status === 'billed' || item.isPaid;
+    const isTempBilled = item.status === 'billed' && !item.isPaid;
     const isReserved = item.status === 'reserved';
     const tableRes = findTableReservation(item, reservations, ['confirmed', 'seated']);
     const isGroupRes = isGroupReservation(tableRes);
@@ -586,11 +587,13 @@ export default function OrderTakerScreen() {
             <Text style={[styles.statusIndicatorText, { color: statusColor }]}>
               {isFoodReady
                 ? 'READY'
-                : isBilled
-                  ? 'BILLED'
-                  : isReserved && isGroupRes
-                    ? `GROUP ${tableRes?.guestsCount}G`
-                    : item.status.toUpperCase()}
+                : isTempBilled
+                  ? 'TEMP BILL'
+                  : isBilled
+                    ? 'BILLED'
+                    : isReserved && isGroupRes
+                      ? `GROUP ${tableRes?.guestsCount}G`
+                      : item.status.toUpperCase()}
             </Text>
           </View>
         </View>
@@ -779,7 +782,7 @@ export default function OrderTakerScreen() {
             </TouchableOpacity>
           )}
 
-          {isBilled && (
+          {item.isPaid && (
             <TouchableOpacity
               style={styles.releaseTableBtn}
               onPress={(e) => {
