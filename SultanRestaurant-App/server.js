@@ -3059,13 +3059,85 @@ try {
         if (t.status === 'served' && Array.isArray(t.items)) {
           deduplicatedStartupTickets.push({
             ...t,
-            items: t.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }))
+            items: t.items.map(it => ({ ...it, completed: true, itemStatus: 'served' })),
+            ...(t.isSettled ? { tableId: 'SETTLED-HISTORY' } : {}),
           });
         } else {
           deduplicatedStartupTickets.push(t);
         }
       }
       serverState.tickets = deduplicatedStartupTickets;
+
+      // Backfill missing settled KOTs from the last 24h paid invoices so Kitchen & Juice KDS Served history is complete
+      if (Array.isArray(serverState.invoices)) {
+        const nowStartup = Date.now();
+        const cutoff24h = nowStartup - 24 * 60 * 60 * 1000;
+        const delIdSet = new Set(serverState.deletedTicketIds || []);
+        let recoveredCount = 0;
+        for (const inv of serverState.invoices) {
+          if (!inv || !inv.id || inv.status === 'voided' || inv.isUnpaidBill) continue;
+          const invTime = Number(inv.timeSettled || inv.timePlaced || 0);
+          if (!invTime || invTime < cutoff24h) continue;
+          if (!Array.isArray(inv.items) || inv.items.length === 0) continue;
+
+          const histId = `KOT-HIST-${String(inv.id).replace(/[^A-Z0-9]/gi, '').slice(-6)}`;
+          if (serverState.tickets.some(tk => tk && tk.id === histId)) continue;
+
+          const invTblId = inv.tableId || (inv.orderType === 'delivery' ? 'delivery' : 'takeaway');
+          const invTblName = String(inv.tableName || (inv.orderType === 'delivery' ? 'Delivery' : 'Takeaway')).trim().toLowerCase();
+          const hasMatchingTicket = serverState.tickets.some(tk => {
+            if (!tk) return false;
+            const tkTime = Number(tk.settledAt || tk.timePlaced || 0);
+            if (Math.abs(invTime - tkTime) > 45 * 60 * 1000) return false;
+            const tkTblId = tk.settledTableId || tk.tableId;
+            const tkTblName = String(tk.tableName || '').replace(/\s*\(Add-on.*|\s*\(from.*/i, '').trim().toLowerCase();
+            return (inv.tableId && tkTblId === inv.tableId) || (invTblName && tkTblName === invTblName);
+          });
+          if (hasMatchingTicket) continue;
+
+          const histTicket = {
+            id: histId,
+            tableId: 'SETTLED-HISTORY',
+            settledTableId: invTblId,
+            tableName: inv.tableName || (inv.orderType === 'delivery' ? 'Delivery' : 'Takeaway'),
+            server: inv.orderTakenBy || inv.server || inv.cashier || 'Staff',
+            timePlaced: Number(inv.timePlaced || invTime),
+            readyAt: invTime,
+            status: 'served',
+            isSettled: true,
+            settledAt: invTime,
+            items: inv.items.map(it => ({
+              id: it.id,
+              name: it.name,
+              price: Number(it.price || 0),
+              qty: Number(it.qty || 1),
+              notes: it.notes,
+              station: it.station || 'main',
+              completed: true,
+              itemStatus: 'served',
+              servedAt: invTime,
+            })),
+          };
+          if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
+            printerHelper.normalizeTicketStations(histTicket, serverState.menuItems || [], true);
+          }
+          const hasMain = histTicket.items.some(i => (i.station || 'main') === 'main');
+          const hasJuice = histTicket.items.some(i => i.station === 'juice');
+          histTicket.stationStatuses = {
+            main: hasMain ? 'served' : undefined,
+            juice: hasJuice ? 'served' : undefined,
+          };
+          delIdSet.delete(histId);
+          serverState.tickets.push(histTicket);
+          recoveredCount++;
+        }
+        if (recoveredCount > 0) {
+          serverState.deletedTicketIds = Array.from(delIdSet);
+          serverState.tickets.sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+          serverState.tickets = capServerTicketsWithHistory(serverState.tickets);
+          console.log(`[Sultan Hub Startup] Recovered ${recoveredCount} settled KOT history records for Kitchen & Juice Bar KDS.`);
+        }
+      }
 
       // Reconcile online orders against ticket status on startup
       if (Array.isArray(serverState.onlineOrders) && Array.isArray(serverState.tickets)) {
@@ -3094,7 +3166,12 @@ try {
         }
       }
     }
-    const activeTicketTableIds = new Set((serverState.tickets || []).map(tk => tk && tk.tableId).filter(Boolean));
+    const activeTicketTableIds = new Set(
+      (serverState.tickets || [])
+        .filter(tk => tk && !tk.isSettled && tk.tableId !== 'SETTLED-HISTORY' && tk.tableId !== 'SETTLED-ORDER')
+        .map(tk => tk.tableId)
+        .filter(Boolean)
+    );
     if (Array.isArray(serverState.tables)) {
       const nowInit = Date.now();
       serverState.tables = serverState.tables.map(t => {
@@ -3128,6 +3205,68 @@ try {
   }
 } catch (err) {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
+}
+
+function archiveServerTicketForSettlement(tk, now) {
+  if (!tk || typeof tk !== 'object') return tk;
+  const stMap = tk.stationStatuses || {};
+  const mainActive = stMap.main === 'pending' || stMap.main === 'cooking';
+  const juiceActive = stMap.juice === 'pending' || stMap.juice === 'cooking';
+  const hasUnservedPrep =
+    tk.status === 'pending' ||
+    tk.status === 'cooking' ||
+    mainActive ||
+    juiceActive;
+  const settledTableId =
+    tk.settledTableId ||
+    (tk.tableId && tk.tableId !== 'SETTLED-HISTORY' && tk.tableId !== 'SETTLED-ORDER' ? tk.tableId : undefined);
+
+  if (hasUnservedPrep) {
+    return {
+      ...tk,
+      isSettled: true,
+      settledAt: tk.settledAt || now,
+      settledTableId,
+      tableId: 'SETTLED-ORDER',
+    };
+  }
+
+  const items = Array.isArray(tk.items) ? tk.items : [];
+  const hasMain = items.some(i => (i.station || 'main') === 'main');
+  const hasJuice = items.some(i => i.station === 'juice');
+  return {
+    ...tk,
+    status: 'served',
+    stationStatuses: {
+      main: hasMain ? 'served' : undefined,
+      juice: hasJuice ? 'served' : undefined,
+    },
+    items: items.map(i => ({
+      ...i,
+      completed: true,
+      itemStatus: 'served',
+      servedAt: i.servedAt || now,
+    })),
+    isSettled: true,
+    settledAt: tk.settledAt || now,
+    settledTableId,
+    tableId: 'SETTLED-HISTORY',
+  };
+}
+
+function capServerTicketsWithHistory(tickets, maxHistory = 500) {
+  const active = [];
+  const history = [];
+  for (const tk of (Array.isArray(tickets) ? tickets : [])) {
+    if (!tk || !tk.id) continue;
+    if (tk.isSettled && tk.status === 'served') {
+      history.push(tk);
+    } else {
+      active.push(tk);
+    }
+  }
+  history.sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+  return [...active, ...history.slice(0, maxHistory)];
 }
 
 function normalizeExactCashierRoleLabels(val) {
@@ -6874,11 +7013,17 @@ async function handleRequest(req, res) {
   // 8. Legacy / Central Web POS Sync: GET & POST /api/sync
   if (url.pathname === '/api/pos/clear-all' && req.method === 'POST') {
     const now = Date.now();
-    const removedIds = (serverState.tickets || []).map(t => t && t.id).filter(Boolean);
+    const unservedTickets = (serverState.tickets || []).filter(t => t && t.status !== 'served' && !(t.isSettled && t.status === 'served'));
+    const preservedServedHistory = capServerTicketsWithHistory(
+      (serverState.tickets || [])
+        .filter(t => t && (t.status === 'served' || (t.isSettled && t.status === 'served')))
+        .map(t => archiveServerTicketForSettlement(t, now))
+    );
+    const removedIds = unservedTickets.map(t => t && t.id).filter(Boolean);
     serverState.deletedTicketIds = Array.from(
       new Set([...(serverState.deletedTicketIds || []), 'KOT-1042', ...removedIds])
     ).slice(-500);
-    serverState.tickets = [];
+    serverState.tickets = preservedServedHistory;
     serverState.tables = (serverState.tables || []).map(t =>
       t.status === 'occupied' || t.status === 'billed'
         ? {
@@ -7995,7 +8140,7 @@ async function handleRequest(req, res) {
         .filter(l => l && l.fromTableId)
         .map(l => l.fromTableId)
     );
-    const autoRetiredTicketIds = [];
+    const autoSettledTicketIds = new Set();
     if (Array.isArray(partialState.tables) && Array.isArray(serverState.tables)) {
       const currTableMap = new Map(serverState.tables.map(t => [t.id, t]));
       for (const incT of partialState.tables) {
@@ -8016,21 +8161,45 @@ async function handleRequest(req, res) {
           incT.lastSettledAt >= (currT.occupiedSince || 0);
         if (newlyBilled || newlySettledFromBilled || newlySettledByTimestamp) {
           const cutoff = incT.lastSettledAt || Date.now();
-          for (const tk of (serverState.tickets || [])) {
-            if (tk && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
+          for (let idx = 0; idx < (serverState.tickets || []).length; idx++) {
+            const tk = serverState.tickets[idx];
+            if (tk && !tk.isSettled && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
               const incTk = incomingTicketMapForRetire.get(tk.id);
               if (incTk && incTk.tableId && incTk.tableId !== incT.id && (incTk.lastMovedAt || 0) > 0) {
                 continue;
               }
-              autoRetiredTicketIds.push(tk.id);
+              autoSettledTicketIds.add(tk.id);
+              serverState.tickets[idx] = archiveServerTicketForSettlement(tk, cutoff);
             }
           }
         }
       }
     }
-    if (incomingDeleted.length > 0 || autoRetiredTicketIds.length > 0) {
+    const explicitCancelledIds = new Set(
+      (Array.isArray(partialState.cancelledOrderLogs) ? partialState.cancelledOrderLogs : [])
+        .filter(l => l && l.ticketId && l.cancelledAt && Date.now() - Number(l.cancelledAt) < 120000)
+        .map(l => l.ticketId)
+    );
+    const serverTicketById = new Map(
+      (Array.isArray(serverState.tickets) ? serverState.tickets : [])
+        .filter(t => t && t.id)
+        .map(t => [t.id, t])
+    );
+    const filteredIncomingDeleted = incomingDeleted.filter(id => {
+      if (autoSettledTicketIds.has(id) && !explicitCancelledIds.has(id)) return false;
+      const ext = serverTicketById.get(id);
+      if (ext && (ext.isSettled || ext.status === 'served') && !explicitCancelledIds.has(id)) {
+        const idx = (serverState.tickets || []).findIndex(t => t && t.id === id);
+        if (idx >= 0) {
+          serverState.tickets[idx] = archiveServerTicketForSettlement(serverState.tickets[idx], Date.now());
+        }
+        return false;
+      }
+      return true;
+    });
+    if (filteredIncomingDeleted.length > 0) {
       serverState.deletedTicketIds = Array.from(
-        new Set([...serverState.deletedTicketIds, ...incomingDeleted, ...autoRetiredTicketIds])
+        new Set([...serverState.deletedTicketIds, ...filteredIncomingDeleted])
       ).slice(-400);
     }
     const deletedSet = new Set(serverState.deletedTicketIds);
@@ -8148,15 +8317,28 @@ async function handleRequest(req, res) {
               if (chosen.status === 'served' && Array.isArray(chosen.items)) {
                 chosen.items = chosen.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
               }
+              if (ext.isSettled || inc.isSettled || autoSettledTicketIds.has(tId)) {
+                chosen.isSettled = true;
+                chosen.settledAt = ext.settledAt || inc.settledAt || Date.now();
+                chosen.settledTableId =
+                  ext.settledTableId ||
+                  inc.settledTableId ||
+                  (ext.tableId && ext.tableId !== 'SETTLED-HISTORY' && ext.tableId !== 'SETTLED-ORDER'
+                    ? ext.tableId
+                    : inc.tableId && inc.tableId !== 'SETTLED-HISTORY' && inc.tableId !== 'SETTLED-ORDER'
+                      ? inc.tableId
+                      : undefined);
+                chosen.tableId = chosen.status === 'served' ? 'SETTLED-HISTORY' : 'SETTLED-ORDER';
+              }
               mergedList.push(chosen);
             } else if (inc) {
               if (inc.status === 'served' && Array.isArray(inc.items)) {
                 inc.items = inc.items.map(it => ({ ...it, completed: true, itemStatus: 'served' }));
               }
-              mergedList.push(inc);
+              mergedList.push(autoSettledTicketIds.has(tId) ? archiveServerTicketForSettlement(inc, Date.now()) : inc);
             } else if (ext) {
-              // Preserve active server tickets when an out-of-sync client sends a partial/older ticket list
-              mergedList.push(ext);
+              // Preserve active server tickets & served history when an out-of-sync client sends a partial/older ticket list
+              mergedList.push(autoSettledTicketIds.has(tId) ? archiveServerTicketForSettlement(ext, Date.now()) : ext);
             }
           }
 
@@ -8208,7 +8390,7 @@ async function handleRequest(req, res) {
             }
           }
 
-          serverState.tickets = deduplicatedMerged;
+          serverState.tickets = capServerTicketsWithHistory(deduplicatedMerged);
 
           // Auto-print newly placed incoming tickets strictly split by station (main -> Kitchen ONLY, juice -> Juice Bar ONLY)
           for (const inc of incomingTickets) {
@@ -8274,7 +8456,7 @@ async function handleRequest(req, res) {
             );
             const incomingMap = new Map(incomingTables.map(t => [t.id, t]));
             const activeTickets = (Array.isArray(serverState.tickets) ? serverState.tickets : []).filter(
-              tk => tk && !deletedSet.has(tk.id)
+              tk => tk && !tk.isSettled && tk.tableId !== 'SETTLED-HISTORY' && tk.tableId !== 'SETTLED-ORDER' && !deletedSet.has(tk.id)
             );
             // Order Taker collection: an explicit null/value from the client wins; a collection older than
             // the latest settlement (lastSettledAt) is stale and must never resurrect the cashier alert.

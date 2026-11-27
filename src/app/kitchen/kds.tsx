@@ -393,13 +393,15 @@ export default function KitchenDisplayScreen() {
     }
   }, [tickets]);
 
-  // Deduplicate tickets by orderId / orderNumber so the kitchen never sees duplicate cards
+  // Deduplicate tickets by ID and orderId / orderNumber so the kitchen never sees duplicate cards
   const uniqueTickets = useMemo(() => {
+    const seenIds = new Set<string>();
     const seenOrderKeys = new Map<string, Ticket>();
     const withoutOrder: Ticket[] = [];
 
     for (const t of tickets || []) {
-      if (!t || !t.id) continue;
+      if (!t || !t.id || seenIds.has(t.id)) continue;
+      seenIds.add(t.id);
       const orderKey = t.orderId
         ? `oid_${t.orderId}`
         : (t.orderNumber ? `onum_${t.orderNumber}` : null);
@@ -438,12 +440,11 @@ export default function KitchenDisplayScreen() {
       const matchingItems = items.filter((i) => resolveMenuCatalogStation(i, menuItems, autoRouteBev) === stationFilter);
       const allMatchingServed = matchingItems.length > 0 && matchingItems.every((i) => i.itemStatus === 'served');
       const allMatchingReady = matchingItems.length > 0 && matchingItems.every((i) => i.itemStatus === 'ready' || i.itemStatus === 'served' || i.completed);
-      let stationStatus: Ticket['status'] = (t.stationStatuses && t.stationStatuses[stationFilter])
-        ? t.stationStatuses[stationFilter]!
-        : t.status;
-      if (t.status === 'served' || allMatchingServed) {
+      const explicitStationStatus = t.stationStatuses && t.stationStatuses[stationFilter];
+      let stationStatus: Ticket['status'] = explicitStationStatus ? explicitStationStatus : t.status;
+      if (t.status === 'served' || allMatchingServed || explicitStationStatus === 'served') {
         stationStatus = 'served';
-      } else if (stationStatus !== 'served' && allMatchingReady) {
+      } else if (allMatchingReady) {
         stationStatus = 'ready';
       }
 

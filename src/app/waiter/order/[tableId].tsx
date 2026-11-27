@@ -265,7 +265,9 @@ export default function TableOrderScreen() {
   const seatingType = table ? getTableSeatingType(table) : 'tables';
   const floorName = isTakeaway ? 'Express Counter' : table ? getTableFloor(table) : 'Ground Floor';
 
-  const activeTickets = tickets.filter((t) => t.tableId === tableId);
+  const activeTickets = tickets.filter(
+    (t) => t && !t.isSettled && t.tableId === tableId && t.tableId !== 'SETTLED-HISTORY' && t.tableId !== 'SETTLED-ORDER'
+  );
   const isExistingOrderActive = activeTickets.length > 0 || table?.status === 'occupied' || table?.status === 'billed';
 
   const alreadyOrderedItems = useMemo(() => {

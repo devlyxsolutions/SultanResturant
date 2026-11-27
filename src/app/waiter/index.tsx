@@ -440,7 +440,7 @@ export default function OrderTakerScreen() {
   // Active KDS tickets for the "My Placed Orders (Live KDS Status)" tracker strip
   const myActiveKdsTickets = useMemo(() => {
     return scopedTickets
-      .filter((t) => t.status !== 'served')
+      .filter((t) => !t.isSettled && t.status !== 'served')
       .sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
   }, [scopedTickets]);
 

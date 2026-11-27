@@ -296,7 +296,11 @@ export default function POSTerminalScreen({
   const tickets = useRestaurantStore((state) => state.tickets) || [];
   const [movingSourceTable, setMovingSourceTable] = useState<Table | null>(null);
   const activeRunningTickets = useMemo(
-    () => tickets.filter((t) => t && t.status !== 'served'),
+    () => tickets.filter((t) => t && !t.isSettled && t.status !== 'served'),
+    [tickets]
+  );
+  const posVisibleRunningTickets = useMemo(
+    () => tickets.filter((t) => t && !(t.isSettled && t.status === 'served')),
     [tickets]
   );
   const invoices = useRestaurantStore((state) => state.invoices) || [];
@@ -502,9 +506,11 @@ export default function POSTerminalScreen({
     const targetTable = tables.find((t) => t.id === tId || t.name.toLowerCase() === tId.toLowerCase());
     const tableTickets = tickets.filter(
       (t) =>
-        t.tableId === tId ||
-        (targetTable &&
-          (t.tableId === targetTable.id || t.tableName?.trim().toLowerCase() === targetTable.name.trim().toLowerCase()))
+        t &&
+        !t.isSettled &&
+        t.tableId !== 'SETTLED-HISTORY' &&
+        t.tableId !== 'SETTLED-ORDER' &&
+        (t.tableId === tId || (targetTable && t.tableId === targetTable.id))
     );
     const latestTicketTime = tableTickets.reduce(
       (max, t) => Math.max(max, t.itemsUpdatedAt || t.timePlaced || 0),
@@ -1828,7 +1834,7 @@ export default function POSTerminalScreen({
     if (!col) return;
     setReceivedWaiterPayIds((prev) => (prev.includes(col.id) ? prev : [...prev.slice(-50), col.id]));
 
-    const tableTickets = tickets.filter((tk) => tk.tableId === targetTable.id);
+    const tableTickets = tickets.filter((tk) => tk && !tk.isSettled && tk.tableId === targetTable.id);
     const rawItems: OrderItem[] =
       tableTickets.length > 0
         ? tableTickets.flatMap((tk) => (tk.items || []).map((i) => ({ ...i })))
@@ -3184,7 +3190,7 @@ export default function POSTerminalScreen({
             >
               <View>
                 <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>
-                  Running Kitchen Orders & Pending Bills ({activeRunningTickets.length} Active{tickets.length > activeRunningTickets.length ? ` • ${tickets.length - activeRunningTickets.length} Dispatched` : ''})
+                  Running Kitchen Orders & Pending Bills ({activeRunningTickets.length} Active{posVisibleRunningTickets.length > activeRunningTickets.length ? ` • ${posVisibleRunningTickets.length - activeRunningTickets.length} Dispatched` : ''})
                 </Text>
                 <Text style={{ fontSize: 13, color: '#64748B', fontWeight: '600' }}>
                   Live second-by-second kitchen preparation countdown timer for all active orders
@@ -3201,7 +3207,7 @@ export default function POSTerminalScreen({
                     onChangeText={setPendingOrderSearchQuery}
                   />
                 </View>
-                {tickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
+                {posVisibleRunningTickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
                   <TouchableOpacity
                     style={[styles.filterChip, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', paddingVertical: 9 }]}
                     onPress={handleClearAllOrphanTickets}
@@ -3213,7 +3219,7 @@ export default function POSTerminalScreen({
             </View>
 
             <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
-              {tickets
+              {posVisibleRunningTickets
                 .filter((t) => {
                   const q = pendingOrderSearchQuery.toLowerCase().trim();
                   if (!q) return true;
@@ -3307,7 +3313,7 @@ export default function POSTerminalScreen({
                           >
                             <Text style={{ fontSize: 13, fontWeight: '900', color: '#1D4ED8' }}>Load in Cart</Text>
                           </TouchableOpacity>
-                          {!hidePrices && (
+                          {!hidePrices && !t.isSettled && (
                             <TouchableOpacity
                               style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C', paddingHorizontal: 16, height: 38 }]}
                               onPress={() => handleCreateBillFromTicket(t, true)}
@@ -3433,7 +3439,7 @@ export default function POSTerminalScreen({
                   );
                 })}
 
-              {tickets.length === 0 && (
+              {posVisibleRunningTickets.length === 0 && (
                 <View style={{ alignItems: 'center', paddingVertical: 60 }}>
                   <Ionicons name="checkmark-done-circle-outline" size={54} color="#CBD5E1" />
                   <Text style={{ fontSize: 17, fontWeight: '900', color: '#475569', marginTop: 10 }}>
@@ -4205,11 +4211,11 @@ export default function POSTerminalScreen({
           <View style={[styles.modalCard, { maxWidth: 760, maxHeight: '86%' }]}>
             <View style={styles.modalHeader}>
               <View>
-                <Text style={styles.modalTitle}>Running Kitchen Orders ({tickets.length})</Text>
+                <Text style={styles.modalTitle}>Running Kitchen Orders ({posVisibleRunningTickets.length})</Text>
                 <Text style={styles.modalSub}>Tap any order to load into POS for billing or add-ons</Text>
               </View>
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-                {tickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
+                {posVisibleRunningTickets.length > 0 && (role === 'admin' || can('posCanDismissTicket')) && (
                   <TouchableOpacity
                     style={[styles.filterChip, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5' }]}
                     onPress={handleClearAllOrphanTickets}
@@ -4235,7 +4241,7 @@ export default function POSTerminalScreen({
               </View>
 
               <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 10 }}>
-                {tickets
+                {posVisibleRunningTickets
                   .filter((t) => {
                     const q = pendingOrderSearchQuery.toLowerCase().trim();
                     if (!q) return true;
@@ -4332,7 +4338,7 @@ export default function POSTerminalScreen({
                           >
                             <Text style={{ fontSize: 12, fontWeight: '800', color: '#1D4ED8' }}>Load</Text>
                           </TouchableOpacity>
-                          {!hidePrices && (
+                          {!hidePrices && !t.isSettled && (
                             <TouchableOpacity
                               style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C' }]}
                               onPress={() => handleCreateBillFromTicket(t, true)}
@@ -4354,7 +4360,7 @@ export default function POSTerminalScreen({
                     );
                   })}
 
-                {tickets.length === 0 && (
+                {posVisibleRunningTickets.length === 0 && (
                   <View style={{ alignItems: 'center', padding: 36 }}>
                     <Ionicons name="checkmark-done-circle-outline" size={44} color="#CBD5E1" />
                     <Text style={{ fontSize: 15, fontWeight: '800', color: '#64748B', marginTop: 8 }}>

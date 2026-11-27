@@ -300,6 +300,9 @@ export type Ticket = {
   itemsUpdatedAt?: number;
   isMinusKot?: boolean;
   kotType?: 'NEW' | 'ADD' | 'MINUS';
+  isSettled?: boolean;
+  settledAt?: number;
+  settledTableId?: string;
 };
 
 export type MenuVariant = {
@@ -1025,7 +1028,9 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
     // If table is already marked billed, preserve billed state until settled
     if (table.status === 'billed') return table;
 
-    const tableTickets = safeTickets.filter(t => t.tableId === table.id);
+    const tableTickets = safeTickets.filter(
+      t => t && !t.isSettled && t.tableId === table.id && t.tableId !== 'SETTLED-HISTORY' && t.tableId !== 'SETTLED-ORDER'
+    );
     const activeCookingOrReady = tableTickets.filter(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready');
     const hasUnbilledTickets = tableTickets.some(t => t.status === 'pending' || t.status === 'cooking' || t.status === 'ready' || t.status === 'served');
 
@@ -1079,6 +1084,66 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
 
     return table;
   });
+}
+
+function archiveTicketForSettlement(tk: Ticket, now: number): Ticket {
+  const mainActive = tk.stationStatuses?.main === 'pending' || tk.stationStatuses?.main === 'cooking';
+  const juiceActive = tk.stationStatuses?.juice === 'pending' || tk.stationStatuses?.juice === 'cooking';
+  const hasUnservedPrep =
+    tk.status === 'pending' ||
+    tk.status === 'cooking' ||
+    mainActive ||
+    juiceActive;
+  const settledTableId =
+    tk.settledTableId ||
+    (tk.tableId && tk.tableId !== 'SETTLED-HISTORY' && tk.tableId !== 'SETTLED-ORDER' ? tk.tableId : undefined);
+
+  if (hasUnservedPrep) {
+    return {
+      ...tk,
+      isSettled: true,
+      settledAt: tk.settledAt || now,
+      settledTableId,
+      tableId: 'SETTLED-ORDER',
+    };
+  }
+
+  const items = Array.isArray(tk.items) ? tk.items : [];
+  const hasMain = items.some(i => (i.station || 'main') === 'main');
+  const hasJuice = items.some(i => i.station === 'juice');
+  return {
+    ...tk,
+    status: 'served',
+    stationStatuses: {
+      main: hasMain ? 'served' : undefined,
+      juice: hasJuice ? 'served' : undefined,
+    },
+    items: items.map(i => ({
+      ...i,
+      completed: true,
+      itemStatus: 'served' as const,
+      servedAt: i.servedAt || now,
+    })),
+    isSettled: true,
+    settledAt: tk.settledAt || now,
+    settledTableId,
+    tableId: 'SETTLED-HISTORY',
+  };
+}
+
+function capTicketsWithHistory(tickets: Ticket[], maxHistory = 500): Ticket[] {
+  const active: Ticket[] = [];
+  const history: Ticket[] = [];
+  for (const tk of tickets) {
+    if (!tk || !tk.id) continue;
+    if (tk.isSettled && tk.status === 'served') {
+      history.push(tk);
+    } else {
+      active.push(tk);
+    }
+  }
+  history.sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+  return [...active, ...history.slice(0, maxHistory)];
 }
 
 let isNotifyPending = false;
@@ -1464,11 +1529,23 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
         set((state) => {
           const table = state.tables.find(t => t.id === tableId);
-          const existingTickets = state.tickets.filter(t => t.tableId === tableId);
+          const existingTickets = state.tickets.filter(t => !t.isSettled && t.tableId === tableId);
           const isActuallyAddOn = isAddOn !== undefined ? isAddOn : existingTickets.length > 0;
           const roundNumber = existingTickets.length + 1;
 
-          const newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
+          const existingIdSet = new Set([
+            ...(state.tickets || []).map(t => t.id),
+            ...(state.deletedTicketIds || []),
+          ]);
+          let newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
+          let attempts = 0;
+          while (existingIdSet.has(newTicketId) && attempts < 50) {
+            newTicketId = `KOT-${Math.floor(Math.random() * 9000) + 1000}`;
+            attempts++;
+          }
+          if (existingIdSet.has(newTicketId)) {
+            newTicketId = `KOT-${Date.now().toString().slice(-5)}`;
+          }
           const itemsTotal = orderItems.reduce((sum, i) => sum + (i.item.price * i.qty), 0);
 
           const resolveStation = (item: MenuItem): 'main' | 'juice' => {
@@ -1895,6 +1972,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             items: updatedItems,
             status: overallStatus,
             stationStatuses: currentStationStatuses,
+            tableId: (t.isSettled && overallStatus === 'served') ? 'SETTLED-HISTORY' : t.tableId,
           } : t),
         };
       }),
@@ -1958,7 +2036,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               items: updatedItems,
               stationStatuses: currentStationStatuses,
               status: overallStatus,
-              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt
+              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt,
+              tableId: (t.isSettled && overallStatus === 'served') ? 'SETTLED-HISTORY' : t.tableId,
             };
           }
           return t;
@@ -2019,7 +2098,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               ...t,
               items: updatedItems,
               stationStatuses: currentStationStatuses,
-              status: overallStatus
+              status: overallStatus,
+              tableId: (t.isSettled && overallStatus === 'served') ? 'SETTLED-HISTORY' : t.tableId,
             } : t),
             lastFoodReadyAlert: updatedAlert
           };
@@ -2036,7 +2116,8 @@ export const useRestaurantStore = create<RestaurantState>()(
             ...t,
             status: 'served',
             items: t.items.map(i => ({ ...i, itemStatus: 'served' as const, completed: true })),
-            stationStatuses: allServedStatuses
+            stationStatuses: allServedStatuses,
+            tableId: t.isSettled ? 'SETTLED-HISTORY' : t.tableId,
           } : t),
           lastFoodReadyAlert: updatedAlert
         };
@@ -2161,7 +2242,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               items: updatedItems,
               stationStatuses: currentStationStatuses,
               status: overallStatus,
-              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt
+              readyAt: (status === 'ready' || overallStatus === 'ready') ? (t.readyAt || Date.now()) : t.readyAt,
+              tableId: (t.isSettled && overallStatus === 'served') ? 'SETTLED-HISTORY' : t.tableId,
             };
           }
 
@@ -2237,7 +2319,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               readyAt: status === 'ready' ? (i.readyAt || Date.now()) : i.readyAt,
             })),
             stationStatuses: fallbackStationStatuses,
-            readyAt: status === 'ready' ? (t.readyAt || Date.now()) : t.readyAt
+            readyAt: status === 'ready' ? (t.readyAt || Date.now()) : t.readyAt,
+            tableId: (t.isSettled && status === 'served') ? 'SETTLED-HISTORY' : t.tableId,
           };
         });
 
@@ -2338,7 +2421,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         const updatedTickets: Ticket[] = [];
         // Walk tickets newest-first when deducting minus quantities
         for (const tk of state.tickets || []) {
-          if (tk.tableId !== tableId || remainingMinus.size === 0) {
+          if (tk.isSettled || tk.tableId !== tableId || remainingMinus.size === 0) {
             updatedTickets.push(tk);
             continue;
           }
@@ -2508,8 +2591,14 @@ export const useRestaurantStore = create<RestaurantState>()(
         );
 
         const now = Date.now();
-        const removedIds = (state.tickets || []).filter(t => t.tableId === tableId).map(t => t.id);
         const linkedReservationId = targetTable?.reservationId;
+        const archivedTickets = capTicketsWithHistory(
+          (state.tickets || []).map(t =>
+            (t.tableId === tableId || (t.settledTableId === tableId && !t.isSettled))
+              ? archiveTicketForSettlement(t, now)
+              : t
+          )
+        );
 
         notifySync();
         return {
@@ -2540,8 +2629,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
             return r;
           }),
-          tickets: state.tickets.filter(t => t.tableId !== tableId),
-          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
+          tickets: archivedTickets,
           lastBillPaidAlert: matchesAlert ? null : state.lastBillPaidAlert,
           lastFoodReadyAlert: matchesFoodAlert ? null : state.lastFoodReadyAlert
         };
@@ -2549,12 +2637,15 @@ export const useRestaurantStore = create<RestaurantState>()(
 
       dismissTicket: (ticketId, options) => set((state) => {
         const target = (state.tickets || []).find(t => t.id === ticketId);
-        const remainingTickets = (state.tickets || []).filter(t => t.id !== ticketId);
         const now = Date.now();
+        const isSettlement = Boolean(options?.isSettlementCleanup);
+        const remainingTickets = isSettlement
+          ? capTicketsWithHistory((state.tickets || []).map(t => (t.id === ticketId ? archiveTicketForSettlement(t, now) : t)))
+          : (state.tickets || []).filter(t => t.id !== ticketId);
         let updatedTables = state.tables;
         const targetTable = target && target.tableId ? state.tables.find(t => t.id === target.tableId) : undefined;
         if (target && target.tableId) {
-          const tableRemaining = remainingTickets.filter(t => t.tableId === target.tableId);
+          const tableRemaining = remainingTickets.filter(t => !t.isSettled && t.tableId === target.tableId);
           updatedTables = state.tables.map(t => {
             if (t.id !== target.tableId) return t;
             if (tableRemaining.length === 0 && t.status !== 'billed') {
@@ -2654,7 +2745,9 @@ export const useRestaurantStore = create<RestaurantState>()(
         return {
           tables: updatedTables,
           tickets: remainingTickets,
-          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ticketId])).slice(-400),
+          ...(isSettlement
+            ? {}
+            : { deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ticketId])).slice(-400) }),
           cancelledOrderLogs: nextCancelledLogs,
           lastOrderCancelledAlert: nextCancelledAlert,
         };
@@ -2881,6 +2974,10 @@ export const useRestaurantStore = create<RestaurantState>()(
         }
 
         notifySync();
+        const isSettlement = Boolean(options?.isSettlementCleanup);
+        const nextTickets = isSettlement
+          ? capTicketsWithHistory((state.tickets || []).map(t => (t.tableId === tableId ? archiveTicketForSettlement(t, now) : t)))
+          : (state.tickets || []).filter(t => t.tableId !== tableId);
         return {
           tables: state.tables.map(t =>
             t.id === tableId && t.status !== 'billed'
@@ -2902,8 +2999,10 @@ export const useRestaurantStore = create<RestaurantState>()(
               }
               : t
           ),
-          tickets: (state.tickets || []).filter(t => t.tableId !== tableId),
-          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400),
+          tickets: nextTickets,
+          ...(isSettlement
+            ? {}
+            : { deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedIds])).slice(-400) }),
           cancelledOrderLogs: nextCancelledLogs,
           lastOrderCancelledAlert: nextCancelledAlert,
         };
@@ -2917,7 +3016,12 @@ export const useRestaurantStore = create<RestaurantState>()(
           fetch(`${apiBase}/api/pos/clear-all`, { method: 'POST' }).catch(() => { });
         } catch { }
         set((state) => {
-          const allTickets = state.tickets || [];
+          const allTickets = (state.tickets || []).filter(t => t && t.status !== 'served');
+          const preservedServedHistory = capTicketsWithHistory(
+            (state.tickets || [])
+              .filter(t => t && t.status === 'served')
+              .map(t => archiveTicketForSettlement(t, Date.now()))
+          );
           const removedIds = allTickets.map(t => t.id);
           const now = Date.now();
 
@@ -3005,7 +3109,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 }
                 : t
             ),
-            tickets: [],
+            tickets: preservedServedHistory,
             deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), 'KOT-1042', ...removedIds])).slice(-400),
             lastBillPaidAlert: null,
             lastFoodReadyAlert: null,
@@ -3062,7 +3166,7 @@ export const useRestaurantStore = create<RestaurantState>()(
 
           const resolvedMover = (movedBy || '').trim() || actor.name || fromTable.server || 'Staff';
           const resolvedRole = actor.role || 'Staff';
-          const affectedTickets = (state.tickets || []).filter(tk => tk.tableId === fromTableId);
+          const affectedTickets = (state.tickets || []).filter(tk => !tk.isSettled && tk.tableId === fromTableId);
           const itemsFromTickets = affectedTickets.reduce(
             (sum, tk) => sum + (tk.items || []).reduce((s, it) => s + Number(it.qty || 1), 0),
             0
@@ -3130,7 +3234,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             : `[Moved from ${fromTable.name}]`;
 
           const updatedTickets = state.tickets.map(tk => {
-            if (tk.tableId === fromTableId) {
+            if (!tk.isSettled && tk.tableId === fromTableId) {
               const prevNotes = (tk.notes || '').trim();
               return {
                 ...tk,
@@ -4477,6 +4581,20 @@ export const useRestaurantStore = create<RestaurantState>()(
                     completed: true,
                   }));
                 }
+
+                if (local?.isSettled || rt.isSettled) {
+                  finalTicket.isSettled = true;
+                  finalTicket.settledAt = local?.settledAt || rt.settledAt || Date.now();
+                  finalTicket.settledTableId =
+                    local?.settledTableId ||
+                    rt.settledTableId ||
+                    (local?.tableId && local.tableId !== 'SETTLED-HISTORY' && local.tableId !== 'SETTLED-ORDER'
+                      ? local.tableId
+                      : rt.tableId && rt.tableId !== 'SETTLED-HISTORY' && rt.tableId !== 'SETTLED-ORDER'
+                        ? rt.tableId
+                        : undefined);
+                  finalTicket.tableId = finalTicket.status === 'served' ? 'SETTLED-HISTORY' : 'SETTLED-ORDER';
+                }
                 return finalTicket;
               });
 
@@ -4488,12 +4606,12 @@ export const useRestaurantStore = create<RestaurantState>()(
               if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id)) return false;
               if (lt.orderId && remoteOrderIds.has(lt.orderId)) return false;
               const rTable = remoteTableMap.get(lt.tableId);
-              if (rTable && rTable.lastSettledAt && lt.timePlaced && lt.timePlaced < rTable.lastSettledAt) {
+              if (!lt.isSettled && rTable && rTable.lastSettledAt && lt.timePlaced && lt.timePlaced < rTable.lastSettledAt) {
                 return false;
               }
               return true;
             });
-            mergedTickets = [...freshLocalOnly, ...normalizedRemote];
+            mergedTickets = capTicketsWithHistory([...freshLocalOnly, ...normalizedRemote]);
             if (freshLocalOnly.length > 0) {
               // Ensure offline-punched tickets are pushed to the server as soon as remote state arrives
               notifySync();
