@@ -5,6 +5,7 @@ import { appStorage } from './storage';
 import { useAuthStore } from './authStore';
 import { useRestaurantStore } from './restaurantStore';
 import { usePathname } from 'expo-router';
+import { findActiveStaffMember } from '../utils/orderTakerScope';
 
 let isRoleNotifyPending = false;
 function notifySync() {
@@ -749,7 +750,7 @@ const POS_DEFAULT_FALSE: Pick<
   posCanSettleBill: false,
   posCanPrintUnpaidBill: false,
   posCanReleaseTable: false,
-  posCanMoveTable: false,
+  posCanMoveTable: true,
   posCanDismissTicket: false,
   posCanSplitPayment: false,
   posCanManageCustomers: false,
@@ -789,10 +790,15 @@ export function normalizeRole(r: CustomRole): CustomRole {
         ...EMPTY_CRUD_PERMISSIONS,
       };
 
+  const baseNorm = String(r.baseRole || '').toLowerCase();
+  const isPureStationRole =
+    baseNorm === 'kitchen' || baseNorm === 'juicebar' || baseNorm === 'playland';
+
   const mergedPerms: RolePermissions = {
     ...(fallback as RolePermissions),
     ...(r.permissions || {}),
     ...(r.id === 'role-admin' ? { canAccessStaff: true } : {}),
+    ...(!isPureStationRole ? { posCanMoveTable: true } : {}),
   };
 
   return {
@@ -1142,7 +1148,7 @@ export function useRolePermissions(targetRoleOverride?: string) {
   }
 
   // 1. Dynamically resolve active employee's assigned role if staffId exists
-  const activeStaff = user?.staffId ? staff.find((s) => s.id === user.staffId) : null;
+  const activeStaff = findActiveStaffMember(user, staff) || null;
   const effectiveCustomRoleId = activeStaff?.customRoleId || user?.customRoleId;
   const effectiveRole = (activeStaff?.role || user?.role || '').toLowerCase();
 
@@ -1237,6 +1243,10 @@ export function useRolePermissions(targetRoleOverride?: string) {
     if (perm === 'canAccessStaff' && (effectiveRole === 'admin' || user?.role === 'admin')) {
       return true;
     }
+    // Universal Move Table access for all logged-in operational users (Cashier, Order Taker, Managers, Admin & custom roles)
+    if (perm === 'posCanMoveTable' && user) {
+      return true;
+    }
     // Non-CRUD permissions stay unlocked for a logged-in Admin unless inspecting a subordinate role
     if (
       !resolvedTargetOverride &&
@@ -1291,6 +1301,7 @@ export function useRolePermissions(targetRoleOverride?: string) {
     posCanSettleBill: can('posCanSettleBill'),
     posCanPrintUnpaidBill: can('posCanPrintUnpaidBill'),
     posCanReleaseTable: can('posCanReleaseTable'),
+    posCanMoveTable: can('posCanMoveTable'),
     posCanDismissTicket: can('posCanDismissTicket'),
     posCanSplitPayment: can('posCanSplitPayment'),
     posCanManageCustomers: can('posCanManageCustomers'),

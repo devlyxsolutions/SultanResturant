@@ -294,6 +294,8 @@ export type Ticket = {
   roundNumber?: number;
   notes?: string;
   stationStatuses?: StationStatusMap;
+  lastMovedAt?: number;
+  movedFromTableId?: string;
 };
 
 export type MenuVariant = {
@@ -3008,7 +3010,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 waiterPaymentCollection: null,
                 lastMoveNote: undefined,
                 lastMovedFrom: undefined,
-                lastMovedAt: undefined,
+                lastMovedAt: now,
                 lastMovedBy: undefined,
               };
             }
@@ -3033,6 +3035,8 @@ export const useRestaurantStore = create<RestaurantState>()(
                 tableId: toTableId,
                 tableName: `${toTable.name} (from ${fromTable.name})`,
                 notes: prevNotes ? `${prevNotes} • ${moveBannerNote}` : moveBannerNote,
+                lastMovedAt: now,
+                movedFromTableId: fromTableId,
               };
             }
             return tk;

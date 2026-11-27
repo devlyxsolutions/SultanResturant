@@ -474,7 +474,7 @@ function Send-PlainTextViaGdiDriver {
                     $useFont = $fontReg
                     $center = $false
 
-                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT") {
+                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT" -or $line -match '^KOT\s*#' -or $line -match '^TABLE:\s*') {
                         $useFont = $fontTitle
                         $center = $true
                     } elseif ($line -match '^(JUICE BAR|MAIN KITCHEN|KITCHEN|\[ .+\]|---|\*\*\*)') {

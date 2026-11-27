@@ -1,0 +1,6 @@
+[Sultan Hub Audit] Loaded 1032 persistent system log(s) from system-logs.ndjson
+[Sultan Hub Recovery] Restored missing inventory/categories from backup: milestone-highwater.json
+[Sultan Hub] Loaded saved database from server-data.json
+[Sultan Hub] Port 5050 listener: listen EADDRINUSE: address already in use :::5050
+[Sultan Hub] Port 5000 listener: listen EADDRINUSE: address already in use :::5000
+[Sultan Hub] Port 80 listener: listen EADDRINUSE: address already in use :::80

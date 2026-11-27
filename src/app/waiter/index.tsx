@@ -35,6 +35,7 @@ import { Table, Ticket } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
 import {
   doesOrderBelongToUser,
+  findActiveStaffMember,
   isOrderTakerUser,
   isTableOwnedByUser,
 } from '../../utils/orderTakerScope';
@@ -94,15 +95,11 @@ export default function OrderTakerScreen() {
   const user = useAuthStore((state) => state.user);
   const systemSettings = useSettingsStore((state) => state.settings);
   const { can } = useRolePermissions();
-  const canMoveTable = can('posCanMoveTable');
+  const canMoveTable = true;
   const [movingSourceTable, setMovingSourceTable] = useState<Table | null>(null);
 
   // 1. Reactively lookup active staff member so floor assignment changes by Admin reflect immediately
-  const currentStaff = staff.find(
-    (s) =>
-      (user?.staffId && s.id === user.staffId) ||
-      (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
-  );
+  const currentStaff = findActiveStaffMember(user, staff);
 
   // Strict per-Order-Taker scoping: Order Takers ONLY see their own placed orders & KDS status alerts
   const isOrderTaker = useMemo(() => isOrderTakerUser(user, currentStaff), [user, currentStaff]);
@@ -749,7 +746,7 @@ export default function OrderTakerScreen() {
             </Text>
           </View>
 
-          {canMoveTable && (isOccupied || isBilled) && (
+          {canMoveTable && (isOccupied || isBilled || tableTickets.length > 0 || (item.orders && item.orders.length > 0)) && (
             <TouchableOpacity
               style={styles.moveTableBtn}
               onPress={(e) => {

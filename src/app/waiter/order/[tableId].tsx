@@ -34,7 +34,7 @@ import {
 } from '../../../store';
 import { useSettingsStore } from '../../../store/settingsStore';
 import { resolveMenuImageUri } from '../../../utils/menuImage';
-import { doesOrderBelongToUser, isOrderTakerUser } from '../../../utils/orderTakerScope';
+import { doesOrderBelongToUser, findActiveStaffMember, isOrderTakerUser } from '../../../utils/orderTakerScope';
 
 const ITEM_NOTE_GROUPS: { label: string; presets: string[] }[] = [
   {
@@ -225,7 +225,7 @@ export default function TableOrderScreen() {
   const [waiterPayNote, setWaiterPayNote] = useState('');
   const [now, setNow] = useState(() => Date.now());
   const { can } = useRolePermissions();
-  const canMoveTable = can('posCanMoveTable');
+  const canMoveTable = true;
 
   useEffect(() => {
     // Only tick frequently when running tickets view or modal is active to prevent order screen lag
@@ -256,11 +256,7 @@ export default function TableOrderScreen() {
   const unavailableIds = useOpsStore((state) => state.unavailableItemIds) || [];
   const unavailableSet = useMemo(() => new Set(unavailableIds), [unavailableIds]);
   const user = useAuthStore((state) => state.user);
-  const currentStaff = staff.find(
-    (s) =>
-      (user?.staffId && s.id === user.staffId) ||
-      (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
-  );
+  const currentStaff = findActiveStaffMember(user, staff);
   const isOrderTaker = isOrderTakerUser(user, currentStaff);
 
   const isTakeaway = tableId === 'takeaway';
@@ -269,13 +265,7 @@ export default function TableOrderScreen() {
   const seatingType = table ? getTableSeatingType(table) : 'tables';
   const floorName = isTakeaway ? 'Express Counter' : table ? getTableFloor(table) : 'Ground Floor';
 
-  const activeTickets = tickets.filter((t) => {
-    if (t.tableId !== tableId) return false;
-    if (isOrderTaker) {
-      return doesOrderBelongToUser({ server: t.server, serverId: t.serverId }, user, staff);
-    }
-    return true;
-  });
+  const activeTickets = tickets.filter((t) => t.tableId === tableId);
   const isExistingOrderActive = activeTickets.length > 0 || table?.status === 'occupied' || table?.status === 'billed';
 
   const alreadyOrderedItems = useMemo(() => {
@@ -324,8 +314,7 @@ export default function TableOrderScreen() {
     } else if (
       table &&
       table.orders &&
-      table.orders.length > 0 &&
-      (!isOrderTaker || doesOrderBelongToUser({ server: table.server, serverId: table.serverId }, user, staff))
+      table.orders.length > 0
     ) {
       table.orders.forEach((it) => {
         list.push({
@@ -830,7 +819,7 @@ export default function TableOrderScreen() {
                   </View>
                 </TouchableOpacity>
               )}
-              {canMoveTable && table && isExistingOrderActive && (
+              {!isTakeaway && canMoveTable && table && isExistingOrderActive && (
                 <TouchableOpacity style={styles.topActionBtn} onPress={() => setTransferModalVisible(true)}>
                   <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
                   <Text style={styles.topActionText}>Move</Text>
@@ -941,7 +930,7 @@ export default function TableOrderScreen() {
             </TouchableOpacity>
           )}
 
-          {canMoveTable && table && isExistingOrderActive && (
+          {!isTakeaway && canMoveTable && table && isExistingOrderActive && (
             <TouchableOpacity
               style={styles.topActionBtn}
               onPress={() => setTransferModalVisible(true)}
@@ -1476,6 +1465,21 @@ export default function TableOrderScreen() {
                 </Text>
               </TouchableOpacity>
 
+              {!isTakeaway && canMoveTable && table && isExistingOrderActive && (
+                <TouchableOpacity
+                  style={[
+                    styles.secActionBtn,
+                    { backgroundColor: '#52141C', borderColor: '#D4AF37', marginBottom: 4 },
+                  ]}
+                  onPress={() => setTransferModalVisible(true)}
+                >
+                  <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
+                  <Text style={{ fontSize: 13, fontWeight: '900', color: '#F3D179' }}>
+                    Move / Shift Table ({table.name})
+                  </Text>
+                </TouchableOpacity>
+              )}
+
               {alreadyOrderedItems.length > 0 && (
                 <View style={styles.secondaryActionsRow}>
                   <TouchableOpacity
@@ -1567,21 +1571,42 @@ export default function TableOrderScreen() {
                       Total Kitchen Prep Time: {runningPrepEstimate.totalMins} Minutes • Elapsed: {formatCountdownMMSS(elapsedSecs)}
                     </Text>
                   </View>
-                  <View
-                    style={{
-                      backgroundColor: allReady ? '#16A34A' : '#D97706',
-                      paddingHorizontal: 14,
-                      paddingVertical: 8,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', fontVariant: ['tabular-nums'] }}>
-                      {allReady
-                        ? 'ORDER READY TO SERVE'
-                        : remainingSecs > 0
-                          ? `⏱️ TIME LEFT: ${formatCountdownMMSS(remainingSecs)}`
-                          : '⏱️ DUE NOW'}
-                    </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    {!isTakeaway && canMoveTable && table && isExistingOrderActive && (
+                      <TouchableOpacity
+                        style={{
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          gap: 6,
+                          backgroundColor: '#52141C',
+                          borderWidth: 1,
+                          borderColor: '#D4AF37',
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                        }}
+                        onPress={() => setTransferModalVisible(true)}
+                      >
+                        <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
+                        <Text style={{ color: '#F3D179', fontSize: 13, fontWeight: '900' }}>Move Table</Text>
+                      </TouchableOpacity>
+                    )}
+                    <View
+                      style={{
+                        backgroundColor: allReady ? '#16A34A' : '#D97706',
+                        paddingHorizontal: 14,
+                        paddingVertical: 8,
+                        borderRadius: 10,
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 15, fontWeight: '900', fontVariant: ['tabular-nums'] }}>
+                        {allReady
+                          ? 'ORDER READY TO SERVE'
+                          : remainingSecs > 0
+                            ? `⏱️ TIME LEFT: ${formatCountdownMMSS(remainingSecs)}`
+                            : '⏱️ DUE NOW'}
+                      </Text>
+                    </View>
                   </View>
                 </View>
               );

@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { Table } from '../store/restaurantStore';
-import { getTableFloor, getTableSeatingType } from '../constants/floors';
+import { getTableFloor, getTableSeatingType, sortFloors } from '../constants/floors';
 import SeatingTypeIcon from './SeatingTypeIcon';
 
 const MOVE_REASON_PRESETS = [
@@ -39,27 +39,37 @@ export default function MoveTableModal({
   onConfirmMove,
 }: MoveTableModalProps) {
   const [selectedTargetId, setSelectedTargetId] = useState<string | null>(null);
-  const [moveNote, setMoveNote] = useState('');
+  const [moveNote, setMoveNote] = useState('Guest Request');
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedFloorFilter, setSelectedFloorFilter] = useState<string>('All');
   const [errorMsg, setErrorMsg] = useState('');
 
   useEffect(() => {
     if (visible) {
       setSelectedTargetId(null);
-      setMoveNote('');
+      setMoveNote('Guest Request');
       setSearchQuery('');
+      setSelectedFloorFilter('All');
       setErrorMsg('');
     }
   }, [visible, sourceTable?.id]);
 
+  const floorOptions = useMemo(() => {
+    const floors = Array.from(new Set(availableTables.map((t) => getTableFloor(t)))).filter(Boolean);
+    return ['All', ...sortFloors(floors)];
+  }, [availableTables]);
+
   const filteredTables = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
     return availableTables.filter((t) => {
+      const floor = getTableFloor(t);
+      if (selectedFloorFilter !== 'All' && floor.toLowerCase() !== selectedFloorFilter.toLowerCase()) {
+        return false;
+      }
       if (!q) return true;
-      const floor = getTableFloor(t).toLowerCase();
-      return t.name.toLowerCase().includes(q) || floor.includes(q);
+      return t.name.toLowerCase().includes(q) || floor.toLowerCase().includes(q);
     });
-  }, [availableTables, searchQuery]);
+  }, [availableTables, searchQuery, selectedFloorFilter]);
 
   const selectedTarget = useMemo(
     () => availableTables.find((t) => t.id === selectedTargetId) || null,
@@ -92,11 +102,7 @@ export default function MoveTableModal({
       setErrorMsg('Pehle destination (khali) table select karein.');
       return;
     }
-    const cleanNote = moveNote.trim();
-    if (!cleanNote) {
-      setErrorMsg('Table move karne ki wajah / note likhein (ya upar quick reason select karein) taake System Log mein record ho.');
-      return;
-    }
+    const cleanNote = moveNote.trim() || 'Guest Request';
     onConfirmMove(selectedTarget, cleanNote);
   };
 
@@ -126,7 +132,7 @@ export default function MoveTableModal({
             </TouchableOpacity>
           </View>
 
-          <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          <ScrollView style={{ maxHeight: 560 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
             {/* Step 1: Select Destination Available Table */}
             <View style={styles.sectionHeaderRow}>
               <Text style={styles.sectionLabel}>1. SELECT AVAILABLE DESTINATION TABLE ({filteredTables.length})</Text>
@@ -148,57 +154,96 @@ export default function MoveTableModal({
               )}
             </View>
 
+            {floorOptions.length > 1 && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 6, paddingBottom: 8 }}
+              >
+                {floorOptions.map((fl) => {
+                  const active = selectedFloorFilter.toLowerCase() === fl.toLowerCase();
+                  return (
+                    <TouchableOpacity
+                      key={fl}
+                      style={[
+                        styles.presetChip,
+                        active && styles.presetChipActive,
+                      ]}
+                      onPress={() => setSelectedFloorFilter(fl)}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[
+                          styles.presetChipText,
+                          active && styles.presetChipTextActive,
+                        ]}
+                      >
+                        {fl === 'All' ? `All Floors (${availableTables.length})` : fl}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            )}
+
             {filteredTables.length === 0 ? (
               <View style={styles.emptyBox}>
                 <Ionicons name="business-outline" size={28} color="#CBD5E1" />
                 <Text style={styles.emptyText}>No available tables match your search.</Text>
               </View>
             ) : (
-              <View style={styles.tableGrid}>
-                {filteredTables.map((t) => {
-                  const isSelected = t.id === selectedTargetId;
-                  const sType = getTableSeatingType(t);
-                  const fName = getTableFloor(t);
-                  return (
-                    <TouchableOpacity
-                      key={t.id}
-                      style={[styles.tableTile, isSelected && styles.tableTileSelected]}
-                      onPress={() => {
-                        setSelectedTargetId(t.id);
-                        setErrorMsg('');
-                      }}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.tableTileTop}>
-                        <SeatingTypeIcon
-                          type={sType}
-                          size={15}
-                          color={isSelected ? '#F3D179' : '#52141C'}
-                        />
-                        {isSelected && <Ionicons name="checkmark-circle" size={16} color="#F3D179" />}
-                      </View>
-                      <Text
-                        style={[styles.tableTileName, isSelected && styles.tableTileNameSelected]}
-                        numberOfLines={1}
+              <ScrollView
+                style={{ maxHeight: 230 }}
+                nestedScrollEnabled
+                showsVerticalScrollIndicator={true}
+                keyboardShouldPersistTaps="handled"
+              >
+                <View style={styles.tableGrid}>
+                  {filteredTables.map((t) => {
+                    const isSelected = t.id === selectedTargetId;
+                    const sType = getTableSeatingType(t);
+                    const fName = getTableFloor(t);
+                    return (
+                      <TouchableOpacity
+                        key={t.id}
+                        style={[styles.tableTile, isSelected && styles.tableTileSelected]}
+                        onPress={() => {
+                          setSelectedTargetId(t.id);
+                          setErrorMsg('');
+                        }}
+                        activeOpacity={0.8}
                       >
-                        {t.name}
-                      </Text>
-                      <Text
-                        style={[styles.tableTileMeta, isSelected && styles.tableTileMetaSelected]}
-                        numberOfLines={1}
-                      >
-                        {fName} • {t.seats}G
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
+                        <View style={styles.tableTileTop}>
+                          <SeatingTypeIcon
+                            type={sType}
+                            size={15}
+                            color={isSelected ? '#F3D179' : '#52141C'}
+                          />
+                          {isSelected && <Ionicons name="checkmark-circle" size={16} color="#F3D179" />}
+                        </View>
+                        <Text
+                          style={[styles.tableTileName, isSelected && styles.tableTileNameSelected]}
+                          numberOfLines={1}
+                        >
+                          {t.name}
+                        </Text>
+                        <Text
+                          style={[styles.tableTileMeta, isSelected && styles.tableTileMetaSelected]}
+                          numberOfLines={1}
+                        >
+                          {fName} • {t.seats}G
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </ScrollView>
             )}
 
             {/* Step 2: Move Note / Reason (Logged to System Logs & KDS) */}
-            <View style={[styles.sectionHeaderRow, { marginTop: 14 }]}>
+            <View style={[styles.sectionHeaderRow, { marginTop: 12 }]}>
               <Text style={styles.sectionLabel}>2. MOVE NOTE / REASON (RECORDED IN SYSTEM LOGS)</Text>
-              <Text style={styles.requiredBadge}>REQUIRED</Text>
+              <Text style={styles.requiredBadge}>LOGGED</Text>
             </View>
 
             <View style={styles.presetsWrap}>
@@ -259,7 +304,7 @@ export default function MoveTableModal({
             <TouchableOpacity
               style={[
                 styles.confirmBtn,
-                (!selectedTarget || !moveNote.trim()) && styles.confirmBtnDisabled,
+                !selectedTarget && styles.confirmBtnDisabled,
               ]}
               onPress={handleConfirm}
               activeOpacity={0.85}

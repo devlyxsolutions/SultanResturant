@@ -19,6 +19,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import FullscreenButton from '../components/FullscreenButton';
 import InvoiceComponent, { formatStaffWithExactRole, printInvoiceReceipt } from '../components/Invoice';
+import MoveTableModal from '../components/MoveTableModal';
 import PermissionDeniedScreen from '../components/PermissionDeniedScreen';
 import SeatingTypeIcon from '../components/SeatingTypeIcon';
 import SultanLogo from '../components/SultanLogo';
@@ -43,6 +44,7 @@ import {
   MenuItem,
   OrderItem,
   Payment,
+  Table,
   useAuthStore,
   useDiscountStore,
   useRestaurantStore,
@@ -284,12 +286,14 @@ export default function POSTerminalScreen({
   const saveInvoice = useRestaurantStore((state) => state.saveInvoice);
   const placeOrder = useRestaurantStore((state) => state.placeOrder);
   const settleBill = useRestaurantStore((state) => state.settleBill);
+  const transferTable = useRestaurantStore((state) => state.transferTable);
   const markTableBilled = useRestaurantStore((state) => state.markTableBilled);
   const dismissTicket = useRestaurantStore((state) => state.dismissTicket);
   const clearTableTickets = useRestaurantStore((state) => state.clearTableTickets);
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
   const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const [movingSourceTable, setMovingSourceTable] = useState<Table | null>(null);
   const activeRunningTickets = useMemo(
     () => tickets.filter((t) => t && t.status !== 'served'),
     [tickets]
@@ -2556,6 +2560,27 @@ export default function POSTerminalScreen({
                         </View>
                       </TouchableOpacity>
 
+                      {selectedTableObj && (selectedTableObj.status === 'occupied' || selectedTableObj.status === 'billed' || tickets.some((tk) => tk.tableId === selectedTableObj.id)) && (
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 5,
+                            backgroundColor: '#52141C',
+                            borderWidth: 1,
+                            borderColor: '#D4AF37',
+                            paddingHorizontal: 11,
+                            paddingVertical: 9,
+                            borderRadius: 10,
+                          }}
+                          onPress={() => setMovingSourceTable(selectedTableObj)}
+                          {...(Platform.OS === 'web' ? ({ title: 'Move / Transfer Table' } as any) : {})}
+                        >
+                          <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
+                          <Text style={{ color: '#F3D179', fontSize: 12.5, fontWeight: '900' }}>Move Table</Text>
+                        </TouchableOpacity>
+                      )}
+
                       {selectedTableObj && (
                         <TouchableOpacity
                           style={styles.releaseTableIconBtn}
@@ -3100,6 +3125,22 @@ export default function POSTerminalScreen({
 
                         {/* Action Buttons */}
                         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                          {(() => {
+                            const sourceTbl = t.tableId ? tables.find((tbl) => tbl.id === t.tableId) : undefined;
+                            if (!sourceTbl) return null;
+                            return (
+                              <TouchableOpacity
+                                style={[
+                                  styles.runningActionBtn,
+                                  { backgroundColor: '#52141C', borderColor: '#D4AF37', paddingHorizontal: 12, height: 38, flexDirection: 'row', gap: 5 },
+                                ]}
+                                onPress={() => setMovingSourceTable(sourceTbl)}
+                              >
+                                <Ionicons name="swap-horizontal" size={15} color="#F3D179" />
+                                <Text style={{ fontSize: 12.5, fontWeight: '900', color: '#F3D179' }}>Move Table</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
                           <TouchableOpacity
                             style={[styles.runningActionBtn, { paddingHorizontal: 12, height: 38, flexDirection: 'row', gap: 6 }]}
                             onPress={() => handlePrintPendingSlipForTicket(t)}
@@ -3456,6 +3497,32 @@ export default function POSTerminalScreen({
                                 : 'Occupied'
                             : 'Available'}
                       </Text>
+                    )}
+                    {isBusy && !primaryTable && (
+                      <TouchableOpacity
+                        style={{
+                          marginTop: 6,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: 4,
+                          backgroundColor: '#52141C',
+                          borderWidth: 1,
+                          borderColor: '#D4AF37',
+                          borderRadius: 7,
+                          paddingVertical: 5,
+                          paddingHorizontal: 8,
+                        }}
+                        onPress={(e) => {
+                          e.stopPropagation?.();
+                          setTableModalVisible(false);
+                          setMovingSourceTable(t);
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        <Ionicons name="swap-horizontal" size={12} color="#F3D179" />
+                        <Text style={{ fontSize: 11, fontWeight: '900', color: '#F3D179' }}>Move Table</Text>
+                      </TouchableOpacity>
                     )}
                   </TouchableOpacity>
                 );
@@ -4080,6 +4147,22 @@ export default function POSTerminalScreen({
                         </View>
 
                         <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                          {(() => {
+                            const sourceTbl = t.tableId ? tables.find((tbl) => tbl.id === t.tableId) : undefined;
+                            if (!sourceTbl) return null;
+                            return (
+                              <TouchableOpacity
+                                style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#D4AF37', flexDirection: 'row', gap: 4 }]}
+                                onPress={() => {
+                                  setPendingOrdersModalVisible(false);
+                                  setMovingSourceTable(sourceTbl);
+                                }}
+                              >
+                                <Ionicons name="swap-horizontal" size={13} color="#F3D179" />
+                                <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#F3D179' }}>Move</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
                           <TouchableOpacity
                             style={styles.runningActionBtn}
                             onPress={() => handlePrintPendingSlipForTicket(t)}
@@ -4259,6 +4342,30 @@ export default function POSTerminalScreen({
           </View>
         </Modal>
       )}
+      {/* Move / Transfer Table Modal (Universal Cashier & Manager Access) */}
+      <MoveTableModal
+        visible={!!movingSourceTable}
+        sourceTable={movingSourceTable}
+        availableTables={tables.filter(
+          (t) => t.id !== movingSourceTable?.id && t.status === 'available'
+        )}
+        onClose={() => setMovingSourceTable(null)}
+        onConfirmMove={(targetTable, note) => {
+          if (!movingSourceTable) return;
+          const fromName = movingSourceTable.name;
+          const fromId = movingSourceTable.id;
+          const movedBy = user?.name || roleName || 'Cashier';
+          transferTable(fromId, targetTable.id, note, movedBy);
+          if (selectedTableId === fromId) {
+            setSelectedTableId(targetTable.id);
+          }
+          broadcastImmediately();
+          setMovingSourceTable(null);
+          const msg = `Moved ${fromName} ➔ ${targetTable.name}\nNote: ${note} (Logged in System Logs)`;
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Table Moved', msg);
+        }}
+      />
     </SafeAreaView>
   );
 }

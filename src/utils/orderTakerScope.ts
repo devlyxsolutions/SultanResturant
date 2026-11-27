@@ -52,6 +52,54 @@ export function isOrderTakerUser(
 }
 
 /**
+ * Finds the exact staff record matching the logged-in user in strict priority order:
+ * 1. Exact staffId match
+ * 2. Exact user.id match
+ * 3. Case-insensitive username match
+ * 4. Normalized name match (preferring records with system access enabled so duplicate
+ *    kitchen/waiter names like "Bilal" or "Qasim" never resolve to the wrong inactive record).
+ */
+export function findActiveStaffMember(
+  user?: User | null,
+  staffList: StaffMember[] = []
+): StaffMember | undefined {
+  if (!user || !Array.isArray(staffList) || staffList.length === 0) return undefined;
+
+  if (user.staffId) {
+    const byStaffId = staffList.find((s) => s.id === user.staffId);
+    if (byStaffId) return byStaffId;
+  }
+
+  if (user.id) {
+    const byId = staffList.find((s) => s.id === user.id);
+    if (byId) return byId;
+  }
+
+  if (user.username) {
+    const uLower = user.username.trim().toLowerCase();
+    const byUsername = staffList.find(
+      (s) => s.username && s.username.trim().toLowerCase() === uLower
+    );
+    if (byUsername) return byUsername;
+  }
+
+  if (user.name) {
+    const normUser = normalizeName(user.name);
+    const byAccessName = staffList.find(
+      (s) => s.hasSystemAccess !== false && s.name && normalizeName(s.name) === normUser
+    );
+    if (byAccessName) return byAccessName;
+
+    const byAnyName = staffList.find(
+      (s) => s.name && normalizeName(s.name) === normUser
+    );
+    if (byAnyName) return byAnyName;
+  }
+
+  return undefined;
+}
+
+/**
  * Resolves the canonical identity (staffId, username, name) of the logged-in user.
  */
 export function resolveOrderTakerIdentity(
@@ -60,13 +108,7 @@ export function resolveOrderTakerIdentity(
 ): { staffId: string; username: string; name: string } {
   if (!user) return { staffId: '', username: '', name: '' };
 
-  const matchedStaff = staffList.find(
-    (s) =>
-      (user.staffId && s.id === user.staffId) ||
-      (user.id && s.id === user.id) ||
-      (user.username && s.username && s.username.trim().toLowerCase() === user.username.trim().toLowerCase()) ||
-      (user.name && s.name && normalizeName(s.name) === normalizeName(user.name))
-  );
+  const matchedStaff = findActiveStaffMember(user, staffList);
 
   return {
     staffId: (matchedStaff?.id || user.staffId || user.id || '').trim(),

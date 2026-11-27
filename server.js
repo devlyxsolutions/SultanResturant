@@ -3182,7 +3182,7 @@ const SERVER_FULL_CRUD_PERMS = Object.keys(SERVER_EMPTY_CRUD_PERMS).reduce((acc,
 const SERVER_EMPTY_POS_PERMS = {
   posCanDineIn: false, posCanTakeaway: false, posCanDelivery: false,
   posCanSendKot: false, posCanSettleBill: false, posCanPrintUnpaidBill: false,
-  posCanReleaseTable: false, posCanDismissTicket: false, posCanSplitPayment: false,
+  posCanReleaseTable: false, posCanMoveTable: true, posCanDismissTicket: false, posCanSplitPayment: false,
   posCanManageCustomers: false,
 };
 
@@ -3258,12 +3258,18 @@ function getServerRoleDefaultPermissions(role) {
 function normalizeServerRole(role) {
   if (!role || typeof role !== 'object') return role;
   const defaults = getServerRoleDefaultPermissions(role);
+  const baseNorm = String(role.baseRole || '').toLowerCase();
+  const isPureStationRole =
+    baseNorm === 'kitchen' || baseNorm === 'juicebar' || baseNorm === 'playland';
   const perms = {
     ...defaults,
     ...(role.permissions || {}),
   };
   if (role.id === 'role-admin') {
     perms.canAccessStaff = true;
+  }
+  if (!isPureStationRole) {
+    perms.posCanMoveTable = true;
   }
   return {
     ...role,
@@ -5874,7 +5880,7 @@ async function handleRequest(req, res) {
         webBundleHash,
         exeHash,
         apkHash,
-        apkVersion: 41,
+        apkVersion: 42,
         apkDownloadUrl: '/api/tablet-update/Sultan-POS-Tablet.apk',
       }));
       return;
@@ -7912,8 +7918,8 @@ async function handleRequest(req, res) {
 
     const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
-    // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tickets, and tables MUST be processed first in order)
-    const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'tableMoveLogs', 'cancelledOrderLogs', 'lastTableMoveAlert', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+    // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tableMoveLogs, tickets, and tables MUST be processed in order)
+    const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
     let modified = false;
 
     if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
@@ -7976,6 +7982,19 @@ async function handleRequest(req, res) {
       serverState.deletedTicketIds = [];
     }
     const incomingDeleted = Array.isArray(partialState.deletedTicketIds) ? partialState.deletedTicketIds : [];
+    const incomingTicketMapForRetire = new Map(
+      (Array.isArray(partialState.tickets) ? partialState.tickets : [])
+        .filter(tk => tk && tk.id)
+        .map(tk => [tk.id, tk])
+    );
+    const incomingMovedFromIds = new Set(
+      [
+        ...(Array.isArray(partialState.tableMoveLogs) ? partialState.tableMoveLogs : []),
+        ...(Array.isArray(serverState.tableMoveLogs) ? serverState.tableMoveLogs : []).filter(l => l && Date.now() - (l.timestamp || 0) < 120000),
+      ]
+        .filter(l => l && l.fromTableId)
+        .map(l => l.fromTableId)
+    );
     const autoRetiredTicketIds = [];
     if (Array.isArray(partialState.tables) && Array.isArray(serverState.tables)) {
       const currTableMap = new Map(serverState.tables.map(t => [t.id, t]));
@@ -7983,6 +8002,11 @@ async function handleRequest(req, res) {
         if (!incT || !incT.id) continue;
         const currT = currTableMap.get(incT.id);
         if (!currT) continue;
+        // Skip retiring tickets when the table was vacated via Move Table rather than settled/billed
+        const isMoveVacated =
+          (incT.status === 'available' && incT.lastMovedAt && (!incT.lastSettledAt || incT.lastMovedAt >= incT.lastSettledAt)) ||
+          (incT.status === 'available' && incomingMovedFromIds.has(incT.id));
+        if (isMoveVacated) continue;
         const newlyBilled = currT.status !== 'billed' && incT.status === 'billed' && incT.isPaid;
         const newlySettledFromBilled = currT.status === 'billed' && incT.status === 'available';
         const newlySettledByTimestamp =
@@ -7994,6 +8018,10 @@ async function handleRequest(req, res) {
           const cutoff = incT.lastSettledAt || Date.now();
           for (const tk of (serverState.tickets || [])) {
             if (tk && tk.tableId === incT.id && (!tk.timePlaced || tk.timePlaced <= cutoff + 2000)) {
+              const incTk = incomingTicketMapForRetire.get(tk.id);
+              if (incTk && incTk.tableId && incTk.tableId !== incT.id && (incTk.lastMovedAt || 0) > 0) {
+                continue;
+              }
               autoRetiredTicketIds.push(tk.id);
             }
           }
@@ -8035,6 +8063,23 @@ async function handleRequest(req, res) {
               const extRank = STATUS_RANK[ext.status] ?? 0;
               const incRank = STATUS_RANK[inc.status] ?? 0;
               let chosen = extRank > incRank ? { ...ext } : { ...inc };
+
+              // Preserve latest Move Table relocation regardless of status rank
+              const extMovedAt = Number(ext.lastMovedAt) || 0;
+              const incMovedAt = Number(inc.lastMovedAt) || 0;
+              if (incMovedAt > extMovedAt) {
+                chosen.tableId = inc.tableId;
+                chosen.tableName = inc.tableName;
+                chosen.notes = inc.notes;
+                chosen.lastMovedAt = incMovedAt;
+                chosen.movedFromTableId = inc.movedFromTableId || ext.tableId;
+              } else if (extMovedAt > incMovedAt) {
+                chosen.tableId = ext.tableId;
+                chosen.tableName = ext.tableName;
+                chosen.notes = ext.notes;
+                chosen.lastMovedAt = extMovedAt;
+                chosen.movedFromTableId = ext.movedFromTableId || inc.tableId;
+              }
 
               // Merge item-level ready/served states
               if (Array.isArray(ext.items) && Array.isArray(inc.items)) {
@@ -8127,6 +8172,30 @@ async function handleRequest(req, res) {
             for (const tk of deduplicatedMerged) {
               if (tk && Array.isArray(tk.items) && tk.items.length > 0) {
                 printerHelper.normalizeTicketStations(tk, serverState.menuItems || [], autoRouteBev);
+              }
+            }
+          }
+
+          // Enforce recent table moves (within last 5 mins) so stale clients cannot snap moved KOTs back to their old table
+          const recentMoveWindowMs = 5 * 60 * 1000;
+          const nowMoveCheck = Date.now();
+          const recentMoveLogs = (Array.isArray(serverState.tableMoveLogs) ? serverState.tableMoveLogs : [])
+            .filter(l => l && l.timestamp && nowMoveCheck - l.timestamp <= recentMoveWindowMs)
+            .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+          if (recentMoveLogs.length > 0) {
+            for (const tk of deduplicatedMerged) {
+              if (!tk || !tk.id) continue;
+              for (const mLog of recentMoveLogs) {
+                const listedTicket = Array.isArray(mLog.ticketIds) && mLog.ticketIds.includes(tk.id);
+                const matchesOldTable = tk.tableId === mLog.fromTableId && (mLog.timestamp || 0) >= (tk.lastMovedAt || tk.timePlaced || 0);
+                if (listedTicket && tk.tableId === mLog.fromTableId && (mLog.timestamp || 0) > (tk.lastMovedAt || 0)) {
+                  tk.tableId = mLog.toTableId;
+                  tk.tableName = `${mLog.toTableName} (from ${mLog.fromTableName})`;
+                  tk.lastMovedAt = mLog.timestamp;
+                  tk.movedFromTableId = mLog.fromTableId;
+                } else if (!listedTicket && matchesOldTable && Array.isArray(mLog.ticketIds) && mLog.ticketIds.length === 0) {
+                  // No ticketIds recorded on legacy move log: do not blindly reassign unless explicitly listed
+                }
               }
             }
           }

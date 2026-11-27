@@ -456,7 +456,7 @@ const EMPTY_PERMISSIONS: RolePermissions = {
   posCanSettleBill: false,
   posCanPrintUnpaidBill: false,
   posCanReleaseTable: false,
-  posCanMoveTable: false,
+  posCanMoveTable: true,
   posCanDismissTicket: false,
   posCanSplitPayment: false,
   posCanManageCustomers: false,

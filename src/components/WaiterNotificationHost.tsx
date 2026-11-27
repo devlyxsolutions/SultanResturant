@@ -16,7 +16,11 @@ import { useAuthStore } from '../store';
 import { getTableFloor } from '../constants/floors';
 import { broadcastImmediately } from '../services/syncService';
 import { playNotificationSound } from '../../modules/call-detector/src';
-import { doesOrderBelongToUser, isOrderTakerUser } from '../utils/orderTakerScope';
+import {
+  doesOrderBelongToUser,
+  findActiveStaffMember,
+  isOrderTakerUser,
+} from '../utils/orderTakerScope';
 
 // Reusable Web Audio synth context
 let sharedAudioCtx: AudioContext | null = null;
@@ -139,11 +143,7 @@ export default function WaiterNotificationHost() {
   const dismissTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Order Taker authorized floors lookup
-  const currentStaff = staff.find(
-    (s) =>
-      (user?.staffId && s.id === user.staffId) ||
-      (user?.name && s.name.trim().toLowerCase() === user.name.trim().toLowerCase())
-  );
+  const currentStaff = findActiveStaffMember(user, staff);
 
   const isOrderTaker = useMemo(() => isOrderTakerUser(user, currentStaff), [user, currentStaff]);
   const userRoleLower = (user?.role || '').toLowerCase();
