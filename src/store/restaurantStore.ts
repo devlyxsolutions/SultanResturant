@@ -3660,11 +3660,11 @@ export const useRestaurantStore = create<RestaurantState>()(
           if (invTime >= dayStartAt) {
             if (typeof inv.invoiceSeq === 'number' && inv.invoiceSeq > maxExistingSeq) {
               maxExistingSeq = inv.invoiceSeq;
-            } else {
-              const m = String(inv.dailyInvoiceNumber || inv.id).match(/^INV-(\d+)$/i);
+            } else if (inv.dailyInvoiceNumber) {
+              const m = String(inv.dailyInvoiceNumber).match(/^INV-(\d+)$/i);
               if (m) {
                 const n = Number(m[1]);
-                if (n > maxExistingSeq) maxExistingSeq = n;
+                if (n > maxExistingSeq && n < 10000) maxExistingSeq = n;
               }
             }
           }

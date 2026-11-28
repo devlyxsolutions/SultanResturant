@@ -8751,17 +8751,19 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
     const curSeq = serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} };
     const incDay = Number(incSeq.dayStartAt || 0);
     const curDay = Number(curSeq.dayStartAt || 0);
+    const rawIncLast = Number(incSeq.lastSeq || 0);
+    const safeIncLast = rawIncLast < 10000 ? rawIncLast : Number(curSeq.lastSeq || 0);
     if (incDay > curDay + 600000) {
       serverState.invoiceSequenceState = {
         dayStartAt: incDay,
-        lastSeq: Number(incSeq.lastSeq || 0),
+        lastSeq: safeIncLast,
         pendingByTableId: { ...(incSeq.pendingByTableId || {}) },
       };
       modified = true;
     } else if (incDay === curDay || (curDay > 0 && Math.abs(incDay - curDay) <= 600000)) {
       serverState.invoiceSequenceState = {
         dayStartAt: curDay || incDay,
-        lastSeq: Math.max(Number(curSeq.lastSeq || 0), Number(incSeq.lastSeq || 0)),
+        lastSeq: Math.max(Number(curSeq.lastSeq || 0), safeIncLast),
         pendingByTableId: { ...(curSeq.pendingByTableId || {}), ...(incSeq.pendingByTableId || {}) },
       };
       modified = true;
