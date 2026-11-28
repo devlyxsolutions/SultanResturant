@@ -42,6 +42,8 @@ export type Table = {
   serverId?: string;
   billTotal?: number;
   orders?: OrderItem[];
+  extraCharge?: number;
+  extraChargeReason?: string;
   isPaid?: boolean;
   lastInvoiceId?: string;
   billedAt?: number;
@@ -426,6 +428,8 @@ export type Invoice = {
   discountEventTitle?: string;
   tax: number;
   serviceCharge?: number;
+  extraCharge?: number;
+  extraChargeReason?: string;
   total: number;
   payments: Payment[];
   tenderedAmount?: number;
@@ -619,7 +623,14 @@ type RestaurantState = {
   bumpTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   updateTicketStatus: (ticketId: string, status: Ticket['status'], station?: 'main' | 'juice') => void;
   serveTableTickets: (tableId: string) => void;
-  markTableBilled: (tableId: string, invoiceId?: string, updatedOrders?: OrderItem[], updatedBillTotal?: number) => void;
+  markTableBilled: (
+    tableId: string,
+    invoiceId?: string,
+    updatedOrders?: OrderItem[],
+    updatedBillTotal?: number,
+    extraCharge?: number,
+    extraChargeReason?: string
+  ) => void;
   reconcileTableCartItems: (
     tableId: string,
     finalCart: OrderItem[],
@@ -2441,7 +2452,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         };
       }),
 
-      markTableBilled: (tableId, invoiceId, updatedOrders, updatedBillTotal) => set((state) => {
+      markTableBilled: (tableId, invoiceId, updatedOrders, updatedBillTotal, extraCharge, extraChargeReason) => set((state) => {
         markLocalTableMutated(tableId);
         const now = Date.now();
 
@@ -2456,6 +2467,11 @@ export const useRestaurantStore = create<RestaurantState>()(
                 : Array.isArray(updatedOrders)
                   ? updatedOrders.reduce((s, it) => s + (it.price || 0) * (it.qty || 1), 0)
                   : (t.billTotal || 0);
+            const hasExtraArg = typeof extraCharge === 'number';
+            const resolvedExtra = hasExtraArg ? Math.max(0, Number(extraCharge) || 0) : (t.extraCharge || 0);
+            const resolvedReason = hasExtraArg
+              ? (resolvedExtra > 0 ? String(extraChargeReason || '').trim() || undefined : undefined)
+              : t.extraChargeReason;
             return {
               ...t,
               status: 'billed' as const,
@@ -2465,6 +2481,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               billedAt: now,
               orders: nextOrders,
               billTotal: nextBillTotal,
+              extraCharge: resolvedExtra > 0 ? resolvedExtra : undefined,
+              extraChargeReason: resolvedReason,
               ordersUpdatedAt: Array.isArray(updatedOrders) ? now : (t.ordersUpdatedAt || now),
             };
           }),
@@ -2693,6 +2711,8 @@ export const useRestaurantStore = create<RestaurantState>()(
               server: undefined,
               serverId: undefined,
               orders: [],
+              extraCharge: undefined,
+              extraChargeReason: undefined,
               isPaid: false,
               lastInvoiceId: undefined,
               occupiedSince: undefined,

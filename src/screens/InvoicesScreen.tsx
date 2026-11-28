@@ -351,6 +351,10 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     if ((inv.discount || 0) > 0) {
       text += `${pad('Discount:', 20)}${padRight(`- Rs. ${(inv.discount || 0).toLocaleString()}`, 12)}\n`;
     }
+    if ((inv.extraCharge || 0) > 0) {
+      const label = inv.extraChargeReason ? `Extra (${inv.extraChargeReason}):` : 'Extra Charge:';
+      text += `${pad(label.substring(0, 19), 20)}${padRight(`+ Rs. ${(inv.extraCharge || 0).toLocaleString()}`, 12)}\n`;
+    }
     text += `${pad('GST Tax (16%):', 20)}${padRight(`Rs. ${(inv.tax || 0).toLocaleString()}`, 12)}\n`;
     text += '================================\n';
     text += `${pad('NET TOTAL:', 20)}${padRight(`Rs. ${(inv.total || 0).toLocaleString()}`, 12)}\n`;
@@ -395,13 +399,13 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       return;
     }
 
-    const headers = 'Invoice ID,Date,Status,Order Type,Table,Server,Customer Name,Customer Phone,Items Summary,Subtotal,Discount,Tax,Total,Payments\n';
+    const headers = 'Invoice ID,Date,Status,Order Type,Table,Server,Customer Name,Customer Phone,Items Summary,Subtotal,Discount,Extra Charge,Extra Reason,Tax,Total,Payments\n';
     const rows = filteredInvoices
       .map((inv) => {
         const itemsStr = (inv.items || []).map((it) => `${it.qty}x ${it.name}`).join(' | ');
         const paymentsStr = (inv.payments || []).map((p) => `${p.type}: Rs.${p.amount}`).join('; ');
         const dateStr = formatDateTime(inv.timeSettled || inv.timePlaced);
-        return `"${inv.dailyInvoiceNumber || inv.id}","${dateStr}","${inv.status || 'settled'}","${inv.orderType}","${inv.tableName || 'N/A'}","${inv.server || 'N/A'}","${inv.customer?.name || 'Walk-in'}","${inv.customer?.phone || 'N/A'}","${itemsStr}","${inv.subTotal || 0}","${inv.discount || 0}","${inv.tax || 0}","${inv.total || 0}","${paymentsStr}"`;
+        return `"${inv.dailyInvoiceNumber || inv.id}","${dateStr}","${inv.status || 'settled'}","${inv.orderType}","${inv.tableName || 'N/A'}","${inv.server || 'N/A'}","${inv.customer?.name || 'Walk-in'}","${inv.customer?.phone || 'N/A'}","${itemsStr}","${inv.subTotal || 0}","${inv.discount || 0}","${inv.extraCharge || 0}","${inv.extraChargeReason || ''}","${inv.tax || 0}","${inv.total || 0}","${paymentsStr}"`;
       })
       .join('\n');
 
@@ -1244,6 +1248,16 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                             </Text>
                           </View>
                         )}
+                        {(selectedInvoice.extraCharge || 0) > 0 && (
+                          <View style={styles.calcRow}>
+                            <Text style={[styles.calcKey, { color: '#B45309' }]}>
+                              Extra{selectedInvoice.extraChargeReason ? ` (${selectedInvoice.extraChargeReason})` : ''}
+                            </Text>
+                            <Text style={[styles.calcVal, { color: '#B45309' }]}>
+                              + Rs. {(selectedInvoice.extraCharge || 0).toLocaleString()}
+                            </Text>
+                          </View>
+                        )}
                         <View style={styles.calcRow}>
                           <Text style={styles.calcKey}>GST Tax (16%)</Text>
                           <Text style={styles.calcVal}>Rs. {(selectedInvoice.tax || 0).toLocaleString()}</Text>
@@ -1415,6 +1429,14 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                           <View style={styles.thermalSummaryRow}>
                             <Text style={[styles.thermalSummaryKey, isSmallMobile && { fontSize: 10 }]}>Discount:</Text>
                             <Text style={[styles.thermalSummaryVal, isSmallMobile && { fontSize: 10 }]}>- Rs. {(selectedInvoice.discount || 0).toLocaleString()}</Text>
+                          </View>
+                        )}
+                        {(selectedInvoice.extraCharge || 0) > 0 && (
+                          <View style={styles.thermalSummaryRow}>
+                            <Text style={[styles.thermalSummaryKey, isSmallMobile && { fontSize: 10 }]}>
+                              Extra{selectedInvoice.extraChargeReason ? ` (${selectedInvoice.extraChargeReason})` : ''}:
+                            </Text>
+                            <Text style={[styles.thermalSummaryVal, isSmallMobile && { fontSize: 10 }]}>+ Rs. {(selectedInvoice.extraCharge || 0).toLocaleString()}</Text>
                           </View>
                         )}
                         {(selectedInvoice.tax || 0) > 0 && (

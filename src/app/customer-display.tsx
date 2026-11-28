@@ -458,6 +458,18 @@ export default function CustomerDisplayScreen() {
                 </View>
               )}
 
+              {/* Extra Charge (if any) */}
+              {(state.extraCharge || 0) > 0 && (
+                <View style={styles.calcRow}>
+                  <Text style={[styles.calcLabel, { color: '#D97706' }]}>
+                    Extra{state.extraChargeReason ? ` (${state.extraChargeReason})` : ''}
+                  </Text>
+                  <Text style={[styles.calcValue, { color: '#D97706' }]}>
+                    + Rs. {(state.extraCharge || 0).toLocaleString()}
+                  </Text>
+                </View>
+              )}
+
               {/* Tax / GST (if any) */}
               {state.tax > 0 && (
                 <View style={styles.calcRow}>

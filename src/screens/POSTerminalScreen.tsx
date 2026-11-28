@@ -434,10 +434,13 @@ export default function POSTerminalScreen({
   const [customerAddress, setCustomerAddress] = useState('');
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
 
-  // Discounts & Payments
+  // Discounts & Extra Manual Charges & Payments
   const campaigns = useDiscountStore((state) => state.campaigns) || [];
   const [selectedEventCampaign, setSelectedEventCampaign] = useState<EventDiscount | null>(null);
   const [discountAmount, setDiscountAmount] = useState('0');
+  const [extraChargeAmount, setExtraChargeAmount] = useState('0');
+  const [extraChargeReason, setExtraChargeReason] = useState('');
+  const [extraChargeExpanded, setExtraChargeExpanded] = useState(false);
   const [payments, setPayments] = useState<Payment[]>([{ type: 'cash', amount: 0 }]);
   const [activePaymentIndex, setActivePaymentIndex] = useState<number>(0);
 
@@ -559,6 +562,8 @@ export default function POSTerminalScreen({
               if (typeof draft.orderNotes === 'string') setOrderNotes(draft.orderNotes);
               if (typeof draft.selectedServer === 'string') setSelectedServer(draft.selectedServer);
               if (typeof draft.discountAmount === 'string') setDiscountAmount(draft.discountAmount);
+              if (typeof draft.extraChargeAmount === 'string') setExtraChargeAmount(draft.extraChargeAmount);
+              if (typeof draft.extraChargeReason === 'string') setExtraChargeReason(draft.extraChargeReason);
             }
           } catch { }
         }
@@ -582,10 +587,12 @@ export default function POSTerminalScreen({
       orderNotes,
       selectedServer,
       discountAmount,
+      extraChargeAmount,
+      extraChargeReason,
       savedAt: Date.now(),
     };
     AsyncStorage.setItem('@sultan_pos_draft_cart_v1', JSON.stringify(payload)).catch(() => { });
-  }, [cart, loadedCart, selectedTableId, orderType, orderNotes, selectedServer, discountAmount]);
+  }, [cart, loadedCart, selectedTableId, orderType, orderNotes, selectedServer, discountAmount, extraChargeAmount, extraChargeReason]);
 
   const availableFloors = useMemo(() => {
     const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);
@@ -742,6 +749,15 @@ export default function POSTerminalScreen({
       setCart([]);
       setLoadedCart([]);
     }
+
+    if (targetTable && (targetTable.extraCharge || 0) > 0) {
+      setExtraChargeAmount(String(targetTable.extraCharge));
+      setExtraChargeReason(targetTable.extraChargeReason || '');
+    } else {
+      setExtraChargeAmount('0');
+      setExtraChargeReason('');
+    }
+    setExtraChargeExpanded(false);
   };
 
   const handleClearSelectedTable = () => {
@@ -756,6 +772,9 @@ export default function POSTerminalScreen({
         setCart([]);
         setLoadedCart([]);
         setSelectedTableId('');
+        setExtraChargeAmount('0');
+        setExtraChargeReason('');
+        setExtraChargeExpanded(false);
       }
     } else {
       Alert.alert('Release Table', confirmMsg, [
@@ -769,6 +788,9 @@ export default function POSTerminalScreen({
             setCart([]);
             setLoadedCart([]);
             setSelectedTableId('');
+            setExtraChargeAmount('0');
+            setExtraChargeReason('');
+            setExtraChargeExpanded(false);
           },
         },
       ]);
@@ -871,13 +893,14 @@ export default function POSTerminalScreen({
   const effectiveTaxRate = systemSettings.taxEnabled ? (systemSettings.taxRatePercent || 0) / 100 : 0;
   const subTotal = cart.reduce((sum, item) => sum + item.price * item.qty, 0);
   const discountVal = parseFloat(discountAmount) || 0;
+  const extraChargeVal = Math.max(0, parseFloat(extraChargeAmount) || 0);
   const afterDiscount = Math.max(0, subTotal - discountVal);
   const serviceCharge = systemSettings.serviceChargeEnabled
     ? afterDiscount * ((systemSettings.serviceChargePercent || 0) / 100)
     : 0;
   const deliveryCharges = orderType === 'delivery' ? (systemSettings.deliveryFeeDefault ?? 150) : 0;
   const tax = afterDiscount * effectiveTaxRate;
-  const rawTotal = afterDiscount + tax + serviceCharge + deliveryCharges;
+  const rawTotal = afterDiscount + extraChargeVal + tax + serviceCharge + deliveryCharges;
   const total = systemSettings.roundTotals ? Math.round(rawTotal) : rawTotal;
 
   const totalPaid = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
@@ -964,6 +987,8 @@ export default function POSTerminalScreen({
       itemCount: hasItems ? cart.reduce((s, i) => s + i.qty, 0) : 0,
       subTotal: hasItems ? subTotal : 0,
       discountVal: hasItems ? discountVal : 0,
+      extraCharge: hasItems ? extraChargeVal : 0,
+      extraChargeReason: hasItems && extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion') : '',
       tax: hasItems ? tax : 0,
       serviceCharge: hasItems ? serviceCharge : 0,
       deliveryCharges: hasItems ? deliveryCharges : 0,
@@ -1001,7 +1026,7 @@ export default function POSTerminalScreen({
     publishCustomerDisplayState(currentState);
     const unsubscribe = subscribeToCustomerDisplay(() => { }, () => getCurrentCfdState());
     return () => unsubscribe();
-  }, [cart, subTotal, discountVal, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, user?.name]);
+  }, [cart, subTotal, discountVal, extraChargeVal, extraChargeReason, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, user?.name]);
 
   const handleOpenCustomerDisplay = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -1325,6 +1350,9 @@ export default function POSTerminalScreen({
     setSelectedTableId('');
     setSelectedEventCampaign(null);
     setDiscountAmount('0');
+    setExtraChargeAmount('0');
+    setExtraChargeReason('');
+    setExtraChargeExpanded(false);
   };
 
   const handleSaveNewCustomer = () => {
@@ -1715,11 +1743,12 @@ export default function POSTerminalScreen({
     if (autoOpenCheckout) {
       setTimeout(() => {
         const ticketSub = ticket.items.reduce((s, it) => s + it.price * it.qty, 0);
+        const ticketExtra = targetTable ? Math.max(0, Number(targetTable.extraCharge || 0)) : 0;
         const ticketTax = ticketSub * effectiveTaxRate;
         const ticketService = systemSettings.serviceChargeEnabled
           ? ticketSub * ((systemSettings.serviceChargePercent || 0) / 100)
           : 0;
-        const rawTicketTotal = ticketSub + ticketTax + ticketService;
+        const rawTicketTotal = ticketSub + ticketExtra + ticketTax + ticketService;
         const ticketTotal = systemSettings.roundTotals ? Math.round(rawTicketTotal) : rawTicketTotal;
         setPayments([{ type: 'cash', amount: ticketTotal }]);
         setCheckoutModalVisible(true);
@@ -1787,6 +1816,8 @@ export default function POSTerminalScreen({
       items: cart,
       subTotal,
       discount: discountVal,
+      extraCharge: extraChargeVal > 0 ? extraChargeVal : undefined,
+      extraChargeReason: extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion / Manual Charge') : undefined,
       tax,
       serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
       total,
@@ -1881,6 +1912,8 @@ export default function POSTerminalScreen({
       itemCount: cart.reduce((s, i) => s + i.qty, 0),
       subTotal,
       discountVal,
+      extraCharge: extraChargeVal,
+      extraChargeReason: extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion') : '',
       tax,
       serviceCharge,
       deliveryCharges,
@@ -1910,6 +1943,9 @@ export default function POSTerminalScreen({
     setOrderNotes('');
     setSelectedEventCampaign(null);
     setDiscountAmount('0');
+    setExtraChargeAmount('0');
+    setExtraChargeReason('');
+    setExtraChargeExpanded(false);
     setCheckoutModalVisible(false);
     setSelectedCustomerId('');
     setSelectedTableId('');
@@ -1960,6 +1996,8 @@ export default function POSTerminalScreen({
       items: cart,
       subTotal,
       discount: discountVal,
+      extraCharge: extraChargeVal > 0 ? extraChargeVal : undefined,
+      extraChargeReason: extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion / Manual Charge') : undefined,
       tax,
       serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
       total,
@@ -1970,14 +2008,25 @@ export default function POSTerminalScreen({
     };
 
     if (selectedTableId) {
-      markTableBilled(selectedTableId, unpaidInvoice.id, cart, subTotal);
+      const resolvedPendingTotal = extraChargeVal > 0 ? total : subTotal;
+      const resolvedExtraReason = extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion / Manual Charge') : undefined;
+      markTableBilled(
+        selectedTableId,
+        unpaidInvoice.id,
+        cart,
+        resolvedPendingTotal,
+        extraChargeVal,
+        resolvedExtraReason
+      );
       postPosAtomicEndpoint('/api/pos/mark-billed', {
         tableId: selectedTableId,
         invoiceId: unpaidInvoice.id,
         dailyInvoiceNumber: unpaidInvoice.id,
         seq: pendingSeq.seq,
         orders: cart,
-        billTotal: subTotal,
+        billTotal: resolvedPendingTotal,
+        extraCharge: extraChargeVal,
+        extraChargeReason: resolvedExtraReason || '',
       }).catch(() => { });
     }
     broadcastImmediately();
@@ -2104,6 +2153,9 @@ export default function POSTerminalScreen({
       setCart([]);
       setLoadedCart([]);
       setOrderNotes('');
+      setExtraChargeAmount('0');
+      setExtraChargeReason('');
+      setExtraChargeExpanded(false);
       setSelectedTableId('');
     }
     postPosAtomicEndpoint('/api/pos/settle-bill', {
@@ -3333,6 +3385,106 @@ export default function POSTerminalScreen({
                       </Text>
                     </View>
 
+                    {/* Fast Inline Manual Extra Charge + Reason (minimal touches, zero popup maze) */}
+                    <View style={styles.summaryLine}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1 }}>
+                        <Text style={styles.summaryLabel}>Extra</Text>
+                        <TouchableOpacity
+                          style={[styles.extraMiniBtn, extraChargeVal > 0 && { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}
+                          onPress={() => setExtraChargeExpanded((prev) => !prev)}
+                        >
+                          <Ionicons name={extraChargeExpanded ? 'chevron-up' : 'add-circle-outline'} size={11} color="#B45309" />
+                          <Text style={styles.extraMiniBtnText}>
+                            {extraChargeVal > 0
+                              ? (extraChargeReason.trim() ? `${extraChargeReason.trim().slice(0, 14)} • Edit` : 'Edit Reason')
+                              : '+ Add Extra'}
+                          </Text>
+                        </TouchableOpacity>
+                        {extraChargeVal > 0 && (
+                          <TouchableOpacity
+                            onPress={() => {
+                              setExtraChargeAmount('0');
+                              setExtraChargeReason('');
+                              setExtraChargeExpanded(false);
+                            }}
+                            style={{ paddingHorizontal: 4, paddingVertical: 2 }}
+                          >
+                            <Ionicons name="close-circle" size={14} color="#DC2626" />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      <Text style={[styles.summaryVal, extraChargeVal > 0 && { color: '#D97706' }]}>
+                        {extraChargeVal > 0 ? `+ Rs. ${extraChargeVal.toLocaleString()}` : 'Rs. 0'}
+                      </Text>
+                    </View>
+
+                    {extraChargeExpanded && (
+                      <View style={styles.extraInlinePanel}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400E' }}>+ Rs.</Text>
+                          <TextInput
+                            style={styles.extraAmtInput}
+                            keyboardType="numeric"
+                            placeholder="0"
+                            placeholderTextColor="#94A3B8"
+                            value={extraChargeAmount === '0' ? '' : extraChargeAmount}
+                            onChangeText={(txt) => setExtraChargeAmount(txt.replace(/[^0-9.]/g, ''))}
+                          />
+                          {[100, 200, 300, 500].map((amt) => (
+                            <TouchableOpacity
+                              key={amt}
+                              style={styles.extraQuickChip}
+                              onPress={() => setExtraChargeAmount(String((parseFloat(extraChargeAmount) || 0) + amt))}
+                            >
+                              <Text style={styles.extraQuickChipText}>+{amt}</Text>
+                            </TouchableOpacity>
+                          ))}
+                          {extraChargeVal > 0 && (
+                            <TouchableOpacity
+                              style={[styles.extraQuickChip, { backgroundColor: '#FEE2E2', borderColor: '#FCA5A5' }]}
+                              onPress={() => {
+                                setExtraChargeAmount('0');
+                                setExtraChargeReason('');
+                              }}
+                            >
+                              <Text style={[styles.extraQuickChipText, { color: '#DC2626' }]}>Clear</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5 }}>
+                          {['Extra Rice', 'Extra Gravy', 'Extra Naan', 'Extra Drink', 'Special Extra'].map((preset) => {
+                            const active = extraChargeReason.trim().toLowerCase() === preset.toLowerCase();
+                            return (
+                              <TouchableOpacity
+                                key={preset}
+                                style={[styles.extraReasonChip, active && styles.extraReasonChipActive]}
+                                onPress={() => setExtraChargeReason(preset)}
+                              >
+                                <Text style={[styles.extraReasonChipText, active && { color: '#FFFFFF' }]}>{preset}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <TextInput
+                            style={styles.extraReasonInput}
+                            placeholder="Reason (e.g. Extra rice dalwae)..."
+                            placeholderTextColor="#94A3B8"
+                            value={extraChargeReason}
+                            onChangeText={setExtraChargeReason}
+                          />
+                          <TouchableOpacity
+                            style={styles.extraDoneBtn}
+                            onPress={() => setExtraChargeExpanded(false)}
+                          >
+                            <Text style={styles.extraDoneBtnText}>Done</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
+
                     {systemSettings.taxEnabled && (
                       <View style={styles.summaryLine}>
                         <Text style={styles.summaryLabel}>
@@ -4326,7 +4478,12 @@ export default function POSTerminalScreen({
                 <View style={styles.checkoutTotalBanner}>
                   <View>
                     <Text style={styles.checkoutTotalLabel}>NET PAYABLE</Text>
-                    <Text style={styles.checkoutTotalItems}>{totalCartQty} items</Text>
+                    <Text style={styles.checkoutTotalItems}>
+                      {totalCartQty} items
+                      {extraChargeVal > 0
+                        ? ` • +Rs. ${extraChargeVal.toLocaleString()} (${extraChargeReason.trim() || 'Extra'})`
+                        : ''}
+                    </Text>
                   </View>
                   <Text style={styles.checkoutTotalValue}>
                     Rs. {Math.round(total).toLocaleString()}
@@ -5766,6 +5923,99 @@ const styles = StyleSheet.create({
     fontSize: 10.5,
     fontWeight: '800',
     color: '#059669',
+  },
+  extraMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    backgroundColor: '#FFFBEB',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 5,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+  },
+  extraMiniBtnText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  extraInlinePanel: {
+    backgroundColor: '#FFFBEB',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 8,
+    padding: 8,
+    gap: 6,
+    marginVertical: 2,
+  },
+  extraAmtInput: {
+    width: 68,
+    height: 28,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#F59E0B',
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    fontSize: 12.5,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+  extraQuickChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FCD34D',
+    borderRadius: 6,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+  },
+  extraQuickChipText: {
+    fontSize: 10.5,
+    fontWeight: '800',
+    color: '#B45309',
+  },
+  extraReasonChip: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 5,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  extraReasonChipActive: {
+    backgroundColor: '#D97706',
+    borderColor: '#B45309',
+  },
+  extraReasonChipText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#92400E',
+  },
+  extraReasonInput: {
+    flex: 1,
+    height: 30,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    fontSize: 11.5,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  extraDoneBtn: {
+    backgroundColor: '#B45309',
+    paddingHorizontal: 10,
+    height: 30,
+    borderRadius: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  extraDoneBtnText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
   },
   grandTotalRow: {
     flexDirection: 'row',

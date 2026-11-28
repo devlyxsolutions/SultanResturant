@@ -6344,7 +6344,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 57;
+      const targetWebVer = 58;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7618,6 +7618,11 @@ async function handleRequest(req, res) {
           typeof body.billTotal === 'number'
             ? body.billTotal
             : nextOrders.reduce((s, it) => s + (Number(it?.price || 0) * Number(it?.qty || 1)), 0);
+        const hasExtraArg = body.extraCharge !== undefined && body.extraCharge !== null;
+        const resolvedExtra = hasExtraArg ? Math.max(0, Number(body.extraCharge) || 0) : (t.extraCharge || 0);
+        const resolvedReason = hasExtraArg
+          ? (resolvedExtra > 0 ? String(body.extraChargeReason || '').trim() || undefined : undefined)
+          : t.extraChargeReason;
         updatedTable = {
           ...t,
           status: 'billed',
@@ -7627,6 +7632,8 @@ async function handleRequest(req, res) {
           billedAt: now,
           orders: nextOrders,
           billTotal: nextBillTotal,
+          extraCharge: resolvedExtra > 0 ? resolvedExtra : undefined,
+          extraChargeReason: resolvedReason,
           ordersUpdatedAt: Array.isArray(body.orders) ? now : (t.ordersUpdatedAt || now),
         };
         return updatedTable;
@@ -7731,6 +7738,8 @@ async function handleRequest(req, res) {
                 status: 'available',
                 billTotal: 0,
                 orders: [],
+                extraCharge: undefined,
+                extraChargeReason: undefined,
                 isPaid: false,
                 server: undefined,
                 serverId: undefined,
@@ -9653,6 +9662,8 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
                 status: 'available',
                 billTotal: 0,
                 orders: [],
+                extraCharge: undefined,
+                extraChargeReason: undefined,
                 isPaid: false,
                 server: undefined,
                 serverId: undefined,

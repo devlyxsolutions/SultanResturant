@@ -567,7 +567,66 @@ async function runTests() {
     const r02DirectKot = afterPrintKot.tables.find((t) => t.id === 't-roof-2');
     assert.strictEqual(r02DirectKot.status, 'occupied', 'POST /api/print/kot must immediately mark R-02 occupied');
 
-    console.log('ALL 17 MULTI-FLOOR SYNC, KOT/SOT, TABLE STABILITY & CLOCK-SKEW TESTS PASSED!');
+    // 18. Manual Extra Charge + Reason persists through mark-billed, settle-bill & /api/sync
+    await fetch(`${baseUrl}/api/pos/mark-billed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId: 't-roof-2',
+        invoiceId: 'TMP-99',
+        seq: 99,
+        orders: [{ id: 'm-rice', name: 'Special Pulao', price: 3000, qty: 1 }],
+        billTotal: 3350,
+        extraCharge: 350,
+        extraChargeReason: 'Extra Rice Portion',
+      }),
+    });
+    const afterMarkExtra = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const r02BilledExtra = afterMarkExtra.tables.find((t) => t.id === 't-roof-2');
+    assert.strictEqual(r02BilledExtra.status, 'billed', 'R-02 must be billed with extra charge');
+    assert.strictEqual(r02BilledExtra.extraCharge, 350, 'Billed table must preserve extraCharge=350');
+    assert.strictEqual(r02BilledExtra.extraChargeReason, 'Extra Rice Portion', 'Billed table must preserve extraChargeReason');
+
+    await fetch(`${baseUrl}/api/pos/settle-bill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId: 't-roof-2',
+        invoice: {
+          id: 'INV-99',
+          invoiceSeq: 99,
+          dailyInvoiceNumber: 'INV-99',
+          orderType: 'dine-in',
+          tableId: 't-roof-2',
+          tableName: 'R-02',
+          server: 'Sharjeel',
+          cashier: 'Sharjeel (Cashier)',
+          timePlaced: Date.now(),
+          timeSettled: Date.now(),
+          items: [{ id: 'm-rice', name: 'Special Pulao', price: 3000, qty: 1 }],
+          subTotal: 3000,
+          discount: 0,
+          extraCharge: 350,
+          extraChargeReason: 'Extra Rice Portion',
+          tax: 0,
+          total: 3350,
+          payments: [{ type: 'cash', amount: 3350 }],
+          status: 'settled',
+        },
+        settleBeforeMs: Date.now(),
+      }),
+    });
+    const afterSettleExtra = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const inv99 = (afterSettleExtra.invoices || []).find((i) => i.id === 'INV-99');
+    const r02Released = afterSettleExtra.tables.find((t) => t.id === 't-roof-2');
+    assert.ok(inv99, 'Settled INV-99 with manual extraCharge must exist');
+    assert.strictEqual(inv99.extraCharge, 350, 'INV-99 must retain extraCharge=350');
+    assert.strictEqual(inv99.extraChargeReason, 'Extra Rice Portion', 'INV-99 must retain extraChargeReason');
+    assert.strictEqual(inv99.total, 3350, 'INV-99 total must equal subtotal + extraCharge');
+    assert.strictEqual(r02Released.status, 'available', 'R-02 must release back to available after settle');
+    assert.strictEqual(r02Released.extraCharge, undefined, 'Released table must clear extraCharge');
+
+    console.log('ALL 18 MULTI-FLOOR SYNC, KOT/SOT, TABLE STABILITY, EXTRA CHARGE & CLOCK-SKEW TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }

@@ -212,6 +212,10 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
     if ((invoice.discount || 0) > 0) {
       text += `Discount: - Rs. ${(invoice.discount || 0).toLocaleString()}\n`;
     }
+    if ((invoice.extraCharge || 0) > 0) {
+      const reasonTxt = invoice.extraChargeReason ? ` (${invoice.extraChargeReason})` : '';
+      text += `Extra${reasonTxt}: + ${currency} ${(invoice.extraCharge || 0).toLocaleString()}\n`;
+    }
     if (sysSettings.taxEnabled && (invoice.tax || 0) > 0) {
       text += `${taxLabel} (${taxRate}%): ${currency} ${(invoice.tax || 0).toLocaleString()}\n`;
     }
@@ -640,6 +644,12 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
             <span style="font-weight: 800;">- Rs. ${(invoice.discount || 0).toLocaleString()}</span>
           </div>
         ` : ''}
+        ${(invoice.extraCharge || 0) > 0 ? `
+          <div class="summary-row">
+            <span>Extra${invoice.extraChargeReason ? ` (${invoice.extraChargeReason})` : ''}:</span>
+            <span style="font-weight: 800;">+ ${currency} ${(invoice.extraCharge || 0).toLocaleString()}</span>
+          </div>
+        ` : ''}
         ${sysSettings.taxEnabled && (invoice.tax || 0) > 0 ? `
           <div class="summary-row">
             <span>${taxLabel} (${taxRate}%):</span>
@@ -957,6 +967,14 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
           <View style={styles.summaryRow}>
             <Text style={styles.summaryKey}>Discount:</Text>
             <Text style={styles.summaryVal}>- {currency} {(invoice.discount || 0).toLocaleString()}</Text>
+          </View>
+        )}
+        {(invoice.extraCharge || 0) > 0 && (
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryKey}>
+              Extra{invoice.extraChargeReason ? ` (${invoice.extraChargeReason})` : ''}:
+            </Text>
+            <Text style={styles.summaryVal}>+ {currency} {(invoice.extraCharge || 0).toLocaleString()}</Text>
           </View>
         )}
         {sysSettings.taxEnabled && (invoice.tax || 0) > 0 && (

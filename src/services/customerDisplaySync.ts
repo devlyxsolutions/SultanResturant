@@ -18,6 +18,8 @@ export interface CustomerDisplayState {
   itemCount: number;
   subTotal: number;
   discountVal: number;
+  extraCharge?: number;
+  extraChargeReason?: string;
   tax: number;
   serviceCharge: number;
   deliveryCharges: number;
@@ -42,6 +44,8 @@ export const INITIAL_CFD_STATE: CustomerDisplayState = {
   itemCount: 0,
   subTotal: 0,
   discountVal: 0,
+  extraCharge: 0,
+  extraChargeReason: '',
   tax: 0,
   serviceCharge: 0,
   deliveryCharges: 0,
