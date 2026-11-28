@@ -7452,6 +7452,10 @@ async function handleRequest(req, res) {
             new Set([...(serverState.deletedRecordIds || []), ...removedInvIds])
           ).slice(-800);
         }
+        serverState.dayResetWindow = {
+          fromTs: clearInvoicesAfterTs,
+          toTs: now,
+        };
       }
 
       serverState.tables = (serverState.tables || []).map((t) => ({
@@ -7519,6 +7523,7 @@ async function handleRequest(req, res) {
         senderId: 'NEW_DAY_RESET',
         timestamp: now,
       });
+      pushStateToLanPeers();
       pushToFirestoreCloud();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(
@@ -8759,8 +8764,28 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
   if (!Array.isArray(serverState.deletedRecordIds)) serverState.deletedRecordIds = [];
   if (Array.isArray(partialState.deletedRecordIds) && partialState.deletedRecordIds.length > 0) {
-    serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...partialState.deletedRecordIds])).slice(-800);
-    modified = true;
+    const isPeerSync = Boolean(options && options.skipPeerPush) || String(senderId || '').startsWith('PEER_');
+    const liveInvoiceIds = isPeerSync
+      ? new Set((Array.isArray(serverState.invoices) ? serverState.invoices : []).map((i) => i && i.id).filter(Boolean))
+      : null;
+    const filteredDeletedRecs = liveInvoiceIds
+      ? partialState.deletedRecordIds.filter((id) => id && !liveInvoiceIds.has(id))
+      : partialState.deletedRecordIds;
+    if (filteredDeletedRecs.length > 0) {
+      serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...filteredDeletedRecs])).slice(-800);
+      modified = true;
+    }
+  }
+  if (partialState.dayResetWindow && typeof partialState.dayResetWindow === 'object') {
+    const incWinTo = Number(partialState.dayResetWindow.toTs || 0);
+    const curWinTo = Number(serverState.dayResetWindow?.toTs || 0);
+    if (incWinTo > curWinTo) {
+      serverState.dayResetWindow = {
+        fromTs: Number(partialState.dayResetWindow.fromTs || 0),
+        toTs: incWinTo,
+      };
+      modified = true;
+    }
   }
   const deletedRecSet = new Set(serverState.deletedRecordIds);
   if (!isStaleInventoryClient && Array.isArray(partialState.deletedInventoryCategories) && partialState.deletedInventoryCategories.length > 0) {
@@ -9593,8 +9618,14 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             for (const c of currArr) {
               if (c && c.id && !deletedRecSet.has(c.id)) rMap.set(c.id, c);
             }
+            const dayWinFrom = Number(serverState.dayResetWindow?.fromTs || 0);
+            const dayWinTo = Number(serverState.dayResetWindow?.toTs || 0);
             for (const inc of incArr) {
               if (!inc || !inc.id || deletedRecSet.has(inc.id)) continue;
+              if (key === 'invoices' && dayWinTo > dayWinFrom && dayWinFrom > 0) {
+                const invTs = Number(inc.timeSettled || inc.timePlaced || 0);
+                if (invTs >= dayWinFrom && invTs <= dayWinTo) continue;
+              }
               const prev = rMap.get(inc.id);
               if (!prev || getRecTs(inc) >= getRecTs(prev)) {
                 rMap.set(inc.id, { ...(prev || {}), ...inc });
@@ -10294,11 +10325,12 @@ function registerOrSyncPeer(peerUrl, healthData) {
     console.log(`[Sultan Hub Peer-Mesh] Connected to peer Cashier server at ${peerUrl} (${healthData.instanceId || 'peer'})`);
   }
   if (
-    (isNewPeer && remoteTs > 0) ||
-    (remoteTs > prevTs && remoteTs > Number(serverState.lastUpdated || 0)) ||
-    (healthData.fingerprint && healthData.fingerprint !== lastStateFingerprint && remoteTs >= Number(serverState.lastUpdated || 0))
+    remoteTs > Number(serverState.lastUpdated || 0) &&
+    (isNewPeer || remoteTs > prevTs || (healthData.fingerprint && healthData.fingerprint !== lastStateFingerprint))
   ) {
     pullFromLanPeer(peerUrl);
+  } else if (isNewPeer && Number(serverState.lastUpdated || 0) >= remoteTs) {
+    pushStateToLanPeers();
   }
 }
 
