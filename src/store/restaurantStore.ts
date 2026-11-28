@@ -44,6 +44,7 @@ export type Table = {
   orders?: OrderItem[];
   isPaid?: boolean;
   lastInvoiceId?: string;
+  billedAt?: number;
   occupiedSince?: number;
   lastSettledAt?: number;
   ordersUpdatedAt?: number;
@@ -2457,6 +2458,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               status: 'billed' as const,
               isPaid: false,
               lastInvoiceId: invoiceId,
+              billedAt: now,
               orders: nextOrders,
               billTotal: nextBillTotal,
               ordersUpdatedAt: Array.isArray(updatedOrders) ? now : (t.ordersUpdatedAt || now),
@@ -2664,8 +2666,21 @@ export const useRestaurantStore = create<RestaurantState>()(
           )
         );
 
+        const nextPendingByTable = { ...(state.invoiceSequenceState?.pendingByTableId || {}) };
+        if (nextPendingByTable[tableId]) {
+          delete nextPendingByTable[tableId];
+        }
+
         notifySync();
         return {
+          ...(state.invoiceSequenceState
+            ? {
+              invoiceSequenceState: {
+                ...state.invoiceSequenceState,
+                pendingByTableId: nextPendingByTable,
+              },
+            }
+            : {}),
           tables: state.tables.map(t =>
             (t.id === tableId || t.mergedInto === tableId) ? {
               ...t,
@@ -3738,6 +3753,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           });
         }
 
+        notifySync();
         return {
           invoices: [invoice, ...state.invoices],
           customers: updatedCustomers,
@@ -4913,9 +4929,17 @@ export const useRestaurantStore = create<RestaurantState>()(
                 const localOccTs = Math.max(lt.occupiedSince || 0, lt.ordersUpdatedAt || 0, lt.lastMovedAt || 0);
                 if (
                   isRecentLocalMutation &&
-                  lt.status === 'occupied' &&
+                  (lt.status === 'occupied' || lt.status === 'billed') &&
                   rt.status === 'available' &&
                   localOccTs > remoteReleaseTs + 500
+                ) {
+                  return lt;
+                }
+                if (
+                  isRecentLocalMutation &&
+                  lt.status === 'billed' &&
+                  rt.status === 'occupied' &&
+                  Number(lt.billedAt || localMutatedAt) >= Number(rt.ordersUpdatedAt || 0)
                 ) {
                   return lt;
                 }
@@ -4992,6 +5016,9 @@ export const useRestaurantStore = create<RestaurantState>()(
                 const remoteList = (remoteState.invoices || []).filter((i) => i && i.id && !deletedRecSet.has(i.id));
                 const remoteMap = new Map(remoteList.map(i => [i.id, i]));
                 const localUnsynced = state.invoices.filter(i => i && i.id && !remoteMap.has(i.id) && !deletedRecSet.has(i.id));
+                if (localUnsynced.length > 0) {
+                  notifySync();
+                }
                 return [...localUnsynced, ...remoteList];
               })()
             } : {}),

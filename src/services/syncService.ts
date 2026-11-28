@@ -434,6 +434,17 @@ export async function resolveDefaultServerIp(): Promise<string> {
     if (host !== 'localhost' && host !== '127.0.0.1') {
       return host;
     }
+    // If desktop app opened on 127.0.0.1/localhost of a secondary Cashier PC, prefer Basement Master Hub (192.168.1.10)
+    // unless 127.0.0.1 is itself that exact server instance.
+    try {
+      const [localHealth, masterHealth] = await Promise.all([
+        fetchSultanHealth(`http://127.0.0.1:${SERVER_PORT}`, 450),
+        fetchSultanHealth(`http://192.168.1.10:${SERVER_PORT}`, 650),
+      ]);
+      if (masterHealth.ok && (!localHealth.ok || !localHealth.instanceId || localHealth.instanceId !== masterHealth.instanceId)) {
+        return '192.168.1.10';
+      }
+    } catch { }
     return '127.0.0.1';
   }
 
@@ -1219,6 +1230,9 @@ function broadcastLocalState(force = false) {
             lastSyncedAt = Date.now();
             totalSyncedEvents++;
             notifyListeners();
+          } else {
+            console.warn(`[SyncService] POST /api/sync returned HTTP ${res.status}; keeping local changes queued`);
+            hasUnsyncedLocalChanges = true;
           }
         })
         .catch(() => {
@@ -1508,5 +1522,43 @@ export async function forceSyncNow(): Promise<boolean> {
   }
 
   reconnect();
+  return false;
+}
+
+/** Sends an atomic POS command (e.g. /api/pos/mark-billed or /api/pos/settle-bill) directly to the Master LAN Hub */
+export async function postPosAtomicEndpoint(path: string, body: Record<string, any>): Promise<boolean> {
+  if (isCustomerPortalRoute() && isPublicCloudHost()) return false;
+  const { httpUrl } = parseServerEndpoints(currentServerAddress);
+  const candidates = Array.from(
+    new Set(
+      [
+        httpUrl,
+        typeof window !== 'undefined' && window.location?.hostname && !isPublicCloudHostname(window.location.hostname)
+          ? `http://${window.location.hostname}:${SERVER_PORT}`
+          : '',
+        `http://192.168.1.10:${SERVER_PORT}`,
+      ].filter(Boolean)
+    )
+  );
+  for (const base of candidates) {
+    try {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), 3000) : null;
+      const res = await fetch(`${base.replace(/\/+$/, '')}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        ...(controller ? { signal: controller.signal } : {}),
+      });
+      if (timer) clearTimeout(timer);
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data?.timestamp && Number(data.timestamp) > lastServerKnownUpdated) {
+          lastServerKnownUpdated = Number(data.timestamp);
+        }
+        return true;
+      }
+    } catch { }
+  }
   return false;
 }

@@ -292,7 +292,94 @@ async function runTests() {
     const activeForG05 = afterResurrectTry.tickets.filter((t) => t.tableId === 't-ground-5' && !t.isSettled);
     assert.strictEqual(activeForG05.length, 0, 'No stale pre-settlement KOT can resurrect on settled G-05!');
 
-    console.log('ALL 8 MULTI-FLOOR SYNC, KOT/SOT SEQUENCE & STALE-DATA PROTECTION TESTS PASSED!');
+    // 9. Regression test for invoiceSequenceState TDZ crash in /api/sync
+    const dayStartNow = Date.now() - 3600 * 1000;
+    const seqSyncRes = await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'CASHIER_SHARJEEL',
+        packetId: 'pkt_seq_sync_test',
+        state: {
+          operationalDayStartAt: dayStartNow,
+          invoiceSequenceState: { dayStartAt: dayStartNow, lastSeq: 4, pendingByTableId: {} },
+        },
+      }),
+    });
+    assert.strictEqual(seqSyncRes.status, 200, 'POST /api/sync with invoiceSequenceState must succeed (no TDZ error)');
+
+    // 10. Atomic /api/pos/mark-billed keeps table BILLED even if stale client sends 'occupied'
+    const markRes = await fetch(`${baseUrl}/api/pos/mark-billed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId: 't-roof-2',
+        invoiceId: 'TMP-5',
+        dailyInvoiceNumber: 'TMP-5',
+        seq: 5,
+        orders: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1 }],
+        billTotal: 1899,
+      }),
+    });
+    assert.strictEqual(markRes.status, 200, '/api/pos/mark-billed succeeds');
+
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'TABLET_OLD_ECHO',
+        packetId: 'pkt_tablet_old_echo',
+        state: {
+          tables: [
+            { id: 't-roof-2', name: 'R-02', floor: 'Rooftop', zone: 'Rooftop', seats: 4, status: 'occupied', ordersUpdatedAt: now - 5000, billTotal: 1899 },
+          ],
+        },
+      }),
+    });
+    const billedState = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const r02Billed = billedState.tables.find((t) => t.id === 't-roof-2');
+    assert.strictEqual(r02Billed.status, 'billed', 'Stale occupied echo must NOT un-bill a Pending Bill table');
+    assert.strictEqual(r02Billed.lastInvoiceId, 'TMP-5', 'TMP-5 preserved on billed table');
+
+    // 11. Atomic /api/pos/settle-bill saves invoice, settles KOT-1002, and releases R-02
+    const inv5 = {
+      id: 'INV-5',
+      invoiceSeq: 5,
+      dailyInvoiceNumber: 'INV-5',
+      orderType: 'dine-in',
+      tableId: 't-roof-2',
+      tableName: 'R-02',
+      timePlaced: now,
+      timeSettled: Date.now(),
+      items: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1, completed: true }],
+      subTotal: 1899,
+      discount: 0,
+      tax: 0,
+      total: 1899,
+      payments: [{ type: 'cash', amount: 1899 }],
+      status: 'paid',
+    };
+    const settleRes = await fetch(`${baseUrl}/api/pos/settle-bill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoice: inv5,
+        tableId: 't-roof-2',
+        settleBeforeMs: Date.now(),
+      }),
+    });
+    assert.strictEqual(settleRes.status, 200, '/api/pos/settle-bill returns 200');
+    const afterSettle = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const r02After = afterSettle.tables.find((t) => t.id === 't-roof-2');
+    const kot2After = afterSettle.tickets.find((t) => t.id === 'KOT-1002');
+    const inv5Saved = afterSettle.invoices.find((i) => i.id === 'INV-5');
+    assert.ok(inv5Saved, 'INV-5 saved atomically on server');
+    assert.strictEqual(r02After.status, 'available', 'R-02 released cleanly to available');
+    assert.strictEqual(kot2After.isSettled, true, 'KOT-1002 marked settled atomically');
+    assert.strictEqual(afterSettle.invoiceSequenceState.lastSeq, 5, 'invoiceSequenceState updated to 5');
+    assert.strictEqual(afterSettle.invoiceSequenceState.pendingByTableId['t-roof-2'], undefined, 'pendingByTableId cleared on settlement');
+
+    console.log('ALL 11 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL & ATOMIC SETTLEMENT TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }

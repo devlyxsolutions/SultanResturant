@@ -38,7 +38,7 @@ import {
   publishCustomerDisplayState,
   subscribeToCustomerDisplay,
 } from '../services/customerDisplaySync';
-import { broadcastImmediately, getActiveServerHttpUrl } from '../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl, postPosAtomicEndpoint } from '../services/syncService';
 import {
   EventDiscount,
   Invoice,
@@ -1834,10 +1834,12 @@ export default function POSTerminalScreen({
     }
 
     // Never re-send already-sent table orders on settlement; only print KOT for a brand-new walk-in order
+    let createdSettlementTicketId: string | undefined;
     if (!hasPriorSentOrder && addedKotItems.length > 0 && canSendKds) {
       placeOrder(kotTarget, cashierName, addedKotItems, false, undefined, orderNotes.trim() || undefined);
       const latestTicket = useRestaurantStore.getState().tickets?.[0];
       if (latestTicket) {
+        createdSettlementTicketId = latestTicket.id;
         dispatchDirectKotPrint(latestTicket, false);
       }
     }
@@ -1849,6 +1851,12 @@ export default function POSTerminalScreen({
       settleBill(targetTableId);
     }
 
+    postPosAtomicEndpoint('/api/pos/settle-bill', {
+      invoice,
+      tableId: wasDineIn && targetTableId ? targetTableId : undefined,
+      ticketsToSettleIds: wasDineIn && createdSettlementTicketId ? [createdSettlementTicketId] : [],
+      settleBeforeMs: Date.now(),
+    }).catch(() => { });
     broadcastImmediately();
 
     if (selectedCustomerObj) {
@@ -1963,6 +1971,14 @@ export default function POSTerminalScreen({
 
     if (selectedTableId) {
       markTableBilled(selectedTableId, unpaidInvoice.id, cart, subTotal);
+      postPosAtomicEndpoint('/api/pos/mark-billed', {
+        tableId: selectedTableId,
+        invoiceId: unpaidInvoice.id,
+        dailyInvoiceNumber: unpaidInvoice.id,
+        seq: pendingSeq.seq,
+        orders: cart,
+        billTotal: subTotal,
+      }).catch(() => { });
     }
     broadcastImmediately();
     if (cart.length > 0) {
@@ -2090,6 +2106,11 @@ export default function POSTerminalScreen({
       setOrderNotes('');
       setSelectedTableId('');
     }
+    postPosAtomicEndpoint('/api/pos/settle-bill', {
+      invoice,
+      tableId: targetTable.id,
+      settleBeforeMs: Date.now(),
+    }).catch(() => { });
     broadcastImmediately();
     printInvoiceReceipt(invoice);
     showKdsToast(

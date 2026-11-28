@@ -6332,7 +6332,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 53;
+      const targetWebVer = 54;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7580,6 +7580,176 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Atomic Pending / Temporary Bill persistence so cross-device sync echoes never snap a billed table back to available/occupied
+  if (url.pathname === '/api/pos/mark-billed' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const tableId = body && body.tableId ? String(body.tableId) : '';
+      if (!tableId) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Missing tableId' }));
+        return;
+      }
+      const now = Date.now();
+      if (!Array.isArray(serverState.tables)) serverState.tables = [];
+      let updatedTable = null;
+      serverState.tables = serverState.tables.map((t) => {
+        if (!t || t.id !== tableId) return t;
+        const nextOrders = Array.isArray(body.orders) ? body.orders.map((i) => ({ ...i })) : (t.orders || []);
+        const nextBillTotal =
+          typeof body.billTotal === 'number'
+            ? body.billTotal
+            : nextOrders.reduce((s, it) => s + (Number(it?.price || 0) * Number(it?.qty || 1)), 0);
+        updatedTable = {
+          ...t,
+          status: 'billed',
+          isPaid: false,
+          lastInvoiceId: body.invoiceId || body.dailyInvoiceNumber || t.lastInvoiceId,
+          billedAt: now,
+          orders: nextOrders,
+          billTotal: nextBillTotal,
+          ordersUpdatedAt: Array.isArray(body.orders) ? now : (t.ordersUpdatedAt || now),
+        };
+        return updatedTable;
+      });
+      const dayStart = Number(serverState.operationalDayStartAt || 0);
+      if (!serverState.invoiceSequenceState || Number(serverState.invoiceSequenceState.dayStartAt || 0) !== dayStart) {
+        serverState.invoiceSequenceState = { dayStartAt: dayStart, lastSeq: 0, pendingByTableId: {} };
+      }
+      if (body.invoiceId && Number(body.seq || 0) > 0) {
+        if (!serverState.invoiceSequenceState.pendingByTableId) serverState.invoiceSequenceState.pendingByTableId = {};
+        serverState.invoiceSequenceState.pendingByTableId[tableId] = {
+          seq: Number(body.seq),
+          dailyInvoiceNumber: String(body.dailyInvoiceNumber || body.invoiceId),
+          createdAt: now,
+        };
+      }
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'POS_MARK_BILLED',
+        timestamp: now,
+      });
+      pushStateToLanPeers();
+      pushToFirestoreCloud();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, table: updatedTable, timestamp: now, state: serverState }));
+    } catch (err) {
+      console.error('[Sultan Hub] /api/pos/mark-billed error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  // Atomic Bill Settlement & Invoice Persistence (saves invoice, settles table tickets, clears pending/table state)
+  if (url.pathname === '/api/pos/settle-bill' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const invoice = body && body.invoice && typeof body.invoice === 'object' ? body.invoice : null;
+      const tableId = body && body.tableId ? String(body.tableId) : (invoice?.tableId ? String(invoice.tableId) : '');
+      const now = Date.now();
+
+      if (invoice && invoice.id) {
+        if (!Array.isArray(serverState.invoices)) serverState.invoices = [];
+        const existingIdx = serverState.invoices.findIndex((i) => i && i.id === invoice.id);
+        const cleanInvoice = sanitizeInvoicesCashierRoleLabels([invoice])[0] || invoice;
+        if (existingIdx >= 0) {
+          serverState.invoices[existingIdx] = { ...serverState.invoices[existingIdx], ...cleanInvoice };
+        } else {
+          serverState.invoices.unshift(cleanInvoice);
+        }
+        if (Array.isArray(serverState.deletedRecordIds) && serverState.deletedRecordIds.includes(invoice.id)) {
+          serverState.deletedRecordIds = serverState.deletedRecordIds.filter((id) => id !== invoice.id);
+        }
+        const dayStart = Number(serverState.operationalDayStartAt || 0);
+        if (!serverState.invoiceSequenceState || Number(serverState.invoiceSequenceState.dayStartAt || 0) !== dayStart) {
+          serverState.invoiceSequenceState = { dayStartAt: dayStart, lastSeq: 0, pendingByTableId: {} };
+        }
+        const invSeq = Number(invoice.invoiceSeq || 0);
+        const idNumMatch = /^INV-(\d+)$/i.exec(String(invoice.id || ''));
+        const resolvedSeq = invSeq > 0 ? invSeq : (idNumMatch ? Number(idNumMatch[1]) : 0);
+        if (resolvedSeq > 0 && resolvedSeq < 10000) {
+          serverState.invoiceSequenceState.lastSeq = Math.max(Number(serverState.invoiceSequenceState.lastSeq || 0), resolvedSeq);
+        }
+        if (tableId && serverState.invoiceSequenceState.pendingByTableId) {
+          delete serverState.invoiceSequenceState.pendingByTableId[tableId];
+        }
+      }
+
+      if (Array.isArray(body.ticketsToSettleIds) && body.ticketsToSettleIds.length > 0 && Array.isArray(serverState.tickets)) {
+        const settleSet = new Set(body.ticketsToSettleIds.map(String));
+        serverState.tickets = serverState.tickets.map((tk) =>
+          tk && settleSet.has(tk.id) ? archiveServerTicketForSettlement(tk, now) : tk
+        );
+      }
+
+      if (tableId) {
+        const cutoff = Number(body.settleBeforeMs || now) + 2000;
+        if (Array.isArray(serverState.tickets)) {
+          serverState.tickets = serverState.tickets.map((tk) => {
+            if (!tk || tk.isSettled) return tk;
+            if ((tk.tableId === tableId || tk.settledTableId === tableId) && (!tk.timePlaced || tk.timePlaced <= cutoff)) {
+              return archiveServerTicketForSettlement(tk, now);
+            }
+            return tk;
+          });
+        }
+        if (Array.isArray(serverState.tables)) {
+          serverState.tables = serverState.tables.map((t) => {
+            if (!t) return t;
+            if (t.id === tableId || t.mergedInto === tableId) {
+              return {
+                ...t,
+                status: 'available',
+                billTotal: 0,
+                orders: [],
+                isPaid: false,
+                server: undefined,
+                serverId: undefined,
+                lastInvoiceId: undefined,
+                occupiedSince: undefined,
+                billedAt: undefined,
+                lastSettledAt: now,
+                mergedInto: undefined,
+                reservationId: undefined,
+                waiterPaymentCollection: null,
+                lastMoveNote: undefined,
+                lastMovedFrom: undefined,
+                lastMovedAt: undefined,
+                lastMovedBy: undefined,
+              };
+            }
+            return t;
+          });
+        }
+      }
+
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'POS_SETTLE_BILL',
+        timestamp: now,
+      });
+      pushStateToLanPeers();
+      pushToFirestoreCloud();
+      console.log(`[Sultan Hub] Atomic /api/pos/settle-bill saved ${invoice?.id || 'NO_INV'} table=${tableId || 'N/A'} total=${invoice?.total || 0}`);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, invoiceId: invoice?.id || null, timestamp: now, state: serverState }));
+    } catch (err) {
+      console.error('[Sultan Hub] /api/pos/settle-bill error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
   // 8.1 Direct Thermal Printer Raw ESC/POS KOT Dispatch (Strict Station Isolation: Main vs Juice Bar)
   if (url.pathname === '/api/print/kot' && req.method === 'POST') {
     try {
@@ -8583,12 +8753,22 @@ function computeStateFingerprint(st) {
         isPaid: t.isPaid,
         server: t.server,
         occupiedSince: t.occupiedSince,
+        billedAt: t.billedAt,
         lastSettledAt: t.lastSettledAt,
         waiterPayId: t.waiterPaymentCollection?.id || '',
         ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
       })),
       onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
-      invoicesLen: Array.isArray(st.invoices) ? st.invoices.length : 0,
+      invoicesKey: Array.isArray(st.invoices)
+        ? `${st.invoices.length}:${st.invoices.slice(0, 25).map(i => `${i?.id}:${i?.status || 'paid'}:${i?.total || 0}`).join(',')}`
+        : '0',
+      operationalDayStartAt: Number(st.operationalDayStartAt || 0),
+      invoiceSeqKey: st.invoiceSequenceState
+        ? `${st.invoiceSequenceState.dayStartAt || 0}:${st.invoiceSequenceState.lastSeq || 0}:${Object.keys(st.invoiceSequenceState.pendingByTableId || {}).length}`
+        : '',
+      kotSeqKey: st.kotSequenceState
+        ? `${st.kotSequenceState.shiftId || ''}:${st.kotSequenceState.kitchenSeq || 0}:${st.kotSequenceState.juiceSeq || 0}`
+        : '',
       menuLen: Array.isArray(st.menuItems)
         ? st.menuItems.map(m => `${m?.id}:${m?.name}:${m?.price}:${(m?.imageUri || m?.imageUrl || '').slice(0, 48)}:${m?.updatedAt || 0}`).join('|')
         : '0',
@@ -8736,6 +8916,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
+  let modified = false;
   const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'invoiceSequenceState', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   if (partialState.operationalDayStartAt !== undefined) {
     const incDayStart = Number(partialState.operationalDayStartAt || 0);
@@ -8769,7 +8950,6 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
       modified = true;
     }
   }
-  let modified = false;
 
   if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
   if (Array.isArray(partialState.deletedTableIds) && partialState.deletedTableIds.length > 0) {
@@ -9334,23 +9514,33 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
               return curr;
             }
 
-            // Preserve Temporary / Pending Bill updates and item add/minus edits
+            // Preserve Temporary / Pending Bill updates and item add/minus edits (never let an older 'occupied' echo un-bill it)
             if (inc.status === 'billed' || curr.status === 'billed') {
               if (inc.status === 'available') {
                 // Only allow release if active tickets are cleared (handled in Case 2 above if tableTickets === 0)
-              } else if (incOrdersAt >= currOrdersAt && (inc.status === 'billed' || inc.orders)) {
-                const nextOrders = Array.isArray(inc.orders) ? inc.orders : (Array.isArray(curr.orders) ? curr.orders : []);
-                const nextBill = typeof inc.billTotal === 'number'
+              } else {
+                const useIncomingOrders = incOrdersAt > currOrdersAt && Array.isArray(inc.orders);
+                const nextOrders = useIncomingOrders
+                  ? inc.orders
+                  : (inc.status === 'billed' && Array.isArray(inc.orders) && inc.orders.length >= (curr.orders?.length || 0)
+                    ? inc.orders
+                    : (Array.isArray(curr.orders) ? curr.orders : (Array.isArray(inc.orders) ? inc.orders : [])));
+                const nextBill = useIncomingOrders && typeof inc.billTotal === 'number'
                   ? inc.billTotal
-                  : nextOrders.reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0);
+                  : (inc.status === 'billed' && typeof inc.billTotal === 'number' && inc.billTotal > 0
+                    ? inc.billTotal
+                    : (typeof curr.billTotal === 'number' && curr.billTotal > 0
+                      ? curr.billTotal
+                      : nextOrders.reduce((s, it) => s + ((it.price || 0) * (it.qty || 1)), 0)));
                 return {
                   ...curr,
-                  ...inc,
+                  ...(inc.status === 'billed' ? inc : {}),
                   status: 'billed',
                   isPaid: false,
+                  billedAt: Number(inc.billedAt || curr.billedAt || Date.now()),
                   orders: nextOrders,
                   billTotal: nextBill,
-                  ordersUpdatedAt: incOrdersAt || currOrdersAt || Date.now(),
+                  ordersUpdatedAt: Math.max(incOrdersAt, currOrdersAt) || Date.now(),
                   waiterPaymentCollection: resolveWaiterPay(curr, inc),
                 };
               }
@@ -10355,6 +10545,8 @@ function pushStateToLanPeers() {
 function registerOrSyncPeer(peerUrl, healthData) {
   if (!peerUrl || !healthData || !healthData.ok) return;
   if (healthData.instanceId && healthData.instanceId === SERVER_INSTANCE_ID) return;
+  const peerHasInstanceId = Boolean(healthData.instanceId && String(healthData.instanceId).trim());
+  const isPrimaryMasterHost = getServerLanIp() === '192.168.1.10';
   const prev = discoveredLanPeers.get(peerUrl);
   const prevTs = prev ? Number(prev.lastUpdated || 0) : 0;
   const remoteTs = Number(healthData.lastUpdated || 0);
@@ -10366,7 +10558,14 @@ function registerOrSyncPeer(peerUrl, healthData) {
     fingerprint: healthData.fingerprint || '',
   });
   if (isNewPeer) {
-    console.log(`[Sultan Hub Peer-Mesh] Connected to peer Cashier server at ${peerUrl} (${healthData.instanceId || 'peer'})`);
+    console.log(`[Sultan Hub Peer-Mesh] Connected to peer Cashier server at ${peerUrl} (${healthData.instanceId || 'legacy-peer'})`);
+  }
+  // Never let a legacy peer (empty instanceId) or secondary PC overwrite Basement Master (192.168.1.10)
+  if (!peerHasInstanceId || isPrimaryMasterHost) {
+    if (isNewPeer || (remoteTs > 0 && Number(serverState.lastUpdated || 0) > remoteTs)) {
+      pushStateToLanPeers();
+    }
+    return;
   }
   if (
     remoteTs > Number(serverState.lastUpdated || 0) &&
