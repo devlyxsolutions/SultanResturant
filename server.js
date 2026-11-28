@@ -8976,6 +8976,20 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
       ),
     };
   }
+  if (Array.isArray(partialState.invoices)) {
+    partialState = {
+      ...partialState,
+      invoices: partialState.invoices.map((inv) =>
+        inv && typeof inv === 'object'
+          ? {
+            ...inv,
+            ...(inv.timePlaced ? { timePlaced: clampFutureTs(inv.timePlaced) } : {}),
+            ...(inv.timeSettled ? { timeSettled: clampFutureTs(inv.timeSettled) } : {}),
+          }
+          : inv
+      ),
+    };
+  }
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
   let modified = false;
@@ -9948,7 +9962,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
           if (incArr.length === 0 && currArr.length > 0 && !currArr.every((r) => r && deletedRecSet.has(r.id))) {
             // Never allow an empty array from an unhydrated client to wipe non-empty ledgers
           } else {
-            const getRecTs = (r) => Number(r?.updatedAt || r?.resolvedAt || r?.paidAt || r?.deliveryDate || r?.orderDate || r?.at || r?.createdAt || r?.timestamp || 0);
+            const getRecTs = (r) => Number(r?.updatedAt || r?.timeSettled || r?.timePlaced || r?.resolvedAt || r?.paidAt || r?.deliveryDate || r?.orderDate || r?.at || r?.createdAt || r?.timestamp || 0);
             const rMap = new Map();
             for (const c of currArr) {
               if (c && c.id && !deletedRecSet.has(c.id)) rMap.set(c.id, c);
