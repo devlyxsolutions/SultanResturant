@@ -1,5 +1,4 @@
 import { Platform } from 'react-native';
-import { getActiveServerHttpUrl } from '../services/syncService';
 
 export interface MenuImageLike {
   id?: string;
@@ -80,6 +79,8 @@ export function resolveMenuImageUri(item?: MenuImageLike | string | null): strin
       return uri;
     }
     try {
+      // Lazy require avoids a circular import (restaurantStore -> menuImage -> syncService -> kitchenStore).
+      const { getActiveServerHttpUrl } = require('../services/syncService');
       const base = getActiveServerHttpUrl().replace(/\/+$/, '');
       if (base) return `${base}${uri}`;
     } catch {}

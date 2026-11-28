@@ -748,7 +748,19 @@ export const getActiveSessions = (sessions: KitchenSession[]) =>
     .sort((a, b) => (a.issuedAt || 0) - (b.issuedAt || 0));
 
 // Auto-deduct raw materials whenever new KOT tickets appear (idempotent per ticket item).
-useRestaurantStore.subscribe(() => {
-  useKitchenStore.getState().processNewTickets();
-});
+// Defer subscription if restaurantStore is still finishing module evaluation so circular imports cannot trigger TDZ.
+const attachRestaurantTicketWatcher = () => {
+  useRestaurantStore.subscribe(() => {
+    useKitchenStore.getState().processNewTickets();
+  });
+};
+try {
+  if (typeof useRestaurantStore?.subscribe === 'function') {
+    attachRestaurantTicketWatcher();
+  } else {
+    setTimeout(attachRestaurantTicketWatcher, 0);
+  }
+} catch {
+  setTimeout(attachRestaurantTicketWatcher, 0);
+}
 setTimeout(() => useKitchenStore.getState().processNewTickets(), 1500);

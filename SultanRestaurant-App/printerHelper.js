@@ -182,7 +182,8 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   const isMinus = !!(
     ticket.isMinusKot ||
     ticket.kotType === 'MINUS' ||
-    String(ticket.id || '').toUpperCase().startsWith('MINUS')
+    String(ticket.id || '').toUpperCase().startsWith('MINUS') ||
+    String(ticket.id || '').toUpperCase().startsWith('CANCEL')
   );
   const isAdd = !isMinus && !!(ticket.isAddOn || ticket.kotType === 'ADD');
 
@@ -197,12 +198,12 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from(esc + '!\x00', 'ascii')); // Normal
   if (isMinus) {
     parts.push(Buffer.from(esc + '!\x18', 'ascii'));
-    parts.push(Buffer.from('*** [ - MINUS / CANCEL ITEM ] ***\n', 'ascii'));
+    parts.push(Buffer.from('*** [ - CANCELLED / MINUS ITEM ] ***\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x08', 'ascii'));
-    parts.push(Buffer.from('*** DO NOT PREPARE / REDUCE QTY ***\n', 'ascii'));
+    parts.push(Buffer.from('*** CANCEL - DO NOT PREPARE ***\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x00', 'ascii'));
   } else if (isAdd) {
-    parts.push(Buffer.from(`*** [ + ADD ITEM / ROUND #${ticket.roundNumber || 2} ] ***\n`, 'ascii'));
+    parts.push(Buffer.from(`*** [ + ADD-ON ITEM / ROUND #${ticket.roundNumber || 2} ] ***\n`, 'ascii'));
   } else {
     parts.push(Buffer.from('--- NEW ORDER ---\n', 'ascii'));
   }
@@ -210,14 +211,17 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const stationSeq = station === 'juice' ? Number(ticket.juiceKotSeq || 0) : Number(ticket.kitchenKotSeq || 0);
   const kotHeading = isMinus
-    ? `MINUS #${kotId.replace(/^(KOT|MINUS)-?/i, '')}`
-    : kotId.startsWith('KOT')
-      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
-      : `KOT #${kotId}`;
+    ? `CANCEL #${kotId.replace(/^(KOT|MINUS|CANCEL)-?/i, '')}`
+    : stationSeq > 0
+      ? `${station === 'juice' ? 'SOT' : 'KOT'} #${stationSeq}`
+      : kotId.startsWith('KOT')
+        ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+        : `KOT #${kotId}`;
   const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 28);
 
-  // 1. Large Prominent KOT Number at the Top (Double-width + Double-height + Bold)
+  // 1. Large Prominent KOT / SOT Number at the Top (Double-width + Double-height + Bold)
   parts.push(Buffer.from(esc + '!\x38', 'ascii'));
   parts.push(Buffer.from(`${kotHeading}\n`, 'ascii'));
 
@@ -241,7 +245,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   parts.push(Buffer.from(`Time: ${dateStr}`.padEnd(22) + `Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}\n`, 'ascii'));
-  parts.push(Buffer.from(`Staff: ${serverName}\n`, 'ascii'));
+  parts.push(Buffer.from(`Staff: ${serverName}`.padEnd(20) + (stationSeq > 0 ? `Ref: ${kotId}\n` : '\n'), 'ascii'));
   if (ticket.notes && String(ticket.notes).trim()) {
     parts.push(Buffer.from('------------------------------------\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x08', 'ascii')); // Bold
@@ -258,7 +262,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
     const qtyPrefix = isMinus ? `-${item.qty || 1}x` : isAdd ? `+${item.qty || 1}x` : `${item.qty || 1}x`;
     const qtyStr = qtyPrefix.padEnd(6);
     const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
-    const opBadge = isMinus ? ' [MINUS]' : isAdd ? ' [ADD]' : '';
+    const opBadge = isMinus ? ' [CANCEL]' : isAdd ? ' [ADD-ON]' : '';
     const nameStr = ((item.name || '') + opBadge + stationBadge).substring(0, 30);
 
     // Print item with double height/bold
@@ -277,9 +281,9 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from(esc + 'a\x01', 'ascii')); // Align center
   parts.push(Buffer.from(esc + '!\x01', 'ascii')); // Bold
   const totalLabel = isMinus
-    ? `TOTAL MINUS ITEMS: -${totalQty}`
+    ? `TOTAL CANCELLED ITEMS: -${totalQty}`
     : isAdd
-      ? `TOTAL ADDED ITEMS: +${totalQty}`
+      ? `TOTAL ADD-ON ITEMS: +${totalQty}`
       : `TOTAL ITEMS: ${totalQty}`;
   parts.push(Buffer.from(`${totalLabel}\n`, 'ascii'));
   parts.push(Buffer.from(esc + '!\x00', 'ascii'));
@@ -311,7 +315,8 @@ function buildPlainTextKot(ticket, station = 'all') {
   const isMinus = !!(
     ticket.isMinusKot ||
     ticket.kotType === 'MINUS' ||
-    String(ticket.id || '').toUpperCase().startsWith('MINUS')
+    String(ticket.id || '').toUpperCase().startsWith('MINUS') ||
+    String(ticket.id || '').toUpperCase().startsWith('CANCEL')
   );
   const isAdd = !isMinus && !!(ticket.isAddOn || ticket.kotType === 'ADD');
 
@@ -323,28 +328,31 @@ function buildPlainTextKot(ticket, station = 'all') {
     month: 'short',
   });
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const stationSeq = station === 'juice' ? Number(ticket.juiceKotSeq || 0) : Number(ticket.kitchenKotSeq || 0);
   const kotHeading = isMinus
-    ? `MINUS #${kotId.replace(/^(KOT|MINUS)-?/i, '')}`
-    : kotId.startsWith('KOT')
-      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
-      : `KOT #${kotId}`;
+    ? `CANCEL #${kotId.replace(/^(KOT|MINUS|CANCEL)-?/i, '')}`
+    : stationSeq > 0
+      ? `${station === 'juice' ? 'SOT' : 'KOT'} #${stationSeq}`
+      : kotId.startsWith('KOT')
+        ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+        : `KOT #${kotId}`;
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   const lines = [
     stationTitle,
     isMinus
-      ? '*** [ - MINUS / CANCEL ITEM ] ***'
+      ? '*** [ - CANCELLED / MINUS ITEM ] ***'
       : isAdd
-        ? `*** [ + ADD ITEM / ROUND #${ticket.roundNumber || 2} ] ***`
+        ? `*** [ + ADD-ON ITEM / ROUND #${ticket.roundNumber || 2} ] ***`
         : '--- NEW ORDER ---',
-    ...(isMinus ? ['*** DO NOT PREPARE / REDUCE QTY ***'] : []),
+    ...(isMinus ? ['*** CANCEL - DO NOT PREPARE ***'] : []),
     '------------------------------------',
     kotHeading,
     `TABLE: ${tableText.substring(0, 28)}`,
     '------------------------------------',
     `Time: ${dateStr}  Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}`,
-    `Staff: ${String(serverName).substring(0, 18)}`,
+    `Staff: ${String(serverName).substring(0, 16)}${stationSeq > 0 ? `  Ref: ${kotId}` : ''}`,
     ...(ticket.notes && String(ticket.notes).trim()
       ? ['------------------------------------', `ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}`]
       : []),
@@ -357,7 +365,7 @@ function buildPlainTextKot(ticket, station = 'all') {
     const qtyPrefix = isMinus ? `-${item.qty || 1}x` : isAdd ? `+${item.qty || 1}x` : `${item.qty || 1}x`;
     const qtyStr = qtyPrefix.padEnd(6);
     const stationBadge = (station === 'all' && item.station === 'juice') ? ' [J]' : '';
-    const opBadge = isMinus ? ' [MINUS]' : isAdd ? ' [ADD]' : '';
+    const opBadge = isMinus ? ' [CANCEL]' : isAdd ? ' [ADD-ON]' : '';
     const nameStr = ((item.name || '') + opBadge + stationBadge).substring(0, 30);
     lines.push(`${qtyStr}${nameStr}`);
     if (item.notes) {
@@ -368,9 +376,9 @@ function buildPlainTextKot(ticket, station = 'all') {
   lines.push('====================================');
   lines.push(
     isMinus
-      ? `TOTAL MINUS ITEMS: -${totalQty}`
+      ? `TOTAL CANCELLED ITEMS: -${totalQty}`
       : isAdd
-        ? `TOTAL ADDED ITEMS: +${totalQty}`
+        ? `TOTAL ADD-ON ITEMS: +${totalQty}`
         : `TOTAL ITEMS: ${totalQty}`
   );
   lines.push('Powered & Designed by Nizaam Digital Solution');
