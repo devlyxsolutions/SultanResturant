@@ -10891,28 +10891,47 @@ async function pullFromLanPeer(peerUrl) {
   }
 }
 
+const inFlightPeerPushes = new Set();
+const lastPeerPushAt = new Map();
+
 function pushStateToLanPeers() {
   if (!discoveredLanPeers || discoveredLanPeers.size === 0) return;
   const now = Date.now();
-  const packetId = `${SERVER_INSTANCE_ID}_${now}_${Math.random().toString(36).substring(2, 6)}`;
-  const body = JSON.stringify({
-    type: 'PEER_SYNC',
-    senderId: SERVER_INSTANCE_ID,
-    packetId,
-    isPeerServer: true,
-    timestamp: now,
-    state: serverState,
-  });
+  let cachedBody = null;
   for (const [peerUrl, info] of discoveredLanPeers.entries()) {
     if (!info || now - (info.lastSeen || 0) > 60000) {
       discoveredLanPeers.delete(peerUrl);
+      lastPeerPushAt.delete(peerUrl);
       continue;
     }
+    if (inFlightPeerPushes.has(peerUrl)) continue;
+    if (now - (lastPeerPushAt.get(peerUrl) || 0) < 4000) continue;
+    if (!cachedBody) {
+      const packetId = `${SERVER_INSTANCE_ID}_${now}_${Math.random().toString(36).substring(2, 6)}`;
+      cachedBody = JSON.stringify({
+        type: 'PEER_SYNC',
+        senderId: SERVER_INSTANCE_ID,
+        packetId,
+        isPeerServer: true,
+        timestamp: now,
+        state: serverState,
+      });
+    }
+    inFlightPeerPushes.add(peerUrl);
+    lastPeerPushAt.set(peerUrl, now);
+    const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = controller ? setTimeout(() => controller.abort(), 3000) : null;
     fetch(`${peerUrl}/api/sync`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body,
-    }).catch(() => { });
+      body: cachedBody,
+      ...(controller ? { signal: controller.signal } : {}),
+    })
+      .catch(() => { })
+      .finally(() => {
+        if (timer) clearTimeout(timer);
+        inFlightPeerPushes.delete(peerUrl);
+      });
   }
 }
 
