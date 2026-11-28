@@ -497,7 +497,77 @@ async function runTests() {
     assert.ok(afterDeletedTry.invoices.some((i) => i.id === 'INV-5'), 'Live INV-5 must survive stale client deletedRecordIds');
     assert.ok(!afterDeletedTry.deletedRecordIds.includes('INV-5'), 'INV-5 must never enter deletedRecordIds');
 
-    console.log('ALL 15 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL, CLOCK-SKEW & INVOICE PROTECTION TESTS PASSED!');
+    // 16. Slow-clock v45 APK Order Taker tablet that knows curr.lastSettledAt places new KOT -> must stay occupied (not snap to available!)
+    await fetch(`${baseUrl}/api/pos/settle-bill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId: 't-ground-5',
+        settleBeforeMs: Date.now() + 5000,
+      }),
+    });
+    const afterG05Settle = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const g05ReleaseTs = afterG05Settle.tables.find((t) => t.id === 't-ground-5').lastSettledAt;
+    const slowTabletClock = g05ReleaseTs - 90000; // Tablet clock 90s slower than Master!
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'V45_SLOW_TABLET',
+        packetId: 'pkt_v45_slow_tablet_kot',
+        state: {
+          tickets: [{
+            id: 'KOT-3001',
+            tableId: 't-ground-5',
+            tableName: 'G-05',
+            server: 'Asim',
+            timePlaced: slowTabletClock,
+            status: 'pending',
+            items: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1, station: 'main', completed: false }],
+          }],
+          tables: [{
+            id: 't-ground-5',
+            name: 'G-05',
+            floor: 'Ground Floor',
+            zone: 'Ground Floor',
+            seats: 4,
+            status: 'occupied',
+            occupiedSince: slowTabletClock, // simulates v45 waiter/order/[tableId].tsx overwriting with Date.now()
+            lastSettledAt: g05ReleaseTs,
+            billTotal: 1899,
+            orders: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1 }],
+          }],
+        },
+      }),
+    });
+    const afterSlowTablet = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const g05SlowAfter = afterSlowTablet.tables.find((t) => t.id === 't-ground-5');
+    const kot3001 = afterSlowTablet.tickets.find((t) => t.id === 'KOT-3001');
+    assert.ok(kot3001 && !kot3001.isSettled, 'Brand-new KOT-3001 from slow-clock v45 tablet must be accepted');
+    assert.strictEqual(g05SlowAfter.status, 'occupied', 'Slow-clock v45 tablet new order must stay occupied (not snap to available)');
+
+    // 17. Direct /api/print/kot for a dine-in table marks table occupied immediately on Master
+    await fetch(`${baseUrl}/api/print/kot`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        station: 'all',
+        ticket: {
+          id: 'KOT-3002',
+          tableId: 't-roof-2',
+          tableName: 'R-02',
+          server: 'Sharjeel (POS)',
+          timePlaced: Date.now(),
+          status: 'pending',
+          items: [{ id: 'm2', name: 'Mint Margarita', price: 390, qty: 2, station: 'juice', completed: false }],
+        },
+      }),
+    });
+    const afterPrintKot = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const r02DirectKot = afterPrintKot.tables.find((t) => t.id === 't-roof-2');
+    assert.strictEqual(r02DirectKot.status, 'occupied', 'POST /api/print/kot must immediately mark R-02 occupied');
+
+    console.log('ALL 17 MULTI-FLOOR SYNC, KOT/SOT, TABLE STABILITY & CLOCK-SKEW TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }

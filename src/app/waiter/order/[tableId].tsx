@@ -639,16 +639,19 @@ export default function TableOrderScreen() {
       combinedOrderNote
     );
 
+    const safeNow = Math.max(Date.now(), table?.lastSettledAt ? Number(table.lastSettledAt) + 1000 : 0);
     if (table && table.status !== 'occupied') {
       updateTable(table.id, {
         status: 'occupied',
-        occupiedSince: table.occupiedSince || Date.now(),
+        occupiedSince: Math.max(Number(table.occupiedSince || 0), safeNow),
+        ordersUpdatedAt: safeNow,
         server: orderServerName,
         serverId: orderServerId,
         billTotal: totalBillSoFar,
       });
     } else if (table) {
       updateTable(table.id, {
+        ordersUpdatedAt: safeNow,
         server: orderServerName,
         serverId: orderServerId,
         billTotal: totalBillSoFar,

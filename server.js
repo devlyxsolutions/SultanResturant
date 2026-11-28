@@ -6344,7 +6344,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 56;
+      const targetWebVer = 57;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7794,7 +7794,29 @@ async function handleRequest(req, res) {
           const extIdx = serverState.tickets.findIndex((t) => t && t.id === tId);
           if (extIdx === -1 && !data.ticket.isSettled) {
             serverState.tickets.unshift(data.ticket);
+            const kotTblId = data.ticket.tableId;
+            if (kotTblId && kotTblId !== 'takeaway' && kotTblId !== 'delivery' && Array.isArray(serverState.tables)) {
+              const nowKot = Date.now();
+              const tkItemsTotal = (Array.isArray(data.ticket.items) ? data.ticket.items : []).reduce(
+                (s, it) => s + Number(it?.price || 0) * Number(it?.qty || 1),
+                0
+              );
+              serverState.tables = serverState.tables.map((t) => {
+                if (!t || t.id !== kotTblId || t.status === 'billed') return t;
+                const safeOcc = Math.max(Number(t.occupiedSince || 0), Number(t.lastSettledAt || 0) + 1000, nowKot);
+                return {
+                  ...t,
+                  status: 'occupied',
+                  isPaid: false,
+                  occupiedSince: safeOcc,
+                  ordersUpdatedAt: Math.max(Number(t.ordersUpdatedAt || 0), nowKot),
+                  server: data.ticket.server || t.server,
+                  billTotal: t.status === 'occupied' ? Math.max(Number(t.billTotal || 0), tkItemsTotal) : Math.max(Number(t.billTotal || 0), tkItemsTotal),
+                };
+              });
+            }
             serverState.lastUpdated = Date.now();
+            lastStateFingerprint = computeStateFingerprint(serverState);
             persistState();
             broadcastToClients({
               type: 'NEW_ORDER_ALERT',
@@ -9254,10 +9276,17 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             if (!inc.isSettled && inc.tableId && !autoSettledTicketIds.has(tId)) {
               const currTbl = currentTablesById.get(inc.tableId);
               const incTbl = incomingTableByIdForTickets.get(inc.tableId);
+              const clientSawLatestSettlement = Boolean(
+                incTbl &&
+                (incTbl.status === 'occupied' || incTbl.status === 'billed') &&
+                Number(currTbl?.lastSettledAt || 0) > 0 &&
+                Number(incTbl.lastSettledAt || 0) >= Number(currTbl?.lastSettledAt || 0) &&
+                serverNow - Number(inc.timePlaced || 0) < 2 * 60 * 60 * 1000
+              );
               const incTableNewlyOccupied =
                 incTbl &&
                 (incTbl.status === 'occupied' || incTbl.status === 'billed') &&
-                Number(incTbl.occupiedSince || 0) > Number(currTbl?.lastSettledAt || 0);
+                (Number(incTbl.occupiedSince || 0) > Number(currTbl?.lastSettledAt || 0) || clientSawLatestSettlement);
               if (
                 currTbl &&
                 currTbl.lastSettledAt &&
@@ -9590,12 +9619,20 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
               inc.status !== 'available';
 
             // Case 1: Table already settled on server — reject ALL stale 'occupied'/'billed' echoes unless strictly newer
+            // Allow genuine slow-clock tablet orders if client already observed currReleaseTs (incReleaseTs >= currReleaseTs) & has active items
+            const clientKnowsReleaseAndAddedItems =
+              inc.status === 'occupied' &&
+              incReleaseTs >= currReleaseTs &&
+              Array.isArray(inc.orders) &&
+              inc.orders.length > 0 &&
+              currReleaseTs - incOccTs < 15 * 60 * 1000;
             if (
               curr.status === 'available' &&
               (inc.status === 'occupied' || inc.status === 'billed') &&
               tableTickets.length === 0 &&
               currReleaseTs > 0 &&
-              (incOccTs === 0 || incOccTs <= currReleaseTs)
+              (incOccTs === 0 || incOccTs <= currReleaseTs) &&
+              !clientKnowsReleaseAndAddedItems
             ) {
               return curr;
             }

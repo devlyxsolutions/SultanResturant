@@ -1794,6 +1794,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   ...t,
                   status: 'occupied',
                   occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1000, Date.now()),
+                  ordersUpdatedAt: safeOrderTs,
                   isPaid: false,
                   server: serverName,
                   serverId: finalServerId,
@@ -4883,11 +4884,18 @@ export const useRestaurantStore = create<RestaurantState>()(
             );
             const remoteOrderIds = new Set(normalizedRemote.map((rt) => rt.orderId).filter(Boolean));
             const remoteTableMap = new Map((remoteState.tables || []).map((t) => [t.id, t]));
+            const localTableMapForTickets = new Map((state.tables || []).map((t) => [t.id, t]));
             const freshLocalOnly = (state.tickets || []).filter((lt) => {
               if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id) || remoteSettledIds.has(lt.id) || lt.isSettled) return false;
               if (lt.orderId && remoteOrderIds.has(lt.orderId)) return false;
               const rTable = remoteTableMap.get(lt.tableId);
-              if (rTable && rTable.lastSettledAt && (!lt.timePlaced || lt.timePlaced <= rTable.lastSettledAt + 2000)) {
+              const lTable = localTableMapForTickets.get(lt.tableId);
+              const locallyReoccupied = Boolean(
+                lTable &&
+                (lTable.status === 'occupied' || lTable.status === 'billed') &&
+                Number(lTable.occupiedSince || 0) > Number(rTable?.lastSettledAt || 0)
+              );
+              if (rTable && rTable.lastSettledAt && (!lt.timePlaced || lt.timePlaced <= rTable.lastSettledAt) && !locallyReoccupied) {
                 return false;
               }
               return true;
