@@ -626,7 +626,96 @@ async function runTests() {
     assert.strictEqual(r02Released.status, 'available', 'R-02 must release back to available after settle');
     assert.strictEqual(r02Released.extraCharge, undefined, 'Released table must clear extraCharge');
 
-    console.log('ALL 18 MULTI-FLOOR SYNC, KOT/SOT, TABLE STABILITY, EXTRA CHARGE & CLOCK-SKEW TESTS PASSED!');
+    // 19. Takeaway Pending (named) persists across KOT + Temp Bill, rejects empty name, settles atomically & blocks stale resurrection
+    const badTwRes = await fetch(`${baseUrl}/api/pos/pending-takeaway`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'upsert', entry: { id: 'TW-BAD-1', customerName: '   ', items: [] } }),
+    });
+    assert.strictEqual(badTwRes.status, 400, 'Takeaway pending without customerName must be rejected with 400');
+
+    const twId1 = 'TW-TEST-BILAL';
+    await fetch(`${baseUrl}/api/pos/pending-takeaway`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action: 'upsert',
+        entry: {
+          id: twId1,
+          customerName: 'Bilal',
+          items: [{ id: 'm-rice', name: 'Chicken Pulao', price: 1500, qty: 2 }],
+          subTotal: 3000,
+          discount: 0,
+          extraCharge: 300,
+          extraChargeReason: 'Extra Rice',
+          tax: 0,
+          total: 3300,
+          status: 'billed',
+          hasKotSent: true,
+          isBillPrinted: true,
+          pendingBillId: 'TMP-101',
+          pendingSeq: 101,
+          ticketIds: ['KOT-TW-1'],
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        },
+      }),
+    });
+    const afterTwCreate = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const bilalTw = (afterTwCreate.pendingTakeaways || []).find((p) => p.id === twId1);
+    assert.ok(bilalTw, 'Pending Takeaway for Bilal must be stored on Master');
+    assert.strictEqual(bilalTw.customerName, 'Bilal', 'Customer name must match');
+    assert.strictEqual(bilalTw.status, 'billed', 'Status must be billed');
+    assert.strictEqual(bilalTw.pendingBillId, 'TMP-101', 'Pending bill ID must be saved');
+    assert.strictEqual(bilalTw.total, 3300, 'Total including extraCharge must be preserved');
+
+    await fetch(`${baseUrl}/api/pos/settle-bill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pendingTakeawayId: twId1,
+        invoice: {
+          id: 'INV-100',
+          invoiceSeq: 100,
+          dailyInvoiceNumber: 'INV-100',
+          orderType: 'takeaway',
+          tableName: 'Takeaway • Bilal',
+          customer: { id: twId1, name: 'Bilal', phone: '', totalOrders: 0, totalSpent: 0 },
+          server: 'Sharjeel (Cashier)',
+          cashier: 'Sharjeel (Cashier)',
+          timePlaced: Date.now(),
+          timeSettled: Date.now(),
+          items: [{ id: 'm-rice', name: 'Chicken Pulao', price: 1500, qty: 2 }],
+          subTotal: 3000,
+          discount: 0,
+          extraCharge: 300,
+          extraChargeReason: 'Extra Rice',
+          tax: 0,
+          total: 3300,
+          payments: [{ type: 'cash', amount: 3300 }],
+          status: 'settled',
+        },
+        settleBeforeMs: Date.now(),
+      }),
+    });
+    // Stale peer tries to resurrect settled takeaway pending
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'STALE_PEER',
+        packetId: 'pkt_stale_tw_resurrect',
+        state: {
+          pendingTakeaways: [{ ...bilalTw, status: 'billed', updatedAt: Date.now() + 5000 }],
+        },
+      }),
+    });
+    const afterTwSettle = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const bilalAfterSettle = (afterTwSettle.pendingTakeaways || []).find((p) => p.id === twId1);
+    assert.strictEqual(bilalAfterSettle.status, 'settled', 'Settled Takeaway Pending must stay settled (never resurrected by stale peer)');
+    assert.strictEqual(bilalAfterSettle.settledInvoiceId, 'INV-100', 'Settled Takeaway Pending must link INV-100');
+
+    console.log('ALL 19 MULTI-FLOOR SYNC, KOT/SOT, TABLE STABILITY, EXTRA CHARGE, TAKEAWAY PENDING & CLOCK-SKEW TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }

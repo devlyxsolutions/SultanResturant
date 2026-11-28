@@ -311,6 +311,33 @@ export type Ticket = {
   kotShiftId?: string;
 };
 
+export type PendingTakeawayOrder = {
+  id: string;
+  customerName: string;
+  customerPhone?: string;
+  customerId?: string;
+  items: OrderItem[];
+  subTotal: number;
+  discount: number;
+  extraCharge?: number;
+  extraChargeReason?: string;
+  tax: number;
+  serviceCharge?: number;
+  total: number;
+  notes?: string;
+  server?: string;
+  cashier?: string;
+  status: 'kot_pending' | 'billed' | 'settled' | 'cancelled';
+  hasKotSent: boolean;
+  isBillPrinted: boolean;
+  pendingBillId?: string;
+  ticketIds: string[];
+  createdAt: number;
+  updatedAt: number;
+  settledAt?: number;
+  settledInvoiceId?: string;
+};
+
 export type MenuVariant = {
   name: string;
   price: number;
@@ -615,7 +642,11 @@ type RestaurantState = {
   clearTableMoveAlert: (alertId?: string) => void;
   clearOrderCancelledAlert: (alertId?: string) => void;
 
-  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean, serverId?: string, orderNotes?: string) => void;
+  placeOrder: (tableId: string, serverName: string, items: { item: MenuItem, qty: number, notes?: string }[], isAddOn?: boolean, serverId?: string, orderNotes?: string, customTableName?: string) => void;
+  pendingTakeaways: PendingTakeawayOrder[];
+  upsertPendingTakeaway: (entry: PendingTakeawayOrder) => void;
+  settlePendingTakeaway: (id: string, invoiceId?: string) => void;
+  cancelPendingTakeaway: (id: string) => void;
   startCookingTicket: (ticketId: string, station?: 'main' | 'juice') => void;
   markItemReady: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
   markItemServed: (ticketId: string, itemId: string, station?: 'main' | 'juice') => void;
@@ -1304,6 +1335,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       lastOrderCancelledAlert: null,
       deletedTicketIds: [],
       tickets: [],
+      pendingTakeaways: [],
       menuItems: INITIAL_MENU,
       hasClearedLegacyDummyMenu: true,
       dummyPurgeVersion: 1,
@@ -1582,7 +1614,7 @@ export const useRestaurantStore = create<RestaurantState>()(
         return state;
       }),
 
-      placeOrder: (tableId, serverName, orderItems, isAddOn, serverId, orderNotes) => {
+      placeOrder: (tableId, serverName, orderItems, isAddOn, serverId, orderNotes, customTableName) => {
         const sysSettings = useSettingsStore.getState().settings;
         const autoRouteBev = sysSettings.kdsAutoRouteBeverages !== false;
         const targetMainPrep = sysSettings.kdsTargetPrepMinutes || 15;
@@ -1634,10 +1666,16 @@ export const useRestaurantStore = create<RestaurantState>()(
           const finalServerId = resolvedServerId || table?.serverId;
           const safeOrderTs = Math.max(Date.now(), table?.lastSettledAt ? Number(table.lastSettledAt) + 1000 : 0);
 
+          const customNonTableLabel = customTableName?.trim()
+            ? customTableName.trim()
+            : (tableId === 'delivery' ? 'Delivery' : 'Takeaway');
+
           const newTicket: Ticket = {
             id: newTicketId,
-            tableId, // can be dummy like 'takeaway' or actual tableId
-            tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
+            tableId, // can be dummy like 'takeaway', 'TW-...', or actual tableId
+            tableName: table
+              ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name)
+              : (isActuallyAddOn ? `${customNonTableLabel} (Add-on #${roundNumber})` : customNonTableLabel),
             server: serverName,
             serverId: finalServerId,
             timePlaced: safeOrderTs,
@@ -1725,7 +1763,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             newBeverageAlert = {
               id: `bev-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
               tableId: table ? table.id : (tableId || 'counter'),
-              tableName: table ? table.name : (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter'),
+              tableName: table ? table.name : (customTableName?.trim() || (tableId === 'delivery' ? 'Delivery' : 'Takeaway / Counter')),
               floor: rawFloor,
               server: serverName,
               items: beverageItems.map((b) => ({
@@ -2662,6 +2700,123 @@ export const useRestaurantStore = create<RestaurantState>()(
         return { lastFoodReadyAlert: nextLast, foodReadyAlerts: nextList };
       }),
 
+      upsertPendingTakeaway: (entry) => set((state) => {
+        if (!entry || !entry.id) return state;
+        const now = Date.now();
+        const existingList = Array.isArray(state.pendingTakeaways) ? state.pendingTakeaways : [];
+        const existing = existingList.find((p) => p && p.id === entry.id);
+        const mergedTicketIds = Array.from(
+          new Set([
+            ...(existing?.ticketIds || []),
+            ...(Array.isArray(entry.ticketIds) ? entry.ticketIds : []),
+          ].filter(Boolean))
+        );
+        const nextRec: PendingTakeawayOrder = {
+          ...(existing || {}),
+          ...entry,
+          customerName: String(entry.customerName || existing?.customerName || 'Guest').trim(),
+          items: Array.isArray(entry.items) ? entry.items.map((i) => ({ ...i })) : (existing?.items || []),
+          hasKotSent: Boolean(entry.hasKotSent || existing?.hasKotSent),
+          isBillPrinted: Boolean(entry.isBillPrinted || existing?.isBillPrinted),
+          pendingBillId: entry.pendingBillId || existing?.pendingBillId,
+          ticketIds: mergedTicketIds,
+          createdAt: existing?.createdAt || entry.createdAt || now,
+          updatedAt: Math.max(now, Number(existing?.updatedAt || 0) + 1),
+        };
+        const others = existingList.filter((p) => p && p.id !== entry.id);
+        const active = [nextRec, ...others].filter((p) => p.status !== 'settled' && p.status !== 'cancelled');
+        const archived = [nextRec, ...others]
+          .filter((p) => p.status === 'settled' || p.status === 'cancelled')
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+          .slice(0, 80);
+        notifySync();
+        return {
+          pendingTakeaways: [...active, ...archived],
+        };
+      }),
+
+      settlePendingTakeaway: (id, invoiceId) => set((state) => {
+        if (!id) return state;
+        const now = Date.now();
+        const existingList = Array.isArray(state.pendingTakeaways) ? state.pendingTakeaways : [];
+        const target = existingList.find((p) => p && p.id === id);
+        const ticketIdSet = new Set(target?.ticketIds || []);
+        const nextList = existingList.map((p) =>
+          p && p.id === id
+            ? {
+              ...p,
+              status: 'settled' as const,
+              settledAt: now,
+              updatedAt: Math.max(now, Number(p.updatedAt || 0) + 1),
+              settledInvoiceId: invoiceId || p.settledInvoiceId,
+            }
+            : p
+        );
+        const archivedTickets = capTicketsWithHistory(
+          (state.tickets || []).map((t) =>
+            t && !t.isSettled && (t.tableId === id || ticketIdSet.has(t.id))
+              ? archiveTicketForSettlement(t, now)
+              : t
+          )
+        );
+        const nextPendingByTable = { ...(state.invoiceSequenceState?.pendingByTableId || {}) };
+        if (nextPendingByTable[id]) delete nextPendingByTable[id];
+        notifySync();
+        return {
+          pendingTakeaways: nextList,
+          tickets: archivedTickets,
+          ...(state.invoiceSequenceState
+            ? {
+              invoiceSequenceState: {
+                ...state.invoiceSequenceState,
+                pendingByTableId: nextPendingByTable,
+              },
+            }
+            : {}),
+        };
+      }),
+
+      cancelPendingTakeaway: (id) => set((state) => {
+        if (!id) return state;
+        const now = Date.now();
+        const existingList = Array.isArray(state.pendingTakeaways) ? state.pendingTakeaways : [];
+        const target = existingList.find((p) => p && p.id === id);
+        const linkedIds = new Set(target?.ticketIds || []);
+        const removedTicketIds: string[] = [];
+        const remainingTickets = (state.tickets || []).filter((t) => {
+          if (!t) return false;
+          if (!t.isSettled && (t.tableId === id || linkedIds.has(t.id))) {
+            removedTicketIds.push(t.id);
+            return false;
+          }
+          return true;
+        });
+        const nextPendingByTable = { ...(state.invoiceSequenceState?.pendingByTableId || {}) };
+        if (nextPendingByTable[id]) delete nextPendingByTable[id];
+        notifySync();
+        return {
+          pendingTakeaways: existingList.map((p) =>
+            p && p.id === id
+              ? {
+                ...p,
+                status: 'cancelled' as const,
+                updatedAt: Math.max(now, Number(p.updatedAt || 0) + 1),
+              }
+              : p
+          ),
+          tickets: remainingTickets,
+          deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), ...removedTicketIds])).slice(-400),
+          ...(state.invoiceSequenceState
+            ? {
+              invoiceSequenceState: {
+                ...state.invoiceSequenceState,
+                pendingByTableId: nextPendingByTable,
+              },
+            }
+            : {}),
+        };
+      }),
+
       settleBill: (tableId) => set((state) => {
         markLocalTableMutated(tableId);
         const targetTable = state.tables.find(t => t.id === tableId);
@@ -3248,12 +3403,15 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           return {
             operationalDayStartAt: Math.max(state.operationalDayStartAt || 0, ts),
-            invoiceSequenceState: { dayStartAt: ts, lastSeq: 0, pendingByTableId: {} },
+            invoiceSequenceState: { dayStartAt: ts, lastSeq: 0, lastPendingSeq: 0, pendingByTableId: {} },
+            pendingTakeaways: [],
             tables: (state.tables || []).map((t) => ({
               ...t,
               status: 'available' as const,
               billTotal: 0,
               orders: [],
+              extraCharge: undefined,
+              extraChargeReason: undefined,
               server: undefined,
               isPaid: false,
               lastInvoiceId: undefined,
@@ -5171,6 +5329,48 @@ export const useRestaurantStore = create<RestaurantState>()(
               })()
             } : {}),
             ...(Array.isArray(remoteState.onlineOrders) ? { onlineOrders: remoteState.onlineOrders } : {}),
+            ...(Array.isArray(remoteState.pendingTakeaways) ? {
+              pendingTakeaways: (() => {
+                const isTerminal = (s?: string) => s === 'settled' || s === 'cancelled';
+                const twMap = new Map<string, PendingTakeawayOrder>();
+                for (const loc of (state.pendingTakeaways || [])) {
+                  if (loc && loc.id) twMap.set(loc.id, loc);
+                }
+                for (const rem of remoteState.pendingTakeaways) {
+                  if (!rem || !rem.id) continue;
+                  const prev = twMap.get(rem.id);
+                  if (!prev) {
+                    twMap.set(rem.id, rem);
+                    continue;
+                  }
+                  if (isTerminal(prev.status) && !isTerminal(rem.status)) continue;
+                  if (isTerminal(rem.status) && !isTerminal(prev.status)) {
+                    twMap.set(rem.id, {
+                      ...prev,
+                      ...rem,
+                      ticketIds: Array.from(new Set([...(prev.ticketIds || []), ...(rem.ticketIds || [])])),
+                    });
+                    continue;
+                  }
+                  const remTs = Number(rem.updatedAt || rem.createdAt || 0);
+                  const prevTs = Number(prev.updatedAt || prev.createdAt || 0);
+                  const newer = remTs >= prevTs ? rem : prev;
+                  const older = remTs >= prevTs ? prev : rem;
+                  twMap.set(rem.id, {
+                    ...older,
+                    ...newer,
+                    hasKotSent: Boolean(newer.hasKotSent || older.hasKotSent),
+                    isBillPrinted: Boolean(newer.isBillPrinted || older.isBillPrinted),
+                    pendingBillId: newer.pendingBillId || older.pendingBillId,
+                    ticketIds: Array.from(new Set([...(older.ticketIds || []), ...(newer.ticketIds || [])])),
+                  });
+                }
+                const all = Array.from(twMap.values());
+                const active = all.filter((p) => !isTerminal(p.status)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
+                const archived = all.filter((p) => isTerminal(p.status)).sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, 80);
+                return [...active, ...archived];
+              })()
+            } : {}),
             ...(remoteState.pendingFloorOrderAlert !== undefined ? { pendingFloorOrderAlert: remoteState.pendingFloorOrderAlert } : {}),
             ...(remoteState.lastBeverageOrderAlert !== undefined ? { lastBeverageOrderAlert: remoteState.lastBeverageOrderAlert } : {}),
             ...(remoteState.salesReturns ? { salesReturns: remoteState.salesReturns } : {}),

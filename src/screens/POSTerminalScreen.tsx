@@ -46,6 +46,7 @@ import {
   MenuItem,
   OrderItem,
   Payment,
+  PendingTakeawayOrder,
   Table,
   useAuthStore,
   useDiscountStore,
@@ -301,7 +302,18 @@ export default function POSTerminalScreen({
   const clearAllOldTickets = useRestaurantStore((state) => state.clearAllOldTickets);
   const logCancelledPunchedItems = useRestaurantStore((state) => state.logCancelledPunchedItems);
   const tickets = useRestaurantStore((state) => state.tickets) || [];
+  const pendingTakeaways = useRestaurantStore((state) => state.pendingTakeaways) || [];
+  const upsertPendingTakeaway = useRestaurantStore((state) => state.upsertPendingTakeaway);
+  const settlePendingTakeaway = useRestaurantStore((state) => state.settlePendingTakeaway);
+  const cancelPendingTakeaway = useRestaurantStore((state) => state.cancelPendingTakeaway);
   const [movingSourceTable, setMovingSourceTable] = useState<Table | null>(null);
+  const activePendingTakeaways = useMemo(
+    () =>
+      (pendingTakeaways || [])
+        .filter((p) => p && p.status !== 'settled' && p.status !== 'cancelled')
+        .sort((a, b) => (b.updatedAt || b.createdAt || 0) - (a.updatedAt || a.createdAt || 0)),
+    [pendingTakeaways]
+  );
   const activeRunningTickets = useMemo(
     () => tickets.filter((t) => t && !t.isSettled && t.status !== 'served'),
     [tickets]
@@ -414,6 +426,12 @@ export default function POSTerminalScreen({
   const [tableModalVisible, setTableModalVisible] = useState(false);
   const [checkoutModalVisible, setCheckoutModalVisible] = useState(false);
   const [pendingOrdersModalVisible, setPendingOrdersModalVisible] = useState(false);
+  const [takeawayPendingModalVisible, setTakeawayPendingModalVisible] = useState(false);
+  const [takeawayPendingSearch, setTakeawayPendingSearch] = useState('');
+  const [takeawayCustomerName, setTakeawayCustomerName] = useState('');
+  const [activeTakeawayPendingId, setActiveTakeawayPendingId] = useState<string | null>(null);
+  const [takeawayNameError, setTakeawayNameError] = useState(false);
+  const takeawayNameInputRef = useRef<any>(null);
   const [nowTick, setNowTick] = useState(() => Date.now());
 
   useEffect(() => {
@@ -564,6 +582,8 @@ export default function POSTerminalScreen({
               if (typeof draft.discountAmount === 'string') setDiscountAmount(draft.discountAmount);
               if (typeof draft.extraChargeAmount === 'string') setExtraChargeAmount(draft.extraChargeAmount);
               if (typeof draft.extraChargeReason === 'string') setExtraChargeReason(draft.extraChargeReason);
+              if (typeof draft.takeawayCustomerName === 'string') setTakeawayCustomerName(draft.takeawayCustomerName);
+              if (typeof draft.activeTakeawayPendingId === 'string') setActiveTakeawayPendingId(draft.activeTakeawayPendingId);
             }
           } catch { }
         }
@@ -589,10 +609,12 @@ export default function POSTerminalScreen({
       discountAmount,
       extraChargeAmount,
       extraChargeReason,
+      takeawayCustomerName,
+      activeTakeawayPendingId,
       savedAt: Date.now(),
     };
     AsyncStorage.setItem('@sultan_pos_draft_cart_v1', JSON.stringify(payload)).catch(() => { });
-  }, [cart, loadedCart, selectedTableId, orderType, orderNotes, selectedServer, discountAmount, extraChargeAmount, extraChargeReason]);
+  }, [cart, loadedCart, selectedTableId, orderType, orderNotes, selectedServer, discountAmount, extraChargeAmount, extraChargeReason, takeawayCustomerName, activeTakeawayPendingId]);
 
   const availableFloors = useMemo(() => {
     const configured = (dynamicFloors || []).map((f) => f.name.trim()).filter(Boolean);
@@ -733,6 +755,9 @@ export default function POSTerminalScreen({
   const handleTableSelect = (tId: string) => {
     setSelectedTableId(tId);
     setOrderType('dine-in');
+    setActiveTakeawayPendingId(null);
+    setTakeawayCustomerName('');
+    setTakeawayNameError(false);
     setTableModalVisible(false);
 
     const { targetTable, tableTickets, combinedItems } = computeTableBaseline(tId);
@@ -996,8 +1021,8 @@ export default function POSTerminalScreen({
       tenderedAmount: hasItems ? totalPaid : 0,
       changeDue: hasItems ? changeDue : 0,
       orderType,
-      tableName: hasItems ? selectedTableObj?.name : '',
-      customerName: hasItems ? selectedCustomerObj?.name : '',
+      tableName: hasItems ? (selectedTableObj?.name || (orderType === 'takeaway' && takeawayCustomerName.trim() ? `Takeaway • ${takeawayCustomerName.trim()}` : '')) : '',
+      customerName: hasItems ? (selectedCustomerObj?.name || takeawayCustomerName.trim()) : '',
       cashierName: user?.name || 'Cashier',
       lastUpdated: Date.now(),
     };
@@ -1026,7 +1051,7 @@ export default function POSTerminalScreen({
     publishCustomerDisplayState(currentState);
     const unsubscribe = subscribeToCustomerDisplay(() => { }, () => getCurrentCfdState());
     return () => unsubscribe();
-  }, [cart, subTotal, discountVal, extraChargeVal, extraChargeReason, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, user?.name]);
+  }, [cart, subTotal, discountVal, extraChargeVal, extraChargeReason, tax, serviceCharge, deliveryCharges, total, totalPaid, changeDue, orderType, selectedTableObj?.name, selectedCustomerObj?.name, takeawayCustomerName, user?.name]);
 
   const handleOpenCustomerDisplay = () => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -1147,13 +1172,19 @@ export default function POSTerminalScreen({
     setOrderType(type);
     if (type === 'dine-in') {
       setSelectedCustomerId('');
+      setActiveTakeawayPendingId(null);
+      setTakeawayNameError(false);
       if (!selectedTableId) setTableModalVisible(true);
     } else {
       setSelectedTableId('');
-      if (type === 'delivery' && !selectedCustomerId) {
-        setCustomerSearchQuery('');
-        setIsCreatingNewCustomer(false);
-        setCustomerModalVisible(true);
+      setTakeawayNameError(false);
+      if (type === 'delivery') {
+        setActiveTakeawayPendingId(null);
+        if (!selectedCustomerId) {
+          setCustomerSearchQuery('');
+          setIsCreatingNewCustomer(false);
+          setCustomerModalVisible(true);
+        }
       }
     }
   };
@@ -1353,6 +1384,9 @@ export default function POSTerminalScreen({
     setExtraChargeAmount('0');
     setExtraChargeReason('');
     setExtraChargeExpanded(false);
+    setActiveTakeawayPendingId(null);
+    setTakeawayCustomerName('');
+    setTakeawayNameError(false);
   };
 
   const handleSaveNewCustomer = () => {
@@ -1366,8 +1400,16 @@ export default function POSTerminalScreen({
     if (existing) {
       updateCustomer(existing.id, { name: customerName, address: customerAddress });
       setSelectedCustomerId(existing.id);
+      if (orderType === 'takeaway') {
+        setTakeawayCustomerName(customerName.trim());
+        setTakeawayNameError(false);
+      }
     } else {
       addCustomer({ name: customerName, phone: customerPhone, address: customerAddress });
+      if (orderType === 'takeaway') {
+        setTakeawayCustomerName(customerName.trim());
+        setTakeawayNameError(false);
+      }
     }
     setIsCreatingNewCustomer(false);
   };
@@ -1572,7 +1614,7 @@ export default function POSTerminalScreen({
 
   const syncCartDeltasToKitchenAndTable = (targetId: string, targetName: string, serverLabel: string) => {
     const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
-    const isTableTarget = Boolean(targetId && targetId !== 'takeaway' && targetId !== 'delivery');
+    const isTableTarget = Boolean(targetId && targetId !== 'takeaway' && targetId !== 'delivery' && !targetId.startsWith('TW-'));
     const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
 
     if (minusKotItems.length > 0) {
@@ -1610,6 +1652,7 @@ export default function POSTerminalScreen({
       }
     }
 
+    let createdTicketId: string | undefined;
     if (addedKotItems.length > 0 && canSendKds) {
       placeOrder(
         targetId,
@@ -1617,15 +1660,176 @@ export default function POSTerminalScreen({
         addedKotItems,
         hasPriorSentOrder,
         undefined,
-        orderNotes.trim() || undefined
+        orderNotes.trim() || undefined,
+        targetName
       );
       const latestTicket = useRestaurantStore.getState().tickets?.[0];
       if (latestTicket) {
+        createdTicketId = latestTicket.id;
         dispatchDirectKotPrint(latestTicket, false);
       }
     }
 
-    return { addedKotItems, minusKotItems, hasPriorSentOrder };
+    return { addedKotItems, minusKotItems, hasPriorSentOrder, createdTicketId };
+  };
+
+  const resolveTakeawayGuestName = () =>
+    (takeawayCustomerName.trim() || selectedCustomerObj?.name?.trim() || '');
+
+  const requireTakeawayGuestName = (actionLabel: string): string | null => {
+    if (orderType !== 'takeaway') return '';
+    const name = resolveTakeawayGuestName();
+    if (name) {
+      setTakeawayNameError(false);
+      return name;
+    }
+    setTakeawayNameError(true);
+    setMobileTab('cart');
+    setTimeout(() => {
+      try { takeawayNameInputRef.current?.focus?.(); } catch { }
+    }, 100);
+    showKdsToast(`Takeaway ${actionLabel} ke liye Customer ka Naam likhna zaroori hai!`);
+    return null;
+  };
+
+  const handleStartNewTakeaway = () => {
+    setOrderType('takeaway');
+    setSelectedTableId('');
+    setSelectedCustomerId('');
+    setActiveTakeawayPendingId(null);
+    setTakeawayCustomerName('');
+    setTakeawayNameError(false);
+    setCart([]);
+    setLoadedCart([]);
+    setOrderNotes('');
+    setSelectedEventCampaign(null);
+    setDiscountAmount('0');
+    setExtraChargeAmount('0');
+    setExtraChargeReason('');
+    setExtraChargeExpanded(false);
+    setLoadedTicketId(null);
+    setTakeawayPendingModalVisible(false);
+    setMobileTab('menu');
+  };
+
+  const handleLoadPendingTakeaway = (tw: PendingTakeawayOrder, autoOpenCheckout = false) => {
+    if (autoOpenCheckout && !requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
+    setOrderType('takeaway');
+    setSelectedTableId('');
+    setActiveTakeawayPendingId(tw.id);
+    setTakeawayCustomerName(tw.customerName || '');
+    setTakeawayNameError(false);
+    setSelectedCustomerId(tw.customerId || '');
+    setSelectedServer(tw.server || '');
+    const itemsCopy = (tw.items || []).map((i) => ({ ...i }));
+    setCart(itemsCopy);
+    setLoadedCart(tw.hasKotSent ? JSON.parse(JSON.stringify(itemsCopy)) : []);
+    setSelectedEventCampaign(null);
+    setDiscountAmount(String(tw.discount || 0));
+    setExtraChargeAmount(String(tw.extraCharge || 0));
+    setExtraChargeReason(tw.extraChargeReason || '');
+    setExtraChargeExpanded(false);
+    setOrderNotes(tw.notes || '');
+    setLoadedTicketId(tw.ticketIds?.[0] || null);
+    setTakeawayPendingModalVisible(false);
+    setPendingOrdersModalVisible(false);
+
+    if (autoOpenCheckout) {
+      setTimeout(() => {
+        setPayments([{ type: 'cash', amount: Math.round(tw.total || 0) }]);
+        setActivePaymentIndex(0);
+        setCheckoutModalVisible(true);
+      }, 120);
+    } else {
+      setMobileTab('cart');
+    }
+  };
+
+  const handleReprintPendingTakeawayBill = (tw: PendingTakeawayOrder) => {
+    if (!requirePosPerm('posCanPrintUnpaidBill', 'print pending takeaway bills')) return;
+    const pendingSeq = useRestaurantStore.getState().allocateNextInvoiceSeq({
+      tableId: tw.id,
+      isPendingBill: true,
+    });
+    const billId = tw.pendingBillId || pendingSeq.dailyInvoiceNumber;
+    const unpaidInvoice: Invoice = {
+      id: billId,
+      invoiceSeq: pendingSeq.seq,
+      dailyInvoiceNumber: billId,
+      orderType: 'takeaway',
+      tableName: `Takeaway • ${tw.customerName}`,
+      customer: {
+        id: tw.customerId || tw.id,
+        name: tw.customerName,
+        phone: tw.customerPhone || '',
+        totalOrders: 0,
+        totalSpent: 0,
+      },
+      server: tw.server || formatStaffWithExactRole(user?.name, 'Cashier'),
+      orderTakenBy: tw.server || formatStaffWithExactRole(user?.name, 'Cashier'),
+      cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
+      timePlaced: tw.createdAt || Date.now(),
+      timeSettled: Date.now(),
+      items: tw.items || [],
+      subTotal: tw.subTotal || 0,
+      discount: tw.discount || 0,
+      extraCharge: (tw.extraCharge || 0) > 0 ? tw.extraCharge : undefined,
+      extraChargeReason: (tw.extraCharge || 0) > 0 ? tw.extraChargeReason : undefined,
+      tax: tw.tax || 0,
+      serviceCharge: (tw.serviceCharge || 0) > 0 ? tw.serviceCharge : undefined,
+      total: tw.total || 0,
+      payments: [],
+      status: 'unpaid',
+      isUnpaidBill: true,
+      notes: `Takeaway Pending Bill • ${tw.customerName}`,
+    };
+    const updatedRec: PendingTakeawayOrder = {
+      ...tw,
+      status: 'billed',
+      isBillPrinted: true,
+      pendingBillId: billId,
+      updatedAt: Date.now(),
+    };
+    upsertPendingTakeaway(updatedRec);
+    postPosAtomicEndpoint('/api/pos/pending-takeaway', {
+      action: 'upsert',
+      entry: { ...updatedRec, pendingSeq: pendingSeq.seq },
+    }).catch(() => { });
+    broadcastImmediately();
+    printInvoiceReceipt(unpaidInvoice);
+    showKdsToast(`Takeaway Pending Bill (${billId}) printed for ${tw.customerName}`);
+  };
+
+  const handleCancelPendingTakeaway = (tw: PendingTakeawayOrder) => {
+    if (!requirePosPerm('posCanDismissTicket', 'cancel pending takeaway orders')) return;
+    const confirmMsg = `Cancel pending takeaway order for "${tw.customerName}" (Rs. ${Math.round(tw.total || 0).toLocaleString()})?`;
+    const executeCancel = () => {
+      cancelPendingTakeaway(tw.id);
+      postPosAtomicEndpoint('/api/pos/pending-takeaway', {
+        action: 'cancel',
+        id: tw.id,
+      }).catch(() => { });
+      broadcastImmediately();
+      if (activeTakeawayPendingId === tw.id) {
+        setActiveTakeawayPendingId(null);
+        setTakeawayCustomerName('');
+        setCart([]);
+        setLoadedCart([]);
+        setOrderNotes('');
+        setDiscountAmount('0');
+        setExtraChargeAmount('0');
+        setExtraChargeReason('');
+      }
+      showKdsToast(`Cancelled Takeaway Pending for ${tw.customerName}`);
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) executeCancel();
+    } else {
+      Alert.alert('Cancel Takeaway Pending', confirmMsg, [
+        { text: 'Keep Order', style: 'cancel' },
+        { text: 'Yes, Cancel', style: 'destructive', onPress: executeCancel },
+      ]);
+    }
   };
 
   const sendToKitchen = () => {
@@ -1636,15 +1840,29 @@ export default function POSTerminalScreen({
       return;
     }
 
-    const tId = orderType === 'dine-in' ? selectedTableId : orderType;
+    let takeawayName = '';
+    let takeawayId = activeTakeawayPendingId;
+    if (orderType === 'takeaway') {
+      const validated = requireTakeawayGuestName('KOT');
+      if (!validated) return;
+      takeawayName = validated;
+      if (!takeawayId) {
+        takeawayId = `TW-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        setActiveTakeawayPendingId(takeawayId);
+      }
+    }
+
+    const tId = orderType === 'dine-in' ? selectedTableId : (orderType === 'takeaway' && takeawayId ? takeawayId : orderType);
     const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
     const targetTableName = targetTable
       ? targetTable.name
-      : selectedCustomerObj?.name
-        ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
-        : orderType === 'delivery'
-          ? 'Delivery'
-          : 'Takeaway';
+      : orderType === 'takeaway' && takeawayName
+        ? `Takeaway • ${takeawayName}`
+        : selectedCustomerObj?.name
+          ? `${orderType === 'delivery' ? 'Delivery' : 'Takeaway'} • ${selectedCustomerObj.name}`
+          : orderType === 'delivery'
+            ? 'Delivery'
+            : 'Takeaway';
 
     const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
 
@@ -1653,9 +1871,11 @@ export default function POSTerminalScreen({
       return;
     }
 
-    const serverLabel = selectedCustomerObj?.name
-      ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
-      : `${user?.name || 'Staff'} (POS)`;
+    const serverLabel = takeawayName
+      ? `${user?.name || 'POS'} • ${takeawayName}`
+      : selectedCustomerObj?.name
+        ? `${user?.name || 'POS'} • ${selectedCustomerObj.name}`
+        : `${user?.name || 'Staff'} (POS)`;
 
     const changedItems = [...addedKotItems, ...minusKotItems];
     const hasMain = changedItems.some((k) => (k.item.station || 'main') === 'main');
@@ -1666,7 +1886,44 @@ export default function POSTerminalScreen({
       menuItems
     );
 
-    syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
+    const { createdTicketId } = syncCartDeltasToKitchenAndTable(tId, targetTableName, serverLabel);
+
+    if (orderType === 'takeaway' && takeawayId && takeawayName) {
+      const existingTw = pendingTakeaways.find((p) => p && p.id === takeawayId);
+      const nextTicketIds = Array.from(
+        new Set([...(existingTw?.ticketIds || []), ...(createdTicketId ? [createdTicketId] : [])])
+      );
+      const pendingRecord: PendingTakeawayOrder = {
+        id: takeawayId,
+        customerName: takeawayName,
+        customerPhone: selectedCustomerObj?.phone || existingTw?.customerPhone,
+        customerId: selectedCustomerObj?.id || existingTw?.customerId,
+        items: cart.map((i) => ({ ...i })),
+        subTotal,
+        discount: discountVal,
+        extraCharge: extraChargeVal > 0 ? extraChargeVal : undefined,
+        extraChargeReason: extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion / Manual Charge') : undefined,
+        tax,
+        serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
+        total,
+        notes: orderNotes.trim() || undefined,
+        server: formatStaffWithExactRole(user?.name, 'Cashier'),
+        cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
+        status: existingTw?.isBillPrinted ? 'billed' : 'kot_pending',
+        hasKotSent: true,
+        isBillPrinted: Boolean(existingTw?.isBillPrinted),
+        pendingBillId: existingTw?.pendingBillId,
+        ticketIds: nextTicketIds,
+        createdAt: existingTw?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+      upsertPendingTakeaway(pendingRecord);
+      postPosAtomicEndpoint('/api/pos/pending-takeaway', {
+        action: 'upsert',
+        entry: pendingRecord,
+      }).catch(() => { });
+    }
+
     broadcastImmediately();
 
     // Sync loadedCart baseline without wiping cart (so customer bill/collection remains intact)
@@ -1680,9 +1937,11 @@ export default function POSTerminalScreen({
       deltaSummaryParts.push(`CANCEL -${minusKotItems.reduce((s, i) => s + i.qty, 0)}`);
     }
     showKdsToast(
-      minusKotItems.length > 0 || hasPriorSentOrder
-        ? `${deltaSummaryParts.join(' / ')} KOT sent to ${stationSummary} (${targetTableName})`
-        : `Order sent to ${stationSummary} (${targetTableName}) • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
+      orderType === 'takeaway' && takeawayName
+        ? `Takeaway Pending saved for "${takeawayName}" & KOT sent to ${stationSummary}`
+        : minusKotItems.length > 0 || hasPriorSentOrder
+          ? `${deltaSummaryParts.join(' / ')} KOT sent to ${stationSummary} (${targetTableName})`
+          : `Order sent to ${stationSummary} (${targetTableName}) • ⏱️ Est. Prep Time: ~${sentPrepEst.totalPrepMins} Mins`
     );
   };
 
@@ -1712,9 +1971,18 @@ export default function POSTerminalScreen({
 
   const handleCreateBillFromTicket = (ticket: typeof tickets[0], autoOpenCheckout = true) => {
     if (autoOpenCheckout && !requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
+
+    const matchedPendingTw = activePendingTakeaways.find(
+      (tw) => tw.id === ticket.tableId || (Array.isArray(tw.ticketIds) && tw.ticketIds.includes(ticket.id))
+    );
+    if (matchedPendingTw) {
+      handleLoadPendingTakeaway(matchedPendingTw, autoOpenCheckout);
+      return;
+    }
+
     setLoadedTicketId(ticket.id);
 
-    const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery';
+    const isTable = ticket.tableId && ticket.tableId !== 'takeaway' && ticket.tableId !== 'delivery' && !ticket.tableId.startsWith('TW-');
     const targetTable = isTable
       ? tables.find(
         (t) =>
@@ -1805,13 +2073,28 @@ export default function POSTerminalScreen({
         return p;
       });
 
+    const twGuestName = orderType === 'takeaway' ? resolveTakeawayGuestName() : '';
+    const resolvedInvoiceCustomer =
+      selectedCustomerObj ||
+      (twGuestName
+        ? {
+          id: activeTakeawayPendingId || `tw-guest-${Date.now()}`,
+          name: twGuestName,
+          phone: '',
+          totalOrders: 0,
+          totalSpent: 0,
+        }
+        : undefined);
+    const resolvedInvoiceTableName =
+      selectedTableObj?.name || (orderType === 'takeaway' && twGuestName ? `Takeaway • ${twGuestName}` : undefined);
+
     const invoice = createInvoicePayload({
       orderType,
       server: orderCreator,
       orderTakenBy: orderCreator,
       cashier: cashierName,
-      customer: selectedCustomerObj,
-      tableName: selectedTableObj?.name,
+      customer: resolvedInvoiceCustomer,
+      tableName: resolvedInvoiceTableName,
       tableId: selectedTableObj?.id,
       items: cart,
       subTotal,
@@ -1826,7 +2109,13 @@ export default function POSTerminalScreen({
       changeReturned: changeDueAmount,
     });
 
+    const settledPendingTwId = orderType === 'takeaway' ? activeTakeawayPendingId : null;
+    const settledPendingTwObj = settledPendingTwId
+      ? pendingTakeaways.find((p) => p && p.id === settledPendingTwId)
+      : undefined;
     const kotTarget = targetTableId || (orderType === 'delivery' ? 'delivery' : 'takeaway');
+    const kotDisplayName =
+      resolvedInvoiceTableName || (orderType === 'delivery' ? 'Delivery' : 'Takeaway');
     const { addedKotItems, minusKotItems, hasPriorSentOrder } = buildCartDeltas();
     const canSendKds = systemSettings.autoSendKdsOnOrder !== false && systemSettings.enableKdsModule !== false;
 
@@ -1834,7 +2123,7 @@ export default function POSTerminalScreen({
       const cancelTicket = {
         id: `CANCEL-${Math.floor(Math.random() * 9000) + 1000}`,
         tableId: kotTarget,
-        tableName: targetTableName,
+        tableName: kotDisplayName,
         server: cashierName,
         timePlaced: Date.now(),
         status: 'pending',
@@ -1855,7 +2144,7 @@ export default function POSTerminalScreen({
       dispatchDirectKotPrint(cancelTicket, true);
     }
 
-    // Clear prior table tickets BEFORE dispatching any brand-new unsent walk-in KOT
+    // Clear prior table / pending takeaway tickets BEFORE dispatching any brand-new unsent walk-in KOT
     if (loadedTicketId) {
       dismissTicket(loadedTicketId, { isSettlementCleanup: true });
       setLoadedTicketId(null);
@@ -1863,11 +2152,22 @@ export default function POSTerminalScreen({
     if (targetTableId) {
       clearTableTickets(targetTableId, { isSettlementCleanup: true });
     }
+    if (settledPendingTwId) {
+      settlePendingTakeaway(settledPendingTwId, invoice.id);
+    }
 
-    // Never re-send already-sent table orders on settlement; only print KOT for a brand-new walk-in order
+    // Never re-send already-sent orders on settlement; only print KOT for a brand-new unsent walk-in / temp-bill-only order
     let createdSettlementTicketId: string | undefined;
     if (!hasPriorSentOrder && addedKotItems.length > 0 && canSendKds) {
-      placeOrder(kotTarget, cashierName, addedKotItems, false, undefined, orderNotes.trim() || undefined);
+      placeOrder(
+        kotTarget,
+        cashierName,
+        addedKotItems,
+        false,
+        undefined,
+        orderNotes.trim() || undefined,
+        kotDisplayName
+      );
       const latestTicket = useRestaurantStore.getState().tickets?.[0];
       if (latestTicket) {
         createdSettlementTicketId = latestTicket.id;
@@ -1882,10 +2182,18 @@ export default function POSTerminalScreen({
       settleBill(targetTableId);
     }
 
+    const ticketsToSettleIds = Array.from(
+      new Set([
+        ...(wasDineIn && createdSettlementTicketId ? [createdSettlementTicketId] : []),
+        ...(settledPendingTwObj?.ticketIds || []),
+      ])
+    );
+
     postPosAtomicEndpoint('/api/pos/settle-bill', {
       invoice,
       tableId: wasDineIn && targetTableId ? targetTableId : undefined,
-      ticketsToSettleIds: wasDineIn && createdSettlementTicketId ? [createdSettlementTicketId] : [],
+      pendingTakeawayId: settledPendingTwId || undefined,
+      ticketsToSettleIds,
       settleBeforeMs: Date.now(),
     }).catch(() => { });
     broadcastImmediately();
@@ -1946,6 +2254,9 @@ export default function POSTerminalScreen({
     setExtraChargeAmount('0');
     setExtraChargeReason('');
     setExtraChargeExpanded(false);
+    setActiveTakeawayPendingId(null);
+    setTakeawayCustomerName('');
+    setTakeawayNameError(false);
     setCheckoutModalVisible(false);
     setSelectedCustomerId('');
     setSelectedTableId('');
@@ -1972,13 +2283,44 @@ export default function POSTerminalScreen({
       return;
     }
 
-    const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
-    const targetTableName = targetTable ? targetTable.name : orderType === 'dine-in' ? 'Table' : orderType.toUpperCase();
+    let takeawayName = '';
+    let takeawayId = activeTakeawayPendingId;
+    if (orderType === 'takeaway') {
+      const validated = requireTakeawayGuestName('Pending Bill');
+      if (!validated) return;
+      takeawayName = validated;
+      if (!takeawayId) {
+        takeawayId = `TW-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        setActiveTakeawayPendingId(takeawayId);
+      }
+    }
 
+    const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
+    const targetTableName = targetTable
+      ? targetTable.name
+      : orderType === 'takeaway' && takeawayName
+        ? `Takeaway • ${takeawayName}`
+        : orderType === 'dine-in'
+          ? 'Table'
+          : orderType.toUpperCase();
+
+    const seqOwnerKey = selectedTableId || (orderType === 'takeaway' && takeawayId ? takeawayId : undefined);
     const pendingSeq = useRestaurantStore.getState().allocateNextInvoiceSeq({
-      tableId: selectedTableId || undefined,
+      tableId: seqOwnerKey,
       isPendingBill: true,
     });
+
+    const resolvedCustomer =
+      selectedCustomerObj ||
+      (orderType === 'takeaway' && takeawayName
+        ? {
+          id: takeawayId || `tw-${Date.now()}`,
+          name: takeawayName,
+          phone: '',
+          totalOrders: 0,
+          totalSpent: 0,
+        }
+        : undefined);
 
     const unpaidInvoice: Invoice = {
       id: pendingSeq.dailyInvoiceNumber,
@@ -1987,7 +2329,7 @@ export default function POSTerminalScreen({
       orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
       tableId: selectedTableId || undefined,
       tableName: targetTableName,
-      customer: selectedCustomerObj,
+      customer: resolvedCustomer,
       server: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
       orderTakenBy: selectedServer ? formatStaffWithExactRole(selectedServer, 'Order Taker') : formatStaffWithExactRole(user?.name, 'Cashier'),
       cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
@@ -2004,7 +2346,9 @@ export default function POSTerminalScreen({
       payments: [],
       status: 'unpaid',
       isUnpaidBill: true,
-      notes: 'Temporary / Pending Bill (Payment Due at Cashier)',
+      notes: orderType === 'takeaway' && takeawayName
+        ? `Takeaway Pending Bill • ${takeawayName}`
+        : 'Temporary / Pending Bill (Payment Due at Cashier)',
     };
 
     if (selectedTableId) {
@@ -2028,12 +2372,47 @@ export default function POSTerminalScreen({
         extraCharge: extraChargeVal,
         extraChargeReason: resolvedExtraReason || '',
       }).catch(() => { });
+    } else if (orderType === 'takeaway' && takeawayId && takeawayName) {
+      const existingTw = pendingTakeaways.find((p) => p && p.id === takeawayId);
+      const pendingRecord: PendingTakeawayOrder = {
+        id: takeawayId,
+        customerName: takeawayName,
+        customerPhone: selectedCustomerObj?.phone || existingTw?.customerPhone,
+        customerId: selectedCustomerObj?.id || existingTw?.customerId,
+        items: cart.map((i) => ({ ...i })),
+        subTotal,
+        discount: discountVal,
+        extraCharge: extraChargeVal > 0 ? extraChargeVal : undefined,
+        extraChargeReason: extraChargeVal > 0 ? (extraChargeReason.trim() || 'Extra Portion / Manual Charge') : undefined,
+        tax,
+        serviceCharge: serviceCharge > 0 ? serviceCharge : undefined,
+        total,
+        notes: orderNotes.trim() || undefined,
+        server: formatStaffWithExactRole(user?.name, 'Cashier'),
+        cashier: formatStaffWithExactRole(user?.name, 'Cashier'),
+        status: 'billed',
+        hasKotSent: Boolean(existingTw?.hasKotSent || loadedCart.length > 0),
+        isBillPrinted: true,
+        pendingBillId: unpaidInvoice.id,
+        ticketIds: existingTw?.ticketIds || [],
+        createdAt: existingTw?.createdAt || Date.now(),
+        updatedAt: Date.now(),
+      };
+      upsertPendingTakeaway(pendingRecord);
+      postPosAtomicEndpoint('/api/pos/pending-takeaway', {
+        action: 'upsert',
+        entry: { ...pendingRecord, pendingSeq: pendingSeq.seq },
+      }).catch(() => { });
     }
     broadcastImmediately();
     if (cart.length > 0) {
       printInvoiceReceipt(unpaidInvoice);
     }
-    showKdsToast(`Temporary / Pending Bill printed for ${targetTableName} (No KOT resent)`);
+    showKdsToast(
+      orderType === 'takeaway' && takeawayName
+        ? `Takeaway Pending Bill (${unpaidInvoice.id}) saved & printed for "${takeawayName}"!`
+        : `Temporary / Pending Bill printed for ${targetTableName} (No KOT resent)`
+    );
   };
 
   const totalCartQty = cart.reduce((s, i) => s + i.qty, 0);
@@ -2283,6 +2662,40 @@ export default function POSTerminalScreen({
 
         {/* Right: Essential Quick Actions */}
         <View style={styles.topBarRight}>
+          {/* Takeaway Pending Bills & KOTs (Always 1-Tap Accessible) */}
+          <TouchableOpacity
+            style={[
+              styles.topActionBtn,
+              activePendingTakeaways.length > 0 && {
+                backgroundColor: 'rgba(245, 158, 11, 0.28)',
+                borderColor: '#F59E0B',
+              },
+            ]}
+            onPress={() => setTakeawayPendingModalVisible(true)}
+          >
+            <Ionicons
+              name="bag-handle"
+              size={15}
+              color={activePendingTakeaways.length > 0 ? '#FBBF24' : '#F3D179'}
+            />
+            {!isMobile && <Text style={styles.topActionText}>Takeaway Pending</Text>}
+            <View
+              style={[
+                styles.topCountBadge,
+                activePendingTakeaways.length > 0 && { backgroundColor: '#F59E0B' },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.topCountBadgeText,
+                  activePendingTakeaways.length > 0 && { color: '#24050A' },
+                ]}
+              >
+                {activePendingTakeaways.length}
+              </Text>
+            </View>
+          </TouchableOpacity>
+
           {/* Running KDS Orders */}
           <TouchableOpacity
             style={[styles.topActionBtn, activeRunningTickets.length > 0 && styles.topActionBtnHighlight]}
@@ -3052,6 +3465,140 @@ export default function POSTerminalScreen({
                         </TouchableOpacity>
                       )}
                     </View>
+                  ) : orderType === 'takeaway' ? (
+                    <View style={{ gap: 8 }}>
+                      <View
+                        style={[
+                          styles.contextSelectBtn,
+                          {
+                            paddingVertical: 8,
+                            borderColor: takeawayNameError
+                              ? '#DC2626'
+                              : activeTakeawayPendingId
+                                ? '#F59E0B'
+                                : '#CBD5E1',
+                            backgroundColor: takeawayNameError
+                              ? '#FEF2F2'
+                              : activeTakeawayPendingId
+                                ? '#FFFBEB'
+                                : '#FFFFFF',
+                          },
+                        ]}
+                      >
+                        <View
+                          style={[
+                            styles.contextIconOrb,
+                            resolveTakeawayGuestName()
+                              ? { backgroundColor: '#FEF3C7' }
+                              : takeawayNameError
+                                ? { backgroundColor: '#FEE2E2' }
+                                : undefined,
+                          ]}
+                        >
+                          <Ionicons
+                            name="bag-handle"
+                            size={16}
+                            color={takeawayNameError ? '#DC2626' : '#B45309'}
+                          />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text
+                              style={[
+                                styles.contextSmallLabel,
+                                takeawayNameError && { color: '#DC2626' },
+                              ]}
+                            >
+                              {activeTakeawayPendingId
+                                ? 'EDITING TAKEAWAY PENDING *'
+                                : 'TAKEAWAY CUSTOMER NAME * (REQUIRED FOR PENDING)'}
+                            </Text>
+                          </View>
+                          <TextInput
+                            ref={takeawayNameInputRef}
+                            style={[
+                              {
+                                fontSize: 14,
+                                fontWeight: '800',
+                                color: '#0F172A',
+                                paddingVertical: 3,
+                                paddingHorizontal: 0,
+                              },
+                              Platform.OS === 'web' && ({ outlineStyle: 'none' } as any),
+                            ]}
+                            placeholder="Customer ka naam likhein (e.g. Bilal / Ali)..."
+                            placeholderTextColor={takeawayNameError ? '#EF4444' : '#94A3B8'}
+                            value={takeawayCustomerName}
+                            onChangeText={(txt) => {
+                              setTakeawayCustomerName(txt);
+                              if (txt.trim()) setTakeawayNameError(false);
+                            }}
+                          />
+                        </View>
+                        <TouchableOpacity
+                          style={styles.contextActionPill}
+                          onPress={() => {
+                            setCustomerSearchQuery('');
+                            setIsCreatingNewCustomer(false);
+                            setCustomerModalVisible(true);
+                          }}
+                        >
+                          <Text style={styles.contextActionPillText}>
+                            {selectedCustomerObj ? 'CRM ✓' : 'CRM'}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                        <TouchableOpacity
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 6,
+                            backgroundColor: activePendingTakeaways.length > 0 ? '#FEF3C7' : '#F1F5F9',
+                            borderWidth: 1,
+                            borderColor: activePendingTakeaways.length > 0 ? '#F59E0B' : '#CBD5E1',
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 8,
+                          }}
+                          onPress={() => setTakeawayPendingModalVisible(true)}
+                        >
+                          <Ionicons name="receipt-outline" size={14} color={activePendingTakeaways.length > 0 ? '#B45309' : '#475569'} />
+                          <Text
+                            style={{
+                              fontSize: 12,
+                              fontWeight: '900',
+                              color: activePendingTakeaways.length > 0 ? '#92400E' : '#475569',
+                            }}
+                          >
+                            Takeaway Pending ({activePendingTakeaways.length})
+                          </Text>
+                        </TouchableOpacity>
+
+                        {activeTakeawayPendingId && (
+                          <TouchableOpacity
+                            style={{
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 5,
+                              backgroundColor: '#EFF6FF',
+                              borderWidth: 1,
+                              borderColor: '#93C5FD',
+                              paddingHorizontal: 10,
+                              paddingVertical: 5,
+                              borderRadius: 8,
+                            }}
+                            onPress={handleStartNewTakeaway}
+                          >
+                            <Ionicons name="add-circle-outline" size={14} color="#1D4ED8" />
+                            <Text style={{ fontSize: 12, fontWeight: '900', color: '#1D4ED8' }}>
+                              + New Takeaway
+                            </Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
                   ) : (
                     <TouchableOpacity
                       style={styles.contextSelectBtn}
@@ -3064,21 +3611,17 @@ export default function POSTerminalScreen({
                     >
                       <View style={[styles.contextIconOrb, selectedCustomerObj && { backgroundColor: '#DBEAFE' }]}>
                         <Ionicons
-                          name={orderType === 'delivery' ? 'bicycle' : 'person'}
+                          name="bicycle"
                           size={16}
                           color={selectedCustomerObj ? '#1D4ED8' : '#52141C'}
                         />
                       </View>
                       <View style={{ flex: 1 }}>
-                        <Text style={styles.contextSmallLabel}>
-                          {orderType === 'delivery' ? 'DELIVERY CUSTOMER' : 'TAKEAWAY GUEST'}
-                        </Text>
+                        <Text style={styles.contextSmallLabel}>DELIVERY CUSTOMER</Text>
                         <Text style={styles.contextMainValue} numberOfLines={1}>
                           {selectedCustomerObj
                             ? `${selectedCustomerObj.name} (${selectedCustomerObj.phone})`
-                            : orderType === 'delivery'
-                              ? 'Select Delivery Customer *'
-                              : 'Walk-in Guest (Optional)'}
+                            : 'Select Delivery Customer *'}
                         </Text>
                       </View>
                       <View style={styles.contextActionPill}>
@@ -3625,6 +4168,146 @@ export default function POSTerminalScreen({
             </View>
 
             <ScrollView contentContainerStyle={{ gap: 12, paddingBottom: 40 }}>
+              {/* Dedicated Takeaway Pending Bills & KOT Section inside Running Tab */}
+              {activePendingTakeaways.length > 0 && (
+                <View
+                  style={{
+                    backgroundColor: '#FFFBEB',
+                    borderRadius: 14,
+                    borderWidth: 1.5,
+                    borderColor: '#F59E0B',
+                    padding: 14,
+                    gap: 10,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Ionicons name="bag-handle" size={20} color="#B45309" />
+                      <Text style={{ fontSize: 16, fontWeight: '900', color: '#78350F' }}>
+                        Takeaway Pending Bills & Orders ({activePendingTakeaways.length})
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      style={{
+                        backgroundColor: '#52141C',
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                      }}
+                      onPress={handleStartNewTakeaway}
+                    >
+                      <Text style={{ color: '#F3D179', fontSize: 12, fontWeight: '900' }}>+ New Takeaway</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {activePendingTakeaways
+                    .filter((tw) => {
+                      const q = pendingOrderSearchQuery.toLowerCase().trim();
+                      if (!q) return true;
+                      return (
+                        tw.customerName.toLowerCase().includes(q) ||
+                        (tw.pendingBillId && tw.pendingBillId.toLowerCase().includes(q)) ||
+                        (tw.items || []).some((i) => i.name.toLowerCase().includes(q))
+                      );
+                    })
+                    .map((tw) => {
+                      const linkedTickets = tickets.filter(
+                        (tk) => tk && !tk.isSettled && (tk.tableId === tw.id || (tw.ticketIds || []).includes(tk.id))
+                      );
+                      const kdsStatus = linkedTickets.length > 0
+                        ? (linkedTickets.every((k) => k.status === 'served')
+                          ? 'DISPATCHED'
+                          : linkedTickets.every((k) => k.status === 'ready' || k.status === 'served')
+                            ? 'READY'
+                            : linkedTickets.some((k) => k.status === 'cooking')
+                              ? 'COOKING'
+                              : 'KOT PENDING')
+                        : null;
+                      const minsAgo = Math.max(0, Math.floor((nowTick - (tw.createdAt || nowTick)) / 60000));
+                      return (
+                        <View
+                          key={tw.id}
+                          style={{
+                            backgroundColor: '#FFFFFF',
+                            borderRadius: 12,
+                            borderWidth: 1,
+                            borderColor: tw.isBillPrinted ? '#F59E0B' : '#FDE68A',
+                            padding: 12,
+                            gap: 8,
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>
+                                👤 {tw.customerName}
+                              </Text>
+                              {tw.isBillPrinted && (
+                                <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400E' }}>
+                                    TEMP BILL{tw.pendingBillId ? ` • ${tw.pendingBillId}` : ''}
+                                  </Text>
+                                </View>
+                              )}
+                              {tw.hasKotSent && (
+                                <View style={{ backgroundColor: kdsStatus === 'READY' ? '#DCFCE7' : '#EFF6FF', borderWidth: 1, borderColor: kdsStatus === 'READY' ? '#22C55E' : '#93C5FD', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 11, fontWeight: '900', color: kdsStatus === 'READY' ? '#15803D' : '#1D4ED8' }}>
+                                    {kdsStatus || 'KOT SENT'}
+                                  </Text>
+                                </View>
+                              )}
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
+                                {minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`}
+                              </Text>
+                              {!hidePrices && (
+                                <Text style={{ fontSize: 16, fontWeight: '900', color: '#52141C' }}>
+                                  • Rs. {Math.round(tw.total || 0).toLocaleString()}
+                                </Text>
+                              )}
+                            </View>
+
+                            <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                              <TouchableOpacity
+                                style={[styles.runningActionBtn, { paddingHorizontal: 10, height: 34, flexDirection: 'row', gap: 5 }]}
+                                onPress={() => handleReprintPendingTakeawayBill(tw)}
+                              >
+                                <Ionicons name="print-outline" size={14} color="#334155" />
+                                <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>Temp Bill</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[styles.runningActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', paddingHorizontal: 12, height: 34 }]}
+                                onPress={() => handleLoadPendingTakeaway(tw, false)}
+                              >
+                                <Text style={{ fontSize: 12, fontWeight: '900', color: '#1D4ED8' }}>Open / Edit</Text>
+                              </TouchableOpacity>
+                              {!hidePrices && (
+                                <TouchableOpacity
+                                  style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C', paddingHorizontal: 14, height: 34 }]}
+                                  onPress={() => handleLoadPendingTakeaway(tw, true)}
+                                >
+                                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#F3D179' }}>Pay & Settle</Text>
+                                </TouchableOpacity>
+                              )}
+                              {(role === 'admin' || can('posCanDismissTicket')) && (
+                                <TouchableOpacity
+                                  style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', paddingHorizontal: 9, height: 34 }]}
+                                  onPress={() => handleCancelPendingTakeaway(tw)}
+                                >
+                                  <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#DC2626' }}>Cancel</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }} numberOfLines={2}>
+                            {(tw.items || []).map((it) => `${it.qty}x ${it.name}`).join(', ')}
+                            {(tw.extraCharge || 0) > 0 ? `  •  +Rs. ${(tw.extraCharge || 0).toLocaleString()} (${tw.extraChargeReason || 'Extra'})` : ''}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                </View>
+              )}
+
               {posVisibleRunningTickets
                 .filter((t) => {
                   const q = pendingOrderSearchQuery.toLowerCase().trim();
@@ -4195,6 +4878,10 @@ export default function POSTerminalScreen({
                         ]}
                         onPress={() => {
                           setSelectedCustomerId(c.id);
+                          if (orderType === 'takeaway') {
+                            setTakeawayCustomerName(c.name);
+                            setTakeawayNameError(false);
+                          }
                           setCustomerModalVisible(false);
                         }}
                       >
@@ -4776,6 +5463,189 @@ export default function POSTerminalScreen({
                     <Ionicons name="checkmark-done-circle-outline" size={44} color="#CBD5E1" />
                     <Text style={{ fontSize: 15, fontWeight: '800', color: '#64748B', marginTop: 8 }}>
                       No active orders in kitchen
+                    </Text>
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================
+          MODAL 6B: TAKEAWAY PENDING BILLS & KOT ORDERS (ALWAYS NAMED)
+          ======================================================== */}
+      <Modal visible={takeawayPendingModalVisible} transparent animationType="fade">
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 780, maxHeight: '86%' }]}>
+            <View style={styles.modalHeader}>
+              <View>
+                <Text style={styles.modalTitle}>
+                  🛍️ Takeaway Pending ({activePendingTakeaways.length})
+                </Text>
+                <Text style={styles.modalSub}>
+                  All unpaid Takeaway KOTs & Temporary / Pending Bills — grouped by Customer Name
+                </Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: '#52141C',
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 8,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                  }}
+                  onPress={handleStartNewTakeaway}
+                >
+                  <Ionicons name="add" size={16} color="#F3D179" />
+                  <Text style={{ color: '#F3D179', fontSize: 12.5, fontWeight: '900' }}>New Takeaway</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={() => setTakeawayPendingModalVisible(false)}
+                >
+                  <Ionicons name="close" size={20} color="#475569" />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={{ padding: 14, gap: 10 }}>
+              <View style={styles.modalSearchBox}>
+                <Ionicons name="search" size={16} color="#94A3B8" />
+                <TextInput
+                  style={[styles.modalSearchInput, Platform.OS === 'web' && ({ outlineStyle: 'none' } as any)]}
+                  placeholder="Search by customer name, pending bill #, or dish..."
+                  placeholderTextColor="#94A3B8"
+                  value={takeawayPendingSearch}
+                  onChangeText={setTakeawayPendingSearch}
+                />
+              </View>
+
+              <ScrollView style={{ maxHeight: 460 }} contentContainerStyle={{ gap: 10 }}>
+                {activePendingTakeaways
+                  .filter((tw) => {
+                    const q = takeawayPendingSearch.toLowerCase().trim();
+                    if (!q) return true;
+                    return (
+                      tw.customerName.toLowerCase().includes(q) ||
+                      (tw.pendingBillId && tw.pendingBillId.toLowerCase().includes(q)) ||
+                      (tw.items || []).some((it) => it.name.toLowerCase().includes(q))
+                    );
+                  })
+                  .map((tw) => {
+                    const linkedTickets = tickets.filter(
+                      (tk) => tk && !tk.isSettled && (tk.tableId === tw.id || (tw.ticketIds || []).includes(tk.id))
+                    );
+                    const kdsStatus = linkedTickets.length > 0
+                      ? (linkedTickets.every((k) => k.status === 'served')
+                        ? 'DISPATCHED'
+                        : linkedTickets.every((k) => k.status === 'ready' || k.status === 'served')
+                          ? 'READY'
+                          : linkedTickets.some((k) => k.status === 'cooking')
+                            ? 'COOKING'
+                            : 'KOT PENDING')
+                      : null;
+                    const minsAgo = Math.max(0, Math.floor((nowTick - (tw.createdAt || nowTick)) / 60000));
+                    return (
+                      <View
+                        key={tw.id}
+                        style={[
+                          styles.runningOrderCard,
+                          {
+                            borderColor: tw.isBillPrinted ? '#F59E0B' : '#CBD5E1',
+                            backgroundColor: tw.isBillPrinted ? '#FFFDF7' : '#FFFFFF',
+                            flexDirection: 'column',
+                            alignItems: 'stretch',
+                            gap: 10,
+                          },
+                        ]}
+                      >
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                            <Text style={[styles.runningOrderTitle, { fontSize: 16 }]}>
+                              👤 {tw.customerName}
+                            </Text>
+                            {tw.isBillPrinted && (
+                              <View style={{ backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: '#92400E' }}>
+                                  UNPAID BILL{tw.pendingBillId ? ` • ${tw.pendingBillId}` : ''}
+                                </Text>
+                              </View>
+                            )}
+                            {tw.hasKotSent && (
+                              <View style={{ backgroundColor: kdsStatus === 'READY' ? '#DCFCE7' : '#EFF6FF', borderWidth: 1, borderColor: kdsStatus === 'READY' ? '#22C55E' : '#93C5FD', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 11, fontWeight: '900', color: kdsStatus === 'READY' ? '#15803D' : '#1D4ED8' }}>
+                                  {kdsStatus || 'KOT IN KITCHEN'}
+                                </Text>
+                              </View>
+                            )}
+                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700' }}>
+                              {minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`}
+                            </Text>
+                          </View>
+                          {!hidePrices && (
+                            <Text style={[styles.runningOrderAmount, { fontSize: 16 }]}>
+                              Rs. {Math.round(tw.total || 0).toLocaleString()}
+                            </Text>
+                          )}
+                        </View>
+
+                        <Text style={styles.runningOrderItems} numberOfLines={3}>
+                          {(tw.items || []).map((it) => `${it.qty}x ${it.name}`).join(', ')}
+                          {(tw.extraCharge || 0) > 0
+                            ? `  •  Extra: +Rs. ${(tw.extraCharge || 0).toLocaleString()} (${tw.extraChargeReason || 'Manual'})`
+                            : ''}
+                          {(tw.discount || 0) > 0
+                            ? `  •  Discount: -Rs. ${(tw.discount || 0).toLocaleString()}`
+                            : ''}
+                        </Text>
+
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap' }}>
+                          <TouchableOpacity
+                            style={[styles.runningActionBtn, { flexDirection: 'row', gap: 5, paddingHorizontal: 10 }]}
+                            onPress={() => handleReprintPendingTakeawayBill(tw)}
+                          >
+                            <Ionicons name="print-outline" size={14} color="#334155" />
+                            <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>Temp Bill</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.runningActionBtn, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE', paddingHorizontal: 12 }]}
+                            onPress={() => handleLoadPendingTakeaway(tw, false)}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '900', color: '#1D4ED8' }}>Open / Edit</Text>
+                          </TouchableOpacity>
+                          {!hidePrices && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#52141C', borderColor: '#52141C', paddingHorizontal: 14 }]}
+                              onPress={() => handleLoadPendingTakeaway(tw, true)}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: '900', color: '#F3D179' }}>Pay & Settle</Text>
+                            </TouchableOpacity>
+                          )}
+                          {(role === 'admin' || can('posCanDismissTicket')) && (
+                            <TouchableOpacity
+                              style={[styles.runningActionBtn, { backgroundColor: '#FEF2F2', borderColor: '#FCA5A5', paddingHorizontal: 9 }]}
+                              onPress={() => handleCancelPendingTakeaway(tw)}
+                            >
+                              <Text style={{ fontSize: 11.5, fontWeight: '900', color: '#DC2626' }}>Cancel</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                {activePendingTakeaways.length === 0 && (
+                  <View style={{ alignItems: 'center', padding: 36 }}>
+                    <Ionicons name="bag-check-outline" size={44} color="#CBD5E1" />
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#64748B', marginTop: 8 }}>
+                      No Pending Takeaway orders right now
+                    </Text>
+                    <Text style={{ fontSize: 12.5, color: '#94A3B8', marginTop: 4, textAlign: 'center' }}>
+                      When you Send KOT or print a Pending / Temp Bill for a Takeaway order, it will appear here under the customer&apos;s name.
                     </Text>
                   </View>
                 )}

@@ -1165,6 +1165,7 @@ function broadcastLocalState(force = false) {
       deletedFloorIds: state.deletedFloorIds || [],
       floors: state.floors || [],
       tickets: state.tickets,
+      pendingTakeaways: state.pendingTakeaways || [],
       deletedTicketIds: state.deletedTicketIds || [],
       operationalDayStartAt: state.operationalDayStartAt || 0,
       invoiceSequenceState: state.invoiceSequenceState,

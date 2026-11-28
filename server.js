@@ -620,6 +620,7 @@ const INITIAL_STATE = {
     { id: 't-1795685616203-5-05me', floor: 'Party Hall', zone: 'Party Hall', seatingType: 'tables', name: 'P-06', seats: 4, status: 'available' }
   ],
   tickets: [],
+  pendingTakeaways: [],
   onlineOrders: [],
   invoices: [],
   operationalDayStartAt: 0,
@@ -6344,7 +6345,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 58;
+      const targetWebVer = 59;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7450,6 +7451,7 @@ async function handleRequest(req, res) {
         new Set([...(serverState.settledTicketIds || []), ...removedTicketIds])
       ).slice(-600);
       serverState.tickets = capServerTicketsWithHistory(keptHistoryTickets);
+      serverState.pendingTakeaways = [];
 
       let removedInvoicesCount = 0;
       if (clearInvoicesAfterTs > 0 && Array.isArray(serverState.invoices)) {
@@ -7676,6 +7678,120 @@ async function handleRequest(req, res) {
     return;
   }
 
+  // Atomic Pending Takeaway Create / Update / Cancel (synced cleanly across all POS terminals)
+  if (url.pathname === '/api/pos/pending-takeaway' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req);
+      const action = String(body?.action || 'upsert').toLowerCase();
+      const now = Date.now();
+      if (!Array.isArray(serverState.pendingTakeaways)) serverState.pendingTakeaways = [];
+
+      if (action === 'cancel') {
+        const targetId = String(body?.id || '').trim();
+        if (!targetId) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Missing pending takeaway id' }));
+          return;
+        }
+        const existing = serverState.pendingTakeaways.find((p) => p && p.id === targetId);
+        const linkedIds = new Set(Array.isArray(existing?.ticketIds) ? existing.ticketIds : []);
+        serverState.pendingTakeaways = serverState.pendingTakeaways.map((p) =>
+          p && p.id === targetId
+            ? { ...p, status: 'cancelled', updatedAt: Math.max(now, Number(p.updatedAt || 0) + 1) }
+            : p
+        );
+        const removedTicketIds = [];
+        if (Array.isArray(serverState.tickets)) {
+          serverState.tickets = serverState.tickets.filter((tk) => {
+            if (!tk) return false;
+            if (!tk.isSettled && (tk.tableId === targetId || linkedIds.has(tk.id))) {
+              removedTicketIds.push(tk.id);
+              return false;
+            }
+            return true;
+          });
+        }
+        if (removedTicketIds.length > 0) {
+          serverState.deletedTicketIds = Array.from(new Set([...(serverState.deletedTicketIds || []), ...removedTicketIds])).slice(-500);
+        }
+        if (serverState.invoiceSequenceState?.pendingByTableId?.[targetId]) {
+          delete serverState.invoiceSequenceState.pendingByTableId[targetId];
+        }
+      } else {
+        const entry = body && body.entry && typeof body.entry === 'object' ? body.entry : body;
+        const targetId = String(entry?.id || '').trim();
+        const customerName = String(entry?.customerName || '').trim();
+        if (!targetId || !customerName) {
+          res.writeHead(400, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: false, error: 'Missing id or customerName for pending takeaway' }));
+          return;
+        }
+        const existing = serverState.pendingTakeaways.find((p) => p && p.id === targetId);
+        if (existing && (existing.status === 'settled' || existing.status === 'cancelled')) {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, entry: existing, timestamp: now, state: serverState }));
+          return;
+        }
+        const mergedTicketIds = Array.from(new Set([
+          ...(Array.isArray(existing?.ticketIds) ? existing.ticketIds : []),
+          ...(Array.isArray(entry.ticketIds) ? entry.ticketIds : []),
+        ].filter(Boolean)));
+        const nextEntry = {
+          ...(existing || {}),
+          ...entry,
+          id: targetId,
+          customerName,
+          items: Array.isArray(entry.items) ? entry.items.map((i) => ({ ...i })) : (existing?.items || []),
+          hasKotSent: Boolean(entry.hasKotSent || existing?.hasKotSent),
+          isBillPrinted: Boolean(entry.isBillPrinted || existing?.isBillPrinted),
+          pendingBillId: entry.pendingBillId || existing?.pendingBillId,
+          ticketIds: mergedTicketIds,
+          createdAt: Number(existing?.createdAt || entry.createdAt || now),
+          updatedAt: Math.max(now, Number(existing?.updatedAt || 0) + 1),
+        };
+        const others = serverState.pendingTakeaways.filter((p) => p && p.id !== targetId);
+        const active = [nextEntry, ...others].filter((p) => p.status !== 'settled' && p.status !== 'cancelled');
+        const archived = [nextEntry, ...others]
+          .filter((p) => p.status === 'settled' || p.status === 'cancelled')
+          .sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0))
+          .slice(0, 80);
+        serverState.pendingTakeaways = [...active, ...archived];
+
+        if (entry.pendingBillId && Number(entry.pendingSeq || 0) > 0) {
+          const dayStart = Number(serverState.operationalDayStartAt || 0);
+          if (!serverState.invoiceSequenceState || Number(serverState.invoiceSequenceState.dayStartAt || 0) !== dayStart) {
+            serverState.invoiceSequenceState = { dayStartAt: dayStart, lastSeq: 0, lastPendingSeq: 0, pendingByTableId: {} };
+          }
+          if (!serverState.invoiceSequenceState.pendingByTableId) serverState.invoiceSequenceState.pendingByTableId = {};
+          serverState.invoiceSequenceState.pendingByTableId[targetId] = Number(entry.pendingSeq);
+          serverState.invoiceSequenceState.lastPendingSeq = Math.max(
+            Number(serverState.invoiceSequenceState.lastPendingSeq || 0),
+            Number(entry.pendingSeq)
+          );
+        }
+      }
+
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'POS_PENDING_TAKEAWAY',
+        timestamp: now,
+      });
+      pushStateToLanPeers();
+      pushToFirestoreCloud();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, timestamp: now, state: serverState }));
+    } catch (err) {
+      console.error('[Sultan Hub] /api/pos/pending-takeaway error:', err.message);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
   // Atomic Bill Settlement & Invoice Persistence (saves invoice, settles table tickets, clears pending/table state)
   if (url.pathname === '/api/pos/settle-bill' && req.method === 'POST') {
     try {
@@ -7716,6 +7832,36 @@ async function handleRequest(req, res) {
         serverState.tickets = serverState.tickets.map((tk) =>
           tk && settleSet.has(tk.id) ? archiveServerTicketForSettlement(tk, now) : tk
         );
+      }
+
+      const pendingTakeawayId = body && body.pendingTakeawayId ? String(body.pendingTakeawayId).trim() : '';
+      if (pendingTakeawayId) {
+        if (!Array.isArray(serverState.pendingTakeaways)) serverState.pendingTakeaways = [];
+        const targetTw = serverState.pendingTakeaways.find((p) => p && p.id === pendingTakeawayId);
+        const twTicketSet = new Set(Array.isArray(targetTw?.ticketIds) ? targetTw.ticketIds : []);
+        serverState.pendingTakeaways = serverState.pendingTakeaways.map((p) =>
+          p && p.id === pendingTakeawayId
+            ? {
+              ...p,
+              status: 'settled',
+              settledAt: now,
+              updatedAt: Math.max(now, Number(p.updatedAt || 0) + 1),
+              settledInvoiceId: invoice?.id || p.settledInvoiceId,
+            }
+            : p
+        );
+        if (Array.isArray(serverState.tickets)) {
+          serverState.tickets = serverState.tickets.map((tk) => {
+            if (!tk || tk.isSettled) return tk;
+            if (tk.tableId === pendingTakeawayId || twTicketSet.has(tk.id)) {
+              return archiveServerTicketForSettlement(tk, now);
+            }
+            return tk;
+          });
+        }
+        if (serverState.invoiceSequenceState?.pendingByTableId?.[pendingTakeawayId]) {
+          delete serverState.invoiceSequenceState.pendingByTableId[pendingTakeawayId];
+        }
       }
 
       if (tableId) {
@@ -8814,6 +8960,9 @@ function computeStateFingerprint(st) {
         ordersLen: Array.isArray(t.orders) ? t.orders.length : 0,
       })),
       onlineOrdersLen: Array.isArray(st.onlineOrders) ? st.onlineOrders.map(o => `${o.id}:${o.status}`).join(',') : '',
+      pendingTakeawaysKey: Array.isArray(st.pendingTakeaways)
+        ? st.pendingTakeaways.map(p => `${p?.id}:${p?.status}:${p?.updatedAt || 0}:${p?.total || 0}`).join(',')
+        : '',
       invoicesKey: Array.isArray(st.invoices)
         ? `${st.invoices.length}:${st.invoices.slice(0, 25).map(i => `${i?.id}:${i?.status || 'paid'}:${i?.total || 0}`).join(',')}`
         : '0',
@@ -9024,7 +9173,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
   let modified = false;
-  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'invoiceSequenceState', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'invoiceSequenceState', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'pendingTakeaways', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   if (partialState.operationalDayStartAt !== undefined) {
     const incDayStart = Number(partialState.operationalDayStartAt || 0);
     const curDayStart = Number(serverState.operationalDayStartAt || 0);
@@ -9786,6 +9935,60 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             }
           }
           serverState.tables = serverState.tables.filter(t => t && t.id && !deletedTableSet.has(t.id));
+          modified = true;
+        }
+      } else if (key === 'pendingTakeaways') {
+        const incList = Array.isArray(partialState.pendingTakeaways) ? partialState.pendingTakeaways : [];
+        const currList = Array.isArray(serverState.pendingTakeaways) ? serverState.pendingTakeaways : [];
+        if (incList.length > 0) {
+          const isTerminal = (s) => s === 'settled' || s === 'cancelled';
+          const maxTs = Date.now() + 15000;
+          const clampTs = (v) => {
+            const n = Number(v || 0);
+            return n > maxTs ? Date.now() : n;
+          };
+          const twMap = new Map();
+          for (const c of currList) {
+            if (c && c.id) twMap.set(c.id, c);
+          }
+          for (const rawInc of incList) {
+            if (!rawInc || !rawInc.id) continue;
+            const inc = {
+              ...rawInc,
+              createdAt: clampTs(rawInc.createdAt),
+              updatedAt: clampTs(rawInc.updatedAt || rawInc.createdAt),
+            };
+            const prev = twMap.get(inc.id);
+            if (!prev) {
+              twMap.set(inc.id, inc);
+              continue;
+            }
+            if (isTerminal(prev.status) && !isTerminal(inc.status)) continue;
+            if (isTerminal(inc.status) && !isTerminal(prev.status)) {
+              twMap.set(inc.id, {
+                ...prev,
+                ...inc,
+                ticketIds: Array.from(new Set([...(prev.ticketIds || []), ...(inc.ticketIds || [])])),
+              });
+              continue;
+            }
+            const incTs = Number(inc.updatedAt || inc.createdAt || 0);
+            const prevTs = Number(prev.updatedAt || prev.createdAt || 0);
+            const newer = incTs >= prevTs ? inc : prev;
+            const older = incTs >= prevTs ? prev : inc;
+            twMap.set(inc.id, {
+              ...older,
+              ...newer,
+              hasKotSent: Boolean(newer.hasKotSent || older.hasKotSent),
+              isBillPrinted: Boolean(newer.isBillPrinted || older.isBillPrinted),
+              pendingBillId: newer.pendingBillId || older.pendingBillId,
+              ticketIds: Array.from(new Set([...(older.ticketIds || []), ...(newer.ticketIds || [])])),
+            });
+          }
+          const all = Array.from(twMap.values());
+          const active = all.filter((p) => !isTerminal(p.status)).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
+          const archived = all.filter((p) => isTerminal(p.status)).sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0)).slice(0, 80);
+          serverState.pendingTakeaways = [...active, ...archived];
           modified = true;
         }
       } else if (key === 'floors') {
