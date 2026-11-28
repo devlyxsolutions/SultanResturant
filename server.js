@@ -2735,7 +2735,14 @@ const INITIAL_STATE = {
   revokedSessions: {},
   revokedDeviceIds: {},
   forceLogoutAll: null,
-  chillerHandovers: []
+  chillerHandovers: [],
+  kotSequenceState: {
+    shiftId: null,
+    shiftStartedAt: 0,
+    kitchenSeq: 0,
+    juiceSeq: 0,
+    ledger: { main: [], juice: [] },
+  },
 };
 
 const LEGACY_DUMMY_IDS = new Set([
@@ -3881,8 +3888,12 @@ function processServerPrintQueue() {
     .then((result) => {
       if (result && result.skipped) {
         console.log(`[Sultan Hub Auto-Print] Skipped ${job.station.toUpperCase()} KOT #${job.ticket.id}: ${result.reason}`);
-      } else if (result && result.success && !result.queued) {
+        updateKotLedgerEntry(job.ticket.id, job.station, { printStatus: 'skipped', printError: result.reason || null });
+      } else if (result && result.queued) {
+        updateKotLedgerEntry(job.ticket.id, job.station, { printStatus: 'queued_agent', printError: null });
+      } else if (result && result.success) {
         console.log(`[Sultan Hub Auto-Print] Direct ${job.station.toUpperCase()} KOT #${job.ticket.id} printed successfully to ${result.printer}.`);
+        updateKotLedgerEntry(job.ticket.id, job.station, { printStatus: 'printed', printError: null });
         broadcastToClients({
           type: 'TICKET_AUTO_PRINTED',
           ticketId: job.ticket.id,
@@ -3890,10 +3901,15 @@ function processServerPrintQueue() {
           printer: result.printer,
           timestamp: Date.now(),
         });
+      } else {
+        updateKotLedgerEntry(job.ticket.id, job.station, { printStatus: 'failed', printError: (result && result.error) || 'Print failed' });
       }
+      persistState();
     })
     .catch((err) => {
       console.warn(`[Sultan Hub Auto-Print] Print error for ${job.station.toUpperCase()} #${job.ticket.id}:`, err.message);
+      updateKotLedgerEntry(job.ticket.id, job.station, { printStatus: 'failed', printError: err.message });
+      persistState();
     })
     .finally(() => {
       setTimeout(() => {
@@ -3901,6 +3917,204 @@ function processServerPrintQueue() {
         processServerPrintQueue();
       }, 220);
     });
+}
+
+// ==============================================================
+// PER-SHIFT SEQUENTIAL KOT / SOT NUMBERING (1, 2, 3...) & GAP LEDGER
+// ==============================================================
+function getLocalPktDayKey(ts = Date.now()) {
+  const pkt = new Date(Number(ts || Date.now()) + 5 * 60 * 60 * 1000);
+  return `DAY-${pkt.toISOString().slice(0, 10)}`;
+}
+
+function isCancelOrMinusTicket(tk) {
+  if (!tk) return false;
+  if (tk.isMinusKot || tk.kotType === 'MINUS') return true;
+  const idUpper = String(tk.id || '').toUpperCase();
+  return idUpper.startsWith('MINUS') || idUpper.startsWith('CANCEL');
+}
+
+function ensureKotSequenceForActiveShift(explicitShiftId = null, explicitStartedAt = null) {
+  if (!serverState.kotSequenceState || typeof serverState.kotSequenceState !== 'object') {
+    serverState.kotSequenceState = {
+      shiftId: null,
+      shiftStartedAt: 0,
+      kitchenSeq: 0,
+      juiceSeq: 0,
+      ledger: { main: [], juice: [] },
+    };
+  }
+  const seqState = serverState.kotSequenceState;
+  if (!seqState.ledger || typeof seqState.ledger !== 'object') {
+    seqState.ledger = { main: [], juice: [] };
+  }
+  if (!Array.isArray(seqState.ledger.main)) seqState.ledger.main = [];
+  if (!Array.isArray(seqState.ledger.juice)) seqState.ledger.juice = [];
+
+  const validShifts = Array.isArray(serverState.shifts) ? serverState.shifts : [];
+  const openShift = serverState.activeShiftId
+    ? validShifts.find((s) => s && s.id === serverState.activeShiftId && s.status === 'open')
+    : validShifts.find((s) => s && s.status === 'open');
+
+  let targetShiftId = explicitShiftId || (openShift ? openShift.id : null);
+  let targetStartedAt = explicitStartedAt || (openShift ? openShift.openedAt : 0);
+
+  if (!targetShiftId) {
+    const todayKey = getLocalPktDayKey();
+    // Preserve recently closed shift's series on the same day until a new shift starts
+    if (seqState.shiftId && String(seqState.shiftId).startsWith('SH-')) {
+      const closedShift = validShifts.find((s) => s && s.id === seqState.shiftId);
+      const shiftDay = closedShift ? getLocalPktDayKey(closedShift.openedAt || Date.now()) : todayKey;
+      targetShiftId = shiftDay === todayKey ? seqState.shiftId : todayKey;
+      targetStartedAt = closedShift?.openedAt || seqState.shiftStartedAt || Date.now();
+    } else {
+      targetShiftId = todayKey;
+      targetStartedAt = seqState.shiftStartedAt || Date.now();
+    }
+  }
+
+  if (seqState.shiftId !== targetShiftId) {
+    const prevShift = seqState.shiftId;
+    seqState.shiftId = targetShiftId;
+    seqState.shiftStartedAt = targetStartedAt || Date.now();
+    seqState.kitchenSeq = 0;
+    seqState.juiceSeq = 0;
+    seqState.ledger = { main: [], juice: [] };
+    console.log(`[Sultan Hub KOT Series] Reset Kitchen KOT & Juice Bar SOT sequence to #1 for shift ${targetShiftId} (previous: ${prevShift || 'none'})`);
+    appendSystemLogs({
+      actorId: 'system',
+      actorName: 'Sultan Central Hub',
+      actorRole: 'System',
+      page: '/shift',
+      module: 'KOT_SEQUENCE',
+      action: 'SHIFT_KOT_SEQUENCE_RESET',
+      actionType: 'UPDATE',
+      severity: 'info',
+      entityType: 'Shift',
+      entityId: targetShiftId,
+      entityName: targetShiftId,
+      summary: `Reset Kitchen KOT #1 & Juice Bar SOT #1 counters for shift ${targetShiftId}`,
+      details: { previousShiftId: prevShift, newShiftId: targetShiftId },
+    });
+    return true;
+  }
+  return false;
+}
+
+function updateKotLedgerEntry(ticketId, station, patch) {
+  if (!ticketId || (station !== 'main' && station !== 'juice')) return;
+  const seqState = serverState.kotSequenceState;
+  const list = seqState?.ledger?.[station];
+  if (!Array.isArray(list)) return;
+  const entry = list.find((e) => e && e.ticketId === ticketId);
+  if (!entry) return;
+  Object.assign(entry, patch, { updatedAt: Date.now() });
+}
+
+function assignStationKotSequences(ticket) {
+  if (!ticket || !ticket.id || ticket.isSettled || isCancelOrMinusTicket(ticket)) {
+    return { hasMain: false, hasJuice: false, assigned: false };
+  }
+  ensureKotSequenceForActiveShift();
+  const seqState = serverState.kotSequenceState;
+  const currentShiftId = seqState.shiftId;
+  const autoRouteBev = isAutoRouteBeveragesEnabled();
+  const { hasMain, hasJuice, mainItems, juiceItems } = printerHelper && typeof printerHelper.normalizeTicketStations === 'function'
+    ? printerHelper.normalizeTicketStations(ticket, serverState.menuItems || [], autoRouteBev)
+    : { hasMain: true, hasJuice: false, mainItems: ticket.items || [], juiceItems: [] };
+
+  const existingTicket = (Array.isArray(serverState.tickets) ? serverState.tickets : []).find((t) => t && t.id === ticket.id);
+  const existingMainLedger = seqState.ledger.main.find((e) => e && e.ticketId === ticket.id);
+  const existingJuiceLedger = seqState.ledger.juice.find((e) => e && e.ticketId === ticket.id);
+
+  if (existingTicket) {
+    if (!ticket.kotShiftId && existingTicket.kotShiftId) ticket.kotShiftId = existingTicket.kotShiftId;
+    if (!ticket.kitchenKotSeq && existingTicket.kitchenKotSeq) ticket.kitchenKotSeq = existingTicket.kitchenKotSeq;
+    if (!ticket.juiceKotSeq && existingTicket.juiceKotSeq) ticket.juiceKotSeq = existingTicket.juiceKotSeq;
+  }
+  if (existingMainLedger && !ticket.kitchenKotSeq) {
+    ticket.kitchenKotSeq = existingMainLedger.seq;
+    ticket.kotShiftId = ticket.kotShiftId || currentShiftId;
+  }
+  if (existingJuiceLedger && !ticket.juiceKotSeq) {
+    ticket.juiceKotSeq = existingJuiceLedger.seq;
+    ticket.kotShiftId = ticket.kotShiftId || currentShiftId;
+  }
+
+  if (!ticket.kotShiftId) {
+    ticket.kotShiftId = currentShiftId;
+  }
+
+  if (!ticket.stationStatuses || typeof ticket.stationStatuses !== 'object') {
+    ticket.stationStatuses = {};
+  }
+  if (hasMain && !ticket.stationStatuses.main) {
+    ticket.stationStatuses.main = ticket.status || 'pending';
+  }
+  if (hasJuice && !ticket.stationStatuses.juice) {
+    ticket.stationStatuses.juice = ticket.status || 'pending';
+  }
+
+  let assignedNew = false;
+  if (hasMain && !ticket.kitchenKotSeq) {
+    seqState.kitchenSeq = Number(seqState.kitchenSeq || 0) + 1;
+    ticket.kitchenKotSeq = seqState.kitchenSeq;
+    assignedNew = true;
+    seqState.ledger.main.push({
+      seq: ticket.kitchenKotSeq,
+      ticketId: ticket.id,
+      tableId: ticket.tableId || '',
+      tableName: ticket.tableName || 'Takeaway',
+      server: ticket.server || 'Staff',
+      isAddOn: Boolean(ticket.isAddOn),
+      roundNumber: ticket.roundNumber || 1,
+      timePlaced: Number(ticket.timePlaced || Date.now()),
+      itemCount: mainItems.reduce((s, it) => s + (Number(it?.qty) || 1), 0),
+      itemsSummary: mainItems.map((it) => `${it?.qty || 1}x ${it?.name || ''}`).join(', ').slice(0, 180),
+      status: ticket.stationStatuses.main || ticket.status || 'pending',
+      printStatus: 'queued',
+      printError: null,
+      stationAckAt: null,
+    });
+    if (seqState.ledger.main.length > 400) seqState.ledger.main = seqState.ledger.main.slice(-400);
+  }
+
+  if (hasJuice && !ticket.juiceKotSeq) {
+    seqState.juiceSeq = Number(seqState.juiceSeq || 0) + 1;
+    ticket.juiceKotSeq = seqState.juiceSeq;
+    assignedNew = true;
+    seqState.ledger.juice.push({
+      seq: ticket.juiceKotSeq,
+      ticketId: ticket.id,
+      tableId: ticket.tableId || '',
+      tableName: ticket.tableName || 'Takeaway',
+      server: ticket.server || 'Staff',
+      isAddOn: Boolean(ticket.isAddOn),
+      roundNumber: ticket.roundNumber || 1,
+      timePlaced: Number(ticket.timePlaced || Date.now()),
+      itemCount: juiceItems.reduce((s, it) => s + (Number(it?.qty) || 1), 0),
+      itemsSummary: juiceItems.map((it) => `${it?.qty || 1}x ${it?.name || ''}`).join(', ').slice(0, 180),
+      status: ticket.stationStatuses.juice || ticket.status || 'pending',
+      printStatus: 'queued',
+      printError: null,
+      stationAckAt: null,
+    });
+    if (seqState.ledger.juice.length > 400) seqState.ledger.juice = seqState.ledger.juice.slice(-400);
+  }
+
+  return { hasMain, hasJuice, assigned: assignedNew };
+}
+
+function syncTicketStatusToLedger(ticket) {
+  if (!ticket || !ticket.id) return;
+  if (ticket.kitchenKotSeq) {
+    const stStatus = ticket.isSettled ? (ticket.status === 'served' ? 'served' : 'settled') : (ticket.stationStatuses?.main || ticket.status || 'pending');
+    updateKotLedgerEntry(ticket.id, 'main', { status: stStatus, tableName: ticket.tableName || 'Takeaway' });
+  }
+  if (ticket.juiceKotSeq) {
+    const stStatus = ticket.isSettled ? (ticket.status === 'served' ? 'served' : 'settled') : (ticket.stationStatuses?.juice || ticket.status || 'pending');
+    updateKotLedgerEntry(ticket.id, 'juice', { status: stStatus, tableName: ticket.tableName || 'Takeaway' });
+  }
 }
 
 // Crash-safe atomic disk write with fs.fsyncSync so sudden power cuts never lose orders or corrupt JSON
@@ -6096,8 +6310,8 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 49;
-      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 49) to force-reload
+      const targetWebVer = 50;
+      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 50) to force-reload
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : 44;
 
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -6490,6 +6704,7 @@ async function handleRequest(req, res) {
         if (printerHelper && typeof printerHelper.normalizeTicketStations === 'function') {
           printerHelper.normalizeTicketStations(kotTicket, serverState.menuItems || [], isAutoRouteBeveragesEnabled());
         }
+        assignStationKotSequences(kotTicket);
         if (!serverState.tickets) serverState.tickets = [];
         serverState.tickets.unshift(kotTicket);
         if (kotTicket) queueAutoPrintTicket(kotTicket, 'auto');
@@ -6671,7 +6886,7 @@ async function handleRequest(req, res) {
 
       if (!validStatuses.includes(status)) {
         res.writeHead(400, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ success: false, error: `Invalid status. Must be one of: ${validStatuses.join(', ')}` }));
+        res.end(JSON.stringify({ success: false, error: `Invalid status.Must be one of: ${ validStatuses.join(', ') } ` }));
         return;
       }
 
@@ -6699,7 +6914,7 @@ async function handleRequest(req, res) {
       if (status === 'CONFIRMED') {
         if (!ticket) {
           ticket = {
-            id: `KOT-${(order.orderNumber || order.id).replace(/\D/g, '') || Math.floor(1000 + Math.random() * 9000)}`,
+            id: `KOT - ${ (order.orderNumber || order.id).replace(/\D/g, '') || Math.floor(1000 + Math.random() * 9000) } `,
             orderId: order.id,
             orderNumber: order.orderNumber,
             tableId: order.tableId || 'DINE-IN-APP',
@@ -6791,14 +7006,14 @@ async function handleRequest(req, res) {
           actorRole: riderName || status === 'OUT_FOR_DELIVERY' || status === 'DELIVERED' ? 'Delivery' : 'Manager',
           page: '/admin/app-orders',
           module: 'ONLINE_DELIVERY',
-          action: `ONLINE_ORDER_${status}`,
+          action: `ONLINE_ORDER_${ status } `,
           actionType: status === 'CANCELLED' ? 'CANCEL' : 'STATUS_CHANGE',
           severity: status === 'CANCELLED' ? 'critical' : (status === 'DELIVERED' || status === 'SERVED' ? 'success' : 'info'),
           entityType: 'OnlineOrder',
           entityId: order.id,
           entityName: order.orderNumber,
           amount: Number(order.total || 0),
-          summary: `Order #${order.orderNumber} (${order.orderType}) marked ${status}${riderName ? ` • Rider: ${riderName}` : ''}${assignedWaiter ? ` • Server: ${assignedWaiter}` : ''}${managerNotes ? ` (${managerNotes})` : ''}`,
+          summary: `Order #${ order.orderNumber } (${ order.orderType }) marked ${ status }${ riderName ? ` • Rider: ${riderName}` : '' }${ assignedWaiter ? ` • Server: ${assignedWaiter}` : '' }${ managerNotes ? ` (${managerNotes})` : '' } `,
           details: { orderId: order.id, orderNumber: order.orderNumber, status, riderName, riderPhone, assignedWaiter, managerNotes },
         },
         { ip: clientIp }
@@ -6816,7 +7031,7 @@ async function handleRequest(req, res) {
       });
 
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, data: order, message: `Status updated to ${status}` }));
+      res.end(JSON.stringify({ success: true, data: order, message: `Status updated to ${ status } ` }));
     } catch (e) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: e.message }));
@@ -6847,9 +7062,9 @@ async function handleRequest(req, res) {
       }
 
       const newReq = {
-        id: `sr-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        id: `sr - ${ Date.now() } -${ Math.floor(Math.random() * 1000) } `,
         tableId,
-        tableName: tableName || `Table ${tableId}`,
+        tableName: tableName || `Table ${ tableId } `,
         zone: zone || 'Dining Hall',
         type, // 'call_waiter' | 'bill' | 'water' | 'cleaning' | 'complaint'
         note: note || '',
@@ -7203,6 +7418,38 @@ async function handleRequest(req, res) {
       const isForceReprint = !!data.forceReprint;
       const requestedStation = data.station === 'juice' ? 'juice' : (data.station === 'all' ? 'all' : 'main');
 
+      if (!isCancelOrMinusTicket(data.ticket)) {
+        assignStationKotSequences(data.ticket);
+        if (tId) {
+          if (!Array.isArray(serverState.tickets)) serverState.tickets = [];
+          const extIdx = serverState.tickets.findIndex((t) => t && t.id === tId);
+          if (extIdx === -1 && !data.ticket.isSettled) {
+            serverState.tickets.unshift(data.ticket);
+            serverState.lastUpdated = Date.now();
+            persistState();
+            broadcastToClients({
+              type: 'NEW_ORDER_ALERT',
+              ticket: data.ticket,
+              soundAlert: true,
+              timestamp: Date.now(),
+            });
+            broadcastToClients({
+              type: 'SERVER_BROADCAST',
+              state: serverState,
+              senderId: 'PRINT_KOT_UPSERT',
+              timestamp: serverState.lastUpdated,
+            });
+          } else if (extIdx >= 0) {
+            serverState.tickets[extIdx] = {
+              ...serverState.tickets[extIdx],
+              kitchenKotSeq: serverState.tickets[extIdx].kitchenKotSeq ?? data.ticket.kitchenKotSeq,
+              juiceKotSeq: serverState.tickets[extIdx].juiceKotSeq ?? data.ticket.juiceKotSeq,
+              kotShiftId: serverState.tickets[extIdx].kotShiftId || data.ticket.kotShiftId,
+            };
+          }
+        }
+      }
+
       const stations = requestedStation === 'all' ? ['main', 'juice'] : [requestedStation];
       const results = [];
 
@@ -7223,6 +7470,10 @@ async function handleRequest(req, res) {
           waitForAck: true,
           printerName: data.printerName,
         });
+        updateKotLedgerEntry(tId, st, {
+          printStatus: r?.skipped ? 'skipped' : r?.queued ? 'queued_agent' : r?.success ? 'printed' : 'failed',
+          printError: r?.error || null,
+        });
         results.push(r);
       }
 
@@ -7231,6 +7482,7 @@ async function handleRequest(req, res) {
         : { success: results.some((r) => r.success), results };
       const allSkipped = results.length > 0 && results.every((r) => r && r.skipped);
       if (!allSkipped) {
+        persistState();
         appendSystemLogs(
           {
             actorId: data.ticket?.server || 'kds',
@@ -7245,17 +7497,167 @@ async function handleRequest(req, res) {
             entityId: tId,
             entityName: data.ticket?.tableName || tId,
             summary: `${isForceReprint ? 'Reprinted' : 'Printed'} ${requestedStation.toUpperCase()} KOT #${tId} for ${data.ticket?.tableName || 'Table'}`,
-            details: { ticketId: tId, station: requestedStation, forceReprint: isForceReprint, success: primaryResult?.success },
+            details: {
+              ticketId: tId,
+              station: requestedStation,
+              forceReprint: isForceReprint,
+              kitchenKotSeq: data.ticket?.kitchenKotSeq,
+              juiceKotSeq: data.ticket?.juiceKotSeq,
+              success: primaryResult?.success,
+            },
           },
           { ip: clientIp }
         );
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify(primaryResult));
+      res.end(JSON.stringify({
+        ...primaryResult,
+        kitchenKotSeq: data.ticket?.kitchenKotSeq,
+        juiceKotSeq: data.ticket?.juiceKotSeq,
+        kotShiftId: data.ticket?.kotShiftId,
+      }));
     } catch (err) {
       console.warn('[Sultan Hub] /api/print/kot error:', err.message);
       res.writeHead(500, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  // 8.1a Per-Shift Station KOT/SOT Sequence Status, Ack, Gap Recovery & Shift Reset
+  if (url.pathname === '/api/kot/sequence-status' && req.method === 'GET') {
+    const station = url.searchParams.get('station') === 'juice' ? 'juice' : 'main';
+    ensureKotSequenceForActiveShift();
+    const seqState = serverState.kotSequenceState;
+    const currentSeq = station === 'juice' ? Number(seqState.juiceSeq || 0) : Number(seqState.kitchenSeq || 0);
+    const ledger = Array.isArray(seqState.ledger?.[station]) ? seqState.ledger[station] : [];
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify({
+      success: true,
+      shiftId: seqState.shiftId,
+      shiftStartedAt: seqState.shiftStartedAt || 0,
+      kitchenSeq: Number(seqState.kitchenSeq || 0),
+      juiceSeq: Number(seqState.juiceSeq || 0),
+      currentSeq,
+      ledger,
+    }));
+    return;
+  }
+
+  if (url.pathname === '/api/kot/ack' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const station = data?.station === 'juice' ? 'juice' : 'main';
+      const seqs = Array.isArray(data?.seqs) ? data.seqs.map(Number).filter(Boolean) : [];
+      ensureKotSequenceForActiveShift();
+      const seqState = serverState.kotSequenceState;
+      const list = Array.isArray(seqState.ledger?.[station]) ? seqState.ledger[station] : [];
+      const now = Date.now();
+      let changed = false;
+      for (const s of seqs) {
+        const entry = list.find((e) => e && e.seq === s);
+        if (entry && !entry.stationAckAt) {
+          entry.stationAckAt = now;
+          changed = true;
+        }
+      }
+      if (changed) persistState();
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ success: true }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/kot/recover' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const station = data?.station === 'juice' ? 'juice' : 'main';
+      const missingSeqs = Array.isArray(data?.missingSeqs) ? data.missingSeqs.map(Number).filter((n) => n > 0) : [];
+      ensureKotSequenceForActiveShift();
+      const seqState = serverState.kotSequenceState;
+      const ledgerList = Array.isArray(seqState.ledger?.[station]) ? seqState.ledger[station] : [];
+      const currentTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
+      const deletedSet = new Set(Array.isArray(serverState.deletedTicketIds) ? serverState.deletedTicketIds : []);
+      const seqField = station === 'juice' ? 'juiceKotSeq' : 'kitchenKotSeq';
+
+      const recovered = missingSeqs.map((seq) => {
+        const ledgerEntry = ledgerList.find((e) => e && e.seq === seq) || null;
+        const ticketBySeq = currentTickets.find((t) => t && t[seqField] === seq && (!seqState.shiftId || !t.kotShiftId || t.kotShiftId === seqState.shiftId));
+        const ticket = ticketBySeq || (ledgerEntry?.ticketId ? currentTickets.find((t) => t && t.id === ledgerEntry.ticketId) : null) || null;
+
+        let reason = 'Order not found on server (client dropped before sync)';
+        let canReprint = false;
+        if (ticket) {
+          if (ledgerEntry?.status === 'cancelled' || deletedSet.has(ticket.id)) {
+            reason = `Cancelled by staff (${ticket.tableName || 'Table'})`;
+          } else if (ticket.isSettled) {
+            reason = `Bill settled (${ticket.tableName || 'Table'})`;
+          } else if (ticket.status === 'served' || ticket.stationStatuses?.[station] === 'served') {
+            reason = `Already marked SERVED (${ticket.tableName || 'Table'})`;
+            canReprint = true;
+          } else if (ledgerEntry?.printStatus === 'failed') {
+            reason = `Printer failed (${ledgerEntry.printError || 'Offline'}) — Ticket restored`;
+            canReprint = true;
+          } else {
+            reason = `Missed during network sync — Restored (${ticket.tableName || 'Table'})`;
+            canReprint = true;
+          }
+        } else if (ledgerEntry) {
+          if (ledgerEntry.status === 'cancelled' || deletedSet.has(ledgerEntry.ticketId)) {
+            reason = `Cancelled by staff (${ledgerEntry.tableName || 'Table'})`;
+          } else if (ledgerEntry.printStatus === 'failed') {
+            reason = `Printer failed (${ledgerEntry.printError || 'Error'})`;
+          } else {
+            reason = `Settled / archived (${ledgerEntry.tableName || 'Table'})`;
+          }
+        }
+
+        return {
+          seq,
+          found: Boolean(ticket),
+          ticket,
+          ledgerEntry,
+          reason,
+          canReprint,
+        };
+      });
+
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({
+        success: true,
+        shiftId: seqState.shiftId,
+        currentSeq: station === 'juice' ? Number(seqState.juiceSeq || 0) : Number(seqState.kitchenSeq || 0),
+        recovered,
+      }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
+    }
+    return;
+  }
+
+  if (url.pathname === '/api/shift/reset-kot-sequence' && req.method === 'POST') {
+    try {
+      const data = await readRequestBody(req);
+      const shiftId = data?.shiftId ? String(data.shiftId) : null;
+      const shiftStartedAt = data?.shiftStartedAt ? Number(data.shiftStartedAt) : Date.now();
+      ensureKotSequenceForActiveShift(shiftId, shiftStartedAt);
+      serverState.lastUpdated = Date.now();
+      persistState();
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'SHIFT_KOT_RESET',
+        timestamp: serverState.lastUpdated,
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+      res.end(JSON.stringify({ success: true, kotSequenceState: serverState.kotSequenceState }));
+    } catch (err) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: err.message }));
     }
     return;
   }
@@ -8158,8 +8560,8 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
 
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
-  // Merge state keys safely (deletedTicketIds, deletedTableIds, deletedFloorIds, tableMoveLogs, tickets, and tables MUST be processed in order)
-  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'shifts', 'activeShiftId', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
+  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   let modified = false;
 
   if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
@@ -8328,6 +8730,17 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             const incRank = STATUS_RANK[inc.status] ?? 0;
             let chosen = extRank > incRank ? { ...ext } : { ...inc };
 
+            // Preserve server-assigned station KOT/SOT sequences across all sync packets
+            if ((ext.kitchenKotSeq ?? inc.kitchenKotSeq) !== undefined) {
+              chosen.kitchenKotSeq = ext.kitchenKotSeq ?? inc.kitchenKotSeq;
+            }
+            if ((ext.juiceKotSeq ?? inc.juiceKotSeq) !== undefined) {
+              chosen.juiceKotSeq = ext.juiceKotSeq ?? inc.juiceKotSeq;
+            }
+            if (ext.kotShiftId || inc.kotShiftId) {
+              chosen.kotShiftId = ext.kotShiftId || inc.kotShiftId;
+            }
+
             // Preserve latest Move Table relocation regardless of status rank
             const extMovedAt = Number(ext.lastMovedAt) || 0;
             const incMovedAt = Number(inc.lastMovedAt) || 0;
@@ -8487,7 +8900,32 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
 
         serverState.tickets = capServerTicketsWithHistory(deduplicatedMerged);
 
-        // Auto-print ONLY brand-new pending tickets (never re-print already-existing or historical isAddOn tickets on sync)
+        // Assign authoritative per-shift Kitchen KOT / Juice Bar SOT sequences (1, 2, 3...) and sync ledger statuses
+        const nowSeqCheck = Date.now();
+        for (const tk of deduplicatedMerged) {
+          if (!tk || !tk.id) continue;
+          const isBrandNewTicket = !existingMap.has(tk.id);
+          const ticketAgeMs = nowSeqCheck - Number(tk.timePlaced || nowSeqCheck);
+          if (isBrandNewTicket && !tk.isSettled && !isCancelOrMinusTicket(tk) && ticketAgeMs < 15 * 60 * 1000) {
+            assignStationKotSequences(tk);
+          }
+          syncTicketStatusToLedger(tk);
+        }
+        if (filteredIncomingDeleted.length > 0 && serverState.kotSequenceState?.ledger) {
+          for (const delId of filteredIncomingDeleted) {
+            for (const stKey of ['main', 'juice']) {
+              const list = serverState.kotSequenceState.ledger[stKey];
+              if (!Array.isArray(list)) continue;
+              const entry = list.find((e) => e && e.ticketId === delId);
+              if (entry && entry.status !== 'served' && entry.status !== 'settled') {
+                entry.status = 'cancelled';
+                entry.updatedAt = nowSeqCheck;
+              }
+            }
+          }
+        }
+
+        // Auto-print & broadcast instant WebSocket alert ONLY for brand-new pending tickets
         const nowAutoPrint = Date.now();
         for (const inc of incomingTickets) {
           if (!inc || !inc.id) continue;
@@ -8503,6 +8941,12 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             mergedTicket.items.length > 0
           ) {
             queueAutoPrintTicket(mergedTicket, 'auto');
+            broadcastToClients({
+              type: 'NEW_ORDER_ALERT',
+              ticket: mergedTicket,
+              soundAlert: true,
+              timestamp: nowAutoPrint,
+            });
           }
         }
 
@@ -8898,10 +9342,13 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
       } else {
         const sanitized = sanitizeIncomingSeedData(key, partialState[key]);
         if (key === 'activeShiftId') {
+          const prevShiftId = serverState.activeShiftId;
           const validShifts = Array.isArray(serverState.shifts) ? serverState.shifts : [];
-          serverState.activeShiftId = sanitized && validShifts.some(s => s && s.id === sanitized && s.status === 'open')
-            ? sanitized
-            : null;
+          const nextShiftObj = sanitized ? validShifts.find(s => s && s.id === sanitized && s.status === 'open') : null;
+          serverState.activeShiftId = nextShiftObj ? sanitized : null;
+          if (serverState.activeShiftId && serverState.activeShiftId !== prevShiftId) {
+            ensureKotSequenceForActiveShift(serverState.activeShiftId, nextShiftObj?.openedAt || Date.now());
+          }
         } else if (key === 'staff') {
           const incStaff = Array.isArray(sanitized) ? sanitized : [];
           const masterOnly = INITIAL_STATE.staff[0];

@@ -303,6 +303,9 @@ export type Ticket = {
   isSettled?: boolean;
   settledAt?: number;
   settledTableId?: string;
+  kitchenKotSeq?: number;
+  juiceKotSeq?: number;
+  kotShiftId?: string;
 };
 
 export type MenuVariant = {
@@ -4607,6 +4610,15 @@ export const useRestaurantStore = create<RestaurantState>()(
                   : { ...rt, items: Array.isArray(rt.items) ? rt.items : [] };
 
                 finalTicket.stationStatuses = mergedStationStatuses;
+                if ((rt.kitchenKotSeq ?? local?.kitchenKotSeq) !== undefined) {
+                  finalTicket.kitchenKotSeq = rt.kitchenKotSeq ?? local?.kitchenKotSeq;
+                }
+                if ((rt.juiceKotSeq ?? local?.juiceKotSeq) !== undefined) {
+                  finalTicket.juiceKotSeq = rt.juiceKotSeq ?? local?.juiceKotSeq;
+                }
+                if (rt.kotShiftId || local?.kotShiftId) {
+                  finalTicket.kotShiftId = rt.kotShiftId || local?.kotShiftId;
+                }
 
                 // Merge items to preserve item-level 'ready' or 'served' status
                 if (local && Array.isArray(local.items) && Array.isArray(rt.items)) {

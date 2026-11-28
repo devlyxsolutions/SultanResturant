@@ -27,8 +27,14 @@ export function printOrderSlip(ticket: Ticket, options?: PrintOrderSlipOptions) 
   }
 
   const stationTitle = options?.stationLabel || 'KITCHEN KOT';
+  const isJuiceSlip = stationTitle.toUpperCase().includes('JUICE');
   const rawKotId = String(ticket.id || 'N/A').toUpperCase();
-  const kotDisplay = rawKotId.startsWith('KOT') ? `KOT #${rawKotId.replace(/^KOT-?/i, '')}` : `KOT #${rawKotId}`;
+  const stationSeq = isJuiceSlip ? Number(ticket.juiceKotSeq || 0) : Number(ticket.kitchenKotSeq || 0);
+  const kotDisplay = stationSeq > 0
+    ? `${isJuiceSlip ? 'SOT' : 'KOT'} #${stationSeq}`
+    : rawKotId.startsWith('KOT')
+      ? `KOT #${rawKotId.replace(/^KOT-?/i, '')}`
+      : `KOT #${rawKotId}`;
   const date = new Date(ticket.timePlaced || Date.now()).toLocaleString('en-PK', {
     hour: '2-digit',
     minute: '2-digit',

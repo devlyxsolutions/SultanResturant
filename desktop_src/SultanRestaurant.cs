@@ -17,8 +17,8 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Sultan Restaurant POS & Central Hub")]
-[assembly: AssemblyVersion("1.0.49.0")]
-[assembly: AssemblyFileVersion("1.0.49.0")]
+[assembly: AssemblyVersion("1.0.50.0")]
+[assembly: AssemblyFileVersion("1.0.50.0")]
 
 namespace SultanRestaurantDesktop
 {
@@ -515,7 +515,7 @@ namespace SultanRestaurantDesktop
 
         private void InitializeComponent()
         {
-            this.Text = "Sultan Restaurant - Desktop Control & POS Hub (v49)";
+            this.Text = "Sultan Restaurant - Desktop Control & POS Hub (v50)";
             this.Size = new Size(680, 680);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;

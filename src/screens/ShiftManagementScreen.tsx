@@ -17,7 +17,7 @@ import {
 import FullscreenButton from '../components/FullscreenButton';
 import { SULTAN_LOGO_BASE64 } from '../constants/logoBase64';
 import { TouchNumericKeypad } from '../components/TouchNumericKeypad';
-import { broadcastImmediately } from '../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../services/syncService';
 import { useAuthStore } from '../store/authStore';
 import { useOpsStore } from '../store/opsStore';
 import { useRestaurantStore } from '../store/restaurantStore';
@@ -192,7 +192,21 @@ export default function ShiftManagementScreen() {
     setCashierNotes('');
     broadcastImmediately();
 
-    Alert.alert('Shift Started! • شفٹ شروع ہو گئی', `Shift ${created.id} is now LIVE on ${created.registerId}.`);
+    try {
+      const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+      if (base) {
+        fetch(`${base}/api/shift/reset-kot-sequence`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ shiftId: created.id, shiftStartedAt: created.openedAt }),
+        }).catch(() => { });
+      }
+    } catch { }
+
+    Alert.alert(
+      'Shift Started! • شفٹ شروع ہو گئی',
+      `Shift ${created.id} is now LIVE on ${created.registerId}.\nKitchen KOT #1 & Juice Bar SOT #1 series started.`
+    );
   };
 
   const handleCloseShift = () => {

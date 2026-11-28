@@ -474,7 +474,7 @@ function Send-PlainTextViaGdiDriver {
                     $useFont = $fontReg
                     $center = $false
 
-                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT" -or $line -match '^(KOT|MINUS|CANCEL)\s*#' -or $line -match '^TABLE:\s*' -or $line -match 'CANCEL.*MINUS|CANCELLED / MINUS|MINUS / CANCEL ITEM') {
+                    if ($script:GdiPrintIndex -eq 0 -or $line -eq "SULTAN RESTAURANT" -or $line -match '^(KOT|SOT|MINUS|CANCEL)\s*#' -or $line -match '^TABLE:\s*' -or $line -match 'CANCEL.*MINUS|CANCELLED / MINUS|MINUS / CANCEL ITEM') {
                         $useFont = $fontTitle
                         $center = $true
                     } elseif ($line -match '^(JUICE BAR|MAIN KITCHEN|KITCHEN|\[ .+\]|---|\*\*\*)') {

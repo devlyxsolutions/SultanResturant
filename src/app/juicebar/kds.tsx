@@ -25,6 +25,13 @@ import StationPrinterModal from '../../components/StationPrinterModal';
 import { broadcastImmediately, getActiveServerHttpUrl, parseServerEndpoints } from '../../services/syncService';
 import { resolveMenuCatalogStation } from '../../utils/stationRouting';
 import {
+  computeStationSequenceGaps,
+  formatStationTicketCode,
+  getTicketStationSeq,
+  RecoveredSeqReport,
+  StationSequenceStatusResponse,
+} from '../../utils/kotSequenceTracker';
+import {
   enqueueKdsAutoPrint,
   markKdsTicketPrinted,
   getKdsAutoPrintEnabled,
@@ -111,6 +118,12 @@ export default function KitchenDisplayScreen() {
     online: false,
     label: 'Setup Juice Printer',
   });
+  const [seqStatus, setSeqStatus] = useState<StationSequenceStatusResponse | null>(null);
+  const [gapReports, setGapReports] = useState<RecoveredSeqReport[]>([]);
+  const [dismissedGapKeys, setDismissedGapKeys] = useState<Set<string>>(() => new Set());
+  const [recoveringGaps, setRecoveringGaps] = useState(false);
+  const lastGapCheckRef = useRef<number>(0);
+  const ackedSeqsRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
@@ -252,13 +265,29 @@ export default function KitchenDisplayScreen() {
 
   const lastTicketMutationRef = useRef<number>(0);
 
-  // Real-time sync poll + WebSocket listener for instant Juice Bar KOT alert & auto-print
+  // Real-time sync poll + Auto-Reconnecting WebSocket listener for instant Juice Bar SOT alert & auto-print
   useEffect(() => {
+    let unmounted = false;
+    let socket: WebSocket | null = null;
+    let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const fetchSequenceStatus = async () => {
+      try {
+        const baseHttpUrl = getActiveServerHttpUrl();
+        const sRes = await fetch(`${baseHttpUrl}/api/kot/sequence-status?station=juice`, { cache: 'no-store' });
+        if (sRes.ok && !unmounted) {
+          const sData = await sRes.json();
+          if (sData?.success) setSeqStatus(sData);
+        }
+      } catch { }
+    };
+
     const fetchLiveTickets = async () => {
+      fetchSequenceStatus();
       if (Date.now() - lastTicketMutationRef.current < 2500) return;
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        const res = await fetch(`${baseHttpUrl}/api/sync`);
+        const res = await fetch(`${baseHttpUrl}/api/sync`, { cache: 'no-store' });
         if (res.ok && Date.now() - lastTicketMutationRef.current >= 2500) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets)) {
@@ -277,63 +306,96 @@ export default function KitchenDisplayScreen() {
     };
 
     fetchLiveTickets();
-    const pollInterval = setInterval(fetchLiveTickets, 6000);
+    const pollInterval = setInterval(fetchLiveTickets, 5000);
 
-    const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
-    let socket: WebSocket | null = null;
-    try {
-      socket = new WebSocket(wsUrl);
-      socket.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
-            if (msg.ticket.id) seenTicketIdsRef.current.add(msg.ticket.id);
-            const currentTickets = useRestaurantStore.getState().tickets || [];
-            if (!currentTickets.some((t: Ticket) => t.id === msg.ticket.id)) {
-              useRestaurantStore.getState().syncFromServer({
-                tickets: [msg.ticket, ...currentTickets],
-              });
-              const catalog = useRestaurantStore.getState().menuItems || [];
-              const stationItems = (msg.ticket.items || []).filter(
-                (it: any) => resolveMenuCatalogStation(it, catalog, true) === 'juice'
-              );
-              if (stationItems.length > 0) {
-                playKitchenChime(!!msg.ticket.isAddOn);
-                setLatestAlert({
-                  id: msg.ticket.id,
-                  tableName: msg.ticket.tableName,
-                  isAddOn: !!msg.ticket.isAddOn,
-                  roundNumber: msg.ticket.roundNumber,
-                  itemCount: stationItems.reduce((s: number, it: any) => s + (it.qty || 1), 0),
-                  server: msg.ticket.server,
-                });
-                enqueueKdsAutoPrint(msg.ticket, 'juice', {
-                  enabled: autoPrintRef.current,
-                  onPrinted: (id) => setLastAutoPrintedTicket(id),
+    const connectWs = () => {
+      if (unmounted) return;
+      try {
+        const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
+        socket = new WebSocket(wsUrl);
+        socket.onmessage = (event) => {
+          try {
+            const msg = JSON.parse(event.data);
+            if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
+              const incomingTicket = msg.ticket as Ticket;
+              const wasSeen = !!(incomingTicket.id && seenTicketIdsRef.current.has(incomingTicket.id));
+              if (incomingTicket.id) seenTicketIdsRef.current.add(incomingTicket.id);
+              const currentTickets = useRestaurantStore.getState().tickets || [];
+              const existing = currentTickets.find((t: Ticket) => t.id === incomingTicket.id);
+              if (!existing || (!existing.juiceKotSeq && incomingTicket.juiceKotSeq)) {
+                useRestaurantStore.getState().syncFromServer({
+                  tickets: [incomingTicket, ...currentTickets.filter((t: Ticket) => t.id !== incomingTicket.id)],
                 });
               }
+              if (!wasSeen) {
+                const catalog = useRestaurantStore.getState().menuItems || [];
+                const stationItems = (incomingTicket.items || []).filter(
+                  (it: any) => resolveMenuCatalogStation(it, catalog, true) === 'juice'
+                );
+                if (stationItems.length > 0) {
+                  playKitchenChime(!!incomingTicket.isAddOn);
+                  setLatestAlert({
+                    id: formatStationTicketCode(incomingTicket, 'juice'),
+                    tableName: incomingTicket.tableName,
+                    isAddOn: !!incomingTicket.isAddOn,
+                    roundNumber: incomingTicket.roundNumber,
+                    itemCount: stationItems.reduce((s: number, it: any) => s + (it.qty || 1), 0),
+                    server: incomingTicket.server,
+                  });
+                  enqueueKdsAutoPrint(incomingTicket, 'juice', {
+                    enabled: autoPrintRef.current,
+                    onPrinted: (id) => setLastAutoPrintedTicket(id),
+                  });
+                }
+              }
+              fetchSequenceStatus();
+            } else if (msg.type === 'SERVER_BROADCAST' && Array.isArray(msg?.state?.tickets)) {
+              if (Date.now() - lastTicketMutationRef.current >= 2500) {
+                useRestaurantStore.getState().syncFromServer({ tickets: msg.state.tickets });
+              }
+              if (msg?.state?.kotSequenceState) {
+                const kss = msg.state.kotSequenceState;
+                setSeqStatus({
+                  success: true,
+                  shiftId: kss.shiftId || null,
+                  shiftStartedAt: kss.shiftStartedAt || 0,
+                  kitchenSeq: Number(kss.kitchenSeq || 0),
+                  juiceSeq: Number(kss.juiceSeq || 0),
+                  currentSeq: Number(kss.juiceSeq || 0),
+                  ledger: Array.isArray(kss.ledger?.juice) ? kss.ledger.juice : [],
+                });
+              }
+            } else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId && msg.station === 'juice') {
+              setLastAutoPrintedTicket(msg.ticketId);
+              seenTicketIdsRef.current.add(msg.ticketId);
+              markKdsTicketPrinted('juice', { id: msg.ticketId } as any);
+            } else if (msg.type === 'PRINT_AGENT_STATUS' && msg.station === 'juice') {
+              setJuicePrinterStatus({
+                online: !!msg.online,
+                label: msg.online ? `Juice: ${msg.activePrinter || 'USB Ready'}` : 'Connect Juice Printer',
+              });
             }
+          } catch {
+            // Ignore malformed ws messages
           }
-        else if (msg.type === 'TICKET_AUTO_PRINTED' && msg.ticketId && msg.station === 'juice') {
-            setLastAutoPrintedTicket(msg.ticketId);
-            seenTicketIdsRef.current.add(msg.ticketId);
-            markKdsTicketPrinted('juice', { id: msg.ticketId } as any);
-          } else if (msg.type === 'PRINT_AGENT_STATUS' && msg.station === 'juice') {
-            setJuicePrinterStatus({
-              online: !!msg.online,
-              label: msg.online ? `Juice: ${msg.activePrinter || 'USB Ready'}` : 'Connect Juice Printer',
-            });
+        };
+        socket.onclose = () => {
+          if (!unmounted) {
+            wsReconnectTimer = setTimeout(connectWs, 3000);
           }
-        } catch {
-          // Ignore malformed ws messages
+        };
+      } catch {
+        if (!unmounted) {
+          wsReconnectTimer = setTimeout(connectWs, 3000);
         }
-      };
-    } catch {
-      // Ignore ws init errors
-    }
+      }
+    };
+    connectWs();
 
     return () => {
+      unmounted = true;
       clearInterval(pollInterval);
+      if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
       if (socket) {
         try { socket.close(); } catch { }
       }
@@ -471,8 +533,92 @@ export default function KitchenDisplayScreen() {
     return t.stationStatus === 'pending' || t.stationStatus === 'cooking' || t.stationStatus === 'ready';
   });
 
-  // Sort newest first so new orders appear at Column 1 and push earlier orders forward!
+  // Sort newest first so new orders appear at Column 1 and push earlier orders forward! (Never blocked by sequence gaps)
   const sortedTickets = [...filteredTickets].sort((a, b) => (b.timePlaced || 0) - (a.timePlaced || 0));
+
+  const seqGapInfo = useMemo(
+    () =>
+      computeStationSequenceGaps({
+        station: 'juice',
+        stationTickets,
+        serverSeqStatus: seqStatus,
+        dismissedKeys: dismissedGapKeys,
+      }),
+    [stationTickets, seqStatus, dismissedGapKeys]
+  );
+
+  const triggerGapRecovery = async (seqsToRecover: number[], force = false) => {
+    if (seqsToRecover.length === 0) {
+      setGapReports([]);
+      return;
+    }
+    if (!force && Date.now() - lastGapCheckRef.current < 4000) return;
+    lastGapCheckRef.current = Date.now();
+    setRecoveringGaps(true);
+    try {
+      const baseHttpUrl = getActiveServerHttpUrl().replace(/\/+$/, '');
+      const res = await fetch(`${baseHttpUrl}/api/kot/recover`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          station: 'juice',
+          missingSeqs: seqsToRecover,
+          shiftId: seqGapInfo.shiftId,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const recoveredList: RecoveredSeqReport[] = Array.isArray(data?.recovered) ? data.recovered : [];
+        const existingTickets = useRestaurantStore.getState().tickets || [];
+        const existingIdSet = new Set(existingTickets.map((t) => t?.id).filter(Boolean));
+        const restoredTickets = recoveredList
+          .filter((r) => r.found && r.ticket && !r.ticket.isSettled && r.ledgerEntry?.status !== 'cancelled' && !existingIdSet.has(r.ticket.id))
+          .map((r) => r.ticket as Ticket);
+
+        if (restoredTickets.length > 0) {
+          useRestaurantStore.getState().syncFromServer({
+            tickets: [...restoredTickets, ...existingTickets],
+          });
+        }
+        setGapReports(recoveredList);
+      }
+    } catch { } finally {
+      setRecoveringGaps(false);
+    }
+  };
+
+  useEffect(() => {
+    if (seqGapInfo.missingSeqs.length > 0) {
+      triggerGapRecovery(seqGapInfo.missingSeqs, false);
+    } else if (gapReports.length > 0) {
+      setGapReports([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seqGapInfo.missingSeqs.join(','), seqGapInfo.shiftId]);
+
+  // Acknowledge newly received Juice Bar SOT sequence numbers to server
+  useEffect(() => {
+    const newSeqs: number[] = [];
+    for (const tk of stationTickets) {
+      const s = getTicketStationSeq(tk, 'juice');
+      if (s <= 0) continue;
+      const key = `${tk.kotShiftId || seqGapInfo.shiftId || 'day'}:${s}`;
+      if (!ackedSeqsRef.current.has(key)) {
+        ackedSeqsRef.current.add(key);
+        newSeqs.push(s);
+      }
+    }
+    if (newSeqs.length > 0) {
+      const baseHttpUrl = getActiveServerHttpUrl().replace(/\/+$/, '');
+      if (baseHttpUrl) {
+        fetch(`${baseHttpUrl}/api/kot/ack`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ station: 'juice', seqs: newSeqs, shiftId: seqGapInfo.shiftId }),
+        }).catch(() => { });
+      }
+    }
+  }, [stationTickets, seqGapInfo.shiftId]);
 
   const handleTicketAction = (ticket: typeof stationTickets[0]) => {
     lastTicketMutationRef.current = Date.now();
@@ -565,7 +711,12 @@ export default function KitchenDisplayScreen() {
         <View style={[styles.ticketHeader, { backgroundColor: headerColor }]}>
           <View style={{ flex: 1 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <Text style={styles.ticketId}>{item.id}</Text>
+              <Text style={styles.ticketId}>{formatStationTicketCode(item, stationFilter)}</Text>
+              {getTicketStationSeq(item, stationFilter) > 0 && (
+                <Text style={{ fontSize: 10.5, fontWeight: '700', color: 'rgba(255,255,255,0.75)' }}>
+                  ({item.id})
+                </Text>
+              )}
               {isPending && (
                 <View style={[styles.addOnTag, { backgroundColor: '#78350F' }]}>
                   <Ionicons name="time" size={11} color="#FDE68A" />
@@ -880,14 +1031,30 @@ export default function KitchenDisplayScreen() {
               <Ionicons name="wine" size={20} color="#FF9500" />
             </View>
             <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <Text style={[styles.navTitle, isMobile && { fontSize: 16 }]}>SULTAN JUICE BAR</Text>
                 <View style={styles.liveIndicator}>
                   <View style={styles.livePulseDot} />
                   <Text style={styles.liveIndicatorText}>LIVE</Text>
                 </View>
+                <View
+                  style={{
+                    backgroundColor: 'rgba(255, 149, 0, 0.16)',
+                    borderWidth: 1,
+                    borderColor: 'rgba(255, 149, 0, 0.45)',
+                    paddingHorizontal: 8,
+                    paddingVertical: 2,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#FDE68A' }}>
+                    {seqGapInfo.highestSeq > 0 ? `SERIES: SOT #1–#${seqGapInfo.highestSeq}` : 'SERIES: READY #1'}
+                  </Text>
+                </View>
               </View>
-              <Text style={styles.navSubtitle}>Juice Station • Shakes & Beverages</Text>
+              <Text style={styles.navSubtitle}>
+                Juice Station • Shakes & Beverages{seqGapInfo.shiftId ? ` • ${seqGapInfo.shiftId}` : ''}
+              </Text>
             </View>
           </View>
 
@@ -1138,6 +1305,128 @@ export default function KitchenDisplayScreen() {
           >
             <Ionicons name="close" size={20} color="#fff" />
           </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Non-Blocking Missing SOT / Failed Print Alert Strip */}
+      {(seqGapInfo.missingSeqs.length > 0 || seqGapInfo.failedPrintEntries.length > 0) && (
+        <View
+          style={{
+            backgroundColor: '#450A0A',
+            borderBottomWidth: 1,
+            borderBottomColor: '#EF4444',
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            gap: 6,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+              <Ionicons name="warning" size={18} color="#FCA5A5" />
+              <Text style={{ color: '#FEE2E2', fontWeight: '800', fontSize: 12.5, flex: 1 }}>
+                {seqGapInfo.missingSeqs.length > 0
+                  ? `MISSING JUICE SOT: ${seqGapInfo.missingSeqs.map((s) => `SOT #${s}`).join(', ')} not received (Next SOTs continue normally)`
+                  : `${seqGapInfo.failedPrintEntries.length} Juice Bar Printer Failure(s) detected`}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={{ backgroundColor: '#B91C1C', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 6 }}
+              onPress={() => triggerGapRecovery(seqGapInfo.missingSeqs, true)}
+              disabled={recoveringGaps}
+            >
+              <Text style={{ color: '#fff', fontWeight: '800', fontSize: 11 }}>
+                {recoveringGaps ? 'Checking...' : 'Check / Recover'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {seqGapInfo.missingSeqs.map((seq) => {
+            const report = gapReports.find((r) => r.seq === seq);
+            return (
+              <View
+                key={`gap-${seq}`}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  backgroundColor: 'rgba(0,0,0,0.28)',
+                  borderRadius: 6,
+                  paddingHorizontal: 10,
+                  paddingVertical: 5,
+                  gap: 8,
+                  flexWrap: 'wrap',
+                }}
+              >
+                <Text style={{ color: '#FECACA', fontSize: 11.5, fontWeight: '700', flex: 1 }}>
+                  SOT #{seq}: {report ? report.reason : 'Checking server ledger...'}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {report?.canReprint && report.ticket && (
+                    <TouchableOpacity
+                      style={{ backgroundColor: '#D97706', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                      onPress={async () => {
+                        try {
+                          const baseHttpUrl = getActiveServerHttpUrl().replace(/\/+$/, '');
+                          await fetch(`${baseHttpUrl}/api/print/kot`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ ticket: report.ticket, station: 'juice', forceReprint: true }),
+                          });
+                          setLastAutoPrintedTicket(`SOT #${seq}`);
+                        } catch { }
+                      }}
+                    >
+                      <Text style={{ color: '#000', fontWeight: '800', fontSize: 10.5 }}>Reprint</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    style={{ backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                    onPress={() => {
+                      setDismissedGapKeys((prev) => {
+                        const next = new Set(prev);
+                        next.add(`${seqGapInfo.shiftId}:${seq}`);
+                        return next;
+                      });
+                    }}
+                  >
+                    <Text style={{ color: '#F3F4F6', fontWeight: '700', fontSize: 10.5 }}>Dismiss</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
+
+          {seqGapInfo.failedPrintEntries.map((entry) => (
+            <View
+              key={`printfail-${entry.seq}`}
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'rgba(120, 53, 15, 0.45)',
+                borderRadius: 6,
+                paddingHorizontal: 10,
+                paddingVertical: 5,
+                gap: 8,
+              }}
+            >
+              <Text style={{ color: '#FDE68A', fontSize: 11.5, fontWeight: '700', flex: 1 }}>
+                SOT #{entry.seq} ({entry.tableName || 'Table'}) Printer Failed: {entry.printError || 'Offline'}
+              </Text>
+              <TouchableOpacity
+                style={{ backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 5 }}
+                onPress={() => {
+                  setDismissedGapKeys((prev) => {
+                    const next = new Set(prev);
+                    next.add(`${seqGapInfo.shiftId}:print:${entry.seq}`);
+                    return next;
+                  });
+                }}
+              >
+                <Text style={{ color: '#F3F4F6', fontWeight: '700', fontSize: 10.5 }}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
         </View>
       )}
 

@@ -211,14 +211,17 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   parts.push(Buffer.from('------------------------------------\n', 'ascii'));
 
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const stationSeq = station === 'juice' ? Number(ticket.juiceKotSeq || 0) : Number(ticket.kitchenKotSeq || 0);
   const kotHeading = isMinus
     ? `CANCEL #${kotId.replace(/^(KOT|MINUS|CANCEL)-?/i, '')}`
-    : kotId.startsWith('KOT')
-      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
-      : `KOT #${kotId}`;
+    : stationSeq > 0
+      ? `${station === 'juice' ? 'SOT' : 'KOT'} #${stationSeq}`
+      : kotId.startsWith('KOT')
+        ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+        : `KOT #${kotId}`;
   const tableText = String(ticket.tableName || ticket.tableId || 'Takeaway').toUpperCase().substring(0, 28);
 
-  // 1. Large Prominent KOT Number at the Top (Double-width + Double-height + Bold)
+  // 1. Large Prominent KOT / SOT Number at the Top (Double-width + Double-height + Bold)
   parts.push(Buffer.from(esc + '!\x38', 'ascii'));
   parts.push(Buffer.from(`${kotHeading}\n`, 'ascii'));
 
@@ -242,7 +245,7 @@ function buildEscPosKotBuffer(ticket, station = 'all') {
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
   parts.push(Buffer.from(`Time: ${dateStr}`.padEnd(22) + `Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}\n`, 'ascii'));
-  parts.push(Buffer.from(`Staff: ${serverName}\n`, 'ascii'));
+  parts.push(Buffer.from(`Staff: ${serverName}`.padEnd(20) + (stationSeq > 0 ? `Ref: ${kotId}\n` : '\n'), 'ascii'));
   if (ticket.notes && String(ticket.notes).trim()) {
     parts.push(Buffer.from('------------------------------------\n', 'ascii'));
     parts.push(Buffer.from(esc + '!\x08', 'ascii')); // Bold
@@ -325,11 +328,14 @@ function buildPlainTextKot(ticket, station = 'all') {
     month: 'short',
   });
   const kotId = String(ticket.id || 'N/A').toUpperCase().substring(0, 14);
+  const stationSeq = station === 'juice' ? Number(ticket.juiceKotSeq || 0) : Number(ticket.kitchenKotSeq || 0);
   const kotHeading = isMinus
     ? `CANCEL #${kotId.replace(/^(KOT|MINUS|CANCEL)-?/i, '')}`
-    : kotId.startsWith('KOT')
-      ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
-      : `KOT #${kotId}`;
+    : stationSeq > 0
+      ? `${station === 'juice' ? 'SOT' : 'KOT'} #${stationSeq}`
+      : kotId.startsWith('KOT')
+        ? `KOT #${kotId.replace(/^KOT-?/i, '')}`
+        : `KOT #${kotId}`;
   const serverName = ticket.server || ticket.orderTakenBy || 'Staff';
   const totalQty = activeItems.reduce((sum, it) => sum + (it?.qty || 1), 0);
 
@@ -346,7 +352,7 @@ function buildPlainTextKot(ticket, station = 'all') {
     `TABLE: ${tableText.substring(0, 28)}`,
     '------------------------------------',
     `Time: ${dateStr}  Qty: ${isMinus ? '-' : isAdd ? '+' : ''}${totalQty}`,
-    `Staff: ${String(serverName).substring(0, 18)}`,
+    `Staff: ${String(serverName).substring(0, 16)}${stationSeq > 0 ? `  Ref: ${kotId}` : ''}`,
     ...(ticket.notes && String(ticket.notes).trim()
       ? ['------------------------------------', `ORDER NOTE: ${String(ticket.notes).trim().substring(0, 120)}`]
       : []),
