@@ -82,7 +82,26 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
   const [orderTypeFilter, setOrderTypeFilter] = useState<'all' | 'dine-in' | 'takeaway' | 'delivery'>('all');
   const [paymentFilter, setPaymentFilter] = useState<'all' | 'cash' | 'card' | 'online'>('all');
   const [statusFilter, setStatusFilter] = useState<'all' | 'settled' | 'voided' | 'refunded'>('all');
+  const [selectedCashiers, setSelectedCashiers] = useState<string[]>([]);
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'amount_high' | 'amount_low'>('newest');
+
+  const normalizeCashierName = (raw?: string): string => {
+    if (!raw) return '';
+    return String(raw)
+      .replace(/\s*\((cashier|admin|manager|floor manager|order taker|waiter|pos|staff)\)\s*$/i, '')
+      .trim();
+  };
+
+  const getInvoiceCashierKey = (inv: Invoice): string => {
+    const clean = normalizeCashierName(inv.cashier || inv.server || '');
+    return clean.toLowerCase();
+  };
+
+  const toggleCashierFilter = (key: string) => {
+    setSelectedCashiers((prev) =>
+      prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]
+    );
+  };
 
   // Selected Invoice for Details Modal
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
@@ -116,8 +135,8 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     };
   }, [operationalDayStartAt]);
 
-  // Filtered & Sorted Invoices
-  const filteredInvoices = useMemo(() => {
+  // Base invoices after Date/OrderType/Payment/Status filters (used to show live counts per Cashier/User pill)
+  const baseFilteredInvoices = useMemo(() => {
     let result = [...invoices];
 
     // Date Filter
@@ -155,7 +174,64 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       result = result.filter((inv) => inv.status === 'refunded' || inv.returnStatus === 'full' || inv.returnStatus === 'partial');
     }
 
-    // Search Query (Invoice ID, Table, Server, Customer Name/Phone, or Items)
+    return result;
+  }, [invoices, dateFilter, orderTypeFilter, paymentFilter, statusFilter, dateRanges]);
+
+  // Multi-select Cashier / User filter chips (always includes Cashiers/Admins/Managers + anyone who billed an invoice)
+  const cashierFilterOptions = useMemo(() => {
+    const map = new Map<string, { key: string; label: string; roleTag?: string; count: number; total: number }>();
+
+    // 1. Seed billing-capable staff so Cashiers (Sharjeel, Tanveer, cashier 2, Master Admin, etc.) are always 1 tap away
+    (staff || []).forEach((s) => {
+      if (!s || !s.name || s.hasSystemAccess === false) return;
+      const roleStr = String(s.role || '').toLowerCase();
+      const customStr = String(s.customRoleId || '').toLowerCase();
+      const isBillingRole =
+        roleStr.includes('cashier') ||
+        roleStr.includes('admin') ||
+        roleStr.includes('manager') ||
+        customStr.includes('cashier') ||
+        customStr.includes('admin') ||
+        customStr.includes('manager');
+      if (!isBillingRole) return;
+      const cleanName = normalizeCashierName(s.name);
+      const key = cleanName.toLowerCase();
+      if (!key || map.has(key)) return;
+      map.set(key, { key, label: cleanName, roleTag: s.role, count: 0, total: 0 });
+    });
+
+    // 2. Count bills & sales from baseFilteredInvoices (respecting Period/Type/Payment/Status)
+    baseFilteredInvoices.forEach((inv) => {
+      const cleanName = normalizeCashierName(inv.cashier || inv.server || '');
+      const key = cleanName.toLowerCase();
+      if (!key) return;
+      const prev = map.get(key) || { key, label: cleanName, count: 0, total: 0 };
+      prev.count += 1;
+      if (inv.status !== 'voided') prev.total += Number(inv.total || 0);
+      map.set(key, prev);
+    });
+
+    return Array.from(map.values()).sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.label.localeCompare(b.label);
+    });
+  }, [staff, baseFilteredInvoices]);
+
+  // Filtered & Sorted Invoices
+  const filteredInvoices = useMemo(() => {
+    let result = [...baseFilteredInvoices];
+
+    // Multi-Select Cashier / User Filter
+    if (selectedCashiers.length > 0) {
+      const selectedSet = new Set(selectedCashiers);
+      result = result.filter((inv) => {
+        const cashierKey = getInvoiceCashierKey(inv);
+        const serverKey = normalizeCashierName(inv.server || '').toLowerCase();
+        return selectedSet.has(cashierKey) || (!inv.cashier && selectedSet.has(serverKey));
+      });
+    }
+
+    // Search Query (Invoice ID, Table, Server, Cashier, Customer Name/Phone, or Items)
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((inv) => {
@@ -163,12 +239,13 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
         const idMatch = inv.id?.toLowerCase().includes(q) || displayId.includes(q);
         const tableMatch = inv.tableName?.toLowerCase().includes(q);
         const serverMatch = inv.server?.toLowerCase().includes(q);
+        const cashierMatch = inv.cashier?.toLowerCase().includes(q);
         const customerMatch =
           inv.customer?.name?.toLowerCase().includes(q) ||
           inv.customer?.phone?.includes(q);
         const itemMatch = inv.items?.some((it) => it.name?.toLowerCase().includes(q));
 
-        return idMatch || tableMatch || serverMatch || customerMatch || itemMatch;
+        return idMatch || tableMatch || serverMatch || cashierMatch || customerMatch || itemMatch;
       });
     }
 
@@ -184,7 +261,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     });
 
     return result;
-  }, [invoices, dateFilter, orderTypeFilter, paymentFilter, statusFilter, searchQuery, sortBy, dateRanges]);
+  }, [baseFilteredInvoices, selectedCashiers, searchQuery, sortBy]);
 
   // Pagination for Invoices List
   const invoicePagination = usePagination({
@@ -652,14 +729,140 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
               />
             </View>
           </View>
+
+          {/* Multi-Select Cashier / User Filter Bar */}
+          {cashierFilterOptions.length > 0 && (
+            <View style={{ marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <Ionicons name="people-outline" size={15} color="#52141C" />
+                  <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>
+                    Filter by Cashier / User (Select 1 or Multiple)
+                  </Text>
+                </View>
+                {selectedCashiers.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSelectedCashiers([])}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 4,
+                      backgroundColor: '#FEF2F2',
+                      borderWidth: 1,
+                      borderColor: '#FECACA',
+                      paddingHorizontal: 8,
+                      paddingVertical: 3,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Ionicons name="close-circle" size={13} color="#DC2626" />
+                    <Text style={{ fontSize: 11, fontWeight: '800', color: '#DC2626' }}>
+                      Clear Users ({selectedCashiers.length})
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedCashiers([])}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 11,
+                    paddingVertical: 6,
+                    borderRadius: 999,
+                    backgroundColor: selectedCashiers.length === 0 ? '#52141C' : '#F8FAFC',
+                    borderWidth: 1,
+                    borderColor: selectedCashiers.length === 0 ? '#52141C' : '#CBD5E1',
+                  }}
+                >
+                  <Ionicons
+                    name={selectedCashiers.length === 0 ? 'checkmark-circle' : 'ellipse-outline'}
+                    size={14}
+                    color={selectedCashiers.length === 0 ? '#F3D179' : '#64748B'}
+                  />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: '800',
+                      color: selectedCashiers.length === 0 ? '#F3D179' : '#334155',
+                    }}
+                  >
+                    All Users ({baseFilteredInvoices.length})
+                  </Text>
+                </TouchableOpacity>
+
+                {cashierFilterOptions.map((opt) => {
+                  const isSelected = selectedCashiers.includes(opt.key);
+                  return (
+                    <TouchableOpacity
+                      key={opt.key}
+                      onPress={() => toggleCashierFilter(opt.key)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 11,
+                        paddingVertical: 6,
+                        borderRadius: 999,
+                        backgroundColor: isSelected ? '#52141C' : '#FFFFFF',
+                        borderWidth: 1.5,
+                        borderColor: isSelected ? '#D4AF37' : '#CBD5E1',
+                      }}
+                    >
+                      <Ionicons
+                        name={isSelected ? 'checkbox' : 'square-outline'}
+                        size={14}
+                        color={isSelected ? '#F3D179' : '#64748B'}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 12,
+                          fontWeight: '800',
+                          color: isSelected ? '#FFFFFF' : '#1E293B',
+                        }}
+                      >
+                        {opt.label}
+                      </Text>
+                      <View
+                        style={{
+                          backgroundColor: isSelected ? 'rgba(243, 209, 121, 0.22)' : '#F1F5F9',
+                          paddingHorizontal: 6,
+                          paddingVertical: 1,
+                          borderRadius: 999,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontSize: 11,
+                            fontWeight: '900',
+                            color: isSelected ? '#F3D179' : '#475569',
+                          }}
+                        >
+                          {opt.count}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Results Counter */}
         <View style={styles.resultsCounterRow}>
           <Text style={styles.resultsCountText}>
             Showing <Text style={{ fontWeight: '800', color: '#1C1C1E' }}>{filteredInvoices.length}</Text> invoice(s)
+            {selectedCashiers.length > 0 && (
+              <Text style={{ fontWeight: '800', color: '#52141C' }}>
+                {' '}• Users: {cashierFilterOptions.filter((o) => selectedCashiers.includes(o.key)).map((o) => o.label).join(' + ')}
+              </Text>
+            )}
           </Text>
-          {(searchQuery || dateFilter !== 'all' || orderTypeFilter !== 'all' || paymentFilter !== 'all' || statusFilter !== 'all') && (
+          {(searchQuery || dateFilter !== 'all' || orderTypeFilter !== 'all' || paymentFilter !== 'all' || statusFilter !== 'all' || selectedCashiers.length > 0) && (
             <TouchableOpacity
               onPress={() => {
                 setSearchQuery('');
@@ -667,6 +870,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                 setOrderTypeFilter('all');
                 setPaymentFilter('all');
                 setStatusFilter('all');
+                setSelectedCashiers([]);
               }}
               style={styles.clearFilterBtn}
             >
