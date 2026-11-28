@@ -4028,6 +4028,13 @@ function assignStationKotSequences(ticket) {
   if (!ticket || !ticket.id || ticket.isSettled || isCancelOrMinusTicket(ticket)) {
     return { hasMain: false, hasJuice: false, assigned: false };
   }
+  const isPrinterTest =
+    String(ticket.id || '').toUpperCase().startsWith('TEST-') ||
+    String(ticket.tableId || '').toUpperCase() === 'TEST' ||
+    String(ticket.tableName || '').toUpperCase().includes('PRINTER TEST');
+  if (isPrinterTest) {
+    return { hasMain: false, hasJuice: false, assigned: false };
+  }
   ensureKotSequenceForActiveShift();
   const seqState = serverState.kotSequenceState;
   const currentShiftId = seqState.shiftId;
