@@ -623,6 +623,7 @@ const INITIAL_STATE = {
   onlineOrders: [],
   invoices: [],
   operationalDayStartAt: 0,
+  invoiceSequenceState: { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} },
   customers: [],
   serviceRequests: [],
   playlandTickets: [],
@@ -6331,7 +6332,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 52;
+      const targetWebVer = 53;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7500,6 +7501,11 @@ async function handleRequest(req, res) {
         kitchenSeq: 0,
         juiceSeq: 0,
         ledger: { main: [], juice: [] },
+      };
+      serverState.invoiceSequenceState = {
+        dayStartAt: now,
+        lastSeq: 0,
+        pendingByTableId: {},
       };
 
       serverState.lastUpdated = now;
@@ -8730,12 +8736,34 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
-  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'invoiceSequenceState', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
   if (partialState.operationalDayStartAt !== undefined) {
     const incDayStart = Number(partialState.operationalDayStartAt || 0);
     const curDayStart = Number(serverState.operationalDayStartAt || 0);
     if (incDayStart > curDayStart) {
       serverState.operationalDayStartAt = incDayStart;
+      serverState.invoiceSequenceState = { dayStartAt: incDayStart, lastSeq: 0, pendingByTableId: {} };
+      modified = true;
+    }
+  }
+  if (partialState.invoiceSequenceState && typeof partialState.invoiceSequenceState === 'object') {
+    const incSeq = partialState.invoiceSequenceState;
+    const curSeq = serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} };
+    const incDay = Number(incSeq.dayStartAt || 0);
+    const curDay = Number(curSeq.dayStartAt || 0);
+    if (incDay > curDay) {
+      serverState.invoiceSequenceState = {
+        dayStartAt: incDay,
+        lastSeq: Number(incSeq.lastSeq || 0),
+        pendingByTableId: { ...(incSeq.pendingByTableId || {}) },
+      };
+      modified = true;
+    } else if (incDay === curDay) {
+      serverState.invoiceSequenceState = {
+        dayStartAt: curDay,
+        lastSeq: Math.max(Number(curSeq.lastSeq || 0), Number(incSeq.lastSeq || 0)),
+        pendingByTableId: { ...(curSeq.pendingByTableId || {}), ...(incSeq.pendingByTableId || {}) },
+      };
       modified = true;
     }
   }
@@ -9993,6 +10021,7 @@ function pushToFirestoreCloud(forceImmediate = false) {
           tickets: serverState.tickets,
           deletedTicketIds: serverState.deletedTicketIds || [],
           operationalDayStartAt: serverState.operationalDayStartAt || 0,
+          invoiceSequenceState: serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} },
           invoices: serverState.invoices || [],
           customers: serverState.customers || [],
           reservations: serverState.reservations || [],

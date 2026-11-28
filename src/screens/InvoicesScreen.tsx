@@ -71,6 +71,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
 
   const systemSettings = useSettingsStore((state) => state.settings);
   const rawInvoices = useRestaurantStore((state) => state.invoices);
+  const operationalDayStartAt = useRestaurantStore((state) => state.operationalDayStartAt) || 0;
   const invoices = useMemo(() => rawInvoices || [], [rawInvoices]);
   const staff = useRestaurantStore((state) => state.staff) || [];
   const voidInvoice = useRestaurantStore((state) => state.voidInvoice);
@@ -100,19 +101,20 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     const now = new Date();
 
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const effectiveToday = Math.max(startOfToday, operationalDayStartAt);
     const startOfYesterday = startOfToday - 24 * 60 * 60 * 1000;
     const endOfYesterday = startOfToday - 1;
     const startOfWeek = startOfToday - 6 * 24 * 60 * 60 * 1000;
     const startOfMonth = startOfToday - 29 * 24 * 60 * 60 * 1000;
 
     return {
-      today: startOfToday,
+      today: effectiveToday,
       yesterdayStart: startOfYesterday,
       yesterdayEnd: endOfYesterday,
       week: startOfWeek,
       month: startOfMonth,
     };
-  }, []);
+  }, [operationalDayStartAt]);
 
   // Filtered & Sorted Invoices
   const filteredInvoices = useMemo(() => {
@@ -157,7 +159,8 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((inv) => {
-        const idMatch = inv.id?.toLowerCase().includes(q);
+        const displayId = (inv.dailyInvoiceNumber || inv.id || '').toLowerCase();
+        const idMatch = inv.id?.toLowerCase().includes(q) || displayId.includes(q);
         const tableMatch = inv.tableName?.toLowerCase().includes(q);
         const serverMatch = inv.server?.toLowerCase().includes(q);
         const customerMatch =
@@ -308,7 +311,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
     text += '     Food Street, Lahore, PK    \n';
     text += '       Phone: 0300-1234567      \n';
     text += '================================\n';
-    text += `Invoice #: ${inv.id}\n`;
+    text += `Invoice #: ${inv.dailyInvoiceNumber || inv.id}\n`;
     text += `Date: ${formatDateTime(inv.timeSettled || inv.timePlaced)}\n`;
     text += `Order Type: ${inv.orderType.toUpperCase()}\n`;
     if (inv.tableName) text += `Table: ${inv.tableName}\n`;
@@ -375,7 +378,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
       try {
         await Share.share({
           message: receiptText,
-          title: `Invoice #${inv.id} - Sultan Restaurant`,
+          title: `Invoice #${inv.dailyInvoiceNumber || inv.id} - Sultan Restaurant`,
         });
       } catch {
         Alert.alert('Invoice', receiptText);
@@ -398,7 +401,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
         const itemsStr = (inv.items || []).map((it) => `${it.qty}x ${it.name}`).join(' | ');
         const paymentsStr = (inv.payments || []).map((p) => `${p.type}: Rs.${p.amount}`).join('; ');
         const dateStr = formatDateTime(inv.timeSettled || inv.timePlaced);
-        return `"${inv.id}","${dateStr}","${inv.status || 'settled'}","${inv.orderType}","${inv.tableName || 'N/A'}","${inv.server || 'N/A'}","${inv.customer?.name || 'Walk-in'}","${inv.customer?.phone || 'N/A'}","${itemsStr}","${inv.subTotal || 0}","${inv.discount || 0}","${inv.tax || 0}","${inv.total || 0}","${paymentsStr}"`;
+        return `"${inv.dailyInvoiceNumber || inv.id}","${dateStr}","${inv.status || 'settled'}","${inv.orderType}","${inv.tableName || 'N/A'}","${inv.server || 'N/A'}","${inv.customer?.name || 'Walk-in'}","${inv.customer?.phone || 'N/A'}","${itemsStr}","${inv.subTotal || 0}","${inv.discount || 0}","${inv.tax || 0}","${inv.total || 0}","${paymentsStr}"`;
       })
       .join('\n');
 
@@ -752,7 +755,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                             </View>
                           )}
 
-                          <Text style={styles.rowInvoiceIdText}>#{inv.id}</Text>
+                          <Text style={styles.rowInvoiceIdText}>#{inv.dailyInvoiceNumber || inv.id}</Text>
 
                           <View style={[styles.typeBadgeCompact, {
                             backgroundColor: inv.orderType === 'dine-in' ? '#EFF6FF' : inv.orderType === 'takeaway' ? '#FFFBEB' : '#F5F3FF',
@@ -1074,7 +1077,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <SultanLogo size="xs" variant="circle" width={22} height={22} />
                     <View>
-                      <Text style={[styles.modalInvoiceTitle, isSmallMobile && { fontSize: 14 }]}>Invoice #{selectedInvoice.id}</Text>
+                      <Text style={[styles.modalInvoiceTitle, isSmallMobile && { fontSize: 14 }]}>Invoice #{selectedInvoice.dailyInvoiceNumber || selectedInvoice.id}</Text>
                       <Text style={[styles.modalInvoiceSubtitle, isSmallMobile && { fontSize: 10 }]}>
                         {formatDateTime(selectedInvoice.timeSettled || selectedInvoice.timePlaced)}
                       </Text>
@@ -1320,7 +1323,7 @@ export default function InvoicesScreen({ userRole, targetRoleOverride, backRoute
                         <Text style={[styles.thermalDashedLine, isSmallMobile && { fontSize: 10 }]}>- - - - - - - - - - - - - - - - - - - -</Text>
 
                         <View style={styles.thermalMetaRow}>
-                          <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>INV: #{selectedInvoice.id}</Text>
+                          <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>INV: #{selectedInvoice.dailyInvoiceNumber || selectedInvoice.id}</Text>
                           <Text style={[styles.thermalMetaText, isSmallMobile && { fontSize: 10 }]}>
                             {new Date(selectedInvoice.timeSettled || selectedInvoice.timePlaced).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </Text>

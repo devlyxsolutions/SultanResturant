@@ -61,9 +61,15 @@ import { findTableReservation, getReservationTableCount, isGroupReservation } fr
 
 function createInvoicePayload(data: Omit<Invoice, 'id' | 'timePlaced' | 'timeSettled'>): Invoice {
   const now = Date.now();
+  const allocated = useRestaurantStore.getState().allocateNextInvoiceSeq({
+    tableId: data.tableId,
+    isPendingBill: false,
+  });
   return {
     ...data,
-    id: `INV-${Math.floor(Math.random() * 90000) + 10000}`,
+    id: allocated.id,
+    invoiceSeq: allocated.seq,
+    dailyInvoiceNumber: allocated.dailyInvoiceNumber,
     timePlaced: now,
     timeSettled: now,
   };
@@ -1925,8 +1931,15 @@ export default function POSTerminalScreen({
     const targetTable = selectedTableId ? tables.find((t) => t.id === selectedTableId) : null;
     const targetTableName = targetTable ? targetTable.name : orderType === 'dine-in' ? 'Table' : orderType.toUpperCase();
 
+    const pendingSeq = useRestaurantStore.getState().allocateNextInvoiceSeq({
+      tableId: selectedTableId || undefined,
+      isPendingBill: true,
+    });
+
     const unpaidInvoice: Invoice = {
-      id: `TMP-${targetTableName.replace(/\s+/g, '')}-${Date.now().toString().slice(-4)}`,
+      id: pendingSeq.dailyInvoiceNumber,
+      invoiceSeq: pendingSeq.seq,
+      dailyInvoiceNumber: pendingSeq.dailyInvoiceNumber,
       orderType: orderType === 'dine-in' ? 'dine-in' : (orderType as any),
       tableId: selectedTableId || undefined,
       tableName: targetTableName,
@@ -4611,7 +4624,7 @@ export default function POSTerminalScreen({
                 <View key={inv.id} style={styles.runningOrderCard}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.runningOrderTitle}>
-                      {inv.id} • {inv.tableName || inv.orderType?.toUpperCase()}
+                      {inv.dailyInvoiceNumber || inv.id} • {inv.tableName || inv.orderType?.toUpperCase()}
                     </Text>
                     <Text style={styles.runningOrderItems}>
                       {new Date(inv.timeSettled || inv.timePlaced).toLocaleTimeString()} •{' '}

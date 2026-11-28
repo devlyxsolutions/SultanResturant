@@ -407,6 +407,8 @@ export * from '../types/returns';
 
 export type Invoice = {
   id: string;
+  invoiceSeq?: number;
+  dailyInvoiceNumber?: string;
   orderType: 'dine-in' | 'takeaway' | 'delivery';
   tableId?: string;
   tableName?: string;
@@ -688,6 +690,16 @@ type RestaurantState = {
   revokedDeviceIds?: Record<string, { sessionId?: string; staffId?: string; staffName: string; timestamp: number; reason: string }>;
   forceLogoutAll?: { timestamp: number; exceptSessionId?: string; exceptDeviceId?: string; reason: string } | null;
   operationalDayStartAt?: number;
+  invoiceSequenceState?: {
+    dayStartAt: number;
+    lastSeq: number;
+    pendingByTableId: Record<string, number>;
+  };
+  allocateNextInvoiceSeq: (opts?: { tableId?: string; isPendingBill?: boolean }) => {
+    seq: number;
+    dailyInvoiceNumber: string;
+    id: string;
+  };
   startNewDayReset: (dayStartAt?: number) => number;
   registerStaffSession: (
     session: Omit<StaffSession, 'loginTime' | 'lastActiveTime'>,
@@ -1267,6 +1279,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       revokedDeviceIds: {},
       forceLogoutAll: null,
       operationalDayStartAt: 0,
+      invoiceSequenceState: { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} },
       attendance: INITIAL_ATTENDANCE,
       salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
@@ -3196,6 +3209,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           }
           return {
             operationalDayStartAt: Math.max(state.operationalDayStartAt || 0, ts),
+            invoiceSequenceState: { dayStartAt: ts, lastSeq: 0, pendingByTableId: {} },
             tables: (state.tables || []).map((t) => ({
               ...t,
               status: 'available' as const,
@@ -3622,6 +3636,77 @@ export const useRestaurantStore = create<RestaurantState>()(
           };
         });
         notifySync();
+      },
+
+      allocateNextInvoiceSeq: (opts) => {
+        const state = get();
+        const now = Date.now();
+        const d = new Date(now);
+        const startOfToday = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const dayStartAt = Math.max(startOfToday, state.operationalDayStartAt || 0);
+        const curSeqState = state.invoiceSequenceState;
+        const isSameCycle = curSeqState && curSeqState.dayStartAt === dayStartAt;
+        const baseLastSeq = isSameCycle ? Number(curSeqState.lastSeq || 0) : 0;
+        const pendingMap: Record<string, number> = isSameCycle
+          ? { ...(curSeqState.pendingByTableId || {}) }
+          : {};
+
+        let maxExistingSeq = 0;
+        const existingIds = new Set<string>();
+        for (const inv of state.invoices || []) {
+          if (!inv || !inv.id) continue;
+          existingIds.add(inv.id);
+          const invTime = Number(inv.timeSettled || inv.timePlaced || 0);
+          if (invTime >= dayStartAt) {
+            if (typeof inv.invoiceSeq === 'number' && inv.invoiceSeq > maxExistingSeq) {
+              maxExistingSeq = inv.invoiceSeq;
+            } else {
+              const m = String(inv.dailyInvoiceNumber || inv.id).match(/^INV-(\d+)$/i);
+              if (m) {
+                const n = Number(m[1]);
+                if (n > maxExistingSeq) maxExistingSeq = n;
+              }
+            }
+          }
+        }
+        for (const v of Object.values(pendingMap)) {
+          if (Number(v) > maxExistingSeq) maxExistingSeq = Number(v);
+        }
+
+        const tableId = opts?.tableId;
+        const isPendingBill = Boolean(opts?.isPendingBill);
+        const reservedForTable = tableId ? Number(pendingMap[tableId] || 0) : 0;
+
+        let seq: number;
+        let nextLastSeq = Math.max(baseLastSeq, maxExistingSeq);
+        if (reservedForTable > 0) {
+          seq = reservedForTable;
+          if (!isPendingBill && tableId) {
+            delete pendingMap[tableId];
+          }
+        } else {
+          seq = nextLastSeq + 1;
+          nextLastSeq = seq;
+          if (isPendingBill && tableId) {
+            pendingMap[tableId] = seq;
+          }
+        }
+
+        set({
+          invoiceSequenceState: {
+            dayStartAt,
+            lastSeq: nextLastSeq,
+            pendingByTableId: pendingMap,
+          },
+        });
+
+        const dailyInvoiceNumber = isPendingBill ? `TMP-${seq}` : `INV-${seq}`;
+        if (isPendingBill) {
+          return { seq, dailyInvoiceNumber, id: dailyInvoiceNumber };
+        }
+        const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+        const uniqueId = existingIds.has(`INV-${seq}`) ? `INV-${ymd}-${seq}` : `INV-${seq}`;
+        return { seq, dailyInvoiceNumber, id: uniqueId };
       },
 
       saveInvoice: (invoice) => set((state) => {
@@ -4874,6 +4959,26 @@ export const useRestaurantStore = create<RestaurantState>()(
           return {
             ...state,
             operationalDayStartAt: nextOperationalDayStart,
+            ...(((remoteState as any).invoiceSequenceState || remoteDayStart > (state.operationalDayStartAt || 0)) ? {
+              invoiceSequenceState: (() => {
+                const rSeq = (remoteState as any).invoiceSequenceState;
+                const lSeq = state.invoiceSequenceState;
+                if (remoteDayStart > (state.operationalDayStartAt || 0) && (!rSeq || Number(rSeq.dayStartAt || 0) >= remoteDayStart)) {
+                  return rSeq || { dayStartAt: nextOperationalDayStart, lastSeq: 0, pendingByTableId: {} };
+                }
+                if (rSeq && (!lSeq || Number(rSeq.dayStartAt || 0) > Number(lSeq.dayStartAt || 0))) {
+                  return rSeq;
+                }
+                if (rSeq && lSeq && Number(rSeq.dayStartAt || 0) === Number(lSeq.dayStartAt || 0)) {
+                  return {
+                    dayStartAt: Number(rSeq.dayStartAt || 0),
+                    lastSeq: Math.max(Number(rSeq.lastSeq || 0), Number(lSeq.lastSeq || 0)),
+                    pendingByTableId: { ...(lSeq.pendingByTableId || {}), ...(rSeq.pendingByTableId || {}) },
+                  };
+                }
+                return lSeq || rSeq;
+              })(),
+            } : {}),
             tables: reconciledTables,
             deletedTableIds: mergedDeletedTableIds,
             deletedFloorIds: mergedDeletedFloorIds,

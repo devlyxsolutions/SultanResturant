@@ -194,7 +194,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
       text += `*** (عارضی بل / ادائیگی باقی ہے) ***\n`;
       text += `--------------------------------\n`;
     }
-    text += `INV #: ${invoice.id}\n`;
+    text += `INV #: ${invoice.dailyInvoiceNumber || invoice.id}\n`;
     text += `Date: ${dateStr}\n`;
     text += `Type: ${invoice.orderType.toUpperCase()}${invoice.tableName ? ` • Table: ${invoice.tableName}` : ''}\n`;
     if (orderCreator && orderCreator !== cashierName) {
@@ -558,7 +558,7 @@ export async function printInvoiceReceipt(invoice: Invoice, precomputedQrCode?: 
         <div class="dashed-line"></div>
 
         <div class="meta-row">
-          <span>INV: #${invoice.id}</span>
+          <span>INV: #${invoice.dailyInvoiceNumber || invoice.id}</span>
           <span>${timeStr}</span>
         </div>
         <div class="meta-row">
@@ -861,7 +861,7 @@ export default function InvoiceComponent({ invoice, onClose }: InvoiceProps) {
 
         {/* Meta Info */}
         <View style={styles.metaRow}>
-          <Text style={styles.metaText}>INV: #{invoice.id}</Text>
+          <Text style={styles.metaText}>INV: #{invoice.dailyInvoiceNumber || invoice.id}</Text>
           <Text style={styles.metaText}>{timeStr}</Text>
         </View>
         <View style={styles.metaRow}>

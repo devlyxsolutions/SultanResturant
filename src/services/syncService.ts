@@ -1141,6 +1141,7 @@ function broadcastLocalState(force = false) {
       tickets: state.tickets,
       deletedTicketIds: state.deletedTicketIds || [],
       operationalDayStartAt: state.operationalDayStartAt || 0,
+      invoiceSequenceState: state.invoiceSequenceState,
       invoices: state.invoices,
       customers: state.customers,
       menuItems: state.menuItems,
