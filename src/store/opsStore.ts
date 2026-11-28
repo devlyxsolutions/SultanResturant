@@ -2795,8 +2795,10 @@ export const useOpsStore = create<OpsState>()(
             ).slice(-300);
           }
           if (Array.isArray(remote.deletedRecordIds)) {
+            // Sequential INV-* tombstones are server-authoritative only; never re-inject stale client INV-* deletions
+            const localOpsOnly = (state.deletedRecordIds || []).filter((id) => id && !/^INV-/i.test(id));
             next.deletedRecordIds = Array.from(
-              new Set([...(state.deletedRecordIds || []), ...remote.deletedRecordIds])
+              new Set([...localOpsOnly, ...remote.deletedRecordIds])
             ).slice(-800);
           }
           const delInvSet = new Set(next.deletedInventoryIds || state.deletedInventoryIds || []);

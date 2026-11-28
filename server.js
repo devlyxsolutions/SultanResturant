@@ -6344,7 +6344,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 55;
+      const targetWebVer = 56;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -9078,14 +9078,19 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   if (!Array.isArray(serverState.deletedStorageZoneIds)) serverState.deletedStorageZoneIds = [];
   if (!Array.isArray(serverState.deletedInventoryCategories)) serverState.deletedInventoryCategories = [];
   if (!Array.isArray(serverState.deletedRecordIds)) serverState.deletedRecordIds = [];
+  const liveInvoiceIds = new Set(
+    (Array.isArray(serverState.invoices) ? serverState.invoices : []).map((i) => i && i.id).filter(Boolean)
+  );
+  // Self-heal: never keep an active live invoice ID inside deletedRecordIds
+  if (serverState.deletedRecordIds.some((id) => liveInvoiceIds.has(id))) {
+    serverState.deletedRecordIds = serverState.deletedRecordIds.filter((id) => id && !liveInvoiceIds.has(id));
+    modified = true;
+  }
   if (Array.isArray(partialState.deletedRecordIds) && partialState.deletedRecordIds.length > 0) {
-    const isPeerSync = Boolean(options && options.skipPeerPush) || String(senderId || '').startsWith('PEER_');
-    const liveInvoiceIds = isPeerSync
-      ? new Set((Array.isArray(serverState.invoices) ? serverState.invoices : []).map((i) => i && i.id).filter(Boolean))
-      : null;
-    const filteredDeletedRecs = liveInvoiceIds
-      ? partialState.deletedRecordIds.filter((id) => id && !liveInvoiceIds.has(id))
-      : partialState.deletedRecordIds;
+    // Never allow any stale client or peer cache to delete existing live invoices via deletedRecordIds
+    const filteredDeletedRecs = partialState.deletedRecordIds.filter(
+      (id) => id && !liveInvoiceIds.has(id) && !/^INV-([1-9]\d{0,2})$/i.test(String(id))
+    );
     if (filteredDeletedRecs.length > 0) {
       serverState.deletedRecordIds = Array.from(new Set([...serverState.deletedRecordIds, ...filteredDeletedRecs])).slice(-800);
       modified = true;

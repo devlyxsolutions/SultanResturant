@@ -481,7 +481,23 @@ async function runTests() {
     const afterGhost = await (await fetch(`${baseUrl}/api/sync`)).json();
     assert.strictEqual(afterGhost.invoiceSequenceState?.pendingByTableId?.tGF04, undefined, 'Ghost table must NOT be saved into pendingByTableId');
 
-    console.log('ALL 14 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL, CLOCK-SKEW & STABILITY TESTS PASSED!');
+    // 15. Stale client sending old INV-* IDs in deletedRecordIds must NEVER wipe live invoices
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'STALE_OPS_CLIENT',
+        packetId: 'pkt_stale_deleted_inv_test',
+        state: {
+          deletedRecordIds: ['INV-5', 'INV-6', 'INV-7'],
+        },
+      }),
+    });
+    const afterDeletedTry = await (await fetch(`${baseUrl}/api/sync`)).json();
+    assert.ok(afterDeletedTry.invoices.some((i) => i.id === 'INV-5'), 'Live INV-5 must survive stale client deletedRecordIds');
+    assert.ok(!afterDeletedTry.deletedRecordIds.includes('INV-5'), 'INV-5 must never enter deletedRecordIds');
+
+    console.log('ALL 15 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL, CLOCK-SKEW & INVOICE PROTECTION TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }
