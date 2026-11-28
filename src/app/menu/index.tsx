@@ -245,6 +245,8 @@ export default function CustomerMenuScreen() {
   const isDesktop = width >= 1024;
   const isTablet = width >= 640 && width < 1024;
   const isMobile = width < 640;
+  // Online / Digital Menu order placement temporarily disabled (view-only Digital Menu mode)
+  const ONLINE_ORDERING_ENABLED = false;
 
   // Stores
   const menuItems = useRestaurantStore((state) => state.menuItems);
@@ -1525,7 +1527,7 @@ export default function CustomerMenuScreen() {
               </Text>
             </View>
 
-            {isItemInCart ? (
+            {ONLINE_ORDERING_ENABLED && (isItemInCart ? (
               <View style={styles.cardStepperRow}>
                 <TouchableOpacity
                   style={styles.cardStepperBtnMini}
@@ -1574,7 +1576,7 @@ export default function CustomerMenuScreen() {
                   {hasVariants || isWeightDish ? 'Options' : 'Add'}
                 </Text>
               </TouchableOpacity>
-            )}
+            ))}
           </View>
         </View>
       </TouchableOpacity>
@@ -1821,7 +1823,7 @@ export default function CustomerMenuScreen() {
               </Text>
             </View>
 
-            {isItemInCart ? (
+            {ONLINE_ORDERING_ENABLED && (isItemInCart ? (
               <View style={styles.cardStepperRow}>
                 <TouchableOpacity
                   style={styles.cardStepperBtnMini}
@@ -1868,7 +1870,7 @@ export default function CustomerMenuScreen() {
                   {hasVariants || isWeightDish ? 'Options' : 'Add'}
                 </Text>
               </TouchableOpacity>
-            )}
+            ))}
           </View>
         </View>
       </TouchableOpacity>
@@ -2524,8 +2526,8 @@ export default function CustomerMenuScreen() {
               )}
             </View>
 
-            {/* Desktop Right Side Sticky Cart Panel */}
-            {isDesktop && (
+            {/* Desktop Right Side Sticky Cart Panel (hidden while Online Ordering is disabled) */}
+            {ONLINE_ORDERING_ENABLED && isDesktop && (
               <View style={styles.desktopCartPanel}>
                 <View style={styles.cartPanelHeader}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -2679,7 +2681,7 @@ export default function CustomerMenuScreen() {
         {/* ========================================================
             4. MOBILE & TABLET FLOATING CART BAR
            ======================================================== */}
-        {!isDesktop && cart.length > 0 && (
+        {ONLINE_ORDERING_ENABLED && !isDesktop && cart.length > 0 && (
           <View style={styles.floatingCartMobileWrapper}>
             <TouchableOpacity
               style={styles.floatingCartMobileBar}
@@ -2937,34 +2939,36 @@ export default function CustomerMenuScreen() {
               </ScrollView>
 
               {/* Customizer Actions with Live Calculated Total */}
-              <View style={styles.customizerActionRow}>
-                <View style={styles.modalStepper}>
+              {ONLINE_ORDERING_ENABLED && (
+                <View style={styles.customizerActionRow}>
+                  <View style={styles.modalStepper}>
+                    <TouchableOpacity
+                      style={styles.modalStepperBtn}
+                      onPress={() => setCustomizerQty(Math.max(1, customizerQty - 1))}
+                    >
+                      <Ionicons name="remove" size={17} color="#3A0F12" />
+                    </TouchableOpacity>
+                    <Text style={styles.modalStepperQty}>{customizerQty}</Text>
+                    <TouchableOpacity
+                      style={styles.modalStepperBtn}
+                      onPress={() => setCustomizerQty(customizerQty + 1)}
+                    >
+                      <Ionicons name="add" size={17} color="#3A0F12" />
+                    </TouchableOpacity>
+                  </View>
+
                   <TouchableOpacity
-                    style={styles.modalStepperBtn}
-                    onPress={() => setCustomizerQty(Math.max(1, customizerQty - 1))}
+                    style={styles.addCustomizerBtn}
+                    onPress={handleAddFromCustomizer}
+                    activeOpacity={0.88}
                   >
-                    <Ionicons name="remove" size={17} color="#3A0F12" />
-                  </TouchableOpacity>
-                  <Text style={styles.modalStepperQty}>{customizerQty}</Text>
-                  <TouchableOpacity
-                    style={styles.modalStepperBtn}
-                    onPress={() => setCustomizerQty(customizerQty + 1)}
-                  >
-                    <Ionicons name="add" size={17} color="#3A0F12" />
+                    <Text style={styles.addCustomizerBtnText}>
+                      Add to Order • Rs. {(customizerUnitPrice * customizerQty).toLocaleString()}
+                    </Text>
+                    <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
                   </TouchableOpacity>
                 </View>
-
-                <TouchableOpacity
-                  style={styles.addCustomizerBtn}
-                  onPress={handleAddFromCustomizer}
-                  activeOpacity={0.88}
-                >
-                  <Text style={styles.addCustomizerBtnText}>
-                    Add to Order • Rs. {(customizerUnitPrice * customizerQty).toLocaleString()}
-                  </Text>
-                  <Ionicons name="arrow-forward" size={16} color="#FFFFFF" />
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
           </Pressable>
         </Pressable>

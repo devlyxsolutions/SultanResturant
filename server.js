@@ -6345,7 +6345,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 59;
+      const targetWebVer = 60;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 

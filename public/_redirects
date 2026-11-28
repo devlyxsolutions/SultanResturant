@@ -10,6 +10,9 @@ https://sultanrestaurant.com.pk/feedback*          https://sultanrestaurant.com.
 /               /site/index.html   200!
 /digital-menu   /site/menu.html    200!
 /digital-menu/  /site/menu.html    200!
+# Order Online temporarily disabled — route /menu links & table QRs to view-only Digital Menu
+/menu           /site/menu.html    200!
+/menu/*         /site/menu.html    200!
 
 # Staff portal + Expo Router SPA routes (/portal, /menu, /admin, ...)
 /*       /index.html        200
