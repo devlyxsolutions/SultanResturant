@@ -265,16 +265,32 @@ export default function KitchenDisplayScreen() {
 
   const lastTicketMutationRef = useRef<number>(0);
 
-  // Real-time sync poll + Auto-Reconnecting WebSocket listener for instant Juice Bar SOT alert & auto-print
+  // Real-time sync poll + Auto-Reconnecting WebSocket with timeout & dead-socket watchdog
   useEffect(() => {
     let unmounted = false;
     let socket: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let wsPingTimer: ReturnType<typeof setInterval> | null = null;
+    let lastWsActivityAt = Date.now();
+    let isFetchingLive = false;
+
+    const fetchWithTimeout = async (url: string, timeoutMs = 2500) => {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+      try {
+        return await fetch(url, {
+          cache: 'no-store',
+          ...(controller ? { signal: controller.signal } : {}),
+        });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
 
     const fetchSequenceStatus = async () => {
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        const sRes = await fetch(`${baseHttpUrl}/api/kot/sequence-status?station=juice`, { cache: 'no-store' });
+        const sRes = await fetchWithTimeout(`${baseHttpUrl}/api/kot/sequence-status?station=juice`, 2500);
         if (sRes.ok && !unmounted) {
           const sData = await sRes.json();
           if (sData?.success) setSeqStatus(sData);
@@ -284,10 +300,11 @@ export default function KitchenDisplayScreen() {
 
     const fetchLiveTickets = async () => {
       fetchSequenceStatus();
-      if (Date.now() - lastTicketMutationRef.current < 2500) return;
+      if (isFetchingLive || Date.now() - lastTicketMutationRef.current < 2500) return;
+      isFetchingLive = true;
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        const res = await fetch(`${baseHttpUrl}/api/sync`, { cache: 'no-store' });
+        const res = await fetchWithTimeout(`${baseHttpUrl}/api/sync`, 2800);
         if (res.ok && Date.now() - lastTicketMutationRef.current >= 2500) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets)) {
@@ -302,20 +319,40 @@ export default function KitchenDisplayScreen() {
             useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
           }
         }
-      } catch (_) {}
+      } catch (_) { } finally {
+        isFetchingLive = false;
+      }
     };
 
     fetchLiveTickets();
-    const pollInterval = setInterval(fetchLiveTickets, 5000);
+    const pollInterval = setInterval(fetchLiveTickets, 3000);
 
     const connectWs = () => {
       if (unmounted) return;
+      if (wsPingTimer) {
+        clearInterval(wsPingTimer);
+        wsPingTimer = null;
+      }
       try {
         const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
         socket = new WebSocket(wsUrl);
+        socket.onopen = () => {
+          lastWsActivityAt = Date.now();
+          fetchLiveTickets();
+          wsPingTimer = setInterval(() => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            if (Date.now() - lastWsActivityAt > 6500) {
+              try { socket.close(); } catch { }
+              return;
+            }
+            try { socket.send(JSON.stringify({ type: 'PING' })); } catch { }
+          }, 2500);
+        };
         socket.onmessage = (event) => {
+          lastWsActivityAt = Date.now();
           try {
             const msg = JSON.parse(event.data);
+            if (msg.type === 'PONG') return;
             if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
               const incomingTicket = msg.ticket as Ticket;
               const wasSeen = !!(incomingTicket.id && seenTicketIdsRef.current.has(incomingTicket.id));
@@ -380,22 +417,38 @@ export default function KitchenDisplayScreen() {
           }
         };
         socket.onclose = () => {
+          if (wsPingTimer) {
+            clearInterval(wsPingTimer);
+            wsPingTimer = null;
+          }
           if (!unmounted) {
-            wsReconnectTimer = setTimeout(connectWs, 3000);
+            wsReconnectTimer = setTimeout(connectWs, 1800);
           }
         };
       } catch {
         if (!unmounted) {
-          wsReconnectTimer = setTimeout(connectWs, 3000);
+          wsReconnectTimer = setTimeout(connectWs, 2000);
         }
       }
     };
     connectWs();
 
+    const handleOnline = () => {
+      fetchLiveTickets();
+      if (!socket || socket.readyState !== WebSocket.OPEN) connectWs();
+    };
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('online', handleOnline);
+    }
+
     return () => {
       unmounted = true;
       clearInterval(pollInterval);
+      if (wsPingTimer) clearInterval(wsPingTimer);
       if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('online', handleOnline);
+      }
       if (socket) {
         try { socket.close(); } catch { }
       }

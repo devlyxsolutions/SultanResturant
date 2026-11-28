@@ -2736,6 +2736,7 @@ const INITIAL_STATE = {
   revokedDeviceIds: {},
   forceLogoutAll: null,
   chillerHandovers: [],
+  settledTicketIds: [],
   kotSequenceState: {
     shiftId: null,
     shiftStartedAt: 0,
@@ -3266,8 +3267,20 @@ try {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
 }
 
+function recordSettledTicketId(ticketId) {
+  if (!ticketId) return;
+  if (!Array.isArray(serverState.settledTicketIds)) serverState.settledTicketIds = [];
+  if (!serverState.settledTicketIds.includes(ticketId)) {
+    serverState.settledTicketIds.push(ticketId);
+    if (serverState.settledTicketIds.length > 1500) {
+      serverState.settledTicketIds = serverState.settledTicketIds.slice(-1500);
+    }
+  }
+}
+
 function archiveServerTicketForSettlement(tk, now) {
   if (!tk || typeof tk !== 'object') return tk;
+  if (tk.id) recordSettledTicketId(tk.id);
   const stMap = tk.stationStatuses || {};
   const mainActive = stMap.main === 'pending' || stMap.main === 'cooking';
   const juiceActive = stMap.juice === 'pending' || stMap.juice === 'cooking';
@@ -6310,8 +6323,8 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 50;
-      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 50) to force-reload
+      const targetWebVer = 51;
+      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 51) to force-reload
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : 44;
 
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
@@ -7397,7 +7410,7 @@ async function handleRequest(req, res) {
         applyStateUpdate(data.state, data.senderId, null, { skipPeerPush: Boolean(data.isPeerServer) });
       }
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, timestamp: Date.now(), state: serverState }));
+      res.end(JSON.stringify({ success: true, timestamp: Date.now(), serverTime: Date.now(), state: serverState }));
     } catch (err) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: err.message }));
@@ -8714,6 +8727,12 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
 
         const existingMap = new Map(existingTickets.filter(t => t && t.id).map(t => [t.id, t]));
         const incomingMap = new Map(incomingTickets.filter(t => t && t.id).map(t => [t.id, t]));
+        const settledIdSet = new Set(Array.isArray(serverState.settledTicketIds) ? serverState.settledTicketIds : []);
+        const currentTablesById = new Map(
+          (Array.isArray(serverState.tables) ? serverState.tables : [])
+            .filter(t => t && t.id)
+            .map(t => [t.id, t])
+        );
         // Incoming keys first so newest KOTs appear at the top of KDS/POS
         const allTicketIds = new Set([...incomingMap.keys(), ...existingMap.keys()]);
         const mergedList = [];
@@ -8724,6 +8743,18 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
 
           const inc = incomingMap.get(tId);
           const ext = existingMap.get(tId);
+
+          if (!ext && inc) {
+            // Never let an out-of-sync Rooftop PC or reconnecting tablet resurrect a ticket already retired by settlement
+            if (settledIdSet.has(tId) && !inc.isSettled) continue;
+            if (!inc.isSettled && inc.tableId && !autoSettledTicketIds.has(tId)) {
+              const currTbl = currentTablesById.get(inc.tableId);
+              if (currTbl && currTbl.lastSettledAt && Number(inc.timePlaced || 0) > 0 && Number(inc.timePlaced) <= Number(currTbl.lastSettledAt)) {
+                recordSettledTicketId(tId);
+                continue;
+              }
+            }
+          }
 
           if (inc && ext) {
             const extRank = STATUS_RANK[ext.status] ?? 0;
@@ -8904,9 +8935,11 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
         const nowSeqCheck = Date.now();
         for (const tk of deduplicatedMerged) {
           if (!tk || !tk.id) continue;
+          if (tk.isSettled) recordSettledTicketId(tk.id);
           const isBrandNewTicket = !existingMap.has(tk.id);
           const ticketAgeMs = nowSeqCheck - Number(tk.timePlaced || nowSeqCheck);
-          if (isBrandNewTicket && !tk.isSettled && !isCancelOrMinusTicket(tk) && ticketAgeMs < 15 * 60 * 1000) {
+          // Allow up to 4 hours (same active shift) so tablets recovering from router drops still get sequenced & printed
+          if (isBrandNewTicket && !tk.isSettled && !isCancelOrMinusTicket(tk) && ticketAgeMs < 4 * 60 * 60 * 1000) {
             assignStationKotSequences(tk);
           }
           syncTicketStatusToLedger(tk);
@@ -8925,18 +8958,19 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
           }
         }
 
-        // Auto-print & broadcast instant WebSocket alert ONLY for brand-new pending tickets
+        // Auto-print & broadcast instant WebSocket alert ONLY for brand-new pending tickets (4h window covers offline router recovery)
         const nowAutoPrint = Date.now();
         for (const inc of incomingTickets) {
           if (!inc || !inc.id) continue;
-          if (deletedSet.has(inc.id)) continue;
+          if (deletedSet.has(inc.id) || settledIdSet.has(inc.id)) continue;
           if (existingMap.has(inc.id)) continue;
-          const mergedTicket = deduplicatedMerged.find((t) => t && t.id === inc.id) || inc;
+          const mergedTicket = deduplicatedMerged.find((t) => t && t.id === inc.id);
+          if (!mergedTicket) continue;
           const ticketAgeMs = nowAutoPrint - Number(mergedTicket.timePlaced || 0);
           if (
             mergedTicket.status === 'pending' &&
             !mergedTicket.isSettled &&
-            ticketAgeMs < 5 * 60 * 1000 &&
+            ticketAgeMs < 4 * 60 * 60 * 1000 &&
             Array.isArray(mergedTicket.items) &&
             mergedTicket.items.length > 0
           ) {
@@ -9022,7 +9056,12 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             const inc = incomingMap.get(curr.id);
             if (!inc) return curr;
 
-            const tableTickets = activeTickets.filter(tk => tk && tk.tableId === curr.id);
+            const tableTickets = activeTickets.filter(
+              tk =>
+                tk &&
+                tk.tableId === curr.id &&
+                !isCancelOrMinusTicket(tk)
+            );
             const currReleaseTs = Math.max(Number(curr.lastSettledAt) || 0, Number(curr.lastMovedAt) || 0);
             const currOccTs = Math.max(Number(curr.occupiedSince) || 0, Number(curr.ordersUpdatedAt) || 0);
             const incReleaseTs = Math.max(Number(inc.lastSettledAt) || 0, Number(inc.lastMovedAt) || 0);
@@ -9035,14 +9074,13 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
               !!resolveWaiterPay(curr, inc) &&
               inc.status !== 'available';
 
-            // Case 1: Table already settled on server — reject stale 'occupied'/'billed' echoes with older timestamps
+            // Case 1: Table already settled on server — reject ALL stale 'occupied'/'billed' echoes unless strictly newer
             if (
               curr.status === 'available' &&
               (inc.status === 'occupied' || inc.status === 'billed') &&
               tableTickets.length === 0 &&
               currReleaseTs > 0 &&
-              incOccTs > 0 &&
-              incOccTs <= currReleaseTs
+              (incOccTs === 0 || incOccTs <= currReleaseTs + 500)
             ) {
               return curr;
             }
@@ -9053,7 +9091,8 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
               inc.status === 'available' &&
               tableTickets.length === 0 &&
               !hasPendingWaiterPay &&
-              (incReleaseTs >= currOccTs || incReleaseTs === 0)
+              incReleaseTs > 0 &&
+              incReleaseTs >= currOccTs
             ) {
               return {
                 ...curr,
@@ -9070,6 +9109,15 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
                 waiterPaymentCollection: null,
                 lastSettledAt: Math.max(currReleaseTs, incReleaseTs, Date.now()),
               };
+            }
+
+            // Reject stale unhydrated client 'available' when server table is actively occupied/billed without a valid newer release timestamp
+            if (
+              (curr.status === 'occupied' || curr.status === 'billed') &&
+              inc.status === 'available' &&
+              (tableTickets.length > 0 || incReleaseTs === 0 || incReleaseTs < currOccTs)
+            ) {
+              return curr;
             }
 
             // Preserve Temporary / Pending Bill updates and item add/minus edits
@@ -9130,7 +9178,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             if (
               curr.status === 'available' &&
               inc.status !== 'available' &&
-              (incOccTs > currReleaseTs || tableTickets.length > 0 || inc.status === 'reserved')
+              (incOccTs > currReleaseTs + 500 || tableTickets.length > 0 || (inc.status === 'reserved' && inc.reservationId))
             ) {
               return {
                 ...curr,
@@ -9139,6 +9187,11 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
                   ? Math.max(incOccTs, currReleaseTs + 1, Date.now())
                   : inc.occupiedSince,
               };
+            }
+
+            // Never let an unknown/stale non-available echo overwrite a settled available table
+            if (curr.status === 'available' && inc.status !== 'available') {
+              return curr;
             }
 
             return { ...curr, ...inc };
@@ -9889,16 +9942,22 @@ setInterval(pollFirestoreCloud, firestorePollInterval);
 
 wss.on('connection', (ws, req) => {
   const remoteIp = req.socket.remoteAddress;
+  ws.isAlive = true;
+  ws.on('pong', () => {
+    ws.isAlive = true;
+  });
   console.log(`[Sultan Hub] New device connected from ${remoteIp}. Total devices: ${wss.clients.size}`);
 
   ws.send(JSON.stringify({
     type: 'INIT_STATE',
     state: serverState,
     senderId: 'SERVER',
+    serverTime: Date.now(),
     timestamp: Date.now()
   }));
 
   ws.on('message', (message) => {
+    ws.isAlive = true;
     try {
       const data = JSON.parse(message.toString());
       if (data.type === 'CLIENT_UPDATE' && data.state) {
@@ -9907,12 +9966,22 @@ wss.on('connection', (ws, req) => {
         if (!hasProcessedServerPacket(data.packetId)) {
           applyStateUpdate(data.state, data.senderId, ws);
         }
+        try {
+          ws.send(JSON.stringify({
+            type: 'SYNC_ACK',
+            packetId: data.packetId || null,
+            lastUpdated: Number(serverState.lastUpdated || 0),
+            serverTime: Date.now(),
+            timestamp: Date.now()
+          }));
+        } catch (_) { }
       } else if (data.type === 'PING') {
         ws.send(JSON.stringify({
           type: 'PONG',
           instanceId: SERVER_INSTANCE_ID,
           lastUpdated: Number(serverState.lastUpdated || 0),
           fingerprint: lastStateFingerprint,
+          serverTime: Date.now(),
           timestamp: Date.now()
         }));
       }
@@ -9929,6 +9998,20 @@ wss.on('connection', (ws, req) => {
     console.error('[Sultan Hub] WS socket error:', err.message);
   });
 });
+
+// Evict dead half-open WebSocket connections (common when floor Wi-Fi routers reboot or lose power)
+setInterval(() => {
+  try {
+    wss.clients.forEach((client) => {
+      if (client.isAlive === false) {
+        try { client.terminate(); } catch (_) { }
+        return;
+      }
+      client.isAlive = false;
+      try { client.ping(); } catch (_) { }
+    });
+  } catch (_) { }
+}, 8000);
 
 function listenDualStack(srv, port, onSuccess, onError) {
   if (!srv) return;

@@ -15,7 +15,7 @@ import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 import { getActiveServerHttpUrl } from '../services/syncService';
 
 export const INSTALLED_APK_VERSION = 44;
-export const INSTALLED_WEB_VERSION = 50;
+export const INSTALLED_WEB_VERSION = 51;
 export const APP_VERSION_LABEL = Platform.OS === 'web' ? `v${INSTALLED_WEB_VERSION}` : `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
@@ -77,18 +77,30 @@ export default function CentralUpdateHost() {
             } catch { }
           };
 
-          // If running via localhost/127.0.0.1 fallback, check if Master LAN hub (192.168.1.10:5050) has a newer webVersion
+          // If running via localhost/127.0.0.1 fallback, check Master LAN hub (192.168.1.10:5050):
+          // 1) If Master is online with a DIFFERENT instanceId (e.g. Rooftop PC fell back after power cut), auto-escape back to Master!
+          // 2) If Master has a newer webVersion, switch to Master immediately.
           const host = window.location?.hostname || '';
           if (host === 'localhost' || host === '127.0.0.1') {
             try {
               const mCtrl = new AbortController();
-              const mTimer = setTimeout(() => mCtrl.abort(), 1500);
-              const mRes = await fetch(
-                `http://192.168.1.10:5050/api/app-update/info?apkVer=${INSTALLED_APK_VERSION}&webVer=${INSTALLED_WEB_VERSION}&t=${Date.now()}`,
-                { signal: mCtrl.signal, headers: { 'Cache-Control': 'no-cache' } }
-              );
+              const mTimer = setTimeout(() => mCtrl.abort(), 1600);
+              const [localHRes, masterHRes, mRes] = await Promise.all([
+                fetch(`${base}/health`, { signal: mCtrl.signal, cache: 'no-store' }).catch(() => null),
+                fetch('http://192.168.1.10:5050/health', { signal: mCtrl.signal, cache: 'no-store' }).catch(() => null),
+                fetch(
+                  `http://192.168.1.10:5050/api/app-update/info?apkVer=${INSTALLED_APK_VERSION}&webVer=${INSTALLED_WEB_VERSION}&t=${Date.now()}`,
+                  { signal: mCtrl.signal, headers: { 'Cache-Control': 'no-cache' } }
+                ).catch(() => null),
+              ]);
               clearTimeout(mTimer);
-              if (mRes.ok) {
+              const localH = localHRes && localHRes.ok ? await localHRes.json() : null;
+              const masterH = masterHRes && masterHRes.ok ? await masterHRes.json() : null;
+              if (masterH?.status === 'online' && masterH?.instanceId && localH?.instanceId && masterH.instanceId !== localH.instanceId) {
+                window.location.href = `http://192.168.1.10:5050${window.location.pathname}${window.location.search}`;
+                return;
+              }
+              if (mRes && mRes.ok) {
                 const masterData = await mRes.json();
                 const masterWebVer = Number(masterData?.webVersion || 0);
                 if (masterWebVer > Math.max(INSTALLED_WEB_VERSION, remoteWebVer)) {

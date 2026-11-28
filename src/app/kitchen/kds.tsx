@@ -257,16 +257,32 @@ export default function KitchenDisplayScreen() {
 
   const lastTicketMutationRef = useRef<number>(0);
 
-  // Initial sync & Auto-Reconnecting Real-Time WebSocket for Kitchen Display System (KDS)
+  // Initial sync & Auto-Reconnecting Real-Time WebSocket with timeout & dead-socket watchdog
   useEffect(() => {
     let unmounted = false;
     let socket: WebSocket | null = null;
     let wsReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let wsPingTimer: ReturnType<typeof setInterval> | null = null;
+    let lastWsActivityAt = Date.now();
+    let isFetchingLive = false;
+
+    const fetchWithTimeout = async (url: string, timeoutMs = 2500) => {
+      const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
+      try {
+        return await fetch(url, {
+          cache: 'no-store',
+          ...(controller ? { signal: controller.signal } : {}),
+        });
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
+    };
 
     const fetchSequenceStatus = async () => {
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        const sRes = await fetch(`${baseHttpUrl}/api/kot/sequence-status?station=main`, { cache: 'no-store' });
+        const sRes = await fetchWithTimeout(`${baseHttpUrl}/api/kot/sequence-status?station=main`, 2500);
         if (sRes.ok && !unmounted) {
           const sData = await sRes.json();
           if (sData?.success) setSeqStatus(sData);
@@ -278,11 +294,12 @@ export default function KitchenDisplayScreen() {
     const fetchLiveTickets = async () => {
       fetchSequenceStatus();
       // Skip poll response if chef just clicked Start Cooking / Mark Ready / Mark Dispatched within last 2.5s
-      if (Date.now() - lastTicketMutationRef.current < 2500) return;
+      if (isFetchingLive || Date.now() - lastTicketMutationRef.current < 2500) return;
+      isFetchingLive = true;
       try {
         const baseHttpUrl = getActiveServerHttpUrl();
-        // 1. Fetch tickets from local sync endpoint so offline/LAN KOTs never get skipped
-        const res = await fetch(`${baseHttpUrl}/api/sync`, { cache: 'no-store' });
+        // 1. Fetch tickets from local sync endpoint with hard timeout so router drops never stall polling
+        const res = await fetchWithTimeout(`${baseHttpUrl}/api/sync`, 2800);
         if (res.ok && Date.now() - lastTicketMutationRef.current >= 2500) {
           const data = await res.json();
           if (data && Array.isArray(data.tickets)) {
@@ -297,21 +314,41 @@ export default function KitchenDisplayScreen() {
             useRestaurantStore.getState().syncFromServer({ tickets: data.tickets });
           }
         }
-      } catch (_) {}
+      } catch (_) { } finally {
+        isFetchingLive = false;
+      }
     };
 
     fetchLiveTickets();
-    const pollInterval = setInterval(fetchLiveTickets, 5000);
+    const pollInterval = setInterval(fetchLiveTickets, 3000);
 
-    // 2. Auto-reconnecting WebSocket stream for instant KOT Chime, Alert Banner & Auto-Print
+    // 2. Auto-reconnecting WebSocket stream + 6.5s dead-socket watchdog
     const connectWs = () => {
       if (unmounted) return;
+      if (wsPingTimer) {
+        clearInterval(wsPingTimer);
+        wsPingTimer = null;
+      }
       try {
         const { wsUrl } = parseServerEndpoints(getActiveServerHttpUrl());
         socket = new WebSocket(wsUrl);
+        socket.onopen = () => {
+          lastWsActivityAt = Date.now();
+          fetchLiveTickets();
+          wsPingTimer = setInterval(() => {
+            if (!socket || socket.readyState !== WebSocket.OPEN) return;
+            if (Date.now() - lastWsActivityAt > 6500) {
+              try { socket.close(); } catch { }
+              return;
+            }
+            try { socket.send(JSON.stringify({ type: 'PING' })); } catch { }
+          }, 2500);
+        };
         socket.onmessage = (event) => {
+          lastWsActivityAt = Date.now();
           try {
             const msg = JSON.parse(event.data);
+            if (msg.type === 'PONG') return;
             if (msg.type === 'NEW_ORDER_ALERT' && msg.ticket) {
               const incomingTicket = msg.ticket as Ticket;
               const wasSeen = !!(incomingTicket.id && seenTicketIdsRef.current.has(incomingTicket.id));
@@ -379,22 +416,38 @@ export default function KitchenDisplayScreen() {
           } catch (e) { }
         };
         socket.onclose = () => {
+          if (wsPingTimer) {
+            clearInterval(wsPingTimer);
+            wsPingTimer = null;
+          }
           if (!unmounted) {
-            wsReconnectTimer = setTimeout(connectWs, 3000);
+            wsReconnectTimer = setTimeout(connectWs, 1800);
           }
         };
       } catch (e) {
         if (!unmounted) {
-          wsReconnectTimer = setTimeout(connectWs, 3000);
+          wsReconnectTimer = setTimeout(connectWs, 2000);
         }
       }
     };
     connectWs();
 
+    const handleOnline = () => {
+      fetchLiveTickets();
+      if (!socket || socket.readyState !== WebSocket.OPEN) connectWs();
+    };
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('online', handleOnline);
+    }
+
     return () => {
       unmounted = true;
       clearInterval(pollInterval);
+      if (wsPingTimer) clearInterval(wsPingTimer);
       if (wsReconnectTimer) clearTimeout(wsReconnectTimer);
+      if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.removeEventListener === 'function') {
+        window.removeEventListener('online', handleOnline);
+      }
       if (socket) {
         try { socket.close(); } catch (e) { }
       }

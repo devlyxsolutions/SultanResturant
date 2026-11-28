@@ -17,8 +17,8 @@ using System.Windows.Forms;
 using Microsoft.Win32;
 
 [assembly: AssemblyTitle("Sultan Restaurant POS & Central Hub")]
-[assembly: AssemblyVersion("1.0.50.0")]
-[assembly: AssemblyFileVersion("1.0.50.0")]
+[assembly: AssemblyVersion("1.0.51.0")]
+[assembly: AssemblyFileVersion("1.0.51.0")]
 
 namespace SultanRestaurantDesktop
 {
@@ -515,7 +515,7 @@ namespace SultanRestaurantDesktop
 
         private void InitializeComponent()
         {
-            this.Text = "Sultan Restaurant - Desktop Control & POS Hub (v50)";
+            this.Text = "Sultan Restaurant - Desktop Control & POS Hub (v51)";
             this.Size = new Size(680, 680);
             this.StartPosition = FormStartPosition.CenterScreen;
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
@@ -910,13 +910,19 @@ namespace SultanRestaurantDesktop
             }
             else
             {
-                // Running on another laptop/computer:
-                // 1) Check if Master Server (e.g. 192.168.1.10:5050) is reachable on LAN
+                // Running on another floor PC (e.g. Rooftop / Kitchen / Juice Bar):
+                // Retry Master Server (192.168.1.10:5050) for up to ~12s after power cuts / router reboots before falling back!
                 bool masterReachable = false;
                 try
                 {
                     Uri u = new Uri(baseServer);
-                    masterReachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 1500);
+                    int targetPort = u.Port > 0 ? u.Port : 5050;
+                    for (int attempt = 0; attempt < 8; attempt++)
+                    {
+                        masterReachable = ProcessHelper.IsPortListening(u.Host, targetPort, 1400);
+                        if (masterReachable) break;
+                        Thread.Sleep(250);
+                    }
                 }
                 catch {}
 
@@ -1165,7 +1171,14 @@ namespace SultanRestaurantDesktop
                 try
                 {
                     Uri u = new Uri(baseServer);
-                    bool reachable = ProcessHelper.IsPortListening(u.Host, u.Port > 0 ? u.Port : 5050, 1500);
+                    int targetPort = u.Port > 0 ? u.Port : 5050;
+                    bool reachable = false;
+                    for (int attempt = 0; attempt < 8; attempt++)
+                    {
+                        reachable = ProcessHelper.IsPortListening(u.Host, targetPort, 1400);
+                        if (reachable) break;
+                        Thread.Sleep(250);
+                    }
                     if (!reachable)
                     {
                         if (!ProcessHelper.IsPortListening("127.0.0.1", 5050, 350))

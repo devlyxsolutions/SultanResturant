@@ -4698,13 +4698,16 @@ export const useRestaurantStore = create<RestaurantState>()(
 
             // Preserve ALL local tickets not yet on the server that have not been deleted/billed/settled
             const remoteIds = new Set(normalizedRemote.map((rt) => rt.id));
+            const remoteSettledIds = new Set<string>(
+              Array.isArray((remoteState as any).settledTicketIds) ? (remoteState as any).settledTicketIds : []
+            );
             const remoteOrderIds = new Set(normalizedRemote.map((rt) => rt.orderId).filter(Boolean));
             const remoteTableMap = new Map((remoteState.tables || []).map((t) => [t.id, t]));
             const freshLocalOnly = (state.tickets || []).filter((lt) => {
-              if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id)) return false;
+              if (!lt || !lt.id || remoteIds.has(lt.id) || deletedSet.has(lt.id) || remoteSettledIds.has(lt.id) || lt.isSettled) return false;
               if (lt.orderId && remoteOrderIds.has(lt.orderId)) return false;
               const rTable = remoteTableMap.get(lt.tableId);
-              if (!lt.isSettled && rTable && rTable.lastSettledAt && lt.timePlaced && lt.timePlaced < rTable.lastSettledAt) {
+              if (rTable && rTable.lastSettledAt && (!lt.timePlaced || lt.timePlaced <= rTable.lastSettledAt + 2000)) {
                 return false;
               }
               return true;
@@ -4768,7 +4771,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   isRecentLocalMutation &&
                   lt.status === 'occupied' &&
                   rt.status === 'available' &&
-                  localOccTs > remoteReleaseTs
+                  localOccTs > remoteReleaseTs + 500
                 ) {
                   return lt;
                 }

@@ -118,6 +118,8 @@ let hasHydratedRemoteOps = false;
 let isInitialized = false;
 let hasUnsyncedLocalChanges = false;
 let currentWsUrl = '';
+let unackedPacketId = '';
+let pendingFlushTimer: ReturnType<typeof setInterval> | null = null;
 
 export function markApplyingRemoteUpdate(durationMs = 350) {
   isApplyingRemoteUpdate = true;
@@ -788,19 +790,23 @@ async function pollLocalLanFallback(forcePull = false) {
       })
       .catch(() => { });
   }
-  // Only poll via HTTP fallback when forced OR when WebSocket is disconnected OR no WS traffic arrived in the last 10s
-  if (!forcePull && ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsReceivedAt < 10000 && hasReceivedInitialSync) {
+  // Only skip HTTP GET when WS is healthy AND no unacknowledged local orders are waiting
+  if (!forcePull && !hasUnsyncedLocalChanges && ws && ws.readyState === WebSocket.OPEN && Date.now() - lastWsReceivedAt < 8000 && hasReceivedInitialSync) {
     return;
   }
   if (!httpUrl) return;
-  if (!(await verifySultanServer(httpUrl, 900))) {
+  if (!(await verifySultanServer(httpUrl, 1200))) {
     isLanConnected = false;
     return;
   }
+  if (hasUnsyncedLocalChanges && !isApplyingRemoteUpdate) {
+    broadcastLocalState(true);
+  }
   const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = controller ? setTimeout(() => controller.abort(), 4000) : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 3000) : null;
   try {
     const res = await fetch(`${httpUrl}/api/sync`, {
+      cache: 'no-store',
       ...(controller ? { signal: controller.signal } : {}),
     });
     if (res.ok) {
@@ -905,14 +911,27 @@ function openVerifiedWebSocket(wsUrl: string) {
         broadcastLocalState(true);
       }
 
-      // Start keep-alive & state-drift check ping every 2.5s so both Cashier PCs stay tightly synchronized
+      // Start keep-alive + dead-socket watchdog every 2s so router drops never stall for 10-15 mins
       pingTimer = setInterval(() => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (lastWsReceivedAt > 0 && Date.now() - lastWsReceivedAt > 6500) {
+          console.warn('[SyncService] WebSocket PONG timed out (dead router link) — reconnecting immediately...');
           try {
-            ws.send(JSON.stringify({ type: 'PING' }));
+            ws.close();
           } catch { }
+          connectWebSocket(true);
+          pollLocalLanFallback(true).catch(() => { });
+          return;
         }
-      }, 2500);
+        try {
+          ws.send(JSON.stringify({ type: 'PING' }));
+        } catch {
+          try {
+            ws.close();
+          } catch { }
+          connectWebSocket(true);
+        }
+      }, 2000);
     };
 
     ws.onmessage = (event) => {
@@ -920,11 +939,20 @@ function openVerifiedWebSocket(wsUrl: string) {
         const data = JSON.parse(event.data as string);
 
         if (data.type === 'PONG') {
+          lastWsReceivedAt = Date.now();
           if (data.lastUpdated && Number(data.lastUpdated) !== lastServerKnownUpdated) {
             pollLocalLanFallback(true).catch(() => { });
-          } else {
-            lastWsReceivedAt = Date.now();
           }
+          return;
+        }
+        if (data.type === 'SYNC_ACK') {
+          lastWsReceivedAt = Date.now();
+          lastSyncedAt = Date.now();
+          if (!unackedPacketId || data.packetId === unackedPacketId) {
+            hasUnsyncedLocalChanges = false;
+            unackedPacketId = '';
+          }
+          notifyListeners();
           return;
         }
         lastWsReceivedAt = Date.now();
@@ -1142,11 +1170,12 @@ function broadcastLocalState(force = false) {
     },
   };
 
-  // 1. Direct Local LAN WebSocket Broadcast (Instantaneous sub-10ms delivery)
+  unackedPacketId = packetId;
+
+  // 1. Direct Local LAN WebSocket Broadcast (Wait for SYNC_ACK / HTTP 200 before clearing hasUnsyncedLocalChanges!)
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
       ws.send(JSON.stringify(payload));
-      hasUnsyncedLocalChanges = false;
       lastSyncedAt = Date.now();
       totalSyncedEvents++;
       notifyListeners();
@@ -1155,7 +1184,7 @@ function broadcastLocalState(force = false) {
     }
   }
 
-  // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed fallback delivery + auto-discovery retry)
+  // 2. Direct Local LAN HTTP POST Broadcast (Guaranteed delivery + timeout + auto-discovery retry)
   const { httpUrl } = parseServerEndpoints(currentServerAddress);
   if (httpUrl) {
     if (peerLanHubHttpUrl && peerLanHubHttpUrl !== httpUrl) {
@@ -1168,14 +1197,21 @@ function broadcastLocalState(force = false) {
       } catch { }
     }
     try {
+      const postCtrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const postTimer = postCtrl ? setTimeout(() => postCtrl.abort(), 3500) : null;
       fetch(`${httpUrl}/api/sync`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
+        ...(postCtrl ? { signal: postCtrl.signal } : {}),
       })
         .then(async (res) => {
+          if (postTimer) clearTimeout(postTimer);
           if (res.ok) {
-            hasUnsyncedLocalChanges = false;
+            if (unackedPacketId === packetId || broadcastSeq === currentBroadcastSeq) {
+              hasUnsyncedLocalChanges = false;
+              unackedPacketId = '';
+            }
             isLanConnected = true;
             syncStatus = 'connected';
             lastSyncedAt = Date.now();
@@ -1184,27 +1220,29 @@ function broadcastLocalState(force = false) {
           }
         })
         .catch(() => {
-          // If POST failed (e.g. router subnet changed), auto-discover new server IP and re-send immediately!
-          if (!ws || ws.readyState !== WebSocket.OPEN) {
-            discoverLocalServerIp()
-              .then((discoveredIp) => {
-                if (discoveredIp) {
-                  const retryEp = parseServerEndpoints(discoveredIp);
-                  if (retryEp.httpUrl) {
-                    fetch(`${retryEp.httpUrl}/api/sync`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify(payload),
+          if (postTimer) clearTimeout(postTimer);
+          // If POST failed (e.g. router reboot/roaming), discover server IP and re-send immediately!
+          discoverLocalServerIp()
+            .then((discoveredIp) => {
+              if (discoveredIp) {
+                const retryEp = parseServerEndpoints(discoveredIp);
+                if (retryEp.httpUrl) {
+                  fetch(`${retryEp.httpUrl}/api/sync`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                  })
+                    .then((r) => {
+                      if (r.ok && (unackedPacketId === packetId || broadcastSeq === currentBroadcastSeq)) {
+                        hasUnsyncedLocalChanges = false;
+                        unackedPacketId = '';
+                      }
                     })
-                      .then((r) => {
-                        if (r.ok) hasUnsyncedLocalChanges = false;
-                      })
-                      .catch(() => { });
-                  }
+                    .catch(() => { });
                 }
-              })
-              .catch(() => { });
-          }
+              }
+            })
+            .catch(() => { });
         });
     } catch { }
   }
@@ -1333,6 +1371,21 @@ export async function initSyncService() {
     discoverLocalServerIp().catch(() => { });
     if (lanHttpPollTimer) clearInterval(lanHttpPollTimer);
     lanHttpPollTimer = setInterval(pollLocalLanFallback, 2200);
+    if (pendingFlushTimer) clearInterval(pendingFlushTimer);
+    pendingFlushTimer = setInterval(() => {
+      if (hasUnsyncedLocalChanges && !isApplyingRemoteUpdate) {
+        broadcastLocalState(true);
+      }
+    }, 2500);
+    if (Platform.OS === 'web' && typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
+      window.addEventListener('online', () => {
+        connectWebSocket(true);
+        pollLocalLanFallback(true).catch(() => { });
+        if (hasUnsyncedLocalChanges && !isApplyingRemoteUpdate) {
+          broadcastLocalState(true);
+        }
+      });
+    }
   }
 
   if (isFirebaseConfigured) {
