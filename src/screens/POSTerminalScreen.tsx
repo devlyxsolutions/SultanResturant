@@ -935,6 +935,41 @@ export default function POSTerminalScreen({
   const selectedCustomerObj = customers.find((c) => c.id === selectedCustomerId);
   const selectedTableObj = tables.find((t) => t.id === selectedTableId);
 
+  const formatOrderClockTime = (ts?: number) => {
+    if (!ts || !Number.isFinite(ts) || ts <= 0) return '';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+
+  const selectedTableOrderTiming = useMemo(() => {
+    if (!selectedTableObj) return null;
+    const tblTickets = (tickets || []).filter(
+      (tk) =>
+        tk &&
+        !tk.isSettled &&
+        tk.tableId === selectedTableObj.id &&
+        tk.tableId !== 'SETTLED-HISTORY' &&
+        tk.tableId !== 'SETTLED-ORDER'
+    );
+    const ticketTimes = tblTickets.map((tk) => Number(tk.timePlaced || 0)).filter((n) => n > 0);
+    const firstKotAt =
+      ticketTimes.length > 0
+        ? Math.min(...ticketTimes)
+        : selectedTableObj.status === 'occupied' || selectedTableObj.status === 'billed'
+          ? Number(selectedTableObj.occupiedSince || 0) || undefined
+          : undefined;
+    const billedAt =
+      selectedTableObj.status === 'billed' && Number(selectedTableObj.billedAt || 0) > 0
+        ? Number(selectedTableObj.billedAt)
+        : undefined;
+    if (!firstKotAt && !billedAt) return null;
+    return { firstKotAt, billedAt };
+  }, [selectedTableObj, tickets]);
+
+  const activePendingTakeawayObj = useMemo(
+    () => (activeTakeawayPendingId ? activePendingTakeaways.find((p) => p.id === activeTakeawayPendingId) || null : null),
+    [activeTakeawayPendingId, activePendingTakeaways]
+  );
+
   const handleSetFullPayment = () => {
     const exact = Math.round(total);
     setPayments((prev) => [{ type: prev[0]?.type || 'cash', amount: exact }]);
@@ -3421,11 +3456,53 @@ export default function POSTerminalScreen({
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.contextSmallLabel}>DINE-IN TABLE / CABIN</Text>
-                          <Text style={styles.contextMainValue} numberOfLines={1}>
-                            {selectedTableObj
-                              ? `${selectedTableObj.name} • ${getTableFloor(selectedTableObj)}`
-                              : 'Tap to Select Table'}
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                            <Text style={styles.contextMainValue} numberOfLines={1}>
+                              {selectedTableObj
+                                ? `${selectedTableObj.name} • ${getTableFloor(selectedTableObj)}`
+                                : 'Tap to Select Table'}
+                            </Text>
+                            {selectedTableOrderTiming?.firstKotAt ? (
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  backgroundColor: '#FFFBEB',
+                                  borderWidth: 1,
+                                  borderColor: '#FCD34D',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Ionicons name="time-outline" size={12} color="#B45309" />
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#92400E' }}>
+                                  KOT: {formatOrderClockTime(selectedTableOrderTiming.firstKotAt)}
+                                </Text>
+                              </View>
+                            ) : null}
+                            {selectedTableOrderTiming?.billedAt ? (
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 4,
+                                  backgroundColor: '#FEF3C7',
+                                  borderWidth: 1,
+                                  borderColor: '#F59E0B',
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 2,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Ionicons name="receipt-outline" size={12} color="#92400E" />
+                                <Text style={{ fontSize: 11.5, fontWeight: '800', color: '#78350F' }}>
+                                  Pending Bill: {formatOrderClockTime(selectedTableOrderTiming.billedAt)}
+                                </Text>
+                              </View>
+                            ) : null}
+                          </View>
                         </View>
                         <View style={styles.contextActionPill}>
                           <Text style={styles.contextActionPillText}>
@@ -3502,7 +3579,7 @@ export default function POSTerminalScreen({
                           />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 }}>
                             <Text
                               style={[
                                 styles.contextSmallLabel,
@@ -3513,6 +3590,26 @@ export default function POSTerminalScreen({
                                 ? 'EDITING TAKEAWAY PENDING *'
                                 : 'TAKEAWAY CUSTOMER NAME * (REQUIRED FOR PENDING)'}
                             </Text>
+                            {activePendingTakeawayObj?.createdAt ? (
+                              <View
+                                style={{
+                                  flexDirection: 'row',
+                                  alignItems: 'center',
+                                  gap: 3,
+                                  backgroundColor: '#FEF3C7',
+                                  borderWidth: 1,
+                                  borderColor: '#F59E0B',
+                                  paddingHorizontal: 7,
+                                  paddingVertical: 1,
+                                  borderRadius: 6,
+                                }}
+                              >
+                                <Ionicons name="time-outline" size={11} color="#B45309" />
+                                <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#92400E' }}>
+                                  {activePendingTakeawayObj.isBillPrinted ? 'Pending' : 'KOT'}: {formatOrderClockTime(activePendingTakeawayObj.createdAt)}
+                                </Text>
+                              </View>
+                            ) : null}
                           </View>
                           <TextInput
                             ref={takeawayNameInputRef}
@@ -4256,7 +4353,7 @@ export default function POSTerminalScreen({
                                 </View>
                               )}
                               <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>
-                                {minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`}
+                                🕒 {formatOrderClockTime(tw.createdAt)} ({minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`})
                               </Text>
                               {!hidePrices && (
                                 <Text style={{ fontSize: 16, fontWeight: '900', color: '#52141C' }}>
@@ -4362,7 +4459,7 @@ export default function POSTerminalScreen({
                             </Text>
                           </View>
                           <Text style={{ fontSize: 13, fontWeight: '700', color: '#64748B' }}>
-                            Ticket #{t.id.slice(-5)}
+                            Ticket #{t.id.slice(-5)}{t.timePlaced ? ` • 🕒 ${formatOrderClockTime(t.timePlaced)}` : ''}
                           </Text>
                           {!hidePrices && (
                             <Text style={{ fontSize: 16, fontWeight: '900', color: '#52141C' }}>
@@ -5397,7 +5494,9 @@ export default function POSTerminalScreen({
                                     : `Prep: ${prepEst.totalPrepMins}m • Time Left: ${prepEst.remainingSeconds > 0 ? prepEst.countdownText : 'Due now'}`}
                               </Text>
                             </View>
-                            <Text style={{ fontSize: 12, color: '#64748B' }}>#{t.id.slice(-5)}</Text>
+                            <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700' }}>
+                              #{t.id.slice(-5)}{t.timePlaced ? ` • 🕒 ${formatOrderClockTime(t.timePlaced)}` : ''}
+                            </Text>
                           </View>
                           <Text style={styles.runningOrderItems} numberOfLines={2}>
                             {prepEst.itemBreakdowns.map((b) => `${b.qty}x ${b.name} (${b.prepMins}m)`).join(', ')}
@@ -5583,7 +5682,7 @@ export default function POSTerminalScreen({
                               </View>
                             )}
                             <Text style={{ fontSize: 12, color: '#64748B', fontWeight: '700' }}>
-                              {minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`}
+                              🕒 {formatOrderClockTime(tw.createdAt)} ({minsAgo === 0 ? 'Just now' : `${minsAgo}m ago`})
                             </Text>
                           </View>
                           {!hidePrices && (

@@ -270,6 +270,21 @@ export default function TableOrderScreen() {
   );
   const isExistingOrderActive = activeTickets.length > 0 || table?.status === 'occupied' || table?.status === 'billed';
 
+  const formatOrderClockTime = (ts?: number) => {
+    if (!ts || !Number.isFinite(ts) || ts <= 0) return '';
+    return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+  };
+
+  const firstOrderPlacedAt = useMemo(() => {
+    const times = activeTickets.map((t) => Number(t.timePlaced || 0)).filter((n) => n > 0);
+    if (times.length > 0) return Math.min(...times);
+    if (isExistingOrderActive && Number(table?.occupiedSince || 0) > 0) return Number(table?.occupiedSince);
+    return undefined;
+  }, [activeTickets, isExistingOrderActive, table?.occupiedSince]);
+
+  const pendingBilledAt =
+    table?.status === 'billed' && Number(table?.billedAt || 0) > 0 ? Number(table?.billedAt) : undefined;
+
   const alreadyOrderedItems = useMemo(() => {
     const list: {
       id: string;
@@ -1244,9 +1259,51 @@ export default function TableOrderScreen() {
             </TouchableOpacity>
 
             <View style={styles.ticketItemsHeader}>
-              <Text style={styles.ticketItemsHeaderTitle}>
-                NEW KOT ITEMS ({totalNewQty})
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, flex: 1 }}>
+                <Text style={styles.ticketItemsHeaderTitle}>
+                  NEW KOT ITEMS ({totalNewQty})
+                </Text>
+                {firstOrderPlacedAt ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      backgroundColor: '#FFFBEB',
+                      borderWidth: 1,
+                      borderColor: '#FCD34D',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Ionicons name="time-outline" size={11} color="#B45309" />
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#92400E' }}>
+                      KOT: {formatOrderClockTime(firstOrderPlacedAt)}
+                    </Text>
+                  </View>
+                ) : null}
+                {pendingBilledAt ? (
+                  <View
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 3,
+                      backgroundColor: '#FEF3C7',
+                      borderWidth: 1,
+                      borderColor: '#F59E0B',
+                      paddingHorizontal: 7,
+                      paddingVertical: 2,
+                      borderRadius: 6,
+                    }}
+                  >
+                    <Ionicons name="receipt-outline" size={11} color="#92400E" />
+                    <Text style={{ fontSize: 10.5, fontWeight: '800', color: '#78350F' }}>
+                      Pending: {formatOrderClockTime(pendingBilledAt)}
+                    </Text>
+                  </View>
+                ) : null}
+              </View>
               {newCart.length > 0 && (
                 <TouchableOpacity style={styles.clearCartLink} onPress={clearNewCartWithLog}>
                   <Ionicons name="close-circle-outline" size={13} color="#DC2626" />
@@ -1573,6 +1630,8 @@ export default function TableOrderScreen() {
                       🔥 Running Kitchen KDS Orders on {tableName}
                     </Text>
                     <Text style={{ fontSize: 12.5, fontWeight: '700', color: allReady ? '#15803D' : '#B45309', marginTop: 2 }}>
+                      {firstOrderPlacedAt ? `🕒 KOT Sent: ${formatOrderClockTime(firstOrderPlacedAt)} • ` : ''}
+                      {pendingBilledAt ? `Pending Bill: ${formatOrderClockTime(pendingBilledAt)} • ` : ''}
                       Total Kitchen Prep Time: {runningPrepEstimate.totalMins} Minutes • Elapsed: {formatCountdownMMSS(elapsedSecs)}
                     </Text>
                   </View>

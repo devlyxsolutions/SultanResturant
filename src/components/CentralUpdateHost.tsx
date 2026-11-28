@@ -15,7 +15,7 @@ import { isCustomerPortalRoute } from '../services/cloudMenuBridge';
 import { getActiveServerHttpUrl } from '../services/syncService';
 
 export const INSTALLED_APK_VERSION = 45;
-export const INSTALLED_WEB_VERSION = 60;
+export const INSTALLED_WEB_VERSION = 61;
 export const APP_VERSION_LABEL = Platform.OS === 'web' ? `v${INSTALLED_WEB_VERSION}` : `v${INSTALLED_APK_VERSION}`;
 const APK_HASH_STORAGE_KEY = `@sultan_installed_apk_hash_v${INSTALLED_APK_VERSION}`;
 
