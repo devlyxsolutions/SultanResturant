@@ -694,6 +694,7 @@ type RestaurantState = {
   invoiceSequenceState?: {
     dayStartAt: number;
     lastSeq: number;
+    lastPendingSeq?: number;
     pendingByTableId: Record<string, number>;
   };
   allocateNextInvoiceSeq: (opts?: { tableId?: string; isPendingBill?: boolean }) => {
@@ -1620,6 +1621,7 @@ export const useRestaurantStore = create<RestaurantState>()(
           );
 
           const finalServerId = resolvedServerId || table?.serverId;
+          const safeOrderTs = Math.max(Date.now(), table?.lastSettledAt ? Number(table.lastSettledAt) + 1000 : 0);
 
           const newTicket: Ticket = {
             id: newTicketId,
@@ -1627,7 +1629,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             tableName: table ? (isActuallyAddOn ? `${table.name} (Add-on #${roundNumber})` : table.name) : (tableId === 'delivery' ? 'Delivery' : 'Takeaway'),
             server: serverName,
             serverId: finalServerId,
-            timePlaced: Date.now(),
+            timePlaced: safeOrderTs,
             cookingStartedAt: undefined,
             estimatedPrepTime: maxPrepTime,
             status: 'pending',
@@ -1791,7 +1793,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                 return {
                   ...t,
                   status: 'occupied',
-                  occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1, Date.now()),
+                  occupiedSince: Math.max(t.occupiedSince || 0, (t.lastSettledAt || 0) + 1000, Date.now()),
                   isPaid: false,
                   server: serverName,
                   serverId: finalServerId,
@@ -2458,6 +2460,7 @@ export const useRestaurantStore = create<RestaurantState>()(
               status: 'billed' as const,
               isPaid: false,
               lastInvoiceId: invoiceId,
+              occupiedSince: Math.max(Number(t.occupiedSince || 0), Number(t.lastSettledAt || 0) + 1000) || now,
               billedAt: now,
               orders: nextOrders,
               billTotal: nextBillTotal,
@@ -3661,64 +3664,81 @@ export const useRestaurantStore = create<RestaurantState>()(
         const dayStartAt = Math.max(startOfToday, state.operationalDayStartAt || 0);
         const curSeqState = state.invoiceSequenceState;
         const isSameCycle = curSeqState && curSeqState.dayStartAt === dayStartAt;
-        const baseLastSeq = isSameCycle ? Number(curSeqState.lastSeq || 0) : 0;
-        const pendingMap: Record<string, number> = isSameCycle
-          ? { ...(curSeqState.pendingByTableId || {}) }
-          : {};
+        const baseLastPaidSeq = isSameCycle ? Number(curSeqState.lastSeq || 0) : 0;
+        const baseLastPendingSeq = isSameCycle ? Number(curSeqState.lastPendingSeq || 0) : 0;
+        const rawPending = isSameCycle ? (curSeqState.pendingByTableId || {}) : {};
+        const liveTableStatus = new Map((state.tables || []).filter(Boolean).map((tbl) => [tbl.id, tbl.status]));
+        const pendingMap: Record<string, number> = {};
+        for (const [k, v] of Object.entries(rawPending)) {
+          const n = typeof v === 'object' && v ? Number((v as any).seq || 0) : Number(v || 0);
+          const st = liveTableStatus.get(k);
+          if (k && n > 0 && n < 10000 && st && st !== 'available') {
+            pendingMap[k] = n;
+          }
+        }
 
-        let maxExistingSeq = 0;
+        let maxExistingPaidSeq = 0;
         const existingIds = new Set<string>();
         for (const inv of state.invoices || []) {
           if (!inv || !inv.id) continue;
           existingIds.add(inv.id);
+          if (inv.isUnpaidBill || inv.status === 'unpaid') continue;
           const invTime = Number(inv.timeSettled || inv.timePlaced || 0);
           if (invTime >= dayStartAt) {
-            if (typeof inv.invoiceSeq === 'number' && inv.invoiceSeq > maxExistingSeq) {
-              maxExistingSeq = inv.invoiceSeq;
+            if (typeof inv.invoiceSeq === 'number' && inv.invoiceSeq > maxExistingPaidSeq) {
+              maxExistingPaidSeq = inv.invoiceSeq;
             } else if (inv.dailyInvoiceNumber) {
               const m = String(inv.dailyInvoiceNumber).match(/^INV-(\d+)$/i);
               if (m) {
                 const n = Number(m[1]);
-                if (n > maxExistingSeq && n < 10000) maxExistingSeq = n;
+                if (n > maxExistingPaidSeq && n < 10000) maxExistingPaidSeq = n;
               }
             }
           }
         }
-        for (const v of Object.values(pendingMap)) {
-          if (Number(v) > maxExistingSeq) maxExistingSeq = Number(v);
-        }
 
         const tableId = opts?.tableId;
         const isPendingBill = Boolean(opts?.isPendingBill);
-        const reservedForTable = tableId ? Number(pendingMap[tableId] || 0) : 0;
 
-        let seq: number;
-        let nextLastSeq = Math.max(baseLastSeq, maxExistingSeq);
-        if (reservedForTable > 0) {
-          seq = reservedForTable;
-          if (!isPendingBill && tableId) {
-            delete pendingMap[tableId];
+        if (isPendingBill) {
+          let maxPending = baseLastPendingSeq;
+          for (const v of Object.values(pendingMap)) {
+            if (Number(v) > maxPending) maxPending = Number(v);
           }
-        } else {
-          seq = nextLastSeq + 1;
-          nextLastSeq = seq;
-          if (isPendingBill && tableId) {
+          const existingPending = tableId ? Number(pendingMap[tableId] || 0) : 0;
+          const seq = existingPending > 0 ? existingPending : maxPending + 1;
+          const nextLastPendingSeq = Math.max(maxPending, seq);
+          if (tableId) {
             pendingMap[tableId] = seq;
           }
+          set({
+            invoiceSequenceState: {
+              dayStartAt,
+              lastSeq: Math.max(baseLastPaidSeq, maxExistingPaidSeq),
+              lastPendingSeq: nextLastPendingSeq,
+              pendingByTableId: pendingMap,
+            },
+          });
+          const dailyInvoiceNumber = `TMP-${seq}`;
+          return { seq, dailyInvoiceNumber, id: dailyInvoiceNumber };
+        }
+
+        // Paid Invoice: allocate strictly contiguous INV-1, INV-2, ... without gaps from TMP bills
+        const seq = Math.max(baseLastPaidSeq, maxExistingPaidSeq) + 1;
+        if (tableId && pendingMap[tableId]) {
+          delete pendingMap[tableId];
         }
 
         set({
           invoiceSequenceState: {
             dayStartAt,
-            lastSeq: nextLastSeq,
+            lastSeq: seq,
+            lastPendingSeq: baseLastPendingSeq,
             pendingByTableId: pendingMap,
           },
         });
 
-        const dailyInvoiceNumber = isPendingBill ? `TMP-${seq}` : `INV-${seq}`;
-        if (isPendingBill) {
-          return { seq, dailyInvoiceNumber, id: dailyInvoiceNumber };
-        }
+        const dailyInvoiceNumber = `INV-${seq}`;
         const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
         const uniqueId = existingIds.has(`INV-${seq}`) ? `INV-${ymd}-${seq}` : `INV-${seq}`;
         return { seq, dailyInvoiceNumber, id: uniqueId };
@@ -4924,14 +4944,14 @@ export const useRestaurantStore = create<RestaurantState>()(
                 const lt = localTableMap.get(rt.id);
                 if (!lt) return rt;
                 const localMutatedAt = localTableMutationAt.get(rt.id) || 0;
-                const isRecentLocalMutation = Date.now() - localMutatedAt < 8000;
+                const isRecentLocalMutation = Date.now() - localMutatedAt < 12000;
                 const remoteReleaseTs = Math.max(rt.lastSettledAt || 0, rt.lastMovedAt || 0);
-                const localOccTs = Math.max(lt.occupiedSince || 0, lt.ordersUpdatedAt || 0, lt.lastMovedAt || 0);
+                const localOccTs = Math.max(lt.occupiedSince || 0, lt.ordersUpdatedAt || 0, lt.billedAt || 0, lt.lastMovedAt || 0);
                 if (
                   isRecentLocalMutation &&
                   (lt.status === 'occupied' || lt.status === 'billed') &&
                   rt.status === 'available' &&
-                  localOccTs > remoteReleaseTs + 500
+                  localOccTs > remoteReleaseTs
                 ) {
                   return lt;
                 }
@@ -4944,7 +4964,7 @@ export const useRestaurantStore = create<RestaurantState>()(
                   return lt;
                 }
                 const localReleaseTs = Math.max(lt.lastSettledAt || 0, lt.lastMovedAt || 0);
-                const remoteOccTs = Math.max(rt.occupiedSince || 0, rt.ordersUpdatedAt || 0, rt.lastMovedAt || 0);
+                const remoteOccTs = Math.max(rt.occupiedSince || 0, rt.ordersUpdatedAt || 0, rt.billedAt || 0, rt.lastMovedAt || 0);
                 if (
                   isRecentLocalMutation &&
                   lt.status === 'available' &&
@@ -4994,10 +5014,20 @@ export const useRestaurantStore = create<RestaurantState>()(
                   return rSeq;
                 }
                 if (rSeq && lSeq && Number(rSeq.dayStartAt || 0) === Number(lSeq.dayStartAt || 0)) {
+                  const statusMap = new Map(reconciledTables.filter(Boolean).map((tbl) => [tbl.id, tbl.status]));
+                  const mergedPending: Record<string, number> = {};
+                  for (const [k, v] of Object.entries({ ...(lSeq.pendingByTableId || {}), ...(rSeq.pendingByTableId || {}) })) {
+                    const n = typeof v === 'object' && v ? Number((v as any).seq || 0) : Number(v || 0);
+                    const st = statusMap.get(k);
+                    if (k && n > 0 && n < 10000 && st && st !== 'available') {
+                      mergedPending[k] = n;
+                    }
+                  }
                   return {
                     dayStartAt: Number(rSeq.dayStartAt || 0),
                     lastSeq: Math.max(Number(rSeq.lastSeq || 0), Number(lSeq.lastSeq || 0)),
-                    pendingByTableId: { ...(lSeq.pendingByTableId || {}), ...(rSeq.pendingByTableId || {}) },
+                    lastPendingSeq: Math.max(Number(rSeq.lastPendingSeq || 0), Number(lSeq.lastPendingSeq || 0)),
+                    pendingByTableId: mergedPending,
                   };
                 }
                 return lSeq || rSeq;

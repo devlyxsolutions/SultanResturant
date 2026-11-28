@@ -3252,6 +3252,7 @@ try {
         }
         return t;
       });
+      pruneStalePendingSeqs();
     }
     serverState.lastUpdated = Date.now();
     fs.writeFileSync(DATA_FILE, JSON.stringify(serverState, null, 2));
@@ -3267,6 +3268,17 @@ try {
   }
 } catch (err) {
   console.error('[Sultan Hub] Error loading server-data.json:', err.message);
+}
+
+function pruneStalePendingSeqs() {
+  if (!serverState.invoiceSequenceState || !serverState.invoiceSequenceState.pendingByTableId) return;
+  const liveStatusById = new Map((serverState.tables || []).filter(Boolean).map(tbl => [tbl.id, tbl.status]));
+  for (const pTableId of Object.keys(serverState.invoiceSequenceState.pendingByTableId)) {
+    const st = liveStatusById.get(pTableId);
+    if (!st || st === 'available') {
+      delete serverState.invoiceSequenceState.pendingByTableId[pTableId];
+    }
+  }
 }
 
 function recordSettledTicketId(ticketId) {
@@ -6332,7 +6344,7 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 54;
+      const targetWebVer = 55;
       const targetApkVer = 45;
       const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
@@ -7590,6 +7602,12 @@ async function handleRequest(req, res) {
         res.end(JSON.stringify({ success: false, error: 'Missing tableId' }));
         return;
       }
+      const deletedTblSet = new Set(Array.isArray(serverState.deletedTableIds) ? serverState.deletedTableIds : []);
+      if (deletedTblSet.has(tableId)) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Table no longer exists (deleted)' }));
+        return;
+      }
       const now = Date.now();
       if (!Array.isArray(serverState.tables)) serverState.tables = [];
       let updatedTable = null;
@@ -7605,6 +7623,7 @@ async function handleRequest(req, res) {
           status: 'billed',
           isPaid: false,
           lastInvoiceId: body.invoiceId || body.dailyInvoiceNumber || t.lastInvoiceId,
+          occupiedSince: Math.max(Number(t.occupiedSince || 0), (Number(t.lastSettledAt || 0) + 1000)) || now,
           billedAt: now,
           orders: nextOrders,
           billTotal: nextBillTotal,
@@ -7612,17 +7631,22 @@ async function handleRequest(req, res) {
         };
         return updatedTable;
       });
+      if (!updatedTable) {
+        res.writeHead(404, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: false, error: 'Table not found on Master server' }));
+        return;
+      }
       const dayStart = Number(serverState.operationalDayStartAt || 0);
       if (!serverState.invoiceSequenceState || Number(serverState.invoiceSequenceState.dayStartAt || 0) !== dayStart) {
-        serverState.invoiceSequenceState = { dayStartAt: dayStart, lastSeq: 0, pendingByTableId: {} };
+        serverState.invoiceSequenceState = { dayStartAt: dayStart, lastSeq: 0, lastPendingSeq: 0, pendingByTableId: {} };
       }
       if (body.invoiceId && Number(body.seq || 0) > 0) {
         if (!serverState.invoiceSequenceState.pendingByTableId) serverState.invoiceSequenceState.pendingByTableId = {};
-        serverState.invoiceSequenceState.pendingByTableId[tableId] = {
-          seq: Number(body.seq),
-          dailyInvoiceNumber: String(body.dailyInvoiceNumber || body.invoiceId),
-          createdAt: now,
-        };
+        serverState.invoiceSequenceState.pendingByTableId[tableId] = Number(body.seq);
+        serverState.invoiceSequenceState.lastPendingSeq = Math.max(
+          Number(serverState.invoiceSequenceState.lastPendingSeq || 0),
+          Number(body.seq)
+        );
       }
       serverState.lastUpdated = now;
       lastStateFingerprint = computeStateFingerprint(serverState);
@@ -8764,7 +8788,7 @@ function computeStateFingerprint(st) {
         : '0',
       operationalDayStartAt: Number(st.operationalDayStartAt || 0),
       invoiceSeqKey: st.invoiceSequenceState
-        ? `${st.invoiceSequenceState.dayStartAt || 0}:${st.invoiceSequenceState.lastSeq || 0}:${Object.keys(st.invoiceSequenceState.pendingByTableId || {}).length}`
+        ? `${st.invoiceSequenceState.dayStartAt || 0}:${st.invoiceSequenceState.lastSeq || 0}:${st.invoiceSequenceState.lastPendingSeq || 0}:${Object.keys(st.invoiceSequenceState.pendingByTableId || {}).length}`
         : '',
       kotSeqKey: st.kotSequenceState
         ? `${st.kotSequenceState.shiftId || ''}:${st.kotSequenceState.kitchenSeq || 0}:${st.kotSequenceState.juiceSeq || 0}`
@@ -8914,6 +8938,44 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   if (!partialState || typeof partialState !== 'object') return;
 
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
+  const serverNow = Date.now();
+  const clampFutureTs = (ts) => {
+    const n = Number(ts);
+    if (!Number.isFinite(n) || n <= 0) return ts;
+    return n > serverNow + 15000 ? serverNow : n;
+  };
+  if (Array.isArray(partialState.tables)) {
+    partialState = {
+      ...partialState,
+      tables: partialState.tables.map((t) =>
+        t && typeof t === 'object'
+          ? {
+            ...t,
+            ...(t.occupiedSince ? { occupiedSince: clampFutureTs(t.occupiedSince) } : {}),
+            ...(t.ordersUpdatedAt ? { ordersUpdatedAt: clampFutureTs(t.ordersUpdatedAt) } : {}),
+            ...(t.billedAt ? { billedAt: clampFutureTs(t.billedAt) } : {}),
+            ...(t.lastSettledAt ? { lastSettledAt: clampFutureTs(t.lastSettledAt) } : {}),
+            ...(t.lastMovedAt ? { lastMovedAt: clampFutureTs(t.lastMovedAt) } : {}),
+          }
+          : t
+      ),
+    };
+  }
+  if (Array.isArray(partialState.tickets)) {
+    partialState = {
+      ...partialState,
+      tickets: partialState.tickets.map((tk) =>
+        tk && typeof tk === 'object'
+          ? {
+            ...tk,
+            ...(tk.timePlaced ? { timePlaced: clampFutureTs(tk.timePlaced) } : {}),
+            ...(tk.settledAt ? { settledAt: clampFutureTs(tk.settledAt) } : {}),
+            ...(tk.lastMovedAt ? { lastMovedAt: clampFutureTs(tk.lastMovedAt) } : {}),
+          }
+          : tk
+      ),
+    };
+  }
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
   let modified = false;
@@ -8923,29 +8985,46 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
     const curDayStart = Number(serverState.operationalDayStartAt || 0);
     if (curDayStart === 0 ? incDayStart > 0 : incDayStart > curDayStart + 600000) {
       serverState.operationalDayStartAt = incDayStart;
-      serverState.invoiceSequenceState = { dayStartAt: incDayStart, lastSeq: 0, pendingByTableId: {} };
+      serverState.invoiceSequenceState = { dayStartAt: incDayStart, lastSeq: 0, lastPendingSeq: 0, pendingByTableId: {} };
       modified = true;
     }
   }
   if (partialState.invoiceSequenceState && typeof partialState.invoiceSequenceState === 'object') {
     const incSeq = partialState.invoiceSequenceState;
-    const curSeq = serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} };
+    const curSeq = serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, lastPendingSeq: 0, pendingByTableId: {} };
     const incDay = Number(incSeq.dayStartAt || 0);
     const curDay = Number(curSeq.dayStartAt || 0);
     const rawIncLast = Number(incSeq.lastSeq || 0);
     const safeIncLast = rawIncLast < 10000 ? rawIncLast : Number(curSeq.lastSeq || 0);
+    const rawIncPend = Number(incSeq.lastPendingSeq || 0);
+    const safeIncPend = rawIncPend < 10000 ? rawIncPend : Number(curSeq.lastPendingSeq || 0);
+    const normalizePendingMap = (m) => {
+      const out = {};
+      if (!m || typeof m !== 'object') return out;
+      for (const [k, v] of Object.entries(m)) {
+        const n = typeof v === 'object' && v ? Number(v.seq || 0) : Number(v || 0);
+        if (k && n > 0 && n < 10000) out[k] = n;
+      }
+      return out;
+    };
+    const mergedPending = {
+      ...normalizePendingMap(curSeq.pendingByTableId),
+      ...normalizePendingMap(incSeq.pendingByTableId),
+    };
     if (incDay > curDay + 600000) {
       serverState.invoiceSequenceState = {
         dayStartAt: incDay,
         lastSeq: safeIncLast,
-        pendingByTableId: { ...(incSeq.pendingByTableId || {}) },
+        lastPendingSeq: safeIncPend,
+        pendingByTableId: normalizePendingMap(incSeq.pendingByTableId),
       };
       modified = true;
     } else if (incDay === curDay || (curDay > 0 && Math.abs(incDay - curDay) <= 600000)) {
       serverState.invoiceSequenceState = {
         dayStartAt: curDay || incDay,
         lastSeq: Math.max(Number(curSeq.lastSeq || 0), safeIncLast),
-        pendingByTableId: { ...(curSeq.pendingByTableId || {}), ...(incSeq.pendingByTableId || {}) },
+        lastPendingSeq: Math.max(Number(curSeq.lastPendingSeq || 0), safeIncPend),
+        pendingByTableId: mergedPending,
       };
       modified = true;
     }
@@ -9056,14 +9135,21 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
         (incT.status === 'available' && incT.lastMovedAt && (!incT.lastSettledAt || incT.lastMovedAt >= incT.lastSettledAt)) ||
         (incT.status === 'available' && incomingMovedFromIds.has(incT.id));
       if (isMoveVacated) continue;
+      const currLatestActivityTs = Math.max(
+        Number(currT.occupiedSince) || 0,
+        Number(currT.ordersUpdatedAt) || 0,
+        Number(currT.billedAt) || 0,
+        Number(currT.lastSettledAt) || 0
+      );
+      const incSettledTs = Number(incT.lastSettledAt) || 0;
       const newlyBilled = currT.status !== 'billed' && incT.status === 'billed' && incT.isPaid;
-      const newlySettledFromBilled = currT.status === 'billed' && incT.status === 'available';
+      // Never let a stale untouched client with old lastSettledAt (e.g. from morning or KDS) retire active KOTs!
       const newlySettledByTimestamp =
         (currT.status === 'occupied' || currT.status === 'billed') &&
         incT.status === 'available' &&
-        incT.lastSettledAt &&
-        incT.lastSettledAt >= (currT.occupiedSince || 0);
-      if (newlyBilled || newlySettledFromBilled || newlySettledByTimestamp) {
+        incSettledTs > 0 &&
+        incSettledTs > currLatestActivityTs;
+      if (newlyBilled || newlySettledByTimestamp) {
         const cutoff = incT.lastSettledAt || Date.now();
         for (let idx = 0; idx < (serverState.tickets || []).length; idx++) {
           const tk = serverState.tickets[idx];
@@ -9127,6 +9213,11 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             .filter(t => t && t.id)
             .map(t => [t.id, t])
         );
+        const incomingTableByIdForTickets = new Map(
+          (Array.isArray(partialState.tables) ? partialState.tables : [])
+            .filter(t => t && t.id)
+            .map(t => [t.id, t])
+        );
         // Incoming keys first so newest KOTs appear at the top of KDS/POS
         const allTicketIds = new Set([...incomingMap.keys(), ...existingMap.keys()]);
         const mergedList = [];
@@ -9143,7 +9234,18 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             if (settledIdSet.has(tId) && !inc.isSettled) continue;
             if (!inc.isSettled && inc.tableId && !autoSettledTicketIds.has(tId)) {
               const currTbl = currentTablesById.get(inc.tableId);
-              if (currTbl && currTbl.lastSettledAt && Number(inc.timePlaced || 0) > 0 && Number(inc.timePlaced) <= Number(currTbl.lastSettledAt)) {
+              const incTbl = incomingTableByIdForTickets.get(inc.tableId);
+              const incTableNewlyOccupied =
+                incTbl &&
+                (incTbl.status === 'occupied' || incTbl.status === 'billed') &&
+                Number(incTbl.occupiedSince || 0) > Number(currTbl?.lastSettledAt || 0);
+              if (
+                currTbl &&
+                currTbl.lastSettledAt &&
+                Number(inc.timePlaced || 0) > 0 &&
+                Number(inc.timePlaced) <= Number(currTbl.lastSettledAt) &&
+                !incTableNewlyOccupied
+              ) {
                 recordSettledTicketId(tId);
                 continue;
               }
@@ -9457,9 +9559,9 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
                 !isCancelOrMinusTicket(tk)
             );
             const currReleaseTs = Math.max(Number(curr.lastSettledAt) || 0, Number(curr.lastMovedAt) || 0);
-            const currOccTs = Math.max(Number(curr.occupiedSince) || 0, Number(curr.ordersUpdatedAt) || 0);
+            const currOccTs = Math.max(Number(curr.occupiedSince) || 0, Number(curr.ordersUpdatedAt) || 0, Number(curr.billedAt) || 0);
             const incReleaseTs = Math.max(Number(inc.lastSettledAt) || 0, Number(inc.lastMovedAt) || 0);
-            const incOccTs = Math.max(Number(inc.occupiedSince) || 0, Number(inc.ordersUpdatedAt) || 0);
+            const incOccTs = Math.max(Number(inc.occupiedSince) || 0, Number(inc.ordersUpdatedAt) || 0, Number(inc.billedAt) || 0);
             const currOrdersAt = Number(curr.ordersUpdatedAt) || 0;
             const incOrdersAt = Number(inc.ordersUpdatedAt) || 0;
 
@@ -9474,19 +9576,20 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
               (inc.status === 'occupied' || inc.status === 'billed') &&
               tableTickets.length === 0 &&
               currReleaseTs > 0 &&
-              (incOccTs === 0 || incOccTs <= currReleaseTs + 500)
+              (incOccTs === 0 || incOccTs <= currReleaseTs)
             ) {
               return curr;
             }
 
             // Case 2: Table is occupied/billed/reserved and other PC explicitly releases it to 'available'
+            // Require strictly newer release timestamp than ALL occupied/billed/previous-release activity so untouched devices never wipe live tables
             if (
               (curr.status === 'occupied' || curr.status === 'billed' || curr.status === 'reserved') &&
               inc.status === 'available' &&
               tableTickets.length === 0 &&
               !hasPendingWaiterPay &&
               incReleaseTs > 0 &&
-              incReleaseTs >= currOccTs
+              incReleaseTs > Math.max(currReleaseTs, currOccTs)
             ) {
               return {
                 ...curr,
@@ -9509,7 +9612,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             if (
               (curr.status === 'occupied' || curr.status === 'billed') &&
               inc.status === 'available' &&
-              (tableTickets.length > 0 || incReleaseTs === 0 || incReleaseTs < currOccTs)
+              (tableTickets.length > 0 || incReleaseTs === 0 || incReleaseTs <= Math.max(currReleaseTs, currOccTs))
             ) {
               return curr;
             }
@@ -9582,7 +9685,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
             if (
               curr.status === 'available' &&
               inc.status !== 'available' &&
-              (incOccTs > currReleaseTs + 500 || tableTickets.length > 0 || (inc.status === 'reserved' && inc.reservationId))
+              (incOccTs > currReleaseTs || tableTickets.length > 0 || (inc.status === 'reserved' && inc.reservationId))
             ) {
               return {
                 ...curr,
@@ -10080,6 +10183,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
         }
         return t;
       });
+      pruneStalePendingSeqs();
     }
 
     const nextFingerprint = computeStateFingerprint(serverState);

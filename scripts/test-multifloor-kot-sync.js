@@ -379,7 +379,109 @@ async function runTests() {
     assert.strictEqual(afterSettle.invoiceSequenceState.lastSeq, 5, 'invoiceSequenceState updated to 5');
     assert.strictEqual(afterSettle.invoiceSequenceState.pendingByTableId['t-roof-2'], undefined, 'pendingByTableId cleared on settlement');
 
-    console.log('ALL 11 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL & ATOMIC SETTLEMENT TESTS PASSED!');
+    // 12. Untouched client sending stale 'available' table (e.g. from morning or KDS) must NOT wipe active/billed tables or active KOTs
+    // (Also verifies tablet with slightly slower timePlaced clock succeeds when occupiedSince > settleTs!)
+    const orderNow = settleTs + 1000;
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'WAITER_TABLET_G05',
+        packetId: 'pkt_occupy_g05_again',
+        state: {
+          tickets: [{
+            id: 'KOT-2005',
+            tableId: 't-ground-5',
+            tableName: 'G-05',
+            server: 'Asim',
+            timePlaced: settleTs - 100,
+            status: 'pending',
+            items: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1, station: 'main', completed: false }],
+          }],
+          tables: [{
+            id: 't-ground-5',
+            name: 'G-05',
+            floor: 'Ground Floor',
+            zone: 'Ground Floor',
+            seats: 4,
+            status: 'occupied',
+            occupiedSince: orderNow,
+            ordersUpdatedAt: orderNow,
+            billTotal: 1899,
+            orders: [{ id: 'm1', name: 'Karahi', price: 1899, qty: 1 }],
+          }],
+        },
+      }),
+    });
+    // Juice Bar KDS or Admin PC sends an unrelated update carrying G-05 as 'available' with morning's old lastSettledAt
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'KDS_JUICE_UNTOUCHED',
+        packetId: 'pkt_kds_stale_table_echo',
+        state: {
+          tables: [{
+            id: 't-ground-5',
+            name: 'G-05',
+            floor: 'Ground Floor',
+            zone: 'Ground Floor',
+            seats: 4,
+            status: 'available',
+            lastSettledAt: settleTs, // old pre-order release timestamp!
+          }],
+        },
+      }),
+    });
+    const afterStaleEcho = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const g05Protected = afterStaleEcho.tables.find((t) => t.id === 't-ground-5');
+    const kot2005Protected = afterStaleEcho.tickets.find((t) => t.id === 'KOT-2005');
+    assert.strictEqual(g05Protected.status, 'occupied', 'Stale KDS echo with old lastSettledAt must NOT flip occupied G-05 to available');
+    assert.strictEqual(Boolean(kot2005Protected.isSettled), false, 'Stale KDS echo must NOT retire active KOT-2005');
+
+    // 13. +13h future skewed clock timestamp on a client must be clamped to server time and cannot poison table
+    const futureSkewTs = Date.now() + 13 * 3600 * 1000;
+    await fetch(`${baseUrl}/api/sync`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        senderId: 'ADMIN_SKEWED_CLOCK',
+        packetId: 'pkt_future_clock_skew',
+        state: {
+          tables: [{
+            id: 't-ground-5',
+            name: 'G-05',
+            floor: 'Ground Floor',
+            zone: 'Ground Floor',
+            seats: 4,
+            status: 'occupied',
+            occupiedSince: futureSkewTs,
+            lastSettledAt: futureSkewTs,
+          }],
+        },
+      }),
+    });
+    const afterSkew = await (await fetch(`${baseUrl}/api/sync`)).json();
+    const g05Skew = afterSkew.tables.find((t) => t.id === 't-ground-5');
+    assert.ok(Number(g05Skew.lastSettledAt || 0) <= Date.now() + 20000, 'Future +13h skewed lastSettledAt must be clamped to server clock');
+
+    // 14. /api/pos/mark-billed rejects unknown/deleted tableId cleanly without polluting pendingByTableId
+    const ghostRes = await fetch(`${baseUrl}/api/pos/mark-billed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tableId: 'tGF04',
+        invoiceId: 'TMP-99',
+        seq: 99,
+        orders: [{ id: 'm1', name: 'Test', price: 100, qty: 1 }],
+        billTotal: 100,
+      }),
+    });
+    assert.strictEqual(ghostRes.status, 404, 'Deleted/ghost tableId must return 404 on /api/pos/mark-billed');
+    const afterGhost = await (await fetch(`${baseUrl}/api/sync`)).json();
+    assert.strictEqual(afterGhost.invoiceSequenceState?.pendingByTableId?.tGF04, undefined, 'Ghost table must NOT be saved into pendingByTableId');
+
+    console.log('ALL 14 MULTI-FLOOR SYNC, KOT/SOT, PENDING BILL, CLOCK-SKEW & STABILITY TESTS PASSED!');
   } finally {
     try { if (wsKds) wsKds.close(); } catch (_) { }
     try { srvProc.kill('SIGKILL'); } catch (_) { }

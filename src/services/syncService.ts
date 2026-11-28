@@ -108,6 +108,17 @@ let activePutAbortController: AbortController | null = null;
 let currentBroadcastSeq: number = 0;
 let lastLocalBroadcastTimestamp: number = 0;
 let lastProcessedRemoteTimestamp: number = 0;
+let serverClockOffsetMs: number = 0;
+
+export function updateServerClockOffset(serverTime?: number) {
+  if (typeof serverTime === 'number' && Number.isFinite(serverTime) && serverTime > 1700000000000) {
+    serverClockOffsetMs = serverTime - Date.now();
+  }
+}
+
+export function getSyncedNow(): number {
+  return Date.now() + serverClockOffsetMs;
+}
 let lastProcessedPacketId: string = '';
 const processedPacketIds = new Set<string>();
 let sseConnection: any = null;
@@ -154,10 +165,11 @@ function hasSeenPacket(packetId?: string): boolean {
 function applyRemoteStateSafely(state: any, packetId?: string, timestamp?: number) {
   if (!state || typeof state !== 'object') return;
   rememberPacketId(packetId);
+  const syncedNow = getSyncedNow();
   if (typeof timestamp === 'number' && timestamp > lastProcessedRemoteTimestamp) {
-    lastProcessedRemoteTimestamp = timestamp;
+    lastProcessedRemoteTimestamp = Math.min(timestamp, syncedNow + 15000);
   } else if (!lastProcessedRemoteTimestamp) {
-    lastProcessedRemoteTimestamp = Date.now();
+    lastProcessedRemoteTimestamp = syncedNow;
   }
   hasReceivedInitialSync = true;
   hasHydratedRemoteOps = true;
@@ -950,6 +962,7 @@ function openVerifiedWebSocket(wsUrl: string) {
         const data = JSON.parse(event.data as string);
 
         if (data.type === 'PONG') {
+          updateServerClockOffset(data.serverTime);
           lastWsReceivedAt = Date.now();
           if (data.lastUpdated && Number(data.lastUpdated) !== lastServerKnownUpdated) {
             pollLocalLanFallback(true).catch(() => { });
@@ -957,6 +970,7 @@ function openVerifiedWebSocket(wsUrl: string) {
           return;
         }
         if (data.type === 'SYNC_ACK') {
+          updateServerClockOffset(data.serverTime);
           lastWsReceivedAt = Date.now();
           lastSyncedAt = Date.now();
           if (!unackedPacketId || data.packetId === unackedPacketId) {
@@ -966,6 +980,7 @@ function openVerifiedWebSocket(wsUrl: string) {
           notifyListeners();
           return;
         }
+        updateServerClockOffset(data.serverTime);
         lastWsReceivedAt = Date.now();
 
         // Ignore messages sent by this same device
@@ -1119,7 +1134,7 @@ function broadcastLocalState(force = false) {
   const kitchenState = getKitchenSyncState();
   const roleState = useRoleStore.getState();
   const shiftState = useShiftStore.getState();
-  const now = Math.max(Date.now(), lastProcessedRemoteTimestamp + 1, lastLocalBroadcastTimestamp + 1);
+  const now = Math.max(getSyncedNow(), lastProcessedRemoteTimestamp + 1, lastLocalBroadcastTimestamp + 1);
   lastLocalBroadcastTimestamp = now;
   const broadcastSeq = ++currentBroadcastSeq;
   const packetId = `${DEVICE_ID}_${now}_${Math.random().toString(36).substring(2, 7)}`;
