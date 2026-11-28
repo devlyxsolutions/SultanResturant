@@ -8740,7 +8740,7 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   if (partialState.operationalDayStartAt !== undefined) {
     const incDayStart = Number(partialState.operationalDayStartAt || 0);
     const curDayStart = Number(serverState.operationalDayStartAt || 0);
-    if (incDayStart > curDayStart) {
+    if (curDayStart === 0 ? incDayStart > 0 : incDayStart > curDayStart + 600000) {
       serverState.operationalDayStartAt = incDayStart;
       serverState.invoiceSequenceState = { dayStartAt: incDayStart, lastSeq: 0, pendingByTableId: {} };
       modified = true;
@@ -8751,16 +8751,16 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
     const curSeq = serverState.invoiceSequenceState || { dayStartAt: 0, lastSeq: 0, pendingByTableId: {} };
     const incDay = Number(incSeq.dayStartAt || 0);
     const curDay = Number(curSeq.dayStartAt || 0);
-    if (incDay > curDay) {
+    if (incDay > curDay + 600000) {
       serverState.invoiceSequenceState = {
         dayStartAt: incDay,
         lastSeq: Number(incSeq.lastSeq || 0),
         pendingByTableId: { ...(incSeq.pendingByTableId || {}) },
       };
       modified = true;
-    } else if (incDay === curDay) {
+    } else if (incDay === curDay || (curDay > 0 && Math.abs(incDay - curDay) <= 600000)) {
       serverState.invoiceSequenceState = {
-        dayStartAt: curDay,
+        dayStartAt: curDay || incDay,
         lastSeq: Math.max(Number(curSeq.lastSeq || 0), Number(incSeq.lastSeq || 0)),
         pendingByTableId: { ...(curSeq.pendingByTableId || {}), ...(incSeq.pendingByTableId || {}) },
       };

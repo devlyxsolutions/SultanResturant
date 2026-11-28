@@ -4948,7 +4948,7 @@ export const useRestaurantStore = create<RestaurantState>()(
             rawTables = deduplicatedRemoteTables;
           }
           const remoteDayStart = Number((remoteState as any).operationalDayStartAt || 0);
-          const nextOperationalDayStart = Math.max(state.operationalDayStartAt || 0, remoteDayStart);
+          const nextOperationalDayStart = remoteDayStart > 0 ? remoteDayStart : (state.operationalDayStartAt || 0);
           if (remoteDayStart > (state.operationalDayStartAt || 0)) {
             localTableMutationAt.clear();
           }
