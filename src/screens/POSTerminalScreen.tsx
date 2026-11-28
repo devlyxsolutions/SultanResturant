@@ -305,10 +305,12 @@ export default function POSTerminalScreen({
     [tickets]
   );
   const invoices = useRestaurantStore((state) => state.invoices) || [];
+  const staff = useRestaurantStore((state) => state.staff) || [];
 
   const systemSettings = useSettingsStore((s) => s.settings);
   const shifts = useShiftStore((state) => state.shifts);
   const activeShiftId = useShiftStore((state) => state.activeShiftId);
+  const openShift = useShiftStore((state) => state.openShift);
   const activeShift = shifts.find((s) => s.id === activeShiftId && s.status === 'open');
   const soldOutIds = useOpsStore((state) => state.unavailableItemIds);
 
@@ -443,6 +445,87 @@ export default function POSTerminalScreen({
   const [loadedTicketId, setLoadedTicketId] = useState<string | null>(null);
   const [shortcutsModalVisible, setShortcutsModalVisible] = useState(false);
   const [recentInvoicesModalVisible, setRecentInvoicesModalVisible] = useState(false);
+  const [shiftStartModalVisible, setShiftStartModalVisible] = useState(false);
+  const [shiftOpeningFloat, setShiftOpeningFloat] = useState('5000');
+  const [shiftTypeChoice, setShiftTypeChoice] = useState<'Morning' | 'Evening' | 'Night'>(() => {
+    const h = new Date().getHours();
+    if (h >= 6 && h < 14) return 'Morning';
+    if (h >= 14 && h < 22) return 'Evening';
+    return 'Night';
+  });
+  const [shiftCashierId, setShiftCashierId] = useState<string>(user?.staffId || '');
+  const [shiftCashierName, setShiftCashierName] = useState<string>(user?.name || 'Cashier');
+  const [isStartingShift, setIsStartingShift] = useState(false);
+  const hasAutoPromptedShiftRef = useRef(false);
+
+  // Auto-prompt Cashier once on POS boot when no shift is open yet so they set Opening Drawer Balance & start KOT #1 / SOT #1
+  useEffect(() => {
+    if (hasAutoPromptedShiftRef.current) return;
+    if (!isCashierOrManagement || isOrderTakerRole) return;
+    if (activeShift) {
+      hasAutoPromptedShiftRef.current = true;
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (hasAutoPromptedShiftRef.current) return;
+      const latestShifts = useShiftStore.getState().shifts || [];
+      const latestActiveId = useShiftStore.getState().activeShiftId;
+      const currentlyOpen =
+        latestShifts.find((s) => s.id === latestActiveId && s.status === 'open') ||
+        latestShifts.find((s) => s.status === 'open');
+      if (currentlyOpen) {
+        hasAutoPromptedShiftRef.current = true;
+        return;
+      }
+      hasAutoPromptedShiftRef.current = true;
+      if (user?.staffId) setShiftCashierId(user.staffId);
+      if (user?.name) setShiftCashierName(user.name);
+      setShiftStartModalVisible(true);
+    }, 850);
+    return () => clearTimeout(timer);
+  }, [activeShift, isCashierOrManagement, isOrderTakerRole, user?.staffId, user?.name]);
+
+  const handleConfirmPosStartShift = async () => {
+    const floatNum = parseFloat(shiftOpeningFloat);
+    if (isNaN(floatNum) || floatNum < 0) {
+      const msg = 'Please enter a valid Opening Drawer Balance (0 or more).';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Invalid Drawer Balance', msg);
+      return;
+    }
+    setIsStartingShift(true);
+    try {
+      const resolvedId = shiftCashierId || user?.staffId || staff[0]?.id || 'st-cashier';
+      const resolvedName = shiftCashierName || user?.name || staff[0]?.name || 'Cashier';
+      const created = openShift({
+        shiftType: shiftTypeChoice,
+        registerId: 'Counter-01 (Main POS)',
+        cashierId: resolvedId,
+        cashierName: resolvedName,
+        openedBy: user?.name ? `${user.name} (${user.role || 'Cashier'})` : resolvedName,
+        openingFloat: floatNum,
+      });
+      broadcastImmediately();
+
+      try {
+        const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+        if (base) {
+          await fetch(`${base}/api/shift/reset-kot-sequence`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ shiftId: created.id, shiftStartedAt: created.openedAt }),
+          }).catch(() => { });
+        }
+      } catch { }
+
+      setShiftStartModalVisible(false);
+      showKdsToast(
+        `Shift Started (${resolvedName}) • Opening Drawer: Rs. ${floatNum.toLocaleString()} • KOT #1 / SOT #1 Live`
+      );
+    } finally {
+      setIsStartingShift(false);
+    }
+  };
 
   const searchInputRef = useRef<any>(null);
   const prefilledRef = useRef<string | null>(null);
@@ -1573,9 +1656,7 @@ export default function POSTerminalScreen({
     if (!requirePosPerm('posCanSettleBill', 'settle bills and collect payment')) return;
     if (cart.length === 0) return;
     if (systemSettings.requireActiveShiftForPos && !activeShift) {
-      const msg = 'An open cash register shift is required before POS billing. Please open a shift first.';
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Active Shift Required', msg);
+      setShiftStartModalVisible(true);
       return;
     }
     if (orderType === 'dine-in' && systemSettings.posRequireTableForDineIn !== false && !selectedTableId) {
@@ -2143,12 +2224,43 @@ export default function POSTerminalScreen({
           )}
 
           {/* Shift Status */}
-          {!isMobile && (
-            <TouchableOpacity style={styles.topShiftBtn} onPress={() => router.push(shiftRoute as any)}>
-              <View style={styles.shiftGreenDot} />
-              <Text style={styles.topShiftText}>{activeShift ? 'Shift Open' : 'Shift'}</Text>
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.topShiftBtn,
+              !activeShift && {
+                backgroundColor: 'rgba(245, 158, 11, 0.2)',
+                borderColor: 'rgba(251, 191, 36, 0.65)',
+              },
+            ]}
+            onPress={() => {
+              if (activeShift) {
+                router.push(shiftRoute as any);
+              } else {
+                if (user?.staffId) setShiftCashierId(user.staffId);
+                if (user?.name) setShiftCashierName(user.name);
+                setShiftStartModalVisible(true);
+              }
+            }}
+          >
+            <View
+              style={[
+                styles.shiftGreenDot,
+                !activeShift && { backgroundColor: '#FBBF24' },
+              ]}
+            />
+            <Text
+              style={[
+                styles.topShiftText,
+                !activeShift && { color: '#FDE68A' },
+              ]}
+            >
+              {activeShift
+                ? isMobile
+                  ? 'Shift Open'
+                  : `Shift Open (Rs. ${(activeShift.openingFloat || 0).toLocaleString()})`
+                : 'Open Shift'}
+            </Text>
+          </TouchableOpacity>
 
           {!isMobile && !isTablet && (
             <TouchableOpacity style={styles.topActionBtn} onPress={() => setShortcutsModalVisible(true)}>
@@ -4637,6 +4749,170 @@ export default function POSTerminalScreen({
           else Alert.alert('Table Moved', msg);
         }}
       />
+
+      {/* Quick Open Cash Drawer & Start Shift Modal */}
+      <Modal
+        visible={shiftStartModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShiftStartModalVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalCard, { maxWidth: 480, padding: 20, gap: 14 }]}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalTitle}>Start Shift & Opening Drawer • شفٹ شروع کریں</Text>
+                <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                  Cash drawer opening balance darj karein — Kitchen KOT #1 aur Juice SOT #1 start ho jayenge.
+                </Text>
+              </View>
+              <TouchableOpacity
+                style={styles.modalCloseBtn}
+                onPress={() => setShiftStartModalVisible(false)}
+              >
+                <Ionicons name="close" size={18} color="#475569" />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>
+                Shift Timing / شفٹ کا وقت
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {(['Morning', 'Evening', 'Night'] as const).map((t) => {
+                  const sel = shiftTypeChoice === t;
+                  return (
+                    <TouchableOpacity
+                      key={t}
+                      onPress={() => setShiftTypeChoice(t)}
+                      style={{
+                        flex: 1,
+                        paddingVertical: 9,
+                        borderRadius: 10,
+                        alignItems: 'center',
+                        backgroundColor: sel ? '#52141C' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: sel ? '#D4AF37' : '#CBD5E1',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12.5, fontWeight: '800', color: sel ? '#F3D179' : '#334155' }}>
+                        {t}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ gap: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>
+                Cashier on Duty / کیشیئر
+              </Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
+                {staff
+                  .filter((st) => {
+                    const r = (st.role || '').toLowerCase();
+                    return r.includes('cashier') || r.includes('manager') || r.includes('admin') || st.id === user?.staffId;
+                  })
+                  .map((st) => {
+                    const sel = (shiftCashierId || user?.staffId) === st.id;
+                    return (
+                      <TouchableOpacity
+                        key={st.id}
+                        onPress={() => {
+                          setShiftCashierId(st.id);
+                          setShiftCashierName(st.name);
+                        }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: 20,
+                          backgroundColor: sel ? '#52141C' : '#F8FAFC',
+                          borderWidth: 1,
+                          borderColor: sel ? '#D4AF37' : '#CBD5E1',
+                        }}
+                      >
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: sel ? '#FFFFFF' : '#334155' }}>
+                          {st.name} ({st.role})
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+              </ScrollView>
+            </View>
+
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: '#334155' }}>
+                Opening Drawer Balance (دراز میں ابتدائی رقم)
+              </Text>
+              <View
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  backgroundColor: '#F8FAFC',
+                  borderWidth: 1.5,
+                  borderColor: '#CBD5E1',
+                  borderRadius: 12,
+                  paddingHorizontal: 14,
+                  height: 48,
+                  gap: 8,
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '900', color: '#52141C' }}>Rs.</Text>
+                <TextInput
+                  value={shiftOpeningFloat}
+                  onChangeText={(txt) => setShiftOpeningFloat(txt.replace(/[^0-9.]/g, ''))}
+                  keyboardType="numeric"
+                  placeholder="5000"
+                  placeholderTextColor="#94A3B8"
+                  style={{ flex: 1, fontSize: 20, fontWeight: '900', color: '#0F172A' }}
+                />
+              </View>
+              <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                {['0', '2000', '5000', '10000', '15000'].map((amt) => {
+                  const sel = shiftOpeningFloat === amt;
+                  return (
+                    <TouchableOpacity
+                      key={amt}
+                      onPress={() => setShiftOpeningFloat(amt)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: sel ? '#FEF3C7' : '#F1F5F9',
+                        borderWidth: 1,
+                        borderColor: sel ? '#D97706' : '#CBD5E1',
+                      }}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '800', color: sel ? '#92400E' : '#475569' }}>
+                        Rs. {parseInt(amt, 10).toLocaleString()}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+              <TouchableOpacity
+                style={[styles.modalPrimaryBtn, { flex: 1, backgroundColor: '#E2E8F0' }]}
+                onPress={() => setShiftStartModalVisible(false)}
+              >
+                <Text style={[styles.modalPrimaryBtnText, { color: '#334155' }]}>Later</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                disabled={isStartingShift}
+                style={[styles.modalPrimaryBtn, { flex: 2, backgroundColor: '#15803D' }]}
+                onPress={handleConfirmPosStartShift}
+              >
+                <Text style={styles.modalPrimaryBtnText}>
+                  {isStartingShift ? 'Starting...' : 'Start Shift & KOT #1  •  شفٹ شروع کریں'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }

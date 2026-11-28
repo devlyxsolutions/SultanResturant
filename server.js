@@ -7390,6 +7390,146 @@ async function handleRequest(req, res) {
     return;
   }
 
+  if (url.pathname === '/api/admin/start-new-day' && req.method === 'POST') {
+    try {
+      const body = await readRequestBody(req).catch(() => ({}));
+      const now = Date.now();
+      const clearInvoicesAfterTs = Number(body?.clearInvoicesAfterTs || 0);
+      const clearTicketsAfterTs = Number(body?.clearTicketsAfterTs || 0);
+      const closeOpenShifts = body?.closeOpenShifts !== false;
+
+      try {
+        if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
+        fs.writeFileSync(path.join(BACKUP_DIR, `pre-new-day-${now}.json`), JSON.stringify(serverState, null, 2));
+      } catch { }
+
+      const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
+      const removedTicketIds = [];
+      const keptHistoryTickets = [];
+      for (const tk of existingTickets) {
+        if (!tk || !tk.id) continue;
+        const tp = Number(tk.timePlaced || 0);
+        const isTest = String(tk.id).toUpperCase().startsWith('TEST-') || String(tk.tableName || '').toUpperCase().includes('PRINTER TEST');
+        const isAfterCutoff = clearTicketsAfterTs > 0 && tp >= clearTicketsAfterTs;
+        const isUnservedOrActive = tk.status !== 'served';
+        if (isTest || isAfterCutoff || isUnservedOrActive) {
+          removedTicketIds.push(tk.id);
+        } else {
+          keptHistoryTickets.push(archiveServerTicketForSettlement(tk, tk.settledAt || tp || now));
+        }
+      }
+
+      serverState.deletedTicketIds = Array.from(
+        new Set([...(serverState.deletedTicketIds || []), 'KOT-1042', ...removedTicketIds])
+      ).slice(-500);
+      serverState.settledTicketIds = Array.from(
+        new Set([...(serverState.settledTicketIds || []), ...removedTicketIds])
+      ).slice(-600);
+      serverState.tickets = capServerTicketsWithHistory(keptHistoryTickets);
+
+      let removedInvoicesCount = 0;
+      if (clearInvoicesAfterTs > 0 && Array.isArray(serverState.invoices)) {
+        const removedInvIds = [];
+        serverState.invoices = serverState.invoices.filter((inv) => {
+          if (!inv || !inv.id) return false;
+          const invTs = Number(inv.timeSettled || inv.timePlaced || 0);
+          if (invTs >= clearInvoicesAfterTs) {
+            removedInvIds.push(inv.id);
+            removedInvoicesCount++;
+            return false;
+          }
+          return true;
+        });
+        if (removedInvIds.length > 0) {
+          serverState.deletedRecordIds = Array.from(
+            new Set([...(serverState.deletedRecordIds || []), ...removedInvIds])
+          ).slice(-800);
+        }
+      }
+
+      serverState.tables = (serverState.tables || []).map((t) => ({
+        ...t,
+        status: 'available',
+        billTotal: 0,
+        orders: [],
+        server: undefined,
+        isPaid: false,
+        lastInvoiceId: undefined,
+        occupiedSince: undefined,
+        ordersUpdatedAt: undefined,
+        lastMovedAt: undefined,
+        lastMovedFrom: undefined,
+        mergedInto: undefined,
+        reservationId: undefined,
+        waiterPaymentCollection: null,
+        lastSettledAt: now,
+      }));
+
+      if (closeOpenShifts && Array.isArray(serverState.shifts)) {
+        serverState.shifts = serverState.shifts.map((s) =>
+          s && s.status === 'open' ? { ...s, status: 'closed', closedAt: s.closedAt || now } : s
+        );
+        serverState.activeShiftId = null;
+      }
+
+      serverState.lastBillPaidAlert = null;
+      serverState.lastFoodReadyAlert = null;
+      serverState.pendingFloorOrderAlert = null;
+      serverState.lastTableMoveAlert = null;
+      serverState.lastOrderCancelledAlert = null;
+
+      const dayShiftId = getLocalPktDayKey(now);
+      serverState.kotSequenceState = {
+        shiftId: dayShiftId,
+        shiftStartedAt: now,
+        kitchenSeq: 0,
+        juiceSeq: 0,
+        ledger: { main: [], juice: [] },
+      };
+
+      serverState.lastUpdated = now;
+      lastStateFingerprint = computeStateFingerprint(serverState);
+      persistState();
+      appendSystemLogs(
+        {
+          actorId: 'admin',
+          actorName: body?.actorName || 'New Day Start',
+          actorRole: 'Admin',
+          page: '/pos',
+          module: 'POS_ORDERS',
+          action: 'START_NEW_DAY_RESET',
+          actionType: 'UPDATE',
+          severity: 'info',
+          entityType: 'POS',
+          summary: `Started fresh day: released all tables, cleared ${removedTicketIds.length} tickets & ${removedInvoicesCount} pre-day invoices, reset KOT #1 / SOT #1`,
+          details: { removedTickets: removedTicketIds.length, removedInvoices: removedInvoicesCount, shiftId: dayShiftId },
+        },
+        { ip: clientIp }
+      );
+      broadcastToClients({
+        type: 'SERVER_BROADCAST',
+        state: serverState,
+        senderId: 'NEW_DAY_RESET',
+        timestamp: now,
+      });
+      pushToFirestoreCloud();
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(
+        JSON.stringify({
+          success: true,
+          timestamp: now,
+          removedTickets: removedTicketIds.length,
+          removedInvoices: removedInvoicesCount,
+          kotSequenceState: serverState.kotSequenceState,
+        })
+      );
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: e.message }));
+    }
+    return;
+  }
+
   if (url.pathname === '/api/sync' && req.method === 'GET') {
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
     res.end(JSON.stringify(serverState));

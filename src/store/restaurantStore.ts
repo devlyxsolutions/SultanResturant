@@ -4815,9 +4815,12 @@ export const useRestaurantStore = create<RestaurantState>()(
             ...(mergedTickets ? { tickets: mergedTickets } : {}),
             ...(remoteState.invoices ? {
               invoices: (() => {
-                const remoteList = remoteState.invoices || [];
+                const deletedRecSet = new Set<string>(
+                  Array.isArray((remoteState as any).deletedRecordIds) ? (remoteState as any).deletedRecordIds : []
+                );
+                const remoteList = (remoteState.invoices || []).filter((i) => i && i.id && !deletedRecSet.has(i.id));
                 const remoteMap = new Map(remoteList.map(i => [i.id, i]));
-                const localUnsynced = state.invoices.filter(i => !remoteMap.has(i.id));
+                const localUnsynced = state.invoices.filter(i => i && i.id && !remoteMap.has(i.id) && !deletedRecSet.has(i.id));
                 return [...localUnsynced, ...remoteList];
               })()
             } : {}),
