@@ -1,5 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Alert,
@@ -47,6 +47,8 @@ function getAutoShiftType(): ShiftType {
 
 export default function ShiftManagementScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ action?: string }>();
+  const isNewDayHighlight = params?.action === 'newday';
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
 
@@ -54,7 +56,10 @@ export default function ShiftManagementScreen() {
   const user = useAuthStore((s) => s.user);
   const staff = useRestaurantStore((s) => s.staff) || [];
   const invoices = useRestaurantStore((s) => s.invoices) || [];
+  const operationalDayStartAt = useRestaurantStore((s) => s.operationalDayStartAt) || 0;
+  const startNewDayReset = useRestaurantStore((s) => s.startNewDayReset);
   const expenses = useOpsStore((s) => s.expenses) || [];
+  const [isStartingNewDay, setIsStartingNewDay] = useState(false);
 
   const shifts = useShiftStore((s) => s.shifts) || [];
   const activeShiftId = useShiftStore((s) => s.activeShiftId);
@@ -207,6 +212,65 @@ export default function ShiftManagementScreen() {
       'Shift Started! • شفٹ شروع ہو گئی',
       `Shift ${created.id} is now LIVE on ${created.registerId}.\nKitchen KOT #1 & Juice Bar SOT #1 series started.`
     );
+  };
+
+  const executeNewDayStart = async () => {
+    setIsStartingNewDay(true);
+    try {
+      const now = Date.now();
+      let serverTimestamp = now;
+      try {
+        const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+        if (base) {
+          const res = await fetch(`${base}/api/admin/start-new-day`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              preserveAllInvoices: true,
+              closeOpenShifts: true,
+              actorName: user?.name ? `${user.name} (${user.role || 'Cashier'})` : 'Cashier New Day',
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json().catch(() => null);
+            if (data?.timestamp) serverTimestamp = Number(data.timestamp);
+          }
+        }
+      } catch { }
+
+      // Close any open shift locally cleanly & reset operational day counters/tables while keeping all invoices saved
+      useShiftStore.setState((s) => ({
+        shifts: (s.shifts || []).map((sh) =>
+          sh && sh.status === 'open' ? { ...sh, status: 'closed' as const, closedAt: sh.closedAt || serverTimestamp } : sh
+        ),
+        activeShiftId: null,
+      }));
+      startNewDayReset(serverTimestamp);
+      broadcastImmediately();
+      setActiveTab('active');
+
+      const doneMsg =
+        'New Day Started! • نیا دن شروع ہو گیا\n\n• All settled invoices & sales history safely saved\n• All tables marked Available (0 occupied)\n• Today Revenue & Orders reset to Rs. 0\n• Kitchen KOT #1 & Juice Bar SOT #1 ready\n\nAb Opening Drawer Balance darj kar ke Shift Start karein.';
+      if (Platform.OS === 'web') window.alert(doneMsg);
+      else Alert.alert('New Day Started • نیا دن شروع', doneMsg);
+    } finally {
+      setIsStartingNewDay(false);
+    }
+  };
+
+  const handleStartNewDayPress = () => {
+    const confirmMsg =
+      'Start New Day & Save All Data? • نیا دن شروع کریں؟\n\n• Ab tak ki tamam invoices aur sale history mehfooz save rahegi.\n• Tamam occupied tables khali (Available) ho jayengi (PC aur Order Taker APK dono par).\n• Aaj ka Dashboard Revenue aur Orders 0 ho jayega aur KOT #1 / SOT #1 se naya din start hoga.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(confirmMsg)) {
+        void executeNewDayStart();
+      }
+      return;
+    }
+    Alert.alert('Start New Day • نیا دن شروع کریں', confirmMsg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Save & Start New Day', style: 'destructive', onPress: () => void executeNewDayStart() },
+    ]);
   };
 
   const handleCloseShift = () => {
@@ -435,6 +499,71 @@ export default function ShiftManagementScreen() {
         {/* ======================================================== */}
         {activeTab === 'active' && (
           <>
+            {/* ---------------------------------------------------- */}
+            {/* NEW DAY START BAR (SAVE ALL INVOICES & RESET TABLES) */}
+            {/* ---------------------------------------------------- */}
+            <View
+              style={{
+                backgroundColor: isNewDayHighlight ? '#FFFBEB' : '#FFFFFF',
+                borderWidth: isNewDayHighlight ? 2 : 1.5,
+                borderColor: isNewDayHighlight ? '#D97706' : '#E2E8F0',
+                borderRadius: 16,
+                padding: 16,
+                marginBottom: 14,
+                flexDirection: isMobile ? 'column' : 'row',
+                alignItems: isMobile ? 'stretch' : 'center',
+                justifyContent: 'space-between',
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View
+                    style={{
+                      width: 34,
+                      height: 34,
+                      borderRadius: 10,
+                      backgroundColor: '#FEF3C7',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Ionicons name="sunny" size={18} color="#D97706" />
+                  </View>
+                  <Text style={{ fontSize: 15, fontWeight: '900', color: '#0F172A' }}>
+                    Start New Day  •  نیا دن شروع کریں
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 12, color: '#475569', lineHeight: 17 }}>
+                  Tamam invoices aur purana data mehfooz save kar ke sab tables khali (Available), aaj ki sale 0 aur KOT #1 / SOT #1 reset karein.
+                  {operationalDayStartAt > 0
+                    ? ` (Last Reset: ${new Date(operationalDayStartAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`
+                    : ''}
+                </Text>
+              </View>
+              <TouchableOpacity
+                disabled={isStartingNewDay}
+                onPress={handleStartNewDayPress}
+                activeOpacity={0.85}
+                style={{
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  backgroundColor: '#B45309',
+                  paddingHorizontal: 16,
+                  paddingVertical: 12,
+                  borderRadius: 12,
+                  opacity: isStartingNewDay ? 0.65 : 1,
+                }}
+              >
+                <Ionicons name="refresh-circle" size={18} color="#FFFFFF" />
+                <Text style={{ color: '#FFFFFF', fontSize: 13, fontWeight: '900' }}>
+                  {isStartingNewDay ? 'Resetting Day...' : 'Save Sales & Start New Day'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
             {/* ---------------------------------------------------- */}
             {/* CASE 1: NO SHIFT IS ACTIVE -> SIMPLE START CARD      */}
             {/* ---------------------------------------------------- */}

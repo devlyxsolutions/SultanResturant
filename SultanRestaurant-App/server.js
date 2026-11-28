@@ -622,6 +622,7 @@ const INITIAL_STATE = {
   tickets: [],
   onlineOrders: [],
   invoices: [],
+  operationalDayStartAt: 0,
   customers: [],
   serviceRequests: [],
   playlandTickets: [],
@@ -6330,9 +6331,9 @@ async function handleRequest(req, res) {
       const ua = String(req.headers['user-agent'] || '');
       const isAndroidClient = /android|okhttp|dalvik/i.test(ua);
       const clientWebVer = Number(url.searchParams.get('webVer') || '0');
-      const targetWebVer = 51;
-      // Keep apkVersion pinned at 44 for Android tablets; only prompt older unpatched desktop/web tabs (< webVer 51) to force-reload
-      const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : 44;
+      const targetWebVer = 52;
+      const targetApkVer = 45;
+      const reportedApkVersion = !isAndroidClient && clientWebVer < targetWebVer ? targetWebVer : targetApkVer;
 
       res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
       res.end(JSON.stringify({
@@ -7401,7 +7402,8 @@ async function handleRequest(req, res) {
     try {
       const body = await readRequestBody(req).catch(() => ({}));
       const now = Date.now();
-      const clearInvoicesAfterTs = Number(body?.clearInvoicesAfterTs || 0);
+      const preserveAllInvoices = body?.preserveAllInvoices !== false;
+      const clearInvoicesAfterTs = preserveAllInvoices ? 0 : Number(body?.clearInvoicesAfterTs || 0);
       const clearTicketsAfterTs = Number(body?.clearTicketsAfterTs || 0);
       const closeOpenShifts = body?.closeOpenShifts !== false;
 
@@ -7409,6 +7411,8 @@ async function handleRequest(req, res) {
         if (!fs.existsSync(BACKUP_DIR)) fs.mkdirSync(BACKUP_DIR, { recursive: true });
         fs.writeFileSync(path.join(BACKUP_DIR, `pre-new-day-${now}.json`), JSON.stringify(serverState, null, 2));
       } catch { }
+
+      serverState.operationalDayStartAt = Math.max(Number(serverState.operationalDayStartAt || 0), now);
 
       const existingTickets = Array.isArray(serverState.tickets) ? serverState.tickets : [];
       const removedTicketIds = [];
@@ -8726,7 +8730,15 @@ function applyStateUpdate(partialState, senderId, originWs = null, options = {})
   const prevFingerprint = lastStateFingerprint || computeStateFingerprint(serverState);
 
   // Merge state keys safely (shifts/activeShiftId BEFORE tickets so shift open resets KOT sequence first!)
-  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  const allowedKeys = ['deletedTicketIds', 'deletedTableIds', 'deletedFloorIds', 'floors', 'inventoryResetEpoch', 'deletedInventoryIds', 'deletedStorageZoneIds', 'deletedInventoryCategories', 'deletedRecordIds', 'operationalDayStartAt', 'shifts', 'activeShiftId', 'tableMoveLogs', 'lastTableMoveAlert', 'tickets', 'tables', 'onlineOrders', 'pendingFloorOrderAlert', 'appUsers', 'appUserLogs', 'invoices', 'menuItems', 'categories', 'regions', 'zones', 'staff', 'attendance', 'salaryPayments', 'feedbacks', 'salesReturns', 'customers', 'reservations', 'lastBillPaidAlert', 'lastFoodReadyAlert', 'cancelledOrderLogs', 'lastOrderCancelledAlert', 'serviceRequests', 'playlandTickets', 'playlandRides', 'inventory', 'storageZones', 'inventoryCategories', 'assetCategories', 'expenseCategories', 'stockMovements', 'chillerHandovers', 'expenses', 'feedback', 'unavailableItemIds', 'suppliers', 'purchaseOrders', 'supplierPayments', 'recipes', 'kitchenSessions', 'kitchenConsumption', 'kitchenManualUsage', 'kitchenCash', 'kitchenSettings', 'assets', 'damageRecords', 'roles', 'systemSettings', 'activeStaffSessions', 'revokedDeviceIds'];
+  if (partialState.operationalDayStartAt !== undefined) {
+    const incDayStart = Number(partialState.operationalDayStartAt || 0);
+    const curDayStart = Number(serverState.operationalDayStartAt || 0);
+    if (incDayStart > curDayStart) {
+      serverState.operationalDayStartAt = incDayStart;
+      modified = true;
+    }
+  }
   let modified = false;
 
   if (!Array.isArray(serverState.deletedTableIds)) serverState.deletedTableIds = [];
@@ -9980,6 +9992,7 @@ function pushToFirestoreCloud(forceImmediate = false) {
           floors: serverState.floors || [],
           tickets: serverState.tickets,
           deletedTicketIds: serverState.deletedTicketIds || [],
+          operationalDayStartAt: serverState.operationalDayStartAt || 0,
           invoices: serverState.invoices || [],
           customers: serverState.customers || [],
           reservations: serverState.reservations || [],

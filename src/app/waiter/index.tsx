@@ -29,10 +29,11 @@ import {
   SeatingZoneType,
   sortFloors,
 } from '../../constants/floors';
-import { broadcastImmediately } from '../../services/syncService';
+import { broadcastImmediately, getActiveServerHttpUrl } from '../../services/syncService';
 import { useAuthStore, useRestaurantStore, useRolePermissions } from '../../store';
 import { Table, Ticket } from '../../store/restaurantStore';
 import { useSettingsStore } from '../../store/settingsStore';
+import { useShiftStore } from '../../store/shiftStore';
 import {
   doesOrderBelongToUser,
   findActiveStaffMember,
@@ -91,6 +92,7 @@ export default function OrderTakerScreen() {
   const lastFoodReadyAlert = useRestaurantStore((state) => state.lastFoodReadyAlert);
   const foodReadyAlerts = useRestaurantStore((state) => state.foodReadyAlerts) || [];
   const clearFoodReadyAlert = useRestaurantStore((state) => state.clearFoodReadyAlert);
+  const operationalDayStartAt = useRestaurantStore((state) => state.operationalDayStartAt) || 0;
 
   const user = useAuthStore((state) => state.user);
   const systemSettings = useSettingsStore((state) => state.settings);
@@ -104,13 +106,16 @@ export default function OrderTakerScreen() {
   // Strict per-Order-Taker scoping: Order Takers ONLY see their own placed orders & KDS status alerts
   const isOrderTaker = useMemo(() => isOrderTakerUser(user, currentStaff), [user, currentStaff]);
 
-  // Scoped tickets: for Order Takers, strictly ONLY tickets they personally placed
+  // Scoped tickets: for Order Takers, strictly ONLY tickets they personally placed since current operational day start
   const scopedTickets = useMemo(() => {
-    if (!isOrderTaker) return tickets;
-    return tickets.filter((t) =>
+    const activeDayTickets = operationalDayStartAt > 0
+      ? tickets.filter((t) => !t || Number(t.timePlaced || 0) >= operationalDayStartAt)
+      : tickets;
+    if (!isOrderTaker) return activeDayTickets;
+    return activeDayTickets.filter((t) =>
       doesOrderBelongToUser({ server: t.server, serverId: t.serverId }, user, staff)
     );
-  }, [tickets, isOrderTaker, user, staff]);
+  }, [tickets, operationalDayStartAt, isOrderTaker, user, staff]);
 
   // 2. Resolve assigned floors
   const assignedZonesList: string[] =
@@ -153,6 +158,45 @@ export default function OrderTakerScreen() {
 
   // Persisted set of dismissed bill paid alert keys so tapping X permanently hides only that specific alert occurrence
   const [dismissedAlerts, setDismissedAlerts] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (operationalDayStartAt > 0) {
+      setDismissedAlerts([]);
+      AsyncStorage.removeItem('@sultan_dismissed_bill_alerts').catch(() => { });
+    }
+  }, [operationalDayStartAt]);
+
+  const handlePullFreshDaySync = async (isNewDayPress = false) => {
+    setIsSyncing(true);
+    try {
+      const base = getActiveServerHttpUrl().replace(/\/+$/, '');
+      if (base) {
+        const res = await fetch(`${base}/api/sync?t=${Date.now()}`, { headers: { 'Cache-Control': 'no-cache' } });
+        if (res.ok) {
+          const remote = await res.json();
+          if (remote && typeof remote === 'object') {
+            useRestaurantStore.getState().syncFromServer(remote);
+            useShiftStore.getState().syncFromServer(remote);
+          }
+        }
+      }
+      if (isNewDayPress) {
+        setDismissedAlerts([]);
+        await AsyncStorage.removeItem('@sultan_dismissed_bill_alerts').catch(() => { });
+        const dayResetTs = useRestaurantStore.getState().operationalDayStartAt || Date.now();
+        useRestaurantStore.getState().startNewDayReset(dayResetTs);
+      }
+      broadcastImmediately();
+      if (isNewDayPress) {
+        const msg = 'Order Taker refreshed for New Day — sab tables aur orders server ke mutabiq clean ho gaye.';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('New Day Synced', msg);
+      }
+    } catch { }
+    finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
+  };
 
   useEffect(() => {
     AsyncStorage.getItem('@sultan_dismissed_bill_alerts')
@@ -866,9 +910,7 @@ export default function OrderTakerScreen() {
           <TouchableOpacity
             style={[styles.compactSyncBtn, isSyncing && styles.compactSyncBtnActive]}
             onPress={() => {
-              setIsSyncing(true);
-              broadcastImmediately();
-              setTimeout(() => setIsSyncing(false), 600);
+              void handlePullFreshDaySync(false);
             }}
             activeOpacity={0.7}
           >
@@ -879,6 +921,27 @@ export default function OrderTakerScreen() {
             />
             <Text style={[styles.compactSyncText, isSyncing && { color: '#D4AF37' }]}>
               {isSyncing ? 'Synced' : 'Sync'}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.compactSyncBtn, { borderColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}
+            onPress={() => {
+              const confirmMsg = 'Refresh tables for New Day? Purani local occupied tables / alerts hat kar server se fresh data aayega.';
+              if (Platform.OS === 'web') {
+                if (window.confirm(confirmMsg)) void handlePullFreshDaySync(true);
+              } else {
+                Alert.alert('New Day Refresh • نیا دن', confirmMsg, [
+                  { text: 'Cancel', style: 'cancel' },
+                  { text: 'Refresh Now', onPress: () => void handlePullFreshDaySync(true) },
+                ]);
+              }
+            }}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="sunny-outline" size={13} color="#B45309" />
+            <Text style={[styles.compactSyncText, { color: '#92400E', fontWeight: '800' }]}>
+              New Day
             </Text>
           </TouchableOpacity>
 

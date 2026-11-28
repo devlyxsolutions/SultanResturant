@@ -29,6 +29,7 @@ const MANAGER_MENU_ITEMS: NavItem[] = [
   { label: 'POS Terminal', route: '/manager/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Floor Plan', route: '/manager/floor-plan', icon: 'business-outline' },
   { label: 'Live Shift & Cash', route: '/manager/shift', icon: 'time-outline' },
+  { label: 'Start New Day • نیا دن', route: '/manager/shift?action=newday', icon: 'sunny-outline', badge: 'Reset' },
   { label: 'Invoices & Orders', route: '/manager/invoices', icon: 'receipt-outline' },
   { label: 'Sales Returns & Refunds', route: '/manager/returns', icon: 'return-down-back-outline' },
   { label: 'Events & Discounts', route: '/manager/discounts', icon: 'pricetags-outline', badge: 'PROMO' },

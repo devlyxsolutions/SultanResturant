@@ -1140,6 +1140,7 @@ function broadcastLocalState(force = false) {
       floors: state.floors || [],
       tickets: state.tickets,
       deletedTicketIds: state.deletedTicketIds || [],
+      operationalDayStartAt: state.operationalDayStartAt || 0,
       invoices: state.invoices,
       customers: state.customers,
       menuItems: state.menuItems,

@@ -43,6 +43,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   } = useRolePermissions();
 
   const invoices = useRestaurantStore((s) => s.invoices);
+  const operationalDayStartAt = useRestaurantStore((s) => s.operationalDayStartAt) || 0;
   const expenses = useOpsStore((s) => s.expenses);
   const expenseCategories = useOpsStore((s) => (s.expenseCategories && s.expenseCategories.length > 0 ? s.expenseCategories : [...EXPENSE_CATEGORIES]));
   const addExpense = useOpsStore((s) => s.addExpense);
@@ -79,8 +80,9 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
   } = useMemo(() => {
     const invList = invoices || [];
     const expList = expenses || [];
+    const effectiveTodayStart = Math.max(todayStart, operationalDayStartAt);
     let periodExpenses = filterPeriod === 'today'
-      ? expList.filter((e) => e.at >= todayStart)
+      ? expList.filter((e) => e.at >= effectiveTodayStart)
       : expList;
 
     let filtered = periodExpenses;
@@ -90,7 +92,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       filtered = periodExpenses.filter((e) => e.isCapEx || e.headType === 'capex');
     }
 
-    const invs = invList.filter((inv) => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= todayStart);
+    const invs = invList.filter((inv) => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= effectiveTodayStart);
     const rev = invs.reduce((sum, inv) => sum + (inv.total || 0), 0);
     const expTotal = periodExpenses.reduce((sum, e) => sum + (e.amount || 0), 0);
     const opex = periodExpenses.filter((e) => !e.isCapEx && e.headType !== 'capex').reduce((sum, e) => sum + (e.amount || 0), 0);
@@ -106,7 +108,7 @@ export default function ExpensesScreen({ backRoute = '/manager/dashboard' }: { b
       capexTotal: capex,
       netProfitToday: profit,
     };
-  }, [filterPeriod, filterHeadType, expenses, invoices, todayStart]);
+  }, [filterPeriod, filterHeadType, expenses, invoices, todayStart, operationalDayStartAt]);
 
   // Pagination for Expenses List
   const expensePagination = usePagination({

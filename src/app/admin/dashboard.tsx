@@ -67,6 +67,7 @@ export default function AdminDashboard() {
   const menuItems = useRestaurantStore(state => state.menuItems);
   const regions = useRestaurantStore(state => state.regions) || [];
   const categories = useRestaurantStore(state => state.categories) || [];
+  const operationalDayStartAt = useRestaurantStore(state => state.operationalDayStartAt) || 0;
 
   // Shift & Ops Store Integration (from Baithak home.php)
   const shifts = useShiftStore(state => state.shifts);
@@ -106,6 +107,8 @@ export default function AdminDashboard() {
     });
   }, []);
 
+  const effectiveTodayStart = Math.max(todayTimestamp, operationalDayStartAt);
+
   // Filter settled invoices based on active shift / today / lifetime scope
   const todaysInvoices = useMemo(() => {
     return invoices.filter(inv => {
@@ -115,11 +118,11 @@ export default function AdminDashboard() {
         return t >= activeShift.openedAt;
       }
       if (filterScope === 'today') {
-        return t >= todayTimestamp;
+        return t >= effectiveTodayStart;
       }
       return true;
     });
-  }, [invoices, filterScope, activeShift, todayTimestamp]);
+  }, [invoices, filterScope, activeShift, effectiveTodayStart]);
 
   const scopeTitle = useMemo(() => {
     if (filterScope === 'active' && activeShift) {
@@ -148,7 +151,7 @@ export default function AdminDashboard() {
     return todaysInvoices.length > 0 ? Math.round(todaysSales / todaysInvoices.length) : 0;
   }, [todaysSales, todaysInvoices.length]);
 
-  const activeOrders = tickets.length;
+  const activeOrders = tickets.filter(t => t && !t.isSettled && t.status !== 'served').length;
   const occupiedTables = tables.filter(t => t.status === 'occupied' || t.status === 'billed').length;
   const freeTables = tables.length - occupiedTables;
   const occupancyRate = tables.length > 0 ? Math.round((occupiedTables / tables.length) * 100) : 0;

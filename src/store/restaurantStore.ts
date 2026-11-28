@@ -687,6 +687,8 @@ type RestaurantState = {
   revokedSessions?: Record<string, RevokedSessionRecord>;
   revokedDeviceIds?: Record<string, { sessionId?: string; staffId?: string; staffName: string; timestamp: number; reason: string }>;
   forceLogoutAll?: { timestamp: number; exceptSessionId?: string; exceptDeviceId?: string; reason: string } | null;
+  operationalDayStartAt?: number;
+  startNewDayReset: (dayStartAt?: number) => number;
   registerStaffSession: (
     session: Omit<StaffSession, 'loginTime' | 'lastActiveTime'>,
     maxAllowed?: number,
@@ -1011,7 +1013,7 @@ export function isWaiterPaymentPending(
   return (t?.lastSettledAt || 0) < (col.collectedAt || 0);
 }
 
-export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): Table[] {
+export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[], operationalDayStartAt = 0): Table[] {
   if (!tables || !Array.isArray(tables)) return [];
   const safeTickets = Array.isArray(tickets) ? tickets : [];
 
@@ -1039,6 +1041,7 @@ export function reconcileTablesWithTickets(tables: Table[], tickets: Ticket[]): 
         t.kotType !== 'MINUS' &&
         !String(t.id || '').toUpperCase().startsWith('MINUS') &&
         !String(t.id || '').toUpperCase().startsWith('CANCEL') &&
+        (operationalDayStartAt <= 0 || Number(t.timePlaced || 0) >= operationalDayStartAt) &&
         t.tableId === table.id &&
         t.tableId !== 'SETTLED-HISTORY' &&
         t.tableId !== 'SETTLED-ORDER'
@@ -1263,6 +1266,7 @@ export const useRestaurantStore = create<RestaurantState>()(
       revokedSessions: {},
       revokedDeviceIds: {},
       forceLogoutAll: null,
+      operationalDayStartAt: 0,
       attendance: INITIAL_ATTENDANCE,
       salaryPayments: INITIAL_SALARY_PAYMENTS,
       reservations: INITIAL_RESERVATIONS,
@@ -3169,6 +3173,61 @@ export const useRestaurantStore = create<RestaurantState>()(
         });
       },
 
+      startNewDayReset: (dayStartAt) => {
+        const ts = Number(dayStartAt || Date.now());
+        localTableMutationAt.clear();
+        const currentTickets = get().tickets || [];
+        const activeCount = currentTickets.filter((t) => t && !t.isSettled && t.status !== 'served').length;
+        set((state) => {
+          const removedIds: string[] = [];
+          const archivedServed: Ticket[] = [];
+          for (const tk of state.tickets || []) {
+            if (!tk || !tk.id) continue;
+            if (tk.status === 'served') {
+              archivedServed.push({
+                ...tk,
+                isSettled: true,
+                settledAt: tk.settledAt || tk.timePlaced || ts,
+                tableId: 'SETTLED-HISTORY',
+              });
+            } else {
+              removedIds.push(tk.id);
+            }
+          }
+          return {
+            operationalDayStartAt: Math.max(state.operationalDayStartAt || 0, ts),
+            tables: (state.tables || []).map((t) => ({
+              ...t,
+              status: 'available' as const,
+              billTotal: 0,
+              orders: [],
+              server: undefined,
+              isPaid: false,
+              lastInvoiceId: undefined,
+              occupiedSince: undefined,
+              ordersUpdatedAt: undefined,
+              lastSettledAt: ts,
+              mergedInto: undefined,
+              reservationId: undefined,
+              waiterPaymentCollection: null,
+              lastMoveNote: undefined,
+              lastMovedFrom: undefined,
+              lastMovedAt: undefined,
+              lastMovedBy: undefined,
+            })),
+            tickets: capTicketsWithHistory(archivedServed),
+            deletedTicketIds: Array.from(new Set([...(state.deletedTicketIds || []), 'KOT-1042', ...removedIds])).slice(-500),
+            lastBillPaidAlert: null,
+            lastFoodReadyAlert: null,
+            pendingFloorOrderAlert: null,
+            lastTableMoveAlert: null,
+            lastOrderCancelledAlert: null,
+            foodReadyAlerts: [],
+          };
+        });
+        return activeCount;
+      },
+
       logCancelledPunchedItems: (entry) => set((state) => {
         const now = Date.now();
         const actor = resolveCurrentAuthActor();
@@ -4803,11 +4862,18 @@ export const useRestaurantStore = create<RestaurantState>()(
             }
             rawTables = deduplicatedRemoteTables;
           }
+          const remoteDayStart = Number((remoteState as any).operationalDayStartAt || 0);
+          const nextOperationalDayStart = Math.max(state.operationalDayStartAt || 0, remoteDayStart);
+          if (remoteDayStart > (state.operationalDayStartAt || 0)) {
+            localTableMutationAt.clear();
+          }
+
           const finalTickets = mergedTickets || state.tickets || [];
-          const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets);
+          const reconciledTables = reconcileTablesWithTickets(rawTables, finalTickets, nextOperationalDayStart);
 
           return {
             ...state,
+            operationalDayStartAt: nextOperationalDayStart,
             tables: reconciledTables,
             deletedTableIds: mergedDeletedTableIds,
             deletedFloorIds: mergedDeletedFloorIds,

@@ -31,6 +31,7 @@ const ADMIN_MENU_ITEMS: NavItem[] = [
   { label: 'App Orders Command', route: '/admin/app-orders', icon: 'phone-portrait-outline', badge: 'Live App' },
   { label: 'POS Terminal', route: '/admin/pos', icon: 'calculator-outline', badge: 'POS' },
   { label: 'Live Shift & Cash', route: '/admin/shift', icon: 'time-outline' },
+  { label: 'Start New Day • نیا دن', route: '/admin/shift?action=newday', icon: 'sunny-outline', badge: 'Reset' },
   { label: 'Invoices & Orders', route: '/admin/invoices', icon: 'receipt-outline' },
   { label: 'Sales Returns & Refunds', route: '/admin/returns', icon: 'return-down-back-outline' },
   { label: 'Events & Discounts', route: '/admin/discounts', icon: 'pricetags-outline', badge: 'PROMO' },

@@ -59,6 +59,7 @@ export default function ManagerDashboard() {
   const tickets = useRestaurantStore(state => state.tickets);
   const tables = useRestaurantStore(state => state.tables);
   const staff = useRestaurantStore(state => state.staff);
+  const operationalDayStartAt = useRestaurantStore(state => state.operationalDayStartAt) || 0;
 
   // Shift Store Integration
   const shifts = useShiftStore(state => state.shifts);
@@ -90,10 +91,12 @@ export default function ManagerDashboard() {
     });
   }, []);
 
+  const effectiveTodayStart = Math.max(todayTimestamp, operationalDayStartAt);
+
   // Filter settled invoices for today
   const todaysInvoices = useMemo(() => {
-    return invoices.filter(inv => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= todayTimestamp);
-  }, [invoices, todayTimestamp]);
+    return invoices.filter(inv => inv.status !== 'voided' && (inv.timeSettled || inv.timePlaced) >= effectiveTodayStart);
+  }, [invoices, effectiveTodayStart]);
 
   const shiftSales = useMemo(() => {
     return todaysInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
@@ -125,7 +128,7 @@ export default function ManagerDashboard() {
     };
   }, [todaysInvoices]);
 
-  const activeOrders = tickets.length;
+  const activeOrders = tickets.filter(t => t && !t.isSettled && t.status !== 'served').length;
   const occupiedTables = tables.filter(t => t.status === 'occupied' || t.status === 'billed').length;
   const freeTables = tables.length - occupiedTables;
   const occupancyRate = tables.length > 0 ? Math.round((occupiedTables / tables.length) * 100) : 0;

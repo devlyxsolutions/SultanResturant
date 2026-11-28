@@ -122,6 +122,7 @@ export default function FloorManagerScreen() {
   const reservations = useRestaurantStore((s) => s.reservations || []);
   const onlineOrders = useRestaurantStore((s) => s.onlineOrders || []);
   const invoices = useRestaurantStore((s) => s.invoices || []);
+  const operationalDayStartAt = useRestaurantStore((s) => s.operationalDayStartAt) || 0;
 
   const assignTableServer = useRestaurantStore((s) => s.assignTableServer);
   const transferTable = useRestaurantStore((s) => s.transferTable);
@@ -537,21 +538,23 @@ export default function FloorManagerScreen() {
 
     const occupancyRate = total > 0 ? Math.round(((occupied + billed) / total) * 100) : 0;
 
-    // Calculate today's sales on this floor from invoices
+    // Calculate today's sales on this floor from invoices (respecting operationalDayStartAt reset)
     const floorTableNames = new Set(floorTables.map((t) => t.name.toLowerCase()));
-    const today = new Date().toISOString().split('T')[0];
+    const dayStart = new Date();
+    dayStart.setHours(0, 0, 0, 0);
+    const effectiveFloorStart = Math.max(dayStart.getTime(), operationalDayStartAt);
     const floorSales = invoices
       .filter((inv) => {
-        const invTime = inv.timeSettled || inv.timePlaced;
-        const invDate = invTime ? new Date(invTime).toISOString().split('T')[0] : '';
-        if (invDate !== today) return false;
+        if (inv.status === 'voided') return false;
+        const invTime = Number(inv.timeSettled || inv.timePlaced || 0);
+        if (invTime < effectiveFloorStart) return false;
         const invTableName = (inv.tableName || '').toLowerCase();
         return floorTableNames.has(invTableName);
       })
       .reduce((sum, inv) => sum + (Number(inv.total) || 0), 0);
 
     return { total, occupied, billed, reserved, available, readyCount, occupancyRate, floorSales };
-  }, [floorTables, tickets, invoices]);
+  }, [floorTables, tickets, invoices, operationalDayStartAt]);
 
   // Filtered tables for display
   const displayedTables = useMemo(() => {
